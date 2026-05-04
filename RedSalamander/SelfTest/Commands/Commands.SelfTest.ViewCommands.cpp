@@ -877,6 +877,25 @@ struct TopLevelMenuMapping
     return FindWindowExW(mainWindow, nullptr, L"RedSalamander.DxMainMenuBar", nullptr);
 }
 
+[[nodiscard]] bool WaitForFocusedFolderViewForMainMenu(HWND expectedFolderView, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(10ms);
+    }
+
+    return g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView;
+}
+
 [[nodiscard]] HWND WaitForReplacementDxUiContextMenuWindow(HWND previousPopup, std::chrono::milliseconds timeout) noexcept
 {
     using namespace std::chrono_literals;
@@ -1075,6 +1094,7 @@ struct TopLevelMenuMapping
 
     const std::unordered_set<std::wstring_view> skipIds = {
         L"cmd/app/exit",
+        L"cmd/app/externalHelp",
         L"cmd/app/openFileExplorerKnownFolder",
         L"cmd/pane/openCommandShell",
         L"cmd/pane/openCurrentFolder",
@@ -1084,7 +1104,6 @@ struct TopLevelMenuMapping
         L"cmd/pane/moveToRecycleBin",
         L"cmd/pane/delete",
         L"cmd/pane/permanentDelete",
-        L"cmd/pane/permanentDeleteWithValidation",
         L"cmd/pane/rename",
         L"cmd/pane/createDirectory",
     };
@@ -2564,6 +2583,137 @@ struct TopLevelMenuMapping
                                                 SelfTest::Scale(3000ms),
                                                 &settledSnapshot),
                   L"Navigation view did not settle cleanly after breadcrumb ancestor navigation.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneNavigationViewClickInUnfocusedPaneFocusesTargetPane(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for unfocused-pane navigation click test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path testRoot = suiteRoot / L"work" / (L"navigation_view_unfocused_pane_click_" + NewGuidText());
+    const std::filesystem::path left     = testRoot / L"left";
+    const std::filesystem::path right    = testRoot / L"right" / L"alpha" / L"beta" / L"gamma";
+    std::error_code ec;
+    std::filesystem::remove_all(testRoot, ec);
+    state.Require(SelfTest::EnsureDirectory(left), L"Failed to create left pane root for unfocused-pane navigation click test.");
+    state.Require(SelfTest::EnsureDirectory(right), L"Failed to create right pane root for unfocused-pane navigation click test.");
+    state.Require(SelfTest::WriteTextFile(left / L"left.txt", "left"), L"Failed to create left.txt for unfocused-pane navigation click test.");
+    state.Require(SelfTest::WriteTextFile(right / L"right.txt", "right"), L"Failed to create right.txt for unfocused-pane navigation click test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const auto restorePanes                                = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+    });
+
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for the left pane during unfocused-pane navigation click test.");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for the right pane during unfocused-pane navigation click test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, left);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, right);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, left, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for unfocused-pane navigation click test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, right, SelfTest::Scale(3000ms)),
+                  L"Failed to set right pane path for unfocused-pane navigation click test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"left.txt"}, SelfTest::Scale(3000ms)),
+                  L"Left pane contents not ready for unfocused-pane navigation click test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"right.txt"}, SelfTest::Scale(3000ms)),
+                  L"Right pane contents not ready for unfocused-pane navigation click test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"left.txt"),
+                  L"Failed to focus left.txt before unfocused-pane navigation click validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const HWND leftFolderView      = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    const HWND rightFolderView     = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right);
+    const HWND rightNavigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Right);
+    state.Require(leftFolderView != nullptr && IsWindow(leftFolderView) != FALSE,
+                  L"Left folder view handle unavailable for unfocused-pane navigation click validation.");
+    state.Require(rightFolderView != nullptr && IsWindow(rightFolderView) != FALSE,
+                  L"Right folder view handle unavailable for unfocused-pane navigation click validation.");
+    state.Require(rightNavigationView != nullptr && IsWindow(rightNavigationView) != FALSE,
+                  L"Right navigation-view handle unavailable for unfocused-pane navigation click validation.");
+    state.Require(WaitForFocusedFolderViewForMainMenu(leftFolderView, SelfTest::Scale(2000ms)),
+                  L"Left folder view did not take baseline focus before unfocused-pane navigation click validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    NavigationViewDebugSnapshot baselineSnapshot{};
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Right,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
+               ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.currentPathText == right.wstring() &&
+               value.pathAncestorSegmentVisible && value.pathAncestorSegmentRect.right > value.pathAncestorSegmentRect.left &&
+               value.pathAncestorSegmentRect.bottom > value.pathAncestorSegmentRect.top && ! value.pathAncestorTargetText.empty();
+    },
+                                                SelfTest::Scale(3000ms),
+                                                &baselineSnapshot),
+                  L"Failed to capture a visible right-pane breadcrumb ancestor segment before unfocused-pane navigation click validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path expectedAncestorPath = std::filesystem::path(baselineSnapshot.pathAncestorTargetText);
+    state.Require(! expectedAncestorPath.empty() && expectedAncestorPath != right,
+                  L"Unfocused-pane breadcrumb click target should resolve to a non-current ancestor path.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const LONG clickX = (baselineSnapshot.pathAncestorSegmentRect.left + baselineSnapshot.pathAncestorSegmentRect.right) / 2;
+    const LONG clickY = (baselineSnapshot.pathAncestorSegmentRect.top + baselineSnapshot.pathAncestorSegmentRect.bottom) / 2;
+    SendMouseClickToResolvedPointWindow(rightNavigationView, MAKELPARAM(clickX, clickY));
+
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, expectedAncestorPath, SelfTest::Scale(3000ms)),
+                  std::format(L"Right-pane breadcrumb click did not navigate to '{}'.", expectedAncestorPath.wstring()));
+    state.Require(WaitForFocusedFolderViewForMainMenu(rightFolderView, SelfTest::Scale(2000ms)),
+                  L"Clicking navigation in the unfocused right pane should move keyboard focus to the right folder view.");
+    state.Require(g_folderWindow.GetActivePane() == FolderWindow::Pane::Right,
+                  L"Clicking navigation in the unfocused right pane should make the right pane active.");
     return state.failure.empty();
 }
 
@@ -5311,7 +5461,7 @@ struct TopLevelMenuMapping
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestCalculateDirectorySizes(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestViewSpace(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -5328,13 +5478,13 @@ struct TopLevelMenuMapping
         return false;
     }
 
-    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"calculate_directory_sizes_{}", GetTickCount64());
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"view_space_{}", GetTickCount64());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
-    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create calculate-directory-sizes test root.");
-    state.Require(SelfTest::EnsureDirectory(root / L"nested"), L"Failed to create nested folder for calculate-directory-sizes test.");
-    state.Require(SelfTest::WriteTextFile(root / L"root.txt", "root"), L"Failed to create root file for calculate-directory-sizes test.");
-    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"child.txt", "child"), L"Failed to create nested file for calculate-directory-sizes test.");
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create view-space test root.");
+    state.Require(SelfTest::EnsureDirectory(root / L"nested"), L"Failed to create nested folder for view-space test.");
+    state.Require(SelfTest::WriteTextFile(root / L"root.txt", "root"), L"Failed to create root file for view-space test.");
+    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"child.txt", "child"), L"Failed to create nested file for view-space test.");
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePath                                = wil::scope_exit([&]
@@ -5360,16 +5510,16 @@ struct TopLevelMenuMapping
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for calculate-directory-sizes test.");
-    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)), L"Enumeration did not complete for calculate-directory-sizes test.");
+                  L"Failed to set left pane path for view-space test.");
+    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)), L"Enumeration did not complete for view-space test.");
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
 
     const size_t before = g_folderWindow.DebugGetViewerInstanceCount();
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CALCULATE_DIRECTORY_SIZES, 0), 0);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_VIEW_SPACE, 0), 0);
     const size_t after = g_folderWindow.DebugGetViewerInstanceCount();
 
-    state.Require(after == before + 1u, L"CalculateDirectorySizes did not open a viewer instance.");
+    state.Require(after == before + 1u, L"Calculate Occupied Space did not open a viewer instance.");
     state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-space"), L"Space Viewer instance missing after command.");
 
     g_folderWindow.CloseAllViewers();
@@ -6124,6 +6274,22 @@ struct TopLevelMenuMapping
         return false;
     }
 
+    static_cast<void>(g_folderWindow.TryRestoreActivePaneFolderViewFocus());
+    const HWND expectedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+    state.Require(expectedFolderView != nullptr,
+                  L"Need active pane folder-view keyboard focus before mouse-opening the persistent DxUI menu bar.");
+    if (! expectedFolderView)
+    {
+        return false;
+    }
+
+    SetFocus(menuBarWindow);
+    state.Require(GetFocus() == menuBarWindow, L"Need keyboard focus on the persistent DxUI menu bar before mouse-opening the menu.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     RECT itemRect{};
     state.Require(DebugGetMainMenuBarItemScreenRect(mainWindow, mapping->visualIndex, itemRect),
                   std::format(L"Failed to query the screen rect for top-level menu '{}'.", mapping->label));
@@ -6218,6 +6384,63 @@ struct TopLevelMenuMapping
         std::format(L"Mouse-opened popup should not draw a selected item fill until pointer movement or keyboard navigation, but {} item(s) were highlighted.",
                     highlightedItemCount.load(std::memory_order_acquire)));
     state.Require(popupClosed.load(std::memory_order_acquire), L"Mouse-opened DxUI popup did not dismiss after Escape.");
+    state.Require(WaitForFocusedFolderViewForMainMenu(expectedFolderView, SelfTest::Scale(2000ms)),
+                  L"Mouse-opened main menu popup should restore keyboard focus to the active pane folder view after closing.");
+    state.Require(WaitForMainMenuBarSelectedIndex(std::nullopt, SelfTest::Scale(2000ms)),
+                  L"Mouse-opened main menu popup should clear the selected top-level menu after closing.");
+    state.Require(WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms)),
+                  L"Mouse-opened main menu popup should clear the menu-bar visual highlight after closing.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SetFocus(menuBarWindow);
+    state.Require(GetFocus() == menuBarWindow, L"Need keyboard focus on the persistent DxUI menu bar before the second mouse-open pass.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::atomic<bool> secondPopupDriverDone{false};
+    std::atomic<bool> secondPopupObserved{false};
+    std::atomic<bool> secondPopupClosed{false};
+    std::jthread secondPopupDriver([&](std::stop_token) noexcept
+    {
+        const auto done = wil::scope_exit([&]() noexcept { secondPopupDriverDone.store(true, std::memory_order_release); });
+
+        PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
+        PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickPoint.x, clickPoint.y));
+        PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
+
+        const HWND popup = WaitForWindow([]() noexcept { return FindVisibleDxUiContextMenuWindow(); }, SelfTest::Scale(2000ms));
+        if (! popup || IsWindow(popup) == FALSE)
+        {
+            return;
+        }
+
+        secondPopupObserved.store(true, std::memory_order_release);
+        PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+        PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+        secondPopupClosed.store(WaitForWindowClosed(popup, SelfTest::Scale(2000ms)), std::memory_order_release);
+    });
+
+    const auto secondDriverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (! secondPopupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < secondDriverDeadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+    secondPopupDriver.join();
+
+    state.Require(secondPopupObserved.load(std::memory_order_acquire), L"Second mouse click on the pane top-level menu did not open a DxUI popup.");
+    state.Require(secondPopupClosed.load(std::memory_order_acquire), L"Second mouse-opened DxUI popup did not dismiss after Escape.");
+    state.Require(WaitForFocusedFolderViewForMainMenu(expectedFolderView, SelfTest::Scale(2000ms)),
+                  L"Mouse-opened main menu popup should restore keyboard focus even when the menu bar owned focus before opening.");
+    state.Require(WaitForMainMenuBarSelectedIndex(std::nullopt, SelfTest::Scale(2000ms)),
+                  L"Second mouse-opened main menu popup should clear the selected top-level menu after closing.");
+    state.Require(WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms)),
+                  L"Second mouse-opened main menu popup should clear the menu-bar visual highlight after closing.");
 
     return state.failure.empty();
 }
@@ -8480,6 +8703,10 @@ struct TopLevelMenuMapping
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_DISPLAY_EXTRA_DETAILED, 0), 0);
     state.Require(g_folderWindow.GetDisplayMode(pane) == FolderView::DisplayMode::ExtraDetailed, L"Display mode did not switch to ExtraDetailed.");
 
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_PANE_THUMBNAILS, 0), 0);
+    state.Require(g_folderWindow.GetDisplayMode(pane) == FolderView::DisplayMode::Thumbnails,
+                  L"Thumbnails command did not select the exclusive Thumbnails display mode.");
+
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_DISPLAY_BRIEF, 0), 0);
     state.Require(g_folderWindow.GetDisplayMode(pane) == FolderView::DisplayMode::Brief, L"Display mode did not switch to Brief.");
 
@@ -9885,6 +10112,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewPathAncestorClickNavigatesToAncestor(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane", [=](CaseState& state) noexcept {
+        return TestPaneNavigationViewClickInUnfocusedPaneFocusesTargetPane(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_full_path_popup_edit_route", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewFullPathPopupEditRoute(mainWindow, state);
     });
@@ -9917,8 +10147,7 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"shortcut_functionbar_dispatch_refresh", [=](CaseState& state) noexcept {
         return TestShortcutFunctionBarDispatchRefresh(mainWindow, state);
     });
-    SelfTest::RunCase(
-        options, suite, L"cmd_pane_calculateDirectorySizes", [=](CaseState& state) noexcept { return TestCalculateDirectorySizes(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_viewSpace", [=](CaseState& state) noexcept { return TestViewSpace(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_app_toggleUiChrome", [=](CaseState& state) noexcept { return TestToggleUiChrome(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_app_menuBar_persistent_surface_renders_nonempty_labels", [=](CaseState& state) noexcept {
         return TestPersistentMainMenuBarRendersNonEmptyLabels(mainWindow, state);

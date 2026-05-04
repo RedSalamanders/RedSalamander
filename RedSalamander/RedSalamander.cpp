@@ -35,6 +35,7 @@
 #pragma warning(pop)
 
 #include <shlobj_core.h>
+#include <shellapi.h>
 #include <strsafe.h>
 #include <winnetwk.h>
 
@@ -56,6 +57,8 @@
 #include "CrashQuarantine.h"
 #include "DirectoryInfoCache.h"
 #include "DxUiThemePalette.h"
+#include "FileActionLauncher.h"
+#include "FileActionResolver.h"
 #include "FileSystemPluginManager.h"
 #include "FindFilesWindow.h"
 #include "FolderWindow.h"
@@ -98,6 +101,8 @@ std::atomic<HWND> g_hFolderWindow{nullptr};
 ThemeMode g_themeMode = ThemeMode::System;
 Common::Settings::Settings g_settings;
 
+void ApplyThemeId(HWND hWnd, std::wstring_view themeId);
+
 namespace
 {
 constexpr wchar_t kAppId[]                           = L"RedSalamander";
@@ -110,6 +115,7 @@ constexpr wchar_t kItemPropertiesWindowId[]          = L"ItemPropertiesWindow";
 constexpr wchar_t kItemPropertiesWindowClassName[]   = L"RedSalamander.ItemPropertiesWindow";
 constexpr wchar_t kAboutDialogWindowClassName[]      = L"RedSalamander.AboutWindow";
 constexpr wchar_t kFatalErrorDialogWindowClassName[] = L"RedSalamander.FatalErrorWindow";
+constexpr wchar_t kExternalHelpUrl[]                 = L"https://github.com/RedSalamanders/RedSalamander/tree/main/Docs#readme";
 constexpr wchar_t kLeftPaneSlot[]                    = L"left";
 constexpr wchar_t kRightPaneSlot[]                   = L"right";
 #ifdef ENABLE_TESTS
@@ -119,6 +125,10 @@ std::mutex g_debugConnectionManagerConnectMutex;
 bool g_debugConnectionManagerConnectSeen    = false;
 uint8_t g_debugConnectionManagerConnectPane = 0u;
 std::wstring g_debugConnectionManagerConnectName;
+std::mutex g_debugRereadAssociationsMutex;
+const Common::Settings::Settings* g_debugRereadAssociationsSettingsOverride = nullptr;
+RereadAssociationsDebugSnapshot g_debugRereadAssociationsSnapshot{};
+bool g_debugRereadAssociationsSnapshotValid = false;
 #endif
 
 [[nodiscard]] HWND NormalizeOwnedWindow(HWND ownerWindow) noexcept
@@ -1119,13 +1129,22 @@ void ShowFatalErrorDialog(HWND owner, const wchar_t* caption, const wchar_t* mes
 }
 
 HMENU g_mainMenuHandle       = nullptr;
+HMENU g_filesMenu            = nullptr;
 HMENU g_viewMenu             = nullptr;
 HMENU g_editMenu             = nullptr;
 HMENU g_editAdvancedMenu     = nullptr;
 HMENU g_viewThemeMenu        = nullptr;
 HMENU g_viewPluginsMenu      = nullptr;
-HMENU g_viewPaneMenu         = nullptr;
+HMENU g_viewWithMenu         = nullptr;
+HMENU g_editWithMenu         = nullptr;
+HMENU g_newTemplateMenu      = nullptr;
+HMENU g_userMenu             = nullptr;
 HMENU g_openFileExplorerMenu = nullptr;
+
+std::unordered_map<UINT, std::wstring> g_viewWithMenuIdToActionId;
+std::unordered_map<UINT, std::wstring> g_editWithMenuIdToActionId;
+std::unordered_map<UINT, std::wstring> g_newTemplateMenuIdToTemplateId;
+std::unordered_map<UINT, std::wstring> g_userMenuIdToActionId;
 
 bool g_menuBarVisible          = true;
 bool g_menuBarTemporarilyShown = false;
@@ -1448,32 +1467,44 @@ HMENU g_leftPaneMenu    = nullptr;
 HMENU g_leftSortMenu    = nullptr;
 HMENU g_leftDisplayMenu = nullptr;
 HMENU g_leftGoToMenu    = nullptr;
+HMENU g_leftShowMenu    = nullptr;
 
 HMENU g_rightPaneMenu    = nullptr;
 HMENU g_rightSortMenu    = nullptr;
 HMENU g_rightDisplayMenu = nullptr;
 HMENU g_rightGoToMenu    = nullptr;
+HMENU g_rightShowMenu    = nullptr;
 
 constexpr UINT kHistoryMenuMaxItems = 50u;
 
 static void ResetMenuHandleCache() noexcept
 {
     g_mainMenuHandle       = nullptr;
+    g_filesMenu            = nullptr;
     g_viewMenu             = nullptr;
     g_editMenu             = nullptr;
     g_editAdvancedMenu     = nullptr;
     g_viewThemeMenu        = nullptr;
     g_viewPluginsMenu      = nullptr;
-    g_viewPaneMenu         = nullptr;
+    g_viewWithMenu         = nullptr;
+    g_editWithMenu         = nullptr;
+    g_newTemplateMenu      = nullptr;
+    g_userMenu             = nullptr;
     g_openFileExplorerMenu = nullptr;
     g_leftPaneMenu         = nullptr;
     g_leftSortMenu         = nullptr;
     g_leftDisplayMenu      = nullptr;
     g_leftGoToMenu         = nullptr;
+    g_leftShowMenu         = nullptr;
     g_rightPaneMenu        = nullptr;
     g_rightSortMenu        = nullptr;
     g_rightDisplayMenu     = nullptr;
     g_rightGoToMenu        = nullptr;
+    g_rightShowMenu        = nullptr;
+    g_viewWithMenuIdToActionId.clear();
+    g_editWithMenuIdToActionId.clear();
+    g_newTemplateMenuIdToTemplateId.clear();
+    g_userMenuIdToActionId.clear();
 }
 
 struct NavigatePathMenuTarget
@@ -1658,6 +1689,8 @@ FolderView::DisplayMode DisplayModeFromSettings(Common::Settings::FolderDisplayM
     {
         case Common::Settings::FolderDisplayMode::Brief: return FolderView::DisplayMode::Brief;
         case Common::Settings::FolderDisplayMode::Detailed: return FolderView::DisplayMode::Detailed;
+        case Common::Settings::FolderDisplayMode::ExtraDetailed: return FolderView::DisplayMode::ExtraDetailed;
+        case Common::Settings::FolderDisplayMode::Thumbnails: return FolderView::DisplayMode::Thumbnails;
     }
     return FolderView::DisplayMode::Brief;
 }
@@ -1692,7 +1725,8 @@ Common::Settings::FolderDisplayMode DisplayModeToSettings(FolderView::DisplayMod
     {
         case FolderView::DisplayMode::Brief: return Common::Settings::FolderDisplayMode::Brief;
         case FolderView::DisplayMode::Detailed: return Common::Settings::FolderDisplayMode::Detailed;
-        case FolderView::DisplayMode::ExtraDetailed: return Common::Settings::FolderDisplayMode::Detailed;
+        case FolderView::DisplayMode::ExtraDetailed: return Common::Settings::FolderDisplayMode::ExtraDetailed;
+        case FolderView::DisplayMode::Thumbnails: return Common::Settings::FolderDisplayMode::Thumbnails;
     }
     return Common::Settings::FolderDisplayMode::Brief;
 }
@@ -1790,6 +1824,61 @@ const Common::Settings::ThemeDefinition* FindThemeById(std::wstring_view id) noe
         }
     }
     return nullptr;
+}
+
+struct CustomThemeGroups
+{
+    std::vector<const Common::Settings::ThemeDefinition*> fileThemes;
+    std::vector<const Common::Settings::ThemeDefinition*> settingsThemes;
+};
+
+[[nodiscard]] CustomThemeGroups CollectCustomThemeGroups()
+{
+    CustomThemeGroups groups;
+
+    std::unordered_map<std::wstring, const Common::Settings::ThemeDefinition*> settingsThemesById;
+    settingsThemesById.reserve(g_settings.theme.themes.size());
+    for (const auto& def : g_settings.theme.themes)
+    {
+        if (def.id.rfind(L"user/", 0) != 0)
+        {
+            continue;
+        }
+        settingsThemesById[def.id] = &def;
+    }
+
+    groups.settingsThemes.reserve(settingsThemesById.size());
+    for (const auto& entry : settingsThemesById)
+    {
+        groups.settingsThemes.push_back(entry.second);
+    }
+
+    groups.fileThemes.reserve(g_fileThemes.size());
+    for (const auto& def : g_fileThemes)
+    {
+        if (def.id.rfind(L"user/", 0) != 0)
+        {
+            continue;
+        }
+        if (settingsThemesById.contains(def.id))
+        {
+            continue;
+        }
+        groups.fileThemes.push_back(&def);
+    }
+
+    const auto byNameThenId = [](const Common::Settings::ThemeDefinition* a, const Common::Settings::ThemeDefinition* b)
+    {
+        if (a->name == b->name)
+        {
+            return a->id < b->id;
+        }
+        return a->name < b->name;
+    };
+
+    std::sort(groups.fileThemes.begin(), groups.fileThemes.end(), byNameThenId);
+    std::sort(groups.settingsThemes.begin(), groups.settingsThemes.end(), byNameThenId);
+    return groups;
 }
 
 COLORREF ColorRefFromArgb(uint32_t argb) noexcept
@@ -2133,6 +2222,10 @@ void CaptureRuntimeSettings(Common::Settings::Settings& settings, HWND hWnd) noe
             pane.view.display          = DisplayModeToSettings(g_folderWindow.GetDisplayMode(paneId));
             pane.view.sortBy           = SortByToSettings(g_folderWindow.GetSortBy(paneId));
             pane.view.sortDirection    = SortDirectionToSettings(g_folderWindow.GetSortDirection(paneId));
+            pane.view.fileExtensionsVisible = g_folderWindow.GetFileExtensionsVisible(paneId);
+            pane.view.thumbnailsVisible     = false;
+            pane.view.navigationBarVisible  = g_folderWindow.GetNavigationBarVisible(paneId);
+            pane.view.filterBarVisible      = g_folderWindow.GetFilterBarVisible(paneId);
             pane.view.statusBarVisible = g_folderWindow.GetStatusBarVisible(paneId);
 
             folders.items.push_back(std::move(pane));
@@ -2366,6 +2459,60 @@ static int FindMenuItemPosById(HMENU menu, UINT id) noexcept
     return -1;
 }
 
+static HMENU FindSubMenuAfterCommand(HMENU menu, UINT commandId) noexcept
+{
+    if (! menu)
+    {
+        return nullptr;
+    }
+
+    const int commandPos = FindMenuItemPosById(menu, commandId);
+    if (commandPos < 0)
+    {
+        return nullptr;
+    }
+
+    const int count = GetMenuItemCount(menu);
+    if (count <= commandPos + 1)
+    {
+        return nullptr;
+    }
+
+    return GetSubMenu(menu, commandPos + 1);
+}
+
+static HMENU FindSubMenuAfterCommandRecursive(HMENU menu, UINT commandId) noexcept
+{
+    HMENU found = FindSubMenuAfterCommand(menu, commandId);
+    if (found)
+    {
+        return found;
+    }
+
+    const int count = GetMenuItemCount(menu);
+    if (count <= 0)
+    {
+        return nullptr;
+    }
+
+    for (int pos = 0; pos < count; ++pos)
+    {
+        HMENU subMenu = GetSubMenu(menu, pos);
+        if (! subMenu)
+        {
+            continue;
+        }
+
+        found = FindSubMenuAfterCommandRecursive(subMenu, commandId);
+        if (found)
+        {
+            return found;
+        }
+    }
+
+    return nullptr;
+}
+
 static void DeleteMenuItemsFromPosition(HMENU menu, int startPos) noexcept
 {
     if (! menu)
@@ -2566,6 +2713,15 @@ static void EnsureMenuHandles(HWND hWnd) noexcept
         g_mainMenuHandle = mainMenu;
     }
 
+    if (! g_filesMenu)
+    {
+        std::vector<HMENU> filesPath;
+        if (TryFindMenuPathToCommand(mainMenu, IDM_PANE_VIEW, filesPath) && ! filesPath.empty())
+        {
+            g_filesMenu = filesPath.back();
+        }
+    }
+
     if (! g_viewMenu)
     {
         std::vector<HMENU> viewPath;
@@ -2611,13 +2767,27 @@ static void EnsureMenuHandles(HWND hWnd) noexcept
         }
     }
 
-    if (! g_viewPaneMenu)
+    if (g_filesMenu)
     {
-        std::vector<HMENU> panePath;
-        if (TryFindMenuPathToCommand(mainMenu, IDM_VIEW_PANE_STATUSBAR_LEFT, panePath) && ! panePath.empty())
+        if (! g_viewWithMenu)
         {
-            g_viewPaneMenu = panePath.back();
+            g_viewWithMenu = FindSubMenuAfterCommand(g_filesMenu, IDM_PANE_ALTERNATE_VIEW);
         }
+
+        if (! g_editWithMenu)
+        {
+            g_editWithMenu = FindSubMenuAfterCommand(g_filesMenu, IDM_PANE_ALTERNATE_EDIT);
+        }
+
+        if (! g_newTemplateMenu)
+        {
+            g_newTemplateMenu = FindSubMenuAfterCommand(g_filesMenu, IDM_PANE_UNPACK);
+        }
+    }
+
+    if (! g_userMenu)
+    {
+        g_userMenu = FindSubMenuAfterCommandRecursive(mainMenu, IDM_APP_REREAD_ASSOCIATIONS);
     }
 
     if (! g_openFileExplorerMenu)
@@ -2633,10 +2803,26 @@ static void EnsureMenuHandles(HWND hWnd) noexcept
     {
         EnsurePaneMenuHandlesFor(mainMenu, IDM_LEFT_SORT_NAME, IDM_LEFT_DISPLAY_BRIEF, g_leftPaneMenu, g_leftSortMenu, g_leftDisplayMenu, g_leftGoToMenu);
     }
+    if (! g_leftShowMenu)
+    {
+        std::vector<HMENU> showPath;
+        if (TryFindMenuPathToCommand(mainMenu, IDM_LEFT_SHOW_HIDDEN_FILES, showPath) && ! showPath.empty())
+        {
+            g_leftShowMenu = showPath.back();
+        }
+    }
 
     if (! g_rightPaneMenu || ! g_rightSortMenu || ! g_rightDisplayMenu || ! g_rightGoToMenu)
     {
         EnsurePaneMenuHandlesFor(mainMenu, IDM_RIGHT_SORT_NAME, IDM_RIGHT_DISPLAY_BRIEF, g_rightPaneMenu, g_rightSortMenu, g_rightDisplayMenu, g_rightGoToMenu);
+    }
+    if (! g_rightShowMenu)
+    {
+        std::vector<HMENU> showPath;
+        if (TryFindMenuPathToCommand(mainMenu, IDM_RIGHT_SHOW_HIDDEN_FILES, showPath) && ! showPath.empty())
+        {
+            g_rightShowMenu = showPath.back();
+        }
     }
 
     if (! IsOverlaySampleEnabled())
@@ -2821,52 +3007,36 @@ static void RebuildThemeMenuDynamicItems(HWND hWnd)
     g_customThemeMenuIdToThemeId.clear();
     g_customThemeIdToMenuId.clear();
 
-    std::unordered_map<std::wstring, const Common::Settings::ThemeDefinition*> settingsThemesById;
-    settingsThemesById.reserve(g_settings.theme.themes.size());
-    for (const auto& def : g_settings.theme.themes)
+    const auto appendThemeNavigation = []() -> bool
     {
-        if (def.id.rfind(L"user/", 0) != 0)
+        if (! AppendMenuW(g_viewThemeMenu, MF_SEPARATOR, 0, nullptr))
         {
-            continue;
+            return false;
         }
-        settingsThemesById[def.id] = &def;
-    }
 
-    std::vector<const Common::Settings::ThemeDefinition*> settingsThemes;
-    settingsThemes.reserve(settingsThemesById.size());
-    for (const auto& [id, def] : settingsThemesById)
-    {
-        settingsThemes.push_back(def);
-    }
+        std::wstring previousTheme = LoadStringResource(nullptr, IDS_CMD_THEME_SELECT_PREV);
+        if (previousTheme.empty())
+        {
+            previousTheme = L"Previous Theme";
+        }
+        previousTheme = EscapeMenuLabel(previousTheme);
+        if (! AppendMenuW(g_viewThemeMenu, MF_STRING, IDM_VIEW_THEME_PREV, previousTheme.c_str()))
+        {
+            return false;
+        }
 
-    std::vector<const Common::Settings::ThemeDefinition*> fileThemes;
-    fileThemes.reserve(g_fileThemes.size());
-    for (const auto& def : g_fileThemes)
-    {
-        if (def.id.rfind(L"user/", 0) != 0)
+        std::wstring nextTheme = LoadStringResource(nullptr, IDS_CMD_THEME_SELECT_NEXT);
+        if (nextTheme.empty())
         {
-            continue;
+            nextTheme = L"Next Theme";
         }
-        if (settingsThemesById.contains(def.id))
-        {
-            continue; // settings version wins
-        }
-        fileThemes.push_back(&def);
-    }
-
-    const auto byNameThenId = [](const Common::Settings::ThemeDefinition* a, const Common::Settings::ThemeDefinition* b)
-    {
-        if (a->name == b->name)
-        {
-            return a->id < b->id;
-        }
-        return a->name < b->name;
+        nextTheme = EscapeMenuLabel(nextTheme);
+        return AppendMenuW(g_viewThemeMenu, MF_STRING, IDM_VIEW_THEME_NEXT, nextTheme.c_str()) != FALSE;
     };
 
-    std::sort(fileThemes.begin(), fileThemes.end(), byNameThenId);
-    std::sort(settingsThemes.begin(), settingsThemes.end(), byNameThenId);
+    const CustomThemeGroups customThemes = CollectCustomThemeGroups();
 
-    if (! fileThemes.empty() || ! settingsThemes.empty())
+    if (! customThemes.fileThemes.empty() || ! customThemes.settingsThemes.empty())
     {
         if (! AppendMenuW(g_viewThemeMenu, MF_SEPARATOR, 0, nullptr))
         {
@@ -2900,12 +3070,12 @@ static void RebuildThemeMenuDynamicItems(HWND hWnd)
             return true;
         };
 
-        if (! addThemes(fileThemes))
+        if (! addThemes(customThemes.fileThemes))
         {
             return;
         }
 
-        if (! fileThemes.empty() && ! settingsThemes.empty() && nextId <= kCustomThemeMenuIdLast)
+        if (! customThemes.fileThemes.empty() && ! customThemes.settingsThemes.empty() && nextId <= kCustomThemeMenuIdLast)
         {
             if (! AppendMenuW(g_viewThemeMenu, MF_SEPARATOR, 0, nullptr))
             {
@@ -2913,10 +3083,15 @@ static void RebuildThemeMenuDynamicItems(HWND hWnd)
             }
         }
 
-        if (! addThemes(settingsThemes))
+        if (! addThemes(customThemes.settingsThemes))
         {
             return;
         }
+    }
+
+    if (! appendThemeNavigation())
+    {
+        return;
     }
 
     DrawMenuBar(hWnd);
@@ -2933,7 +3108,7 @@ void UpdatePaneMenuChecks() noexcept
 
         const FolderView::DisplayMode display = g_folderWindow.GetDisplayMode(pane);
         const UINT displayChecked             = displayBase + static_cast<UINT>(display);
-        CheckMenuRadioItem(displayMenu, displayBase, displayBase + 1, displayChecked, MF_BYCOMMAND);
+        CheckMenuRadioItem(displayMenu, displayBase, displayBase + 3, displayChecked, MF_BYCOMMAND);
     };
 
     if (g_leftSortMenu && g_leftDisplayMenu)
@@ -2965,25 +3140,53 @@ void UpdatePaneMenuChecks() noexcept
 
     const UINT leftStatusCheck  = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetStatusBarVisible(FolderWindow::Pane::Left) ? MF_CHECKED : MF_UNCHECKED));
     const UINT rightStatusCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetStatusBarVisible(FolderWindow::Pane::Right) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT leftFileExtensionsCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetFileExtensionsVisible(FolderWindow::Pane::Left) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT rightFileExtensionsCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetFileExtensionsVisible(FolderWindow::Pane::Right) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT leftPreviewPaneCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.IsPreviewPaneOpenForSource(FolderWindow::Pane::Left) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT rightPreviewPaneCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.IsPreviewPaneOpenForSource(FolderWindow::Pane::Right) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT leftFilterBarCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetFilterBarVisible(FolderWindow::Pane::Left) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT rightFilterBarCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetFilterBarVisible(FolderWindow::Pane::Right) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT leftNavigationCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT rightNavigationCheck =
+        static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Right) ? MF_CHECKED : MF_UNCHECKED));
     const UINT hiddenFilesCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetShowHiddenFiles() ? MF_CHECKED : MF_UNCHECKED));
     const UINT systemFilesCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetShowSystemFiles() ? MF_CHECKED : MF_UNCHECKED));
 
-    if (g_viewPaneMenu)
-    {
-        CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_HIDDEN_FILES, hiddenFilesCheck);
-        CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_SYSTEM_FILES, systemFilesCheck);
-        CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_STATUSBAR_LEFT, leftStatusCheck);
-        CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_STATUSBAR_RIGHT, rightStatusCheck);
-    }
-
     if (g_leftPaneMenu)
     {
-        CheckMenuItem(g_leftPaneMenu, IDM_LEFT_STATUSBAR, leftStatusCheck);
+        CheckMenuItem(g_leftPaneMenu, IDM_LEFT_PREVIEW_PANE, leftPreviewPaneCheck);
     }
 
     if (g_rightPaneMenu)
     {
-        CheckMenuItem(g_rightPaneMenu, IDM_RIGHT_STATUSBAR, rightStatusCheck);
+        CheckMenuItem(g_rightPaneMenu, IDM_RIGHT_PREVIEW_PANE, rightPreviewPaneCheck);
+    }
+
+    if (g_leftShowMenu)
+    {
+        CheckMenuItem(g_leftShowMenu, IDM_LEFT_SHOW_HIDDEN_FILES, hiddenFilesCheck);
+        CheckMenuItem(g_leftShowMenu, IDM_LEFT_SHOW_SYSTEM_FILES, systemFilesCheck);
+        CheckMenuItem(g_leftShowMenu, IDM_LEFT_SHOW_FILE_EXTENSIONS, leftFileExtensionsCheck);
+        CheckMenuItem(g_leftShowMenu, IDM_LEFT_FILTER_BAR, leftFilterBarCheck);
+        CheckMenuItem(g_leftShowMenu, IDM_LEFT_NAVIGATION_BAR, leftNavigationCheck);
+        CheckMenuItem(g_leftShowMenu, IDM_LEFT_STATUSBAR, leftStatusCheck);
+    }
+
+    if (g_rightShowMenu)
+    {
+        CheckMenuItem(g_rightShowMenu, IDM_RIGHT_SHOW_HIDDEN_FILES, hiddenFilesCheck);
+        CheckMenuItem(g_rightShowMenu, IDM_RIGHT_SHOW_SYSTEM_FILES, systemFilesCheck);
+        CheckMenuItem(g_rightShowMenu, IDM_RIGHT_SHOW_FILE_EXTENSIONS, rightFileExtensionsCheck);
+        CheckMenuItem(g_rightShowMenu, IDM_RIGHT_FILTER_BAR, rightFilterBarCheck);
+        CheckMenuItem(g_rightShowMenu, IDM_RIGHT_NAVIGATION_BAR, rightNavigationCheck);
+        CheckMenuItem(g_rightShowMenu, IDM_RIGHT_STATUSBAR, rightStatusCheck);
     }
 
     if (g_viewMenu)
@@ -3091,6 +3294,215 @@ void AppendEmptyMenuItem(HMENU menu) noexcept
 
     const std::wstring emptyLabel = LoadStringResource(nullptr, IDS_MENU_EMPTY);
     AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, emptyLabel.empty() ? L"" : emptyLabel.c_str());
+}
+
+[[nodiscard]] std::wstring GetComputerNameText()
+{
+    wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1]{};
+    DWORD computerNameLength = static_cast<DWORD>(std::size(computerName));
+    if (GetComputerNameW(computerName, &computerNameLength) == FALSE || computerNameLength == 0u)
+    {
+        return {};
+    }
+
+    return std::wstring(computerName, computerNameLength);
+}
+
+[[nodiscard]] std::wstring GetFileActionMenuText(const Common::Settings::FileActionDefinition& action)
+{
+    if (! action.displayName.empty())
+    {
+        return action.displayName;
+    }
+
+    return action.id;
+}
+
+void RebuildFileActionMenuDynamicItems(HMENU menu, bool viewerActions)
+{
+    if (! menu)
+    {
+        return;
+    }
+
+    Debug::Perf::Scope perf(viewerActions ? L"fileaction.viewwith.menu_populate_us" : L"fileaction.editwith.menu_populate_us");
+
+    DeleteMenuItemsFromPosition(menu, 0);
+    auto& menuMap = viewerActions ? g_viewWithMenuIdToActionId : g_editWithMenuIdToActionId;
+    menuMap.clear();
+
+    const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+    const std::optional<std::filesystem::path> focusedPath = g_folderWindow.GetFocusedItemPath(pane);
+    if (! focusedPath.has_value())
+    {
+        AppendEmptyMenuItem(menu);
+        perf.SetValue0(0u);
+        perf.SetValue1(0u);
+        return;
+    }
+
+    const std::vector<Common::Settings::FileActionDefinition>& actionSettings =
+        viewerActions ? g_settings.fileActions.viewers.actions : g_settings.fileActions.editors.actions;
+    const std::wstring computerName = GetComputerNameText();
+    const std::vector<const Common::Settings::FileActionDefinition*> actions =
+        FileActionResolver::CollectApplicableActions(actionSettings, focusedPath.value(), computerName);
+
+    const UINT firstId = viewerActions ? IDM_PANE_VIEW_WITH_BASE : IDM_PANE_EDIT_WITH_BASE;
+    const UINT lastId  = viewerActions ? IDM_PANE_VIEW_WITH_LAST : IDM_PANE_EDIT_WITH_LAST;
+    UINT nextId        = firstId;
+    uint64_t written   = 0;
+
+    for (const Common::Settings::FileActionDefinition* action : actions)
+    {
+        if (! action || action->id.empty() || nextId > lastId)
+        {
+            continue;
+        }
+
+        const std::wstring text = GetFileActionMenuText(*action);
+        if (text.empty())
+        {
+            continue;
+        }
+
+        if (AppendMenuW(menu, MF_STRING, nextId, text.c_str()) != FALSE)
+        {
+            menuMap.emplace(nextId, action->id);
+            ++nextId;
+            ++written;
+        }
+    }
+
+    if (written == 0)
+    {
+        AppendEmptyMenuItem(menu);
+    }
+
+    perf.SetValue0(static_cast<uint64_t>(actions.size()));
+    perf.SetValue1(written);
+}
+
+void RebuildUserMenuDynamicItems(HMENU menu)
+{
+    if (! menu)
+    {
+        return;
+    }
+
+    Debug::Perf::Scope perf(L"usermenu.menu_populate_us");
+
+    DeleteMenuItemsFromPosition(menu, 0);
+    g_userMenuIdToActionId.clear();
+
+    const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+    const std::vector<FolderWindow::UserMenuItem> items = g_folderWindow.CollectUserMenuItems(pane);
+
+    UINT nextId      = IDM_PANE_USER_MENU_BASE;
+    uint64_t written = 0;
+    for (const FolderWindow::UserMenuItem& item : items)
+    {
+        if (item.id.empty() || item.displayName.empty() || nextId > IDM_PANE_USER_MENU_LAST)
+        {
+            continue;
+        }
+
+        const UINT flags = item.enabled ? MF_STRING : (MF_STRING | MF_GRAYED);
+        if (AppendMenuW(menu, flags, nextId, item.displayName.c_str()) != FALSE)
+        {
+            g_userMenuIdToActionId.emplace(nextId, item.id);
+            ++nextId;
+            ++written;
+        }
+    }
+
+    if (written == 0)
+    {
+        AppendEmptyMenuItem(menu);
+    }
+
+    perf.SetValue0(static_cast<uint64_t>(items.size()));
+    perf.SetValue1(written);
+}
+
+[[nodiscard]] POINT GetUserMenuPopupAnchor(HWND ownerWindow) noexcept
+{
+    RECT rect{};
+    if (const HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+        focusedFolderView && GetWindowRect(focusedFolderView, &rect) != FALSE)
+    {
+        return POINT{rect.left + 8, rect.top + 8};
+    }
+
+    if (ownerWindow && GetWindowRect(ownerWindow, &rect) != FALSE)
+    {
+        return POINT{rect.left + 16, rect.top + GetSystemMetrics(SM_CYMENU) + 8};
+    }
+
+    POINT point{};
+    static_cast<void>(GetCursorPos(&point));
+    return point;
+}
+
+void ShowUserMenuPopup(HWND hWnd) noexcept
+{
+    EnsureMenuHandles(hWnd);
+    if (! g_userMenu)
+    {
+        return;
+    }
+
+    RebuildUserMenuDynamicItems(g_userMenu);
+
+    const POINT point = GetUserMenuPopupAnchor(hWnd);
+    SetForegroundWindow(hWnd);
+    const UINT commandId = static_cast<UINT>(
+        TrackPopupMenuEx(g_userMenu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, hWnd, nullptr));
+    if (commandId != 0u)
+    {
+        SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(static_cast<WORD>(commandId), 0), 0);
+    }
+}
+
+void RebuildShellNewTemplateMenuDynamicItems(HMENU menu)
+{
+    if (! menu)
+    {
+        return;
+    }
+
+    Debug::Perf::Scope perf(L"shellnew.menu_populate_us");
+
+    constexpr int kFirstDynamicPosition = 2;
+    DeleteMenuItemsFromPosition(menu, kFirstDynamicPosition);
+    g_newTemplateMenuIdToTemplateId.clear();
+
+    const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+    const std::vector<FolderWindow::ShellNewTemplateMenuItem> items = g_folderWindow.CollectShellNewTemplateMenuItems(pane);
+
+    UINT nextId      = IDM_PANE_NEW_TEMPLATE_BASE;
+    uint64_t written = 0u;
+    for (const FolderWindow::ShellNewTemplateMenuItem& item : items)
+    {
+        if (item.id.empty() || item.displayName.empty() || nextId > IDM_PANE_NEW_TEMPLATE_LAST)
+        {
+            continue;
+        }
+
+        if (AppendMenuW(menu, MF_STRING, nextId, item.displayName.c_str()) != FALSE)
+        {
+            g_newTemplateMenuIdToTemplateId.emplace(nextId, item.id);
+            ++nextId;
+            ++written;
+        }
+    }
+
+    if (written == 0u)
+    {
+        AppendEmptyMenuItem(menu);
+    }
+
+    perf.SetValue0(static_cast<uint64_t>(items.size()));
+    perf.SetValue1(written);
 }
 
 void RebuildGoToMenuDynamicItems(FolderWindow::Pane pane, HMENU goToMenu, UINT hotPathsCommandId, UINT hotPathBaseId, UINT historyBaseId)
@@ -3295,6 +3707,30 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
 
     EnsureMenuHandles(hWnd);
 
+    if (menu == g_viewWithMenu)
+    {
+        RebuildFileActionMenuDynamicItems(menu, true);
+        return;
+    }
+
+    if (menu == g_editWithMenu)
+    {
+        RebuildFileActionMenuDynamicItems(menu, false);
+        return;
+    }
+
+    if (menu == g_userMenu)
+    {
+        RebuildUserMenuDynamicItems(menu);
+        return;
+    }
+
+    if (menu == g_newTemplateMenu)
+    {
+        RebuildShellNewTemplateMenuDynamicItems(menu);
+        return;
+    }
+
     if (menu == g_viewPluginsMenu)
     {
         RebuildPluginsMenuDynamicItems(hWnd);
@@ -3308,7 +3744,7 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
     }
 
     if (menu != g_leftGoToMenu && menu != g_rightGoToMenu && menu != g_leftSortMenu && menu != g_rightSortMenu && menu != g_leftDisplayMenu &&
-        menu != g_rightDisplayMenu && menu != g_viewPaneMenu && menu != g_viewMenu && menu != g_editMenu && menu != g_editAdvancedMenu &&
+        menu != g_rightDisplayMenu && menu != g_leftShowMenu && menu != g_rightShowMenu && menu != g_viewMenu && menu != g_editMenu && menu != g_editAdvancedMenu &&
         menu != g_leftPaneMenu && menu != g_rightPaneMenu)
     {
         return;
@@ -3505,6 +3941,12 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
         case IDM_RIGHT_DISPLAY_BRIEF: return L"cmd/pane/display/brief";
         case IDM_LEFT_DISPLAY_DETAILED:
         case IDM_RIGHT_DISPLAY_DETAILED: return L"cmd/pane/display/detailed";
+        case IDM_LEFT_DISPLAY_EXTRA_DETAILED:
+        case IDM_RIGHT_DISPLAY_EXTRA_DETAILED: return L"cmd/pane/display/extraDetailed";
+        case IDM_LEFT_DISPLAY_THUMBNAILS:
+        case IDM_RIGHT_DISPLAY_THUMBNAILS: return L"cmd/pane/viewOptions/toggleThumbnails";
+        case IDM_LEFT_PREVIEW_PANE:
+        case IDM_RIGHT_PREVIEW_PANE: return L"cmd/pane/viewOptions/togglePreviewPane";
 
         case IDM_LEFT_SORT_NONE:
         case IDM_RIGHT_SORT_NONE: return L"cmd/pane/sort/none";
@@ -3521,10 +3963,22 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
 
         case IDM_LEFT_ZOOM_PANEL:
         case IDM_RIGHT_ZOOM_PANEL: return L"cmd/pane/zoomPanel";
+        case IDM_LEFT_SHOW_HIDDEN_FILES:
+        case IDM_RIGHT_SHOW_HIDDEN_FILES: return L"cmd/pane/viewOptions/toggleHiddenFiles";
+        case IDM_LEFT_SHOW_SYSTEM_FILES:
+        case IDM_RIGHT_SHOW_SYSTEM_FILES: return L"cmd/pane/viewOptions/toggleSystemFiles";
+        case IDM_LEFT_SHOW_FILE_EXTENSIONS:
+        case IDM_RIGHT_SHOW_FILE_EXTENSIONS: return L"cmd/pane/viewOptions/toggleFileExtensions";
         case IDM_LEFT_FILTER:
         case IDM_RIGHT_FILTER: return L"cmd/pane/filter";
         case IDM_LEFT_REFRESH:
         case IDM_RIGHT_REFRESH: return L"cmd/pane/refresh";
+        case IDM_LEFT_FILTER_BAR:
+        case IDM_RIGHT_FILTER_BAR: return L"cmd/pane/viewOptions/toggleFilterBar";
+        case IDM_LEFT_NAVIGATION_BAR:
+        case IDM_RIGHT_NAVIGATION_BAR: return L"cmd/pane/viewOptions/toggleNavigationBar";
+        case IDM_LEFT_STATUSBAR:
+        case IDM_RIGHT_STATUSBAR: return L"cmd/pane/viewOptions/toggleStatusBar";
     }
 
     return std::nullopt;
@@ -4012,6 +4466,39 @@ private:
         return RedSalamander::DxUi::RestoreCapturedFocus(_focusRestoreHwnd);
     }
 
+    void ClearMenuSessionFocusState() noexcept
+    {
+        if (_menuBar)
+        {
+            _menuBar->SetSelectedIndex(std::nullopt);
+        }
+        _host.SetFocusControl(nullptr);
+        UpdateSelectedIndexSnapshot();
+    }
+
+    [[nodiscard]] bool RestoreFocusAfterMenuSession() noexcept
+    {
+        ClearMenuSessionFocusState();
+        if (RestoreCapturedFocus())
+        {
+            return true;
+        }
+        if (g_folderWindow.GetFocusedFolderViewHwnd() != nullptr)
+        {
+            return true;
+        }
+        if (g_folderWindow.TryRestoreActivePaneFolderViewFocus())
+        {
+            return true;
+        }
+        if (_ownerWindow && IsWindow(_ownerWindow) != FALSE)
+        {
+            SetFocus(_ownerWindow);
+            return GetFocus() == _ownerWindow;
+        }
+        return false;
+    }
+
     [[nodiscard]] std::optional<size_t> HitTestScreenPoint(POINT screenPoint) const noexcept
     {
         if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
@@ -4200,7 +4687,7 @@ private:
         }
         else
         {
-            static_cast<void>(RestoreCapturedFocus());
+            static_cast<void>(RestoreFocusAfterMenuSession());
         }
 
         if (result.has_value())
@@ -4217,7 +4704,7 @@ private:
         }
 
         g_menuBarTemporarilyShown = false;
-        const bool restored       = RestoreCapturedFocus();
+        const bool restored       = RestoreFocusAfterMenuSession();
         SendMessageW(_ownerWindow, WM_SIZE, 0, 0);
         if (! restored)
         {
@@ -4737,7 +5224,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     static_cast<void>(HostShowAlert(request));
 }
 
-[[nodiscard]] bool DispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept
+[[nodiscard]] bool ExecuteCommandById(HWND ownerWindow, std::wstring_view commandId) noexcept
 {
     if (commandId.empty())
     {
@@ -4745,6 +5232,51 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     }
 
     const std::wstring_view originalCommandId = commandId;
+    std::optional<std::wstring_view> themeId;
+    {
+        constexpr std::wstring_view kThemeSelectPrefix = L"cmd/app/theme/select/";
+        if (originalCommandId.starts_with(kThemeSelectPrefix) && originalCommandId.size() > kThemeSelectPrefix.size())
+        {
+            themeId = originalCommandId.substr(kThemeSelectPrefix.size());
+        }
+    }
+
+    std::optional<std::wstring_view> viewerActionId;
+    {
+        constexpr std::wstring_view kViewWithPrefix = L"cmd/pane/viewWith/";
+        if (originalCommandId.starts_with(kViewWithPrefix) && originalCommandId.size() > kViewWithPrefix.size())
+        {
+            viewerActionId = originalCommandId.substr(kViewWithPrefix.size());
+        }
+    }
+
+    std::optional<std::wstring_view> editorActionId;
+    {
+        constexpr std::wstring_view kEditWithPrefix = L"cmd/pane/editWith/";
+        if (originalCommandId.starts_with(kEditWithPrefix) && originalCommandId.size() > kEditWithPrefix.size())
+        {
+            editorActionId = originalCommandId.substr(kEditWithPrefix.size());
+        }
+    }
+
+    std::optional<std::wstring_view> userMenuActionId;
+    {
+        constexpr std::wstring_view kUserMenuPrefix = L"cmd/pane/userMenu/";
+        if (originalCommandId.starts_with(kUserMenuPrefix) && originalCommandId.size() > kUserMenuPrefix.size())
+        {
+            userMenuActionId = originalCommandId.substr(kUserMenuPrefix.size());
+        }
+    }
+
+    std::optional<std::wstring_view> shellNewTemplateId;
+    {
+        constexpr std::wstring_view kShellNewTemplatePrefix = L"cmd/pane/newFromShellTemplate/";
+        if (originalCommandId.starts_with(kShellNewTemplatePrefix) && originalCommandId.size() > kShellNewTemplatePrefix.size())
+        {
+            shellNewTemplateId = originalCommandId.substr(kShellNewTemplatePrefix.size());
+        }
+    }
+
     std::optional<wchar_t> driveRootLetter;
     {
         constexpr std::wstring_view kGoDriveRootPrefix = L"cmd/pane/goDriveRoot/";
@@ -4791,6 +5323,12 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     }
 
     commandId = CanonicalizeCommandId(commandId);
+
+    if (commandId == L"cmd/app/theme/select" && themeId.has_value())
+    {
+        ApplyThemeId(ownerWindow, themeId.value());
+        return true;
+    }
 
     if (commandId == L"cmd/pane/menu")
     {
@@ -4879,6 +5417,126 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
 
         const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
         g_folderWindow.ToggleZoomPanel(pane);
+        return true;
+    }
+    if (commandId == L"cmd/pane/viewOptions/toggleStatusBar")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+        const bool visible           = g_folderWindow.GetStatusBarVisible(pane);
+        g_folderWindow.SetStatusBarVisible(pane, ! visible);
+        UpdatePaneMenuChecks();
+        return true;
+    }
+    if (commandId == L"cmd/pane/viewOptions/toggleFileExtensions")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+        const bool visible           = g_folderWindow.GetFileExtensionsVisible(pane);
+        g_folderWindow.SetFileExtensionsVisible(pane, ! visible);
+        UpdatePaneMenuChecks();
+        return true;
+    }
+    if (commandId == L"cmd/pane/viewOptions/toggleNavigationBar")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+        const bool visible           = g_folderWindow.GetNavigationBarVisible(pane);
+        g_folderWindow.SetNavigationBarVisible(pane, ! visible);
+        UpdatePaneMenuChecks();
+        return true;
+    }
+    if (commandId == L"cmd/pane/viewOptions/toggleThumbnails")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+        g_folderWindow.SetDisplayMode(pane, FolderView::DisplayMode::Thumbnails);
+        UpdatePaneMenuChecks();
+        return true;
+    }
+    if (commandId == L"cmd/pane/viewOptions/togglePreviewPane")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+        g_folderWindow.TogglePreviewPane(pane);
+        UpdatePaneMenuChecks();
+        return true;
+    }
+    if (commandId == L"cmd/pane/viewOptions/toggleFilterBar")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+        const bool visible           = g_folderWindow.GetFilterBarVisible(pane);
+        g_folderWindow.SetFilterBarVisible(pane, ! visible);
+        UpdatePaneMenuChecks();
+        return true;
+    }
+    if (commandId == L"cmd/pane/viewWith" && viewerActionId.has_value())
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandViewWith(pane, viewerActionId.value());
+        return true;
+    }
+    if (commandId == L"cmd/pane/editWith" && editorActionId.has_value())
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandEditWith(pane, editorActionId.value());
+        return true;
+    }
+    if (commandId == L"cmd/pane/userMenu" && userMenuActionId.has_value())
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandUserMenu(pane, userMenuActionId.value());
+        return true;
+    }
+    if (commandId == L"cmd/pane/newFromShellTemplate")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandNewFromShellTemplate(pane, shellNewTemplateId.value_or(std::wstring_view{}));
         return true;
     }
     if (commandId == L"cmd/pane/filter")
@@ -5069,6 +5727,11 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
 
     ShowCommandNotImplementedMessage(ownerWindow, commandId);
     return true;
+}
+
+[[nodiscard]] bool DispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept
+{
+    return ExecuteCommandById(ownerWindow, commandId);
 }
 
 LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noexcept
@@ -5483,6 +6146,26 @@ bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId)
     return DispatchShortcutCommand(ownerWindow, commandId);
 }
 
+void DebugSetRereadAssociationsSettingsForTest(const Common::Settings::Settings* settings) noexcept
+{
+    const std::scoped_lock lock(g_debugRereadAssociationsMutex);
+    g_debugRereadAssociationsSettingsOverride = settings;
+}
+
+void DebugResetRereadAssociationsSnapshot() noexcept
+{
+    const std::scoped_lock lock(g_debugRereadAssociationsMutex);
+    g_debugRereadAssociationsSnapshot      = {};
+    g_debugRereadAssociationsSnapshotValid = false;
+}
+
+bool DebugGetRereadAssociationsSnapshot(RereadAssociationsDebugSnapshot& out) noexcept
+{
+    const std::scoped_lock lock(g_debugRereadAssociationsMutex);
+    out = g_debugRereadAssociationsSnapshot;
+    return g_debugRereadAssociationsSnapshotValid;
+}
+
 std::wstring_view DebugGetRedSalamanderHelpText() noexcept
 {
     return GetRedSalamanderHelpText();
@@ -5802,11 +6485,12 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     }
 
     HRESULT settingsHr = S_OK;
+    Common::Settings::SettingsLoadRecoveryInfo settingsRecovery{};
     {
         SplashScreen::IfExistSetText(L"Loading app settings...");
         Debug::Perf::Scope perf(L"App.Startup.LoadSettings");
         perf.SetDetail(kAppId);
-        settingsHr = Common::Settings::LoadSettings(kAppId, g_settings);
+        settingsHr = Common::Settings::LoadSettingsWithRecoveryInfo(kAppId, g_settings, &settingsRecovery);
         perf.SetHr(settingsHr);
     }
     if (SUCCEEDED(settingsHr))
@@ -5841,6 +6525,14 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     const bool runHeadlessCompareSelfTest = false;
     const bool anySelfTest                = false;
 #endif
+
+    if (! anySelfTest && settingsRecovery.backedUp && ! settingsRecovery.backupPath.empty())
+    {
+        const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_SETTINGS_RESTORED_DEFAULTS);
+        const std::wstring message = FormatStringResource(
+            nullptr, IDS_FMT_SETTINGS_RESTORED_DEFAULTS_BACKUP, settingsRecovery.settingsPath.wstring(), settingsRecovery.backupPath.wstring());
+        MessageBoxCenteredText(nullptr, message, title, MB_OK | MB_ICONWARNING);
+    }
 
     const bool showSplash      = ! anySelfTest && ! runHeadlessCompareSelfTest && (! g_settings.startup.has_value() || g_settings.startup->showSplash);
     const auto setSplashStatus = [&](std::wstring_view status) noexcept
@@ -6570,6 +7262,75 @@ static void ApplyAppTheme(HWND hWnd)
     }
 }
 
+[[nodiscard]] std::vector<std::wstring_view> BuildThemeCycleIds()
+{
+    constexpr std::array<std::wstring_view, 5> kBuiltInThemeIds = {
+        std::wstring_view{L"builtin/system"},
+        std::wstring_view{L"builtin/light"},
+        std::wstring_view{L"builtin/dark"},
+        std::wstring_view{L"builtin/rainbow"},
+        std::wstring_view{L"builtin/highContrast"},
+    };
+
+    const CustomThemeGroups customThemes = CollectCustomThemeGroups();
+
+    std::vector<std::wstring_view> ids;
+    ids.reserve(kBuiltInThemeIds.size() + customThemes.fileThemes.size() + customThemes.settingsThemes.size());
+    ids.insert(ids.end(), kBuiltInThemeIds.begin(), kBuiltInThemeIds.end());
+
+    for (const auto* def : customThemes.fileThemes)
+    {
+        ids.push_back(def->id);
+    }
+    for (const auto* def : customThemes.settingsThemes)
+    {
+        ids.push_back(def->id);
+    }
+
+    return ids;
+}
+
+void ApplyThemeId(HWND hWnd, std::wstring_view themeId)
+{
+    g_settings.theme.currentThemeId = std::wstring(themeId);
+    if (const auto* def = FindThemeById(themeId))
+    {
+        g_themeMode = ThemeModeFromThemeId(def->baseThemeId);
+    }
+    else
+    {
+        g_themeMode = ThemeModeFromThemeId(themeId);
+    }
+
+    ApplyAppTheme(hWnd);
+}
+
+void SelectAdjacentTheme(HWND hWnd, int direction)
+{
+    const std::vector<std::wstring_view> ids = BuildThemeCycleIds();
+    if (ids.empty())
+    {
+        return;
+    }
+
+    const auto findTheme = [&](std::wstring_view id)
+    {
+        return std::find(ids.begin(), ids.end(), id);
+    };
+
+    auto currentIt = findTheme(g_settings.theme.currentThemeId);
+    if (currentIt == ids.end())
+    {
+        const std::wstring fallbackThemeId = ThemeIdFromThemeMode(g_themeMode);
+        currentIt                          = findTheme(fallbackThemeId);
+    }
+
+    const size_t currentIndex = currentIt != ids.end() ? static_cast<size_t>(std::distance(ids.begin(), currentIt)) : 0u;
+    const size_t count        = ids.size();
+    const size_t nextIndex    = direction >= 0 ? (currentIndex + 1u) % count : (currentIndex + count - 1u) % count;
+    ApplyThemeId(hWnd, ids[nextIndex]);
+}
+
 [[nodiscard]] bool HasOpenItemPropertiesWindow() noexcept
 {
     const HWND props = FindWindowW(kItemPropertiesWindowClassName, nullptr);
@@ -6650,16 +7411,29 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
             FolderView::DisplayMode displayMode     = FolderView::DisplayMode::Brief;
             FolderView::SortBy sortBy               = FolderView::SortBy::Name;
             FolderView::SortDirection sortDirection = FolderView::SortDirection::Ascending;
+            bool fileExtensionsVisible              = true;
+            bool navigationBarVisible               = true;
+            bool filterBarVisible                   = false;
             bool statusBarVisible                   = true;
 
             if (settingsPane)
             {
-                displayMode      = DisplayModeFromSettings(settingsPane->view.display);
-                sortBy           = SortByFromSettings(settingsPane->view.sortBy);
-                sortDirection    = SortDirectionFromSettings(settingsPane->view.sortDirection);
-                statusBarVisible = settingsPane->view.statusBarVisible;
+                displayMode           = DisplayModeFromSettings(settingsPane->view.display);
+                sortBy                = SortByFromSettings(settingsPane->view.sortBy);
+                sortDirection         = SortDirectionFromSettings(settingsPane->view.sortDirection);
+                fileExtensionsVisible = settingsPane->view.fileExtensionsVisible;
+                if (settingsPane->view.thumbnailsVisible)
+                {
+                    displayMode = FolderView::DisplayMode::Thumbnails;
+                }
+                navigationBarVisible  = settingsPane->view.navigationBarVisible;
+                filterBarVisible      = settingsPane->view.filterBarVisible;
+                statusBarVisible      = settingsPane->view.statusBarVisible;
             }
 
+            g_folderWindow.SetFileExtensionsVisible(pane, fileExtensionsVisible);
+            g_folderWindow.SetNavigationBarVisible(pane, navigationBarVisible);
+            g_folderWindow.SetFilterBarVisible(pane, filterBarVisible);
             g_folderWindow.SetStatusBarVisible(pane, statusBarVisible);
             g_folderWindow.SetSort(pane, sortBy, sortDirection);
             g_folderWindow.SetDisplayMode(pane, displayMode);
@@ -6691,6 +7465,186 @@ void RefreshRunningPluginsFromSettings(HWND hWnd) noexcept
     RebuildPluginsMenuDynamicItems(hWnd);
 }
 
+[[nodiscard]] std::vector<std::wstring_view> CollectRuntimeSettingsWindowIds() noexcept
+{
+    std::vector<std::wstring_view> runtimeWindowIds;
+    runtimeWindowIds.reserve(6);
+    runtimeWindowIds.push_back(kMainWindowId);
+    if (const HWND prefs = GetPreferencesDialogHandle(); prefs && IsWindow(prefs))
+    {
+        runtimeWindowIds.push_back(kPreferencesWindowId);
+    }
+    if (const HWND connections = GetConnectionManagerDialogHandle(); connections && IsWindow(connections))
+    {
+        runtimeWindowIds.push_back(kConnectionManagerWindowId);
+    }
+    if (const HWND shortcuts = GetShortcutsWindowHandle(); shortcuts && IsWindow(shortcuts))
+    {
+        runtimeWindowIds.push_back(kShortcutsWindowId);
+    }
+    if (const HWND findFiles = GetFindFilesWindowHandle(); findFiles && IsWindow(findFiles))
+    {
+        runtimeWindowIds.push_back(kFindFilesWindowId);
+    }
+    if (HasOpenItemPropertiesWindow())
+    {
+        runtimeWindowIds.push_back(kItemPropertiesWindowId);
+    }
+    return runtimeWindowIds;
+}
+
+[[nodiscard]] bool SettingsContainPanePath(
+    const std::optional<Common::Settings::FoldersSettings>& folders, std::wstring_view slot, const std::optional<std::filesystem::path>& expected) noexcept
+{
+    if (! expected.has_value())
+    {
+        return true;
+    }
+    if (! folders.has_value())
+    {
+        return false;
+    }
+
+    for (const Common::Settings::FolderPane& pane : folders->items)
+    {
+        if (pane.slot == slot && pane.current == expected.value())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] HRESULT LoadRereadAssociationsSettings(Common::Settings::Settings& settings) noexcept
+{
+#ifdef ENABLE_TESTS
+    {
+        const std::scoped_lock lock(g_debugRereadAssociationsMutex);
+        if (g_debugRereadAssociationsSettingsOverride)
+        {
+            settings = *g_debugRereadAssociationsSettingsOverride;
+            return S_OK;
+        }
+    }
+#endif
+
+    return Common::Settings::TryLoadSettingsNoRecovery(kAppId, settings);
+}
+
+#ifdef ENABLE_TESTS
+void DebugPublishRereadAssociationsSnapshot(const RereadAssociationsDebugSnapshot& snapshot) noexcept
+{
+    const std::scoped_lock lock(g_debugRereadAssociationsMutex);
+    g_debugRereadAssociationsSnapshot      = snapshot;
+    g_debugRereadAssociationsSnapshotValid = true;
+}
+#endif
+
+void RereadAssociations(HWND hWnd) noexcept
+{
+    Debug::Perf::Scope perf(L"rereadAssociations.total_us");
+
+#ifdef ENABLE_TESTS
+    RereadAssociationsDebugSnapshot snapshot{};
+    snapshot.attempted                 = true;
+    snapshot.leftRefreshCountBefore    = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    snapshot.rightRefreshCountBefore   = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Right);
+    snapshot.associationIconCacheSizeBefore = DebugGetAssociationIconCacheSize();
+#endif
+
+    Common::Settings::Settings diskSettings;
+    const HRESULT loadHr = LoadRereadAssociationsSettings(diskSettings);
+#ifdef ENABLE_TESTS
+    snapshot.hr     = loadHr;
+    snapshot.loaded = (loadHr == S_OK);
+#endif
+    if (loadHr != S_OK)
+    {
+        perf.SetHr(loadHr);
+        Debug::Warning(L"RereadAssociations: settings reload failed (hr=0x{:08X})", static_cast<unsigned long>(loadHr));
+        SettingsHotReload::ShowInvalidReloadAlert(Common::Settings::GetSettingsPath(kAppId));
+#ifdef ENABLE_TESTS
+        DebugPublishRereadAssociationsSnapshot(snapshot);
+#endif
+        return;
+    }
+
+    const FolderWindow::Pane activePaneBefore = g_folderWindow.GetActivePane();
+    const std::optional<std::filesystem::path> liveLeftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> liveRightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+
+    Common::Settings::Settings runtimeSettings = g_settings;
+    CaptureRuntimeSettings(runtimeSettings, hWnd);
+    g_settings = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(diskSettings, runtimeSettings, CollectRuntimeSettingsWindowIds());
+    ShortcutDefaults::EnsureShortcutsInitialized(g_settings);
+
+    SettingsHotReload::ClearInvalidReloadAlert();
+    ApplyCurrentSettingsToRunningApp(hWnd);
+    RefreshRunningPluginsFromSettings(hWnd);
+
+    IconCache::GetInstance().Clear();
+    IconCache::GetInstance().ClearAssociationCache();
+
+    EnsureMenuHandles(hWnd);
+    bool viewWithMenuRebuilt = false;
+    bool editWithMenuRebuilt = false;
+    bool userMenuRebuilt     = false;
+    if (g_viewWithMenu)
+    {
+        RebuildFileActionMenuDynamicItems(g_viewWithMenu, true);
+        viewWithMenuRebuilt = true;
+    }
+    if (g_editWithMenu)
+    {
+        RebuildFileActionMenuDynamicItems(g_editWithMenu, false);
+        editWithMenuRebuilt = true;
+    }
+    if (g_userMenu)
+    {
+        RebuildUserMenuDynamicItems(g_userMenu);
+        userMenuRebuilt = true;
+    }
+    if (g_newTemplateMenu)
+    {
+        RebuildShellNewTemplateMenuDynamicItems(g_newTemplateMenu);
+    }
+    UpdatePaneMenuChecks();
+    g_mainMenuBarHost.SyncMenuModel();
+
+    g_folderWindow.CommandRefresh(FolderWindow::Pane::Left);
+    g_folderWindow.CommandRefresh(FolderWindow::Pane::Right);
+    g_folderWindow.SetActivePane(activePaneBefore);
+
+    Common::Settings::SettingsFileStamp stamp{};
+    if (Common::Settings::TryGetSettingsFileStamp(kAppId, stamp) == S_OK)
+    {
+        SettingsHotReload::MarkAppliedStamp(stamp);
+    }
+    SettingsHotReload::NotifyParticipants();
+
+#ifdef ENABLE_TESTS
+    snapshot.viewerActionCount               = g_settings.fileActions.viewers.actions.size();
+    snapshot.editorActionCount               = g_settings.fileActions.editors.actions.size();
+    snapshot.userMenuActionCount             = g_settings.userMenu.actions.size();
+    snapshot.viewerExtensionMappingCount     = g_settings.fileActions.viewers.associations.size();
+    snapshot.fileSystemExtensionMappingCount = g_settings.extensions.openWithFileSystemByExtension.size();
+    snapshot.associationIconCacheSizeAfterClear = DebugGetAssociationIconCacheSize();
+    snapshot.leftRefreshCountAfter              = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    snapshot.rightRefreshCountAfter             = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Right);
+    snapshot.dynamicFileActionMenusRebuilt      = viewWithMenuRebuilt && editWithMenuRebuilt;
+    snapshot.userMenuRebuilt                    = userMenuRebuilt;
+    snapshot.pluginsRefreshed                   = hWnd && IsWindow(hWnd) != FALSE;
+    snapshot.runtimeFoldersPreserved =
+        SettingsContainPanePath(g_settings.folders, kLeftPaneSlot, liveLeftBefore) && SettingsContainPanePath(g_settings.folders, kRightPaneSlot, liveRightBefore);
+    DebugPublishRereadAssociationsSnapshot(snapshot);
+#endif
+
+    perf.SetValue0(static_cast<uint64_t>(g_settings.fileActions.viewers.associations.size()));
+    perf.SetValue1(
+        static_cast<uint64_t>(g_settings.fileActions.viewers.actions.size() + g_settings.fileActions.editors.actions.size() + g_settings.userMenu.actions.size()));
+    perf.SetHr(S_OK);
+}
+
 LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
 {
     auto payload = TakeMessagePayload<SettingsHotReload::SettingsFileChangedPayload>(lParam);
@@ -6720,31 +7674,7 @@ LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
     Common::Settings::Settings runtimeSettings = g_settings;
     CaptureRuntimeSettings(runtimeSettings, hWnd);
 
-    std::vector<std::wstring_view> runtimeWindowIds;
-    runtimeWindowIds.reserve(6);
-    runtimeWindowIds.push_back(kMainWindowId);
-    if (const HWND prefs = GetPreferencesDialogHandle(); prefs && IsWindow(prefs))
-    {
-        runtimeWindowIds.push_back(kPreferencesWindowId);
-    }
-    if (const HWND connections = GetConnectionManagerDialogHandle(); connections && IsWindow(connections))
-    {
-        runtimeWindowIds.push_back(kConnectionManagerWindowId);
-    }
-    if (const HWND shortcuts = GetShortcutsWindowHandle(); shortcuts && IsWindow(shortcuts))
-    {
-        runtimeWindowIds.push_back(kShortcutsWindowId);
-    }
-    if (const HWND findFiles = GetFindFilesWindowHandle(); findFiles && IsWindow(findFiles))
-    {
-        runtimeWindowIds.push_back(kFindFilesWindowId);
-    }
-    if (HasOpenItemPropertiesWindow())
-    {
-        runtimeWindowIds.push_back(kItemPropertiesWindowId);
-    }
-
-    g_settings = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(loadResult.settings, runtimeSettings, runtimeWindowIds);
+    g_settings = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(loadResult.settings, runtimeSettings, CollectRuntimeSettingsWindowIds());
     ShortcutDefaults::EnsureShortcutsInitialized(g_settings);
 
     SettingsHotReload::ClearInvalidReloadAlert();
@@ -6967,19 +7897,50 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         FolderView::DisplayMode displayMode     = FolderView::DisplayMode::Brief;
         FolderView::SortBy sortBy               = FolderView::SortBy::Name;
         FolderView::SortDirection sortDirection = FolderView::SortDirection::Ascending;
+        bool fileExtensionsVisible              = true;
+        bool navigationBarVisible               = true;
+        bool filterBarVisible                   = false;
         bool statusBarVisible                   = true;
         if (! useDeterministicSelfTestPaneStartup && settingsPane)
         {
-            displayMode      = DisplayModeFromSettings(settingsPane->view.display);
-            sortBy           = SortByFromSettings(settingsPane->view.sortBy);
-            sortDirection    = SortDirectionFromSettings(settingsPane->view.sortDirection);
-            statusBarVisible = settingsPane->view.statusBarVisible;
+            displayMode           = DisplayModeFromSettings(settingsPane->view.display);
+            sortBy                = SortByFromSettings(settingsPane->view.sortBy);
+            sortDirection         = SortDirectionFromSettings(settingsPane->view.sortDirection);
+            fileExtensionsVisible = settingsPane->view.fileExtensionsVisible;
+            if (settingsPane->view.thumbnailsVisible)
+            {
+                displayMode = FolderView::DisplayMode::Thumbnails;
+            }
+            navigationBarVisible  = settingsPane->view.navigationBarVisible;
+            filterBarVisible      = settingsPane->view.filterBarVisible;
+            statusBarVisible      = settingsPane->view.statusBarVisible;
         }
 
         perf.SetDetail(current.native());
         perf.SetValue0(static_cast<uint64_t>(displayMode));
         perf.SetValue1(static_cast<uint64_t>(sortBy));
 
+        {
+            Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetFileExtensionsVisible"
+                                                                         : L"App.Startup.ApplyPane.Right.SetFileExtensionsVisible");
+            callPerf.SetDetail(current.native());
+            callPerf.SetValue0(fileExtensionsVisible ? 1u : 0u);
+            g_folderWindow.SetFileExtensionsVisible(pane, fileExtensionsVisible);
+        }
+        {
+            Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetNavigationBarVisible"
+                                                                         : L"App.Startup.ApplyPane.Right.SetNavigationBarVisible");
+            callPerf.SetDetail(current.native());
+            callPerf.SetValue0(navigationBarVisible ? 1u : 0u);
+            g_folderWindow.SetNavigationBarVisible(pane, navigationBarVisible);
+        }
+        {
+            Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetFilterBarVisible"
+                                                                         : L"App.Startup.ApplyPane.Right.SetFilterBarVisible");
+            callPerf.SetDetail(current.native());
+            callPerf.SetValue0(filterBarVisible ? 1u : 0u);
+            g_folderWindow.SetFilterBarVisible(pane, filterBarVisible);
+        }
         {
             Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetStatusBarVisible"
                                                                          : L"App.Startup.ApplyPane.Right.SetStatusBarVisible");
@@ -7314,6 +8275,16 @@ void ToggleFullScreen(HWND hWnd) noexcept
     }
 }
 
+void OpenExternalHelp(HWND ownerWindow) noexcept
+{
+    const HINSTANCE result = ShellExecuteW(ownerWindow, L"open", kExternalHelpUrl, nullptr, nullptr, SW_SHOWNORMAL);
+    const auto code        = reinterpret_cast<INT_PTR>(result);
+    if (code <= 32)
+    {
+        Debug::Error(L"External Help: ShellExecuteW failed for '{}' (code={}).", kExternalHelpUrl, static_cast<long long>(code));
+    }
+}
+
 LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
 {
     const UINT wmId = id;
@@ -7323,6 +8294,11 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         {
             const AppTheme theme = ResolveConfiguredTheme();
             static_cast<void>(ShowAboutDialog(hWnd, theme));
+            break;
+        }
+        case IDM_APP_EXTERNAL_HELP:
+        {
+            OpenExternalHelp(hWnd);
             break;
         }
         case IDM_FILE_PREFERENCES:
@@ -7358,6 +8334,11 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                     g_folderWindow.BeginViewWidthAdjust();
                 }
             }
+            break;
+        }
+        case IDM_APP_REREAD_ASSOCIATIONS:
+        {
+            RereadAssociations(hWnd);
             break;
         }
         case IDM_EXIT: SendMessageW(hWnd, WM_CLOSE, 0, 0); break;
@@ -7521,30 +8502,26 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_APP_SWAP_PANES: g_folderWindow.SwapPanes(); break;
+        case IDM_VIEW_THEME_PREV:
+            SelectAdjacentTheme(hWnd, -1);
+            break;
+        case IDM_VIEW_THEME_NEXT:
+            SelectAdjacentTheme(hWnd, 1);
+            break;
         case IDM_VIEW_THEME_SYSTEM:
-            g_themeMode                     = ThemeMode::System;
-            g_settings.theme.currentThemeId = ThemeIdFromThemeMode(g_themeMode);
-            ApplyAppTheme(hWnd);
+            ApplyThemeId(hWnd, L"builtin/system");
             break;
         case IDM_VIEW_THEME_LIGHT:
-            g_themeMode                     = ThemeMode::Light;
-            g_settings.theme.currentThemeId = ThemeIdFromThemeMode(g_themeMode);
-            ApplyAppTheme(hWnd);
+            ApplyThemeId(hWnd, L"builtin/light");
             break;
         case IDM_VIEW_THEME_DARK:
-            g_themeMode                     = ThemeMode::Dark;
-            g_settings.theme.currentThemeId = ThemeIdFromThemeMode(g_themeMode);
-            ApplyAppTheme(hWnd);
+            ApplyThemeId(hWnd, L"builtin/dark");
             break;
         case IDM_VIEW_THEME_RAINBOW:
-            g_themeMode                     = ThemeMode::Rainbow;
-            g_settings.theme.currentThemeId = ThemeIdFromThemeMode(g_themeMode);
-            ApplyAppTheme(hWnd);
+            ApplyThemeId(hWnd, L"builtin/rainbow");
             break;
         case IDM_VIEW_THEME_HIGH_CONTRAST_APP:
-            g_themeMode                     = ThemeMode::HighContrast;
-            g_settings.theme.currentThemeId = ThemeIdFromThemeMode(g_themeMode);
-            ApplyAppTheme(hWnd);
+            ApplyThemeId(hWnd, L"builtin/highContrast");
             break;
         case IDM_VIEW_PLUGINS_MANAGE:
         {
@@ -7569,6 +8546,8 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_VIEW_PANE_HIDDEN_FILES:
+        case IDM_LEFT_SHOW_HIDDEN_FILES:
+        case IDM_RIGHT_SHOW_HIDDEN_FILES:
         {
             const bool visible = g_folderWindow.GetShowHiddenFiles();
             g_folderWindow.SetShowHiddenFiles(! visible);
@@ -7576,9 +8555,97 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_VIEW_PANE_SYSTEM_FILES:
+        case IDM_LEFT_SHOW_SYSTEM_FILES:
+        case IDM_RIGHT_SHOW_SYSTEM_FILES:
         {
             const bool visible = g_folderWindow.GetShowSystemFiles();
             g_folderWindow.SetShowSystemFiles(! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_VIEW_PANE_FILE_EXTENSIONS:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+            const bool visible           = g_folderWindow.GetFileExtensionsVisible(pane);
+            g_folderWindow.SetFileExtensionsVisible(pane, ! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_LEFT_SHOW_FILE_EXTENSIONS:
+        {
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            const bool visible = g_folderWindow.GetFileExtensionsVisible(FolderWindow::Pane::Left);
+            g_folderWindow.SetFileExtensionsVisible(FolderWindow::Pane::Left, ! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_RIGHT_SHOW_FILE_EXTENSIONS:
+        {
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            const bool visible = g_folderWindow.GetFileExtensionsVisible(FolderWindow::Pane::Right);
+            g_folderWindow.SetFileExtensionsVisible(FolderWindow::Pane::Right, ! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_VIEW_PANE_THUMBNAILS:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+            g_folderWindow.SetDisplayMode(pane, FolderView::DisplayMode::Thumbnails);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_LEFT_DISPLAY_THUMBNAILS:
+        {
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Thumbnails);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_RIGHT_DISPLAY_THUMBNAILS:
+        {
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            g_folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::Thumbnails);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_VIEW_PANE_PREVIEW_PANE:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+            g_folderWindow.TogglePreviewPane(pane);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_LEFT_PREVIEW_PANE:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            g_folderWindow.TogglePreviewPane(FolderWindow::Pane::Left);
+            UpdatePaneMenuChecks();
+            break;
+        case IDM_RIGHT_PREVIEW_PANE:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            g_folderWindow.TogglePreviewPane(FolderWindow::Pane::Right);
+            UpdatePaneMenuChecks();
+            break;
+        case IDM_VIEW_PANE_FILTER_BAR:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
+            const bool visible           = g_folderWindow.GetFilterBarVisible(pane);
+            g_folderWindow.SetFilterBarVisible(pane, ! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_LEFT_FILTER_BAR:
+        {
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            const bool visible = g_folderWindow.GetFilterBarVisible(FolderWindow::Pane::Left);
+            g_folderWindow.SetFilterBarVisible(FolderWindow::Pane::Left, ! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_RIGHT_FILTER_BAR:
+        {
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            const bool visible = g_folderWindow.GetFilterBarVisible(FolderWindow::Pane::Right);
+            g_folderWindow.SetFilterBarVisible(FolderWindow::Pane::Right, ! visible);
             UpdatePaneMenuChecks();
             break;
         }
@@ -7635,14 +8702,25 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_RIGHT_FILTER: g_folderWindow.CommandFilter(FolderWindow::Pane::Right); break;
         case IDM_RIGHT_REFRESH: g_folderWindow.CommandRefresh(FolderWindow::Pane::Right); break;
         case IDM_VIEW_PANE_NAVBAR_LEFT:
+        case IDM_LEFT_NAVIGATION_BAR:
+        {
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/viewOptions/toggleNavigationBar");
+            const bool visible = g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left);
+            g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Left, ! visible);
+            UpdatePaneMenuChecks();
             break;
+        }
         case IDM_VIEW_PANE_NAVBAR_RIGHT:
+        case IDM_RIGHT_NAVIGATION_BAR:
+        {
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/viewOptions/toggleNavigationBar");
+            const bool visible = g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Right);
+            g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Right, ! visible);
+            UpdatePaneMenuChecks();
             break;
+        }
         case IDM_PANE_MENU: SendMessageW(hWnd, WM_SYSCOMMAND, SC_KEYMENU, 0); break;
+        case IDM_PANE_USER_MENU: ShowUserMenuPopup(hWnd); break;
         case IDM_PANE_EXECUTE_OPEN:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -7662,6 +8740,16 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             if (g_folderWindow.TryHandleNavigationEditClipboardCommand(id))
             {
                 break;
+            }
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.SetActivePane(pane);
+            if (HWND folderView = g_folderWindow.GetFolderViewHwnd(pane))
+            {
+                auto* view = reinterpret_cast<FolderView*>(GetWindowLongPtrW(folderView, GWLP_USERDATA));
+                if (view)
+                {
+                    static_cast<void>(view->CutSelectionToClipboard());
+                }
             }
             break;
         }
@@ -7813,6 +8901,24 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_PASTE));
             break;
         }
+        case IDM_PANE_CLIPBOARD_PASTE_SHORTCUT:
+        {
+            if (g_folderWindow.TryHandleNavigationEditClipboardCommand(id))
+            {
+                break;
+            }
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.SetActivePane(pane);
+            if (HWND folderView = g_folderWindow.GetFolderViewHwnd(pane))
+            {
+                auto* view = reinterpret_cast<FolderView*>(GetWindowLongPtrW(folderView, GWLP_USERDATA));
+                if (view)
+                {
+                    static_cast<void>(view->PasteShortcutFromClipboard());
+                }
+            }
+            break;
+        }
         case IDM_PANE_OPEN_PROPERTIES:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -7820,11 +8926,35 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_PROPERTIES));
             break;
         }
+        case IDM_PANE_OPEN_SECURITY:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandOpenSecurity(pane);
+            break;
+        }
+        case IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandGoToShortcutOrLinkTarget(pane);
+            break;
+        }
+        case IDM_PANE_CHANGE_ATTRIBUTES:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandChangeAttributes(pane);
+            break;
+        }
         case IDM_PANE_CONTEXT_MENU:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.SetActivePane(pane);
             static_cast<void>(SendKeyToFolderView(pane, VK_APPS));
+            break;
+        }
+        case IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandContextMenuCurrentDirectory(pane);
             break;
         }
         case IDM_PANE_SELECT_NEXT:
@@ -8049,10 +9179,34 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             static_cast<void>(ShowConnectionManagerWindow(hWnd, kAppId, g_settings, theme, {}, static_cast<uint8_t>(pane)));
             break;
         }
-        case IDM_PANE_CALCULATE_DIRECTORY_SIZES:
+        case IDM_PANE_MAKE_FILE_LIST:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
-            g_folderWindow.CommandCalculateDirectorySizes(pane);
+            g_folderWindow.CommandMakeFileList(pane);
+            break;
+        }
+        case IDM_PANE_PACK:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandPack(pane);
+            break;
+        }
+        case IDM_PANE_UNPACK:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandUnpack(pane);
+            break;
+        }
+        case IDM_PANE_LIST_OPENED_FILES:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandListOpenedFiles(pane);
+            break;
+        }
+        case IDM_PANE_SHARES:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSharedDirectories(pane);
             break;
         }
         case IDM_PANE_CHANGE_CASE:
@@ -8065,6 +9219,24 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.CommandOpenCommandShell(pane);
+            break;
+        }
+        case IDM_PANE_QUICK_SEARCH:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandQuickSearch(pane);
+            break;
+        }
+        case IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandBringCurrentDirToCommandLine(pane);
+            break;
+        }
+        case IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandBringFilenameToCommandLine(pane);
             break;
         }
         case IDM_PANE_OPEN_CURRENT_FOLDER:
@@ -8114,13 +9286,16 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_PANE_RENAME:
         case IDM_PANE_VIEW:
+        case IDM_PANE_ALTERNATE_VIEW:
+        case IDM_PANE_EDIT:
+        case IDM_PANE_ALTERNATE_EDIT:
+        case IDM_PANE_EDIT_NEW:
         case IDM_PANE_VIEW_SPACE:
         case IDM_PANE_COPY_TO_OTHER:
         case IDM_PANE_MOVE_TO_OTHER:
         case IDM_PANE_CREATE_DIR:
         case IDM_PANE_DELETE:
         case IDM_PANE_PERMANENT_DELETE:
-        case IDM_PANE_PERMANENT_DELETE_WITH_VALIDATION:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.SetActivePane(pane);
@@ -8129,13 +9304,16 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             {
                 case IDM_PANE_RENAME: g_folderWindow.CommandRename(pane); break;
                 case IDM_PANE_VIEW: g_folderWindow.CommandView(pane); break;
+                case IDM_PANE_ALTERNATE_VIEW: g_folderWindow.CommandAlternateView(pane); break;
+                case IDM_PANE_EDIT: g_folderWindow.CommandEdit(pane); break;
+                case IDM_PANE_ALTERNATE_EDIT: g_folderWindow.CommandAlternateEdit(pane); break;
+                case IDM_PANE_EDIT_NEW: g_folderWindow.CommandEditNew(pane); break;
                 case IDM_PANE_VIEW_SPACE: g_folderWindow.CommandViewSpace(pane); break;
                 case IDM_PANE_COPY_TO_OTHER: g_folderWindow.CommandCopyToOtherPane(pane); break;
                 case IDM_PANE_MOVE_TO_OTHER: g_folderWindow.CommandMoveToOtherPane(pane); break;
                 case IDM_PANE_CREATE_DIR: g_folderWindow.CommandCreateDirectory(pane); break;
                 case IDM_PANE_DELETE: g_folderWindow.CommandDelete(pane); break;
                 case IDM_PANE_PERMANENT_DELETE: g_folderWindow.CommandPermanentDelete(pane); break;
-                case IDM_PANE_PERMANENT_DELETE_WITH_VALIDATION: g_folderWindow.CommandPermanentDeleteWithValidation(pane); break;
             }
             break;
         }
@@ -8183,6 +9361,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                 case IDM_PANE_DISPLAY_EXTRA_DETAILED: mode = FolderView::DisplayMode::ExtraDetailed; break;
             }
             g_folderWindow.SetDisplayMode(pane, mode);
+            UpdatePaneMenuChecks();
             break;
         }
         case IDM_LEFT_SORT_NAME:
@@ -8212,14 +9391,17 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_LEFT_DISPLAY_BRIEF:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Brief);
+            UpdatePaneMenuChecks();
             break;
         case IDM_LEFT_DISPLAY_DETAILED:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Detailed);
+            UpdatePaneMenuChecks();
             break;
         case IDM_LEFT_DISPLAY_EXTRA_DETAILED:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::ExtraDetailed);
+            UpdatePaneMenuChecks();
             break;
         case IDM_RIGHT_SORT_NAME:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
@@ -8248,14 +9430,17 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_RIGHT_DISPLAY_BRIEF:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::Brief);
+            UpdatePaneMenuChecks();
             break;
         case IDM_RIGHT_DISPLAY_DETAILED:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::Detailed);
+            UpdatePaneMenuChecks();
             break;
         case IDM_RIGHT_DISPLAY_EXTRA_DETAILED:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::ExtraDetailed);
+            UpdatePaneMenuChecks();
             break;
         case IDM_LEFT_OVERLAY_SAMPLE_ERROR:
             if (! IsOverlaySampleEnabled())
@@ -8431,17 +9616,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             const auto it = g_customThemeMenuIdToThemeId.find(cmdId);
             if (it != g_customThemeMenuIdToThemeId.end())
             {
-                g_settings.theme.currentThemeId = it->second;
-                if (const auto* def = FindThemeById(it->second))
-                {
-                    g_themeMode = ThemeModeFromThemeId(def->baseThemeId);
-                }
-                else
-                {
-                    g_themeMode = ThemeMode::System;
-                }
-
-                ApplyAppTheme(hWnd);
+                ApplyThemeId(hWnd, it->second);
                 break;
             }
 
@@ -8469,6 +9644,38 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                         DBGOUT_ERROR(L"SaveSettings failed (hr=0x{:08X}) path={}\n", static_cast<unsigned long>(saveHr), settingsPath.wstring());
                     }
                 }
+                break;
+            }
+
+            const auto viewWithIt = g_viewWithMenuIdToActionId.find(cmdId);
+            if (viewWithIt != g_viewWithMenuIdToActionId.end())
+            {
+                const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+                g_folderWindow.CommandViewWith(pane, viewWithIt->second);
+                break;
+            }
+
+            const auto editWithIt = g_editWithMenuIdToActionId.find(cmdId);
+            if (editWithIt != g_editWithMenuIdToActionId.end())
+            {
+                const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+                g_folderWindow.CommandEditWith(pane, editWithIt->second);
+                break;
+            }
+
+            const auto userMenuIt = g_userMenuIdToActionId.find(cmdId);
+            if (userMenuIt != g_userMenuIdToActionId.end())
+            {
+                const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+                g_folderWindow.CommandUserMenu(pane, userMenuIt->second);
+                break;
+            }
+
+            const auto newTemplateIt = g_newTemplateMenuIdToTemplateId.find(cmdId);
+            if (newTemplateIt != g_newTemplateMenuIdToTemplateId.end())
+            {
+                const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+                g_folderWindow.CommandNewFromShellTemplate(pane, newTemplateIt->second);
                 break;
             }
 
@@ -8778,6 +9985,7 @@ LRESULT OnMainWindowClose(HWND hWnd)
 LRESULT OnMainWindowDestroy(HWND hWnd)
 {
     SettingsHotReload::Stop();
+    g_mainMenuBarHost.Destroy();
 
 #ifdef ENABLE_TESTS
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)

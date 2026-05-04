@@ -260,6 +260,7 @@ void CompareDirectoriesWindow::UpdateViewMenuChecks() noexcept
         case FolderView::DisplayMode::Brief: checked = IDM_PANE_DISPLAY_BRIEF; break;
         case FolderView::DisplayMode::Detailed: checked = IDM_PANE_DISPLAY_DETAILED; break;
         case FolderView::DisplayMode::ExtraDetailed: checked = IDM_PANE_DISPLAY_EXTRA_DETAILED; break;
+        case FolderView::DisplayMode::Thumbnails: checked = IDM_PANE_DISPLAY_DETAILED; break;
     }
 
     CheckMenuRadioItem(menu, IDM_PANE_DISPLAY_BRIEF, IDM_PANE_DISPLAY_EXTRA_DETAILED, checked, MF_BYCOMMAND);

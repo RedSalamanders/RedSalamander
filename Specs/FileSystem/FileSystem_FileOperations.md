@@ -1,6 +1,6 @@
 # File Operations Specification
 
-Last updated: 2026-05-01
+Last updated: 2026-05-04
 
 Normative sections use RFC-2119 keywords (MUST/SHOULD/MAY). Appendices are informative.
 
@@ -74,6 +74,20 @@ Progress-display investigations MUST keep UI cadence and operation cadence separ
 
 - Plugin operation and callback contracts: `Specs/Plugins/Plugins_VirtualFileSystem.md`
 - Theme key list (including file ops keys): `Specs/Core/Core_SettingsStore.md`
+
+## Archive Operations (Normative)
+
+`cmd/pane/pack` creates an archive from the active local pane selection. `cmd/pane/unpack` extracts selected or focused local archives to a destination selected by the Unpack prompt. Unsupported providers MUST keep the pane in place and show localized pane feedback.
+
+Pack uses the selected items, or the focused item when nothing is selected. The built-in `ZIP (Plugin)` packer writes deterministic stored ZIP archives with `/` separators, preserved selected empty directories, and entries sorted by archive path. Other writable archive formats are discovered from the bundled `7zip.dll` and are created through `IOutArchive::UpdateItems`.
+
+Unpack supports stored ZIP entries through the built-in reader and delegates compressed ZIP entries, 7-Zip archives, and other formats supported by the bundled `7zip.dll` to the 7-Zip extraction path. Both extraction paths preserve the same destination, overwrite, mask, and safe-entry-path contract. Unsupported/encrypted methods fail with localized pane feedback.
+
+Archive entry names MUST be relative `/`-separated paths. Both extraction paths MUST reject empty names, absolute paths, drive-qualified paths, UNC-style prefixes, backslashes, `.` / `..` components, colons, embedded NULs, and reserved DOS device names such as `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, and `LPT1`-`LPT9` even when followed by an extension.
+
+After combining an entry name with the chosen destination, both extraction paths MUST verify that the normalized target remains inside the destination directory before creating directories, opening files, or moving temp files into place. 7-Zip extraction MUST reject symbolic-link and hard-link entries with `ERROR_NOT_SUPPORTED`.
+
+ZIP names MUST be decoded as UTF-8 when general-purpose flag bit 11 is set, and as CP437 otherwise. Extraction should create parent directories before file entries and should commit file contents via same-directory temp files. Transient `ERROR_SHARING_VIOLATION` / `ERROR_LOCK_VIOLATION` failures while replacing the final output MAY be retried briefly before reporting failure.
 
 ## Settings And Ownership (Normative)
 
@@ -449,6 +463,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
   - Pre-calc: indeterminate marquee bar
   - Copy/Move: current-item bar (primary) + overall bar (secondary)
   - Delete: overall item bar; MAY additionally show size progress when pre-calc data is available
+  - Finished successful tasks MUST render their progress bar as complete even when the last advisory byte counters lagged the completion event.
 - Bandwidth graph (Copy/Move):
   - Shows recent throughput history.
   - Samples represent the smoothed display throughput at popup timer cadence.
@@ -692,6 +707,7 @@ These are the “product rules” that determine the safest implementation strat
 3) **Delete bytes semantics**
    - Delete progress MAY report bytes when available (best-effort) so that the popup can show size progress when pre-calc totals exist.
    - The host SHOULD treat delete `completedBytes` as advisory; item counts remain the primary completion signal.
+   - A successful completed delete MUST display as complete even if its final advisory byte counter is below the pre-calc total.
 
 4) **Directory watcher overflow semantics**
    - `overflow==TRUE` MUST be treated as “resync required” (not just “some events may be coalesced”).
@@ -975,6 +991,8 @@ Tasks:
   - Properties views MUST omit unavailable optional metadata instead of displaying placeholder zero values. In particular, timestamp fields whose value is `0` are not shown.
   - The built-in local filesystem General section SHOULD stay focused on name, full path, type, and file size; parent/root/extension rows are omitted because they duplicate those values.
   - Built-in local filesystem file sizes SHOULD use folder-view compact units and include the exact byte count in parentheses for sizes of 1 KB and larger.
+  - Built-in local filesystem properties MUST add target metadata for link-like items when available: `.lnk` files expose a `Shortcut` section with `Target`; `.url` files expose an `Internet Shortcut` section with `URL` and a local `Target` when the URL resolves to one; junctions, mount points, and directory symbolic links expose a `Reparse Point` section with `Kind` and `Target`.
+  - Built-in local filesystem target metadata MUST be omitted rather than shown as placeholders when target resolution fails or the reparse tag is unsupported.
   - The dialog MUST show an item-stream section only when `GetItemProperties` JSON contains named streams. The stream section lists stream name and size. Each stream row has a View action that opens that stream in ViewerText, where the user can inspect it in text or hex mode. When the active filesystem also exposes `IFileSystemItemStreams`, each removable stream gets an enabled Remove action that deletes the stream and refreshes the dialog; if the refreshed item has no remaining streams, the stream section disappears. Stream Remove actions do not need a tooltip when the visible command text already says `Remove`.
 
 - [x] Self-test coverage:

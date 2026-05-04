@@ -159,6 +159,7 @@ private:
     RedSalamander::DxUi::GridSortSpec _tableSortSpec{};
 
     wil::unique_hwnd _hWnd;
+    bool _embeddedMode = false;
     UINT _dpi = USER_DEFAULT_SCREEN_DPI;
 
     RedSalamander::DxUi::WindowHost _dxHost;

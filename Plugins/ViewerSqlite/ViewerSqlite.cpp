@@ -901,6 +901,19 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Open(const ViewerOpenContext* context) n
     LoadOtherFiles(context);
     _currentPath = _otherFiles.empty() ? std::wstring(context->focusedPath) : _otherFiles[_otherIndex];
 
+    const bool embeddedMode =
+        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
+    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
+    {
+        Debug::Error(L"ViewerSqlite: embedded Open requires a valid ownerWindow parent.");
+        return E_INVALIDARG;
+    }
+    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    {
+        static_cast<void>(Close());
+    }
+
     _currentQuery.clear();
     _currentHasMore   = false;
     _currentRowOffset = 0;
@@ -917,7 +930,20 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Open(const ViewerOpenContext* context) n
         int y = CW_USEDEFAULT;
         int w = 1100;
         int h = 760;
-        if (context->ownerWindow != nullptr && GetWindowRect(context->ownerWindow, &ownerRect) != 0)
+        if (embeddedMode)
+        {
+            RECT client{};
+            if (GetClientRect(embeddedParent, &client) == 0)
+            {
+                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerSqlite: GetClientRect failed for embedded preview parent.");
+                return HRESULT_FROM_WIN32(lastError);
+            }
+            x = 0;
+            y = 0;
+            w = std::max(1L, client.right - client.left);
+            h = std::max(1L, client.bottom - client.top);
+        }
+        else if (context->ownerWindow != nullptr && GetWindowRect(context->ownerWindow, &ownerRect) != 0)
         {
             x = ownerRect.left;
             y = ownerRect.top;
@@ -925,21 +951,46 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Open(const ViewerOpenContext* context) n
             h = std::max(1L, ownerRect.bottom - ownerRect.top);
         }
 
-        HWND window = CreateWindowExW(0, GetWindowClassName().c_str(), _metaName.c_str(), WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr, nullptr, g_hInstance, this);
+        const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : WS_OVERLAPPEDWINDOW;
+        HWND window =
+            CreateWindowExW(0, GetWindowClassName().c_str(), embeddedMode ? L"" : _metaName.c_str(), style, x, y, w, h, embeddedParent, nullptr, g_hInstance, this);
         if (! window)
         {
-            return HRESULT_FROM_WIN32(GetLastError());
+            const DWORD lastError = Debug::ErrorWithLastError(L"ViewerSqlite: CreateWindowExW failed.");
+            return HRESULT_FROM_WIN32(lastError);
         }
 
         _hWnd.reset(window);
+        _embeddedMode = embeddedMode;
         AddRef();
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
+        if (! embeddedMode)
+        {
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
     else
     {
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        if (_embeddedMode)
+        {
+            RECT client{};
+            if (embeddedParent != nullptr && GetClientRect(embeddedParent, &client) != 0)
+            {
+                SetWindowPos(_hWnd.get(),
+                             nullptr,
+                             0,
+                             0,
+                             std::max(1L, client.right - client.left),
+                             std::max(1L, client.bottom - client.top),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else
+        {
+            ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
 
     if (_queryField)
@@ -961,6 +1012,7 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Close() noexcept
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
+    _embeddedMode = false;
     return S_OK;
 }
 
@@ -1245,7 +1297,10 @@ void ViewerSqlite::ApplyTheme(HWND hwnd) noexcept
 {
     ThemePalette palette = _hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false);
     _dxHost.SetTheme(palette);
-    ApplyTitleBarTheme(GetActiveWindow() == hwnd);
+    if (! _embeddedMode)
+    {
+        ApplyTitleBarTheme(GetActiveWindow() == hwnd);
+    }
 }
 
 void ViewerSqlite::ApplyTitleBarTheme(bool /*windowActive*/) noexcept

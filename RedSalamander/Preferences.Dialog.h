@@ -58,6 +58,9 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugGetThemesListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetThemesListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugSetViewersSearchText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugSelectViewersDefaultAction(bool alternate, std::wstring_view actionId) noexcept;
+[[nodiscard]] bool DebugSelectEditorsDefaultAction(bool alternate, std::wstring_view actionId) noexcept;
+[[nodiscard]] bool DebugSelectEditorsDefaultEditNewAction(std::wstring_view actionId) noexcept;
 [[nodiscard]] bool DebugSetKeyboardSearchText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetKeyboardFunctionBarScope() noexcept;
 [[nodiscard]] bool DebugCaptureKeyboardShortcut(uint32_t vk, uint32_t modifiers) noexcept;

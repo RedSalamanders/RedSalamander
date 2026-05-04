@@ -1,5 +1,262 @@
 #include "FolderViewInternal.h"
 
+namespace
+{
+[[nodiscard]] bool IsBuiltinFileSystemPlugin(std::wstring_view pluginId) noexcept
+{
+    return CompareStringOrdinal(pluginId.data(), static_cast<int>(pluginId.size()), L"builtin/file-system", -1, TRUE) == CSTR_EQUAL;
+}
+
+void ShowClipboardOverlay(FolderView& view,
+                          UINT titleStringId,
+                          UINT messageStringId,
+                          FolderView::OverlaySeverity severity,
+                          HRESULT hr = S_OK) noexcept
+{
+    Debug::Perf::Scope perf(L"clipboard.feedback_us");
+    perf.SetHr(hr);
+
+    std::wstring title = LoadStringResource(nullptr, titleStringId);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, severity == FolderView::OverlaySeverity::Error ? IDS_CAPTION_ERROR : IDS_CAPTION_WARNING);
+    }
+
+    std::wstring message = LoadStringResource(nullptr, messageStringId);
+    if (message.empty())
+    {
+        message = title;
+    }
+
+    view.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, severity, std::move(title), std::move(message), hr, true, false);
+}
+
+void ShowClipboardFormattedOverlay(FolderView& view,
+                                   UINT titleStringId,
+                                   UINT messageStringId,
+                                   const std::filesystem::path& path,
+                                   HRESULT hr) noexcept
+{
+    Debug::Perf::Scope perf(L"clipboard.feedback_us");
+    perf.SetHr(hr);
+
+    std::wstring title = LoadStringResource(nullptr, titleStringId);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+    }
+
+    std::wstring message =
+        FormatStringResource(nullptr, messageStringId, path.filename().wstring(), static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+    if (message.empty())
+    {
+        message = title;
+    }
+
+    view.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), hr, true, false);
+}
+
+[[nodiscard]] wil::unique_hglobal BuildFileDropHGlobal(const std::vector<std::filesystem::path>& paths) noexcept
+{
+    size_t totalChars = 1u;
+    for (const auto& path : paths)
+    {
+        totalChars += path.native().size() + 1u;
+    }
+
+    const size_t bytes = sizeof(DROPFILES) + totalChars * sizeof(wchar_t);
+    wil::unique_hglobal memory(GlobalAlloc(GMEM_MOVEABLE, bytes));
+    if (! memory)
+    {
+        return nullptr;
+    }
+
+    auto* drop = static_cast<DROPFILES*>(GlobalLock(memory.get()));
+    if (! drop)
+    {
+        return nullptr;
+    }
+
+    drop->pFiles = sizeof(DROPFILES);
+    drop->pt     = POINT{};
+    drop->fNC    = FALSE;
+    drop->fWide  = TRUE;
+
+    auto* cursor = reinterpret_cast<wchar_t*>(reinterpret_cast<BYTE*>(drop) + drop->pFiles);
+    for (const auto& path : paths)
+    {
+        const std::wstring text = path.native();
+        std::copy(text.begin(), text.end(), cursor);
+        cursor += text.size();
+        *cursor++ = L'\0';
+    }
+    *cursor = L'\0';
+    GlobalUnlock(memory.get());
+
+    return memory;
+}
+
+[[nodiscard]] wil::unique_hglobal BuildPreferredDropEffectHGlobal(DWORD preferredEffect) noexcept
+{
+    wil::unique_hglobal memory(GlobalAlloc(GMEM_MOVEABLE, sizeof(DWORD)));
+    if (! memory)
+    {
+        return nullptr;
+    }
+
+    auto* effect = static_cast<DWORD*>(GlobalLock(memory.get()));
+    if (! effect)
+    {
+        return nullptr;
+    }
+
+    *effect = preferredEffect;
+    GlobalUnlock(memory.get());
+    return memory;
+}
+
+[[nodiscard]] bool SetFileDropClipboard(HWND ownerWindow, const std::vector<std::filesystem::path>& paths, DWORD preferredEffect) noexcept
+{
+    wil::unique_hglobal drop = BuildFileDropHGlobal(paths);
+    if (! drop)
+    {
+        return false;
+    }
+
+    wil::unique_hglobal effect = BuildPreferredDropEffectHGlobal(preferredEffect);
+    if (! effect)
+    {
+        return false;
+    }
+
+    if (OpenClipboard(ownerWindow) == 0)
+    {
+        return false;
+    }
+    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+
+    if (EmptyClipboard() == 0)
+    {
+        return false;
+    }
+
+    if (SetClipboardData(CF_HDROP, drop.get()) == nullptr)
+    {
+        return false;
+    }
+    drop.release();
+
+    const UINT preferredDropEffectFormat = PreferredDropEffectFormat();
+    if (preferredDropEffectFormat == 0u || SetClipboardData(preferredDropEffectFormat, effect.get()) == nullptr)
+    {
+        return false;
+    }
+    effect.release();
+
+    return true;
+}
+
+[[nodiscard]] std::vector<std::filesystem::path> ReadFileDropClipboard(HWND ownerWindow) noexcept
+{
+    std::vector<std::filesystem::path> result;
+    if (OpenClipboard(ownerWindow) == 0)
+    {
+        return result;
+    }
+    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+
+    HANDLE handle = GetClipboardData(CF_HDROP);
+    if (! handle)
+    {
+        return result;
+    }
+
+    const auto fileCount = DragQueryFileW(static_cast<HDROP>(handle), 0xFFFFFFFFu, nullptr, 0u);
+    result.reserve(fileCount);
+    for (UINT index = 0; index < fileCount; ++index)
+    {
+        const UINT length = DragQueryFileW(static_cast<HDROP>(handle), index, nullptr, 0u);
+        if (length == 0u)
+        {
+            continue;
+        }
+
+        std::wstring path(length, L'\0');
+        if (DragQueryFileW(static_cast<HDROP>(handle), index, path.data(), length + 1u) == length)
+        {
+            result.emplace_back(path);
+        }
+    }
+
+    return result;
+}
+
+[[nodiscard]] HRESULT CreateShellShortcut(const std::filesystem::path& target,
+                                          const std::filesystem::path& destinationFolder,
+                                          std::filesystem::path& createdPath) noexcept
+{
+    createdPath.clear();
+
+    wil::com_ptr<IShellLinkW> shellLink;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(shellLink.addressof()));
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = shellLink->SetPath(target.c_str());
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    const std::filesystem::path parent = target.parent_path();
+    if (! parent.empty())
+    {
+        static_cast<void>(shellLink->SetWorkingDirectory(parent.c_str()));
+    }
+
+    const std::wstring description = target.filename().wstring();
+    if (! description.empty())
+    {
+        static_cast<void>(shellLink->SetDescription(description.c_str()));
+    }
+
+    wil::com_ptr<IPersistFile> persist;
+    hr = shellLink->QueryInterface(IID_PPV_ARGS(persist.addressof()));
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    std::error_code ec;
+    bool foundSlot = false;
+    for (int attempt = 0; attempt < 256; ++attempt)
+    {
+        const std::filesystem::path candidate = GenerateShortcutPath(destinationFolder, target, attempt);
+        if (! std::filesystem::exists(candidate, ec))
+        {
+            if (ec)
+            {
+                return HrFromErrorCode(ec);
+            }
+
+            createdPath = candidate;
+            foundSlot   = true;
+            break;
+        }
+        ec.clear();
+    }
+
+    if (! foundSlot)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    }
+
+    return persist->Save(createdPath.c_str(), TRUE);
+}
+} // namespace
+
 void FolderView::CommandRename()
 {
     RenameFocusedItem();
@@ -7,22 +264,48 @@ void FolderView::CommandRename()
 
 void FolderView::CommandView()
 {
+    static_cast<void>(RequestViewFocusedItem(ViewFileRole::Primary, true));
+}
+
+bool FolderView::CommandAlternateView()
+{
+    return RequestViewFocusedItem(ViewFileRole::Alternate, false);
+}
+
+bool FolderView::CommandViewWith(std::wstring_view actionId)
+{
+    if (actionId.empty())
+    {
+        return false;
+    }
+
+    return RequestViewFocusedItem(ViewFileRole::Primary, false, actionId);
+}
+
+bool FolderView::RequestViewFocusedItem(ViewFileRole role, bool activateFallback, std::wstring_view actionId)
+{
     if (_focusedIndex == static_cast<size_t>(-1) || _focusedIndex >= _items.size())
     {
-        return;
+        return false;
     }
 
     const auto& item = _items[_focusedIndex];
     if (item.isDirectory)
     {
-        SetFolderPath(GetItemFullPath(item));
-        return;
+        if (activateFallback)
+        {
+            SetFolderPath(GetItemFullPath(item));
+            return true;
+        }
+        return false;
     }
 
     bool handled = false;
     if (_viewFileRequestCallback)
     {
         ViewFileRequest request;
+        request.role        = role;
+        request.actionId    = std::wstring(actionId);
         request.focusedPath = GetItemFullPath(item);
 
         for (const auto& candidate : _items)
@@ -42,10 +325,13 @@ void FolderView::CommandView()
         handled = _viewFileRequestCallback(request);
     }
 
-    if (! handled)
+    if (! handled && activateFallback)
     {
         ActivateFocusedItem();
+        handled = true;
     }
+
+    return handled;
 }
 
 void FolderView::CommandDelete()
@@ -289,33 +575,34 @@ void FolderView::CopySelectionToClipboard()
     if (paths.empty())
         return;
 
-    std::wstring multiSz = BuildMultiSz(paths);
-    SIZE_T bytes         = (multiSz.size()) * sizeof(wchar_t) + sizeof(DROPFILES);
+    static_cast<void>(SetFileDropClipboard(_hWnd.get(), paths, DROPEFFECT_COPY));
+}
 
-    wil::unique_hglobal hMem(GlobalAlloc(GMEM_MOVEABLE, bytes));
-    if (! hMem)
-        return;
+bool FolderView::CutSelectionToClipboard()
+{
+    Debug::Perf::Scope perf(L"clipboard.cut_us");
 
-    auto* data = static_cast<BYTE*>(GlobalLock(hMem.get()));
-    if (! data)
-        return;
-
-    auto* drop   = reinterpret_cast<DROPFILES*>(data);
-    drop->pFiles = sizeof(DROPFILES);
-    drop->pt     = POINT{};
-    drop->fNC    = FALSE;
-    drop->fWide  = TRUE;
-
-    auto* files = reinterpret_cast<wchar_t*>(data + drop->pFiles);
-    memcpy(files, multiSz.c_str(), (multiSz.size()) * sizeof(wchar_t));
-    GlobalUnlock(hMem.get());
-
-    if (OpenClipboard(_hWnd.get()))
+    if (! IsBuiltinFileSystemPlugin(_fileSystemPluginId))
     {
-        EmptyClipboard();
-        SetClipboardData(CF_HDROP, hMem.release());
-        CloseClipboard();
+        ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_CUT, IDS_MSG_CLIPBOARD_LOCAL_SELECTION_REQUIRED, OverlaySeverity::Warning);
+        return false;
     }
+
+    const std::vector<std::filesystem::path> paths = GetSelectedOrFocusedPaths();
+    perf.SetValue0(static_cast<uint64_t>(paths.size()));
+    if (paths.empty())
+    {
+        ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_CUT, IDS_MSG_CLIPBOARD_SELECTION_REQUIRED, OverlaySeverity::Warning);
+        return false;
+    }
+
+    if (! SetFileDropClipboard(_hWnd.get(), paths, DROPEFFECT_MOVE))
+    {
+        ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_CUT, IDS_MSG_CLIPBOARD_WRITE_FAILED, OverlaySeverity::Warning);
+        return false;
+    }
+
+    return true;
 }
 
 void FolderView::PasteItemsFromClipboard()
@@ -382,6 +669,64 @@ void FolderView::PasteItemsFromClipboard()
     {
         ForceRefresh();
     }
+}
+
+bool FolderView::PasteShortcutFromClipboard()
+{
+    Debug::Perf::Scope perf(L"clipboard.paste_shortcut_us");
+
+    if (! _currentFolder.has_value() || _currentFolder.value().empty() || ! IsBuiltinFileSystemPlugin(_fileSystemPluginId))
+    {
+        ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT, IDS_MSG_CLIPBOARD_LOCAL_FOLDER_REQUIRED, OverlaySeverity::Warning);
+        return false;
+    }
+
+    std::vector<std::filesystem::path> sources = ReadFileDropClipboard(_hWnd.get());
+    perf.SetValue0(static_cast<uint64_t>(sources.size()));
+    if (sources.empty())
+    {
+        ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT, IDS_MSG_CLIPBOARD_NO_SHORTCUT_SOURCE, OverlaySeverity::Warning);
+        return false;
+    }
+
+    std::vector<std::filesystem::path> createdLinks;
+    createdLinks.reserve(sources.size());
+    HRESULT firstFailure = S_OK;
+    std::filesystem::path failedSource;
+
+    for (const auto& source : sources)
+    {
+        std::filesystem::path createdPath;
+        const HRESULT hr = CreateShellShortcut(source, _currentFolder.value(), createdPath);
+        if (FAILED(hr))
+        {
+            firstFailure = hr;
+            failedSource = source;
+            break;
+        }
+
+        if (! createdPath.empty())
+        {
+            createdLinks.push_back(std::move(createdPath));
+        }
+    }
+
+    perf.SetValue1(static_cast<uint64_t>(createdLinks.size()));
+
+    if (! createdLinks.empty())
+    {
+        DirectoryInfoCache::GetInstance().NotifyFolderContentsChanged(_fileSystem.get(), _currentFolder.value());
+        RememberFocusedItemForFolder(_currentFolder.value(), createdLinks.back().filename().wstring());
+        EnumerateFolder();
+    }
+
+    if (FAILED(firstFailure))
+    {
+        ShowClipboardFormattedOverlay(*this, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT, IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED, failedSource, firstFailure);
+        return false;
+    }
+
+    return ! createdLinks.empty();
 }
 
 void FolderView::RenameFocusedItem()

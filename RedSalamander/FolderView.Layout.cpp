@@ -68,6 +68,9 @@ void FolderView::LayoutItems()
 
     const float clientWidthDip  = std::max(0.0f, DipFromPx(_clientSize.cx));
     const float clientHeightDip = std::max(0.0f, DipFromPx(_clientSize.cy));
+    const bool includeDetailsLine =
+        _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
 
     _columnCounts.clear();
     _columnPrefixSums.clear();
@@ -88,8 +91,6 @@ void FolderView::LayoutItems()
                     parentRowLabel = LoadStringResource(nullptr, IDS_EMPTY_FOLDER_TITLE);
                 }
 
-                const bool includeDetailsLine  = _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed;
-                const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed && static_cast<bool>(_metadataTextProvider);
                 const FolderViewEmptyStateLayout::PlaceholderItemMetrics metrics =
                     FolderViewEmptyStateLayout::ResolvePlaceholderItemMetrics(FolderViewEmptyStateLayout::PlaceholderItemMetricsInput{
                         .clientWidthDip          = clientWidthDip,
@@ -101,7 +102,7 @@ void FolderView::LayoutItems()
                         .metadataLineHeightDip   = _metadataLineHeightDip > 0.0f ? _metadataLineHeightDip : _estimatedMetadataHeightDip,
                         .titleLength             = parentRowLabel.size(),
                         .includeDetailsLine      = includeDetailsLine,
-                        .includeMetadataLine     = includeMetadataLine,
+                        .includeMetadataLine     = includeMetadataLine && static_cast<bool>(_metadataTextProvider),
                     });
 
                 _tileWidthDip   = metrics.tileWidthDip;
@@ -129,7 +130,7 @@ void FolderView::LayoutItems()
     {
         TRACER_CTX(L"EstimateMetrics");
 
-        if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
+        if (includeDetailsLine)
         {
             size_t sizeSlotChars = 0;
             for (const auto& item : _items)
@@ -177,7 +178,7 @@ void FolderView::LayoutItems()
             // Clear any existing layout - will be created lazily on render
             item.labelLayout.reset();
 
-            if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
+            if (includeDetailsLine)
             {
                 if (item.detailsText.empty())
                 {
@@ -203,7 +204,7 @@ void FolderView::LayoutItems()
                 // Clear any existing layout - will be created lazily on render
                 item.detailsLayout.reset();
 
-                if (_displayMode == DisplayMode::ExtraDetailed)
+                if (includeMetadataLine)
                 {
                     if (item.metadataText.empty() && _metadataTextProvider)
                     {
@@ -254,7 +255,7 @@ void FolderView::LayoutItems()
     {
         textWidthForLayout = std::max(maxLabelWidth, maxDetailsWidth);
     }
-    else if (_displayMode == DisplayMode::ExtraDetailed)
+    else if (includeMetadataLine)
     {
         textWidthForLayout = std::max(std::max(maxLabelWidth, maxDetailsWidth), maxMetadataWidth);
     }
@@ -267,11 +268,11 @@ void FolderView::LayoutItems()
     _tileWidthDip                  = std::min(targetColumnWidth, maxAllowedWidth);
 
     _labelHeightDip = maxLabelHeight + kLabelVerticalPaddingDip * 2.0f;
-    if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
+    if (includeDetailsLine)
     {
         const float detailsHeight = _detailsLineHeightDip > 0.0f ? _detailsLineHeightDip : 12.0f;
         float textBlockHeight     = maxLabelHeight + kDetailsGapDip + detailsHeight;
-        if (_displayMode == DisplayMode::ExtraDetailed && _metadataTextProvider && maxMetadataWidth > 0.0f)
+        if (includeMetadataLine && _metadataTextProvider && maxMetadataWidth > 0.0f)
         {
             const float metadataHeight = _metadataLineHeightDip > 0.0f ? _metadataLineHeightDip : detailsHeight;
             textBlockHeight += kDetailsGapDip + metadataHeight;
@@ -395,6 +396,9 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
         return;
     }
 
+    const bool includeDetailsLine =
+        _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const float constrainedWidth          = std::max(labelWidth, 1.0f);
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
     const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
@@ -468,7 +472,7 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
             item.labelLayout->SetMaxHeight(constrainedHeight);
         }
 
-        if (_displayMode == DisplayMode::Brief)
+        if (! includeDetailsLine)
         {
             item.detailsLayout.reset();
             item.detailsMetrics = {};
@@ -526,7 +530,7 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
             item.detailsLayout->SetMaxHeight(constrainedDetailsHeight);
         }
 
-        if (_displayMode != DisplayMode::ExtraDetailed)
+        if (! includeMetadataLine)
         {
             item.metadataLayout.reset();
             item.metadataMetrics = {};
@@ -667,7 +671,7 @@ void FolderView::ReleaseDistantRenderingState()
     for (size_t i = 0; i < keepStart && i < _items.size(); ++i)
     {
         auto& item = _items[i];
-        if (item.labelLayout || item.detailsLayout || item.metadataLayout || item.icon)
+        if (item.labelLayout || item.detailsLayout || item.metadataLayout || item.icon || item.thumbnail)
         {
             item.labelLayout.reset();
             item.labelMetrics = {};
@@ -680,6 +684,7 @@ void FolderView::ReleaseDistantRenderingState()
             item.metadataText.clear();
             item.metadataText.shrink_to_fit();
             item.icon.reset();
+            item.thumbnail.reset();
             ++released;
         }
     }
@@ -688,7 +693,7 @@ void FolderView::ReleaseDistantRenderingState()
     for (size_t i = keepEnd; i < _items.size(); ++i)
     {
         auto& item = _items[i];
-        if (item.labelLayout || item.detailsLayout || item.metadataLayout || item.icon)
+        if (item.labelLayout || item.detailsLayout || item.metadataLayout || item.icon || item.thumbnail)
         {
             item.labelLayout.reset();
             item.labelMetrics = {};
@@ -701,6 +706,7 @@ void FolderView::ReleaseDistantRenderingState()
             item.metadataText.clear();
             item.metadataText.shrink_to_fit();
             item.icon.reset();
+            item.thumbnail.reset();
             ++released;
         }
     }
@@ -711,6 +717,16 @@ void FolderView::ReleaseDistantRenderingState()
     }
 }
 
+std::wstring_view FolderView::GetVisualDisplayName(const FolderItem& item) const noexcept
+{
+    if (_fileExtensionsVisible || item.isDirectory)
+    {
+        return item.displayName;
+    }
+
+    return item.GetNameWithoutExtension();
+}
+
 void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
 {
     if (! _dwriteFactory || ! _labelFormat)
@@ -718,11 +734,15 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
         return;
     }
 
-    if (item.displayName.empty())
+    const std::wstring_view labelText = GetVisualDisplayName(item);
+    if (labelText.empty())
     {
         return;
     }
 
+    const bool includeDetailsLine =
+        _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const float constrainedWidth          = std::max(labelWidth, 1.0f);
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
     const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
@@ -732,8 +752,8 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
     if (! item.labelLayout)
     {
         wil::com_ptr<IDWriteTextLayout> layout;
-        HRESULT hr = _dwriteFactory->CreateTextLayout(item.displayName.data(),
-                                                      static_cast<UINT32>(item.displayName.length()),
+        HRESULT hr = _dwriteFactory->CreateTextLayout(labelText.data(),
+                                                      static_cast<UINT32>(labelText.length()),
                                                       _labelFormat.get(),
                                                       constrainedWidth,
                                                       constrainedHeight,
@@ -757,8 +777,8 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
         item.labelLayout->SetMaxHeight(constrainedHeight);
     }
 
-    // Create details layout if in detailed/extra detailed mode and not yet created
-    if ((_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed) && _detailsFormat)
+    // Create details layout if the display mode includes secondary lines.
+    if (includeDetailsLine && _detailsFormat)
     {
         if (item.detailsText.empty())
         {
@@ -801,7 +821,7 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
             item.detailsLayout->SetMaxHeight(constrainedDetailsHeight);
         }
 
-        if (_displayMode == DisplayMode::ExtraDetailed)
+        if (includeMetadataLine)
         {
             if (item.metadataText.empty() && _metadataTextProvider)
             {
@@ -900,6 +920,9 @@ void FolderView::ProcessIdleLayoutBatch()
         return;
     }
 
+    const bool includeDetailsLine =
+        _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const float labelWidth                = std::max(0.0f, _tileWidthDip - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
     const float constrainedWidth          = std::max(labelWidth, 1.0f);
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
@@ -940,7 +963,7 @@ void FolderView::ProcessIdleLayoutBatch()
         }
 
         // Create details layout if needed
-        if ((_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed) && _detailsFormat)
+        if (includeDetailsLine && _detailsFormat)
         {
             if (item.detailsText.empty())
             {
@@ -976,7 +999,7 @@ void FolderView::ProcessIdleLayoutBatch()
                 }
             }
 
-            if (_displayMode == DisplayMode::ExtraDetailed)
+            if (includeMetadataLine)
             {
                 if (item.metadataText.empty() && _metadataTextProvider)
                 {

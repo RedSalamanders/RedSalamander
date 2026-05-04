@@ -60,7 +60,7 @@ Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, 
 - **Ban `sprintf_s` / `swprintf_s`** in non-PoC code:
   - Diagnostics: `std::format` / `std::format_to_n` + `OutputDebugStringA/W`
   - User-facing/localized: `.rc` resources + `FormatStringResource(...)` with **positional** placeholders
-- **Resource strings must use `std::format`-style positional placeholders** (`{0}`, `{1:08X}`); never treat a resource string as a printf-format string (avoid C4774 suppression).
+- **Resource strings must use `std::format`-style positional placeholders** (`{0}`, `{1:08X}`); bare `{}` and unindexed format specs like `{:08X}` are forbidden in `.rc` resources because translators must be able to reorder arguments. Never treat a resource string as a printf-format string (avoid C4774 suppression).
 - **COM ownership:** never store owning raw COM interface pointers (no manual `Release()`); use `wil::com_ptr<T>` for members and locals.
 - **COM ref-counting:** never do `obj->AddRef(); ptr.attach(obj);` (two-step hazard); prefer `ptr = obj;` / `wil::com_ptr<T> ptr = obj;`.
 - **`wil::unique_hwnd` ownership:** never call `DestroyWindow(_hWnd.get())` on a `wil::unique_hwnd` owner; use `_hWnd.reset()` (or `.release()` only when transferring ownership explicitly).

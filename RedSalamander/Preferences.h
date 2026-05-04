@@ -17,6 +17,7 @@ enum class PrefCategory : int;
 [[nodiscard]] bool ShowPreferencesDialog(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme);
 [[nodiscard]] bool ShowPreferencesDialogPlugins(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme);
 [[nodiscard]] bool ShowPreferencesDialogHotPaths(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme);
+[[nodiscard]] bool ShowPreferencesDialogUserMenu(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme);
 
 [[nodiscard]] HWND GetPreferencesDialogHandle() noexcept;
 void UpdatePreferencesWindowsTheme(const AppTheme& theme) noexcept;
@@ -58,6 +59,9 @@ enum class PreferencesViewersDebugFocusTarget : uint8_t
     SaveButton,
     RemoveButton,
     ResetButton,
+    ActionsGrid,
+    ActionIdField,
+    TestFileField,
 };
 
 enum class PreferencesGeneralDebugFocusTarget : uint8_t
@@ -256,9 +260,24 @@ struct PreferencesDebugSnapshot
     uint64_t viewersListRenderCount        = 0u;
     uint64_t viewersListResizeCount        = 0u;
     uint64_t viewersListResizeFailureCount = 0u;
+    size_t viewersActionCount              = 0u;
+    size_t viewersActionRowCount           = 0u;
+    std::wstring viewersPrimaryActionIdText;
+    std::wstring viewersAlternateActionIdText;
+    std::wstring viewersPreviewActionIdText;
+    std::wstring viewersPreviewReasonText;
     std::wstring viewersSearchText;
     std::wstring viewersSelectedExtensionText;
     PreferencesViewersDebugFocusTarget viewersFocusTarget = PreferencesViewersDebugFocusTarget::None;
+    size_t editorsActionCount                            = 0u;
+    size_t editorsAssociationRowCount                    = 0u;
+    size_t editorsActionRowCount                         = 0u;
+    std::wstring editorsPrimaryActionIdText;
+    std::wstring editorsAlternateActionIdText;
+    std::wstring editorsEditNewActionIdText;
+    std::wstring editorsPreviewActionIdText;
+    std::wstring editorsPreviewReasonText;
+    size_t userMenuActionCount                           = 0u;
     size_t keyboardListRowCount                           = 0u;
     size_t keyboardListVisibleRowCount                    = 0u;
     size_t keyboardListVisibleColumnCount                 = 0u;
@@ -384,6 +403,9 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugGetPreferencesThemesListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetPreferencesThemesListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugSetPreferencesViewersSearchText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugSelectPreferencesViewersDefaultAction(bool alternate, std::wstring_view actionId) noexcept;
+[[nodiscard]] bool DebugSelectPreferencesEditorsDefaultAction(bool alternate, std::wstring_view actionId) noexcept;
+[[nodiscard]] bool DebugSelectPreferencesEditorsDefaultEditNewAction(std::wstring_view actionId) noexcept;
 [[nodiscard]] bool DebugSetPreferencesKeyboardSearchText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetPreferencesKeyboardFunctionBarScope() noexcept;
 [[nodiscard]] bool DebugCapturePreferencesKeyboardShortcut(uint32_t vk, uint32_t modifiers = 0) noexcept;

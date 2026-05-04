@@ -906,7 +906,7 @@ Properties JSON (version 1) (minimal shape):
 }
 ```
 
-The host treats field values as display text, not typed values; plugins should format sizes for users rather than exposing raw byte counts as the only text. Long field values may wrap in the themed dialog.
+The host treats field values as display text, not typed values; plugins should format sizes for users rather than exposing raw byte counts as the only text. Long field values may wrap in the themed dialog. Plugins that expose shortcut/link/reparse metadata should prefer the same section names and labels used by the built-in local filesystem: `Shortcut` / `Target`, `Internet Shortcut` / `URL` / `Target`, and `Reparse Point` / `Kind` / `Target`.
 
 `streams` is optional and lists named streams for the item. The default unnamed data stream is not listed. `name` is the logical stream name without Win32 `:` delimiters or `:$DATA` suffix. `sizeBytes` is the stream size as an unsigned integer; `displaySize` is the plugin-provided localized/display string; `canRemove` only means the stream is semantically removable if the active filesystem also implements `IFileSystemItemStreams`.
 

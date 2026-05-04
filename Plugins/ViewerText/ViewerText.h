@@ -547,6 +547,7 @@ private:
 
     ViewerTheme _theme{};
     bool _hasTheme                = false;
+    bool _embeddedMode            = false;
     bool _allowEraseBkgnd         = true;
     bool _allowEraseBkgndTextView = true;
     bool _allowEraseBkgndHexView  = true;

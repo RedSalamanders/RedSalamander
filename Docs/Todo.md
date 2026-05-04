@@ -6,22 +6,24 @@ This page is a user-facing summary of what is planned.
 
 ## Navigation
 
-- [ ] Filter bar (always-visible)
+- [x] Filter bar (per-pane visibility toggle)
 
 ## View / layout
 
-- [ ] Pane view options: file extensions
-- [ ] Pane view options: thumbnails
-- [ ] Pane view options: preview pane
-- [ ] Navigation bar visibility toggles per pane
+- [x] Pane view options: file extensions
+- [x] Pane view options: thumbnails
+- [x] Pane view options: preview pane
+- [x] Navigation bar visibility toggles per pane
 
 ## Files and editors
 
-- [ ] “Edit width”
-- [ ] Alternate View
-- [ ] View With / Edit With menus
-- [ ] Edit / Edit new file workflow
-- [ ] Editors preferences page (currently a placeholder)
+- [x] Alternate View / Alternate Edit
+- [x] View With / Edit With menus
+- [x] Edit / Edit new file workflow
+- [x] Editors preferences page action defaults
+- [x] New from shell templates
+- [x] Clipboard Cut
+- [x] Paste Shortcut
 
 ## Selection tools
 
@@ -29,15 +31,17 @@ This page is a user-facing summary of what is planned.
 
 ## Commands
 
-- [ ] Make file list
-- [ ] Go to shortcut/link target
-- [ ] List of opened files
-- [ ] Shared directories
-- [ ] Quick search / command-line input
-- [ ] “Bring current directory/filename to command line”
-- [ ] Reread associations
-- [ ] User menu
+- [x] Change attributes
+- [x] Make file list
+- [x] Go to shortcut/link target
+- [x] List of opened files
+- [x] Shared directories
+- [x] Quick search
+- [x] Command-line input
+- [x] “Bring current directory/filename to command line”
+- [x] Reread associations
+- [x] User menu
 
 ## Packing
 
-- [ ] Pack / Unpack commands (beyond browsing archives as virtual file systems)
+- [x] Pack / Unpack commands for local ZIP archive creation and extraction

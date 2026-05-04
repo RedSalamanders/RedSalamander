@@ -2,7 +2,7 @@
   "name": "red-salamander",
   "description": "RedSalamander Project",
   "homepage": "https://github.com/Redsalamanderse/RedSalamander",
-  "builtin-baseline": "c3867e714dd3a51c272826eea77267876517ed99",
+  "builtin-baseline": "56bb2411609227288b70117ead2c47585ba07713",
   "dependencies": [
     {
       "name": "7zip",
@@ -38,7 +38,7 @@
     },
     {
       "name": "curl",
-      "version>=": "8.19.0",
+      "version>=": "8.20.0",
       "features": [
         "ssl",
         "ssh",

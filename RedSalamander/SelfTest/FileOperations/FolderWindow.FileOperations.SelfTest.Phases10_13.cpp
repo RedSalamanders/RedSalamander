@@ -1,9 +1,9 @@
-case SelfTestState::Step::Phase10_PermanentDeleteWithValidation:
+case SelfTestState::Step::Phase10_PermanentDelete:
 {
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 120'000ull))
     {
-        Fail(L"Phase10_PermanentDeleteWithValidation timed out.");
+        Fail(L"Phase10_PermanentDelete timed out.");
         return true;
     }
 
@@ -39,7 +39,7 @@ case SelfTestState::Step::Phase10_PermanentDeleteWithValidation:
                                                                  true);
         if (! state.taskA.has_value())
         {
-            Fail(L"Failed to start perm-delete (with validation) task.");
+            Fail(L"Failed to start confirmed permanent-delete task.");
             return true;
         }
 

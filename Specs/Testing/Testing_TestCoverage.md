@@ -56,12 +56,12 @@ Recent UI-retirement evidence:
 
 ## 1. Commands Suite (`--commands-selftest`)
 
-**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 11 included `.cpp` family files (70K+ lines, 360+ cases)
+**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (70K+ lines, 360+ cases)
 
 The Commands suite is split into logical `.cpp` family files included from the main orchestrator:
 - `SelfTest\Commands\Commands.SelfTest.Settings.cpp` — Settings hot-reload, store, registry, shortcut defaults (11 cases)
 - `SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp` — Plugin configuration and file-system plugin (13 cases)
-- `SelfTest\Commands\Commands.SelfTest.Connections.cpp` — Connection manager and credentials (34 cases)
+- `SelfTest\Commands\Commands.SelfTest.Connections.cpp` — Connection manager and credentials (36 cases)
 - `SelfTest\Commands\Commands.SelfTest.Preferences.cpp` coordinator + 7 included chunk files — Preferences dialog automation (129 cases)
 - `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` — Compare directories options, chrome, and progress (11 cases)
 - `SelfTest\Commands\Commands.SelfTest.Search.cpp` — Find dialog, local search index, quick search/filter (52 cases)
@@ -69,6 +69,7 @@ The Commands suite is split into logical `.cpp` family files included from the m
 - `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` — View commands, selection, sort, pane, tabs (28 cases)
 - `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` — File operations issues pane, speed limit prompt (21 cases)
 - `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` — Navigation location, GoTo, navigation/drive menu shell stability, Escape focus reclaim to the active FolderView, navigation-menu `Go to >` placement before drive rows, nonstandard file-system `Common Folders` submenu coverage, and directory-impact selection preservation
+- `SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp` — Shell-integrated pane commands including Change Attributes attributes/date-time/stream reports and recursive progress
 - `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` — About, fatal error, splash, change case, filter, rename, including long initial rename-selection clipping, etc. (48 cases)
 
 The suitetests UI automation, dialog interactions, preferences, shortcuts,
@@ -145,7 +146,7 @@ window using UIAutomation and direct Win32 message simulation.
 | `cmd_app_shortcuts_reordered_resized_columns_survive_sort_cycles_and_search_roundtrip` | Reordered+resized layout through sort and search |
 | `cmd_app_shortcuts_reordered_resized_copy_follows_visible_columns_after_sort_cycles_and_search_roundtrip` | Reordered+resized copy after sort and search |
 
-### 1.4 Connection Manager (27 cases)
+### 1.4 Connection Manager (29 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
@@ -157,6 +158,8 @@ window using UIAutomation and direct Win32 message simulation.
 | `cmd_connection_manager_window_enter_from_dx_input_routes_default_connect` | Enter from DxUi input routes the default Connect command |
 | `cmd_connection_manager_window_applies_selected_tool_backdrop` | Shared tool-window backdrop application |
 | `cmd_connection_manager_window_live_dx_interaction` | DxUi interaction |
+| `cmd_connection_manager_window_masked_secret_accepts_bridge_chars` | Masked secret field accepts WM_CHAR through the DxUi bridge |
+| `cmd_connection_manager_window_textfield_doubleclick_selects_word` | Real Connection Manager text field double-click selects a word |
 | `cmd_connection_manager_window_long_run_list_scrolling_stays_bounded` | Scroll bounds |
 | `cmd_connection_manager_window_long_run_open_close_stays_stable` | Stability |
 | `cmd_connection_manager_window_modeless_connect_posts_left_navigation` | Modeless Connect posts left-pane navigation |
@@ -175,7 +178,7 @@ window using UIAutomation and direct Win32 message simulation.
 | `cmd_connection_manager_window_uses_dxui_form_action_buttons` | Form action buttons |
 | `cmd_connection_manager_window_uses_dxui_form_inputs` | Form inputs |
 | `cmd_connection_manager_window_uses_localized_strings_for_dynamic_labels` | Resource-backed dynamic labels |
-| `cmd_connection_manager_window_wm_close_discards_new_profile` | System close/WM_CLOSE discard semantics |
+| `cmd_connection_manager_window_wm_close_discards_new_profile` | System close/WM_CLOSE prompts before dirty discard |
 
 Connection Manager closeout requires:
 
@@ -197,13 +200,18 @@ Connection Manager closeout requires:
 | `cmd_connection_credential_prompt_pointer_click_toggles_secret_visibility` | Secret visibility toggle |
 | `cmd_connection_credential_prompt_theme_cycle_keeps_surface_legible` | Theme cycle surface legibility and shared tool-window backdrop application |
 
-### 1.6 Pane Commands (17 cases)
+### 1.6 Pane Commands (23 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
+| `cmd_pane_changeAttributes_applies_attributes_removes_streams_and_reports` | Change Attributes selected-item scope, attribute set/clear, stream removal, and report contents |
+| `cmd_pane_changeAttributes_options_dialog_uses_dxui_not_win32_template` | Change Attributes DxUi dialog, tri-state cycle back to leave unchanged, date/time rows, Include subdirectories disabled for file-only selection, UIA toggle surface |
+| `cmd_pane_changeAttributes_recurse_applies_datetime_with_progress` | Recursive Change Attributes applies date/time to selected folder descendants and creates a File Operations progress task |
 | `cmd_pane_changeCase` | Change case command |
 | `cmd_pane_copy_text` | Copy text to clipboard |
 | `cmd_pane_focusAddressBar_tab_traversal` | Address bar tab traversal |
+| `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` | Pack/Unpack ZIP round trip, sorted entries, empty-directory preservation, overwrite validation, invalid destination handling, unsupported-provider feedback, and archive perf artifact output |
+| `cmd_pane_listOpenedFiles_shows_sources_prunes_closed_editors_and_focuses_items` | List Opened Files dialog empty state, viewer/editor/preview source rows, closed external-editor pruning, focus navigation, and perf artifact output |
 | `cmd_pane_navigationView_full_path_popup_edit_route` | Navigation full path editing |
 | `cmd_pane_navigationView_history_dropdown_keyboard_navigation` | History dropdown navigation |
 | `cmd_pane_navigationView_path_doubleClick_enters_edit_mode` | Path double-click edit |
@@ -218,6 +226,7 @@ Connection Manager closeout requires:
 | `cmd_pane_selection_goto_selected_name` | Go to selected name |
 | `cmd_pane_selection_hide_names` | Hide selected names |
 | `cmd_pane_selection_invert` | Invert selection |
+| `cmd_pane_shares_shows_synthetic_rows_opens_paths_and_reports_access_denied` | Shared Directories sorted synthetic rows, open-path navigation, access-denied empty/error state, shortcut dispatch, and perf artifact output |
 
 ### 1.7 Find Files Dialog (46 cases)
 
@@ -347,13 +356,14 @@ Key coverage patterns per page:
 | `cmd_compare_directories_options_uses_dxui_labels_without_visible_legacy_statics` | DxUi labels, zero visible native body/footer controls, and DirectWrite options typography metrics |
 | `cmd_compare_directories_progress_perf` | Compare progress performance |
 
-### 1.12 Settings and Infrastructure (18 cases)
+### 1.12 Settings and Infrastructure (21 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
 | `folderView_empty_folder_state` | Empty folder centered state plus row-sized focused `Go to parent` placeholder item |
 | `folderView_filter_watermark_empty_state` | Filter watermark display |
 | `folderView_perf_large_folder_baseline` | Large folder performance baseline |
+| `help_menu_links_external_documentation` | Help menu external documentation command placement and registry binding |
 | `icon_bitmap_alpha_normalization` | Icon alpha normalization including premultiply and AND-mask transparency semantics |
 | `mask_syntax_wildcards` | Wildcard mask syntax parsing |
 | `menu_copy_text_group_contract` | Menu copy text contract |
@@ -362,6 +372,9 @@ Key coverage patterns per page:
 | `navigation_location_edit_input_expands_environment_variables` | Environment variable expansion |
 | `red_salamander_help_lists_diagnostics_options` | Help text documents Release diagnostics ETW and perf JSONL switches |
 | `registry_integrity` | Registry settings integrity; every command has a non-empty short function-bar label with guarded examples (`MakeDir`, `UsrMenu`, `ByTime`) |
+| `resource_hresult_details_format_is_valid` | Localized HRESULT details resource uses valid positional `std::format` placeholders |
+| `resource_invalid_format_string_returns_empty` | Runtime resource formatting degrades to an empty fallback instead of throwing when a localized string has invalid `std::format` syntax |
+| `resource_format_placeholders_are_positional` | Product `.rc` resources reject bare `{}` and unindexed `std::format` specs while allowing documented literal file-action macros |
 | `search_local_index_stream_stop_after_first` | Search stream stop semantics |
 | `settings_file_operations_precalc_roundtrip` | Pre-calc settings roundtrip |
 | `settings_file_system_plugin_roundtrip` | Plugin settings roundtrip |
@@ -599,7 +612,7 @@ Each phase represents a test case that exercises one aspect of the file operatio
 
 | Case Name | Coverage Area |
 |-----------|---------------|
-| `Phase10_PermanentDeleteWithValidation` | Permanent delete with validation |
+| `Phase10_PermanentDelete` | Confirmed permanent delete |
 | `Phase11_CrossFileSystemBridge` | Cross-filesystem bridge |
 | `Phase11_BridgeSingleFolderParallelCopyInFlightLines` | Bridge single-folder parallel |
 | `Phase11_BridgeMultiFolderParallelCopyInFlightLines` | Bridge multi-folder parallel |

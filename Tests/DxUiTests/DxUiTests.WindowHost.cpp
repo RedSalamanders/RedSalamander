@@ -218,6 +218,35 @@ private:
     TrackingControlState* _state = nullptr;
 };
 
+class DetachOrderProbeControl final : public RedSalamander::DxUi::Control
+{
+public:
+    DetachOrderProbeControl(DWORD ownerThreadId, uint32_t expectedAttachmentCount, bool& destroyed, bool& sawAttachmentAlive) noexcept
+        : _ownerThreadId(ownerThreadId), _expectedAttachmentCount(expectedAttachmentCount), _destroyed(destroyed), _sawAttachmentAlive(sawAttachmentAlive)
+    {
+    }
+    DetachOrderProbeControl(const DetachOrderProbeControl&)            = delete;
+    DetachOrderProbeControl& operator=(const DetachOrderProbeControl&) = delete;
+    DetachOrderProbeControl(DetachOrderProbeControl&&)                 = delete;
+    DetachOrderProbeControl& operator=(DetachOrderProbeControl&&)      = delete;
+
+    ~DetachOrderProbeControl() override
+    {
+        _destroyed          = true;
+        _sawAttachmentAlive = RedSalamander::DxUi::DebugGetSharedWindowHostAttachmentCountForThread(_ownerThreadId) == _expectedAttachmentCount;
+    }
+
+    void Paint(RedSalamander::DxUi::WindowHost&) const override
+    {
+    }
+
+private:
+    DWORD _ownerThreadId              = 0u;
+    uint32_t _expectedAttachmentCount = 0u;
+    bool& _destroyed;
+    bool& _sawAttachmentAlive;
+};
+
 void TestWindowHostKeyboardInputMarksFocusVisible()
 {
     using namespace RedSalamander::DxUi;
@@ -268,6 +297,34 @@ void TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount()
     Require(DebugGetAttachedWindowHostCount() == baselineAttachedHostCount, "cross-thread detach removes the host from the attached-host registry");
     Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == baselineOwnerAttachmentCount,
             "cross-thread detach releases the original owner thread graphics attachment count");
+}
+
+void TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed()
+{
+    using namespace RedSalamander::DxUi;
+
+    const DWORD ownerThreadId                   = GetCurrentThreadId();
+    const size_t baselineAttachedHostCount      = DebugGetAttachedWindowHostCount();
+    const uint32_t baselineOwnerAttachmentCount = DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId);
+
+    AttachedHostWindow window;
+    const uint32_t attachedOwnerAttachmentCount = baselineOwnerAttachmentCount + 1u;
+    bool probeDestroyed                         = false;
+    bool probeSawAttachmentAlive                = false;
+    window.Host().SetRoot(std::make_unique<DetachOrderProbeControl>(
+        ownerThreadId, attachedOwnerAttachmentCount, probeDestroyed, probeSawAttachmentAlive));
+
+    Require(DebugGetAttachedWindowHostCount() == (baselineAttachedHostCount + 1u), "attached host registers before detach-order validation");
+    Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == attachedOwnerAttachmentCount,
+            "attached host increments graphics attachment count before detach-order validation");
+
+    window.Host().Detach();
+
+    Require(probeDestroyed, "detach destroys the retained control tree");
+    Require(probeSawAttachmentAlive, "detach keeps the shared graphics attachment alive until the retained control tree is destroyed");
+    Require(DebugGetAttachedWindowHostCount() == baselineAttachedHostCount, "detach removes host from the attached-host registry after order validation");
+    Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == baselineOwnerAttachmentCount,
+            "detach releases graphics attachment count after retained host resources are destroyed");
 }
 
 void TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads()
@@ -1933,6 +1990,8 @@ void RunWindowHostTests()
     runTest("TestWindowHostKeyboardInputMarksFocusVisible", TestWindowHostKeyboardInputMarksFocusVisible);
     runTest("TestWindowHostPointerInputClearsKeyboardFocusVisible", TestWindowHostPointerInputClearsKeyboardFocusVisible);
     runTest("TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount", TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount);
+    runTest("TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed",
+            TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed);
     runTest("TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads", TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads);
     runTest("TestWindowHostMouseMoveUpdatesHoverTarget", TestWindowHostMouseMoveUpdatesHoverTarget);
     runTest("TestWindowHostTabTraversal", TestWindowHostTabTraversal);

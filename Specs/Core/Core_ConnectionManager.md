@@ -11,6 +11,7 @@ Migration record: `Specs/Plans/Done/UI_ConnectionManagerSingleCanvasPlan.md`.
 - The live implementation is `RedSalamander/ConnectionManagerWindow.{h,cpp}`. `ConnectionManagerDialog.h` and `ConnectionManagerDialog.cpp` are retired and must not be reintroduced.
 - `ShowConnectionManagerWindow(...)` is the normal application entry point. It is modeless, single-instance, and posts `WndMsg::kConnectionManagerConnect` to the owner with a copied connection-name payload and the requested target pane after Connect validates and saves.
 - `ShowConnectionManagerDialog(...)` is a synchronous facade over the same single-canvas window for host-service callers that require the existing `S_OK` / `S_FALSE` result contract.
+- The top-level window class MUST register `CS_DBLCLKS` so native double-click gestures reach DxUi text fields. Text fields in the real Connection Manager window must support bridge-backed character input, word selection on double-click, and masked secret editing without exposing secret text through clipboard copy/cut.
 - The Connection Manager window and connection credential prompts MUST apply the persisted `ui.windowBackdrop` setting through the shared window chrome/backdrop helper path with tool-window target semantics. High contrast or unsupported OS state MUST resolve to no system backdrop, and activation handling MUST keep title-bar active/inactive state correct without changing the persisted backdrop policy.
 - Profile names are trimmed before save and must be non-empty, unique case-insensitively, and not reserved for Quick Connect. A saved name must resolve to exactly one persisted profile.
 - The settings hot-reload contract matches Preferences: clean windows reload from disk automatically, dirty windows prompt before reloading, and stale save-producing actions prompt before overwriting disk state.
@@ -285,7 +286,7 @@ Layout (using RedSalamander theming):
   - `Connect` (OK): saves config, resolves selected/edited connection, and closes dialog
   - `Close`: saves config and closes dialog (no navigation)
   - `Cancel`: closes without saving changes (no navigation)
-- System close/title-bar close (`WM_CLOSE`) follows `Cancel`: it closes without saving changes (no navigation).
+- System close/title-bar close (`WM_CLOSE`) follows `Cancel` only after confirming when the editor is dirty: choosing OK discards unsaved changes and closes without navigation; choosing Cancel keeps the Connection Manager open.
 
 Connect-time secret behavior:
 

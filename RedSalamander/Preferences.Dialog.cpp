@@ -15,6 +15,7 @@
 #include "Preferences.Panes.h"
 #include "Preferences.Plugins.h"
 #include "Preferences.Themes.h"
+#include "Preferences.UserMenu.h"
 #include "Preferences.Viewers.h"
 #include "Preferences.h"
 
@@ -194,11 +195,12 @@ private:
     HWND _hwnd = nullptr;
 };
 
-constexpr std::array<CategoryInfo, 12> kCategories = {{
+constexpr std::array<CategoryInfo, 13> kCategories = {{
     {PrefCategory::General, IDS_PREFS_CAT_GENERAL, IDS_PREFS_CAT_GENERAL_DESC},
     {PrefCategory::Panes, IDS_PREFS_CAT_PANES, IDS_PREFS_CAT_PANES_DESC},
     {PrefCategory::Viewers, IDS_PREFS_CAT_VIEWERS, IDS_PREFS_CAT_VIEWERS_DESC},
     {PrefCategory::Editors, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC},
+    {PrefCategory::UserMenu, IDS_PREFS_CAT_USER_MENU, IDS_PREFS_CAT_USER_MENU_DESC},
     {PrefCategory::Keyboard, IDS_PREFS_CAT_KEYBOARD, IDS_PREFS_CAT_KEYBOARD_DESC},
     {PrefCategory::Mouse, IDS_PREFS_CAT_MOUSE, IDS_PREFS_CAT_MOUSE_DESC},
     {PrefCategory::Themes, IDS_PREFS_CAT_THEMES, IDS_PREFS_CAT_THEMES_DESC},
@@ -219,6 +221,7 @@ struct PreferencesDialogHost final : PreferencesDialogState
     PanesPane _panesPane;
     ViewersPane _viewersPane;
     EditorsPane _editorsPane;
+    UserMenuPane _userMenuPane;
     KeyboardPane _keyboardPane;
     MousePane _mousePane;
     ThemesPane _themesPane;
@@ -536,6 +539,7 @@ private:
         case PrefCategory::Panes: return L"Panes";
         case PrefCategory::Viewers: return L"Viewers";
         case PrefCategory::Editors: return L"Editors";
+        case PrefCategory::UserMenu: return L"UserMenu";
         case PrefCategory::Keyboard: return L"Keyboard";
         case PrefCategory::Mouse: return L"Mouse";
         case PrefCategory::Themes: return L"Themes";
@@ -577,6 +581,7 @@ private:
         case PrefCategory::Panes:
         case PrefCategory::Viewers:
         case PrefCategory::Keyboard:
+        case PrefCategory::UserMenu:
         case PrefCategory::Themes:
         case PrefCategory::Plugins:
         case PrefCategory::Advanced:
@@ -701,6 +706,7 @@ void InitializePreferencesPageControls(const PrefCategory category, PreferencesD
         case PrefCategory::Panes: return ensurePage(hostState._panesPane);
         case PrefCategory::Viewers: return ensurePage(hostState._viewersPane);
         case PrefCategory::Editors: return ensurePage(hostState._editorsPane);
+        case PrefCategory::UserMenu: return ensurePage(hostState._userMenuPane);
         case PrefCategory::Keyboard: return ensurePage(hostState._keyboardPane);
         case PrefCategory::Mouse: return ensurePage(hostState._mousePane);
         case PrefCategory::Themes: return ensurePage(hostState._themesPane);
@@ -1931,7 +1937,7 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     {
         return true;
     }
-    if (state.baselineSettings.extensions.openWithViewerByExtension != state.workingSettings.extensions.openWithViewerByExtension)
+    if (state.baselineSettings.fileActions != state.workingSettings.fileActions)
     {
         return true;
     }
@@ -2260,9 +2266,9 @@ namespace
     {
         merged.connections = state.workingSettings.connections;
     }
-    if (state.baselineSettings.extensions.openWithViewerByExtension != state.workingSettings.extensions.openWithViewerByExtension)
+    if (state.baselineSettings.fileActions != state.workingSettings.fileActions)
     {
-        merged.extensions.openWithViewerByExtension = state.workingSettings.extensions.openWithViewerByExtension;
+        merged.fileActions = state.workingSettings.fileActions;
     }
     {
         const auto& baselineCompare = PrefsCompareDirectories::GetCompareDirectoriesSettingsOrDefault(state.baselineSettings);
@@ -3343,6 +3349,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const bool showPanes                = state.currentCategory == PrefCategory::Panes;
     const bool showViewers              = state.currentCategory == PrefCategory::Viewers;
     const bool showEditors              = state.currentCategory == PrefCategory::Editors;
+    const bool showUserMenu             = state.currentCategory == PrefCategory::UserMenu;
     const bool showKeyboard             = state.currentCategory == PrefCategory::Keyboard;
     const bool showMouse                = state.currentCategory == PrefCategory::Mouse;
     const bool showThemes               = state.currentCategory == PrefCategory::Themes;
@@ -3351,7 +3358,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const bool showCompareDirectories   = state.currentCategory == PrefCategory::CompareDirectories;
     const bool showHotPaths             = state.currentCategory == PrefCategory::HotPaths;
     const bool showAdvanced             = state.currentCategory == PrefCategory::Advanced;
-    const bool notePageSkipsHostTabStop = showEditors || showMouse;
+    const bool notePageSkipsHostTabStop = showMouse;
 
     if (host)
     {
@@ -3391,6 +3398,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     hostState._panesPane.OnVisibilityChanged(showPanes);
     hostState._viewersPane.OnVisibilityChanged(showViewers);
     hostState._editorsPane.OnVisibilityChanged(showEditors);
+    hostState._userMenuPane.OnVisibilityChanged(showUserMenu);
     hostState._keyboardPane.OnVisibilityChanged(showKeyboard);
     hostState._mousePane.OnVisibilityChanged(showMouse);
     hostState._themesPane.OnVisibilityChanged(showThemes);
@@ -3419,17 +3427,13 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     if (showEditors)
     {
         static_cast<PreferencesDialogHost&>(state)._editorsPane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
-        const PreferencesEmptyStateSpec spec = GetCurrentPreferencesSharedEmptyState(state);
-        if (! spec.title.empty() || ! spec.body.empty() || ! spec.caption.empty())
-        {
-            const int cardHeight = PrefsUi::ShowSharedPageEmptyState(host, state, spec, x, margin, width, pageTypography);
-            if (cardHeight > 0)
-            {
-                RECT card{x, margin, x + width, margin + cardHeight};
-                PrefsUi::TryPushCard(state.pageSettingCards, card);
-                state.pageHostDirectContentBottomPx = (std::max)(state.pageHostDirectContentBottomPx, static_cast<int>(card.bottom));
-            }
-        }
+        FinalizePreferencesPageHostLayout(host, state, margin, width);
+        return;
+    }
+
+    if (showUserMenu)
+    {
+        static_cast<PreferencesDialogHost&>(state)._userMenuPane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
@@ -3528,13 +3532,14 @@ void RefreshActivePreferencesPage(HWND host, PreferencesDialogState& state) noex
         case PrefCategory::Keyboard: KeyboardPane::Refresh(host, state); break;
         case PrefCategory::Panes: static_cast<PreferencesDialogHost&>(state)._panesPane.Refresh(host, state); break;
         case PrefCategory::Viewers: static_cast<PreferencesDialogHost&>(state)._viewersPane.Refresh(host, state); break;
+        case PrefCategory::Editors: static_cast<PreferencesDialogHost&>(state)._editorsPane.Refresh(host, state); break;
+        case PrefCategory::UserMenu: static_cast<PreferencesDialogHost&>(state)._userMenuPane.Refresh(host, state); break;
         case PrefCategory::Themes: static_cast<PreferencesDialogHost&>(state)._themesPane.Refresh(host, state); break;
         case PrefCategory::Plugins: static_cast<PreferencesDialogHost&>(state)._pluginsPane.Refresh(host, state); break;
         case PrefCategory::FileOperations: static_cast<PreferencesDialogHost&>(state)._fileOperationsPane.Refresh(host, state); break;
         case PrefCategory::CompareDirectories: static_cast<PreferencesDialogHost&>(state)._compareDirectoriesPane.Refresh(host, state); break;
         case PrefCategory::HotPaths: static_cast<PreferencesDialogHost&>(state)._hotPathsPane.Refresh(host, state); break;
         case PrefCategory::Advanced: RefreshAdvancedPage(host, state); break;
-        case PrefCategory::Editors:
         case PrefCategory::Mouse: break;
     }
 }
@@ -5325,9 +5330,43 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
         out.viewersListRenderCount                     = hostState._viewersPane.DebugListRenderCount();
         out.viewersListResizeCount                     = hostState._viewersPane.DebugListResizeCount();
         out.viewersListResizeFailureCount              = hostState._viewersPane.DebugListResizeFailureCount();
+        out.viewersActionCount                         = state->workingSettings.fileActions.viewers.actions.size();
+        out.viewersActionRowCount                      = hostState._viewersPane.DebugActionRowCount();
+        out.viewersPrimaryActionIdText.clear();
+        out.viewersAlternateActionIdText.clear();
+        for (const auto& rule : state->workingSettings.fileActions.viewers.associations)
+        {
+            if (rule.match.kind == Common::Settings::FileActionMatchKind::Default && rule.computerName.empty())
+            {
+                out.viewersPrimaryActionIdText   = rule.viewActionId;
+                out.viewersAlternateActionIdText = rule.alternateViewActionId;
+                break;
+            }
+        }
         out.viewersSearchText                          = state->viewersSearchText;
         out.viewersSelectedExtensionText               = state->viewersSelectedExtensionText;
+        out.viewersPreviewActionIdText                 = hostState._viewersPane.DebugPreviewActionId();
+        out.viewersPreviewReasonText                   = hostState._viewersPane.DebugPreviewReason();
         out.viewersFocusTarget                         = hostState._viewersPane.DebugGetFocusTarget();
+        out.editorsActionCount                         = state->workingSettings.fileActions.editors.actions.size();
+        out.editorsAssociationRowCount                 = hostState._editorsPane.DebugAssociationRowCount();
+        out.editorsActionRowCount                      = hostState._editorsPane.DebugActionRowCount();
+        out.editorsPrimaryActionIdText.clear();
+        out.editorsAlternateActionIdText.clear();
+        out.editorsEditNewActionIdText.clear();
+        for (const auto& rule : state->workingSettings.fileActions.editors.associations)
+        {
+            if (rule.match.kind == Common::Settings::FileActionMatchKind::Default && rule.computerName.empty())
+            {
+                out.editorsPrimaryActionIdText   = rule.editActionId;
+                out.editorsAlternateActionIdText = rule.alternateEditActionId;
+                out.editorsEditNewActionIdText   = rule.editNewActionId;
+                break;
+            }
+        }
+        out.editorsPreviewActionIdText                 = hostState._editorsPane.DebugPreviewActionId();
+        out.editorsPreviewReasonText                   = hostState._editorsPane.DebugPreviewReason();
+        out.userMenuActionCount                        = state->workingSettings.userMenu.actions.size();
         out.keyboardListRowCount                       = hostState._keyboardPane.DebugListRowCount();
         const auto keyboardListMetrics                 = hostState._keyboardPane.DebugListVisibleWorkMetrics();
         out.keyboardListVisibleRowCount                = static_cast<size_t>(keyboardListMetrics.visibleRowCount);
@@ -6136,6 +6175,60 @@ bool PreferencesDialog::DebugSetViewersSearchText(std::wstring_view text) noexce
 
     auto& hostState = static_cast<PreferencesDialogHost&>(*state);
     return hostState._viewersPane.DebugSetSearchText(text);
+}
+
+bool PreferencesDialog::DebugSelectViewersDefaultAction(const bool alternate, std::wstring_view actionId) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._viewersPane.DebugSelectDefaultAction(alternate, actionId);
+}
+
+bool PreferencesDialog::DebugSelectEditorsDefaultAction(const bool alternate, std::wstring_view actionId) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._editorsPane.DebugSelectDefaultAction(alternate, actionId);
+}
+
+bool PreferencesDialog::DebugSelectEditorsDefaultEditNewAction(std::wstring_view actionId) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._editorsPane.DebugSelectDefaultEditNewAction(actionId);
 }
 
 bool PreferencesDialog::DebugSetKeyboardSearchText(std::wstring_view text) noexcept

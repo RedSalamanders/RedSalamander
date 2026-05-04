@@ -28,8 +28,9 @@ The left tree contains:
 
 - **General**: common app behavior.
 - **Panes**: default pane display/sort behavior, visibility options, and history size.
-- **Viewers**: file extension → viewer mapping used by `F3`.
-- **Editors**: placeholder (not implemented yet).
+- **Viewers**: viewer Actions and Associations for `F3`, `Alt+F3`, and View With.
+- **Editors**: editor Actions and Associations for `F4`, `Ctrl+Shift+F4`, `Shift+F4`, and Edit With.
+- **User Menu**: external command entries shown by `F9` and the Commands -> User Menu popup.
 - **Keyboard**: shortcut bindings for Function Bar and FolderView commands.
 - **Mouse**: placeholder (not implemented yet).
 - **Themes**: theme selection, user-theme editing, and theme file management.
@@ -45,10 +46,23 @@ Tip: Plugins also appear as child nodes under **Plugins** when a plugin exposes 
 
 ### Viewers
 
-- Search the current extension mappings.
-- Add or update a mapping to a different viewer plugin.
-- Remove a custom mapping.
-- Reset all mappings back to the built-in defaults.
+- Use **Associations** to choose which viewer action `F3` and `Alt+F3` use for an extension, pattern, default `*` row, or computer-specific override.
+- Use **Actions** to configure internal viewer-plugin actions or external viewer programs.
+- Test a file path on the page to see the resolved action and why it was chosen.
+- View With lists the configured viewer actions that apply to the focused file and current computer.
+
+### Editors
+
+- Use **Associations** to choose which editor action `F4`, `Ctrl+Shift+F4`, and `Shift+F4` use for an extension, pattern, default `*` row, or computer-specific override.
+- Use **Actions** to configure external editor programs.
+- Edit New shows an Editor combo filtered by file extension, computer name, configured action availability, and executable availability.
+- Apply or OK saves viewer/editor Actions and Associations to the main settings file.
+
+### User Menu
+
+- Configure the ordered external command entries shown by `F9` and **Commands -> User Menu**.
+- Each entry can define an executable, arguments, working directory, enabled state, extension filter, and computer-name filter.
+- Commands use the same macros and applicability rules as viewer and editor actions, including selected-paths file support for multi-selection workflows.
 
 ### Keyboard
 

@@ -89,9 +89,7 @@ Notes:
 ## Delete vs permanent delete
 
 - **Delete** (`Del` / `F8`): deletes to the Recycle Bin when supported by the active file system.
-- **Permanent Delete**: bypasses the Recycle Bin.
-  - `Shift+F8`: permanent delete
-  - `Shift+Del`: permanent delete **with confirmation**
+- **Permanent Delete** (`Shift+F8` / `Shift+Del`): asks for confirmation, then bypasses the Recycle Bin.
 
 ## Progress UI: tasks, pause, cancel, mode, speed limit
 
@@ -156,18 +154,30 @@ Open item properties with **Files -> Properties** or `Alt+Enter`.
 
 ![File properties dialog](res/file-properties.png)
 
-Properties work through the active file-system plugin. Local files show general identity, path, type, size, timestamps, attributes, and named streams when present. Remote/cloud plugins can expose their own metadata through the same dialog. `Ctrl+C` copies the full property text; `Esc` closes the dialog.
+Properties work through the active file-system plugin. Local files show general identity, path, type, size, timestamps, attributes, shortcut/link/reparse targets when present, and named streams when present. Remote/cloud plugins can expose their own metadata through the same dialog. `Ctrl+C` copies the full property text; `Esc` closes the dialog.
 
 ## Clipboard copy/paste (Windows Explorer format)
 
 Folder view supports a basic Explorer-style clipboard for **Windows paths**:
 
 - `Ctrl+C`: copy selection to the clipboard as `CF_HDROP`
+- `Ctrl+X`: cut selection to the clipboard as `CF_HDROP` with the Explorer move drop effect
 - `Ctrl+V`: paste into the current folder (copy)
+- **Paste Shortcut**: create `.lnk` shortcuts in the current local folder for file paths on the clipboard, using unique shortcut names
 
 Limitations:
 
-- The clipboard format is Windows-path based, so it is primarily useful in the `file` file system.
+- The clipboard format is Windows-path based, so file cut and Paste Shortcut are available for local `file` file-system paths.
+
+## Creating files from ShellNew templates
+
+Files -> New lists Windows ShellNew templates for local folders. Template entries prompt for a new file name, create the file from the selected `NullFile`, `Data`, or `FileName` template, refresh the pane, and focus the created item when it is visible. ShellNew command templates are not invoked by this safe path.
+
+## ZIP Pack / Unpack
+
+Use **Files -> Pack** (`Alt+F5`) to create a ZIP archive from the selected local files and folders, or the focused item when nothing is selected. Use **Files -> Unpack** (`Alt+F6`) on a focused or selected ZIP archive to extract it to a destination folder.
+
+Pack writes deterministic stored ZIP entries, preserves selected empty directories, and reports the created archive. Unpack validates archive entry paths before writing so unsafe absolute, parent-relative, drive-qualified, or alternate-stream paths are rejected.
 
 ## Drag & drop
 
@@ -176,7 +186,6 @@ Limitations:
 
 ## Not implemented yet
 
-- Pack / Unpack
 - Additional "copy path as text" helpers beyond **Copy Path and File Name**
 - Some same-name selection helpers
 

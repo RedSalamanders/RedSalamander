@@ -125,6 +125,15 @@ namespace SettingsSave
         }
     }
 
+    if (result.makeFileList.has_value())
+    {
+        const Common::Settings::MakeFileListSettings defaults{};
+        if (result.makeFileList.value() == defaults)
+        {
+            result.makeFileList.reset();
+        }
+    }
+
     if (result.ui.has_value())
     {
         const Common::Settings::UiSettings defaults{};

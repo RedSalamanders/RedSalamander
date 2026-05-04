@@ -4,12 +4,12 @@
 
 `FolderWindow` is the host container for file browsing in `RedSalamander`. In v1 it implements a **dual-pane** layout:
 
-- **Left pane**: `NavigationView` + `FolderView` + per-pane **Status Bar**
-- **Right pane**: `NavigationView` + `FolderView` + per-pane **Status Bar**
+- **Left pane**: optional `NavigationView` + `FolderView` + optional per-pane **Filter Bar** + optional per-pane **Status Bar**, or a Folder/Preview tabbed host when previewing the right pane
+- **Right pane**: optional `NavigationView` + `FolderView` + optional per-pane **Filter Bar** + optional per-pane **Status Bar**, or a Folder/Preview tabbed host when previewing the left pane
 - A vertical splitter between panes for horizontal resizing
 - A bottom application **Function Bar** when function-key chrome is enabled
 
-Each pane has its own navigation state (current path) and its own FolderView state (display mode + sort + status bar visibility). Folder history is a **global MRU list** shared across panes.
+Each pane has its own navigation state (current path) and its own FolderView state (display mode + sort + view-option chrome visibility). Folder history is a **global MRU list** shared across panes.
 
 ## Implementation Files
 
@@ -117,9 +117,11 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 
 - The window is split horizontally into two panes with a vertical splitter between them.
 - Each pane contains:
-  - `NavigationView` at the top (fixed height in DIPs)
-  - `FolderView` filling the remaining height (above the status bar)
-  - **Status Bar** at the bottom (optional per pane)
+  - `NavigationView` at the top when navigation bar visibility is enabled
+  - `FolderView` filling the remaining height above the optional filter/status bars
+  - **Filter Bar** below the folder view when enabled for that pane; it is a themed DxUi host, not a native `STATIC` label
+  - **Status Bar** at the bottom when enabled for that pane
+- When preview mode is open, the opposite pane becomes a themed DxUi tabbed host. The tab strip is placed at the top of that pane, the `Preview` tab hides the host pane's normal navigation/filter/folder/status chrome, and the preview content fills the host pane down to the function bar or the bottom edge when the function bar is hidden.
 - When enabled, the application **Function Bar** is a visible child HWND laid out below the pane area; toggling chrome must keep its HWND visibility and layout in sync.
 
 ### Split Ratio
@@ -148,6 +150,7 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 - The "focused pane" is the pane that contains the current keyboard focus (either its `NavigationView` or its `FolderView`).
 - Keyboard accelerators that target "the active pane" apply to the focused pane.
 - When keyboard focus is outside both pane `FolderView` controls but still belongs to main-window chrome or a transient menu, `FolderWindow`'s active pane is the fallback pane for focus restoration.
+- Any user navigation action inside a pane's `NavigationView` activates that pane before changing navigation state. This includes the drive/menu button, history and disk-info dropdowns, breadcrumb segment clicks, sibling menus, and menu-selected path changes. If the action originates from an unfocused pane, keyboard focus returns to that pane's `FolderView` rather than staying in the previously focused pane.
 - A first `Escape` from main-window chrome or transient menu focus MUST restore keyboard focus to the active pane's `FolderView` without changing that pane's selection. A subsequent `Escape` delivered while the `FolderView` already has focus uses normal `FolderView` behavior.
 
 ## Keyboard Management
@@ -242,6 +245,19 @@ Example (narrow):
 - Hovering the sort indicator shows a tooltip indicating it is clickable.
 - Status bar visibility is persisted per pane.
 
+## Pane View Options
+
+Pane view option commands are defined by `Specs/UI/UI_CommandMenuKeyboard.md` and implemented by `FolderWindow`/`FolderView` state.
+
+- File-extension visibility is per pane and display-only. Hidden extensions affect rendered names, text measurement, and quick-search highlighting, but item operations, command-line insertion, clipboard actions, and plugin calls continue to use real names and full paths.
+- Thumbnails is a per-pane display mode, exclusive with Brief/Detailed/Extra Detailed. When selected, the owning `FolderView` uses larger DPI-aware item visuals, queues thumbnail extraction for visible local items only, applies completed thumbnails on the UI thread, and keeps icon fallback available for unsupported providers, extraction failures, or pending work.
+- Preview Pane is an independent per-source toggle. The preview host resolves the configured viewer plugin for the focused item and uses it when the plugin supports embedded preview hosting; when saved viewer associations are missing or only resolve the default text viewer, the host consults the built-in embedded viewer defaults before using `builtin/viewer-text`. If the newly focused item resolves to the same embedded viewer plugin as the current preview, the host reuses that viewer instance and refreshes it with the new open context; it replaces the preview window only when resolution chooses a different plugin or the refresh fails. It must not force images, media, web/document formats, PE files, SQLite files, folders, or text files through `builtin/viewer-text` when a better configured or built-in embedded viewer is available. Known embedded-capable built-ins are `builtin/viewer-text`, `builtin/viewer-space`, `builtin/viewer-imgraw`, `builtin/viewer-vlc`, `builtin/viewer-web`, `builtin/viewer-json`, `builtin/viewer-markdown`, `builtin/viewer-pe`, and `builtin/viewer-sqlite`. If embedded preview is unavailable or fails to open, the host falls back to the embedded text viewer or localized placeholder and logs the selected viewer/fallback reason for diagnostics. Embedded preview viewers MUST NOT take keyboard focus from the source pane, and preview close/replacement must persist viewer plugin configuration changes such as media volume/mute.
+- Preview pane visibility is tied to the source pane. The preview is hosted in the opposite pane with themed DxUi `Folder` and `Preview` tabs; the Preview tab tracks the focused item from the source pane, and the Folder tab keeps the host pane usable without closing preview mode. Closing preview removes the tabs and restores normal host pane layout. File preview uses an embedded viewer-capable plugin window for supported files. Localized empty/folder/unsupported/binary fallback text is shown by the themed preview host when embedded preview is not available.
+- Navigation bar visibility is per pane. Explicit left/right menu entries affect their named pane; shortcut invocation affects the active pane. Commands that focus the address bar must first show the owning navigation bar, then focus the address edit.
+- Filter bar visibility is per pane. The DxUi filter bar displays the current `cmd/pane/filter` state using localized text and updates when filters are applied, cleared, restored from history, or panes are swapped. It is separate from transient Quick Search.
+- Generic status bar shortcut routing applies to the active pane and shares the existing left/right status-bar implementation.
+- Pane view option changes must update child HWND visibility, recompute layout, preserve folder-view focus when a bar is hidden, refresh menu check states, and persist through `folders.items[].view.*`.
+
 ## Menus
 
 FolderWindow exposes two top-level pane menus in the application menu bar:
@@ -259,12 +275,13 @@ FolderWindow also integrates with the top-level **Plugins** menu:
 
 ## Pane Prompts
 
-The pane-scoped file-system prompts for change-case and selection-mask actions use owned DxUi prompt windows, not legacy Win32 dialog-template routes.
+The pane-scoped file-system prompts for change-attributes, change-case, and selection-mask actions use owned DxUi prompt windows, not legacy Win32 dialog-template routes.
 
+- `Change Attributes...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.Commands.Part.cpp`. The prompt MUST expose tri-state attribute toggles, date/time rows, alternate-stream removal, and an Include subdirectories option that is enabled only when a folder is in scope. Recursive Change Attributes runs asynchronously as a File Operations informational task with enumeration/apply status.
 - `Change Case...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
 - The selection-mask commands (`Select by Mask...` / `Unselect by Mask...`) MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
 - These prompts MUST expose the shared DxUi host contract and MUST NOT reintroduce legacy `DialogBoxParamW`, owner-draw button/toggle, or extra visible combo/input-frame fallback surfaces for the active product path.
-- Validation anchors for this contract are `cmd_pane_changeCase_prompt_*`, `cmd_pane_changeCase_dialog`, and `cmd_pane_selection_mask_dialogs`.
+- Validation anchors for this contract are `cmd_pane_changeAttributes_options_dialog_uses_dxui_not_win32_template`, `cmd_pane_changeAttributes_recurse_applies_datetime_with_progress`, `cmd_pane_changeCase_prompt_*`, `cmd_pane_changeCase_dialog`, and `cmd_pane_selection_mask_dialogs`.
 
 ### Sort By
 
@@ -303,12 +320,9 @@ Sort behavior:
 
 Status bar visibility must be controllable from:
 
-- **View → Pane**:
-  - Status Bar (Left) (checkable)
-  - Status Bar (Right) (checkable)
 - **Pane menus**:
-  - `Left` menu contains a checkable **Status Bar** item controlling the left pane.
-  - `Right` menu contains a checkable **Status Bar** item controlling the right pane.
+  - `Left` → `Show` contains a checkable **Status Bar** item controlling the left pane.
+  - `Right` → `Show` contains a checkable **Status Bar** item controlling the right pane.
 
 ### Display As
 
@@ -340,4 +354,7 @@ FolderWindow state is persisted in settings (see `Specs/Core/Core_SettingsStore.
   - `view.display`
   - `view.sortBy`
   - `view.sortDirection`
+  - `view.fileExtensionsVisible`
+  - `view.navigationBarVisible`
+  - `view.filterBarVisible`
   - `view.statusBarVisible`

@@ -23,6 +23,8 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "Win32CallbackHelpers.h"
+#include "WindowMessages.h"
 #include "WindowSizing.h"
 
 #include "resource.h"
@@ -47,8 +49,19 @@ constexpr UINT_PTR kUiTimerId          = 1;
 constexpr UINT kUiTimerIntervalMs      = 200;
 constexpr UINT_PTR kHudAnimTimerId     = 2;
 constexpr UINT kHudAnimIntervalMs      = 16;
+constexpr UINT_PTR kLoadingTimerId     = 3;
+constexpr UINT kLoadingTimerIntervalMs = 100;
+constexpr ULONGLONG kLoadingOverlayDelayMs = 800;
 constexpr float kHudDimOpacity         = 0.18f;
 constexpr ULONGLONG kHudIdleDimDelayMs = 20'000;
+constexpr wchar_t kWheelForwardOriginalWndProcProp[] = L"RS.ViewerVLC.WheelForwardOriginalWndProc";
+constexpr wchar_t kWheelForwardOwnerProp[]           = L"RS.ViewerVLC.WheelForwardOwner";
+constexpr wchar_t kHudGlyphPlay                      = static_cast<wchar_t>(0xE768);
+constexpr wchar_t kHudGlyphPause                     = static_cast<wchar_t>(0xE769);
+constexpr wchar_t kHudGlyphStop                      = static_cast<wchar_t>(0xE71A);
+constexpr wchar_t kHudGlyphSnapshot                  = static_cast<wchar_t>(0xE722);
+constexpr wchar_t kHudGlyphVolume                    = static_cast<wchar_t>(0xE767);
+constexpr wchar_t kHudGlyphMute                      = static_cast<wchar_t>(0xE74F);
 
 constexpr char kViewerVlcSchemaJson[] = R"json(
 {
@@ -155,6 +168,22 @@ constexpr char kViewerVlcSchemaJson[] = R"json(
       "type": "text",
       "default": "",
       "description": "Additional libVLC options (space-separated). Example: --no-sub-autodetect-file"
+    },
+    {
+      "key": "lastVolumePercent",
+      "label": "Last volume (%)",
+      "type": "value",
+      "default": 100,
+      "min": 0,
+      "max": 100,
+      "description": "Remembered playback volume used when opening the next video."
+    },
+    {
+      "key": "muted",
+      "label": "Muted",
+      "type": "bool",
+      "default": false,
+      "description": "Remember whether the VLC viewer was muted when it last saved settings."
     }
   ]
 }
@@ -319,7 +348,9 @@ struct HudLayout
     RECT seekTrack{};
     RECT time{};
     RECT speed{};
-    RECT volume{};
+    RECT volumeMute{};
+    RECT volumeHit{};
+    RECT volumeTrack{};
 };
 
 [[nodiscard]] HudLayout ComputeHudLayout(int width, int height, UINT dpi) noexcept
@@ -328,11 +359,12 @@ struct HudLayout
 
     const auto px = [&](int dip) noexcept { return MulDiv(dip, static_cast<int>(dpi), 96); };
 
-    const int inset  = px(12);
-    const int gap    = px(10);
-    const int btn    = px(36);
-    const int timeW  = px(140);
-    const int trackH = std::max(1, px(6));
+    const int inset    = px(12);
+    const int gap      = px(10);
+    const int btn      = px(36);
+    const int timeW    = px(140);
+    const int volumeW  = px(96);
+    const int trackH   = std::max(1, px(6));
 
     const int y = std::max(0, (height - btn) / 2);
 
@@ -344,9 +376,18 @@ struct HudLayout
     layout.snapshot = {x, y, x + btn, y + btn};
     x += btn + gap;
 
-    int right     = std::max(x, width - inset);
-    layout.volume = {std::max(x, right - btn), y, right, y + btn};
-    right         = std::max<int>(x, static_cast<int>(layout.volume.left) - gap);
+    int right        = std::max(x, width - inset);
+    const int slider = ((right - x) >= (btn + gap + px(64))) ? std::min(volumeW, std::max(px(64), right - x - btn - gap)) : 0;
+    if (slider > 0)
+    {
+        layout.volumeHit   = {std::max(x, right - slider), y, right, y + btn};
+        const int trackY   = y + (btn - trackH) / 2;
+        layout.volumeTrack = {layout.volumeHit.left + px(8), trackY, layout.volumeHit.right - px(8), trackY + trackH};
+        right              = std::max<int>(x, static_cast<int>(layout.volumeHit.left) - gap);
+    }
+
+    layout.volumeMute = {std::max(x, right - btn), y, right, y + btn};
+    right             = std::max<int>(x, static_cast<int>(layout.volumeMute.left) - gap);
 
     layout.speed = {std::max(x, right - btn), y, right, y + btn};
     right        = std::max<int>(x, static_cast<int>(layout.speed.left) - gap);
@@ -874,6 +915,37 @@ struct VlcState
     std::string instanceArgsKey;
 };
 
+struct ViewerVLC::VlcLoadSpec
+{
+    std::filesystem::path installDir;
+    std::vector<std::string> argStorage;
+    std::string instanceArgsKey;
+};
+
+struct ViewerVLC::VlcAsyncLoadResult
+{
+    VlcAsyncLoadResult()                                      = default;
+    VlcAsyncLoadResult(const VlcAsyncLoadResult&)             = delete;
+    VlcAsyncLoadResult(VlcAsyncLoadResult&&)                  = delete;
+    VlcAsyncLoadResult& operator=(const VlcAsyncLoadResult&)  = delete;
+    VlcAsyncLoadResult& operator=(VlcAsyncLoadResult&&)       = delete;
+
+    uint64_t generation = 0;
+    std::filesystem::path path;
+    wil::com_ptr<IViewer> self;
+    std::unique_ptr<VlcState> state;
+    std::wstring error;
+};
+
+struct ViewerVLC::VlcAsyncLoadWork
+{
+    wil::com_ptr<IViewer> self;
+    HWND hwnd = nullptr;
+    uint64_t generation = 0;
+    std::filesystem::path path;
+    VlcLoadSpec spec;
+};
+
 ViewerVLC::ViewerVLC()
 {
     _metaId          = L"builtin/viewer-vlc";
@@ -986,6 +1058,8 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
     std::string audioOutput;
     std::string audioVisualization = "visual";
     std::string extraArgs;
+    uint32_t lastVolumePercent = 100;
+    bool muted                 = false;
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
@@ -1095,6 +1169,28 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
                         extraArgs = s;
                     }
                 }
+
+                if (yyjson_val* v = yyjson_obj_get(root, "lastVolumePercent"); v && (yyjson_is_sint(v) || yyjson_is_uint(v)))
+                {
+                    const int64_t raw = yyjson_is_sint(v) ? yyjson_get_sint(v) : static_cast<int64_t>(yyjson_get_uint(v));
+                    lastVolumePercent = static_cast<uint32_t>(std::clamp<int64_t>(raw, 0, 100));
+                }
+
+                if (yyjson_val* v = yyjson_obj_get(root, "muted"); v)
+                {
+                    if (yyjson_is_bool(v))
+                    {
+                        muted = yyjson_get_bool(v);
+                    }
+                    else if (yyjson_is_sint(v))
+                    {
+                        muted = yyjson_get_sint(v) != 0;
+                    }
+                    else if (yyjson_is_uint(v))
+                    {
+                        muted = yyjson_get_uint(v) != 0;
+                    }
+                }
             }
         }
     }
@@ -1110,126 +1206,15 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
     _config.audioOutput                = audioOutput;
     _config.audioVisualization         = audioVisualization;
     _config.extraArgs                  = extraArgs;
+    _config.lastVolumePercent          = lastVolumePercent;
+    _config.muted                      = muted;
 
     _hudRate = std::clamp(static_cast<float>(_config.defaultPlaybackRatePercent) / 100.0f, 0.25f, 4.0f);
+    _hudVolumeValue         = std::clamp<int>(static_cast<int>(_config.lastVolumePercent), 0, 100);
+    _hudPreviousVolumeValue = (_hudVolumeValue > 0) ? _hudVolumeValue : 100;
+    _hudMuted               = _config.muted;
 
-    yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
-    if (! doc)
-    {
-        return E_OUTOFMEMORY;
-    }
-
-    auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
-
-    yyjson_mut_val* root = yyjson_mut_obj(doc);
-    if (! root)
-    {
-        return E_OUTOFMEMORY;
-    }
-    yyjson_mut_doc_set_root(doc, root);
-
-    const std::string keyPathUtf8   = "vlcInstallPath";
-    const std::string valuePathUtf8 = Utf8FromUtf16(vlcInstallPath);
-    yyjson_mut_val* pathKey         = yyjson_mut_strncpy(doc, keyPathUtf8.c_str(), keyPathUtf8.size());
-    yyjson_mut_val* pathVal         = yyjson_mut_strncpy(doc, valuePathUtf8.c_str(), valuePathUtf8.size());
-    if (! pathKey || ! pathVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, pathKey, pathVal));
-
-    yyjson_mut_val* autoKey = yyjson_mut_strncpy(doc, "autoDetectVlc", strlen("autoDetectVlc"));
-    yyjson_mut_val* autoVal = yyjson_mut_bool(doc, autoDetectVlc);
-    if (! autoKey || ! autoVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, autoKey, autoVal));
-
-    yyjson_mut_val* quietKey = yyjson_mut_strncpy(doc, "quiet", strlen("quiet"));
-    yyjson_mut_val* quietVal = yyjson_mut_bool(doc, quiet);
-    if (! quietKey || ! quietVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, quietKey, quietVal));
-
-    yyjson_mut_val* rateKey = yyjson_mut_strncpy(doc, "defaultPlaybackRatePercent", strlen("defaultPlaybackRatePercent"));
-    yyjson_mut_val* rateVal = yyjson_mut_uint(doc, defaultPlaybackRatePercent);
-    if (! rateKey || ! rateVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, rateKey, rateVal));
-
-    yyjson_mut_val* fileCacheKey = yyjson_mut_strncpy(doc, "fileCachingMs", strlen("fileCachingMs"));
-    yyjson_mut_val* fileCacheVal = yyjson_mut_uint(doc, fileCachingMs);
-    if (! fileCacheKey || ! fileCacheVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, fileCacheKey, fileCacheVal));
-
-    yyjson_mut_val* netCacheKey = yyjson_mut_strncpy(doc, "networkCachingMs", strlen("networkCachingMs"));
-    yyjson_mut_val* netCacheVal = yyjson_mut_uint(doc, networkCachingMs);
-    if (! netCacheKey || ! netCacheVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, netCacheKey, netCacheVal));
-
-    yyjson_mut_val* hwKey = yyjson_mut_strncpy(doc, "avcodecHw", strlen("avcodecHw"));
-    yyjson_mut_val* hwVal = yyjson_mut_strncpy(doc, avcodecHw.c_str(), avcodecHw.size());
-    if (! hwKey || ! hwVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, hwKey, hwVal));
-
-    yyjson_mut_val* voutKey = yyjson_mut_strncpy(doc, "videoOutput", strlen("videoOutput"));
-    yyjson_mut_val* voutVal = yyjson_mut_strncpy(doc, videoOutput.c_str(), videoOutput.size());
-    if (! voutKey || ! voutVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, voutKey, voutVal));
-
-    yyjson_mut_val* aoutKey = yyjson_mut_strncpy(doc, "audioOutput", strlen("audioOutput"));
-    yyjson_mut_val* aoutVal = yyjson_mut_strncpy(doc, audioOutput.c_str(), audioOutput.size());
-    if (! aoutKey || ! aoutVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, aoutKey, aoutVal));
-
-    yyjson_mut_val* vizKey = yyjson_mut_strncpy(doc, "audioVisualization", strlen("audioVisualization"));
-    yyjson_mut_val* vizVal = yyjson_mut_strncpy(doc, audioVisualization.c_str(), audioVisualization.size());
-    if (! vizKey || ! vizVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, vizKey, vizVal));
-
-    yyjson_mut_val* extraKey = yyjson_mut_strncpy(doc, "extraArgs", strlen("extraArgs"));
-    yyjson_mut_val* extraVal = yyjson_mut_strncpy(doc, extraArgs.c_str(), extraArgs.size());
-    if (! extraKey || ! extraVal)
-    {
-        return E_OUTOFMEMORY;
-    }
-    static_cast<void>(yyjson_mut_obj_add(root, extraKey, extraVal));
-
-    yyjson_write_err err{};
-    size_t len = 0;
-    wil::unique_any<char*, decltype(&::free), ::free> json(yyjson_mut_write_opts(doc, YYJSON_WRITE_NOFLAG, nullptr, &len, &err));
-    if (! json || len == 0)
-    {
-        Debug::Warning(L"ViewerVLC: Failed to serialize configuration JSON: code: {}", err.code);
-        _configurationJson = "{}";
-        return S_OK;
-    }
-
-    _configurationJson.assign(json.get(), len);
-    return S_OK;
+    return RebuildConfigurationJson();
 }
 
 HRESULT STDMETHODCALLTYPE ViewerVLC::GetConfiguration(const char** configurationJsonUtf8) noexcept
@@ -1250,8 +1235,96 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SomethingToSave(BOOL* pSomethingToSave) noe
         return E_POINTER;
     }
 
-    *pSomethingToSave = FALSE;
+    *pSomethingToSave = ConfigurationDiffersFromDefaults() ? TRUE : FALSE;
     return S_OK;
+}
+
+HRESULT ViewerVLC::RebuildConfigurationJson() noexcept
+{
+    yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
+    if (! doc)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
+
+    yyjson_mut_val* root = yyjson_mut_obj(doc);
+    if (! root)
+    {
+        return E_OUTOFMEMORY;
+    }
+    yyjson_mut_doc_set_root(doc, root);
+
+    const auto addString = [&](const char* key, std::string_view value) noexcept -> bool
+    {
+        yyjson_mut_val* k = yyjson_mut_strncpy(doc, key, strlen(key));
+        yyjson_mut_val* v = yyjson_mut_strncpy(doc, value.data(), value.size());
+        return k != nullptr && v != nullptr && yyjson_mut_obj_add(root, k, v);
+    };
+
+    const auto addBool = [&](const char* key, bool value) noexcept -> bool
+    {
+        yyjson_mut_val* k = yyjson_mut_strncpy(doc, key, strlen(key));
+        yyjson_mut_val* v = yyjson_mut_bool(doc, value);
+        return k != nullptr && v != nullptr && yyjson_mut_obj_add(root, k, v);
+    };
+
+    const auto addUint = [&](const char* key, uint32_t value) noexcept -> bool
+    {
+        yyjson_mut_val* k = yyjson_mut_strncpy(doc, key, strlen(key));
+        yyjson_mut_val* v = yyjson_mut_uint(doc, value);
+        return k != nullptr && v != nullptr && yyjson_mut_obj_add(root, k, v);
+    };
+
+    const std::string installPathUtf8 = Utf8FromUtf16(_config.vlcInstallPath.wstring());
+    const bool ok = addString("vlcInstallPath", installPathUtf8) &&
+                    addBool("autoDetectVlc", _config.autoDetectVlc) &&
+                    addBool("quiet", _config.quiet) &&
+                    addUint("defaultPlaybackRatePercent", _config.defaultPlaybackRatePercent) &&
+                    addUint("fileCachingMs", _config.fileCachingMs) &&
+                    addUint("networkCachingMs", _config.networkCachingMs) &&
+                    addString("avcodecHw", _config.avcodecHw) &&
+                    addString("videoOutput", _config.videoOutput) &&
+                    addString("audioOutput", _config.audioOutput) &&
+                    addString("audioVisualization", _config.audioVisualization) &&
+                    addString("extraArgs", _config.extraArgs) &&
+                    addUint("lastVolumePercent", _config.lastVolumePercent) &&
+                    addBool("muted", _config.muted);
+    if (! ok)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    yyjson_write_err err{};
+    size_t len = 0;
+    wil::unique_any<char*, decltype(&::free), ::free> json(yyjson_mut_write_opts(doc, YYJSON_WRITE_NOFLAG, nullptr, &len, &err));
+    if (! json || len == 0)
+    {
+        Debug::Warning(L"ViewerVLC: Failed to serialize configuration JSON: code: {}", err.code);
+        _configurationJson = "{}";
+        return S_OK;
+    }
+
+    _configurationJson.assign(json.get(), len);
+    return S_OK;
+}
+
+bool ViewerVLC::ConfigurationDiffersFromDefaults() const noexcept
+{
+    return ! _config.vlcInstallPath.empty() ||
+           ! _config.autoDetectVlc ||
+           ! _config.quiet ||
+           _config.fileCachingMs != 300 ||
+           _config.networkCachingMs != 1000 ||
+           _config.defaultPlaybackRatePercent != 100 ||
+           _config.avcodecHw != "any" ||
+           ! _config.videoOutput.empty() ||
+           ! _config.audioOutput.empty() ||
+           _config.audioVisualization != "visual" ||
+           ! _config.extraArgs.empty() ||
+           _config.lastVolumePercent != 100 ||
+           _config.muted;
 }
 
 ATOM ViewerVLC::RegisterWndClass(HINSTANCE instance) noexcept
@@ -1519,12 +1592,151 @@ LRESULT CALLBACK ViewerVLC::SeekPreviewProcThunk(HWND hwnd, UINT msg, WPARAM wp,
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+LRESULT CALLBACK ViewerVLC::WheelForwardProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* self = reinterpret_cast<ViewerVLC*>(GetPropW(hwnd, kWheelForwardOwnerProp));
+    if (msg == WM_MOUSEWHEEL && self)
+    {
+        self->OnSurfaceMouseWheel(wp);
+        return 0;
+    }
+
+    if (msg == WM_NCDESTROY)
+    {
+        const WNDPROC originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kWheelForwardOriginalWndProcProp);
+        if (self)
+        {
+            std::erase(self->_wheelForwardedChildren, hwnd);
+        }
+
+        if (originalWndProc)
+        {
+            const auto currentWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
+            if (currentWndProc == &ViewerVLC::WheelForwardProc)
+            {
+                static_cast<void>(
+                    RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(originalWndProc)));
+            }
+        }
+        RemovePropW(hwnd, kWheelForwardOriginalWndProcProp);
+        RemovePropW(hwnd, kWheelForwardOwnerProp);
+
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp)
+                               : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kWheelForwardOriginalWndProcProp, msg, wp, lp);
+}
+
 LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     switch (msg)
     {
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
+        case WndMsg::kViewerVlcAsyncOpenComplete:
+        {
+            auto result = TakeMessagePayload<VlcAsyncLoadResult>(lp);
+            OnAsyncVlcLoadComplete(std::move(result));
+            return 0;
+        }
+#ifdef ENABLE_TESTS
+        case WndMsg::kViewerVlcDebugGetSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerVlcDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot = {};
+            snapshot->loadingActive  = _loadingUiActive;
+            snapshot->loadingVisible = _loadingUiVisible;
+            snapshot->missingVisible = _missingUiVisible;
+            snapshot->muted          = _hudMuted;
+            snapshot->volume         = _hudVolumeValue;
+            snapshot->timeMs         = _hudTimeMs;
+            snapshot->lengthMs       = _hudLengthMs;
+            if (_hHud)
+            {
+                static_cast<void>(EnsureHudDirect2D(_hHud.get()));
+            }
+            snapshot->hudButtonsUseFilledButtonStyle = true;
+            snapshot->hudIconsUseIconFont            = _hudIconFormat != nullptr;
+            snapshot->playPauseIconGlyph             = GetHudPlayPauseGlyph();
+            snapshot->stopIconGlyph                  = kHudGlyphStop;
+            snapshot->snapshotIconGlyph              = kHudGlyphSnapshot;
+            snapshot->volumeIconUsesIconFont         = _hudIconFormat != nullptr;
+            snapshot->volumeIconGlyph                = GetHudVolumeGlyph();
+
+            const SIZE snapshotSize = ComputeSnapshotSize();
+            snapshot->snapshotWidth  = snapshotSize.cx;
+            snapshot->snapshotHeight = snapshotSize.cy;
+
+            RECT hudClient{};
+            if (_hWnd && GetClientRect(_hWnd.get(), &hudClient) != 0)
+            {
+                const int hudW = std::max<LONG>(0, hudClient.right - hudClient.left);
+                const int hudH = MulDiv(64, static_cast<int>(GetDpiForWindow(_hWnd.get())), 96);
+                const HudLayout layout = ComputeHudLayout(hudW, hudH, GetDpiForWindow(_hWnd.get()));
+                snapshot->hasVolumeMuteButton = ! IsRectEmpty(&layout.volumeMute);
+                snapshot->hasVolumeSlider     = ! IsRectEmpty(&layout.volumeHit) && ! IsRectEmpty(&layout.volumeTrack);
+            }
+            return TRUE;
+        }
+        case WndMsg::kViewerVlcDebugForceLoadingVisible:
+            SetMissingUiVisible(false, {});
+            SetLoadingUiVisible(true);
+            _loadingStartedTick = GetTickCount64() - (kLoadingOverlayDelayMs + 1);
+            OnTimer(kLoadingTimerId);
+            return TRUE;
+        case WndMsg::kViewerVlcDebugSetPlaybackState:
+        {
+            const auto* state = reinterpret_cast<const WndMsg::ViewerVlcDebugPlaybackState*>(lp);
+            if (! state)
+            {
+                return FALSE;
+            }
+            _hudLengthMs = std::max<int64_t>(0, state->lengthMs);
+            _hudTimeMs = (_hudLengthMs > 0) ? std::clamp<int64_t>(state->timeMs, 0, _hudLengthMs) : std::max<int64_t>(0, state->timeMs);
+            _hudDragTimeMs = _hudTimeMs;
+            _hudVolumeValue = std::clamp(state->volume, 0, 100);
+            _hudPreviousVolumeValue = (_hudVolumeValue > 0) ? _hudVolumeValue : 100;
+            _hudMuted = state->muted;
+            PersistVolumeState();
+            if (_hHud)
+            {
+                InvalidateRect(_hHud.get(), nullptr, FALSE);
+            }
+            return TRUE;
+        }
+        case WndMsg::kViewerVlcDebugWheel:
+        {
+            const auto* wheel = reinterpret_cast<const WndMsg::ViewerVlcDebugWheel*>(lp);
+            if (! wheel)
+            {
+                return FALSE;
+            }
+            SeekByWheel(wheel->wheelDelta, wheel->shift, wheel->ctrl);
+            return TRUE;
+        }
+        case WndMsg::kViewerVlcDebugToggleMute:
+            ToggleMute();
+            return TRUE;
+        case WndMsg::kViewerVlcDebugWheelVideoChild:
+        {
+            const auto* wheel = reinterpret_cast<const WndMsg::ViewerVlcDebugWheel*>(lp);
+            if (! wheel || ! DebugEnsureWheelVideoChild())
+            {
+                return FALSE;
+            }
+
+            const WPARAM wheelParam = MAKEWPARAM((wheel->shift ? MK_SHIFT : 0) | (wheel->ctrl ? MK_CONTROL : 0),
+                                                 static_cast<WORD>(static_cast<short>(wheel->wheelDelta)));
+            SendMessageW(_debugWheelVideoChild.get(), WM_MOUSEWHEEL, wheelParam, 0);
+            return TRUE;
+        }
+#endif
         case WM_GETMINMAXINFO:
             if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
             {
@@ -1532,7 +1744,11 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             }
             return 0;
         case WM_SETFOCUS:
-            if (_hVideo)
+            if (TryRestoreFocusFromEmbeddedSetFocus(wp))
+            {
+                return 0;
+            }
+            if (! _embeddedMode && _hVideo)
             {
                 SetFocus(_hVideo.get());
             }
@@ -1552,6 +1768,9 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return 0;
             }
             break;
+        case WM_MOUSEWHEEL:
+            OnSurfaceMouseWheel(wp);
+            return 0;
         case WM_NCACTIVATE: ApplyTitleBarTheme(wp != FALSE); return DefWindowProcW(hwnd, msg, wp, lp);
         case WM_LBUTTONDBLCLK: ToggleFullscreen(); return 0;
         case WM_PAINT:
@@ -1578,15 +1797,27 @@ LRESULT ViewerVLC::VideoProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     switch (msg)
     {
+        case WM_SETFOCUS:
+            if (TryRestoreFocusFromEmbeddedSetFocus(wp))
+            {
+                return 0;
+            }
+            break;
         case WM_LBUTTONDOWN:
             _hudLastActivityTick = 0;
             if (_hHud)
             {
                 UpdateHudOpacityTarget(_hHud.get(), true);
             }
-            SetFocus(hwnd);
+            if (! _embeddedMode)
+            {
+                SetFocus(hwnd);
+            }
             return 0;
         case WM_LBUTTONDBLCLK: ToggleFullscreen(); return 0;
+        case WM_MOUSEWHEEL:
+            OnSurfaceMouseWheel(wp);
+            return 0;
         case WM_PARENTNOTIFY:
         {
             const UINT childMsg = LOWORD(wp);
@@ -1787,8 +2018,12 @@ LRESULT ViewerVLC::HudProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             break;
         }
         case WM_KEYDOWN: OnHudKeyDown(hwnd, static_cast<UINT>(wp)); return 0;
-        case WM_MOUSEWHEEL: OnHudMouseWheel(hwnd, static_cast<short>(GET_WHEEL_DELTA_WPARAM(wp))); return 0;
+        case WM_MOUSEWHEEL: OnHudMouseWheel(hwnd, wp); return 0;
         case WM_SETFOCUS:
+            if (TryRestoreFocusFromEmbeddedSetFocus(wp))
+            {
+                return 0;
+            }
             _hudLastActivityTick = GetTickCount64();
             UpdateHudOpacityTarget(hwnd, true);
             return 0;
@@ -1801,6 +2036,26 @@ LRESULT ViewerVLC::HudProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+bool ViewerVLC::TryRestoreFocusFromEmbeddedSetFocus(WPARAM previousFocusParam) noexcept
+{
+    if (! _embeddedMode)
+    {
+        return false;
+    }
+
+    const auto isExternalFocusTarget = [this](HWND hwnd) noexcept
+    {
+        return hwnd != nullptr && IsWindow(hwnd) != FALSE && (_hWnd == nullptr || (hwnd != _hWnd.get() && IsChild(_hWnd.get(), hwnd) == FALSE));
+    };
+
+    HWND focusTarget = isExternalFocusTarget(_embeddedFocusReturnWindow) ? _embeddedFocusReturnWindow : reinterpret_cast<HWND>(previousFocusParam);
+    if (isExternalFocusTarget(focusTarget))
+    {
+        SetFocus(focusTarget);
+    }
+    return true;
+}
+
 LRESULT ViewerVLC::OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     switch (msg)
@@ -1808,6 +2063,7 @@ LRESULT ViewerVLC::OverlayProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexce
         case WM_SIZE: OnOverlaySize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
         case WM_PAINT: OnOverlayPaint(hwnd); return 0;
         case WM_LBUTTONDBLCLK: ToggleFullscreen(); return 0;
+        case WM_MOUSEWHEEL: OnSurfaceMouseWheel(wp); return 0;
         case WM_MOUSEMOVE:
         {
             const POINT pt = {static_cast<int>(static_cast<short>(LOWORD(lp))), static_cast<int>(static_cast<short>(HIWORD(lp)))};
@@ -1841,6 +2097,7 @@ LRESULT ViewerVLC::SeekPreviewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) no
     {
         case WM_SIZE: OnSeekPreviewSize(hwnd, LOWORD(lp), HIWORD(lp)); return 0;
         case WM_PAINT: OnSeekPreviewPaint(hwnd); return 0;
+        case WM_MOUSEWHEEL: OnSurfaceMouseWheel(wp); return 0;
         case WM_ERASEBKGND: return 1;
         case WM_NCHITTEST: return HTTRANSPARENT;
         case WM_NCDESTROY: SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0); return DefWindowProcW(hwnd, msg, wp, lp);
@@ -1850,6 +2107,8 @@ LRESULT ViewerVLC::SeekPreviewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) no
 
 void ViewerVLC::OnCreate(HWND hwnd) noexcept
 {
+    InitPostedPayloadWindow(hwnd);
+
     if (RegisterVideoClass(g_hInstance))
     {
         _hVideo.reset(CreateWindowExW(
@@ -1885,6 +2144,8 @@ void ViewerVLC::OnCreate(HWND hwnd) noexcept
 
 void ViewerVLC::OnDestroy() noexcept
 {
+    ++_asyncOpenGeneration;
+    SetLoadingUiVisible(false);
     StopPlayback();
 
     RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
@@ -1905,7 +2166,12 @@ void ViewerVLC::OnDestroy() noexcept
 LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 {
     OnDestroy();
+    static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
 
+#ifdef ENABLE_TESTS
+    _debugWheelVideoChild.release();
+#endif
+    RemoveVideoChildWheelForwarding();
     _hVideo.release();
     _hHud.release();
     _hMissingOverlay.release();
@@ -1931,6 +2197,8 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _hudTargetOpacity  = 1.0f;
     _hudAnimTimerId    = 0;
     _hudVolumeValue    = 100;
+    _hudPreviousVolumeValue = 100;
+    _hudMuted          = false;
     _hudTimeMs         = 0;
     _hudLengthMs       = 0;
     _hudPlaying        = false;
@@ -1939,6 +2207,7 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _hudRenderTarget.reset();
     _hudTextFormat.reset();
     _hudMonoFormat.reset();
+    _hudIconFormat.reset();
 
     _overlayRenderTarget.reset();
     _overlayTitleFormat.reset();
@@ -1948,6 +2217,11 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 
     _hudDWriteFactory.reset();
     _hudD2DFactory.reset();
+
+    _loadingTimerId = 0;
+    _loadingUiActive = false;
+    _loadingUiVisible = false;
+    _loadingStartedTick = 0;
 
     Release();
     return DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
@@ -1974,6 +2248,21 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
     const std::filesystem::path path(context->focusedPath);
     _currentPath = path;
 
+    const bool embeddedMode =
+        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
+    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
+    {
+        Debug::Error(L"ViewerVLC: embedded Open requires a valid ownerWindow parent.");
+        return E_INVALIDARG;
+    }
+    const HWND embeddedFocusReturnWindow = embeddedMode ? GetFocus() : nullptr;
+    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    {
+        static_cast<void>(Close());
+    }
+    _embeddedFocusReturnWindow = embeddedFocusReturnWindow;
+
     if (! _hWnd)
     {
         if (! RegisterWndClass(g_hInstance))
@@ -1981,72 +2270,92 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
             return E_FAIL;
         }
 
-        HWND ownerWindow = context->ownerWindow;
-
         RECT ownerRect{};
-        if (ownerWindow && GetWindowRect(ownerWindow, &ownerRect) != 0)
+        int x = CW_USEDEFAULT;
+        int y = CW_USEDEFAULT;
+        int w = 900;
+        int h = 700;
+        if (embeddedMode)
         {
-            const int w = ownerRect.right - ownerRect.left;
-            const int h = ownerRect.bottom - ownerRect.top;
-
-            HWND window = CreateWindowExW(0,
-                                          kClassName,
-                                          LoadStringResource(g_hInstance, IDS_VIEWERVLC_WINDOW_CAPTION).c_str(),
-                                          WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                                          ownerRect.left,
-                                          ownerRect.top,
-                                          std::max(1, w),
-                                          std::max(1, h),
-                                          nullptr,
-                                          nullptr,
-                                          g_hInstance,
-                                          this);
-            if (! window)
+            RECT client{};
+            if (GetClientRect(embeddedParent, &client) == 0)
             {
-                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerVLC: CreateWindowExW failed.");
+                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerVLC: GetClientRect failed for embedded preview parent.");
                 return HRESULT_FROM_WIN32(lastError);
             }
-
-            _hWnd.reset(window);
-            CreateOrUpdateWindowBackgroundBrush();
-            ApplyTitleBarTheme(true);
+            x = 0;
+            y = 0;
+            w = std::max(1L, client.right - client.left);
+            h = std::max(1L, client.bottom - client.top);
         }
-        else
+        else if (context->ownerWindow && GetWindowRect(context->ownerWindow, &ownerRect) != 0)
         {
-            HWND window = CreateWindowExW(0,
-                                          kClassName,
-                                          LoadStringResource(g_hInstance, IDS_VIEWERVLC_WINDOW_CAPTION).c_str(),
-                                          WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          900,
-                                          700,
-                                          nullptr,
-                                          nullptr,
-                                          g_hInstance,
-                                          this);
-            if (! window)
-            {
-                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerVLC: CreateWindowExW failed.");
-                return HRESULT_FROM_WIN32(lastError);
-            }
+            x = ownerRect.left;
+            y = ownerRect.top;
+            w = std::max(1L, ownerRect.right - ownerRect.left);
+            h = std::max(1L, ownerRect.bottom - ownerRect.top);
+        }
 
-            _hWnd.reset(window);
-            CreateOrUpdateWindowBackgroundBrush();
+        const std::wstring caption = embeddedMode ? std::wstring{} : LoadStringResource(g_hInstance, IDS_VIEWERVLC_WINDOW_CAPTION);
+        const DWORD style          = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN);
+        HWND window                = CreateWindowExW(0,
+                                      kClassName,
+                                      caption.c_str(),
+                                      style,
+                                      x,
+                                      y,
+                                      w,
+                                      h,
+                                      embeddedMode ? embeddedParent : nullptr,
+                                      nullptr,
+                                      g_hInstance,
+                                      this);
+        if (! window)
+        {
+            const DWORD lastError = Debug::ErrorWithLastError(L"ViewerVLC: CreateWindowExW failed.");
+            return HRESULT_FROM_WIN32(lastError);
+        }
+
+        _hWnd.reset(window);
+        _embeddedMode = embeddedMode;
+        CreateOrUpdateWindowBackgroundBrush();
+        if (! embeddedMode)
+        {
             ApplyTitleBarTheme(true);
         }
 
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
+        if (! embeddedMode)
+        {
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
     else
     {
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        if (_embeddedMode)
+        {
+            RECT client{};
+            if (embeddedParent != nullptr && GetClientRect(embeddedParent, &client) != 0)
+            {
+                SetWindowPos(_hWnd.get(),
+                             nullptr,
+                             0,
+                             0,
+                             std::max(1L, client.right - client.left),
+                             std::max(1L, client.bottom - client.top),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else
+        {
+            ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
 
-    if (_hWnd)
+    if (_hWnd && ! _embeddedMode)
     {
         SetWindowTextW(_hWnd.get(),
                        std::format(L"{} - {}", _currentPath.filename().wstring(), LoadStringResource(g_hInstance, IDS_VIEWERVLC_WINDOW_CAPTION)).c_str());
@@ -2062,6 +2371,8 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Close() noexcept
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
+    _embeddedMode = false;
+    _embeddedFocusReturnWindow = nullptr;
     return S_OK;
 }
 
@@ -2199,6 +2510,16 @@ void ViewerVLC::SeekAbsoluteMs(int64_t timeMs) noexcept
 {
     if (! _vlc || ! _vlc->player || ! _vlc->libvlc_media_player_set_time)
     {
+        if (_hudLengthMs > 0)
+        {
+            const int64_t clamped = std::clamp<int64_t>(timeMs, 0, _hudLengthMs);
+            _hudTimeMs           = clamped;
+            _hudDragTimeMs       = clamped;
+            if (_hHud)
+            {
+                InvalidateRect(_hHud.get(), nullptr, FALSE);
+            }
+        }
         return;
     }
 
@@ -2223,15 +2544,248 @@ void ViewerVLC::SeekRelativeMs(int64_t deltaMs) noexcept
 void ViewerVLC::SetVolume(int volume) noexcept
 {
     _hudVolumeValue = std::clamp(volume, 0, 100);
-    if (_vlc && _vlc->player && _vlc->libvlc_audio_set_volume)
+    if (_hudVolumeValue > 0)
     {
-        static_cast<void>(_vlc->libvlc_audio_set_volume(_vlc->player.get(), _hudVolumeValue));
+        _hudPreviousVolumeValue = _hudVolumeValue;
+        _hudMuted               = false;
     }
+    ApplyVolumeToPlayer();
+    PersistVolumeState();
     if (_hHud)
     {
         UpdateHudOpacityTarget(_hHud.get(), false);
         InvalidateRect(_hHud.get(), nullptr, TRUE);
     }
+}
+
+void ViewerVLC::ApplyVolumeToPlayer() noexcept
+{
+    if (_vlc && _vlc->player && _vlc->libvlc_audio_set_volume)
+    {
+        static_cast<void>(_vlc->libvlc_audio_set_volume(_vlc->player.get(), _hudMuted ? 0 : _hudVolumeValue));
+    }
+}
+
+void ViewerVLC::ToggleMute() noexcept
+{
+    if (_hudMuted)
+    {
+        _hudMuted = false;
+        if (_hudVolumeValue == 0)
+        {
+            _hudVolumeValue = std::clamp(_hudPreviousVolumeValue, 1, 100);
+        }
+    }
+    else
+    {
+        if (_hudVolumeValue > 0)
+        {
+            _hudPreviousVolumeValue = _hudVolumeValue;
+        }
+        _hudMuted = true;
+    }
+
+    ApplyVolumeToPlayer();
+    PersistVolumeState();
+    if (_hHud)
+    {
+        UpdateHudOpacityTarget(_hHud.get(), false);
+        InvalidateRect(_hHud.get(), nullptr, TRUE);
+    }
+}
+
+void ViewerVLC::PersistVolumeState() noexcept
+{
+    _config.lastVolumePercent = static_cast<uint32_t>(std::clamp(_hudVolumeValue, 0, 100));
+    _config.muted             = _hudMuted;
+    static_cast<void>(RebuildConfigurationJson());
+}
+
+int64_t ViewerVLC::ComputeWheelSeekDeltaMs(bool shift, bool ctrl) const noexcept
+{
+    if (shift && ctrl)
+    {
+        return 300'000;
+    }
+    if (ctrl)
+    {
+        return 60'000;
+    }
+    if (shift)
+    {
+        return 3'000;
+    }
+    return 10'000;
+}
+
+void ViewerVLC::SeekByWheel(int wheelDelta, bool shift, bool ctrl) noexcept
+{
+    if (wheelDelta == 0 || _hudLengthMs <= 0)
+    {
+        return;
+    }
+
+    const int64_t step = ComputeWheelSeekDeltaMs(shift, ctrl);
+    SeekRelativeMs(wheelDelta > 0 ? step : -step);
+    _hudLastActivityTick = GetTickCount64();
+    if (_hHud)
+    {
+        UpdateHudOpacityTarget(_hHud.get(), true);
+        InvalidateRect(_hHud.get(), nullptr, FALSE);
+    }
+}
+
+void ViewerVLC::OnSurfaceMouseWheel(WPARAM wheelParam) noexcept
+{
+    SeekByWheel(static_cast<short>(GET_WHEEL_DELTA_WPARAM(wheelParam)),
+                (GET_KEYSTATE_WPARAM(wheelParam) & MK_SHIFT) != 0,
+                (GET_KEYSTATE_WPARAM(wheelParam) & MK_CONTROL) != 0);
+}
+
+wchar_t ViewerVLC::GetHudPlayPauseGlyph() const noexcept
+{
+    return _hudPlaying ? kHudGlyphPause : kHudGlyphPlay;
+}
+
+wchar_t ViewerVLC::GetHudVolumeGlyph() const noexcept
+{
+    return (_hudMuted || _hudVolumeValue == 0) ? kHudGlyphMute : kHudGlyphVolume;
+}
+
+bool ViewerVLC::InstallVideoChildWheelForwarding(HWND child) noexcept
+{
+    if (! child || IsWindow(child) == FALSE)
+    {
+        return false;
+    }
+
+    if (child == _hWnd.get() || child == _hVideo.get() || child == _hHud.get() || child == _hMissingOverlay.get() || child == _hSeekPreview.get())
+    {
+        return false;
+    }
+
+    if (RedSalamander::Win32Callback::GetStoredWndProc(child, kWheelForwardOriginalWndProcProp))
+    {
+        static_cast<void>(RedSalamander::Win32Callback::SetPropNoThrow(child, kWheelForwardOwnerProp, reinterpret_cast<HANDLE>(this)));
+        if (std::ranges::find(_wheelForwardedChildren, child) == _wheelForwardedChildren.end())
+        {
+            _wheelForwardedChildren.push_back(child);
+        }
+        return true;
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(child, kWheelForwardOwnerProp, reinterpret_cast<HANDLE>(this)))
+    {
+        return false;
+    }
+
+    if (! RedSalamander::Win32Callback::InstallWndProcHook(child, kWheelForwardOriginalWndProcProp, &ViewerVLC::WheelForwardProc))
+    {
+        RemovePropW(child, kWheelForwardOwnerProp);
+        return false;
+    }
+
+    if (std::ranges::find(_wheelForwardedChildren, child) == _wheelForwardedChildren.end())
+    {
+        _wheelForwardedChildren.push_back(child);
+    }
+    return true;
+}
+
+void ViewerVLC::RefreshVideoChildWheelForwarding() noexcept
+{
+    if (! _hVideo || IsWindow(_hVideo.get()) == FALSE)
+    {
+        RemoveVideoChildWheelForwarding();
+        return;
+    }
+
+    std::erase_if(_wheelForwardedChildren,
+                  [this](HWND child) noexcept
+    {
+        if (! child || IsWindow(child) == FALSE)
+        {
+            return true;
+        }
+
+        if (IsChild(_hVideo.get(), child) == FALSE)
+        {
+            RedSalamander::Win32Callback::RestoreWndProcHook(child, kWheelForwardOriginalWndProcProp, &ViewerVLC::WheelForwardProc);
+            RemovePropW(child, kWheelForwardOwnerProp);
+            return true;
+        }
+        return false;
+    });
+
+    EnumChildWindows(_hVideo.get(),
+                     [](HWND child, LPARAM context) noexcept -> BOOL
+    {
+        auto* self = reinterpret_cast<ViewerVLC*>(context);
+        if (self)
+        {
+            static_cast<void>(self->InstallVideoChildWheelForwarding(child));
+        }
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(this));
+}
+
+void ViewerVLC::RemoveVideoChildWheelForwarding() noexcept
+{
+    for (HWND child : _wheelForwardedChildren)
+    {
+        if (! child || IsWindow(child) == FALSE)
+        {
+            continue;
+        }
+
+        RedSalamander::Win32Callback::RestoreWndProcHook(child, kWheelForwardOriginalWndProcProp, &ViewerVLC::WheelForwardProc);
+        RemovePropW(child, kWheelForwardOwnerProp);
+    }
+    _wheelForwardedChildren.clear();
+}
+
+#ifdef ENABLE_TESTS
+bool ViewerVLC::DebugEnsureWheelVideoChild() noexcept
+{
+    if (_debugWheelVideoChild && IsWindow(_debugWheelVideoChild.get()) != FALSE)
+    {
+        RefreshVideoChildWheelForwarding();
+        return true;
+    }
+
+    if (! _hVideo || IsWindow(_hVideo.get()) == FALSE)
+    {
+        return false;
+    }
+
+    _debugWheelVideoChild.reset(CreateWindowExW(
+        0, L"Static", nullptr, WS_CHILD | WS_VISIBLE | SS_BLACKRECT, 0, 0, 24, 24, _hVideo.get(), nullptr, g_hInstance, nullptr));
+    if (! _debugWheelVideoChild)
+    {
+        return false;
+    }
+
+    RefreshVideoChildWheelForwarding();
+    return true;
+}
+#endif
+
+SIZE ViewerVLC::ComputeSnapshotSize() const noexcept
+{
+    RECT rc{};
+    HWND hwnd = _hVideo ? _hVideo.get() : (_hWnd ? _hWnd.get() : nullptr);
+    if (hwnd && GetClientRect(hwnd, &rc) != 0)
+    {
+        const LONG w = std::max<LONG>(0, rc.right - rc.left);
+        const LONG h = std::max<LONG>(0, rc.bottom - rc.top);
+        if (w > 0 && h > 0)
+        {
+            return SIZE{w, h};
+        }
+    }
+
+    return SIZE{0, 0};
 }
 
 void ViewerVLC::SetPlaybackRate(float rate) noexcept
@@ -2339,6 +2893,40 @@ void ViewerVLC::SetFullscreen(bool enabled) noexcept
 
 void ViewerVLC::OnTimer(UINT_PTR timerId) noexcept
 {
+    if (timerId == kLoadingTimerId)
+    {
+        if (! _loadingUiActive || ! _hWnd)
+        {
+            SetLoadingUiVisible(false);
+            return;
+        }
+
+        const ULONGLONG now = GetTickCount64();
+        if (! _loadingUiVisible && now >= _loadingStartedTick && (now - _loadingStartedTick) >= kLoadingOverlayDelayMs)
+        {
+            _loadingUiVisible = true;
+            if (_hMissingOverlay)
+            {
+                ShowWindow(_hMissingOverlay.get(), SW_SHOW);
+            }
+            if (_hHud)
+            {
+                ShowWindow(_hHud.get(), SW_HIDE);
+            }
+            RECT rc{};
+            if (GetClientRect(_hWnd.get(), &rc) != 0)
+            {
+                Layout(_hWnd.get(), static_cast<UINT>(std::max<LONG>(0, rc.right - rc.left)), static_cast<UINT>(std::max<LONG>(0, rc.bottom - rc.top)));
+            }
+        }
+
+        if (_loadingUiVisible && _hMissingOverlay)
+        {
+            InvalidateRect(_hMissingOverlay.get(), nullptr, FALSE);
+        }
+        return;
+    }
+
     if (timerId != kUiTimerId)
     {
         return;
@@ -2377,7 +2965,7 @@ void ViewerVLC::Layout(HWND hwnd, UINT width, UINT height) noexcept
     const int margin = scale(10);
     const int gap    = scale(8);
 
-    const bool showHud  = ! _missingUiVisible;
+    const bool showHud  = ! _missingUiVisible && ! _loadingUiVisible;
     const int barHeight = showHud ? scale(64) : 0;
 
     const int barY = std::max(0, h - barHeight);
@@ -2385,6 +2973,7 @@ void ViewerVLC::Layout(HWND hwnd, UINT width, UINT height) noexcept
     if (_hVideo)
     {
         SetWindowPos(_hVideo.get(), nullptr, 0, 0, w, barY, SWP_NOZORDER | SWP_NOACTIVATE);
+        RefreshVideoChildWheelForwarding();
     }
 
     if (_hHud)
@@ -2418,7 +3007,7 @@ void ViewerVLC::Layout(HWND hwnd, UINT width, UINT height) noexcept
 
 void ViewerVLC::UpdatePlaybackUi() noexcept
 {
-    if (_missingUiVisible)
+    if (_missingUiVisible || _loadingUiActive)
     {
         return;
     }
@@ -2432,6 +3021,8 @@ void ViewerVLC::UpdatePlaybackUi() noexcept
 
     if (hasPlayer)
     {
+        RefreshVideoChildWheelForwarding();
+
         if (_vlc->libvlc_media_player_is_playing)
         {
             playing = _vlc->libvlc_media_player_is_playing(_vlc->player.get()) != 0;
@@ -2447,7 +3038,7 @@ void ViewerVLC::UpdatePlaybackUi() noexcept
         if (_vlc->libvlc_audio_get_volume)
         {
             const int v = _vlc->libvlc_audio_get_volume(_vlc->player.get());
-            if (v >= 0)
+            if (v >= 0 && ! _hudMuted)
             {
                 volume = v;
             }
@@ -2470,6 +3061,10 @@ void ViewerVLC::UpdatePlaybackUi() noexcept
         _hudDragTimeMs = _hudTimeMs;
     }
     _hudVolumeValue = std::clamp(volume, 0, 100);
+    if (_hudVolumeValue > 0)
+    {
+        _hudPreviousVolumeValue = _hudVolumeValue;
+    }
     _hudRate        = std::clamp(rate, 0.25f, 4.0f);
 
     if (_hHud)
@@ -2481,6 +3076,11 @@ void ViewerVLC::UpdatePlaybackUi() noexcept
 
 void ViewerVLC::SetMissingUiVisible(bool visible, std::wstring_view details) noexcept
 {
+    if (visible)
+    {
+        SetLoadingUiVisible(false);
+    }
+
     _missingUiVisible = visible;
     _overlayDetails.assign(details);
     _overlayLinkRect      = {};
@@ -2515,6 +3115,55 @@ void ViewerVLC::SetMissingUiVisible(bool visible, std::wstring_view details) noe
     }
 
     UpdatePlaybackUi();
+}
+
+void ViewerVLC::SetLoadingUiVisible(bool visible) noexcept
+{
+    _loadingUiActive = visible;
+    if (visible)
+    {
+        _loadingStartedTick = GetTickCount64();
+        _loadingUiVisible   = false;
+        _overlayDetails.clear();
+        _overlayLinkRect      = {};
+        _overlayLinkHot       = false;
+        _overlayTrackingMouse = false;
+        if (_hWnd && _loadingTimerId == 0)
+        {
+            _loadingTimerId = SetTimer(_hWnd.get(), kLoadingTimerId, kLoadingTimerIntervalMs, nullptr);
+        }
+    }
+    else
+    {
+        if (_hWnd && _loadingTimerId != 0)
+        {
+            KillTimer(_hWnd.get(), _loadingTimerId);
+        }
+        _loadingTimerId     = 0;
+        _loadingStartedTick = 0;
+        _loadingUiVisible   = false;
+    }
+
+    if (_hMissingOverlay && ! _missingUiVisible)
+    {
+        ShowWindow(_hMissingOverlay.get(), (visible && _loadingUiVisible) ? SW_SHOW : SW_HIDE);
+        InvalidateRect(_hMissingOverlay.get(), nullptr, TRUE);
+    }
+
+    if (_hHud && ! _missingUiVisible)
+    {
+        ShowWindow(_hHud.get(), visible ? SW_HIDE : SW_SHOW);
+        InvalidateRect(_hHud.get(), nullptr, TRUE);
+    }
+
+    if (_hWnd)
+    {
+        RECT rc{};
+        if (GetClientRect(_hWnd.get(), &rc) != 0)
+        {
+            Layout(_hWnd.get(), static_cast<UINT>(std::max<LONG>(0, rc.right - rc.left)), static_cast<UINT>(std::max<LONG>(0, rc.bottom - rc.top)));
+        }
+    }
 }
 
 bool ViewerVLC::EnsureHudDirect2D(HWND hwnd) noexcept
@@ -2567,6 +3216,7 @@ bool ViewerVLC::EnsureHudDirect2D(HWND hwnd) noexcept
         _hudTextDpi = dpi;
         _hudTextFormat.reset();
         _hudMonoFormat.reset();
+        _hudIconFormat.reset();
     }
 
     if (! _hudTextFormat && _hudDWriteFactory)
@@ -2590,6 +3240,18 @@ bool ViewerVLC::EnsureHudDirect2D(HWND hwnd) noexcept
             _hudMonoFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
             _hudMonoFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
             _hudMonoFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+        }
+    }
+
+    if (! _hudIconFormat && _hudDWriteFactory)
+    {
+        const float size = static_cast<float>(MulDiv(18, static_cast<int>(dpi), 96));
+        const HRESULT hr = Typography::CreateTextFormat(_hudDWriteFactory.get(), Typography::MakeUiIconSpec(size), _hudIconFormat.put());
+        if (SUCCEEDED(hr))
+        {
+            _hudIconFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+            _hudIconFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+            _hudIconFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
         }
     }
 
@@ -3005,8 +3667,9 @@ void ViewerVLC::CycleHudFocus(bool backwards) noexcept
         case HudPart::Stop: next = backwards ? HudPart::PlayPause : HudPart::Snapshot; break;
         case HudPart::Snapshot: next = backwards ? HudPart::Stop : HudPart::Seek; break;
         case HudPart::Seek: next = backwards ? HudPart::Snapshot : HudPart::Speed; break;
-        case HudPart::Speed: next = backwards ? HudPart::Seek : HudPart::Volume; break;
-        case HudPart::Volume: next = backwards ? HudPart::Speed : HudPart::PlayPause; break;
+        case HudPart::Speed: next = backwards ? HudPart::Seek : HudPart::VolumeMute; break;
+        case HudPart::VolumeMute: next = backwards ? HudPart::Speed : HudPart::Volume; break;
+        case HudPart::Volume: next = backwards ? HudPart::VolumeMute : HudPart::PlayPause; break;
     }
     _hudFocus = next;
 }
@@ -3032,7 +3695,9 @@ ViewerVLC::HudPart ViewerVLC::HitTestHud(HWND hwnd, POINT pt) const noexcept
         return HudPart::Snapshot;
     if (PtInRect(&layout.speed, pt) != 0)
         return HudPart::Speed;
-    if (PtInRect(&layout.volume, pt) != 0)
+    if (PtInRect(&layout.volumeMute, pt) != 0)
+        return HudPart::VolumeMute;
+    if (! IsRectEmpty(&layout.volumeHit) && PtInRect(&layout.volumeHit, pt) != 0)
         return HudPart::Volume;
     if (PtInRect(&layout.seekHit, pt) != 0)
         return HudPart::Seek;
@@ -3085,11 +3750,15 @@ void ViewerVLC::UpdateHudVolumeDrag(HWND hwnd, POINT pt) noexcept
     const int h            = std::max<LONG>(0, rc.bottom - rc.top);
     const UINT dpi         = GetDpiForWindow(hwnd);
     const HudLayout layout = ComputeHudLayout(w, h, dpi);
+    if (IsRectEmpty(&layout.volumeTrack))
+    {
+        return;
+    }
 
-    const int areaH = std::max<int>(1, static_cast<int>(layout.volume.bottom - layout.volume.top));
-    const int y     = pt.y - static_cast<int>(layout.volume.top);
-    const int px    = std::clamp(y, 0, areaH);
-    const double t  = 1.0 - (static_cast<double>(px) / static_cast<double>(areaH));
+    const int areaW = std::max<int>(1, static_cast<int>(layout.volumeTrack.right - layout.volumeTrack.left));
+    const int x     = pt.x - static_cast<int>(layout.volumeTrack.left);
+    const int px    = std::clamp(x, 0, areaW);
+    const double t  = static_cast<double>(px) / static_cast<double>(areaW);
     SetVolume(static_cast<int>(std::lround(t * 100.0)));
 }
 
@@ -3174,7 +3843,10 @@ void ViewerVLC::OnHudMouseLeave(HWND hwnd) noexcept
 
 void ViewerVLC::OnHudLButtonDown(HWND hwnd, POINT pt) noexcept
 {
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
     _hudLastActivityTick = GetTickCount64();
 
     const HudPart part = HitTestHud(hwnd, pt);
@@ -3269,6 +3941,7 @@ void ViewerVLC::OnHudLButtonUp(HWND hwnd, POINT pt) noexcept
             case HudPart::Snapshot: TakeSnapshot(); break;
             case HudPart::Seek: break;
             case HudPart::Speed: StepPlaybackRate(1); break;
+            case HudPart::VolumeMute: ToggleMute(); break;
             case HudPart::Volume: break;
         }
     }
@@ -3311,6 +3984,7 @@ void ViewerVLC::OnHudKeyDown(HWND hwnd, UINT vkey) noexcept
             case HudPart::Snapshot: TakeSnapshot(); break;
             case HudPart::Seek: break;
             case HudPart::Speed: StepPlaybackRate(1); break;
+            case HudPart::VolumeMute: ToggleMute(); break;
             case HudPart::Volume: break;
         }
         UpdateHudOpacityTarget(hwnd, true);
@@ -3365,8 +4039,9 @@ void ViewerVLC::OnHudKeyDown(HWND hwnd, UINT vkey) noexcept
     }
 }
 
-void ViewerVLC::OnHudMouseWheel(HWND /*hwnd*/, int wheelDelta) noexcept
+void ViewerVLC::OnHudMouseWheel(HWND /*hwnd*/, WPARAM wheelParam) noexcept
 {
+    const int wheelDelta = static_cast<short>(GET_WHEEL_DELTA_WPARAM(wheelParam));
     if (wheelDelta == 0)
     {
         return;
@@ -3388,9 +4063,11 @@ void ViewerVLC::OnHudMouseWheel(HWND /*hwnd*/, int wheelDelta) noexcept
 
     if (_hudFocus == HudPart::Seek && _hudLengthMs > 0)
     {
-        SeekRelativeMs(wheelDelta > 0 ? 5000 : -5000);
+        SeekByWheel(wheelDelta, (GET_KEYSTATE_WPARAM(wheelParam) & MK_SHIFT) != 0, (GET_KEYSTATE_WPARAM(wheelParam) & MK_CONTROL) != 0);
         return;
     }
+
+    SeekByWheel(wheelDelta, (GET_KEYSTATE_WPARAM(wheelParam) & MK_SHIFT) != 0, (GET_KEYSTATE_WPARAM(wheelParam) & MK_CONTROL) != 0);
 }
 
 void ViewerVLC::OnHudKillFocus(HWND hwnd) noexcept
@@ -3449,6 +4126,10 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
     const COLORREF hoverFillDim = BlendColor(bg, hoverFill, dimA);
     const COLORREF pressFill    = BlendColor(bg, accent, 56u);
     const COLORREF pressFillDim = BlendColor(bg, pressFill, dimA);
+    const COLORREF buttonFill    = themed ? BlendColor(bg, fg, 18u) : GetSysColor(COLOR_BTNFACE);
+    const COLORREF buttonFillDim = BlendColor(bg, buttonFill, dimA);
+    const COLORREF mutedFill     = BlendColor(bg, accent, 44u);
+    const COLORREF mutedFillDim  = BlendColor(bg, mutedFill, dimA);
 
     const uint8_t disabledA   = static_cast<uint8_t>(std::lround(static_cast<float>(dimA) * 0.55f));
     const COLORREF fgDisabled = BlendColor(bg, fg, disabledA);
@@ -3459,6 +4140,8 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
     wil::com_ptr<ID2D1SolidColorBrush> brushBorder;
     wil::com_ptr<ID2D1SolidColorBrush> brushHover;
     wil::com_ptr<ID2D1SolidColorBrush> brushPress;
+    wil::com_ptr<ID2D1SolidColorBrush> brushButton;
+    wil::com_ptr<ID2D1SolidColorBrush> brushMutedButton;
 
     _hudRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(fgDim), brushText.put());
     _hudRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(fgDisabled), brushTextDisabled.put());
@@ -3466,6 +4149,8 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
     _hudRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(borderDim), brushBorder.put());
     _hudRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(hoverFillDim), brushHover.put());
     _hudRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(pressFillDim), brushPress.put());
+    _hudRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(buttonFillDim), brushButton.put());
+    _hudRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(mutedFillDim), brushMutedButton.put());
 
     const float radius = static_cast<float>(px(6));
     const float stroke = std::max(1.0f, static_cast<float>(px(1)));
@@ -3478,14 +4163,26 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
         const bool hot     = (_hudHot == part);
         const bool pressed = (_hudPressed == part);
         const bool focused = (_hudFocus == part) && (GetFocus() == hwnd);
+        const bool mutedButton = part == HudPart::VolumeMute && (_hudMuted || _hudVolumeValue == 0);
 
-        if (enabled && (hot || pressed || focused))
+        ID2D1Brush* fillBrush = mutedButton ? brushMutedButton.get() : brushButton.get();
+        if (enabled && pressed)
         {
-            const auto fillBrush = pressed ? brushPress.get() : brushHover.get();
+            fillBrush = brushPress.get();
+        }
+        else if (enabled && (hot || focused))
+        {
+            fillBrush = brushHover.get();
+        }
+
+        if (fillBrush)
+        {
             _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(RectFFromRect(rcBtn), radius, radius), fillBrush);
         }
 
-        _hudRenderTarget->DrawRoundedRectangle(D2D1::RoundedRect(RectFFromRect(rcBtn), radius, radius), brushBorder.get(), stroke);
+        _hudRenderTarget->DrawRoundedRectangle(D2D1::RoundedRect(RectFFromRect(rcBtn), radius, radius),
+                                               mutedButton ? brushAccent.get() : brushBorder.get(),
+                                               stroke);
 
         if (focused)
         {
@@ -3494,92 +4191,28 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
         }
     };
 
-    const auto fillTriangle = [&](D2D1_POINT_2F p1, D2D1_POINT_2F p2, D2D1_POINT_2F p3, ID2D1Brush* brush)
+    const auto drawIconGlyph = [&](const RECT& rcBtn, wchar_t glyph, ID2D1Brush* brush)
     {
-        if (! _hudD2DFactory)
+        if (! _hudIconFormat || ! brush || glyph == L'\0')
         {
             return;
         }
 
-        wil::com_ptr<ID2D1PathGeometry> geo;
-        if (FAILED(_hudD2DFactory->CreatePathGeometry(geo.put())))
-        {
-            return;
-        }
-
-        wil::com_ptr<ID2D1GeometrySink> sink;
-        if (FAILED(geo->Open(sink.put())))
-        {
-            return;
-        }
-
-        sink->BeginFigure(p1, D2D1_FIGURE_BEGIN_FILLED);
-        std::array<D2D1_POINT_2F, 2> pts{p2, p3};
-        sink->AddLines(pts.data(), static_cast<UINT32>(pts.size()));
-        sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-        static_cast<void>(sink->Close());
-
-        _hudRenderTarget->FillGeometry(geo.get(), brush);
-    };
-
-    const auto drawPlayPauseIcon = [&](const RECT& rcBtn, ID2D1Brush* brush)
-    {
-        const float cx = (static_cast<float>(rcBtn.left) + static_cast<float>(rcBtn.right)) * 0.5f;
-        const float cy = (static_cast<float>(rcBtn.top) + static_cast<float>(rcBtn.bottom)) * 0.5f;
-        const float s  = std::max(6.0f, (static_cast<float>(rcBtn.right - rcBtn.left) * 0.32f));
-
-        if (_hudPlaying)
-        {
-            const float barW     = std::max(2.0f, s * 0.28f);
-            const float barH     = s * 1.15f;
-            const float gapX     = barW * 0.55f;
-            const D2D1_RECT_F r1 = D2D1::RectF(cx - gapX - barW, cy - barH * 0.5f, cx - gapX, cy + barH * 0.5f);
-            const D2D1_RECT_F r2 = D2D1::RectF(cx + gapX, cy - barH * 0.5f, cx + gapX + barW, cy + barH * 0.5f);
-            _hudRenderTarget->FillRectangle(r1, brush);
-            _hudRenderTarget->FillRectangle(r2, brush);
-        }
-        else
-        {
-            const D2D1_POINT_2F p1 = {cx - s * 0.55f, cy - s * 0.75f};
-            const D2D1_POINT_2F p2 = {cx - s * 0.55f, cy + s * 0.75f};
-            const D2D1_POINT_2F p3 = {cx + s * 0.80f, cy};
-            fillTriangle(p1, p2, p3, brush);
-        }
-    };
-
-    const auto drawStopIcon = [&](const RECT& rcBtn, ID2D1Brush* brush)
-    {
-        const float cx      = (static_cast<float>(rcBtn.left) + static_cast<float>(rcBtn.right)) * 0.5f;
-        const float cy      = (static_cast<float>(rcBtn.top) + static_cast<float>(rcBtn.bottom)) * 0.5f;
-        const float s       = std::max(6.0f, (static_cast<float>(rcBtn.right - rcBtn.left) * 0.34f));
-        const D2D1_RECT_F r = D2D1::RectF(cx - s, cy - s, cx + s, cy + s);
-        _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(r, radius * 0.5f, radius * 0.5f), brush);
-    };
-
-    const auto drawSnapshotIcon = [&](const RECT& rcBtn, ID2D1Brush* brush)
-    {
-        const float cx         = (static_cast<float>(rcBtn.left) + static_cast<float>(rcBtn.right)) * 0.5f;
-        const float cy         = (static_cast<float>(rcBtn.top) + static_cast<float>(rcBtn.bottom)) * 0.5f;
-        const float s          = std::max(6.0f, (static_cast<float>(rcBtn.right - rcBtn.left) * 0.34f));
-        const D2D1_RECT_F body = D2D1::RectF(cx - s, cy - s * 0.55f, cx + s, cy + s * 0.65f);
-        _hudRenderTarget->DrawRoundedRectangle(D2D1::RoundedRect(body, radius * 0.5f, radius * 0.5f), brush, stroke);
-        const D2D1_ELLIPSE lens{D2D1::Point2F(cx, cy + s * 0.05f), s * 0.35f, s * 0.35f};
-        _hudRenderTarget->DrawEllipse(lens, brush, stroke);
-        const D2D1_RECT_F top = D2D1::RectF(cx - s * 0.55f, cy - s * 0.75f, cx - s * 0.05f, cy - s * 0.55f);
-        _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(top, radius * 0.25f, radius * 0.25f), brush);
+        const wchar_t text[] = {glyph, L'\0'};
+        _hudRenderTarget->DrawTextW(text, 1, _hudIconFormat.get(), RectFFromRect(rcBtn), brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
     };
 
     _hudRenderTarget->BeginDraw();
     _hudRenderTarget->Clear(ColorFFromColorRef(bg));
 
     drawButtonBackground(layout.play, HudPart::PlayPause, hasPlayer);
-    drawPlayPauseIcon(layout.play, hasPlayer ? brushText.get() : brushTextDisabled.get());
+    drawIconGlyph(layout.play, GetHudPlayPauseGlyph(), hasPlayer ? brushText.get() : brushTextDisabled.get());
 
     drawButtonBackground(layout.stop, HudPart::Stop, hasPlayer);
-    drawStopIcon(layout.stop, hasPlayer ? brushText.get() : brushTextDisabled.get());
+    drawIconGlyph(layout.stop, kHudGlyphStop, hasPlayer ? brushText.get() : brushTextDisabled.get());
 
     drawButtonBackground(layout.snapshot, HudPart::Snapshot, hasPlayer);
-    drawSnapshotIcon(layout.snapshot, hasPlayer ? brushText.get() : brushTextDisabled.get());
+    drawIconGlyph(layout.snapshot, kHudGlyphSnapshot, hasPlayer ? brushText.get() : brushTextDisabled.get());
 
     // Seek bar
     const RECT trackRc      = layout.seekTrack;
@@ -3644,29 +4277,41 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
         }
     }
 
-    // Volume knob
-    drawButtonBackground(layout.volume, HudPart::Volume, true);
-    const float vcx = (static_cast<float>(layout.volume.left) + static_cast<float>(layout.volume.right)) * 0.5f;
-    const float vcy = (static_cast<float>(layout.volume.top) + static_cast<float>(layout.volume.bottom)) * 0.5f;
-    const float vr  = std::max(6.0f, (static_cast<float>(layout.volume.right - layout.volume.left) * 0.32f));
-    const D2D1_ELLIPSE vknob{D2D1::Point2F(vcx, vcy), vr, vr};
-    _hudRenderTarget->DrawEllipse(vknob, brushBorder.get(), stroke);
-    _hudRenderTarget->DrawEllipse(vknob, brushAccent.get(), stroke);
+    // Volume mute and slider
+    drawButtonBackground(layout.volumeMute, HudPart::VolumeMute, true);
+    const bool mutedVolume = _hudMuted || _hudVolumeValue == 0;
+    drawIconGlyph(layout.volumeMute, GetHudVolumeGlyph(), mutedVolume ? brushAccent.get() : brushText.get());
 
-    const double vRatio = std::clamp(static_cast<double>(_hudVolumeValue) / 100.0, 0.0, 1.0);
-    const double startA = -3.14159265358979323846 * 0.75;
-    const double sweep  = 3.14159265358979323846 * 1.5;
-    const double ang    = startA + sweep * vRatio;
-    const float ix      = vcx + static_cast<float>(std::cos(ang) * (vr * 0.85));
-    const float iy      = vcy + static_cast<float>(std::sin(ang) * (vr * 0.85));
-    _hudRenderTarget->DrawLine(D2D1::Point2F(vcx, vcy), D2D1::Point2F(ix, iy), brushText.get(), stroke * 1.5f);
-
-    const bool volFocused = (_hudFocus == HudPart::Volume) && (GetFocus() == hwnd);
-    if (((_hudHot == HudPart::Volume) || volFocused) && _hudTextFormat)
+    if (! IsRectEmpty(&layout.volumeHit))
     {
-        const std::wstring vText = std::format(L"{}%", _hudVolumeValue);
-        const D2D1_RECT_F vRc    = RectFFromRect(layout.volume);
-        _hudRenderTarget->DrawTextW(vText.c_str(), static_cast<UINT32>(vText.size()), _hudTextFormat.get(), vRc, brushText.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        const RECT volumeTrack = layout.volumeTrack;
+        const float volumeRadius = std::max(1.0f, static_cast<float>(px(3)));
+        _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(RectFFromRect(volumeTrack), volumeRadius, volumeRadius), brushBorder.get());
+
+        const int volumeTrackW = std::max(1, static_cast<int>(volumeTrack.right - volumeTrack.left));
+        const double vRatio = std::clamp(static_cast<double>(_hudVolumeValue) / 100.0, 0.0, 1.0);
+        RECT volumeFill = volumeTrack;
+        volumeFill.right = std::min(volumeTrack.right, volumeTrack.left + static_cast<int>(std::lround(static_cast<double>(volumeTrackW) * vRatio)));
+        if (volumeFill.right > volumeFill.left)
+        {
+            _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(RectFFromRect(volumeFill), volumeRadius, volumeRadius),
+                                                   mutedVolume ? brushMutedButton.get() : brushAccent.get());
+        }
+
+        const float thumbVx = static_cast<float>(volumeFill.right);
+        const float thumbVy = (static_cast<float>(volumeTrack.top) + static_cast<float>(volumeTrack.bottom)) * 0.5f;
+        const D2D1_ELLIPSE volumeThumb{D2D1::Point2F(thumbVx, thumbVy), thumbR, thumbR};
+        _hudRenderTarget->FillEllipse(volumeThumb, brushText.get());
+        _hudRenderTarget->DrawEllipse(volumeThumb, brushAccent.get(), stroke);
+
+        const bool volFocused = (_hudFocus == HudPart::Volume) && (GetFocus() == hwnd);
+        if (volFocused)
+        {
+            RECT focusRc = layout.volumeHit;
+            focusRc.top += px(6);
+            focusRc.bottom -= px(6);
+            _hudRenderTarget->DrawRoundedRectangle(D2D1::RoundedRect(RectFFromRect(focusRc), radius, radius), brushAccent.get(), stroke * 2.0f);
+        }
     }
 
     // Top border line
@@ -3819,6 +4464,31 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
     const D2D1_RECT_F stripeRc = D2D1::RectF(1.0f, 1.0f, static_cast<float>(1 + stripeW), static_cast<float>(h) - 1.0f);
     _overlayRenderTarget->FillRectangle(stripeRc, brushAccent.get());
 
+    if (_loadingUiVisible)
+    {
+        const ULONGLONG elapsed = (_loadingStartedTick != 0) ? (GetTickCount64() - _loadingStartedTick) : 0;
+        const int activeIndex = static_cast<int>((elapsed / 120) % 8);
+        const float centerX = static_cast<float>(contentRc.right - px(28));
+        const float centerY = static_cast<float>(contentRc.top + px(18));
+        const float orbit = static_cast<float>(px(11));
+        const float dotR = std::max(1.5f, static_cast<float>(px(2)));
+        for (int i = 0; i < 8; ++i)
+        {
+            const double angle = (static_cast<double>(i) / 8.0) * 6.28318530717958647692;
+            const uint8_t alpha = static_cast<uint8_t>(std::clamp(72 + ((8 + i - activeIndex) % 8) * 20, 72, 212));
+            wil::com_ptr<ID2D1SolidColorBrush> brushDot;
+            _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, accent, alpha)), brushDot.put());
+            if (brushDot)
+            {
+                const D2D1_ELLIPSE dot{D2D1::Point2F(centerX + static_cast<float>(std::cos(angle)) * orbit,
+                                                     centerY + static_cast<float>(std::sin(angle)) * orbit),
+                                       dotR,
+                                       dotR};
+                _overlayRenderTarget->FillEllipse(dot, brushDot.get());
+            }
+        }
+    }
+
     if (titleRc.bottom > titleRc.top && _overlayTitleFormat)
     {
         _overlayRenderTarget->DrawTextW(
@@ -3911,11 +4581,20 @@ LRESULT ViewerVLC::OnOverlaySetCursor(HWND /*hwnd*/) noexcept
 
 std::wstring ViewerVLC::GetOverlayTitleText() const
 {
+    if (_loadingUiVisible)
+    {
+        return LoadStringResource(g_hInstance, IDS_VIEWERVLC_LOADING_TITLE);
+    }
     return LoadStringResource(g_hInstance, IDS_VIEWERVLC_MISSING_TITLE);
 }
 
 std::wstring ViewerVLC::GetOverlayBodyText() const
 {
+    if (_loadingUiVisible)
+    {
+        return LoadStringResource(g_hInstance, IDS_VIEWERVLC_LOADING_BODY);
+    }
+
     std::wstring message = LoadStringResource(g_hInstance, IDS_VIEWERVLC_MISSING_BODY);
     if (! _overlayDetails.empty())
     {
@@ -3926,17 +4605,26 @@ std::wstring ViewerVLC::GetOverlayBodyText() const
 
 std::wstring ViewerVLC::GetOverlayLinkLabelText() const
 {
+    if (_loadingUiVisible)
+    {
+        return {};
+    }
     return LoadStringResource(g_hInstance, IDS_VIEWERVLC_MISSING_LINK_LABEL);
 }
 
 std::wstring ViewerVLC::GetOverlayLinkUrl() const
 {
+    if (_loadingUiVisible)
+    {
+        return {};
+    }
     return L"https://www.videolan.org/vlc/";
 }
 
-bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualization) noexcept
+bool ViewerVLC::BuildVlcLoadSpec(bool enableAudioVisualization, VlcLoadSpec& spec, std::wstring& outError) const noexcept
 {
     outError.clear();
+    spec = {};
 
     std::filesystem::path installDir;
     if (! _config.vlcInstallPath.empty())
@@ -3972,47 +4660,47 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
 
     const std::string pluginPathUtf8 = Utf8FromUtf16((installDir / L"plugins").wstring());
 
-    std::vector<std::string> argStorage;
-    argStorage.reserve(16);
-    argStorage.emplace_back("--no-video-title-show");
+    spec.installDir = installDir;
+    spec.argStorage.reserve(16);
+    spec.argStorage.emplace_back("--no-video-title-show");
     if (_config.quiet)
     {
-        argStorage.emplace_back("--quiet");
+        spec.argStorage.emplace_back("--quiet");
     }
 
     if (! pluginPathUtf8.empty())
     {
-        argStorage.push_back(std::format("--plugin-path={}", pluginPathUtf8));
+        spec.argStorage.push_back(std::format("--plugin-path={}", pluginPathUtf8));
     }
 
     if (_config.fileCachingMs > 0)
     {
-        argStorage.push_back(std::format("--file-caching={}", _config.fileCachingMs));
+        spec.argStorage.push_back(std::format("--file-caching={}", _config.fileCachingMs));
     }
 
     if (_config.networkCachingMs > 0)
     {
-        argStorage.push_back(std::format("--network-caching={}", _config.networkCachingMs));
+        spec.argStorage.push_back(std::format("--network-caching={}", _config.networkCachingMs));
     }
 
     if (! _config.avcodecHw.empty())
     {
-        argStorage.push_back(std::format("--avcodec-hw={}", _config.avcodecHw));
+        spec.argStorage.push_back(std::format("--avcodec-hw={}", _config.avcodecHw));
     }
 
     if (! _config.videoOutput.empty())
     {
-        argStorage.push_back(std::format("--vout={}", _config.videoOutput));
+        spec.argStorage.push_back(std::format("--vout={}", _config.videoOutput));
     }
 
     if (! _config.audioOutput.empty())
     {
-        argStorage.push_back(std::format("--aout={}", _config.audioOutput));
+        spec.argStorage.push_back(std::format("--aout={}", _config.audioOutput));
     }
 
     if (enableAudioVisualization && ! _config.audioVisualization.empty() && _config.audioVisualization != "off")
     {
-        argStorage.push_back(std::format("--audio-visual={}", _config.audioVisualization));
+        spec.argStorage.push_back(std::format("--audio-visual={}", _config.audioVisualization));
     }
 
     if (! _config.extraArgs.empty())
@@ -4022,32 +4710,29 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
         {
             if (! a.empty())
             {
-                argStorage.push_back(a);
+                spec.argStorage.push_back(a);
             }
         }
     }
 
-    std::string desiredKey;
-    desiredKey.reserve(argStorage.size() * 32);
-    for (const auto& a : argStorage)
+    spec.instanceArgsKey.reserve(spec.argStorage.size() * 32);
+    for (const auto& a : spec.argStorage)
     {
-        desiredKey.append(a);
-        desiredKey.push_back('\n');
+        spec.instanceArgsKey.append(a);
+        spec.instanceArgsKey.push_back('\n');
     }
 
-    if (_vlc && _vlc->instance && _vlc->module && _vlc->installDir == installDir && _vlc->instanceArgsKey == desiredKey)
-    {
-        return true;
-    }
+    return true;
+}
 
-    StopPlayback();
-    _vlc.reset();
-
+std::unique_ptr<VlcState> ViewerVLC::LoadVlcState(const VlcLoadSpec& spec, std::wstring& outError) noexcept
+{
+    outError.clear();
     auto state             = std::make_unique<VlcState>();
-    state->installDir      = installDir;
-    state->instanceArgsKey = desiredKey;
+    state->installDir      = spec.installDir;
+    state->instanceArgsKey = spec.instanceArgsKey;
 
-    const std::filesystem::path dllPath = installDir / L"libvlc.dll";
+    const std::filesystem::path dllPath = spec.installDir / L"libvlc.dll";
 
     const DWORD prevNeeded = GetDllDirectoryW(0, nullptr);
     if (prevNeeded > 0 && prevNeeded < 32768)
@@ -4060,14 +4745,14 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
             state->previousDllDirectory = std::move(prev);
         }
     }
-    state->dllDirectoryWasSet = SetDllDirectoryW(installDir.c_str()) != 0;
+    state->dllDirectoryWasSet = SetDllDirectoryW(spec.installDir.c_str()) != 0;
 
     HMODULE module = LoadLibraryW(dllPath.c_str());
     if (! module)
     {
         const DWORD lastError = GetLastError();
         outError              = std::format(L"Failed to load '{}' (Win32: {}).", dllPath.wstring(), lastError);
-        return false;
+        return nullptr;
     }
 
     state->module.reset(module);
@@ -4096,15 +4781,15 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
     if (! ok)
     {
         outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_EXPORTS_MISSING);
-        return false;
+        return nullptr;
     }
 
     state->instance.get_deleter().release = state->libvlc_release;
     state->player.get_deleter().release   = state->libvlc_media_player_release;
 
     std::vector<const char*> argv;
-    argv.reserve(argStorage.size());
-    for (auto& a : argStorage)
+    argv.reserve(spec.argStorage.size());
+    for (const auto& a : spec.argStorage)
     {
         argv.push_back(a.c_str());
     }
@@ -4113,13 +4798,87 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
     if (! inst)
     {
         outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_LIBVLC_NEW_FAILED);
-        return false;
+        return nullptr;
     }
 
     state->instance.reset(inst);
+    return state;
+}
 
-    _vlc = std::move(state);
-    return true;
+void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec&& spec) noexcept
+{
+    if (! _hWnd)
+    {
+        return;
+    }
+
+    StopPlayback();
+    _vlc.reset();
+    SetMissingUiVisible(false, {});
+    SetLoadingUiVisible(true);
+
+    auto work = std::make_unique<VlcAsyncLoadWork>();
+    work->self       = static_cast<IViewer*>(this);
+    work->hwnd       = _hWnd.get();
+    work->generation = ++_asyncOpenGeneration;
+    work->path       = path;
+    work->spec       = std::move(spec);
+
+    const BOOL queued = TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        std::unique_ptr<VlcAsyncLoadWork> work(static_cast<VlcAsyncLoadWork*>(context));
+
+        auto result        = std::make_unique<VlcAsyncLoadResult>();
+        result->generation = work->generation;
+        result->path       = work->path;
+        result->self       = work->self;
+        result->state      = LoadVlcState(work->spec, result->error);
+
+        if (! work->hwnd || IsWindow(work->hwnd) == FALSE ||
+            ! PostMessagePayload(work->hwnd, WndMsg::kViewerVlcAsyncOpenComplete, 0, std::move(result)))
+        {
+            Debug::Warning(L"ViewerVLC: Failed to post async VLC initialization result.");
+        }
+    },
+        work.get(),
+        nullptr);
+
+    if (queued == 0)
+    {
+        SetLoadingUiVisible(false);
+        std::wstring error;
+        _vlc = LoadVlcState(work->spec, error);
+        if (! _vlc)
+        {
+            SetMissingUiVisible(true, error);
+            return;
+        }
+        static_cast<void>(StartPlaybackWithLoadedVlc(path));
+        return;
+    }
+
+    static_cast<void>(work.release());
+}
+
+void ViewerVLC::OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> result) noexcept
+{
+    if (! result || result->generation != _asyncOpenGeneration)
+    {
+        return;
+    }
+
+    SetLoadingUiVisible(false);
+
+    if (! result->state)
+    {
+        SetMissingUiVisible(true, result->error);
+        return;
+    }
+
+    StopPlayback();
+    _vlc = std::move(result->state);
+    static_cast<void>(StartPlaybackWithLoadedVlc(result->path));
 }
 
 bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
@@ -4145,12 +4904,24 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
     _isAudioFile                        = IsAudioExtension(path.extension().wstring());
     const bool enableAudioVisualization = _isAudioFile && ! _config.audioVisualization.empty() && _config.audioVisualization != "off";
 
-    if (! EnsureVlcLoaded(error, enableAudioVisualization))
+    VlcLoadSpec spec{};
+    if (! BuildVlcLoadSpec(enableAudioVisualization, spec, error))
     {
         SetMissingUiVisible(true, error);
         return false;
     }
 
+    if (_vlc && _vlc->instance && _vlc->module && _vlc->installDir == spec.installDir && _vlc->instanceArgsKey == spec.instanceArgsKey)
+    {
+        return StartPlaybackWithLoadedVlc(path);
+    }
+
+    BeginAsyncVlcLoad(path, std::move(spec));
+    return true;
+}
+
+bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) noexcept
+{
     if (! _vlc || ! _vlc->instance || ! _vlc->libvlc_media_new_path || ! _vlc->libvlc_media_player_new_from_media || ! _vlc->libvlc_media_release ||
         ! _vlc->libvlc_media_player_release)
     {
@@ -4186,17 +4957,13 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
         _vlc->libvlc_media_player_set_hwnd(player.get(), _hVideo.get());
     }
 
-    if (_vlc->libvlc_audio_set_volume)
-    {
-        _vlc->libvlc_audio_set_volume(player.get(), std::clamp(_hudVolumeValue, 0, 100));
-    }
-
     if (_vlc->libvlc_media_player_set_rate)
     {
         _vlc->libvlc_media_player_set_rate(player.get(), std::clamp(_hudRate, 0.25f, 4.0f));
     }
 
     _vlc->player = std::move(player);
+    ApplyVolumeToPlayer();
 
     SetMissingUiVisible(false, {});
 
@@ -4216,6 +4983,7 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
         _uiTimerId = SetTimer(_hWnd.get(), kUiTimerId, kUiTimerIntervalMs, nullptr);
     }
 
+    RefreshVideoChildWheelForwarding();
     _hudLastActivityTick = GetTickCount64();
 
     UpdatePlaybackUi();
@@ -4237,6 +5005,7 @@ void ViewerVLC::StopPlayback() noexcept
     _hudDragTimeMs      = 0;
     _seekDragWasPlaying = false;
     ClearSeekPreview();
+    RemoveVideoChildWheelForwarding();
 
     if (_vlc && _vlc->player)
     {
@@ -4287,7 +5056,10 @@ void ViewerVLC::TakeSnapshot() noexcept
         return;
     }
 
-    const int rc = _vlc->libvlc_video_take_snapshot(_vlc->player.get(), 0, outUtf8.c_str(), 0, 0);
+    const SIZE snapshotSize = ComputeSnapshotSize();
+    const unsigned snapshotWidth = static_cast<unsigned>(std::max<LONG>(0, snapshotSize.cx));
+    const unsigned snapshotHeight = static_cast<unsigned>(std::max<LONG>(0, snapshotSize.cy));
+    const int rc = _vlc->libvlc_video_take_snapshot(_vlc->player.get(), 0, outUtf8.c_str(), snapshotWidth, snapshotHeight);
     if (rc == 0)
     {
         return;

@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <vector>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4820 28182) // WIL: deleted copy/move operators and padding
@@ -60,6 +61,9 @@ public:
 
 private:
     enum class HudPart : uint8_t;
+    struct VlcLoadSpec;
+    struct VlcAsyncLoadWork;
+    struct VlcAsyncLoadResult;
 
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
     static constexpr wchar_t kClassName[] = L"RedSalamander.ViewerVLC";
@@ -91,17 +95,21 @@ private:
     static LRESULT CALLBACK SeekPreviewProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     LRESULT SeekPreviewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
+    static LRESULT CALLBACK WheelForwardProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+
     void OnCreate(HWND hwnd) noexcept;
     void OnDestroy() noexcept;
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
     void OnSize(UINT width, UINT height) noexcept;
     void OnTimer(UINT_PTR timerId) noexcept;
     LRESULT OnNotify(const NMHDR* hdr) noexcept;
+    bool TryRestoreFocusFromEmbeddedSetFocus(WPARAM previousFocusParam) noexcept;
 
     void Layout(HWND hwnd, UINT width, UINT height) noexcept;
 
     void UpdatePlaybackUi() noexcept;
     void SetMissingUiVisible(bool visible, std::wstring_view details) noexcept;
+    void SetLoadingUiVisible(bool visible) noexcept;
 
     bool EnsureHudDirect2D(HWND hwnd) noexcept;
     void DiscardHudRenderTarget() noexcept;
@@ -118,11 +126,15 @@ private:
     void OnHudLButtonDown(HWND hwnd, POINT pt) noexcept;
     void OnHudLButtonUp(HWND hwnd, POINT pt) noexcept;
     void OnHudKeyDown(HWND hwnd, UINT vkey) noexcept;
-    void OnHudMouseWheel(HWND hwnd, int wheelDelta) noexcept;
+    void OnHudMouseWheel(HWND hwnd, WPARAM wheelParam) noexcept;
     void OnHudKillFocus(HWND hwnd) noexcept;
 
-    bool EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualization) noexcept;
+    [[nodiscard]] bool BuildVlcLoadSpec(bool enableAudioVisualization, VlcLoadSpec& spec, std::wstring& outError) const noexcept;
+    [[nodiscard]] static std::unique_ptr<VlcState> LoadVlcState(const VlcLoadSpec& spec, std::wstring& outError) noexcept;
     bool StartPlayback(const std::filesystem::path& path) noexcept;
+    bool StartPlaybackWithLoadedVlc(const std::filesystem::path& path) noexcept;
+    void BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec&& spec) noexcept;
+    void OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> result) noexcept;
     void StopPlayback() noexcept;
 
     void TakeSnapshot() noexcept;
@@ -132,6 +144,21 @@ private:
     void SeekAbsoluteMs(int64_t timeMs) noexcept;
     void SeekRelativeMs(int64_t deltaMs) noexcept;
     void SetVolume(int volume) noexcept;
+    void ApplyVolumeToPlayer() noexcept;
+    void ToggleMute() noexcept;
+    void PersistVolumeState() noexcept;
+    void SeekByWheel(int wheelDelta, bool shift, bool ctrl) noexcept;
+    void OnSurfaceMouseWheel(WPARAM wheelParam) noexcept;
+    [[nodiscard]] wchar_t GetHudPlayPauseGlyph() const noexcept;
+    [[nodiscard]] wchar_t GetHudVolumeGlyph() const noexcept;
+    [[nodiscard]] int64_t ComputeWheelSeekDeltaMs(bool shift, bool ctrl) const noexcept;
+    void RefreshVideoChildWheelForwarding() noexcept;
+    void RemoveVideoChildWheelForwarding() noexcept;
+    bool InstallVideoChildWheelForwarding(HWND child) noexcept;
+#ifdef ENABLE_TESTS
+    bool DebugEnsureWheelVideoChild() noexcept;
+#endif
+    [[nodiscard]] SIZE ComputeSnapshotSize() const noexcept;
     void SetPlaybackRate(float rate) noexcept;
     void StepPlaybackRate(int deltaSteps) noexcept;
     void ToggleFullscreen() noexcept;
@@ -161,6 +188,8 @@ private:
     [[nodiscard]] std::wstring GetOverlayBodyText() const;
     [[nodiscard]] std::wstring GetOverlayLinkLabelText() const;
     [[nodiscard]] std::wstring GetOverlayLinkUrl() const;
+    [[nodiscard]] HRESULT RebuildConfigurationJson() noexcept;
+    [[nodiscard]] bool ConfigurationDiffersFromDefaults() const noexcept;
 
     struct ViewerVlcConfig
     {
@@ -173,8 +202,10 @@ private:
         std::string avcodecHw               = "any";
         std::string videoOutput;
         std::string audioOutput;
-        std::string audioVisualization = "goom";
+        std::string audioVisualization = "visual";
         std::string extraArgs;
+        uint32_t lastVolumePercent = 100;
+        bool muted                 = false;
     };
 
     std::atomic_ulong _refCount{1};
@@ -195,6 +226,8 @@ private:
     ViewerVlcConfig _config;
 
     wil::unique_hwnd _hWnd;
+    bool _embeddedMode = false;
+    HWND _embeddedFocusReturnWindow = nullptr;
     wil::unique_hwnd _hVideo;
     wil::unique_hwnd _hHud;
 
@@ -216,6 +249,7 @@ private:
         Snapshot,
         Seek,
         Speed,
+        VolumeMute,
         Volume,
     };
 
@@ -231,6 +265,8 @@ private:
     UINT_PTR _hudAnimTimerId = 0;
 
     int _hudVolumeValue            = 100;
+    int _hudPreviousVolumeValue    = 100;
+    bool _hudMuted                 = false;
     int64_t _hudTimeMs             = 0;
     int64_t _hudLengthMs           = 0;
     bool _hudPlaying               = false;
@@ -241,12 +277,14 @@ private:
 
     ULONGLONG _videoLastClickTick = 0;
     POINT _videoLastClickPos{};
+    std::vector<HWND> _wheelForwardedChildren;
 
     wil::com_ptr<ID2D1Factory> _hudD2DFactory;
     wil::com_ptr<ID2D1HwndRenderTarget> _hudRenderTarget;
     wil::com_ptr<IDWriteFactory> _hudDWriteFactory;
     wil::com_ptr<IDWriteTextFormat> _hudTextFormat;
     wil::com_ptr<IDWriteTextFormat> _hudMonoFormat;
+    wil::com_ptr<IDWriteTextFormat> _hudIconFormat;
     UINT _hudTextDpi = 0;
 
     wil::com_ptr<ID2D1HwndRenderTarget> _overlayRenderTarget;
@@ -269,10 +307,18 @@ private:
 
     UINT_PTR _uiTimerId    = 0;
     bool _missingUiVisible = false;
+    UINT_PTR _loadingTimerId = 0;
+    bool _loadingUiActive    = false;
+    bool _loadingUiVisible   = false;
+    ULONGLONG _loadingStartedTick = 0;
+    uint64_t _asyncOpenGeneration = 0;
 
     std::unique_ptr<VlcState> _vlc;
 
     std::filesystem::path _currentPath;
 
     RegistrationCallbackState<IViewerCallback> _callbackState;
+#ifdef ENABLE_TESTS
+    wil::unique_hwnd _debugWheelVideoChild;
+#endif
 };

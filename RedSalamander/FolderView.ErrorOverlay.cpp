@@ -715,6 +715,29 @@ void FolderView::DismissAlertOverlay()
     }
 }
 
+#ifdef ENABLE_TESTS
+bool FolderView::DebugGetAlertOverlaySnapshot(AlertOverlayDebugSnapshot& out) const noexcept
+{
+    out = AlertOverlayDebugSnapshot{};
+
+    std::lock_guard lock(_errorOverlayMutex);
+    if (! _errorOverlay)
+    {
+        return true;
+    }
+
+    out.visible     = true;
+    out.kind        = _errorOverlay->kind;
+    out.severity    = _errorOverlay->severity;
+    out.title       = _errorOverlay->title;
+    out.message     = _errorOverlay->message;
+    out.hr          = _errorOverlay->hr;
+    out.closable    = _errorOverlay->closable;
+    out.blocksInput = _errorOverlay->blocksInput;
+    return true;
+}
+#endif
+
 void FolderView::DrawErrorOverlay()
 {
     ErrorOverlayState overlay{};

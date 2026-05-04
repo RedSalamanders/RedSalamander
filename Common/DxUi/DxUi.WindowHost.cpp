@@ -876,13 +876,12 @@ void WindowHost::Detach() noexcept
     {
         ReleaseCapture();
     }
+    const DWORD attachmentOwnerThreadId = _attachmentOwnerThreadId;
     if (hadAttachment)
     {
-        // Sever the Win32/global attachment before tearing down retained state so any
-        // nested message delivery or overlapping shutdown sweep cannot re-enter this host
-        // while its control tree and caches are only partially cleared.
+        // Sever the Win32 attachment before tearing down retained state so any nested
+        // message delivery cannot re-enter this host while its tree is partially cleared.
         UnregisterWindowHostAccessibilityTarget(attachedHwnd, this);
-        ReleaseSharedWindowHostAttachment(this, _attachmentOwnerThreadId);
     }
     _attachmentOwnerThreadId = 0u;
     _hwnd                    = nullptr;
@@ -909,6 +908,13 @@ void WindowHost::Detach() noexcept
     _onEscape       = {};
     _onFocusChanged = {};
     DestroyTextInputBridge();
+    if (hadAttachment)
+    {
+        // Release the shared graphics bucket after this host's retained tree and device
+        // resources are gone. The last host must not tear down shared D2D/DComp state
+        // while its own controls/resources are still destructing.
+        ReleaseSharedWindowHostAttachment(this, attachmentOwnerThreadId);
+    }
 }
 
 void WindowHost::SetTheme(const ThemePalette& palette) noexcept
@@ -1878,6 +1884,18 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             SetInputModality(InputModality::Pointer);
             const D2D1_POINT_2F point = PointFromLParam(lp);
             Control* target           = _capturedControl;
+            const UINT buttonDownMessage = PointerButtonDownMessageFor(msg);
+            if (! target && IsPointerDoubleClickMessage(msg))
+            {
+                const auto& candidate = _pendingPointerDoubleClick;
+                const POINT pointPx{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                if (candidate.target && candidate.downMessage == buttonDownMessage && candidate.tickMs != 0u &&
+                    GetTickCount64() - candidate.tickMs <= static_cast<uint64_t>(GetDoubleClickTime()) &&
+                    IsWithinSystemDoubleClickBounds(candidate.pointPx, pointPx) && ControlBelongsToTree(_root.get(), candidate.target))
+                {
+                    target = candidate.target;
+                }
+            }
             if (! target)
             {
                 target = HitTestControl(point);
@@ -1886,7 +1904,6 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             // Many DxUi hosts attach to existing STATIC/custom windows that never emit
             // WM_*BUTTONDBLCLK, so detect the second down here and route it through the
             // same control-level double-click path.
-            const UINT buttonDownMessage = PointerButtonDownMessageFor(msg);
             const bool doubleClick       = IsPointerDoubleClickMessage(msg) || ShouldTreatButtonDownAsDoubleClick(target, buttonDownMessage, lp);
             const bool controlHandled    = target && (doubleClick ? target->OnMouseDoubleClick(*this, point, rightButton, static_cast<UINT>(wp))
                                                                   : target->OnMouseDown(*this, point, rightButton, static_cast<UINT>(wp)));

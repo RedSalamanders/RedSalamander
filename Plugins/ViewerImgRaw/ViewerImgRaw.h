@@ -264,6 +264,7 @@ private:
 
     // Viewer state
     wil::unique_hwnd _hWnd;
+    bool _embeddedMode = false;
     wil::unique_hmenu _menuHandle;
     RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;

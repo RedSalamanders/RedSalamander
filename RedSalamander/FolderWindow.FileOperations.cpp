@@ -520,30 +520,6 @@ void FolderWindow::CommandPermanentDelete(Pane pane)
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
 
     const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
-    static_cast<void>(_fileOperations->StartOperation(
-        FILESYSTEM_DELETE, pane, std::nullopt, state.fileSystem, std::move(paths), {}, flags, waitForOthers, 0, FileOperationState::ExecutionMode::PerItem));
-}
-
-void FolderWindow::CommandPermanentDeleteWithValidation(Pane pane)
-{
-    SetActivePane(pane);
-    EnsureFileOperations();
-
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
-    if (! _fileOperations || ! state.fileSystem)
-    {
-        return;
-    }
-
-    std::vector<std::filesystem::path> paths = state.folderView.GetSelectedOrFocusedPaths();
-    if (paths.empty())
-    {
-        return;
-    }
-
-    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-
-    const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
     static_cast<void>(_fileOperations->StartOperation(FILESYSTEM_DELETE,
                                                       pane,
                                                       std::nullopt,

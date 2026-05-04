@@ -112,6 +112,14 @@ void NavigationView::RequestPathChange(const std::filesystem::path& path)
     SetPath(path);
 }
 
+void NavigationView::RequestOwnerPaneFocus() const noexcept
+{
+    if (_requestFolderViewFocusCallback)
+    {
+        _requestFolderViewFocusCallback();
+    }
+}
+
 std::filesystem::path NavigationView::ToPluginPath(const std::filesystem::path& displayPath) const
 {
     NavigationLocation::Location location;

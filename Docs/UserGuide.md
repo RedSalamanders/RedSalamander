@@ -57,6 +57,7 @@ The main window contains:
 - **Menu bar**: pane, file, edit, command, plugin, view, and help commands.
 - **Navigation bars**: one per pane, with drive/menu access, breadcrumbs, path entry, history, and disk information.
 - **Folder views**: the two file panels where you select, sort, and operate on files.
+- **Filter bars**: optional per-pane filter summaries for persistent folder filters.
 - **Status bars**: selected item, directory, and operation context for each pane.
 - **Function bar**: keyboard command strip.
 
@@ -104,11 +105,15 @@ Use the drive/menu dropdown to reach:
 
 Folder views can be switched between **Brief**, **Detailed**, and **Extra Detailed** layouts. Sorting is available by name, extension, time, size, attributes, or no sort.
 
+Use the **Left** and **Right** menus to toggle per-pane display and chrome options. **Show -> File Extensions** changes only displayed labels in the named pane; file operations still use real names and paths. **Thumbnails** uses larger item visuals and background thumbnail loading with icon fallback. **Preview Pane** opens a Folder/Preview tabbed host in the opposite pane and follows the named pane's focused item. **Filter Bar** shows the current persistent folder filter below the named pane. **Navigation Bar** targets the named pane, and address-bar focus commands show the bar first when needed. Persistent options are saved per pane.
+
 Default shortcuts:
 
 - `Alt+2`: Brief
 - `Alt+3`: Detailed
 - `Alt+4`: Extra Detailed
+- `Alt+5`: Thumbnails
+- `Alt+6`: Preview Pane
 - `Ctrl+F2`: Sort None
 - `Ctrl+F3`: Sort Name
 - `Ctrl+F4`: Sort Extension
@@ -140,6 +145,7 @@ The navigation bar accepts local paths, UNC paths, file URIs, plugin-prefixed pa
 - `Shift+Backspace`: root folder.
 - `Ctrl+.`: set current pane path from the other pane.
 - `Ctrl+F12`: filter the current folder.
+- `Shift+Space`: start Quick Search in the current pane. Type to highlight every matching name, move to the best prefix match first, use arrows to move through matches, `Esc` to clear, or `Enter` to accept the focused item.
 - `Ctrl+1` through `Ctrl+0`: go to Hot Path slots 1 through 10.
 - `Ctrl+Shift+1` through `Ctrl+Shift+0`: assign the current folder to a Hot Path slot.
 
@@ -187,20 +193,28 @@ Use **Files** and **Edit** menu commands, the context menu, or the function keys
 ### Opening, Viewing, and Inspecting
 
 - **Open/Execute**: runs the focused file or opens a folder.
-- **View** (`F3`): opens the mapped viewer plugin.
+- **View** (`F3`): opens the viewer action associated with the focused file.
 - **View Width**: opens the viewer using width-oriented behavior where supported.
 - **Properties**: shows item properties exposed by the active file system.
-- **Context Menu**: opens the file-system shell/context menu when available.
+- **Context Menu**: opens the item shell/context menu when available.
+- **Context Menu (Current Directory)**: opens the Windows shell menu for the active pane's current local folder.
+- **Security**: opens the Windows Security property page for the focused local item.
+- **Change Attributes** (`Ctrl+F8`): changes read-only, hidden, system, and archive attributes for the selection and can remove alternate data streams, then reports what changed.
+- **Go to Shortcut or Link Target**: follows a focused `.lnk`, local `file:` `.url`, junction, mount point, or directory symlink. File targets open their parent folder and focus the target file; folder targets open directly. Web URLs stay in place and report that they are unsupported for pane navigation.
+- **List of Opened Files** (`Alt+F11`): shows files currently open through RedSalamander viewers, external viewer/editor launches, and the Preview pane. The list shows the source, opener, and file path; double-click or **Focus Item** returns the owning pane to that item when it is still reachable.
+- **Pack** (`Alt+F5`) and **Unpack** (`Alt+F6`): create or extract local ZIP archives from the active pane. Pack preserves selected empty folders and sorted entries; Unpack validates ZIP paths before writing and can preserve existing files when overwrite is disabled.
 
 ![File properties dialog](res/file-properties.png)
 
-Properties can be opened with **Files -> Properties** or `Alt+Enter`. The dialog is theme-aware and can show plugin-provided metadata, including general item identity, path, type, size, timestamps, attributes, and named streams when the provider exposes them. `Esc` closes the dialog and `Ctrl+C` copies all property text.
+Properties can be opened with **Files -> Properties** or `Alt+Enter`. The dialog is theme-aware and can show plugin-provided metadata, including general item identity, path, type, size, timestamps, attributes, shortcut/link/reparse targets, and named streams when the provider exposes them. `Esc` closes the dialog and `Ctrl+C` copies all property text.
 
 ### Creating and Renaming
 
 - **Rename** (`F2`): rename the focused item.
 - **New Folder / MakeDir** (`F7`): create a directory in the focused pane.
+- **New -> Shell templates**: lists Windows ShellNew templates for local folders. Choosing one prompts for a name, creates the file, refreshes the pane, and focuses the new item when it is visible.
 - **Change Case**: change name casing for selected items.
+- **Change Attributes**: uses mixed tri-state boxes for multi-selection so unchanged attributes stay untouched.
 
 ### Copy, Move, and Delete
 
@@ -209,7 +223,7 @@ Properties can be opened with **Files -> Properties** or `Alt+Enter`. The dialog
 - **Copy** (`F5`): copy selected items to the other pane.
 - **Move/Rename** (`F6`): move selected items to the other pane or rename depending on context.
 - **Delete** (`Del` or `F8`): delete selected items, using the Recycle Bin when supported.
-- **Permanent Delete** (`Shift+Del` or `Shift+F8`): bypass the Recycle Bin.
+- **Permanent Delete** (`Shift+Del` or `Shift+F8`): asks for confirmation, then bypasses the Recycle Bin.
 
 Long operations run in the background. The File Operations popup shows:
 
@@ -223,7 +237,9 @@ Long operations run in the background. The File Operations popup shows:
 ### Clipboard and Drag-and-Drop
 
 - `Ctrl+C`: copy selected Windows-path items to the clipboard.
+- `Ctrl+X`: mark selected local Windows-path items for move using the standard Explorer clipboard format.
 - `Ctrl+V`: paste into the current folder.
+- **Paste Shortcut** creates `.lnk` files in the current local folder for file paths already on the clipboard.
 - Drag items between panes to queue file operations.
 - Drag items to external applications where standard Windows drop formats are available.
 
@@ -246,17 +262,21 @@ The **Edit** menu provides selection commands for batch work:
 The file and command menus include several everyday workflow helpers:
 
 - **Copy Path and File Name**, **Copy Path**, **Copy Name**, and **Copy UNC Path and Name** copy text forms of the current selection.
+- **Cut** and **Paste Shortcut** use standard Windows clipboard formats for local file-system selections.
 - **Open File Explorer -> Current Folder** opens the active folder in Windows File Explorer when it has a local backing path.
 - **Command Shell** opens a shell in the current location when possible.
+- **Bring Current Directory to Command Line** (`Ctrl+Space`) opens the command-line input and appends the active local folder path with command-line quoting.
+- **Bring Filename to Command Line** (`Ctrl+Enter`) opens the command-line input and appends the focused item name, or selected full local paths when files are selected. Press `Enter` in the input to run the command in that pane's current folder, or `Esc` to close it.
+- **User Menu** (`F9`) opens configured external commands for the focused pane. Entries are managed in Preferences, can be filtered by file extension and computer name, and use the same path/selection macros as viewer and editor actions.
+- **Reread Associations** reloads the settings-backed viewer, editor, User Menu, plugin, and extension association data without moving the current pane folders. It rebuilds the dynamic action menus, clears icon association caches, refreshes both panes, and keeps the previous valid settings when the settings file cannot be reloaded.
+- **Make File List** opens an options dialog for the current selection, focused item, or current folder. It can recurse into folders, write JSON/CSV/text, choose which fields are included, use text macros such as `{fullPath}` and `{size}`, and save the result to the clipboard or a UTF-8 file. The last selected options are remembered.
+- **Shared Directories** (`Ctrl+Shift+F9`) opens a modeless list of local Windows disk shares. The dialog shows share name, local path, type, and remark, can open reachable local share paths in the focused pane, and offers the Windows Shared Folders management console.
 - **Connect Network Drive** (`F11`) and **Disconnect** (`F12`) use Windows network-drive integration from local `file:` panes.
 - **File Operations Failed Items** (`Ctrl+J`) opens the issues pane for failed copy/move/delete work.
 
 ### Folder Size and Space Usage
 
-RedSalamander has two related size workflows:
-
-- **Calculate Directory Sizes** (`Ctrl+Shift+F10`) updates folder-size values in the current pane.
-- **Calculate Occupied Space** (`Alt+F10`) opens ViewerSpace, a treemap-style folder usage viewer.
+Use **Calculate Occupied Space** (`Alt+F10`) to open ViewerSpace, a treemap-style folder usage viewer.
 
 Pressing `Space` on a folder selects it, calculates its size, and moves to the next item.
 
@@ -337,7 +357,9 @@ Preferences pages cover:
 
 - **General**: startup and common application behavior.
 - **Panes**: folder pane display and interaction settings.
-- **Viewers**: extension-to-viewer associations.
+- **Viewers**: viewer Actions and Associations for View, Alternate View, and View With.
+- **Editors**: editor Actions and Associations for Edit, Alternate Edit, Edit New, and Edit With.
+- **User Menu**: external command actions shown by `F9` and Commands -> User Menu.
 - **Keyboard**: shortcut bindings.
 - **Themes**: built-in, file-based, and user themes.
 - **Plugins**: plugin enablement, diagnostics, and plugin configuration.
@@ -414,7 +436,7 @@ For full per-plugin behavior, limitations, configuration, and shortcut notes, se
 
 ### Built-In Viewer Plugins
 
-Viewer mappings are configured in **Preferences -> Viewers**. Press `F3` to open the selected file with the mapped viewer. If a mapping is missing or disabled, RedSalamander falls back to the Text viewer.
+Viewer actions and associations are configured in **Preferences -> Viewers**. Press `F3` to open the focused file with the associated primary viewer action, use `Alt+F3` for the associated alternate viewer action, or choose **View With** to pick from applicable configured viewer actions. If no specific rule matches, the default `*` association normally opens the Text viewer.
 
 | Viewer | Plugin id | Typical files | User-visible capabilities |
 |--------|-----------|---------------|---------------------------|
@@ -511,7 +533,7 @@ More detail: [RedSalamanderMonitor](Monitor.md)
 
 RedSalamander stores durable user choices in its settings file, including:
 
-- Viewer extension mappings.
+- File-action associations for viewer/editor behavior.
 - Theme choices and user theme data.
 - Hot Paths.
 - File operation defaults.
@@ -540,22 +562,7 @@ More detail: [Troubleshooting / Reset](Troubleshooting.md)
 
 The menus intentionally expose some future commands. Current planned or placeholder items include:
 
-- Alternate View.
-- View With and Edit With menus.
-- Edit and Edit New file workflow.
-- Edit Width.
-- Editors and Mouse preference pages.
-- Always-visible filter bar.
-- Some pane view options such as file extensions, thumbnails, preview pane, and per-pane navigation bar toggles.
+- Mouse preference page.
 - Select/unselect same name.
-- Make file list.
-- Go to shortcut/link target.
-- List opened files.
-- Shared directories.
-- Quick search / command-line input.
-- Bring current directory or filename to the command line.
-- Reread associations.
-- User Menu.
-- Pack/Unpack commands beyond archive browsing as virtual file systems.
 
 More detail: [Planned / TODO features](Todo.md)

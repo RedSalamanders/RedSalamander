@@ -4800,6 +4800,11 @@ void ViewerText::OnCreate(HWND hwnd)
                 static_cast<void>(OpenPath(hwnd, _otherFiles[_otherIndex], false));
             }
 
+            if (_embeddedMode)
+            {
+                return;
+            }
+
             if (_viewMode == ViewMode::Hex)
             {
                 if (_hHex)
@@ -7779,7 +7784,14 @@ void ViewerText::SetViewMode(HWND hwnd, ViewMode mode) noexcept
         ShowWindow(_hHex.get(), showContent && _viewMode == ViewMode::Hex ? SW_SHOW : SW_HIDE);
     }
 
-    if (! showContent)
+    if (_embeddedMode)
+    {
+        if (_viewMode == ViewMode::Hex && previous != _viewMode && ! _isLoading && _hexBytes.empty() && _hexCacheValid == 0)
+        {
+            static_cast<void>(LoadHexData(hwnd));
+        }
+    }
+    else if (! showContent)
     {
         if (_hWnd)
         {
@@ -9418,6 +9430,19 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
         _viewMode = ViewMode::Hex;
     }
 
+    const bool embeddedMode = (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) != 0u;
+    const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    if (embeddedMode && (! embeddedParent || IsWindow(embeddedParent) == FALSE))
+    {
+        Debug::Error(L"ViewerText: embedded Open called without a valid parent window.");
+        return E_INVALIDARG;
+    }
+
+    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    {
+        static_cast<void>(Close());
+    }
+
     const std::filesystem::path path(context->focusedPath);
 
     if (! _hWnd)
@@ -9427,10 +9452,40 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             return E_FAIL;
         }
 
+        _embeddedMode = embeddedMode;
         HWND ownerWindow = context->ownerWindow;
 
         RECT ownerRect{};
-        if (ownerWindow && GetWindowRect(ownerWindow, &ownerRect) != 0)
+        if (embeddedMode)
+        {
+            RECT parentClient{};
+            GetClientRect(embeddedParent, &parentClient);
+            HWND window = CreateWindowExW(0,
+                                          kClassName,
+                                          L"",
+                                          WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                          0,
+                                          0,
+                                          std::max(1L, parentClient.right - parentClient.left),
+                                          std::max(1L, parentClient.bottom - parentClient.top),
+                                          embeddedParent,
+                                          nullptr,
+                                          g_hInstance,
+                                          this);
+            if (! window)
+            {
+                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerText: embedded CreateWindowExW failed.");
+                return HRESULT_FROM_WIN32(lastError);
+            }
+
+            _hWnd.reset(window);
+            ApplyTheme(_hWnd.get());
+            ApplyPendingViewerTextClassBackgroundBrush(_hWnd.get(), _hEdit.get(), _hHex.get());
+
+            AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else if (ownerWindow && GetWindowRect(ownerWindow, &ownerRect) != 0)
         {
             const int w = ownerRect.right - ownerRect.left;
             const int h = ownerRect.bottom - ownerRect.top;
@@ -9524,8 +9579,26 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
     else
     {
         ApplyPendingViewerTextClassBackgroundBrush(_hWnd.get(), _hEdit.get(), _hHex.get());
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        if (_embeddedMode)
+        {
+            RECT parentClient{};
+            if (embeddedParent && GetClientRect(embeddedParent, &parentClient) != FALSE)
+            {
+                SetWindowPos(_hWnd.get(),
+                             HWND_TOP,
+                             0,
+                             0,
+                             std::max(1L, parentClient.right - parentClient.left),
+                             std::max(1L, parentClient.bottom - parentClient.top),
+                             SWP_NOACTIVATE);
+            }
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else
+        {
+            ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
 
     if (! _hWnd)

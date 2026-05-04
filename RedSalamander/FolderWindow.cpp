@@ -7,13 +7,18 @@
 #include <winsock2.h>
 
 #include "FolderWindowInternal.h"
+#include "DxUiThemePalette.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "SelfTestCommon.h"
 
 #include <netioapi.h>
+#include <shlwapi.h>
+#include <shobjidl.h>
+#include <winioctl.h>
 
 #pragma comment(lib, "Iphlpapi.lib")
+#pragma comment(lib, "Shlwapi.lib")
 
 #ifdef ENABLE_TESTS
 [[nodiscard]] bool IsFolderWindowSelfTestTracingEnabled() noexcept
@@ -24,6 +29,25 @@
 
 namespace
 {
+constexpr wchar_t kFolderWindowDxHostClassName[] = L"RedSalamander.FolderWindow.DxHost";
+
+[[nodiscard]] bool EnsureFolderWindowDxHostClass(HINSTANCE instance) noexcept
+{
+    WNDCLASSW existing{};
+    if (GetClassInfoW(instance, kFolderWindowDxHostClassName, &existing) != FALSE)
+    {
+        return true;
+    }
+
+    WNDCLASSW wc{};
+    wc.lpfnWndProc   = &FolderWindowDxHostWndProc;
+    wc.hInstance     = instance;
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hbrBackground = nullptr;
+    wc.lpszClassName = kFolderWindowDxHostClassName;
+    return RegisterClassW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+}
+
 LRESULT OnHostServicesMessage(UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     LRESULT result = 0;
@@ -55,7 +79,654 @@ LRESULT OnHostServicesMessage(UINT msg, WPARAM wp, LPARAM lp) noexcept
 
     return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
 }
+
+[[nodiscard]] std::wstring FileActionTargetText(const std::optional<std::filesystem::path>& targetPath) noexcept
+{
+    if (! targetPath.has_value() || targetPath.value().empty())
+    {
+        return {};
+    }
+
+    std::wstring target = targetPath.value().filename().wstring();
+    if (target.empty())
+    {
+        target = targetPath.value().wstring();
+    }
+    return target;
+}
+
+void ShowFileActionUnavailableOverlay(FolderWindow& window,
+                                      FolderWindow::Pane pane,
+                                      bool viewerAction,
+                                      std::wstring_view actionId,
+                                      const std::optional<std::filesystem::path>& targetPath) noexcept
+{
+    Debug::Perf::Scope perf(L"fileaction.feedback_us");
+    perf.SetDetail(viewerAction ? L"viewer-unavailable" : L"editor-unavailable");
+    perf.SetValue0(static_cast<uint64_t>(actionId.size()));
+
+    std::wstring title = LoadStringResource(nullptr, viewerAction ? IDS_FILEACTION_VIEWER_UNAVAILABLE_TITLE : IDS_FILEACTION_EDITOR_UNAVAILABLE_TITLE);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    }
+
+    std::wstring target = FileActionTargetText(targetPath);
+    std::wstring message =
+        FormatStringResource(nullptr,
+                             viewerAction ? IDS_FMT_FILEACTION_VIEWER_NOT_AVAILABLE : IDS_FMT_FILEACTION_EDITOR_NOT_AVAILABLE,
+                             std::wstring(actionId),
+                             target);
+    if (message.empty())
+    {
+        message = std::wstring(actionId);
+    }
+
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), S_OK, true, false);
+}
+
+void ShowFileActionLaunchFailureOverlay(FolderWindow& window,
+                                        FolderWindow::Pane pane,
+                                        bool viewerAction,
+                                        std::wstring_view actionId,
+                                        const std::optional<std::filesystem::path>& targetPath,
+                                        HRESULT hr) noexcept
+{
+    Debug::Perf::Scope perf(L"fileaction.feedback_us");
+    perf.SetDetail(viewerAction ? L"viewer-launch-failed" : L"editor-launch-failed");
+    perf.SetValue0(static_cast<uint64_t>(actionId.size()));
+    perf.SetHr(hr);
+
+    std::wstring title = LoadStringResource(nullptr, viewerAction ? IDS_FILEACTION_VIEWER_UNAVAILABLE_TITLE : IDS_FILEACTION_EDITOR_UNAVAILABLE_TITLE);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    }
+
+    std::wstring target = FileActionTargetText(targetPath);
+    std::wstring message =
+        FormatStringResource(nullptr,
+                             viewerAction ? IDS_FMT_FILEACTION_VIEWER_LAUNCH_FAILED : IDS_FMT_FILEACTION_EDITOR_LAUNCH_FAILED,
+                             std::wstring(actionId),
+                             target,
+                             static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+    if (message.empty())
+    {
+        message = std::wstring(actionId);
+    }
+
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr, true, false);
+}
+
+void ShowAlternateFileActionUnavailableOverlay(FolderWindow& window,
+                                               FolderWindow::Pane pane,
+                                               bool viewerAction,
+                                               const std::optional<std::filesystem::path>& targetPath) noexcept
+{
+    Debug::Perf::Scope perf(L"fileaction.feedback_us");
+    perf.SetDetail(viewerAction ? L"alternate-viewer-unavailable" : L"alternate-editor-unavailable");
+
+    std::wstring title = LoadStringResource(nullptr, viewerAction ? IDS_FILEACTION_VIEWER_UNAVAILABLE_TITLE : IDS_FILEACTION_EDITOR_UNAVAILABLE_TITLE);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    }
+
+    std::wstring target = FileActionTargetText(targetPath);
+    std::wstring message =
+        FormatStringResource(nullptr,
+                             viewerAction ? IDS_FMT_FILEACTION_ALTERNATE_VIEWER_NOT_CONFIGURED : IDS_FMT_FILEACTION_ALTERNATE_EDITOR_NOT_CONFIGURED,
+                             target);
+    if (message.empty())
+    {
+        message = target;
+    }
+
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), S_OK, true, false);
+}
+
+[[nodiscard]] std::wstring ShellActionTargetText(const std::filesystem::path& path) noexcept
+{
+    std::wstring target = path.filename().wstring();
+    if (target.empty())
+    {
+        target = path.wstring();
+    }
+    return target;
+}
+
+void ShowShellActionUnavailableOverlay(FolderWindow& window, FolderWindow::Pane pane, UINT messageStringId) noexcept
+{
+    Debug::Perf::Scope perf(L"shell.feedback_us");
+    perf.SetDetail(L"unavailable");
+
+    std::wstring title = LoadStringResource(nullptr, IDS_SHELL_ACTION_UNAVAILABLE_TITLE);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    }
+
+    std::wstring message = LoadStringResource(nullptr, messageStringId);
+    if (message.empty())
+    {
+        message = title;
+    }
+
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), S_OK, true, false);
+}
+
+void ShowShellActionFailedOverlay(FolderWindow& window, FolderWindow::Pane pane, const std::filesystem::path& path, HRESULT hr) noexcept
+{
+    Debug::Perf::Scope perf(L"shell.feedback_us");
+    perf.SetDetail(L"failed");
+    perf.SetHr(hr);
+
+    std::wstring title = LoadStringResource(nullptr, IDS_SHELL_ACTION_UNAVAILABLE_TITLE);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    }
+
+    std::wstring message =
+        FormatStringResource(nullptr, IDS_FMT_SHELL_ACTION_FAILED, ShellActionTargetText(path), static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+    if (message.empty())
+    {
+        message = ShellActionTargetText(path);
+    }
+
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr, true, false);
+}
+
+enum class ShortcutTargetResolutionStatus : uint8_t
+{
+    Resolved,
+    Unsupported,
+    Failed
+};
+
+struct ShortcutTargetResolution final
+{
+    ShortcutTargetResolutionStatus status = ShortcutTargetResolutionStatus::Unsupported;
+    std::filesystem::path target;
+    HRESULT hr = S_OK;
+};
+
+struct MountPointReparseDataBuffer final
+{
+    ULONG ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+    USHORT ReparseDataLength = 0;
+    USHORT Reserved = 0;
+    USHORT SubstituteNameOffset = 0;
+    USHORT SubstituteNameLength = 0;
+    USHORT PrintNameOffset = 0;
+    USHORT PrintNameLength = 0;
+    wchar_t PathBuffer[1]{};
+};
+
+struct SymbolicLinkReparseDataBuffer final
+{
+    ULONG ReparseTag = IO_REPARSE_TAG_SYMLINK;
+    USHORT ReparseDataLength = 0;
+    USHORT Reserved = 0;
+    USHORT SubstituteNameOffset = 0;
+    USHORT SubstituteNameLength = 0;
+    USHORT PrintNameOffset = 0;
+    USHORT PrintNameLength = 0;
+    ULONG Flags = 0;
+    wchar_t PathBuffer[1]{};
+};
+
+[[nodiscard]] std::wstring TrimShortcutValue(std::wstring_view value)
+{
+    while (! value.empty() && (value.front() == L' ' || value.front() == L'\t' || value.front() == L'\r' || value.front() == L'\n'))
+    {
+        value.remove_prefix(1);
+    }
+    while (! value.empty() && (value.back() == L' ' || value.back() == L'\t' || value.back() == L'\r' || value.back() == L'\n'))
+    {
+        value.remove_suffix(1);
+    }
+    return std::wstring(value);
+}
+
+[[nodiscard]] bool IsWindowsAbsolutePathText(std::wstring_view text) noexcept
+{
+    if (text.size() >= 3 && std::iswalpha(static_cast<wint_t>(text[0])) != 0 && text[1] == L':' && (text[2] == L'\\' || text[2] == L'/'))
+    {
+        return true;
+    }
+
+    return text.size() >= 2 && ((text[0] == L'\\' && text[1] == L'\\') || (text[0] == L'/' && text[1] == L'/'));
+}
+
+[[nodiscard]] HRESULT ConvertFileUrlToLocalPath(std::wstring_view url, std::filesystem::path& outPath) noexcept
+{
+    outPath.clear();
+
+    std::wstring urlText(url);
+    std::wstring pathText(32768, L'\0');
+    DWORD pathCharCount = static_cast<DWORD>(pathText.size());
+    const HRESULT hr    = PathCreateFromUrlW(urlText.c_str(), pathText.data(), &pathCharCount, 0);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    const size_t terminator = pathText.find(L'\0');
+    if (terminator != std::wstring::npos)
+    {
+        pathText.resize(terminator);
+    }
+    else
+    {
+        pathText.resize(std::min<size_t>(pathCharCount, pathText.size()));
+    }
+
+    if (pathText.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    outPath = std::filesystem::path(pathText);
+    return S_OK;
+}
+
+[[nodiscard]] bool TryReadInternetShortcutUrl(const std::filesystem::path& shortcutPath, std::wstring& outUrl) noexcept
+{
+    outUrl.clear();
+
+    std::wstring value(32768, L'\0');
+    const DWORD copied =
+        GetPrivateProfileStringW(L"InternetShortcut", L"URL", L"", value.data(), static_cast<DWORD>(value.size()), shortcutPath.c_str());
+    if (copied == 0 || copied >= (value.size() - 1u))
+    {
+        return false;
+    }
+
+    value.resize(copied);
+    outUrl = TrimShortcutValue(value);
+    return ! outUrl.empty();
+}
+
+[[nodiscard]] ShortcutTargetResolution ResolveInternetShortcutTarget(const std::filesystem::path& shortcutPath) noexcept
+{
+    std::wstring url;
+    if (! TryReadInternetShortcutUrl(shortcutPath, url))
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(ERROR_BAD_FORMAT)};
+    }
+
+    std::filesystem::path target;
+    if (OrdinalString::StartsWithNoCase(url, L"file:"))
+    {
+        const HRESULT hr = ConvertFileUrlToLocalPath(url, target);
+        if (FAILED(hr))
+        {
+            return {.status = ShortcutTargetResolutionStatus::Failed, .hr = hr};
+        }
+
+        return {.status = ShortcutTargetResolutionStatus::Resolved, .target = std::move(target), .hr = S_OK};
+    }
+
+    if (IsWindowsAbsolutePathText(url))
+    {
+        return {.status = ShortcutTargetResolutionStatus::Resolved, .target = std::filesystem::path(url), .hr = S_OK};
+    }
+
+    return {.status = ShortcutTargetResolutionStatus::Unsupported};
+}
+
+[[nodiscard]] ShortcutTargetResolution ResolveShellLinkTarget(const std::filesystem::path& shortcutPath) noexcept
+{
+    const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    const bool uninitialize = SUCCEEDED(coHr);
+    const auto coCleanup    = wil::scope_exit([&]
+    {
+        if (uninitialize)
+        {
+            CoUninitialize();
+        }
+    });
+    if (FAILED(coHr) && coHr != RPC_E_CHANGED_MODE)
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = coHr};
+    }
+
+    wil::com_ptr<IShellLinkW> shellLink;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(shellLink.put()));
+    if (FAILED(hr) || ! shellLink)
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = FAILED(hr) ? hr : E_POINTER};
+    }
+
+    wil::com_ptr<IPersistFile> persistFile;
+    hr = shellLink->QueryInterface(IID_PPV_ARGS(persistFile.put()));
+    if (FAILED(hr) || ! persistFile)
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = FAILED(hr) ? hr : E_NOINTERFACE};
+    }
+
+    hr = persistFile->Load(shortcutPath.c_str(), STGM_READ);
+    if (FAILED(hr))
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = hr};
+    }
+
+    WIN32_FIND_DATAW findData{};
+    std::wstring targetText(32768, L'\0');
+    hr = shellLink->GetPath(targetText.data(), static_cast<int>(targetText.size()), &findData, SLGP_UNCPRIORITY);
+    if (FAILED(hr))
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = hr};
+    }
+
+    const size_t terminator = targetText.find(L'\0');
+    if (terminator != std::wstring::npos)
+    {
+        targetText.resize(terminator);
+    }
+    if (targetText.empty())
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(ERROR_BAD_FORMAT)};
+    }
+
+    return {.status = ShortcutTargetResolutionStatus::Resolved, .target = std::filesystem::path(targetText), .hr = S_OK};
+}
+
+[[nodiscard]] std::optional<std::wstring> ExtractReparsePathBufferString(const wchar_t* pathBuffer,
+                                                                         USHORT substituteNameOffset,
+                                                                         USHORT substituteNameLength,
+                                                                         size_t pathBufferBytes)
+{
+    if ((substituteNameOffset % sizeof(wchar_t)) != 0 || (substituteNameLength % sizeof(wchar_t)) != 0)
+    {
+        return std::nullopt;
+    }
+    if (static_cast<size_t>(substituteNameOffset) + static_cast<size_t>(substituteNameLength) > pathBufferBytes)
+    {
+        return std::nullopt;
+    }
+
+    const size_t charOffset = substituteNameOffset / sizeof(wchar_t);
+    const size_t charLength = substituteNameLength / sizeof(wchar_t);
+    if (charLength == 0)
+    {
+        return std::nullopt;
+    }
+
+    return std::wstring(pathBuffer + charOffset, charLength);
+}
+
+[[nodiscard]] std::wstring NormalizeReparseSubstituteName(std::wstring_view substituteName)
+{
+    constexpr std::wstring_view kNtDosPrefix = LR"(\??\)";
+    if (OrdinalString::StartsWithNoCase(substituteName, kNtDosPrefix))
+    {
+        const std::wstring_view tail = substituteName.substr(kNtDosPrefix.size());
+        if (OrdinalString::StartsWithNoCase(tail, LR"(UNC\)"))
+        {
+            return LR"(\\)" + std::wstring(tail.substr(4));
+        }
+        if (OrdinalString::StartsWithNoCase(tail, L"Volume{"))
+        {
+            return LR"(\\?\)" + std::wstring(tail);
+        }
+        return std::wstring(tail);
+    }
+
+    constexpr std::wstring_view kMupPrefix = LR"(\Device\Mup\)";
+    if (OrdinalString::StartsWithNoCase(substituteName, kMupPrefix))
+    {
+        return LR"(\\)" + std::wstring(substituteName.substr(kMupPrefix.size()));
+    }
+
+    return std::wstring(substituteName);
+}
+
+[[nodiscard]] ShortcutTargetResolution ResolveReparsePointTarget(const std::filesystem::path& sourcePath) noexcept
+{
+    constexpr DWORD kReparseBufferSize = 16u * 1024u;
+    std::vector<std::byte> reparseBuffer(kReparseBufferSize);
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
+    wil::unique_hfile reparseHandle(CreateFileW(sourcePath.c_str(),
+                                                FILE_READ_ATTRIBUTES,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                                nullptr));
+#pragma warning(pop)
+    if (! reparseHandle)
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(GetLastError())};
+    }
+
+    DWORD bytesReturned = 0;
+    if (DeviceIoControl(reparseHandle.get(),
+                        FSCTL_GET_REPARSE_POINT,
+                        nullptr,
+                        0,
+                        reparseBuffer.data(),
+                        static_cast<DWORD>(reparseBuffer.size()),
+                        &bytesReturned,
+                        nullptr) == FALSE)
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(GetLastError())};
+    }
+
+    if (bytesReturned < offsetof(MountPointReparseDataBuffer, PathBuffer))
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(ERROR_BAD_FORMAT)};
+    }
+
+    const auto* header = reinterpret_cast<const MountPointReparseDataBuffer*>(reparseBuffer.data());
+    std::optional<std::wstring> substituteName;
+    if (header->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT)
+    {
+        const auto* mountPoint = reinterpret_cast<const MountPointReparseDataBuffer*>(reparseBuffer.data());
+        const size_t pathBufferBytes =
+            mountPoint->ReparseDataLength >= (4u * sizeof(USHORT)) ? mountPoint->ReparseDataLength - (4u * sizeof(USHORT)) : 0u;
+        substituteName = ExtractReparsePathBufferString(
+            mountPoint->PathBuffer, mountPoint->SubstituteNameOffset, mountPoint->SubstituteNameLength, pathBufferBytes);
+    }
+    else if (header->ReparseTag == IO_REPARSE_TAG_SYMLINK)
+    {
+        if (bytesReturned < offsetof(SymbolicLinkReparseDataBuffer, PathBuffer))
+        {
+            return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(ERROR_BAD_FORMAT)};
+        }
+
+        const auto* symlink = reinterpret_cast<const SymbolicLinkReparseDataBuffer*>(reparseBuffer.data());
+        const size_t pathBufferBytes =
+            symlink->ReparseDataLength >= ((4u * sizeof(USHORT)) + sizeof(ULONG))
+                ? symlink->ReparseDataLength - ((4u * sizeof(USHORT)) + sizeof(ULONG))
+                : 0u;
+        substituteName =
+            ExtractReparsePathBufferString(symlink->PathBuffer, symlink->SubstituteNameOffset, symlink->SubstituteNameLength, pathBufferBytes);
+    }
+    else
+    {
+        return {.status = ShortcutTargetResolutionStatus::Unsupported};
+    }
+
+    if (! substituteName.has_value() || substituteName.value().empty())
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(ERROR_BAD_FORMAT)};
+    }
+
+    std::wstring target = NormalizeReparseSubstituteName(substituteName.value());
+    if (target.empty())
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(ERROR_BAD_FORMAT)};
+    }
+
+    return {.status = ShortcutTargetResolutionStatus::Resolved, .target = std::filesystem::path(std::move(target)), .hr = S_OK};
+}
+
+[[nodiscard]] ShortcutTargetResolution ResolveShortcutOrLinkTarget(const std::filesystem::path& sourcePath) noexcept
+{
+    if (OrdinalString::EqualsNoCase(sourcePath.extension().wstring(), L".url"))
+    {
+        return ResolveInternetShortcutTarget(sourcePath);
+    }
+
+    if (OrdinalString::EqualsNoCase(sourcePath.extension().wstring(), L".lnk"))
+    {
+        return ResolveShellLinkTarget(sourcePath);
+    }
+
+    const DWORD attributes = GetFileAttributesW(sourcePath.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+    {
+        return {.status = ShortcutTargetResolutionStatus::Failed, .hr = HRESULT_FROM_WIN32(GetLastError())};
+    }
+    if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+    {
+        return ResolveReparsePointTarget(sourcePath);
+    }
+
+    return {.status = ShortcutTargetResolutionStatus::Unsupported};
+}
+
+[[nodiscard]] POINT ResolveShellContextMenuPoint(HWND owner) noexcept
+{
+    POINT point{};
+    if (GetCursorPos(&point) != FALSE)
+    {
+        return point;
+    }
+
+    RECT windowRect{};
+    if (owner && IsWindow(owner) != FALSE && GetWindowRect(owner, &windowRect) != FALSE)
+    {
+        point.x = windowRect.left + ((windowRect.right - windowRect.left) / 2);
+        point.y = windowRect.top + ((windowRect.bottom - windowRect.top) / 2);
+    }
+    return point;
+}
+
+[[nodiscard]] HRESULT ShowShellContextMenuForPath(HWND owner, const std::filesystem::path& path) noexcept
+{
+    PIDLIST_ABSOLUTE rawPidl = nullptr;
+    SFGAOF attributes        = 0;
+    HRESULT hr              = SHParseDisplayName(path.c_str(), nullptr, &rawPidl, 0, &attributes);
+    if (FAILED(hr))
+    {
+        Debug::Warning(L"Shell context menu: SHParseDisplayName failed for {}: {:#x}", path.wstring(), hr);
+        return hr;
+    }
+
+    wil::unique_cotaskmem_ptr<ITEMIDLIST_ABSOLUTE> pidl(reinterpret_cast<ITEMIDLIST_ABSOLUTE*>(rawPidl));
+
+    wil::com_ptr<IShellFolder> parentFolder;
+    PCUITEMID_CHILD childPidl = nullptr;
+    hr                       = SHBindToParent(pidl.get(), IID_IShellFolder, parentFolder.put_void(), &childPidl);
+    if (FAILED(hr) || ! parentFolder || ! childPidl)
+    {
+        Debug::Warning(L"Shell context menu: SHBindToParent failed for {}: {:#x}", path.wstring(), hr);
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    wil::com_ptr<IContextMenu> contextMenu;
+    hr = parentFolder->GetUIObjectOf(owner, 1, &childPidl, IID_IContextMenu, nullptr, contextMenu.put_void());
+    if (FAILED(hr) || ! contextMenu)
+    {
+        Debug::Warning(L"Shell context menu: GetUIObjectOf(IContextMenu) failed for {}: {:#x}", path.wstring(), hr);
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+
+    wil::unique_hmenu menu(CreatePopupMenu());
+    if (! menu)
+    {
+        const DWORD lastError = Debug::ErrorWithLastError(L"Shell context menu: CreatePopupMenu failed");
+        return HRESULT_FROM_WIN32(lastError);
+    }
+
+    constexpr UINT kFirstCommandId = 1u;
+    constexpr UINT kLastCommandId  = 0x7FFFu;
+    hr                             = contextMenu->QueryContextMenu(menu.get(), 0, kFirstCommandId, kLastCommandId, CMF_NORMAL);
+    if (FAILED(hr))
+    {
+        Debug::Warning(L"Shell context menu: QueryContextMenu failed for {}: {:#x}", path.wstring(), hr);
+        return hr;
+    }
+
+    const POINT point = ResolveShellContextMenuPoint(owner);
+    const UINT chosenCommand =
+        static_cast<UINT>(TrackPopupMenuEx(menu.get(), TPM_RETURNCMD | TPM_RIGHTBUTTON, point.x, point.y, owner, nullptr));
+    if (chosenCommand == 0u)
+    {
+        return S_FALSE;
+    }
+
+    CMINVOKECOMMANDINFOEX invoke{};
+    invoke.cbSize   = sizeof(invoke);
+    invoke.fMask    = CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE;
+    invoke.hwnd     = owner;
+    invoke.lpVerb   = MAKEINTRESOURCEA(chosenCommand - kFirstCommandId);
+    invoke.lpVerbW  = MAKEINTRESOURCEW(chosenCommand - kFirstCommandId);
+    invoke.nShow    = SW_SHOWNORMAL;
+    invoke.ptInvoke = point;
+
+    hr = contextMenu->InvokeCommand(reinterpret_cast<LPCMINVOKECOMMANDINFO>(&invoke));
+    if (FAILED(hr))
+    {
+        Debug::Warning(L"Shell context menu: InvokeCommand failed for {}: {:#x}", path.wstring(), hr);
+    }
+    return hr;
+}
 } // namespace
+
+void FolderWindow::ClearFileActionFailure() noexcept
+{
+    _lastFileActionFailure.reset();
+}
+
+void FolderWindow::RecordFileActionLaunchFailure(bool viewerAction,
+                                                 std::wstring_view actionId,
+                                                 const std::filesystem::path& targetPath,
+                                                 HRESULT hr) noexcept
+{
+    FileActionFailure failure{};
+    failure.kind         = FileActionFailureKind::LaunchFailed;
+    failure.viewerAction = viewerAction;
+    failure.actionId     = std::wstring(actionId);
+    failure.targetPath   = targetPath;
+    failure.hr           = hr;
+    _lastFileActionFailure = std::move(failure);
+}
+
+std::optional<FolderWindow::FileActionFailure> FolderWindow::TakeFileActionFailure() noexcept
+{
+    std::optional<FileActionFailure> failure = std::move(_lastFileActionFailure);
+    _lastFileActionFailure.reset();
+    return failure;
+}
+
+bool FolderWindow::ShowRecordedFileActionFailureOverlay(Pane pane) noexcept
+{
+    std::optional<FileActionFailure> failure = TakeFileActionFailure();
+    if (! failure.has_value())
+    {
+        return false;
+    }
+
+    if (failure.value().kind != FileActionFailureKind::LaunchFailed)
+    {
+        return false;
+    }
+
+    ShowFileActionLaunchFailureOverlay(
+        *this, pane, failure.value().viewerAction, failure.value().actionId, failure.value().targetPath, failure.value().hr);
+    return true;
+}
 
 class FolderWindow::NetworkChangeSubscription final
 {
@@ -398,6 +1069,8 @@ void FolderWindow::Destroy()
     _splitterGripBrush.reset();
     _splitterArrowHoverBrush.reset();
 
+    DestroyCommandLineControls();
+
     _functionBar.Destroy();
 
     if (_leftPane.hNavigationView)
@@ -412,6 +1085,15 @@ void FolderWindow::Destroy()
         _leftPane.hFolderView.reset();
     }
 
+    _leftPane.filterBarHost.Detach();
+    _leftPane.filterBarLabel = nullptr;
+    _leftPane.hFilterBar.reset();
+    _leftPane.previewTabsHost.Detach();
+    _leftPane.previewTabsControl = nullptr;
+    _leftPane.hPreviewTabs.reset();
+    _leftPane.previewContentHost.Detach();
+    _leftPane.previewContentLabel = nullptr;
+    _leftPane.hPreviewContent.reset();
     _leftPane.hStatusBar.reset();
 
     if (_rightPane.hNavigationView)
@@ -426,6 +1108,15 @@ void FolderWindow::Destroy()
         _rightPane.hFolderView.reset();
     }
 
+    _rightPane.filterBarHost.Detach();
+    _rightPane.filterBarLabel = nullptr;
+    _rightPane.hFilterBar.reset();
+    _rightPane.previewTabsHost.Detach();
+    _rightPane.previewTabsControl = nullptr;
+    _rightPane.hPreviewTabs.reset();
+    _rightPane.previewContentHost.Detach();
+    _rightPane.previewContentLabel = nullptr;
+    _rightPane.hPreviewContent.reset();
     _rightPane.hStatusBar.reset();
 
     if (_leftPane.fileSystem)
@@ -508,6 +1199,8 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kFileOperationCompleted: return OnFileOperationCompleted(lp);
         case WndMsg::kChangeCaseTaskUpdate: return OnChangeCaseTaskUpdate(lp);
         case WndMsg::kChangeCaseCompleted: return OnChangeCaseCompleted(lp);
+        case WndMsg::kChangeAttributesTaskUpdate: return OnChangeAttributesTaskUpdate(lp);
+        case WndMsg::kChangeAttributesCompleted: return OnChangeAttributesCompleted(lp);
         case WndMsg::kHostShowAlert: return OnHostServicesMessage(msg, wp, lp);
         case WndMsg::kHostClearAlert: return OnHostServicesMessage(msg, wp, lp);
         case WndMsg::kHostShowPrompt: return OnHostServicesMessage(msg, wp, lp);
@@ -666,6 +1359,126 @@ LRESULT FolderWindow::OnNotify(const NMHDR* header)
     return DefWindowProcW(_hWnd.get(), WM_NOTIFY, controlId, reinterpret_cast<LPARAM>(header));
 }
 
+LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
+{
+    const auto dispatch = [&](Pane pane,
+                              wil::unique_hwnd& expectedHwnd,
+                              RedSalamander::DxUi::WindowHost& host,
+                              RedSalamander::DxUi::Label** label,
+                              RedSalamander::DxUi::TabControl** tabs,
+                              bool previewContent) noexcept -> std::optional<LRESULT>
+    {
+        if (! expectedHwnd || hwnd != expectedHwnd.get())
+        {
+            return std::nullopt;
+        }
+
+        if (msg == WM_NCDESTROY)
+        {
+            handled = true;
+            host.ReleaseMouseCapture();
+            host.Detach();
+            if (label)
+            {
+                *label = nullptr;
+            }
+            if (tabs)
+            {
+                *tabs = nullptr;
+            }
+            expectedHwnd.release();
+            return 0;
+        }
+
+        const LRESULT result = host.HandleMessage(hwnd, msg, wp, lp, handled);
+        if (msg == WM_SIZE)
+        {
+            if (previewContent)
+            {
+                UpdatePreviewContentLayout(pane);
+                LayoutEmbeddedPreviewViewer(pane);
+            }
+            else if (label && *label)
+            {
+                UpdateFilterBarLayout(pane);
+            }
+        }
+        return handled ? std::optional<LRESULT>{result} : std::nullopt;
+    };
+
+    if (const auto result =
+            dispatch(Pane::Left, _leftPane.hFilterBar, _leftPane.filterBarHost, &_leftPane.filterBarLabel, nullptr, false))
+    {
+        return result.value();
+    }
+    if (const auto result =
+            dispatch(Pane::Right, _rightPane.hFilterBar, _rightPane.filterBarHost, &_rightPane.filterBarLabel, nullptr, false))
+    {
+        return result.value();
+    }
+    if (const auto result =
+            dispatch(Pane::Left, _leftPane.hPreviewTabs, _leftPane.previewTabsHost, nullptr, &_leftPane.previewTabsControl, false))
+    {
+        return result.value();
+    }
+    if (const auto result =
+            dispatch(Pane::Right, _rightPane.hPreviewTabs, _rightPane.previewTabsHost, nullptr, &_rightPane.previewTabsControl, false))
+    {
+        return result.value();
+    }
+    if (const auto result = dispatch(Pane::Left,
+                                     _leftPane.hPreviewContent,
+                                     _leftPane.previewContentHost,
+                                     &_leftPane.previewContentLabel,
+                                     nullptr,
+                                     true))
+    {
+        return result.value();
+    }
+    if (const auto result = dispatch(Pane::Right,
+                                     _rightPane.hPreviewContent,
+                                     _rightPane.previewContentHost,
+                                     &_rightPane.previewContentLabel,
+                                     nullptr,
+                                     true))
+    {
+        return result.value();
+    }
+
+    handled = false;
+    return 0;
+}
+
+LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* self = reinterpret_cast<FolderWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (msg == WM_NCCREATE)
+    {
+        const auto* createStruct = reinterpret_cast<const CREATESTRUCTW*>(lp);
+        self                     = createStruct ? static_cast<FolderWindow*>(createStruct->lpCreateParams) : nullptr;
+        if (self)
+        {
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+        }
+    }
+
+    if (self)
+    {
+        bool handled         = false;
+        const LRESULT result = self->HandlePaneDxHostMessage(hwnd, msg, wp, lp, handled);
+        if (handled)
+        {
+            if (msg == WM_NCDESTROY)
+            {
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            }
+            return result;
+        }
+    }
+
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
 bool FolderWindow::OnCreate(HWND hwnd) noexcept
 {
     // _hWnd not yet initialize
@@ -684,6 +1497,11 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         Debug::Error(L"FolderWindow::OnCreate failed to register status-bar class.");
         return false;
     }
+    if (! EnsureFolderWindowDxHostClass(_hInstance))
+    {
+        Debug::Error(L"FolderWindow::OnCreate failed to register DxUi host class.");
+        return false;
+    }
 
     {
         Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CalculateLayout");
@@ -693,11 +1511,17 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
     auto createPane = [&](Pane pane,
                           PaneState& state,
                           const RECT& navRect,
+                          const RECT& filterRect,
                           const RECT& folderRect,
                           const RECT& statusRect,
+                          const RECT& previewTabsRect,
+                          const RECT& previewContentRect,
                           UINT_PTR navId,
+                          UINT_PTR filterId,
                           UINT_PTR folderId,
-                          UINT_PTR statusId) -> bool
+                          UINT_PTR statusId,
+                          UINT_PTR previewTabsId,
+                          UINT_PTR previewContentId) -> bool
     {
         const std::wstring_view paneName = pane == Pane::Left ? L"Left" : L"Right";
 
@@ -712,6 +1536,39 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             return false;
         }
         SetWindowLongPtrW(state.hNavigationView.get(), GWLP_ID, static_cast<LONG_PTR>(navId));
+
+        const int filterWidth   = std::max(0L, filterRect.right - filterRect.left);
+        const int filterHeight  = std::max(0L, filterRect.bottom - filterRect.top);
+        const DWORD filterStyle = WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        {
+            Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane.FilterBar.CreateDxHost");
+            perf.SetDetail(paneName);
+            state.hFilterBar.reset(CreateWindowExW(0,
+                                                   kFolderWindowDxHostClassName,
+                                                   nullptr,
+                                                   filterStyle,
+                                                   filterRect.left,
+                                                   filterRect.top,
+                                                   filterWidth,
+                                                   filterHeight,
+                                                   hwnd,
+                                                   reinterpret_cast<HMENU>(filterId),
+                                                   _hInstance,
+                                                   this));
+        }
+        if (! state.hFilterBar || ! state.filterBarHost.Attach(state.hFilterBar.get()))
+        {
+            return false;
+        }
+        {
+            auto root            = std::make_unique<RedSalamander::DxUi::Panel>();
+            state.filterBarLabel = root->AddChild<RedSalamander::DxUi::Label>();
+            state.filterBarLabel->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+            state.filterBarLabel->SetMultiline(false);
+            state.filterBarHost.SetRoot(std::move(root));
+            state.filterBarHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+            UpdateFilterBarLayout(pane);
+        }
 
         {
             Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane.FolderView.Create");
@@ -758,6 +1615,76 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             SetPropW(state.hStatusBar.get(), kStatusBarFocusHueProp, reinterpret_cast<HANDLE>(&state.statusFocusHueDegrees));
         }
 
+        const int previewTabsWidth   = std::max(0L, previewTabsRect.right - previewTabsRect.left);
+        const int previewTabsHeight  = std::max(0L, previewTabsRect.bottom - previewTabsRect.top);
+        const DWORD previewTabsStyle = WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_TABSTOP;
+        {
+            Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane.PreviewTabs.CreateDxHost");
+            perf.SetDetail(paneName);
+            state.hPreviewTabs.reset(CreateWindowExW(0,
+                                                     kFolderWindowDxHostClassName,
+                                                     nullptr,
+                                                     previewTabsStyle,
+                                                     previewTabsRect.left,
+                                                     previewTabsRect.top,
+                                                     previewTabsWidth,
+                                                     previewTabsHeight,
+                                                     hwnd,
+                                                     reinterpret_cast<HMENU>(previewTabsId),
+                                                     _hInstance,
+                                                     this));
+        }
+        if (! state.hPreviewTabs || ! state.previewTabsHost.Attach(state.hPreviewTabs.get()))
+        {
+            return false;
+        }
+
+        {
+            std::wstring folderTabText  = LoadStringResource(nullptr, IDS_PREVIEW_TAB_FOLDER);
+            std::wstring previewTabText = LoadStringResource(nullptr, IDS_PREVIEW_TAB_PREVIEW);
+            auto tabs                = std::make_unique<RedSalamander::DxUi::TabControl>();
+            state.previewTabsControl = tabs.get();
+            tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(folderTabText));
+            tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(previewTabText));
+            tabs->SetSelectedIndex(0u);
+            tabs->SetOnSelectionChanged([this, pane](size_t index) noexcept { SetPreviewPaneTab(pane, index == 1u); });
+            state.previewTabsHost.SetRoot(std::move(tabs));
+            state.previewTabsHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+        }
+
+        const int previewContentWidth   = std::max(0L, previewContentRect.right - previewContentRect.left);
+        const int previewContentHeight  = std::max(0L, previewContentRect.bottom - previewContentRect.top);
+        const DWORD previewContentStyle = WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        {
+            Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane.PreviewContent.CreateDxHost");
+            perf.SetDetail(paneName);
+            state.hPreviewContent.reset(CreateWindowExW(0,
+                                                        kFolderWindowDxHostClassName,
+                                                        nullptr,
+                                                        previewContentStyle,
+                                                        previewContentRect.left,
+                                                        previewContentRect.top,
+                                                        previewContentWidth,
+                                                        previewContentHeight,
+                                                        hwnd,
+                                                        reinterpret_cast<HMENU>(previewContentId),
+                                                        _hInstance,
+                                                        this));
+        }
+        if (! state.hPreviewContent || ! state.previewContentHost.Attach(state.hPreviewContent.get()))
+        {
+            return false;
+        }
+        {
+            auto root                    = std::make_unique<RedSalamander::DxUi::Panel>();
+            state.previewContentLabel    = root->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PREVIEW_EMPTY));
+            state.previewContentLabel->SetFontRole(RedSalamander::DxUi::FontRole::Body);
+            state.previewContentLabel->SetMultiline(true);
+            state.previewContentHost.SetRoot(std::move(root));
+            state.previewContentHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+            UpdatePreviewContentLayout(pane);
+        }
+
         {
             Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane.SetFileSystem");
             perf.SetDetail(paneName);
@@ -770,9 +1697,20 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             perf.SetDetail(paneName);
             state.navigationView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path)
             { OnNavigationPathChanged(pane, path); });
-            state.navigationView.SetRequestFolderViewFocusCallback([this, pane] { FocusPaneFolderView(pane); });
+            state.navigationView.SetRequestFolderViewFocusCallback([this, pane]
+            {
+                SetActivePane(pane);
+                FocusPaneFolderView(pane);
+            });
 
-            state.folderView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path) { OnFolderViewPathChanged(pane, path); });
+            state.folderView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path)
+            {
+                OnFolderViewPathChanged(pane, path);
+                if (_previewSourcePane.has_value() && _previewSourcePane.value() == pane)
+                {
+                    RefreshPreviewPane();
+                }
+            });
             state.folderView.SetDirectoryImpactCallback([this, pane](const DirectoryInfoCache::DirectoryImpact& impact) noexcept
             { OnFolderViewDirectoryImpact(pane, impact); });
             state.folderView.SetNavigateUpFromRootRequestCallback([this, pane] { OnFolderViewNavigateUpFromRoot(pane); });
@@ -789,6 +1727,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                 switch (request)
                 {
                     case FolderView::NavigationRequest::FocusNavigationMenu:
+                        SetNavigationBarVisible(pane, true);
                         s.navigationView.SetFocusRegion(NavigationView::FocusRegion::Menu);
                         if (s.hNavigationView)
                         {
@@ -796,14 +1735,21 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                         }
                         break;
                     case FolderView::NavigationRequest::FocusNavigationDiskInfo:
+                        SetNavigationBarVisible(pane, true);
                         s.navigationView.SetFocusRegion(NavigationView::FocusRegion::DiskInfo);
                         if (s.hNavigationView)
                         {
                             SetFocus(s.hNavigationView.get());
                         }
                         break;
-                    case FolderView::NavigationRequest::FocusAddressBar: s.navigationView.FocusAddressBar(); break;
-                    case FolderView::NavigationRequest::OpenHistoryDropdown: s.navigationView.OpenHistoryDropdownFromKeyboard(); break;
+                    case FolderView::NavigationRequest::FocusAddressBar:
+                        SetNavigationBarVisible(pane, true);
+                        s.navigationView.FocusAddressBar();
+                        break;
+                    case FolderView::NavigationRequest::OpenHistoryDropdown:
+                        SetNavigationBarVisible(pane, true);
+                        s.navigationView.OpenHistoryDropdownFromKeyboard();
+                        break;
                     case FolderView::NavigationRequest::SwitchPane:
                     {
                         const Pane otherPane = pane == Pane::Left ? Pane::Right : Pane::Left;
@@ -824,9 +1770,20 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                 s.selectionStats = stats;
                 CancelSelectionSizeComputation(pane);
                 UpdatePaneStatusBar(pane);
+                if (_previewSourcePane.has_value() && _previewSourcePane.value() == pane)
+                {
+                    RefreshPreviewPane();
+                }
             });
 
-            state.folderView.SetFocusedItemChangedCallback([this, pane] { UpdatePaneStatusBar(pane); });
+            state.folderView.SetFocusedItemChangedCallback([this, pane]
+            {
+                UpdatePaneStatusBar(pane);
+                if (_previewSourcePane.has_value() && _previewSourcePane.value() == pane)
+                {
+                    RefreshPreviewPane();
+                }
+            });
             state.folderView.SetIncrementalSearchChangedCallback([this, pane] { UpdatePaneStatusBar(pane); });
             state.folderView.SetSelectionSizeComputationRequestedCallback([this, pane] { RequestSelectionSizeComputation(pane); });
         }
@@ -844,7 +1801,20 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane");
         perf.SetDetail(L"Left");
         if (! createPane(
-                Pane::Left, _leftPane, _leftNavigationRect, _leftFolderViewRect, _leftStatusBarRect, kLeftNavigationId, kLeftFolderViewId, kLeftStatusBarId))
+                Pane::Left,
+                _leftPane,
+                _leftNavigationRect,
+                _leftFilterBarRect,
+                _leftFolderViewRect,
+                _leftStatusBarRect,
+                _leftPreviewTabsRect,
+                _leftPreviewContentRect,
+                kLeftNavigationId,
+                kLeftFilterBarId,
+                kLeftFolderViewId,
+                kLeftStatusBarId,
+                kLeftPreviewTabsId,
+                kLeftPreviewContentId))
         {
             Debug::Error(L"FolderWindow::OnCreate failed to create left pane.");
             return false;
@@ -857,13 +1827,28 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         if (! createPane(Pane::Right,
                          _rightPane,
                          _rightNavigationRect,
+                         _rightFilterBarRect,
                          _rightFolderViewRect,
                          _rightStatusBarRect,
+                         _rightPreviewTabsRect,
+                         _rightPreviewContentRect,
                          kRightNavigationId,
+                         kRightFilterBarId,
                          kRightFolderViewId,
-                         kRightStatusBarId))
+                         kRightStatusBarId,
+                         kRightPreviewTabsId,
+                         kRightPreviewContentId))
         {
             Debug::Error(L"FolderWindow::OnCreate failed to create right pane.");
+            return false;
+        }
+    }
+
+    {
+        Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CommandLine.Create");
+        if (! CreateCommandLineControls(hwnd))
+        {
+            Debug::Error(L"FolderWindow::OnCreate failed to create command-line controls.");
             return false;
         }
     }
@@ -886,6 +1871,8 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
 
     {
         Debug::Perf::Scope perf(L"FolderWindow.OnCreate.UpdatePaneUI");
+        UpdatePaneFilterBar(Pane::Left);
+        UpdatePaneFilterBar(Pane::Right);
         UpdatePaneStatusBar(Pane::Left);
         UpdatePaneStatusBar(Pane::Right);
         UpdatePaneFocusStates();
@@ -941,6 +1928,14 @@ void FolderWindow::DebugHideOverlaySample(Pane pane)
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.DebugHideOverlaySample();
 }
+
+#ifdef ENABLE_TESTS
+bool FolderWindow::DebugGetPaneAlertSnapshot(Pane pane, FolderView::AlertOverlayDebugSnapshot& out) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetAlertOverlaySnapshot(out);
+}
+#endif
 
 void FolderWindow::ShowPaneAlertOverlay(Pane pane,
                                         FolderView::ErrorOverlayKind kind,
@@ -1001,6 +1996,8 @@ void FolderWindow::OnDestroy()
         _draggingSplitter = false;
     }
 
+    DestroyCommandLineControls();
+
     auto destroyPane = [](PaneState& state)
     {
         if (state.hNavigationView)
@@ -1013,6 +2010,27 @@ void FolderWindow::OnDestroy()
         {
             state.folderView.Destroy();
             state.hFolderView = nullptr;
+        }
+
+        if (state.hFilterBar)
+        {
+            state.filterBarHost.Detach();
+            state.filterBarLabel = nullptr;
+            state.hFilterBar = nullptr;
+        }
+
+        if (state.hPreviewTabs)
+        {
+            state.previewTabsHost.Detach();
+            state.previewTabsControl = nullptr;
+            state.hPreviewTabs = nullptr;
+        }
+
+        if (state.hPreviewContent)
+        {
+            state.previewContentHost.Detach();
+            state.previewContentLabel = nullptr;
+            state.hPreviewContent = nullptr;
         }
 
         if (state.hStatusBar)
@@ -1042,7 +2060,249 @@ void FolderWindow::CommandView(Pane pane)
 {
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    ClearFileActionFailure();
     state.folderView.CommandView();
+    static_cast<void>(ShowRecordedFileActionFailureOverlay(pane));
+}
+
+void FolderWindow::CommandAlternateView(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
+    ClearFileActionFailure();
+    if (! state.folderView.CommandAlternateView())
+    {
+        if (! ShowRecordedFileActionFailureOverlay(pane))
+        {
+            ShowAlternateFileActionUnavailableOverlay(*this, pane, true, focusedPath);
+        }
+    }
+}
+
+void FolderWindow::CommandViewWith(Pane pane, std::wstring_view actionId)
+{
+    if (actionId.empty())
+    {
+        return;
+    }
+
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
+    ClearFileActionFailure();
+    if (! state.folderView.CommandViewWith(actionId))
+    {
+        if (! ShowRecordedFileActionFailureOverlay(pane))
+        {
+            ShowFileActionUnavailableOverlay(*this, pane, true, actionId, focusedPath);
+        }
+    }
+}
+
+void FolderWindow::CommandEdit(Pane pane)
+{
+    SetActivePane(pane);
+    ClearFileActionFailure();
+    static_cast<void>(TryEditFocusedFileWithEditor(pane, {}, false));
+    static_cast<void>(ShowRecordedFileActionFailureOverlay(pane));
+}
+
+void FolderWindow::CommandAlternateEdit(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
+    ClearFileActionFailure();
+    if (! TryEditFocusedFileWithEditor(pane, {}, true))
+    {
+        if (! ShowRecordedFileActionFailureOverlay(pane))
+        {
+            ShowAlternateFileActionUnavailableOverlay(*this, pane, false, focusedPath);
+        }
+    }
+}
+
+void FolderWindow::CommandEditWith(Pane pane, std::wstring_view actionId)
+{
+    if (actionId.empty())
+    {
+        return;
+    }
+
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
+    ClearFileActionFailure();
+    if (! TryEditFocusedFileWithEditor(pane, actionId, false))
+    {
+        if (! ShowRecordedFileActionFailureOverlay(pane))
+        {
+            ShowFileActionUnavailableOverlay(*this, pane, false, actionId, focusedPath);
+        }
+    }
+}
+
+void FolderWindow::CommandContextMenuCurrentDirectory(Pane pane)
+{
+    Debug::Perf::Scope perf(L"shell.context_menu_current_directory_us");
+    SetActivePane(pane);
+
+    if (GetFileSystemPluginId(pane) != std::wstring_view(L"builtin/file-system"))
+    {
+        ShowShellActionUnavailableOverlay(*this, pane, IDS_MSG_SHELL_ACTION_LOCAL_FOLDER_REQUIRED);
+        return;
+    }
+
+    const std::optional<std::filesystem::path> pathOpt = GetCurrentPluginPath(pane);
+    if (! pathOpt.has_value() || pathOpt.value().empty())
+    {
+        ShowShellActionUnavailableOverlay(*this, pane, IDS_MSG_SHELL_ACTION_LOCAL_FOLDER_REQUIRED);
+        return;
+    }
+
+    const std::filesystem::path path = pathOpt.value();
+
+#ifdef ENABLE_TESTS
+    if (_debugShellActionCallback)
+    {
+        DebugShellAction action{};
+        action.kind = DebugShellActionKind::ContextMenuCurrentDirectory;
+        action.pane = pane;
+        action.path = path;
+
+        const HRESULT hr = _debugShellActionCallback(action);
+        if (FAILED(hr))
+        {
+            ShowShellActionFailedOverlay(*this, pane, path, hr);
+        }
+        return;
+    }
+#endif
+
+    const HRESULT hr = ShowShellContextMenuForPath(_hWnd.get(), path);
+    if (FAILED(hr))
+    {
+        ShowShellActionFailedOverlay(*this, pane, path, hr);
+    }
+}
+
+void FolderWindow::CommandOpenSecurity(Pane pane)
+{
+    Debug::Perf::Scope perf(L"shell.open_security_us");
+    SetActivePane(pane);
+
+    if (GetFileSystemPluginId(pane) != std::wstring_view(L"builtin/file-system"))
+    {
+        ShowShellActionUnavailableOverlay(*this, pane, IDS_MSG_SHELL_ACTION_LOCAL_SELECTION_REQUIRED);
+        return;
+    }
+
+    const std::optional<std::filesystem::path> pathOpt = GetFocusedItemPath(pane);
+    if (! pathOpt.has_value() || pathOpt.value().empty())
+    {
+        ShowShellActionUnavailableOverlay(*this, pane, IDS_MSG_SHELL_ACTION_LOCAL_SELECTION_REQUIRED);
+        return;
+    }
+
+    const std::filesystem::path path = pathOpt.value();
+
+#ifdef ENABLE_TESTS
+    if (_debugShellActionCallback)
+    {
+        DebugShellAction action{};
+        action.kind         = DebugShellActionKind::OpenSecurity;
+        action.pane         = pane;
+        action.path         = path;
+        action.propertyPage = L"Security";
+
+        const HRESULT hr = _debugShellActionCallback(action);
+        if (FAILED(hr))
+        {
+            ShowShellActionFailedOverlay(*this, pane, path, hr);
+        }
+        return;
+    }
+#endif
+
+    const BOOL shown = SHObjectProperties(_hWnd.get(), SHOP_FILEPATH, path.c_str(), L"Security");
+    if (shown == FALSE)
+    {
+        const DWORD lastError = GetLastError();
+        const HRESULT hr     = lastError != ERROR_SUCCESS ? HRESULT_FROM_WIN32(lastError) : E_FAIL;
+        Debug::Warning(L"Open Security: SHObjectProperties failed for {}: {:#x}", path.wstring(), hr);
+        ShowShellActionFailedOverlay(*this, pane, path, hr);
+    }
+}
+
+void FolderWindow::CommandGoToShortcutOrLinkTarget(Pane pane)
+{
+    Debug::Perf::Scope perf(L"shell.go_to_shortcut_target_us");
+    SetActivePane(pane);
+
+    if (GetFileSystemPluginId(pane) != std::wstring_view(L"builtin/file-system"))
+    {
+        ShowShellActionUnavailableOverlay(*this, pane, IDS_MSG_SHORTCUT_TARGET_SELECTION_REQUIRED);
+        return;
+    }
+
+    const std::optional<std::filesystem::path> sourcePathOpt = GetFocusedItemPath(pane);
+    if (! sourcePathOpt.has_value() || sourcePathOpt.value().empty())
+    {
+        ShowShellActionUnavailableOverlay(*this, pane, IDS_MSG_SHORTCUT_TARGET_SELECTION_REQUIRED);
+        return;
+    }
+
+    const std::filesystem::path sourcePath = sourcePathOpt.value();
+    const ShortcutTargetResolution resolution = ResolveShortcutOrLinkTarget(sourcePath);
+    if (resolution.status == ShortcutTargetResolutionStatus::Unsupported)
+    {
+        ShowShellActionUnavailableOverlay(*this, pane, IDS_MSG_SHORTCUT_TARGET_UNSUPPORTED);
+        return;
+    }
+    if (resolution.status == ShortcutTargetResolutionStatus::Failed || resolution.target.empty())
+    {
+        ShowShellActionFailedOverlay(*this, pane, sourcePath, FAILED(resolution.hr) ? resolution.hr : E_FAIL);
+        return;
+    }
+
+    const DWORD targetAttributes = GetFileAttributesW(resolution.target.c_str());
+    if (targetAttributes == INVALID_FILE_ATTRIBUTES)
+    {
+        const DWORD lastError = GetLastError();
+        ShowShellActionFailedOverlay(*this, pane, resolution.target, lastError != ERROR_SUCCESS ? HRESULT_FROM_WIN32(lastError) : E_FAIL);
+        return;
+    }
+
+    if ((targetAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+    {
+        SetFolderPath(pane, resolution.target);
+        return;
+    }
+
+    const std::filesystem::path parent = resolution.target.parent_path();
+    if (parent.empty())
+    {
+        ShowShellActionFailedOverlay(*this, pane, resolution.target, E_INVALIDARG);
+        return;
+    }
+
+    const DWORD parentAttributes = GetFileAttributesW(parent.c_str());
+    if (parentAttributes == INVALID_FILE_ATTRIBUTES || (parentAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u)
+    {
+        const HRESULT hr = parentAttributes == INVALID_FILE_ATTRIBUTES ? HRESULT_FROM_WIN32(GetLastError()) : E_INVALIDARG;
+        ShowShellActionFailedOverlay(*this, pane, parent, FAILED(hr) ? hr : E_FAIL);
+        return;
+    }
+
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::wstring focusName = resolution.target.filename().wstring();
+    if (! focusName.empty())
+    {
+        state.folderView.RememberFocusedItemForFolder(parent, focusName);
+    }
+
+    SetFolderPath(pane, parent);
 }
 
 void FolderWindow::CommandViewSpace(Pane pane)

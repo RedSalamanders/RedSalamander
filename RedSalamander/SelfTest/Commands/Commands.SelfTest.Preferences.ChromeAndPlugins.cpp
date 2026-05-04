@@ -1608,10 +1608,9 @@
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.extensions.openWithViewerByExtension.clear();
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-001", L"builtin/viewer-text");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-002", L"builtin/viewer-pe");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-003", L"builtin/viewer-text");
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     const HWND prefs = WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms));
@@ -1882,10 +1881,9 @@
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.extensions.openWithViewerByExtension.clear();
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-001", L"builtin/viewer-text");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-002", L"builtin/viewer-pe");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-003", L"builtin/viewer-text");
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
 
     const auto waitForPreferencesWindow = [&]() noexcept
     { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
@@ -2130,6 +2128,13 @@
                       L"Existing Preferences window did not close before Viewers search round-trip test.");
     }
 
+    const Common::Settings::Settings baselineSettings = g_settings;
+    const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
+
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
+
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     const HWND prefs = WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms));
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Viewers search round-trip test.");
@@ -2174,15 +2179,9 @@
     };
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Viewers search round-trip test.");
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
+                  L"Failed to select the Preferences Viewers category for Viewers search round-trip test.");
     PumpPendingMessages();
-    for (int i = 0; i < 2; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
 
     PreferencesDebugSnapshot snapshot{};
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -2206,8 +2205,8 @@
         return false;
     }
 
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryGeneral),
+                  L"Failed to select the Preferences General category during retained-search round-trip validation.");
     PumpPendingMessages();
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
     { return value.currentCategory == kPrefCategoryGeneral && true /* Phase 8: removed field */ && true /* Phase 8: removed field */; },
@@ -2218,12 +2217,9 @@
         return false;
     }
 
-    for (int i = 0; i < 2; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
+                  L"Failed to reselect the Preferences Viewers category during retained-search round-trip validation.");
+    PumpPendingMessages();
 
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
@@ -2254,6 +2250,13 @@
         state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
                       L"Existing Preferences window did not close before Viewers deferred-search test.");
     }
+
+    const Common::Settings::Settings baselineSettings = g_settings;
+    const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
+
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     const HWND prefs = WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms));
@@ -2299,15 +2302,8 @@
     };
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Viewers deferred-search test.");
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers), L"Failed to select the Preferences Viewers category for deferred-search test.");
     PumpPendingMessages();
-    for (int i = 0; i < 2; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
 
     PreferencesDebugSnapshot snapshot{};
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -2352,10 +2348,9 @@
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.extensions.openWithViewerByExtension.clear();
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-001", L"builtin/viewer-text");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-002", L"builtin/viewer-pe");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-003", L"builtin/viewer-text");
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
 
     auto waitForPreferencesWindow = [&]() noexcept { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
@@ -2636,10 +2631,9 @@
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.extensions.openWithViewerByExtension.clear();
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-001", L"builtin/viewer-text");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-002", L"builtin/viewer-pe");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-003", L"builtin/viewer-text");
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
 
     auto waitForPreferencesWindow = [&]() noexcept { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
@@ -2863,12 +2857,11 @@
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.extensions.openWithViewerByExtension.clear();
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-001", L"builtin/viewer-text");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-002", L"builtin/viewer-pe");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-003", L"builtin/viewer-text");
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
 
-    const size_t defaultRowCount = Common::Settings::ExtensionsSettings{}.openWithViewerByExtension.size();
+    const size_t defaultRowCount = TestVisibleViewerAssociationRowCount(Common::Settings::DefaultViewerFileActionsSettings());
 
     auto waitForPreferencesWindow = [&]() noexcept { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
@@ -3082,10 +3075,9 @@
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    g_settings.extensions.openWithViewerByExtension.clear();
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-001", L"builtin/viewer-text");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-002", L"builtin/viewer-pe");
-    g_settings.extensions.openWithViewerByExtension.emplace(L".selftest-viewers-003", L"builtin/viewer-text");
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
 
     auto waitForPreferencesWindow = [&]() noexcept { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
@@ -3368,6 +3360,13 @@
                       L"Existing Preferences window did not close before Viewers retained-selection test.");
     }
 
+    const Common::Settings::Settings baselineSettings = g_settings;
+    const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
+
+    TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
+                                  {L".selftest-viewers-002", L"builtin/viewer-pe"},
+                                  {L".selftest-viewers-003", L"builtin/viewer-text"}});
+
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     const HWND prefs = WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms));
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Viewers retained-selection test.");
@@ -3412,15 +3411,8 @@
     };
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Viewers retained-selection test.");
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers), L"Failed to select the Preferences Viewers category for retained-selection test.");
     PumpPendingMessages();
-    for (int i = 0; i < 2; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
 
     PreferencesDebugSnapshot snapshot{};
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -3453,8 +3445,8 @@
         return false;
     }
 
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryGeneral),
+                  L"Failed to select the Preferences General category during retained-selection validation.");
     PumpPendingMessages();
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
     { return value.currentCategory == kPrefCategoryGeneral && true /* Phase 8: removed field */ && true /* Phase 8: removed field */; },
@@ -3465,12 +3457,9 @@
         return false;
     }
 
-    for (int i = 0; i < 2; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
+                  L"Failed to reselect the Preferences Viewers category during retained-selection validation.");
+    PumpPendingMessages();
 
     state.Require(waitForSnapshot([&](const PreferencesDebugSnapshot& value) noexcept
     { return value.currentCategory == kPrefCategoryViewers && value.viewersSelectedExtensionText == retainedExtension && value.createdPaneWindowCount == 0u; },

@@ -24,6 +24,7 @@ inline constexpr UINT kFolderViewBatchIconUpdate     = WM_APP + 0x306;
 inline constexpr UINT kNetworkConnectivityChanged    = WM_APP + 0x305;
 inline constexpr UINT kFolderViewDeferredInit        = WM_APP + 0x307;
 inline constexpr UINT kFolderViewDirectoryImpact     = WM_APP + 0x308;
+inline constexpr UINT kFolderViewCreateThumbnailBitmap = WM_APP + 0x309;
 
 inline constexpr UINT kEditSuggestResults = WM_APP + 0x350;
 
@@ -100,6 +101,10 @@ inline constexpr UINT kFindSearchResults         = WM_APP + 0x527;
 inline constexpr UINT kFindSearchProgress        = WM_APP + 0x528;
 inline constexpr UINT kFindSearchComplete        = WM_APP + 0x529;
 inline constexpr UINT kFindSearchDeferredRefresh = WM_APP + 0x52A;
+
+// Change Attributes (background)
+inline constexpr UINT kChangeAttributesTaskUpdate = WM_APP + 0x52B;
+inline constexpr UINT kChangeAttributesCompleted  = WM_APP + 0x52C;
 
 // Preferences
 inline constexpr UINT kPreferencesApplyComboThemeDeferred   = WM_APP + 0x530;
@@ -309,6 +314,52 @@ struct ViewerNativeMenuModelDebugSnapshot
 };
 
 inline constexpr UINT kViewerDebugGetNativeMenuModelSnapshot = WM_APP + 0x612;
+#endif
+inline constexpr UINT kViewerVlcAsyncOpenComplete = WM_APP + 0x613;
+#ifdef ENABLE_TESTS
+struct ViewerVlcDebugSnapshot
+{
+    bool loadingActive = false;
+    bool loadingVisible = false;
+    bool missingVisible = false;
+    bool hasVolumeMuteButton = false;
+    bool hasVolumeSlider = false;
+    bool muted = false;
+    int volume = 0;
+    int64_t timeMs = 0;
+    int64_t lengthMs = 0;
+    LONG snapshotWidth = 0;
+    LONG snapshotHeight = 0;
+    bool hudButtonsUseFilledButtonStyle = false;
+    bool hudIconsUseIconFont = false;
+    wchar_t playPauseIconGlyph = L'\0';
+    wchar_t stopIconGlyph = L'\0';
+    wchar_t snapshotIconGlyph = L'\0';
+    bool volumeIconUsesIconFont = false;
+    wchar_t volumeIconGlyph = L'\0';
+};
+
+struct ViewerVlcDebugPlaybackState
+{
+    int64_t timeMs = 0;
+    int64_t lengthMs = 0;
+    int volume = 100;
+    bool muted = false;
+};
+
+struct ViewerVlcDebugWheel
+{
+    int wheelDelta = 0;
+    bool shift = false;
+    bool ctrl = false;
+};
+
+inline constexpr UINT kViewerVlcDebugGetSnapshot         = WM_APP + 0x614;
+inline constexpr UINT kViewerVlcDebugForceLoadingVisible = WM_APP + 0x615;
+inline constexpr UINT kViewerVlcDebugSetPlaybackState    = WM_APP + 0x616;
+inline constexpr UINT kViewerVlcDebugWheel               = WM_APP + 0x617;
+inline constexpr UINT kViewerVlcDebugToggleMute          = WM_APP + 0x618;
+inline constexpr UINT kViewerVlcDebugWheelVideoChild     = WM_APP + 0x619;
 #endif
 
 // RedSalamanderMonitor / ColorTextView

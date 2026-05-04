@@ -18,6 +18,7 @@ This specification applies to:
 - `RedSalamander/Preferences.Internal.cpp`
 - `RedSalamander/Preferences.General.cpp`
 - `RedSalamander/Preferences.Panes.cpp`
+- `RedSalamander/Preferences.FileActions.cpp`
 - `RedSalamander/Preferences.Viewers.cpp`
 - `RedSalamander/Preferences.Editors.cpp`
 - `RedSalamander/Preferences.Keyboard.cpp`
@@ -61,14 +62,15 @@ Root item order is:
 2. Panes
 3. Viewers
 4. Editors
-5. Keyboard
-6. Mouse
-7. Themes
-8. Plugins
-9. File Operations
-10. Compare Directories
-11. Hot Paths
-12. Advanced
+5. User Menu
+6. Keyboard
+7. Mouse
+8. Themes
+9. Plugins
+10. File Operations
+11. Compare Directories
+12. Hot Paths
+13. Advanced
 
 Additional navigation rules:
 
@@ -86,6 +88,7 @@ The live narrowed direct-host scope includes:
 - `Panes`
 - `Viewers`
 - `Editors`
+- `UserMenu`
 - `Keyboard`
 - `Mouse`
 - `Themes`
@@ -97,14 +100,44 @@ The live narrowed direct-host scope includes:
 
 Per-page rules:
 
-- `Editors` and `Mouse` are note-style pages.
-- `Viewers`, `Keyboard`, `Themes`, and `Plugins` are list/search/detail style pages and MUST preserve their page-local retained state across category round-trips.
+- `Mouse` is a note-style page.
+- `Viewers`, `Editors`, `Keyboard`, `Themes`, and `Plugins` are list/search/detail style pages and MUST preserve their page-local retained state across category round-trips.
+- `Viewers` and `Editors` share the file-actions page implementation but remain separate visible categories because their command columns differ.
 - `Plugins` root page MUST expose plugin enablement, custom-path management, and navigation into schema-driven child pages.
 - The plugin child page MUST embed the schema-driven configuration editor and MAY still offer the dedicated advanced configuration dialog entry point.
 - The File Operations page edits host-owned global defaults only: pre-calculation enable/workers, default copy/move speed limit, and cross-file-system bridge buffer size.
 - The File Operations page MUST NOT duplicate plugin-owned concurrency, recycle-bin batching, or search-walker controls; it instead shows a note that those settings live under `Preferences -> Plugins -> File System`.
 - The Compare Directories page edits the same persisted defaults described in `Specs/Core/Core_CompareDirectories.md`.
 - The Hot Paths page edits the persisted hot-path definitions and their menu-visibility flag.
+
+### Viewers And Editors Page Contract
+
+The `Viewers` and `Editors` pages MUST expose the same mental model:
+
+- **Actions** are named things RedSalamander can launch.
+- **Associations** are rules that choose which action a command uses for a file type, pattern, default row, and optional computer override.
+
+The `Viewers` page:
+
+- MUST show `Associations` and `Actions` tabs.
+- The Associations table columns are `Match`, `Computer`, `F3 View`, `Alt+F3 Alternate View`, and `Status`.
+- The Actions table columns are `Name`, `Type`, `Applies To`, `Computer`, and `Status`.
+- `F3 View` and `Alt+F3 Alternate View` action selectors MUST list configured viewer actions plus `(none)` where clearing is valid.
+
+The `Editors` page:
+
+- MUST show `Associations` and `Actions` tabs.
+- The Associations table columns are `Match`, `Computer`, `F4 Edit`, `Ctrl+Shift+F4 Alternate Edit`, `Shift+F4 Edit New`, and `Status`.
+- The Actions table columns are `Name`, `Type`, `Applies To`, `Computer`, and `Status`.
+- `F4 Edit`, `Ctrl+Shift+F4 Alternate Edit`, and `Shift+F4 Edit New` action selectors MUST list configured editor actions plus `(none)` where clearing is valid.
+
+Both pages:
+
+- MUST edit `workingSettings.fileActions` only; they MUST NOT expose the removed root `viewers`/`editors` shape or `extensions.openWithViewerByExtension`.
+- MUST use the shared file-action resolver for the visible preview row so the page explains the same priority the command layer uses: computer-specific extension/pattern, global extension/pattern, computer default, global default.
+- MUST show the selected test file path, command, resolved action name, and reason in the preview.
+- MUST mark Preferences dirty when an association or action changes, and `Apply` / `OK` MUST persist the changed `fileActions` graph without dropping unrelated settings.
+- MUST remain DxUi-owned, theme-aware, and accessible through the shared page-host and grid patterns.
 
 ### General Page Contract
 
@@ -154,7 +187,7 @@ Normative behavior:
 - The Preferences visible shell and current live page set MUST use the shared `DxUi` path and obey `Specs/UI/UI_DxUiSharedGrid.md`.
 - Shared `DxUi` rules such as zero accepted visible native fallback, page-host ownership, redraw batching, retained-state rules, `WM_GETOBJECT`, UI Automation exposure, and direct-host validation are normative through that shared spec and are not duplicated here.
 - The active page surface, not the outer dialog HWND, is the page-local accessibility target for page-specific validation.
-- General, Panes, and Viewers page layout MUST use the Preferences-owned typography context and DirectWrite measurement for visible toggle/combo/card/hint text, not pane-local `HFONT` or GDI text measurement. Tests MUST keep `generalUsesDxUiTypographyContext`, `generalUsesDxUiTypographyMetrics`, `panesUsesDxUiTypographyContext`, `panesUsesDxUiTypographyMetrics`, `viewersUsesDxUiTypographyContext`, and `viewersUsesDxUiTypographyMetrics` true for the matching page snapshots.
+- General, Panes, Viewers, and Editors page layout MUST use the Preferences-owned typography context and DirectWrite measurement for visible toggle/combo/card/hint text, not pane-local `HFONT` or GDI text measurement. Tests MUST keep `generalUsesDxUiTypographyContext`, `generalUsesDxUiTypographyMetrics`, `panesUsesDxUiTypographyContext`, `panesUsesDxUiTypographyMetrics`, `viewersUsesDxUiTypographyContext`, and `viewersUsesDxUiTypographyMetrics` true for the matching page snapshots.
 
 ## Verification Requirements
 

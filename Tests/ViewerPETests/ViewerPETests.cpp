@@ -3741,6 +3741,283 @@ private:
     return success;
 }
 
+[[nodiscard]] bool TestViewerVlcConfigurationPersistsLastVolumeAndMute() noexcept
+{
+    bool success = true;
+
+    std::array<wchar_t, MAX_PATH + 1> modulePath{};
+    const DWORD pathLength = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+    Check(pathLength > 0 && pathLength < modulePath.size(), L"ViewerVLC configuration test executable path resolves", success);
+    if (pathLength == 0 || pathLength >= modulePath.size())
+    {
+        return false;
+    }
+
+    const std::filesystem::path buildDir   = std::filesystem::path(modulePath.data()).parent_path();
+    const std::filesystem::path pluginPath = buildDir / L"Plugins" / L"ViewerVLC.dll";
+    const std::filesystem::path pluginDir  = pluginPath.parent_path();
+    Check(std::filesystem::exists(pluginPath), L"ViewerVLC.dll is present for configuration validation", success);
+    if (! std::filesystem::exists(pluginPath))
+    {
+        return false;
+    }
+
+    static_cast<void>(SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS));
+    DLL_DIRECTORY_COOKIE buildCookie  = AddDllDirectory(buildDir.c_str());
+    DLL_DIRECTORY_COOKIE pluginCookie = AddDllDirectory(pluginDir.c_str());
+    auto removeDllDirectories         = wil::scope_exit([&]() noexcept
+    {
+        if (pluginCookie)
+        {
+            RemoveDllDirectory(pluginCookie);
+        }
+        if (buildCookie)
+        {
+            RemoveDllDirectory(buildCookie);
+        }
+    });
+
+    wil::unique_hmodule pluginModule(LoadLibraryExW(pluginPath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR));
+    Check(pluginModule.is_valid(), L"ViewerVLC.dll loads successfully for configuration validation", success);
+    if (! pluginModule.is_valid())
+    {
+        return false;
+    }
+
+    const FARPROC createProc       = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
+    RedSalamanderCreateFn createFn = nullptr;
+    static_assert(sizeof(createFn) == sizeof(createProc));
+    std::memcpy(&createFn, &createProc, sizeof(createFn));
+    Check(createFn != nullptr, L"ViewerVLC factory export is available for configuration validation", success);
+    if (! createFn)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IViewer> viewer;
+    const FactoryOptions factoryOptions{DEBUG_LEVEL_NONE};
+    const HRESULT createHr = createFn(__uuidof(IViewer), &factoryOptions, nullptr, kViewerVlcPluginId, viewer.put_void());
+    Check(SUCCEEDED(createHr) && viewer != nullptr, L"ViewerVLC factory creates an IViewer for configuration validation", success);
+    if (FAILED(createHr) || ! viewer)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IInformations> informations;
+    const HRESULT infoHr = viewer->QueryInterface(__uuidof(IInformations), informations.put_void());
+    Check(SUCCEEDED(infoHr) && informations != nullptr, L"ViewerVLC exposes IInformations for configuration validation", success);
+    if (FAILED(infoHr) || ! informations)
+    {
+        return false;
+    }
+
+    const char* schema = nullptr;
+    const HRESULT schemaHr = informations->GetConfigurationSchema(&schema);
+    Check(SUCCEEDED(schemaHr) && schema != nullptr, L"ViewerVLC configuration schema is available", success);
+    if (SUCCEEDED(schemaHr) && schema)
+    {
+        const std::string_view schemaText(schema);
+        Check(schemaText.find("\"lastVolumePercent\"") != std::string_view::npos,
+              L"ViewerVLC schema exposes last volume persistence",
+              success);
+        Check(schemaText.find("\"muted\"") != std::string_view::npos, L"ViewerVLC schema exposes mute persistence", success);
+    }
+
+    constexpr char kSavedVolumeJson[] = R"json({"lastVolumePercent":37,"muted":true})json";
+    const HRESULT setHr               = informations->SetConfiguration(kSavedVolumeJson);
+    Check(SUCCEEDED(setHr), L"ViewerVLC accepts persisted volume and mute configuration", success);
+
+    const char* savedJson = nullptr;
+    const HRESULT getHr = informations->GetConfiguration(&savedJson);
+    Check(SUCCEEDED(getHr) && savedJson != nullptr, L"ViewerVLC returns normalized persisted configuration", success);
+    if (SUCCEEDED(getHr) && savedJson)
+    {
+        const std::string_view savedText(savedJson);
+        Check(savedText.find("\"lastVolumePercent\":37") != std::string_view::npos,
+              L"ViewerVLC keeps the last volume in its persisted configuration",
+              success);
+        Check(savedText.find("\"muted\":true") != std::string_view::npos,
+              L"ViewerVLC keeps mute state in its persisted configuration",
+              success);
+    }
+
+    BOOL somethingToSave = FALSE;
+    const HRESULT saveHr = informations->SomethingToSave(&somethingToSave);
+    Check(SUCCEEDED(saveHr) && somethingToSave != FALSE, L"ViewerVLC marks non-default volume state for persistence", success);
+    return success;
+}
+
+[[nodiscard]] bool TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts() noexcept
+{
+    bool success = true;
+
+    std::array<wchar_t, MAX_PATH + 1> modulePath{};
+    const DWORD pathLength = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
+    Check(pathLength > 0 && pathLength < modulePath.size(), L"ViewerVLC HUD contract test executable path resolves", success);
+    if (pathLength == 0 || pathLength >= modulePath.size())
+    {
+        return false;
+    }
+
+    const std::filesystem::path buildDir   = std::filesystem::path(modulePath.data()).parent_path();
+    const std::filesystem::path pluginPath = buildDir / L"Plugins" / L"ViewerVLC.dll";
+    const std::filesystem::path pluginDir  = pluginPath.parent_path();
+    Check(std::filesystem::exists(pluginPath), L"ViewerVLC.dll is present for HUD contract validation", success);
+    if (! std::filesystem::exists(pluginPath))
+    {
+        return false;
+    }
+
+    static_cast<void>(SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS));
+    DLL_DIRECTORY_COOKIE buildCookie  = AddDllDirectory(buildDir.c_str());
+    DLL_DIRECTORY_COOKIE pluginCookie = AddDllDirectory(pluginDir.c_str());
+    auto removeDllDirectories         = wil::scope_exit([&]() noexcept
+    {
+        if (pluginCookie)
+        {
+            RemoveDllDirectory(pluginCookie);
+        }
+        if (buildCookie)
+        {
+            RemoveDllDirectory(buildCookie);
+        }
+    });
+
+    wil::unique_hmodule pluginModule(LoadLibraryExW(pluginPath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR));
+    Check(pluginModule.is_valid(), L"ViewerVLC.dll loads successfully for HUD contract validation", success);
+    if (! pluginModule.is_valid())
+    {
+        return false;
+    }
+
+    const FARPROC createProc       = GetProcAddress(pluginModule.get(), "RedSalamanderCreate");
+    RedSalamanderCreateFn createFn = nullptr;
+    static_assert(sizeof(createFn) == sizeof(createProc));
+    std::memcpy(&createFn, &createProc, sizeof(createFn));
+    Check(createFn != nullptr, L"ViewerVLC factory export is available for HUD contract validation", success);
+    if (! createFn)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IViewer> viewer;
+    const FactoryOptions factoryOptions{DEBUG_LEVEL_NONE};
+    const HRESULT createHr = createFn(__uuidof(IViewer), &factoryOptions, nullptr, kViewerVlcPluginId, viewer.put_void());
+    Check(SUCCEEDED(createHr) && viewer != nullptr, L"ViewerVLC factory creates an IViewer for HUD contract validation", success);
+    if (FAILED(createHr) || ! viewer)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IInformations> informations;
+    static_cast<void>(viewer->QueryInterface(__uuidof(IInformations), informations.put_void()));
+    if (informations)
+    {
+        static_cast<void>(informations->SetConfiguration(R"json({"autoDetectVlc":false})json"));
+    }
+
+    const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerVLCWindowClassName);
+
+    const std::filesystem::path tempDir = buildDir / L"ViewerVLCTests";
+    std::error_code ec;
+    static_cast<void>(std::filesystem::create_directories(tempDir, ec));
+    const std::filesystem::path samplePath = WriteTinyWaveFile(tempDir / L"sample-hud.wav");
+    auto cleanupTemp                       = wil::scope_exit([&]() noexcept
+    {
+        std::error_code cleanupEc;
+        static_cast<void>(std::filesystem::remove(samplePath, cleanupEc));
+        static_cast<void>(std::filesystem::remove(tempDir, cleanupEc));
+    });
+
+    const std::wstring samplePathText = samplePath.wstring();
+    ViewerOpenContext context{};
+    context.focusedPath = samplePathText.c_str();
+
+    const HRESULT openHr = viewer->Open(&context);
+    Check(SUCCEEDED(openHr), L"ViewerVLC HUD contract window open succeeds", success);
+    if (FAILED(openHr))
+    {
+        return false;
+    }
+
+    HWND viewerWindow       = nullptr;
+    const bool openedWindow = PumpUntil(
+        [&]() noexcept
+    {
+        viewerWindow = FindNewVisibleWindowByClass(kViewerVLCWindowClassName, existingWindows);
+        return viewerWindow != nullptr;
+    },
+        8000ms);
+    Check(openedWindow, L"ViewerVLC HUD contract window becomes visible", success);
+    if (! openedWindow || ! viewerWindow)
+    {
+        static_cast<void>(viewer->Close());
+        return false;
+    }
+
+    WndMsg::ViewerVlcDebugSnapshot snapshot{};
+    Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE,
+          L"ViewerVLC debug snapshot is available",
+          success);
+    Check(snapshot.hasVolumeMuteButton, L"ViewerVLC HUD exposes a speaker mute button", success);
+    Check(snapshot.hasVolumeSlider, L"ViewerVLC HUD exposes a horizontal volume slider", success);
+    Check(snapshot.snapshotWidth > 0 && snapshot.snapshotHeight > 0, L"ViewerVLC snapshot uses the visible video surface size", success);
+
+    Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugForceLoadingVisible, 0, 0) != FALSE,
+          L"ViewerVLC debug can force delayed loading overlay",
+          success);
+    snapshot = {};
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
+    Check(snapshot.loadingActive && snapshot.loadingVisible, L"ViewerVLC shows a loading overlay once VLC init exceeds the delay", success);
+
+    WndMsg::ViewerVlcDebugPlaybackState playbackState{};
+    playbackState.lengthMs = 120'000;
+    playbackState.timeMs   = 60'000;
+    playbackState.volume   = 37;
+    playbackState.muted    = false;
+    Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugSetPlaybackState, 0, reinterpret_cast<LPARAM>(&playbackState)) != FALSE,
+          L"ViewerVLC debug playback state can seed wheel and volume checks",
+          success);
+
+    WndMsg::ViewerVlcDebugWheel wheel{};
+    wheel.wheelDelta = WHEEL_DELTA;
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugWheel, 0, reinterpret_cast<LPARAM>(&wheel)));
+    snapshot = {};
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
+    Check(snapshot.timeMs == 70'000, L"ViewerVLC mouse wheel seeks by the normal ten-second step", success);
+
+    wheel.wheelDelta = -WHEEL_DELTA;
+    wheel.shift      = true;
+    wheel.ctrl       = false;
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugWheel, 0, reinterpret_cast<LPARAM>(&wheel)));
+    snapshot = {};
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
+    Check(snapshot.timeMs == 67'000, L"ViewerVLC Shift+wheel seeks by the small three-second step", success);
+
+    wheel.wheelDelta = WHEEL_DELTA;
+    wheel.shift      = false;
+    wheel.ctrl       = true;
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugWheel, 0, reinterpret_cast<LPARAM>(&wheel)));
+    snapshot = {};
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
+    Check(snapshot.timeMs == 120'000, L"ViewerVLC Ctrl+wheel seeks by the large one-minute step and clamps to the end", success);
+
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugToggleMute, 0, 0));
+    snapshot = {};
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
+    Check(snapshot.muted && snapshot.volume == 37, L"ViewerVLC speaker click mutes without forgetting the slider volume", success);
+
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugToggleMute, 0, 0));
+    snapshot = {};
+    static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
+    Check(! snapshot.muted && snapshot.volume == 37, L"ViewerVLC speaker click restores the previous volume", success);
+
+    const HRESULT closeHr = viewer->Close();
+    Check(SUCCEEDED(closeHr), L"ViewerVLC HUD contract window close succeeds", success);
+    Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerVLC HUD contract window closes cleanly", success);
+    return success;
+}
+
 [[nodiscard]] bool CheckViewerTextPromptUsesDxUiHostAndClosesCleanly(UINT commandId,
                                                                      std::wstring_view promptName,
                                                                      std::wstring_view expectedInitialText,
@@ -4034,6 +4311,8 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
         success = RunFilteredSelfExecutable(L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", 120000ms, success) && success;
         success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", 120000ms, success) && success;
         success = RunFilteredSelfExecutable(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", 120000ms, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", 120000ms, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", 120000ms, success) && success;
     }
 
     return success;
@@ -4050,6 +4329,8 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
         L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo",
         L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses",
         L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly",
+        L"TestViewerVlcConfigurationPersistsLastVolumeAndMute",
+        L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts",
         L"TestViewerShellComboHostsLongRunOpenCloseStayStable",
     };
 #ifdef _DEBUG
@@ -4127,6 +4408,14 @@ int wmain(int argc, wchar_t** argv)
     if (shouldRun(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly"))
     {
         success = TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly() && success;
+    }
+    if (shouldRun(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute"))
+    {
+        success = TestViewerVlcConfigurationPersistsLastVolumeAndMute() && success;
+    }
+    if (shouldRun(L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts"))
+    {
+        success = TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts() && success;
     }
     if (shouldRun(kViewerTextFindPromptExplicitTestName))
     {

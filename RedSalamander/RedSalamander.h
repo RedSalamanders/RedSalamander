@@ -2,15 +2,44 @@
 
 #include "resource.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 
 #include <windows.h>
 
+namespace Common::Settings
+{
+struct Settings;
+}
+
 [[nodiscard]] HWND GetAboutDialogHandle() noexcept;
 [[nodiscard]] HWND GetFatalErrorDialogHandle() noexcept;
 
 #ifdef ENABLE_TESTS
+struct RereadAssociationsDebugSnapshot
+{
+    bool attempted                            = false;
+    bool loaded                               = false;
+    HRESULT hr                                = S_FALSE;
+    size_t viewerActionCount                  = 0u;
+    size_t editorActionCount                  = 0u;
+    size_t userMenuActionCount                = 0u;
+    size_t viewerExtensionMappingCount        = 0u;
+    size_t fileSystemExtensionMappingCount    = 0u;
+    size_t associationIconCacheSizeBefore     = 0u;
+    size_t associationIconCacheSizeAfterClear = 0u;
+    uint64_t leftRefreshCountBefore           = 0u;
+    uint64_t leftRefreshCountAfter            = 0u;
+    uint64_t rightRefreshCountBefore          = 0u;
+    uint64_t rightRefreshCountAfter           = 0u;
+    bool dynamicFileActionMenusRebuilt        = false;
+    bool userMenuRebuilt                      = false;
+    bool pluginsRefreshed                     = false;
+    bool runtimeFoldersPreserved              = false;
+};
+
 struct FatalErrorDialogDebugSnapshot
 {
     bool usesDxUiHost              = false;
@@ -30,6 +59,9 @@ struct FatalErrorDialogDebugSnapshot
     std::wstring messageText;
 };
 
+void DebugSetRereadAssociationsSettingsForTest(const Common::Settings::Settings* settings) noexcept;
+void DebugResetRereadAssociationsSnapshot() noexcept;
+[[nodiscard]] bool DebugGetRereadAssociationsSnapshot(RereadAssociationsDebugSnapshot& out) noexcept;
 void DebugShowFatalErrorDialog(HWND ownerWindow, const wchar_t* caption, const wchar_t* message) noexcept;
 [[nodiscard]] bool DebugGetFatalErrorDialogSnapshot(FatalErrorDialogDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugScrollFatalErrorDialogByWheelDetents(int detents) noexcept;

@@ -15,6 +15,7 @@ enum ViewerOpenFlags : uint32_t
 {
     VIEWER_OPEN_FLAG_NONE      = 0,
     VIEWER_OPEN_FLAG_START_HEX = 0x1,
+    VIEWER_OPEN_FLAG_EMBEDDED  = 0x2,
 };
 
 struct ViewerOpenContext
@@ -26,8 +27,9 @@ struct ViewerOpenContext
     // - `fileSystem` is a caller-owned COM interface pointer that remains valid at least for the duration of the Open() call.
     //   Plugins that need to use it beyond Open() MUST AddRef() it (and Release() when done).
 
-    // Optional host/main window handle (for initial placement/activation).
-    // Note: viewers SHOULD remain independent top-level windows; do not assume Win32 ownership.
+    // Optional host/main window handle. Normal viewer opens use this only for placement/activation.
+    // When VIEWER_OPEN_FLAG_EMBEDDED is set, this MUST be a valid parent window; embedded-capable
+    // plugins MUST create non-activating child-window chrome under it.
     HWND ownerWindow;
 
     // Active filesystem instance for `focusedPath`/`otherFiles` paths.

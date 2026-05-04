@@ -8,6 +8,9 @@
 namespace
 {
 constexpr unsigned int kMaxIconLoadRetries = 2u;
+constexpr unsigned int kMaxThumbnailLoadRetries = 1u;
+constexpr size_t kMaxThumbnailQueueItems = 256u;
+constexpr uint32_t kMaxThumbnailPixelSize = 512u;
 
 [[nodiscard]] uint64_t PerfElapsedUs(const std::chrono::steady_clock::time_point& start) noexcept
 {
@@ -23,6 +26,76 @@ void PerfEmitCounter(std::wstring_view name, uint64_t value) noexcept
 void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Emit(name, L"", durationUs, value0, value1, hr);
+}
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] wil::unique_hbitmap CreateSyntheticThumbnailBitmap(uint32_t targetPx, size_t itemIndex) noexcept
+{
+    const uint32_t safeSize = std::clamp(targetPx, 1u, kMaxThumbnailPixelSize);
+
+    wil::unique_hdc_window screenDc{GetDC(nullptr)};
+    if (! screenDc)
+    {
+        return nullptr;
+    }
+
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth       = static_cast<LONG>(safeSize);
+    bmi.bmiHeader.biHeight      = -static_cast<LONG>(safeSize);
+    bmi.bmiHeader.biPlanes      = 1;
+    bmi.bmiHeader.biBitCount    = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    void* bits = nullptr;
+    wil::unique_hbitmap bitmap{CreateDIBSection(screenDc.get(), &bmi, DIB_RGB_COLORS, &bits, nullptr, 0)};
+    if (! bitmap || ! bits)
+    {
+        return nullptr;
+    }
+
+    auto* pixels = static_cast<uint32_t*>(bits);
+    const uint8_t red = static_cast<uint8_t>(64u + ((itemIndex * 41u) % 160u));
+    const uint8_t green = static_cast<uint8_t>(72u + ((itemIndex * 29u) % 150u));
+    const uint8_t blue = static_cast<uint8_t>(96u + ((itemIndex * 17u) % 130u));
+    const uint32_t fill = 0xFF000000u | (static_cast<uint32_t>(red) << 16u) | (static_cast<uint32_t>(green) << 8u) | blue;
+    const uint32_t accent = 0xFFFFFFFFu;
+
+    for (uint32_t y = 0; y < safeSize; ++y)
+    {
+        for (uint32_t x = 0; x < safeSize; ++x)
+        {
+            const bool border = x == 0u || y == 0u || x + 1u == safeSize || y + 1u == safeSize;
+            pixels[(static_cast<size_t>(y) * safeSize) + x] = border ? accent : fill;
+        }
+    }
+
+    return bitmap;
+}
+#endif
+
+[[nodiscard]] HRESULT ExtractShellThumbnailBitmap(const std::filesystem::path& fullPath, uint32_t targetPx, wil::unique_hbitmap& outBitmap) noexcept
+{
+    outBitmap.reset();
+    if (fullPath.empty() || targetPx == 0u)
+    {
+        return E_INVALIDARG;
+    }
+
+    wil::com_ptr<IShellItemImageFactory> imageFactory;
+    HRESULT hr = SHCreateItemFromParsingName(fullPath.c_str(), nullptr, IID_PPV_ARGS(imageFactory.put()));
+    if (FAILED(hr) || ! imageFactory)
+    {
+        return hr;
+    }
+
+    const uint32_t safeSize = std::clamp(targetPx, 1u, kMaxThumbnailPixelSize);
+    const SIZE size{static_cast<LONG>(safeSize), static_cast<LONG>(safeSize)};
+    HBITMAP rawBitmap = nullptr;
+    constexpr SIIGBF flags = static_cast<SIIGBF>(SIIGBF_THUMBNAILONLY | SIIGBF_BIGGERSIZEOK | SIIGBF_SCALEUP);
+    hr = imageFactory->GetImage(size, flags, &rawBitmap);
+    outBitmap.reset(rawBitmap);
+    return hr;
 }
 } // namespace
 
@@ -320,6 +393,11 @@ void FolderView::BoostIconLoadingForVisibleRange()
     {
         QueueIconLoading();
     }
+
+    if (_thumbnailsVisible)
+    {
+        QueueThumbnailLoading();
+    }
 }
 
 void FolderView::ProcessIconLoadQueue()
@@ -487,6 +565,225 @@ void FolderView::ProcessIconLoadQueue()
     }
 
     perf.SetValue1(_iconLoadStats.extracted.load(std::memory_order_relaxed));
+}
+
+void FolderView::QueueThumbnailLoading()
+{
+    if (! _thumbnailsVisible || _items.empty() || ! _hWnd)
+    {
+        return;
+    }
+
+    Debug::Perf::Scope queuePerf(L"thumbnails.queue_build_us");
+    queuePerf.SetDetail(_itemsFolder.native());
+
+    const uint64_t batchId = _thumbnailLoadStats.batchId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    const uint64_t enumerationGeneration = _enumerationGeneration.load(std::memory_order_acquire);
+    const float targetDip = _iconSizeDip;
+    const uint32_t targetPx = static_cast<uint32_t>(std::max(1, PxFromDip(targetDip)));
+
+    _thumbnailLoadStats.queued.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.completed.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.fallback.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.staleDrops.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.pendingBitmapCreates.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.cacheHits.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.targetDipX100.store(static_cast<uint64_t>(std::round(targetDip * 100.0f)), std::memory_order_release);
+
+    const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
+    const size_t visibleStart = std::min(visibleStartRaw, _items.size());
+    const size_t visibleEnd = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
+
+    std::deque<ThumbnailLoadRequest> newQueue;
+    const size_t reserveLimit = std::min(kMaxThumbnailQueueItems, visibleEnd - visibleStart);
+    static_cast<void>(reserveLimit);
+
+    for (size_t index = visibleStart; index < visibleEnd && newQueue.size() < kMaxThumbnailQueueItems; ++index)
+    {
+        const FolderItem& item = _items[index];
+        if (item.thumbnail)
+        {
+            _thumbnailLoadStats.cacheHits.fetch_add(1u, std::memory_order_relaxed);
+            continue;
+        }
+
+        ThumbnailLoadRequest request;
+        request.enumerationGeneration = enumerationGeneration;
+        request.itemIndex             = index;
+        request.fullPath              = GetItemFullPath(item);
+        request.targetPx              = targetPx;
+        request.hasVisibleItem        = true;
+        request.enqueuedAt            = std::chrono::steady_clock::now();
+        newQueue.push_back(std::move(request));
+    }
+
+    const uint64_t queuedCount = static_cast<uint64_t>(newQueue.size());
+    {
+        std::lock_guard lock(_enumerationMutex);
+        _thumbnailLoadQueue = std::move(newQueue);
+    }
+
+    _thumbnailLoadStats.queued.store(queuedCount, std::memory_order_release);
+    PerfEmitCounter(L"thumbnails.queue_count", queuedCount);
+    PerfEmitCounter(L"thumbnails.queue_visible_count", queuedCount);
+    PerfEmitCounter(L"thumbnails.cache_hit_count", _thumbnailLoadStats.cacheHits.load(std::memory_order_relaxed));
+    queuePerf.SetValue0(queuedCount);
+    queuePerf.SetValue1(static_cast<uint64_t>(targetPx));
+
+    if (queuedCount > 0u)
+    {
+        _thumbnailLoadingActive.store(true, std::memory_order_release);
+        _enumerationCv.notify_one();
+    }
+
+    static_cast<void>(batchId);
+}
+
+void FolderView::CancelThumbnailLoading() noexcept
+{
+    _thumbnailLoadStats.batchId.fetch_add(1u, std::memory_order_acq_rel);
+    {
+        std::lock_guard lock(_enumerationMutex);
+        _thumbnailLoadQueue.clear();
+    }
+
+    _thumbnailLoadingActive.store(false, std::memory_order_release);
+    _thumbnailLoadStats.pendingBitmapCreates.store(0u, std::memory_order_release);
+    _enumerationCv.notify_one();
+}
+
+void FolderView::ProcessThumbnailLoadQueue()
+{
+    const uint64_t batchId = _thumbnailLoadStats.batchId.load(std::memory_order_acquire);
+    Debug::Perf::Scope perf(L"FolderView.ThumbnailLoading.ProcessQueue");
+    perf.SetDetail(_itemsFolder.native());
+    perf.SetValue0(_thumbnailLoadStats.queued.load(std::memory_order_relaxed));
+
+    while (_thumbnailLoadingActive.load(std::memory_order_acquire))
+    {
+        if (_thumbnailLoadStats.batchId.load(std::memory_order_acquire) != batchId)
+        {
+            break;
+        }
+
+        ThumbnailLoadRequest request{};
+        {
+            std::lock_guard lock(_enumerationMutex);
+            if (_thumbnailLoadQueue.empty())
+            {
+                _thumbnailLoadingActive.store(false, std::memory_order_release);
+                break;
+            }
+
+            request = std::move(_thumbnailLoadQueue.front());
+            _thumbnailLoadQueue.pop_front();
+        }
+
+        if (request.itemIndex == static_cast<size_t>(-1))
+        {
+            continue;
+        }
+
+        if (request.enumerationGeneration != _enumerationGeneration.load(std::memory_order_acquire))
+        {
+            _thumbnailLoadStats.staleDrops.fetch_add(1u, std::memory_order_relaxed);
+            continue;
+        }
+
+        if (request.enqueuedAt.time_since_epoch().count() > 0)
+        {
+            PerfEmitDuration(L"thumbnails.queue_wait_to_dequeue_us",
+                             PerfElapsedUs(request.enqueuedAt),
+                             static_cast<uint64_t>(request.itemIndex),
+                             static_cast<uint64_t>(request.targetPx),
+                             S_OK);
+        }
+
+        auto bitmapRequest = std::make_unique<ThumbnailBitmapRequest>();
+        bitmapRequest->thumbnailLoadBatchId = batchId;
+        bitmapRequest->enumerationGeneration = request.enumerationGeneration;
+        bitmapRequest->itemIndex = request.itemIndex;
+        bitmapRequest->postedAt = std::chrono::steady_clock::now();
+
+        const auto extractStart = std::chrono::steady_clock::now();
+        HRESULT hr = S_FALSE;
+        bool usedFallback = false;
+
+#ifdef ENABLE_TESTS
+        const DebugThumbnailProviderMode providerMode = _debugThumbnailProviderMode.load(std::memory_order_acquire);
+        if (providerMode == DebugThumbnailProviderMode::ForceFallback)
+        {
+            usedFallback = true;
+            hr = S_FALSE;
+        }
+        else if (providerMode == DebugThumbnailProviderMode::ForceSyntheticSuccess)
+        {
+            bitmapRequest->hBitmap = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex);
+            hr = bitmapRequest->hBitmap ? S_OK : S_FALSE;
+            usedFallback = ! bitmapRequest->hBitmap;
+        }
+        else
+#endif
+        {
+            wil::unique_hbitmap shellBitmap;
+            hr = ExtractShellThumbnailBitmap(request.fullPath, request.targetPx, shellBitmap);
+            if (SUCCEEDED(hr) && shellBitmap)
+            {
+                bitmapRequest->hBitmap = std::move(shellBitmap);
+            }
+            else
+            {
+                usedFallback = true;
+            }
+        }
+
+        bitmapRequest->hr = hr;
+        bitmapRequest->usedFallback = usedFallback;
+        PerfEmitDuration(L"thumbnails.extract_us",
+                         PerfElapsedUs(extractStart),
+                         static_cast<uint64_t>(request.itemIndex),
+                         static_cast<uint64_t>(request.targetPx),
+                         hr);
+
+        if (! bitmapRequest->hBitmap && ! usedFallback && request.retryCount < kMaxThumbnailLoadRetries)
+        {
+            ++request.retryCount;
+            {
+                std::lock_guard lock(_enumerationMutex);
+                _thumbnailLoadQueue.push_back(std::move(request));
+            }
+            _enumerationCv.notify_one();
+            continue;
+        }
+
+        if (! _hWnd)
+        {
+            _thumbnailLoadStats.completed.fetch_add(1u, std::memory_order_relaxed);
+            if (usedFallback)
+            {
+                _thumbnailLoadStats.fallback.fetch_add(1u, std::memory_order_relaxed);
+            }
+            continue;
+        }
+
+        _thumbnailLoadStats.pendingBitmapCreates.fetch_add(1u, std::memory_order_acq_rel);
+        const bool posted = PostMessagePayload(_hWnd.get(), WndMsg::kFolderViewCreateThumbnailBitmap, 0, std::move(bitmapRequest));
+        if (! posted)
+        {
+            const uint64_t before = _thumbnailLoadStats.pendingBitmapCreates.load(std::memory_order_acquire);
+            if (before > 0u)
+            {
+                _thumbnailLoadStats.pendingBitmapCreates.fetch_sub(1u, std::memory_order_acq_rel);
+            }
+            _thumbnailLoadStats.completed.fetch_add(1u, std::memory_order_relaxed);
+            if (usedFallback)
+            {
+                _thumbnailLoadStats.fallback.fetch_add(1u, std::memory_order_relaxed);
+            }
+        }
+    }
+
+    perf.SetValue1(_thumbnailLoadStats.completed.load(std::memory_order_relaxed));
 }
 
 void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPtr)
@@ -658,6 +955,146 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
     SelfTest::AppendSelfTestTrace(std::format(L"FolderView::OnCreateIconBitmap: end applied={} iconIndex={}", applied, requestPtr->iconIndex));
 #endif
 }
+
+void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest> requestPtr)
+{
+    if (! requestPtr)
+    {
+        return;
+    }
+
+    const auto onExit = wil::scope_exit([&]() noexcept
+    {
+        const uint64_t before = _thumbnailLoadStats.pendingBitmapCreates.load(std::memory_order_acquire);
+        if (before > 0u)
+        {
+            _thumbnailLoadStats.pendingBitmapCreates.fetch_sub(1u, std::memory_order_acq_rel);
+        }
+    });
+
+    const uint64_t batchId = _thumbnailLoadStats.batchId.load(std::memory_order_acquire);
+    if (requestPtr->thumbnailLoadBatchId != batchId)
+    {
+        _thumbnailLoadStats.staleDrops.fetch_add(1u, std::memory_order_relaxed);
+        return;
+    }
+
+    const uint64_t enumerationGeneration = _enumerationGeneration.load(std::memory_order_acquire);
+    if (requestPtr->enumerationGeneration != enumerationGeneration)
+    {
+        _thumbnailLoadStats.staleDrops.fetch_add(1u, std::memory_order_relaxed);
+        return;
+    }
+
+    if (requestPtr->postedAt.time_since_epoch().count() > 0)
+    {
+        PerfEmitDuration(L"thumbnails.post_message_latency_us",
+                         PerfElapsedUs(requestPtr->postedAt),
+                         static_cast<uint64_t>(requestPtr->itemIndex),
+                         1u,
+                         requestPtr->hr);
+    }
+
+    const auto completeAsFallback = [&]() noexcept
+    {
+        _thumbnailLoadStats.completed.fetch_add(1u, std::memory_order_relaxed);
+        _thumbnailLoadStats.fallback.fetch_add(1u, std::memory_order_relaxed);
+        PerfEmitCounter(L"thumbnails.fallback_count", 1u);
+    };
+
+    if (requestPtr->usedFallback || FAILED(requestPtr->hr) || ! requestPtr->hBitmap)
+    {
+        completeAsFallback();
+        return;
+    }
+
+    if (! _d2dContext)
+    {
+        completeAsFallback();
+        return;
+    }
+
+    if (! _wicFactory)
+    {
+        EnsureDeviceIndependentResources();
+    }
+
+    if (! _wicFactory)
+    {
+        completeAsFallback();
+        return;
+    }
+
+    wil::com_ptr<IWICBitmap> wicBitmap;
+    const auto convertStart = std::chrono::steady_clock::now();
+    HRESULT hr = _wicFactory->CreateBitmapFromHBITMAP(requestPtr->hBitmap.get(), nullptr, WICBitmapUsePremultipliedAlpha, wicBitmap.put());
+    wil::com_ptr<ID2D1Bitmap1> bitmap;
+    if (SUCCEEDED(hr) && wicBitmap)
+    {
+        const D2D1_BITMAP_PROPERTIES1 bitmapProps = D2D1::BitmapProperties1(
+            D2D1_BITMAP_OPTIONS_NONE,
+            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+            _dpi,
+            _dpi);
+        hr = _d2dContext->CreateBitmapFromWicBitmap(wicBitmap.get(), &bitmapProps, bitmap.put());
+    }
+
+    PerfEmitDuration(L"thumbnails.ui_convert_us",
+                     PerfElapsedUs(convertStart),
+                     static_cast<uint64_t>(requestPtr->itemIndex),
+                     1u,
+                     hr);
+    if (FAILED(hr) || ! bitmap)
+    {
+        completeAsFallback();
+        return;
+    }
+
+    if (requestPtr->itemIndex >= _items.size())
+    {
+        _thumbnailLoadStats.staleDrops.fetch_add(1u, std::memory_order_relaxed);
+        return;
+    }
+
+    _items[requestPtr->itemIndex].thumbnail = std::move(bitmap);
+    _thumbnailLoadStats.completed.fetch_add(1u, std::memory_order_relaxed);
+    PerfEmitCounter(L"thumbnails.ui_apply_count", 1u);
+
+    if (! _hWnd)
+    {
+        return;
+    }
+
+    const auto& item             = _items[requestPtr->itemIndex];
+    const D2D1_RECT_F viewBounds = OffsetRect(item.bounds, -_horizontalOffset, -_scrollOffset);
+    RECT updateRect;
+    updateRect.left   = PxFromDip(viewBounds.left);
+    updateRect.top    = PxFromDip(viewBounds.top);
+    updateRect.right  = PxFromDip(viewBounds.right);
+    updateRect.bottom = PxFromDip(viewBounds.bottom);
+    InvalidateRect(_hWnd.get(), &updateRect, FALSE);
+}
+
+#ifdef ENABLE_TESTS
+FolderView::ThumbnailDebugSnapshot FolderView::DebugGetThumbnailSnapshot() const noexcept
+{
+    ThumbnailDebugSnapshot snapshot{};
+    snapshot.visible = _thumbnailsVisible;
+    snapshot.targetDip = static_cast<float>(_thumbnailLoadStats.targetDipX100.load(std::memory_order_acquire)) / 100.0f;
+    snapshot.queuedCount = _thumbnailLoadStats.queued.load(std::memory_order_acquire);
+    snapshot.completedCount = _thumbnailLoadStats.completed.load(std::memory_order_acquire);
+    snapshot.fallbackCount = _thumbnailLoadStats.fallback.load(std::memory_order_acquire);
+    snapshot.staleDropCount = _thumbnailLoadStats.staleDrops.load(std::memory_order_acquire);
+    snapshot.pendingCount = _thumbnailLoadStats.pendingBitmapCreates.load(std::memory_order_acquire);
+    snapshot.cacheHitCount = _thumbnailLoadStats.cacheHits.load(std::memory_order_acquire);
+    return snapshot;
+}
+
+void FolderView::DebugSetThumbnailProviderMode(DebugThumbnailProviderMode mode) noexcept
+{
+    _debugThumbnailProviderMode.store(mode, std::memory_order_release);
+}
+#endif
 
 void FolderView::OnBatchIconUpdate()
 {

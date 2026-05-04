@@ -68,6 +68,8 @@ BEGIN
         MENUITEM "&Bref",               IDM_LEFT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
         MENUITEM "&Détaillé",            IDM_LEFT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "Très &détaillé",      IDM_LEFT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Miniatures",          IDM_LEFT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
+        MENUITEM "Volet d’&aperçu",      IDM_LEFT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "Trier &par",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -78,12 +80,22 @@ BEGIN
             MENUITEM "&Taille",              IDM_LEFT_SORT_SIZE,MFT_STRING,MFS_ENABLED
             MENUITEM "&Attributs",                 IDM_LEFT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
+        POPUP "Affic&her",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Fichiers &masqués",        IDM_LEFT_SHOW_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Fichiers &système",        IDM_LEFT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "E&xtensions de fichier",   IDM_LEFT_SHOW_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Barre de &filtre",         IDM_LEFT_FILTER_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "Barre de &navigation",     IDM_LEFT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "Barre d’&état",            IDM_LEFT_STATUSBAR,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Agrandir/restaurer le volet", IDM_LEFT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "Permuter les &volets",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
-        MENUITEM MFT_SEPARATOR
-	        MENUITEM "&Filtrer...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Ac&tualiser",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "Chemin depuis l’autre &volet",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Ac&tualiser",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrer...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "Exemple de &superposition [dbg]",          65535,MFT_STRING,MFS_ENABLED
@@ -114,18 +126,18 @@ BEGIN
         MENUITEM "&Ouvrir / exécuter",       IDM_PANE_EXECUTE_OPEN,MFT_STRING,MFS_ENABLED
         MENUITEM "&Affichage",                    IDM_PANE_VIEW,MFT_STRING,MFS_ENABLED
         MENUITEM "Largeur d’&affichage...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
-        MENUITEM "Affichage &alternatif [todo]",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
-        POPUP "Afficher &avec [todo]",                      65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "Affichage &alternatif",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
+        POPUP "Afficher &avec",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(Vide)",                      0,MFT_STRING,MFS_GRAYED
         END
-        MENUITEM "&Modifier [todo]",                    IDM_PANE_EDIT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Largeur de &modification... [todo]", IDM_PANE_EDIT_WIDTH,MFT_STRING,MFS_ENABLED
-        POPUP "Modifier &avec [todo]",                      65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Modifier",                    IDM_PANE_EDIT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Modification &alternative", IDM_PANE_ALTERNATE_EDIT,MFT_STRING,MFS_ENABLED
+        POPUP "Modifier &avec",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(Vide)",                      0,MFT_STRING,MFS_GRAYED
         END
-        MENUITEM "Modifier un &nouveau fichier... [todo]",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
+        MENUITEM "Modifier un &nouveau fichier...",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
         MENUITEM "&Copier...",                  IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
         MENUITEM "&Déplacer/Renommer...",           IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
         POPUP "&Supprimer",                         65535,MFT_STRING,MFS_ENABLED
@@ -134,16 +146,15 @@ BEGIN
             MENUITEM "Déplacer vers la &corbeille",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
         END
         MENUITEM "&Supprimer définitivement",   IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Supprimer définitivement (avec &confirmation)", IDM_PANE_PERMANENT_DELETE_WITH_VALIDATION,MFT_STRING,MFS_ENABLED
         MENUITEM "&Propriétés",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
         MENUITEM "Menu con&textuel",      IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "Menu contextuel (&dossier courant) [todo]", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Sécurité... [todo]",                  IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
+        MENUITEM "Menu contextuel (&dossier courant)", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Sécurité...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "Modifier les &attributs... [todo]", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+        MENUITEM "Modifier les &attributs...", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         MENUITEM "Changer la &casse...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Compresser... [todo]",              IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Décompresser... [todo]",            IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Compresser...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Décompresser...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
         POPUP "&Nouveau",                            65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "&Dossier...",                IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
@@ -155,10 +166,10 @@ BEGIN
     END
     POPUP "&Édition",                          65535,MFT_STRING,MFS_ENABLED
     BEGIN
-        MENUITEM "Cou&per [todo]",                         IDM_PANE_CLIPBOARD_CUT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Cou&per",                                IDM_PANE_CLIPBOARD_CUT,MFT_STRING,MFS_ENABLED
         MENUITEM "&Copier",           IDM_PANE_CLIPBOARD_COPY,MFT_STRING,MFS_ENABLED
         MENUITEM "&Coller",         IDM_PANE_CLIPBOARD_PASTE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Coller le raccourci [todo]",               IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Coller le raccourci",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "Copier le chemin et le nom comme texte", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
         MENUITEM "Copier le nom comme texte",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
@@ -198,26 +209,25 @@ BEGIN
         MENUITEM "Changer de &dossier...", IDM_PANE_CHANGE_DIRECTORY,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Comparer les &dossiers...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Calculer l’&espace occupé", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Calculer la &taille des dossiers", IDM_PANE_CALCULATE_DIRECTORY_SIZES,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Rechercher des &fichiers et dossiers...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Créer une liste de &fichiers... [todo]", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Aller vers la cible du raccourci ou du &lien [todo]", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
+	        MENUITEM "Créer une liste de &fichiers...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
+	        MENUITEM "Aller vers la cible du raccourci ou du &lien", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "Liste des fichiers &ouverts [todo]", IDM_PANE_LIST_OPENED_FILES,MFT_STRING,MFS_ENABLED
+        MENUITEM "Liste des fichiers &ouverts", IDM_PANE_LIST_OPENED_FILES,MFT_STRING,MFS_ENABLED
         MENUITEM "Afficher l’&historique des dossiers", IDM_PANE_SHOW_FOLDERS_HISTORY,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "Connecter un lecteur &réseau...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
         MENUITEM "Se dé&connecter...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Dossiers &partagés... [todo]", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
+        MENUITEM "Dossiers &partagés...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
         MENUITEM "Gestionnaire de &connexions...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Invite de commandes", IDM_PANE_OPEN_COMMAND_SHELL,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Recherche rapide / saisie de ligne de commande [todo]", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
-        MENUITEM "Envoyer le dossier courant vers la ligne de commande [todo]", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
-        MENUITEM "Envoyer le nom de fichier vers la ligne de commande [todo]", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Recherche rapide", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
+        MENUITEM "Envoyer le dossier courant vers la ligne de commande", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Envoyer le nom de fichier vers la ligne de commande", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
         MENUITEM "Volet &Menu", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Relire les associations [todo]", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
-        POPUP "Menu &utilisateur [todo]",                   65535,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Relire les associations", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        POPUP "Menu &utilisateur",                          65535,MFT_STRING,MFS_ENABLED
         BEGIN
             MENUITEM "(Vide)",                     0,MFT_STRING,MFS_GRAYED
         END
@@ -251,27 +261,15 @@ BEGIN
             MENUITEM "&Sombre",                       IDM_VIEW_THEME_DARK,MFT_STRING,MFS_ENABLED
             MENUITEM "&Arc-en-ciel",                    IDM_VIEW_THEME_RAINBOW,MFT_STRING,MFS_ENABLED
             MENUITEM "Contraste &élevé (application)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Thème précédent",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
+            MENUITEM "Thème suivant",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
         MENUITEM "Basculer en plein &écran", IDM_APP_FULL_SCREEN,MFT_STRING,MFS_ENABLED
         MENUITEM "Menu &fenêtre",            IDM_VIEW_WINDOW_MENU,MFT_STRING,MFS_ENABLED
         MENUITEM "Changer le &volet actif",            IDM_VIEW_SWITCH_PANE_FOCUS,MFT_STRING,MFS_ENABLED
         MENUITEM "Éléments en échec des opérations de &fichiers", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
-        POPUP "&Volet",                          65535,MFT_STRING,MFS_ENABLED
-        BEGIN
-            MENUITEM "Afficher les fichiers &masqués",               IDM_VIEW_PANE_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Afficher les fichiers &système",               IDM_VIEW_PANE_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Afficher les e&xtensions de fichier [todo]",            IDM_VIEW_PANE_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
-            MENUITEM "Afficher les &miniatures [todo]",                 IDM_VIEW_PANE_THUMBNAILS,MFT_STRING,MFS_ENABLED
-            MENUITEM "Afficher le volet d’&aperçu [todo]",               IDM_VIEW_PANE_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
-            MENUITEM "Afficher la barre de &filtre [todo]",                 IDM_VIEW_PANE_FILTER_BAR,MFT_STRING,MFS_ENABLED
-            MENUITEM MFT_SEPARATOR
-            MENUITEM "Afficher la barre de navigation (&gauche) [todo]",      IDM_VIEW_PANE_NAVBAR_LEFT,MFT_STRING,MFS_ENABLED
-            MENUITEM "Afficher la barre de navigation (&droite) [todo]",     IDM_VIEW_PANE_NAVBAR_RIGHT,MFT_STRING,MFS_ENABLED
-            MENUITEM MFT_SEPARATOR
-            MENUITEM "Barre d’&état (gauche)",               IDM_VIEW_PANE_STATUSBAR_LEFT,MFT_STRING,MFS_ENABLED
-            MENUITEM "Barre d’ét&at (droite)",              IDM_VIEW_PANE_STATUSBAR_RIGHT,MFT_STRING,MFS_ENABLED
-        END
         MENUITEM "Barre de &fonctions",                IDM_VIEW_FUNCTIONBAR,MFT_STRING,MFS_ENABLED
         MENUITEM "Barre de &menus",                    IDM_VIEW_MENUBAR,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
@@ -288,7 +286,7 @@ BEGIN
             MENUITEM "&Dossier racine",                    IDM_RIGHT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
             MENUITEM "Chemin depuis l’autre &volet",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Emplacements &favoris... [todo]",      IDM_RIGHT_HOT_PATHS,MFT_STRING,MFS_ENABLED
+            MENUITEM "Emplacements &favoris...",      IDM_RIGHT_HOT_PATHS,MFT_STRING,MFS_ENABLED
             MENUITEM "(Vide)",                      0,MFT_STRING,MFS_GRAYED
             MENUITEM MFT_SEPARATOR
             MENUITEM "(Vide)",                      0,MFT_STRING,MFS_GRAYED
@@ -297,6 +295,8 @@ BEGIN
         MENUITEM "&Bref",               IDM_RIGHT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
         MENUITEM "&Détaillé",            IDM_RIGHT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM "Très &détaillé",      IDM_RIGHT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Miniatures",          IDM_RIGHT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
+        MENUITEM "Volet d’&aperçu",      IDM_RIGHT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "Trier &par",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -307,12 +307,22 @@ BEGIN
             MENUITEM "&Taille",              IDM_RIGHT_SORT_SIZE,MFT_STRING,MFS_ENABLED
             MENUITEM "&Attributs",                 IDM_RIGHT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
         END
+        POPUP "Affic&her",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "Fichiers &masqués",        IDM_RIGHT_SHOW_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Fichiers &système",        IDM_RIGHT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "E&xtensions de fichier",   IDM_RIGHT_SHOW_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Barre de &filtre",         IDM_RIGHT_FILTER_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "Barre de &navigation",     IDM_RIGHT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "Barre d’&état",            IDM_RIGHT_STATUSBAR,MFT_STRING,MFS_ENABLED
+        END
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Agrandir/restaurer le volet", IDM_RIGHT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "Permuter les &volets",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
-        MENUITEM MFT_SEPARATOR
-	        MENUITEM "&Filtrer...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Ac&tualiser",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "Chemin depuis l’autre &volet",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Ac&tualiser",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrer...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
 	        POPUP "Exemple de &superposition [dbg]",          65535,MFT_STRING,MFS_ENABLED
@@ -340,6 +350,7 @@ BEGIN
 	    POPUP "&Aide",                          65535,MFT_STRING | MFT_RIGHTJUSTIFY,MFS_ENABLED
     BEGIN
         MENUITEM "Afficher les &raccourcis...", IDM_APP_SHOW_SHORTCUTS,MFT_STRING,MFS_ENABLED
+        MENUITEM "Aide &externe",        IDM_APP_EXTERNAL_HELP,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "À &propos...",                  IDM_ABOUT,MFT_STRING,MFS_ENABLED
     END
@@ -404,6 +415,18 @@ BEGIN
     PUSHBUTTON      "Annuler",IDCANCEL,250,255,50,14
 END
 
+IDD_SHARED_DIRECTORIES DIALOGEX 0, 0, 520, 240
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | DS_SHELLFONT
+CAPTION "Dossiers partagés"
+FONT 9, "Segoe UI"
+BEGIN
+    CONTROL         "",IDC_SHARED_DIRECTORIES_LIST,"SysListView32",LVS_REPORT | LVS_SINGLESEL | WS_BORDER | WS_TABSTOP,8,8,504,190
+    LTEXT           "Aucun dossier partagé n’est disponible.",IDC_SHARED_DIRECTORIES_EMPTY,14,18,492,24
+    PUSHBUTTON      "Ouvrir",IDC_SHARED_DIRECTORIES_OPEN,266,218,70,14
+    PUSHBUTTON      "Gérer...",IDC_SHARED_DIRECTORIES_MANAGE,342,218,70,14
+    DEFPUSHBUTTON   "Fermer",IDCANCEL,420,218,92,14
+END
+
 STRINGTABLE
 BEGIN
     IDS_APP_TITLE           "RedSalamander"
@@ -424,11 +447,13 @@ BEGIN
     IDS_PREFS_CAT_VIEWERS   "Visionneuses"
     IDS_PREFS_CAT_VIEWERS_DESC "Association des extensions de fichier aux visionneuses."
     IDS_PREFS_CAT_EDITORS   "Éditeurs"
-    IDS_PREFS_CAT_EDITORS_DESC "Association des extensions de fichier aux éditeurs."
-    IDS_PREFS_EDITORS_PLACEHOLDER "La configuration des éditeurs externes est prévue dans une prochaine version."
-    IDS_PREFS_EDITORS_EMPTY_TITLE "Aucun éditeur configuré"
-    IDS_PREFS_EDITORS_EMPTY_BODY "La configuration des éditeurs externes est prévue dans une prochaine version."
-    IDS_PREFS_EDITORS_EMPTY_CAPTION "Cette page utilisera la même mise en page en cartes que le reste des Préférences lorsqu’elle sera disponible."
+    IDS_PREFS_CAT_EDITORS_DESC "Configurer les actions d'édition principale et alternative."
+    IDS_PREFS_CAT_USER_MENU "Menu utilisateur"
+    IDS_PREFS_CAT_USER_MENU_DESC "Configurer les commandes externes personnalisées."
+    IDS_PREFS_EDITORS_PLACEHOLDER "Configurer les actions d'édition principale et alternative."
+    IDS_PREFS_EDITORS_EMPTY_TITLE "Aucune action d'éditeur"
+    IDS_PREFS_EDITORS_EMPTY_BODY "Ajoutez des actions d'éditeur dans les paramètres, puis choisissez les valeurs principale et alternative ici."
+    IDS_PREFS_EDITORS_EMPTY_CAPTION "Les actions d'éditeur utilisent les mêmes macros de programme externe que Voir, Voir autrement et Modifier avec."
     IDS_PREFS_CAT_KEYBOARD  "Clavier"
     IDS_PREFS_CAT_KEYBOARD_DESC "Raccourcis clavier."
     IDS_PREFS_CAT_MOUSE     "Souris"
@@ -575,13 +600,14 @@ BEGIN
     IDS_CONNECTIONS_BTN_CLOSE "Fermer"
     IDS_CONNECTIONS_QUICK_CONNECT "<Connexion rapide>"
     IDS_CONNECTIONS_PROMPT_PASSWORD_CAPTION "Mot de passe requis"
-    IDS_CONNECTIONS_PROMPT_PASSWORD_MESSAGE_FMT "Saisissez le mot de passe de la connexion ""{}""."
+    IDS_CONNECTIONS_PROMPT_PASSWORD_MESSAGE_FMT "Saisissez le mot de passe de la connexion ""{0}""."
     IDS_CONNECTIONS_PROMPT_PASSPHRASE_CAPTION "Phrase secrète requise"
-    IDS_CONNECTIONS_PROMPT_PASSPHRASE_MESSAGE_FMT "Saisissez la phrase secrète de la connexion ""{}""."
+    IDS_CONNECTIONS_PROMPT_PASSPHRASE_MESSAGE_FMT "Saisissez la phrase secrète de la connexion ""{0}""."
     IDS_CONNECTIONS_PROMPT_FTP_CREDENTIALS_CAPTION "Identifiants requis"
-    IDS_CONNECTIONS_PROMPT_FTP_ANON_REJECTED_MESSAGE_FMT "La connexion anonyme a été refusée par le serveur FTP. Saisissez les identifiants de la connexion ""{}""."
+    IDS_CONNECTIONS_PROMPT_FTP_ANON_REJECTED_MESSAGE_FMT "La connexion anonyme a été refusée par le serveur FTP. Saisissez les identifiants de la connexion ""{0}""."
     IDS_CONNECTIONS_ERR_PROMPT_USER_REQUIRED "Le nom d’utilisateur est requis."
     IDS_CONNECTIONS_ERR_PROMPT_PASSWORD_REQUIRED "Le mot de passe est requis."
+    IDS_CONNECTIONS_CONFIRM_DISCARD_MESSAGE "Des modifications de connexion ne sont pas enregistrées. Choisissez OK pour les abandonner, ou Annuler pour continuer l’édition."
     IDS_CONNECTIONS_BTN_SHOW_SECRET "Afficher"
     IDS_CONNECTIONS_BTN_HIDE_SECRET "Masquer"
     IDS_CONNECTIONS_BROWSE_PRIVATE_KEY "Sélectionner la clé privée"
@@ -600,7 +626,7 @@ BEGIN
     IDS_CONNECTIONS_ERR_PASSPHRASE_REQUIRED_TO_SAVE "Une phrase secrète est requise pour enregistrer (ou décochez ""Enregistrer le mot de passe"")."
     IDS_CONNECTIONS_ERR_PASSWORD_REQUIRED_TO_SAVE "Un mot de passe est requis pour enregistrer."
     IDS_CONNECTIONS_ERR_PASSWORD_SAVE_REQUIRED "Les connexions par mot de passe nécessitent un mot de passe, enregistré ou saisi au moment de la connexion."
-    IDS_CONNECTIONS_ERR_SAVE_CREDENTIAL_FAILED_FMT "Impossible d’enregistrer l’identifiant de la connexion '{}'.\r\n\r\n{}"
+    IDS_CONNECTIONS_ERR_SAVE_CREDENTIAL_FAILED_FMT "Impossible d’enregistrer l’identifiant de la connexion '{0}'.\r\n\r\n{1}"
     IDS_CONNECTIONS_HELLO_PROMPT_CREDENTIAL "Vérifiez votre identité avec Windows Hello pour accéder à l’identifiant enregistré."
     IDS_PREFS_GENERAL_LABEL_MENU_BAR "Barre de menus"
     IDS_PREFS_GENERAL_DESC_MENU_BAR "Afficher ou masquer la barre de menus principale."
@@ -634,7 +660,7 @@ BEGIN
     IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_ACRYLIC "Acrylique"
     IDS_CRASH_DETECTED_TITLE "Crash précédent détecté"
     IDS_CRASH_DETECTED_MESSAGE "Un vidage mémoire d’une exécution précédente a été trouvé.\r\n\r\nOuvrir le dossier du crash ?"
-    IDS_CRASH_DETECTED_MESSAGE_FMT "Un vidage mémoire d’une exécution précédente a été écrit dans :\r\n{}\r\n\r\nOuvrir le dossier du crash ?"
+    IDS_CRASH_DETECTED_MESSAGE_FMT "Un vidage mémoire d’une exécution précédente a été écrit dans :\r\n{0}\r\n\r\nOuvrir le dossier du crash ?"
     IDS_CRASH_QUARANTINE_TITLE "Récupération après crash"
     IDS_CRASH_QUARANTINE_MESSAGE_FMT "L’exécution précédente a planté pendant que le plug-in de système de fichiers '{0}' était actif.\r\n\r\nDésactiver ce plug-in pour éviter des crashs répétés ?"
     IDS_CRASH_QUARANTINE_MESSAGE_PLURAL_FMT "L’exécution précédente a planté pendant que les plug-ins de système de fichiers suivants étaient actifs :\r\n{0}\r\n\r\nDésactiver ces plug-ins pour éviter des crashs répétés ?"
@@ -656,6 +682,8 @@ BEGIN
     IDS_PREFS_PANES_DESC_HISTORY_SIZE "Nombre maximal de dossiers conservés dans l’historique."
     IDS_PREFS_PANES_OPTION_BRIEF "Bref"
     IDS_PREFS_PANES_OPTION_DETAILED "Détaillé"
+    IDS_PREFS_PANES_OPTION_EXTRA_DETAILED "Très détaillé"
+    IDS_PREFS_PANES_OPTION_THUMBNAILS "Miniatures"
     IDS_PREFS_PANES_OPTION_ASCENDING "Croissant"
     IDS_PREFS_PANES_OPTION_DESCENDING "Décroissant"
     IDS_PREFS_PANES_OPTION_HIDE "Masquer"
@@ -673,7 +701,7 @@ BEGIN
     IDS_PREFS_PANES_CHECK_SHOW_SYSTEM_FILES "Afficher les fichiers et dossiers système"
     IDS_PREFS_VIEWERS_COL_EXTENSION "Extension"
     IDS_PREFS_VIEWERS_COL_VIEWER "Visionneuse"
-    IDS_PREFS_VIEWERS_HINT "Associez les extensions de fichier à la visionneuse utilisée avec F3."
+    IDS_PREFS_VIEWERS_HINT "Associez les anciens plug-ins de visionneuse par extension et choisissez les visionneuses principale et alternative des paramètres."
     IDS_PREFS_VIEWERS_WARNING_ENTER_EXTENSION "Saisissez une extension comme .txt"
     IDS_PREFS_VIEWERS_WARNING_SELECT_VIEWER "Sélectionnez un plug-in de visionneuse."
     IDS_PREFS_VIEWERS_OOM_UPDATE "Mémoire insuffisante lors de la mise à jour de l’association."
@@ -866,9 +894,9 @@ BEGIN
     IDS_PREFS_PLUGINS_CUSTOM_PATHS_INVALID "Sélectionnez un fichier DLL."
     IDS_PREFS_PLUGINS_CUSTOM_PATHS_EMPTY "Aucune DLL de plug-in personnalisée ajoutée. Utilisez Ajouter... pour ajouter des chemins de DLL."
     IDS_PREFS_PLUGINS_CONFIGURE_ELLIPSIS "Configurer..."
-    IDS_PREFS_PLUGINS_CONFIGURE_OPEN_FAILED_FMT "Impossible d’ouvrir la configuration de :\r\n\r\n{}\r\n\r\nErreur : 0x{:08X}"
+    IDS_PREFS_PLUGINS_CONFIGURE_OPEN_FAILED_FMT "Impossible d’ouvrir la configuration de :\r\n\r\n{0}\r\n\r\nErreur : 0x{1:08X}"
     IDS_PREFS_PLUGINS_DETAILS_HINT "Sélectionnez « Plug-ins » dans l’arborescence de navigation pour revenir à la liste des plug-ins."
-    IDS_PREFS_PLUGINS_DETAILS_ID_FMT "Id: {}"
+    IDS_PREFS_PLUGINS_DETAILS_ID_FMT "Id: {0}"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_LABEL "Configuration"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE "La configuration n’est pas disponible pour ce plug-in."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT "Aucune configuration n’est enregistrée pour ce plug-in (valeurs par défaut utilisées)."
@@ -879,6 +907,14 @@ BEGIN
     IDS_PREFS_PLUGINS_EMPTY_TITLE "Rien à configurer"
     IDS_PREFS_PLUGINS_EMPTY_BODY "{0} n’expose aucun paramètre configurable."
     IDS_PREFS_PLUGINS_EMPTY_CAPTION "Il est prêt à l’emploi."
+    IDS_FILEACTION_VIEWER_UNAVAILABLE_TITLE "Action de visualisation indisponible"
+    IDS_FILEACTION_EDITOR_UNAVAILABLE_TITLE "Action d’édition indisponible"
+    IDS_FMT_FILEACTION_VIEWER_NOT_AVAILABLE "L’action de visualisation « {0} » n’est pas disponible pour {1}."
+    IDS_FMT_FILEACTION_EDITOR_NOT_AVAILABLE "L’action d’édition « {0} » n’est pas disponible pour {1}."
+    IDS_FMT_FILEACTION_VIEWER_LAUNCH_FAILED "Impossible de lancer l’action de visualisation « {0} » pour {1}. Erreur : 0x{2:08X}."
+    IDS_FMT_FILEACTION_EDITOR_LAUNCH_FAILED "Impossible de lancer l’action d’édition « {0} » pour {1}. Erreur : 0x{2:08X}."
+    IDS_FMT_FILEACTION_ALTERNATE_VIEWER_NOT_CONFIGURED "Aucun visualiseur alternatif n’est configuré pour {0}."
+    IDS_FMT_FILEACTION_ALTERNATE_EDITOR_NOT_CONFIGURED "Aucun éditeur alternatif n’est configuré pour {0}."
     IDS_BTN_TEST "Test"
     IDS_BTN_TEST_ALL "Tout tester"
     IDS_PREFS_BUTTON_RESET_ALL "Tout réinitialiser"
@@ -890,7 +926,7 @@ BEGIN
     IDS_MSG_FAILED_CREATE_FOLDERWINDOW "Impossible de créer FolderWindow."
     IDS_MSG_FAILED_CREATE_LEFT_PANE "Impossible de créer le volet gauche."
     IDS_MSG_FAILED_CREATE_RIGHT_PANE "Impossible de créer le volet droit."
-    IDS_FMT_INVALID_PATH    "Le chemin '{}' n’est pas valide ou n’existe pas."
+    IDS_FMT_INVALID_PATH    "Le chemin '{0}' n’est pas valide ou n’existe pas."
     IDS_MENU_EMPTY          "(Vide)"
     IDS_MENU_CHANGE_DRIVE   "Changer de &lecteur"
     IDS_MENU_CONNECTIONS "Connexions"
@@ -916,16 +952,16 @@ END
 
 STRINGTABLE
 BEGIN
-    IDS_FMT_DISK_INFO_HEADER "Informations du disque : {}"
-    IDS_FMT_DISK_VOLUME_LABEL "Nom du volume : {}"
-    IDS_FMT_DISK_FILE_SYSTEM "Système de fichiers : {}"
-    IDS_FMT_DISK_TOTAL_SPACE "Espace total : {} ({:L} octets)"
-    IDS_FMT_DISK_USED_SPACE "Espace utilisé : {} ({:L} octets)"
-    IDS_FMT_DISK_FREE_SPACE "Espace libre : {} ({:L} octets)"
-    IDS_FMT_DISK_USED_PERCENT "{:.1Lf} % utilisés"
+    IDS_FMT_DISK_INFO_HEADER "Informations du disque : {0}"
+    IDS_FMT_DISK_VOLUME_LABEL "Nom du volume : {0}"
+    IDS_FMT_DISK_FILE_SYSTEM "Système de fichiers : {0}"
+    IDS_FMT_DISK_TOTAL_SPACE "Espace total : {0} ({1:L} octets)"
+    IDS_FMT_DISK_USED_SPACE "Espace utilisé : {0} ({1:L} octets)"
+    IDS_FMT_DISK_FREE_SPACE "Espace libre : {0} ({1:L} octets)"
+    IDS_FMT_DISK_USED_PERCENT "{0:.1Lf} % utilisés"
     IDS_MENU_DISK_PROPERTIES "Propriétés du disque..."
     IDS_MENU_DISK_CLEANUP   "Nettoyage du disque..."
-    IDS_FMT_HRESULT_DETAILS "0x{:08X}: {}"
+    IDS_FMT_HRESULT_DETAILS "0x{0:08X}: {1}"
     IDS_OVERLAY_TITLE_OPERATION_FAILED "Échec de l’opération"
     IDS_OVERLAY_TITLE_RENDERING_ERROR "Erreur de rendu"
     IDS_OVERLAY_TITLE_ENUMERATION_FAILED "Impossible d’énumérer le dossier"
@@ -940,23 +976,23 @@ END
 STRINGTABLE
 BEGIN
     IDS_OVERLAY_MSG_ACCESS_DENIED_FMT
-                            "Vous n’avez pas l’autorisation d’afficher '{}'.\r\n\r\n{}"
+                            "Vous n’avez pas l’autorisation d’afficher '{0}'.\r\n\r\n{1}"
     IDS_OVERLAY_MSG_LOGIN_FAILED_FMT
-                            "Impossible de s’authentifier lors de l’accès à '{}'.\r\n\r\n{}"
+                            "Impossible de s’authentifier lors de l’accès à '{0}'.\r\n\r\n{1}"
     IDS_OVERLAY_MSG_INVALID_PASSWORD_FMT
-                            "Impossible de s’authentifier, car aucun mot de passe enregistré n’est disponible pour '{}'.\r\n\r\n{}\r\n\r\nOuvrez le gestionnaire de connexions et ressaisissez le mot de passe (vérifiez que « Enregistrer le mot de passe » est activé)."
+                            "Impossible de s’authentifier, car aucun mot de passe enregistré n’est disponible pour '{0}'.\r\n\r\n{1}\r\n\r\nOuvrez le gestionnaire de connexions et ressaisissez le mot de passe (vérifiez que « Enregistrer le mot de passe » est activé)."
     IDS_OVERLAY_MSG_TLS_CERTIFICATE_FAILED_FMT
-                            "Impossible d’établir une connexion sécurisée lors de l’accès à '{}'.\r\n\r\nLe certificat du serveur n’a pas pu être validé. Vérifiez que la chaîne de certificats est approuvée sur ce PC, ou corrigez le certificat du serveur.\r\n\r\n{}"
+                            "Impossible d’établir une connexion sécurisée lors de l’accès à '{0}'.\r\n\r\nLe certificat du serveur n’a pas pu être validé. Vérifiez que la chaîne de certificats est approuvée sur ce PC, ou corrigez le certificat du serveur.\r\n\r\n{1}"
     IDS_OVERLAY_MSG_ACCESSING_FOLDER_FMT
-                            "Accès à '{}'.\r\n\r\nCela peut prendre un moment."
+                            "Accès à '{0}'.\r\n\r\nCela peut prendre un moment."
     IDS_OVERLAY_MSG_ENUMERATION_CANCELED
                             "Le chargement du dossier a été annulé.\r\n\r\nAucun élément n’a été chargé."
     IDS_OVERLAY_TITLE_FS_PLUGIN_NOT_AVAILABLE
                             "Plug-in de système de fichiers indisponible"
     IDS_OVERLAY_MSG_FS_PLUGIN_NOT_AVAILABLE_FMT
-                            "Impossible de charger le plug-in FileSystem.\r\n\r\nVérifiez que FileSystem.dll se trouve dans le dossier Plug-ins à côté de RedSalamander.exe.\r\n\r\n{}"
+                            "Impossible de charger le plug-in FileSystem.\r\n\r\nVérifiez que FileSystem.dll se trouve dans le dossier Plug-ins à côté de RedSalamander.exe.\r\n\r\n{0}"
     IDS_OVERLAY_MSG_DISCONNECTED_FMT
-                            "L’emplacement '{}' n’est plus disponible.\r\n\r\nReconnectez le lecteur ou choisissez un autre emplacement."
+                            "L’emplacement '{0}' n’est plus disponible.\r\n\r\nReconnectez le lecteur ou choisissez un autre emplacement."
 END
 
 STRINGTABLE
@@ -964,7 +1000,7 @@ BEGIN
     IDS_OVERLAY_TITLE_WARNING "Avertissement"
     IDS_OVERLAY_TITLE_INFORMATION "Information"
     IDS_OVERLAY_DEBUG_SAMPLE_MSG_ERROR_FMT
-                            "Impossible de terminer l’opération.\r\n\r\n{}"
+                            "Impossible de terminer l’opération.\r\n\r\n{0}"
     IDS_OVERLAY_DEBUG_SAMPLE_MSG_WARNING
                             "Ceci est un exemple d’avertissement utilisé pour les tests d’interface.\r\n\r\nCertaines opérations peuvent prendre plus de temps que prévu."
     IDS_OVERLAY_DEBUG_SAMPLE_MSG_INFORMATION
@@ -976,7 +1012,7 @@ END
 STRINGTABLE
 BEGIN
     IDS_CAPTION_PLUGINS_MANAGER      "Plug-ins"
-    IDS_FMT_PLUGIN_TEST_ALL_RESULT   "Résultats du test des plug-ins :\r\n\r\nOK : {:L}\r\nÉchecs : {:L}"
+    IDS_FMT_PLUGIN_TEST_ALL_RESULT   "Résultats du test des plug-ins :\r\n\r\nOK : {0:L}\r\nÉchecs : {1:L}"
     IDS_MSG_PLUGIN_TEST_OK           "Test du plug-in réussi."
     IDS_MSG_PLUGIN_TEST_FAILED       "Échec du test du plug-in."
     IDS_FMT_PLUGIN_TEST_FAILED_NAMED "Échec du test du plug-in : {0}"
@@ -996,9 +1032,9 @@ BEGIN
     IDS_PLUGIN_SUFFIX_DISABLED       "(désactivé)"
     IDS_PLUGIN_SUFFIX_UNAVAILABLE    "(indisponible)"
     IDS_FILEDLG_FILTER_DLL           "Fichiers DLL (*.dll)\0*.dll\0Tous les fichiers (*.*)\0*.*\0"
-    IDS_FMT_PLUGIN_ABOUT             "{}\r\n\r\nId : {}\r\nVersion : {}\r\nChemin : {}"
+    IDS_FMT_PLUGIN_ABOUT             "{0}\r\n\r\nId : {1}\r\nVersion : {2}\r\nChemin : {3}"
     IDS_MSG_PLUGIN_CONFIG_APPLY_FAILED "Impossible d’appliquer la configuration du plug-in."
-    IDS_FMT_SETTINGS_SAVE_FAILED     "Impossible d’enregistrer les paramètres dans :\r\n\r\n{}\r\n\r\nErreur : 0x{:08X}\r\n\r\nSi le fichier est ouvert dans un autre programme, fermez-le puis réessayez."
+    IDS_FMT_SETTINGS_SAVE_FAILED     "Impossible d’enregistrer les paramètres dans :\r\n\r\n{0}\r\n\r\nErreur : 0x{1:08X}\r\n\r\nSi le fichier est ouvert dans un autre programme, fermez-le puis réessayez."
     IDS_CAPTION_SETTINGS_RELOADED_FROM_DISK "Paramètres rechargés"
     IDS_FMT_SETTINGS_RELOAD_CONFLICT_KEEP_EDITING "Les paramètres ont changé sur le disque alors que '{0}' contient des modifications non enregistrées.\r\n\r\nOui recharge depuis le disque et abandonne les modifications en cours.\r\nNon conserve les modifications en cours."
     IDS_FMT_SETTINGS_RELOAD_CONFLICT_STALE_SAVE "Les paramètres ont changé sur le disque après le début de la modification de '{0}'.\r\n\r\nOui remplace le fichier par les modifications en cours.\r\nNon recharge depuis le disque et abandonne les modifications en cours.\r\nAnnuler continue la modification sans enregistrer."
@@ -1010,15 +1046,15 @@ BEGIN
     IDS_PLUGIN_BUTTON_REMOVE         "Supprimer"
     IDS_PLUGIN_BUTTON_DISABLE        "Désactiver"
     IDS_PLUGIN_BUTTON_ENABLE         "Activer"
-    IDS_FMT_STATUS_SELECTED_FILES          "{:L} fichier{:s} sélectionné{:s} : {}"
-    IDS_FMT_STATUS_SELECTED_FOLDERS_FILES  "{:L} dossier{:s} / {:L} fichier{:s} sélectionné{:s} : {}"
-    IDS_FMT_STATUS_SELECTED_FOLDERS        "{:L} dossier{:s} sélectionné{:s} : {}"
+    IDS_FMT_STATUS_SELECTED_FILES          "{0:L} fichier{1:s} sélectionné{2:s} : {3}"
+    IDS_FMT_STATUS_SELECTED_FOLDERS_FILES  "{0:L} dossier{1:s} / {2:L} fichier{3:s} sélectionné{4:s} : {5}"
+    IDS_FMT_STATUS_SELECTED_FOLDERS        "{0:L} dossier{1:s} sélectionné{2:s} : {3}"
     IDS_STATUS_NO_SELECTION                "Aucune sélection"
-    IDS_FMT_STATUS_INCREMENTAL_SEARCH      "recherche: {}"
-    IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS "{} • {} • {}"
-    IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS      "{} • {}"
-    IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS       "DIR • {} • {} • {}"
-    IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS            "DIR • {} • {}"
+    IDS_FMT_STATUS_INCREMENTAL_SEARCH      "recherche: {0}"
+    IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS "{0} • {1} • {2}"
+    IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS      "{0} • {1}"
+    IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS       "DIR • {0} • {1} • {2}"
+    IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS            "DIR • {0} • {1}"
     IDS_TIP_STATUS_SORT                                 "Cliquer pour changer le tri"
     IDS_STATUS_SORT_INDICATOR                           "⇅"
     IDS_FOLDERVIEW_TYPE_FOLDER                          "Dossier"
@@ -1027,7 +1063,6 @@ BEGIN
     IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER            "Cette opération exige que la source et la destination soient des dossiers différents."
     IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS               "Cette opération exige des systèmes de fichiers source et destination compatibles."
     IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED                  "La création de dossier n’est pas prise en charge par le système de fichiers actuel."
-    IDS_MSG_PANE_CALCULATE_DIRECTORY_SIZES_FAILED        "Impossible d’ouvrir la visionneuse Espace pour calculer la taille des dossiers."
     IDS_FMT_PANE_CHANGE_CASE_FAILED                      "Impossible de changer la casse.\r\n\r\nErreur : 0x{0:08X}"
     IDS_CAPTION_PROPERTIES                               "Propriétés"
     IDS_PROPERTIES_COL_KEY                               "Propriété"
@@ -1046,6 +1081,11 @@ BEGIN
     IDS_LABEL_CREATE_DIR_IN                              "Créer dans :"
     IDS_LABEL_CREATE_DIR_NAME                            "Nom du dossier :"
     IDS_BUTTON_CREATE                                    "Créer"
+    IDS_CAPTION_EDIT_NEW                                 "Modifier un nouveau fichier"
+    IDS_LABEL_EDIT_NEW_IN                                "Créer dans :"
+    IDS_LABEL_EDIT_NEW_NAME                              "Nom du fichier :"
+    IDS_LABEL_EDIT_NEW_EDITOR                            "Éditeur :"
+    IDS_BUTTON_CREATE_AND_EDIT                           "Créer && modifier"
     IDS_CAPTION_SELECTION_MASK                           "Sélectionner ou désélectionner"
     IDS_LABEL_SELECTION_MASK                             "Sélectionner ou désélectionner"
     IDS_CAPTION_SELECTION_MASK_SELECT                    "Sélectionner"
@@ -1083,33 +1123,163 @@ BEGIN
     IDS_MSG_PANE_CREATE_DIR_EMPTY_NAME                   "Le nom du dossier ne peut pas être vide."
     IDS_MSG_PANE_CREATE_DIR_DOT_NAME                     "Le nom du dossier ne peut pas être '.' ou '..'."
     IDS_MSG_PANE_CREATE_DIR_INVALID_WHITESPACE           "Le nom du dossier ne peut pas contenir de saut de ligne ni de tabulation."
-    IDS_FMT_PANE_CREATE_DIR_FAILED                       "Impossible de créer le dossier :\r\n\r\n{}\r\n\r\nErreur : 0x{:08X}"
-    IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN           "Le plug-in de système de fichiers '{}' ne prend pas en charge la création de dossiers."
-    IDS_FMT_FILEOPS_CONFIRM_COPY                         "Copier {} :\r\nde : {}\r\n\r\nvers : {}"
-    IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Déplacer {} :\r\nde : {}\r\n\r\nvers : {}"
-    IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE             "Supprimer définitivement {} :\r\nde : {}\r\n\r\nCette action est irréversible."
-    IDS_FMT_FILEOPS_INVALID_DESTINATION_OVERLAP          "Cette opération ne peut pas cibler le même élément ni l’un de ses sous-dossiers.\r\n\r\nSource :\r\n{}\r\n\r\nDossier de destination :\r\n{}"
+    IDS_FMT_PANE_CREATE_DIR_FAILED                       "Impossible de créer le dossier :\r\n\r\n{0}\r\n\r\nErreur : 0x{1:08X}"
+    IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN           "Le plug-in de système de fichiers '{0}' ne prend pas en charge la création de dossiers."
+    IDS_MSG_PANE_EDIT_NEW_UNSUPPORTED                    "La création de fichier n’est pas prise en charge par le système de fichiers actuel."
+    IDS_FMT_PANE_EDIT_NEW_UNSUPPORTED_PLUGIN             "Le plug-in de système de fichiers '{0}' ne prend pas en charge la création de fichiers."
+    IDS_FMT_PANE_EDIT_NEW_FAILED                         "Impossible de créer le fichier :\r\n\r\n{0}\r\n\r\nErreur : 0x{1:08X}"
+    IDS_MSG_PANE_EDIT_NEW_INVALID_CHARS                  "Un nom de fichier ne peut contenir aucun des caractères suivants :\r\n\\ / : * ? "" < > |"
+    IDS_MSG_PANE_EDIT_NEW_EMPTY_NAME                     "Le nom du fichier ne peut pas être vide."
+    IDS_MSG_PANE_EDIT_NEW_DOT_NAME                       "Le nom du fichier ne peut pas être '.' ou '..'."
+    IDS_MSG_PANE_EDIT_NEW_INVALID_WHITESPACE             "Le nom du fichier ne peut pas contenir de saut de ligne ni de tabulation."
+    IDS_MSG_PANE_EDIT_NEW_EXISTS                         "Un fichier portant ce nom existe déjà."
+    IDS_MSG_PANE_EDIT_NEW_RESERVED_NAME                  "Ce nom de fichier est réservé par Windows."
+    IDS_PREFS_FILE_ACTION_PRIMARY_DEFAULT                "Principale :"
+    IDS_PREFS_FILE_ACTION_ALTERNATE_DEFAULT              "Alternative :"
+    IDS_PREFS_FILE_ACTION_NONE                           "(aucune)"
+    IDS_PREFS_EDITORS_ACTION_HINT                        "Choisissez l'éditeur utilisé par Modifier et Modifier autrement. Les détails du programme externe, les arguments, le dossier de travail, les extensions et les filtres d'ordinateur sont stockés dans les paramètres."
+    IDS_PREFS_USER_MENU_ACTIONS_TITLE                    "Commandes configurées"
+    IDS_PREFS_USER_MENU_EMPTY_TITLE                      "Aucune commande de menu utilisateur"
+    IDS_PREFS_USER_MENU_EMPTY_BODY                       "Ajoutez des actions de menu utilisateur dans les paramètres pour afficher des commandes ici."
+    IDS_PREFS_USER_MENU_HINT                             "Les commandes du menu utilisateur sont des programmes externes stockés dans les paramètres. Elles prennent en charge les mêmes macros que les visionneuses et éditeurs : {Path}, {FullPath}, {PathAndFilename}, {Filename}, {SelectedPathsFile}, {OppositePanePath} et {ComputerName}."
+    IDS_SHELL_ACTION_UNAVAILABLE_TITLE                   "Action shell indisponible"
+    IDS_MSG_SHELL_ACTION_LOCAL_FOLDER_REQUIRED           "Cette commande nécessite un dossier Windows local dans le panneau actif."
+    IDS_MSG_SHELL_ACTION_LOCAL_SELECTION_REQUIRED        "Sélectionnez d'abord un fichier ou un dossier Windows local."
+    IDS_FMT_SHELL_ACTION_FAILED                          "Windows n'a pas pu ouvrir l'action shell demandée pour {0}. Erreur 0x{1:08X}."
+    IDS_MSG_CHANGE_ATTRIBUTES_SELECTION_REQUIRED          "Sélectionnez d'abord un fichier ou un dossier."
+    IDS_MSG_CHANGE_ATTRIBUTES_UNSUPPORTED                 "Ce panneau ne permet pas de modifier les attributs."
+    IDS_MSG_CHANGE_ATTRIBUTES_NO_CHANGES                  "Aucune modification d'attribut ou de flux n'a été demandée."
+    IDS_FMT_CHANGE_ATTRIBUTES_REPORT                      "{0} élément(s) traité(s). Attributs modifiés pour {1}; {2} flux alternatif(s) supprimé(s)."
+    IDS_FMT_CHANGE_ATTRIBUTES_REPORT_FAILURE              "{0} élément(s) traité(s). Attributs modifiés pour {1}; {2} flux alternatif(s) supprimé(s); {3} échec(s), première erreur 0x{4:08X}."
+    IDS_MSG_SHORTCUT_TARGET_SELECTION_REQUIRED            "Sélectionnez d'abord un raccourci, un lien, une jonction ou un point de montage."
+    IDS_MSG_SHORTCUT_TARGET_UNSUPPORTED                   "L'élément sélectionné ne pointe pas vers une cible Windows locale que RedSalamander peut ouvrir."
+    IDS_MSG_SHELL_NEW_NO_TEMPLATES                       "Aucun modèle du shell n'est disponible."
+    IDS_FMT_SHELL_NEW_TEMPLATE_UNAVAILABLE               "Le modèle du shell '{0}' n'est pas disponible."
+    IDS_FMT_SHELL_NEW_CREATE_FAILED                      "Impossible de créer '{0}' à partir du modèle du shell. HRESULT : 0x{1:08X}."
+    IDS_MSG_SHELL_NEW_LOCAL_FOLDER_REQUIRED              "Les modèles du shell sont disponibles seulement dans les dossiers locaux du système de fichiers."
+    IDS_MSG_CLIPBOARD_LOCAL_SELECTION_REQUIRED           "Les commandes de fichiers du presse-papiers nécessitent une sélection Windows locale."
+    IDS_MSG_CLIPBOARD_SELECTION_REQUIRED                 "Sélectionnez d'abord un fichier ou un dossier local."
+    IDS_MSG_CLIPBOARD_WRITE_FAILED                       "Impossible d'écrire la sélection de fichiers dans le presse-papiers."
+    IDS_MSG_CLIPBOARD_LOCAL_FOLDER_REQUIRED              "Coller Raccourci est disponible seulement dans les dossiers locaux du système de fichiers."
+    IDS_MSG_CLIPBOARD_NO_SHORTCUT_SOURCE                 "Le presse-papiers ne contient pas de chemins de fichiers pour Coller Raccourci."
+    IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED              "Impossible de créer un raccourci pour {0}. HRESULT : 0x{1:08X}."
+    IDS_COMMAND_LINE_LABEL                               "Commande :"
+    IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED           "La ligne de commande nécessite un dossier Windows local dans le volet actif."
+    IDS_MSG_COMMAND_LINE_ITEM_REQUIRED                   "Sélectionnez ou placez le focus sur un fichier ou un dossier d'abord."
+    IDS_FMT_COMMAND_LINE_LAUNCH_FAILED                   "Windows n'a pas pu lancer la ligne de commande. HRESULT : 0x{0:08X}."
+    IDS_USER_MENU_UNAVAILABLE_TITLE                      "Élément de menu utilisateur indisponible"
+    IDS_FMT_USER_MENU_ITEM_UNAVAILABLE                   "L'élément de menu utilisateur « {0} » n'est pas disponible pour {1}."
+    IDS_FMT_USER_MENU_LAUNCH_FAILED                      "Impossible de lancer l'élément de menu utilisateur « {0} » pour {1}. Erreur : 0x{2:08X}."
+    IDS_MSG_USER_MENU_EMPTY                              "Aucune commande de menu utilisateur n'est configurée."
+    IDS_FMT_PANE_FILTER_BAR_ACTIVE                       "Filtre : {0}"
+    IDS_MSG_MAKE_FILE_LIST_LOCAL_FOLDER_REQUIRED          "Créer une liste de fichiers est disponible seulement dans les dossiers locaux du système de fichiers."
+    IDS_MSG_MAKE_FILE_LIST_SELECTION_REQUIRED             "Sélectionnez d'abord un fichier ou un dossier, ou choisissez le dossier actuel."
+    IDS_MSG_MAKE_FILE_LIST_OUTPUT_FILE_REQUIRED           "Choisissez un fichier de sortie ou utilisez le presse-papiers."
+    IDS_FMT_MAKE_FILE_LIST_FAILED                        "Impossible de créer la liste de fichiers pour {0}. HRESULT : 0x{1:08X}."
+    IDS_FMT_MAKE_FILE_LIST_COMPLETED                     "Liste de fichiers {0} créée avec {1} élément(s) dans {2}."
+    IDS_MSG_MAKE_FILE_LIST_TARGET_CLIPBOARD               "le presse-papiers"
+    IDS_CHANGE_ATTR_OPTIONS_HINT                         "Choisissez comment modifier chaque attribut pour les éléments sélectionnés."
+    IDS_CHANGE_ATTR_SECTION_ATTRIBUTES                   "Attributs"
+    IDS_CHANGE_ATTR_LABEL_READONLY                       "Lecture seule"
+    IDS_CHANGE_ATTR_LABEL_HIDDEN                         "Masqué"
+    IDS_CHANGE_ATTR_LABEL_SYSTEM                         "Système"
+    IDS_CHANGE_ATTR_LABEL_ARCHIVE                        "Archive"
+    IDS_CHANGE_ATTR_LABEL_COMPRESSED                     "Compressé"
+    IDS_CHANGE_ATTR_LABEL_ENCRYPTED                      "Chiffré"
+    IDS_CHANGE_ATTR_REMOVE_STREAMS                       "Supprimer les flux de données alternatifs de la sélection"
+    IDS_CHANGE_ATTR_SECTION_OPTIONS                      "Options"
+    IDS_CHANGE_ATTR_OPTION_LEAVE                         "Ne pas modifier"
+    IDS_CHANGE_ATTR_OPTION_SET                           "Activer"
+    IDS_CHANGE_ATTR_OPTION_CLEAR                         "Désactiver"
+    IDS_CHANGE_CASE_EXAMPLE_FMT                          "Exemple : {0} -> {1}"
+    IDS_MAKE_FILE_LIST_SOURCE                            "Source"
+    IDS_MAKE_FILE_LIST_SOURCE_SELECTION                  "Sélection ou élément focalisé"
+    IDS_MAKE_FILE_LIST_SOURCE_CURRENT_FOLDER             "Dossier actuel"
+    IDS_MAKE_FILE_LIST_RECURSIVE                         "Récursif"
+    IDS_MAKE_FILE_LIST_FORMAT                            "Format"
+    IDS_MAKE_FILE_LIST_FORMAT_TEXT                       "Texte"
+    IDS_MAKE_FILE_LIST_FORMAT_CSV                        "CSV"
+    IDS_MAKE_FILE_LIST_FORMAT_JSON                       "JSON"
+    IDS_MAKE_FILE_LIST_TEXT_MACRO                        "Macro texte"
+    IDS_MAKE_FILE_LIST_FIELDS                            "Champs"
+    IDS_MAKE_FILE_LIST_INCLUDE_NAME                      "Nom"
+    IDS_MAKE_FILE_LIST_INCLUDE_FULLPATH                  "Chemin complet"
+    IDS_MAKE_FILE_LIST_INCLUDE_SIZE                      "Taille"
+    IDS_MAKE_FILE_LIST_INCLUDE_MODIFIED                  "Modifié"
+    IDS_MAKE_FILE_LIST_INCLUDE_ATTRIBUTES                "Attributs"
+    IDS_MAKE_FILE_LIST_INCLUDE_DIRECTORIES               "Dossiers"
+    IDS_MAKE_FILE_LIST_OUTPUT                            "Sortie"
+    IDS_MAKE_FILE_LIST_OUTPUT_CLIPBOARD                  "Presse-papiers"
+    IDS_MAKE_FILE_LIST_OUTPUT_FILE                       "Fichier"
+    IDS_MAKE_FILE_LIST_OUTPUT_FILE_PATH                  "Fichier de sortie"
+    IDS_OPENED_FILES_COLUMN_FILE                         "Fichier"
+    IDS_OPENED_FILES_COLUMN_SOURCE                       "Source"
+    IDS_OPENED_FILES_COLUMN_OPENED_BY                    "Ouvert par"
+    IDS_OPENED_FILES_EMPTY                               "Aucun fichier n’est actuellement ouvert par RedSalamander."
+    IDS_OPENED_FILES_SOURCE_VIEWER                       "Visionneuse"
+    IDS_OPENED_FILES_SOURCE_EDITOR                       "Éditeur"
+    IDS_OPENED_FILES_SOURCE_PREVIEW                      "Volet d’aperçu"
+    IDS_OPENED_FILES_OPENED_BY_PREVIEW                   "Volet d’aperçu"
+    IDS_OPENED_FILES_UNKNOWN_VIEWER                      "Visionneuse"
+    IDS_OPENED_FILES_FOCUS_ITEM                          "Focus sur l’élément"
+    IDS_OPENED_FILES_CLOSE                               "Fermer"
+    IDS_SHARED_DIRECTORIES_COLUMN_NAME                   "Partage"
+    IDS_SHARED_DIRECTORIES_COLUMN_LOCAL_PATH             "Chemin local"
+    IDS_SHARED_DIRECTORIES_COLUMN_TYPE                   "Type"
+    IDS_SHARED_DIRECTORIES_COLUMN_REMARK                 "Remarque"
+    IDS_SHARED_DIRECTORIES_EMPTY                         "Aucun dossier partagé n’est disponible."
+    IDS_SHARED_DIRECTORIES_ACCESS_DENIED                 "Impossible de lister les dossiers partagés : accès refusé."
+    IDS_SHARED_DIRECTORIES_TYPE_DISK                     "Disque"
+    IDS_SHARED_DIRECTORIES_OPEN_FAILED                   "Le chemin du dossier partagé n’a pas pu être ouvert."
+    IDS_SHARED_DIRECTORIES_MANAGE_FAILED                 "La gestion Windows des dossiers partagés n’a pas pu être ouverte."
+    IDS_MSG_ARCHIVE_LOCAL_FOLDER_REQUIRED                "Compresser et Décompresser sont disponibles uniquement pour les dossiers locaux."
+    IDS_MSG_ARCHIVE_SELECTION_REQUIRED                   "Sélectionnez ou placez le curseur sur au moins un fichier ou dossier."
+    IDS_MSG_ARCHIVE_ARCHIVE_PATH_REQUIRED                "Choisissez le chemin d’une archive."
+    IDS_MSG_ARCHIVE_DESTINATION_REQUIRED                 "Choisissez un dossier de destination."
+    IDS_FMT_ARCHIVE_PACK_FAILED                          "Impossible de créer l’archive :\r\n{0}\r\n\r\nErreur : 0x{1:08X}"
+    IDS_FMT_ARCHIVE_UNPACK_FAILED                        "Impossible d’extraire l’archive ZIP :\r\n{0}\r\n\r\nErreur : 0x{1:08X}"
+    IDS_FMT_ARCHIVE_PACK_COMPLETED                       "Archive {0} créée avec {1} entrées."
+    IDS_FMT_ARCHIVE_UNPACK_COMPLETED                     "{1} entrées extraites depuis {0}."
+    IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT                   "Seules les archives ZIP standard sont prises en charge."
+    IDS_MSG_ARCHIVE_INVALID_ENTRY_PATH                   "L’archive ZIP contient un chemin d’entrée non sûr."
+    IDS_BTN_HELP                                         "Aide"
+    IDS_ARCHIVE_PACK_DIRECTORY_FMT                       "Compresser le dossier ""{0}"" dans une archive"
+    IDS_ARCHIVE_PACK_FILE_FMT                            "Compresser le fichier ""{0}"" dans une archive"
+    IDS_ARCHIVE_PACK_SELECTION_FMT                       "Compresser la sélection dans une archive"
+    IDS_ARCHIVE_PACKER_LABEL                             "Compresseur :"
+    IDS_ARCHIVE_PACK_DELETE_AFTER                        "Supprimer les fichiers du disque après la compression"
+    IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED                "L’archive {0} a été créée, mais la suppression des fichiers d’origine a échoué.\r\n\r\nErreur : 0x{1:08X}"
+    IDS_ARCHIVE_UNPACK_ARCHIVE_FMT                       "Extraire l’archive ""{0}"" vers"
+    IDS_ARCHIVE_UNPACKER_LABEL                           "Extracteur :"
+    IDS_ARCHIVE_UNPACK_DELETE_AFTER                      "Supprimer l’archive après l’extraction"
+    IDS_ARCHIVE_UNPACK_FILES_LABEL                       "Fichiers à extraire :"
+    IDS_ARCHIVE_UNPACK_MASK_HINTS                        "aide masques"
+    IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED                "L’archive {0} a été extraite, mais sa suppression a échoué.\r\n\r\nErreur : 0x{1:08X}"
+    IDS_FMT_FILEOPS_CONFIRM_COPY                         "Copier {0} :\r\nde : {1}\r\n\r\nvers : {2}"
+    IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Déplacer {0} :\r\nde : {1}\r\n\r\nvers : {2}"
+    IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE             "Supprimer définitivement {0} :\r\nde : {1}\r\n\r\nCette action est irréversible."
+    IDS_FMT_FILEOPS_INVALID_DESTINATION_OVERLAP          "Cette opération ne peut pas cibler le même élément ni l’un de ses sous-dossiers.\r\n\r\nSource :\r\n{0}\r\n\r\nDossier de destination :\r\n{1}"
     IDS_FILEOPS_LOCATION_MULTIPLE                        "Plusieurs emplacements"
-    IDS_FMT_FILEOPS_COUNT_ITEM                           "{:L} élément{:s}"
-    IDS_FMT_FILEOPS_COUNT_FILE                           "{:L} fichier{:s}"
-    IDS_FMT_FILEOPS_COUNT_FOLDER                         "{:L} dossier{:s}"
-    IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS                  "{:L} fichier{:s} et {:L} dossier{:s}"
+    IDS_FMT_FILEOPS_COUNT_ITEM                           "{0:L} élément{1:s}"
+    IDS_FMT_FILEOPS_COUNT_FILE                           "{0:L} fichier{1:s}"
+    IDS_FMT_FILEOPS_COUNT_FOLDER                         "{0:L} dossier{1:s}"
+    IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS                  "{0:L} fichier{1:s} et {2:L} dossier{3:s}"
     IDS_STATUS_CALCULATING_SIZE                          "Calcul..."
-    IDS_FMT_STATUS_CALCULATING_SIZE_WITH_BYTES           "Calcul... {}"
+    IDS_FMT_STATUS_CALCULATING_SIZE_WITH_BYTES           "Calcul... {0}"
     IDS_STATUS_SIZE_UNKNOWN                              "—"
     IDS_FILEOP_OPERATION_COPY                            "Copier"
     IDS_FILEOP_OPERATION_MOVE                            "Déplacer"
     IDS_FILEOP_OPERATION_DELETE                          "Supprimer"
     IDS_FILEOP_OPERATION_RENAME                          "Renommer"
-    IDS_FMT_FILEOP_ITEMS                                 "Éléments : {:L}/{:L}"
-    IDS_FMT_FILEOP_ITEMS_UNKNOWN_TOTAL                   "Éléments : {:L}/?"
-    IDS_FMT_FILEOP_SPEED_BYTES                           "Vitesse : {}/s"
-    IDS_FMT_FILEOP_SPEED_ITEMS                           "Vitesse : {:.1Lf} éléments/s"
-    IDS_FMT_FILEOP_SPEED_LIMIT_BUTTON_BYTES              "Limite : {}/s"
+    IDS_FMT_FILEOP_ITEMS                                 "Éléments : {0:L}/{1:L}"
+    IDS_FMT_FILEOP_ITEMS_UNKNOWN_TOTAL                   "Éléments : {0:L}/?"
+    IDS_FMT_FILEOP_SPEED_BYTES                           "Vitesse : {0}/s"
+    IDS_FMT_FILEOP_SPEED_ITEMS                           "Vitesse : {0:.1Lf} éléments/s"
+    IDS_FMT_FILEOP_SPEED_LIMIT_BUTTON_BYTES              "Limite : {0}/s"
     IDS_FILEOP_SPEED_LIMIT_BUTTON_UNLIMITED              "Limite : illimitée"
     IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED                "Illimitée"
     IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM                   "Personnalisée..."
-    IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES                "{}/s"
+    IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES                "{0}/s"
     IDS_MSG_FILEOP_SPEED_LIMIT_INVALID                   "Limite de vitesse non valide. Exemples : 3KB, 4MB, 1GB, 0."
     IDS_FILEOP_BTN_PAUSE                                 "Pause"
     IDS_FILEOP_BTN_RESUME                                "Reprendre"
@@ -1123,20 +1293,20 @@ BEGIN
     IDS_FILEOPS_LABEL_FROM                                "De :"
     IDS_FILEOPS_LABEL_TO                                  "Vers :"
     IDS_FILEOPS_LABEL_DELETING                            "Suppression :"
-    IDS_FMT_FILEOPS_OP_COUNTS                             "{}: {:L}/{:L}"
-    IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL               "{}: {:L}/?"
-    IDS_FMT_FILEOPS_ETA                                   "Restant : {}"
+    IDS_FMT_FILEOPS_OP_COUNTS                             "{0}: {1:L}/{2:L}"
+    IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL               "{0}: {1:L}/?"
+    IDS_FMT_FILEOPS_ETA                                   "Restant : {0}"
     IDS_FILEOPS_BTN_CANCEL_ALL                            "Tout annuler"
     IDS_FILEOPS_BTN_MODE_QUEUE                            "Attendre"
     IDS_FILEOPS_BTN_MODE_PARALLEL                         "Parallèle"
     IDS_MSG_FILEOPS_CANCEL_ALL_CONFIRM                    "Annuler toutes les opérations de fichiers ?"
     IDS_FILEOPS_CALCULATING                               "Calcul..."
-    IDS_FMT_FILEOPS_CALCULATING_TIME                      "Calcul... ({} écoulé)"
+    IDS_FMT_FILEOPS_CALCULATING_TIME                      "Calcul... ({0} écoulé)"
     IDS_FILEOPS_PREPARING                                 "Préparation..."
-    IDS_FMT_FILEOPS_PREPARING_TIME                        "Préparation... ({} écoulé)"
+    IDS_FMT_FILEOPS_PREPARING_TIME                        "Préparation... ({0} écoulé)"
     IDS_FILEOPS_BTN_SKIP                                  "Ignorer la pré-vérification"
-    IDS_FMT_FILEOPS_FILES_FOLDERS                         "{:L} éléments ({:L} fichiers, {:L} dossiers)"
-    IDS_FMT_FILEOPS_SIZE_PROGRESS                         "{} / {}"
+    IDS_FMT_FILEOPS_FILES_FOLDERS                         "{0:L} éléments ({1:L} fichiers, {2:L} dossiers)"
+    IDS_FMT_FILEOPS_SIZE_PROGRESS                         "{0} / {1}"
     IDS_FILEOPS_GRAPH_PAUSED                              "En pause"
     IDS_FILEOPS_GRAPH_WAITING                             "En attente de l’opération précédente"
     IDS_FILEOPS_GRAPH_CALCULATING                         "Calcul..."
@@ -1166,11 +1336,11 @@ BEGIN
     IDS_FILEOPS_CONFLICT_UNSUPPORTED_REPARSE              "Le point de réanalyse du dossier ne peut pas être conservé pour cette opération."
     IDS_FILEOPS_STATUS_COMPLETED                          "Terminé"
     IDS_FILEOPS_STATUS_PARTIAL                            "Terminé avec des éléments ignorés"
-    IDS_FMT_FILEOPS_STATUS_FAILED                         "Échec (0x{:08X})"
-    IDS_FMT_FILEOPS_OP_STATUS                             "{}: {}"
-    IDS_FMT_FILEOPS_WARNINGS_ERRORS                       "Avertissements : {:L}, erreurs : {:L}"
-    IDS_FMT_FILEOPS_LAST_NOTE                             "Dernière note : {}"
-    IDS_FMT_FILEOPS_RESULT_HRESULT                        "Résultat : 0x{:08X}"
+    IDS_FMT_FILEOPS_STATUS_FAILED                         "Échec (0x{0:08X})"
+    IDS_FMT_FILEOPS_OP_STATUS                             "{0}: {1}"
+    IDS_FMT_FILEOPS_WARNINGS_ERRORS                       "Avertissements : {0:L}, erreurs : {1:L}"
+    IDS_FMT_FILEOPS_LAST_NOTE                             "Dernière note : {0}"
+    IDS_FMT_FILEOPS_RESULT_HRESULT                        "Résultat : 0x{0:08X}"
     IDS_FILEOP_BTN_DISMISS                                "Fermer"
     IDS_FILEOPS_BTN_CLEAR_COMPLETED                       "Effacer les opérations terminées"
     IDS_FILEOP_BTN_SHOW_LOG                               "Afficher le journal"
@@ -1193,7 +1363,7 @@ BEGIN
     IDS_FILEOPS_ISSUES_OPERATION_UNKNOWN                  "Inconnu"
 
     IDS_CAPTION_NOT_IMPLEMENTED                           "Non implémenté"
-    IDS_FMT_CMD_NOT_IMPLEMENTED                           "'{}' n’est pas encore implémenté."
+    IDS_FMT_CMD_NOT_IMPLEMENTED                           "'{0}' n’est pas encore implémenté."
 
 	    IDS_CMD_EXIT                                          "Quitter"
 	    IDS_CMD_OPEN_LEFT_DRIVE_MENU                          "Menu des lecteurs de gauche"
@@ -1210,7 +1380,7 @@ BEGIN
     IDS_CMD_EDIT                                          "Modifier"
     IDS_CMD_SORT_BY_EXTENSION                             "Trier par extension"
     IDS_CMD_EDIT_NEW                                      "Modifier un nouveau fichier"
-    IDS_CMD_EDIT_WIDTH                                    "Largeur d’édition"
+    IDS_CMD_ALTERNATE_EDIT                                "Modification alternative"
     IDS_CMD_COPY                                          "Copier"
     IDS_CMD_SORT_BY_TIME                                  "Trier par date"
     IDS_CMD_PACK                                          "Compresser"
@@ -1223,7 +1393,6 @@ BEGIN
     IDS_CMD_FIND                                          "Rechercher"
     IDS_CMD_CHANGE_DIRECTORY                              "Changer de dossier"
     IDS_CMD_DELETE                                        "Supprimer"
-    IDS_CMD_PERMANENT_DELETE                              "Supprimer définitivement"
     IDS_CMD_USER_MENU                                     "Menu utilisateur"
     IDS_CMD_REFRESH                                       "Actualiser"
     IDS_CMD_HOT_PATHS                                     "Emplacements favoris"
@@ -1232,7 +1401,6 @@ BEGIN
     IDS_CMD_COMPARE                                       "Comparer"
     IDS_CMD_SPACE_VIEW                                    "Vue Espace"
     IDS_CMD_CONTEXT_MENU                                  "Menu contextuel"
-    IDS_CMD_CALCULATE_DIRECTORY_SIZES                     "Calculer la taille des dossiers"
     IDS_CMD_CONTEXT_MENU_CURRENT_DIRECTORY                "Menu contextuel (dossier actuel)"
     IDS_CMD_CONNECT                                       "Connecter"
     IDS_CMD_CONNECTIONS                                   "Connexions"
@@ -1262,14 +1430,17 @@ BEGIN
 	    IDS_CMD_COPY_PATH_AS_TEXT                             "Copier le chemin comme texte"
 	    IDS_CMD_COPY_NAME_AS_TEXT                             "Copier le nom comme texte"
 		    IDS_CMD_MOVE_TO_RECYCLE_BIN                           "Déplacer vers la corbeille"
-		    IDS_CMD_PERMANENT_DELETE_WITH_VALIDATION              "Supprimer définitivement (avec validation)"
+		    IDS_CMD_PERMANENT_DELETE                              "Supprimer définitivement"
 		    IDS_CMD_ABOUT                                         "À propos"
+		    IDS_CMD_EXTERNAL_HELP                                 "Aide externe"
 		    IDS_CMD_PREFERENCES                                   "Préférences"
 		    IDS_CMD_SWAP_PANES                                    "Permuter les volets"
 		    IDS_CMD_REREAD_ASSOCIATIONS                           "Relire les associations"
 		    IDS_CMD_TOGGLE_MENU_BAR                               "Afficher/masquer la barre de menus"
 		    IDS_CMD_TOGGLE_FUNCTION_BAR                           "Afficher/masquer la barre de fonctions"
 		    IDS_CMD_THEME_SELECT                                  "Sélectionner le thème"
+		    IDS_CMD_THEME_SELECT_NEXT                             "Thème suivant"
+		    IDS_CMD_THEME_SELECT_PREV                             "Thème précédent"
 		    IDS_CMD_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR          "Contraste élevé (système)"
 		    IDS_CMD_PLUGINS_MANAGE                                "Gestionnaire de plug-ins"
 		    IDS_CMD_PLUGINS_TOGGLE_ENABLED                        "Activer/désactiver le plug-in"
@@ -1312,16 +1483,23 @@ BEGIN
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_HIDDEN_FILES                "Afficher/masquer les fichiers masqués"
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_SYSTEM_FILES                "Afficher/masquer les fichiers système"
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_FILE_EXTENSIONS             "Afficher/masquer les extensions"
-		    IDS_CMD_VIEWOPTIONS_TOGGLE_THUMBNAILS                  "Afficher/masquer les miniatures"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_THUMBNAILS                  "Miniatures"
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_PREVIEW_PANE                "Afficher/masquer le volet d’aperçu"
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_FILTER_BAR                  "Afficher/masquer la barre de filtre"
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_NAVIGATION_BAR              "Afficher/masquer la barre de navigation"
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_STATUS_BAR                  "Afficher/masquer la barre d’état"
 		    IDS_CMD_SELECT_FILE_SYSTEM_PLUGIN                      "Sélectionner le plug-in de système de fichiers"
+		    IDS_PREVIEW_TAB_FOLDER                                 "Dossier"
+		    IDS_PREVIEW_TAB_PREVIEW                                "Aperçu"
+		    IDS_PREVIEW_EMPTY                                      "Aucun fichier sélectionné pour l’aperçu."
+		    IDS_PREVIEW_FOLDER_FMT                                 "Dossier : {0}"
+		    IDS_PREVIEW_UNSUPPORTED                                "L’aperçu est disponible pour les fichiers locaux dans cette version."
+		    IDS_PREVIEW_BINARY_FALLBACK_FMT                        "Aperçu binaire omis. {0} octets affichés."
 		    // IDS_CMD_SHORT_* resource ids use IDS_CMD_SHORT_BASE + the matching IDS_CMD_* display id.
 		    // Keep resource ids 20000-21999 reserved for command short labels.
 		    IDS_CMD_SHORTCUTS                                     "Raccourcis"
 		    IDS_CMD_SHORT_ABOUT                                  "About"
+		    IDS_CMD_SHORT_EXTERNAL_HELP                          "AideExt"
 		    IDS_CMD_SHORT_COMPARE                                "Compare"
 		    IDS_CMD_SHORT_EXIT                                   "Quitter"
 		    IDS_CMD_SHORT_FULL_SCREEN                            "FullScr"
@@ -1336,6 +1514,8 @@ BEGIN
 		    IDS_CMD_SHORT_SHORTCUTS                              "Raccourcis"
 		    IDS_CMD_SHORT_SWAP_PANES                             "SwapVolets"
 		    IDS_CMD_SHORT_THEME_SELECT                           "Thème"
+		    IDS_CMD_SHORT_THEME_SELECT_NEXT                      "NextTheme"
+		    IDS_CMD_SHORT_THEME_SELECT_PREV                      "PrevTheme"
 		    IDS_CMD_SHORT_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR   "HiContrast"
 		    IDS_CMD_SHORT_TOGGLE_FILEOPS_FAILED_ITEMS            "FailedOps"
 		    IDS_CMD_SHORT_TOGGLE_FUNCTION_BAR                    "FuncBar"
@@ -1344,7 +1524,6 @@ BEGIN
 		    IDS_CMD_SHORT_ALTERNATE_VIEW                         "AltVw"
 		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToCmd"
 		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "NameToCmd"
-		    IDS_CMD_SHORT_CALCULATE_DIRECTORY_SIZES              "CalcSize"
 		    IDS_CMD_SHORT_CHANGE_ATTRIBUTES                      "ChgAttr"
 		    IDS_CMD_SHORT_CHANGE_CASE                            "ChgCase"
 		    IDS_CMD_SHORT_CHANGE_DIRECTORY                       "ChgDir"
@@ -1369,7 +1548,7 @@ BEGIN
 		    IDS_CMD_SHORT_DISPLAY_EXTRA_DETAILED                 "xtraDtl"
 		    IDS_CMD_SHORT_EDIT                                   "Modifier"
 		    IDS_CMD_SHORT_EDIT_NEW                               "EditNew"
-		    IDS_CMD_SHORT_EDIT_WIDTH                             "EditWdth"
+		    IDS_CMD_SHORT_ALTERNATE_EDIT                         "AltEdit"
 		    IDS_CMD_SHORT_EDIT_WITH                              "EditWith"
 		    IDS_CMD_SHORT_EXECUTE_OPEN                           "ExecOpen"
 		    IDS_CMD_SHORT_FILTER                                 "Filtrer"
@@ -1396,7 +1575,6 @@ BEGIN
 		    IDS_CMD_SHORT_OPEN_SECURITY                          "Security"
 		    IDS_CMD_SHORT_PACK                                   "Pack"
 		    IDS_CMD_SHORT_PERMANENT_DELETE                       "Supprimer"
-		    IDS_CMD_SHORT_PERMANENT_DELETE_WITH_VALIDATION       "DeleteOk"
 		    IDS_CMD_SHORT_QUICK_SEARCH                           "QuickSrch"
 		    IDS_CMD_SHORT_REFRESH                                "Actualiser"
 		    IDS_CMD_SHORT_RENAME                                 "Renommer"
@@ -1458,7 +1636,7 @@ BEGIN
 		    IDS_SHORTCUTS_COL_CTRL                                "Ctrl"
 		    IDS_SHORTCUTS_COL_ALT                                 "Alt"
 		    IDS_SHORTCUTS_COL_SHIFT                               "Shift"
-		    IDS_FMT_SHORTCUT_CONFLICT                             "Conflit avec la commande '{}' ({})"
+		    IDS_FMT_SHORTCUT_CONFLICT                             "Conflit avec la commande '{0}' ({1})"
 		    IDS_MSG_SHORTCUT_INVALID_COMMAND_ID                   "L’ID de commande doit commencer par 'cmd/'."
 		    IDS_CMD_DESC_COMPARE                                  "Comparer les deux volets."
 		    IDS_CMD_DESC_EXIT                                     "Quitter l’application."
@@ -1470,7 +1648,6 @@ BEGIN
 		    IDS_CMD_DESC_ALTERNATE_VIEW                           "Activer ou désactiver l’autre mode d’affichage."
 		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "Insérer le dossier actuel dans la ligne de commande."
 		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "Insérer le nom du fichier actif dans la ligne de commande."
-		    IDS_CMD_DESC_CALCULATE_DIRECTORY_SIZES                "Calculer la taille des dossiers dans le volet actuel."
 		    IDS_CMD_DESC_CHANGE_ATTRIBUTES                        "Modifier les attributs de fichier pour la sélection."
 		    IDS_CMD_DESC_CHANGE_CASE                              "Changer la casse de la sélection."
 		    IDS_CMD_DESC_CHANGE_DIRECTORY                         "Changer de dossier à l’aide d’une invite de chemin."
@@ -1493,7 +1670,7 @@ BEGIN
 			    IDS_CMD_DESC_DISPLAY_EXTRA_DETAILED                   "Passer en affichage très détaillé."
 			    IDS_CMD_DESC_EDIT                                     "Modifier le fichier actif."
 			    IDS_CMD_DESC_EDIT_NEW                                 "Créer et modifier un nouveau fichier."
-		    IDS_CMD_DESC_EDIT_WIDTH                               "Ajuster la largeur d’édition."
+		    IDS_CMD_DESC_ALTERNATE_EDIT                           "Modifier le fichier actif avec l’éditeur alternatif configuré."
 		    IDS_CMD_DESC_EXECUTE_OPEN                             "Exécuter ou ouvrir la sélection."
 		    IDS_CMD_DESC_FILTER                                   "Filtrer le volet actuel."
 		    IDS_CMD_DESC_FIND                                     "Ouvrir la boîte de dialogue Rechercher fichiers et dossiers."
@@ -1507,8 +1684,7 @@ BEGIN
 		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "Ouvrir le dossier actuel."
 		    IDS_CMD_DESC_OPEN_PROPERTIES                          "Ouvrir la boîte de dialogue des propriétés de la sélection."
 		    IDS_CMD_DESC_PACK                                     "Compresser la sélection."
-		    IDS_CMD_DESC_PERMANENT_DELETE                         "Supprimer définitivement la sélection."
-		    IDS_CMD_DESC_PERMANENT_DELETE_WITH_VALIDATION         "Supprimer définitivement la sélection avec confirmation."
+		    IDS_CMD_DESC_PERMANENT_DELETE                         "Supprimer définitivement la sélection après confirmation."
 		    IDS_CMD_DESC_QUICK_SEARCH                             "Démarrer la recherche rapide."
 		    IDS_CMD_DESC_REFRESH                                  "Actualiser le volet actuel."
 		    IDS_CMD_DESC_RENAME                                   "Renommer l’élément actif."
@@ -1530,12 +1706,15 @@ BEGIN
 		    IDS_CMD_DESC_WINDOW_MENU                              "Ouvrir le menu Fenêtre."
 		    IDS_CMD_DESC_ZOOM_PANEL                               "Agrandir le volet."
 		    IDS_CMD_DESC_ABOUT                                    "Afficher les informations sur RedSalamander."
+		    IDS_CMD_DESC_EXTERNAL_HELP                            "Ouvrir la documentation externe de RedSalamander."
 		    IDS_CMD_DESC_PREFERENCES                              "Ouvrir la boîte de dialogue des préférences."
 		    IDS_CMD_DESC_SWAP_PANES                               "Permuter les volets gauche et droit."
 		    IDS_CMD_DESC_REREAD_ASSOCIATIONS                      "Recharger les associations de fichiers."
 		    IDS_CMD_DESC_TOGGLE_MENU_BAR                          "Afficher ou masquer la barre de menus."
 		    IDS_CMD_DESC_TOGGLE_FUNCTION_BAR                      "Afficher ou masquer la barre de fonctions."
 		    IDS_CMD_DESC_THEME_SELECT                             "Sélectionner le thème de l’application."
+		    IDS_CMD_DESC_THEME_SELECT_NEXT                        "Sélectionner le thème suivant de l’application."
+		    IDS_CMD_DESC_THEME_SELECT_PREV                        "Sélectionner le thème précédent de l’application."
 		    IDS_CMD_DESC_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR     "Indicateur du mode contraste élevé du système."
 		    IDS_CMD_DESC_PLUGINS_MANAGE                           "Ouvrir le gestionnaire de plug-ins."
 		    IDS_CMD_DESC_PLUGINS_TOGGLE_ENABLED                   "Activer ou désactiver un plug-in."
@@ -1577,7 +1756,7 @@ BEGIN
 		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_HIDDEN_FILES          "Afficher ou masquer les fichiers masqués."
 		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_SYSTEM_FILES          "Afficher ou masquer les fichiers système."
 		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_FILE_EXTENSIONS       "Afficher ou masquer les extensions de fichier."
-		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_THUMBNAILS            "Afficher ou masquer les miniatures."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_THUMBNAILS            "Sélectionne le mode d'affichage Miniatures."
 		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_PREVIEW_PANE          "Afficher ou masquer le volet d’aperçu."
 		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_FILTER_BAR            "Afficher ou masquer la barre de filtre."
 		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_NAVIGATION_BAR        "Afficher ou masquer la barre de navigation."

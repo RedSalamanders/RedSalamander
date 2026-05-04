@@ -249,6 +249,10 @@ bool PanesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexce
             {std::to_wstring(static_cast<int>(Common::Settings::FolderDisplayMode::Brief)), LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_BRIEF)});
         items.push_back(
             {std::to_wstring(static_cast<int>(Common::Settings::FolderDisplayMode::Detailed)), LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_DETAILED)});
+        items.push_back({std::to_wstring(static_cast<int>(Common::Settings::FolderDisplayMode::ExtraDetailed)),
+                         LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_EXTRA_DETAILED)});
+        items.push_back({std::to_wstring(static_cast<int>(Common::Settings::FolderDisplayMode::Thumbnails)),
+                         LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_THUMBNAILS)});
         combo->SetItems(std::move(items));
     };
 
@@ -305,6 +309,8 @@ bool PanesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexce
             static constexpr Common::Settings::FolderDisplayMode kModes[] = {
                 Common::Settings::FolderDisplayMode::Brief,
                 Common::Settings::FolderDisplayMode::Detailed,
+                Common::Settings::FolderDisplayMode::ExtraDetailed,
+                Common::Settings::FolderDisplayMode::Thumbnails,
             };
             if (itemIndex >= std::size(kModes))
             {
@@ -1330,6 +1336,14 @@ bool PanesPane::DebugSelectLeftDisplayByText(std::wstring_view displayText) noex
     else if (displayText == LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_DETAILED))
     {
         targetMode = Common::Settings::FolderDisplayMode::Detailed;
+    }
+    else if (displayText == LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_EXTRA_DETAILED))
+    {
+        targetMode = Common::Settings::FolderDisplayMode::ExtraDetailed;
+    }
+    else if (displayText == LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_THUMBNAILS))
+    {
+        targetMode = Common::Settings::FolderDisplayMode::Thumbnails;
     }
     else
     {

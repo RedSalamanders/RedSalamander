@@ -115,6 +115,76 @@ function Get-RSMSBuildInvocationPlan {
     }
 }
 
+function Test-RSMSBuildDiagnosticLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string]$Line,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('Warning', 'Error')]
+        [string]$Kind
+    )
+
+    $diagnosticCodePattern = '[A-Z]+[A-Z0-9]*\d[A-Z0-9]*'
+    if ($Kind -eq 'Warning') {
+        return $Line -match "(?i):\s+warning\s+$diagnosticCodePattern\s*:"
+    }
+
+    return $Line -match "(?i):\s+(?:fatal\s+)?error\s+$diagnosticCodePattern\s*:"
+}
+
+function Get-RSMSBuildDiagnosticSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath
+    )
+
+    $resolvedLogPath = [System.IO.Path]::GetFullPath($LogPath)
+    $warningCount = 0
+    $errorCount = 0
+
+    foreach ($line in [System.IO.File]::ReadLines($resolvedLogPath)) {
+        if (Test-RSMSBuildDiagnosticLine -Line $line -Kind 'Warning') {
+            $warningCount++
+        }
+        if (Test-RSMSBuildDiagnosticLine -Line $line -Kind 'Error') {
+            $errorCount++
+        }
+    }
+
+    return [pscustomobject]@{
+        LogPath      = $resolvedLogPath
+        WarningCount = $warningCount
+        ErrorCount   = $errorCount
+    }
+}
+
+function Write-RSMSBuildDiagnosticSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath
+    )
+
+    if (-not (Test-Path -LiteralPath $LogPath)) {
+        Write-Host "Diagnostics: unavailable (log not found)" -ForegroundColor DarkYellow
+        return
+    }
+
+    $summary = Get-RSMSBuildDiagnosticSummary -LogPath $LogPath
+    $foregroundColor = if ($summary.ErrorCount -gt 0) {
+        'Red'
+    }
+    elseif ($summary.WarningCount -gt 0) {
+        'Yellow'
+    }
+    else {
+        'Green'
+    }
+
+    Write-Host ("Diagnostics: {0} warning(s), {1} error(s)" -f $summary.WarningCount, $summary.ErrorCount) -ForegroundColor $foregroundColor
+}
+
 function Get-RSMSBuildLineForegroundColor {
     param(
         [AllowNull()]

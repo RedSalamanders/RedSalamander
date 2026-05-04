@@ -4432,7 +4432,7 @@ struct OwnedMenuSessionEscapeResult
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestCalculateDirectorySizesKeepsNavigationShellStable(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestViewSpaceKeepsNavigationShellStable(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -4449,14 +4449,13 @@ struct OwnedMenuSessionEscapeResult
         return false;
     }
 
-    const std::filesystem::path root = suiteRoot / L"work" / (L"calculate_directory_sizes_nav_shell_" + NewGuidText());
+    const std::filesystem::path root = suiteRoot / L"work" / (L"view_space_nav_shell_" + NewGuidText());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
-    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create calculate-directory-sizes shell-stability root.");
-    state.Require(SelfTest::EnsureDirectory(root / L"nested"), L"Failed to create nested folder for calculate-directory-sizes shell-stability test.");
-    state.Require(SelfTest::WriteTextFile(root / L"root.txt", "root"), L"Failed to create root file for calculate-directory-sizes shell-stability test.");
-    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"child.txt", "child"),
-                  L"Failed to create nested file for calculate-directory-sizes shell-stability test.");
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create view-space shell-stability root.");
+    state.Require(SelfTest::EnsureDirectory(root / L"nested"), L"Failed to create nested folder for view-space shell-stability test.");
+    state.Require(SelfTest::WriteTextFile(root / L"root.txt", "root"), L"Failed to create root file for view-space shell-stability test.");
+    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"child.txt", "child"), L"Failed to create nested file for view-space shell-stability test.");
     if (! state.failure.empty())
     {
         return false;
@@ -4477,7 +4476,7 @@ struct OwnedMenuSessionEscapeResult
     g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
-                  L"Failed to set local file-system plugin for calculate-directory-sizes shell-stability test.");
+                  L"Failed to set local file-system plugin for view-space shell-stability test.");
     if (! state.failure.empty())
     {
         return false;
@@ -4496,13 +4495,12 @@ struct OwnedMenuSessionEscapeResult
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set pane path for calculate-directory-sizes shell-stability test.");
-    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)),
-                  L"Enumeration did not complete for calculate-directory-sizes shell-stability test.");
+                  L"Failed to set pane path for view-space shell-stability test.");
+    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)), L"Enumeration did not complete for view-space shell-stability test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"nested", L"root.txt"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for calculate-directory-sizes shell-stability test.");
+                  L"Pane contents not ready for view-space shell-stability test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"nested"),
-                  L"Failed to focus nested before calculate-directory-sizes shell-stability validation.");
+                  L"Failed to focus nested before view-space shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -4511,7 +4509,7 @@ struct OwnedMenuSessionEscapeResult
     FocusFolderViewPane(FolderWindow::Pane::Left);
     const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE,
-                  L"Folder view handle unavailable for calculate-directory-sizes shell-stability validation.");
+                  L"Folder view handle unavailable for view-space shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -4533,13 +4531,13 @@ struct OwnedMenuSessionEscapeResult
     },
                                                 SelfTest::Scale(3000ms),
                                                 &baselineSnapshot),
-                  L"Failed to capture the baseline navigation-view state before calculate-directory-sizes shell-stability validation.");
+                  L"Failed to capture the baseline navigation-view state before view-space shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CALCULATE_DIRECTORY_SIZES, 0), 0);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_VIEW_SPACE, 0), 0);
 
     const auto viewerDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
     while (std::chrono::steady_clock::now() < viewerDeadline)
@@ -4553,9 +4551,9 @@ struct OwnedMenuSessionEscapeResult
     }
 
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u,
-                  L"Calculate Directory Sizes should open one viewer instance while keeping the navigation shell quiet.");
+                  L"Calculate Occupied Space should open one viewer instance while keeping the navigation shell quiet.");
     state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-space"),
-                  L"Calculate Directory Sizes should open the Space Viewer while keeping the navigation shell quiet.");
+                  L"Calculate Occupied Space should open the Space Viewer while keeping the navigation shell quiet.");
     if (! state.failure.empty())
     {
         return false;
@@ -4574,7 +4572,7 @@ struct OwnedMenuSessionEscapeResult
     },
                                                 SelfTest::Scale(3000ms),
                                                 &openSnapshot),
-                  L"Calculate Directory Sizes should not wake edit/history/suggest/full-path popup shell state while opening the Space Viewer.");
+                  L"Calculate Occupied Space should not wake edit/history/suggest/full-path popup shell state while opening the Space Viewer.");
     if (! state.failure.empty())
     {
         return false;
@@ -4593,7 +4591,7 @@ struct OwnedMenuSessionEscapeResult
     }
 
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount,
-                  L"CloseAllViewers should restore the baseline viewer count after calculate-directory-sizes shell-stability validation.");
+                  L"CloseAllViewers should restore the baseline viewer count after view-space shell-stability validation.");
 
     NavigationViewDebugSnapshot closedSnapshot{};
     state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
@@ -8856,6 +8854,139 @@ struct OwnedMenuSessionEscapeResult
     return state.failure.empty();
 }
 
+[[nodiscard]] std::wstring QuoteExpectedCommandLineText(std::wstring_view text)
+{
+    std::wstring quoted;
+    quoted.reserve(text.size() + 2u);
+    quoted.push_back(L'"');
+    quoted.append(text);
+    quoted.push_back(L'"');
+    return quoted;
+}
+
+[[nodiscard]] bool TestPaneCommandLineInsertionAndExecute(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"command line root " + NewGuidText());
+    const std::filesystem::path alphaPath = root / L"space name.txt";
+    const std::filesystem::path betaPath  = root / L"beta.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create command-line test root.");
+    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create space name.txt for command-line test.");
+    state.Require(SelfTest::WriteTextFile(betaPath, "beta"), L"Failed to create beta.txt for command-line test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugSetCommandLineLaunchCallback({});
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for command-line test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for command-line test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"space name.txt", L"beta.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for command-line test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"space name.txt"),
+                  L"Failed to focus space name.txt for command-line test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE, 0), 0);
+    PumpPendingMessages();
+
+    FolderWindow::CommandLineDebugSnapshot snapshot{};
+    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available.");
+    state.Require(snapshot.visible, L"Bring Current Directory should show the command-line input.");
+    state.Require(snapshot.hasKeyboardFocus, L"Bring Current Directory should focus the command-line input.");
+    state.Require(snapshot.pane == FolderWindow::Pane::Left, L"Command-line input should be associated with the focused left pane.");
+    state.Require(snapshot.workingDirectory == root, L"Command-line working directory should be the focused pane folder.");
+    const std::wstring quotedRoot = QuoteExpectedCommandLineText(root.wstring());
+    state.Require(snapshot.text == quotedRoot,
+                  std::format(L"Bring Current Directory should insert the quoted current folder. Expected '{}', got '{}'.", quotedRoot, snapshot.text));
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE, 0), 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available after filename insertion.");
+    const std::wstring expectedFocused = quotedRoot + L" " + QuoteExpectedCommandLineText(L"space name.txt");
+    state.Require(snapshot.text == expectedFocused,
+                  std::format(L"Bring Filename should append the focused display name. Expected '{}', got '{}'.", expectedFocused, snapshot.text));
+
+    g_folderWindow.DebugSetCommandLineTextForTest(L"tool.exe");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"space name.txt" || name == L"beta.txt"; }, true);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE, 0), 0);
+    PumpPendingMessages();
+
+    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available after selected path insertion.");
+    const std::wstring expectedSelection = std::wstring(L"tool.exe ") + QuoteExpectedCommandLineText(alphaPath.wstring()) + L" " +
+                                           QuoteExpectedCommandLineText(betaPath.wstring());
+    state.Require(snapshot.text == expectedSelection,
+                  std::format(L"Bring Filename should append selected item paths. Expected '{}', got '{}'.", expectedSelection, snapshot.text));
+
+    struct LaunchCapture final
+    {
+        uint32_t calls = 0u;
+        std::wstring commandLine;
+        std::filesystem::path workingDirectory;
+    } launch;
+
+    g_folderWindow.DebugSetCommandLineLaunchCallback(
+        [&](std::wstring_view commandLine, const std::filesystem::path& workingDirectory) noexcept -> HRESULT
+    {
+        ++launch.calls;
+        launch.commandLine.assign(commandLine);
+        launch.workingDirectory = workingDirectory;
+        return S_OK;
+    });
+
+    HWND editHwnd = snapshot.editHwnd;
+    state.Require(editHwnd != nullptr && IsWindow(editHwnd) != FALSE, L"Command-line edit HWND should be valid before Enter.");
+    if (editHwnd)
+    {
+        SendMessageW(editHwnd, WM_KEYDOWN, VK_RETURN, 0);
+        PumpPendingMessages();
+    }
+
+    state.Require(launch.calls == 1u, std::format(L"Command-line Enter should launch once; got {} calls.", launch.calls));
+    state.Require(launch.commandLine == expectedSelection, L"Command-line Enter should launch the current input text.");
+    state.Require(launch.workingDirectory == root, L"Command-line Enter should use the command-line working directory.");
+    state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should remain available after launch.");
+    state.Require(! snapshot.visible, L"Command-line input should hide after a successful launch.");
+
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -8929,6 +9060,9 @@ void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTes
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_change_directory_edit_clipboard_accelerators", [=](CaseState& state) noexcept {
         return TestChangeDirectoryEditClipboardAccelerators(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_pane_command_line_insertion_and_execute", [=](CaseState& state) noexcept {
+        return TestPaneCommandLineInsertionAndExecute(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_switch_pane_focus_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
         return TestSwitchPaneFocusKeepsNavigationShellStable(mainWindow, state);
     });
@@ -8977,8 +9111,8 @@ void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTes
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_sort_modes_keep_navigation_shell_stable", [=](CaseState& state) noexcept {
         return TestSortModesKeepNavigationShellStable(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_pane_navigation_calculate_directory_sizes_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
-        return TestCalculateDirectorySizesKeepsNavigationShellStable(mainWindow, state);
+    SelfTest::RunCase(options, suite, L"cmd_pane_navigation_view_space_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
+        return TestViewSpaceKeepsNavigationShellStable(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_toggle_hidden_system_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
         return TestToggleHiddenSystemFilesKeepsNavigationShellStable(mainWindow, state);

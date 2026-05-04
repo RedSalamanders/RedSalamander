@@ -963,6 +963,17 @@ std::vector<std::filesystem::path> FolderView::GetSelectedPaths() const
     return paths;
 }
 
+std::optional<std::filesystem::path> FolderView::GetFocusedPath() const
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return std::nullopt;
+    }
+
+    return GetItemFullPath(_items[_focusedIndex]);
+}
+
 std::vector<std::filesystem::path> FolderView::GetSelectedOrFocusedPaths() const
 {
     std::vector<std::filesystem::path> paths = GetSelectedPaths();
@@ -1064,6 +1075,17 @@ std::wstring_view FolderView::DebugGetFocusedDisplayName() const noexcept
     }
 
     return _items[_focusedIndex].displayName;
+}
+
+std::wstring FolderView::DebugGetFocusedVisualDisplayName() const
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return {};
+    }
+
+    return std::wstring(GetVisualDisplayName(_items[_focusedIndex]));
 }
 
 bool FolderView::DebugHasItemDisplayName(std::wstring_view displayName) const noexcept

@@ -7664,6 +7664,28 @@ void TestMaskedAttachedTextBridgeSuppressesClipboardCopyAndCut()
     Require(field->GetText() == L"secret", "masked bridge cut does not mutate secret field text");
 }
 
+void TestMaskedAttachedTextBridgeAcceptsCharacterInput()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>();
+    field->SetMasked(true);
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    HWND bridgeEdit = FindTextInputBridgeEdit(window.Hwnd());
+    Require(bridgeEdit != nullptr, "bridge edit exists for masked character input test");
+    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L'X'), 0));
+    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L'7'), 0));
+
+    Require(field->GetText() == L"X7", "masked bridge character input updates the secret field text");
+    Require(field->IsMasked(), "masked bridge character input keeps the field masked");
+}
+
 void TestAttachedTextInputBridgePasteSyncsTextField()
 {
     using namespace RedSalamander::DxUi;
@@ -8277,6 +8299,7 @@ void RunTextInputBridgeTests()
     runTest("TestAttachedEditableComboBridgeSetWindowTextSyncsCombo", TestAttachedEditableComboBridgeSetWindowTextSyncsCombo);
     runTest("TestAttachedEditableComboBridgeUndoSyncsCombo", TestAttachedEditableComboBridgeUndoSyncsCombo);
     runTest("TestMaskedAttachedTextBridgeSuppressesClipboardCopyAndCut", TestMaskedAttachedTextBridgeSuppressesClipboardCopyAndCut);
+    runTest("TestMaskedAttachedTextBridgeAcceptsCharacterInput", TestMaskedAttachedTextBridgeAcceptsCharacterInput);
     runTest("TestAttachedTextInputBridgePasteSyncsTextField", TestAttachedTextInputBridgePasteSyncsTextField);
     runTest("TestAttachedSingleLineTextFieldDoubleClickMatchesBridgeWordSelection", TestAttachedSingleLineTextFieldDoubleClickMatchesBridgeWordSelection);
     runTest("TestAttachedSingleLineTextFieldRepeatedClicksWithoutClassDoubleClicksStillSelectWord",

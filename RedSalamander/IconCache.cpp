@@ -459,6 +459,12 @@ int DebugSelectIconCacheImageListSize(float targetDipSize, float dpi) noexcept
     const float targetPixels = targetDipSize * dpi / 96.0f;
     return SelectImageListSizeForTargetPixels(targetPixels);
 }
+
+size_t DebugGetAssociationIconCacheSize() noexcept
+{
+    std::lock_guard lock(g_associationCacheMutex);
+    return g_associationToIconIndex.size();
+}
 #endif
 
 IconCache& IconCache::GetInstance()
@@ -1262,6 +1268,21 @@ void IconCache::Clear()
     _pathLruEvictions       = 0;
 
     DBGOUT_INFO(L"IconCache: Cleared {} cached icons, {} extension mappings, and {} path mappings", iconCount, extCount, pathCount);
+}
+
+void IconCache::ClearAssociationCache() noexcept
+{
+    const auto clearStart = std::chrono::steady_clock::now();
+    size_t associationCount = 0u;
+    {
+        std::lock_guard lock(g_associationCacheMutex);
+        associationCount = g_associationToIconIndex.size();
+        g_associationToIconIndex.clear();
+        g_associationQueryAccessCounter = 0u;
+        g_associationLruEvictions       = 0u;
+    }
+
+    PerfEmitDuration(L"iconcache.association_clear_us", PerfElapsedUs(clearStart), static_cast<uint64_t>(associationCount), 0u, S_OK);
 }
 
 void IconCache::ClearDeviceCache(ID2D1Device* device)

@@ -761,7 +761,10 @@ bool ViewerText::DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noex
 
 LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
 {
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
 
     const auto hit = HitTestTextView(hwnd, pt);
     if (hit.has_value() && IsClickableHiddenDiffBannerLogicalLine(hit->logicalLine))

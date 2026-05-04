@@ -59,12 +59,12 @@ File-system plugins share the same pane commands unless a plugin is read-only or
 |----------|---------|
 | `Enter` | Open folder, execute/open file, or mount an archive when an association exists. |
 | `Backspace` | Parent folder. |
-| `F3` | View selected file with the mapped viewer plugin. |
+| `F3` | View selected file with the associated viewer action. |
 | `F5` | Copy selection to the other pane. |
 | `F6` | Move selection to the other pane when supported. |
 | `F7` | Create directory when supported. |
 | `F8` / `Del` | Delete, using Recycle Bin only when the active file system supports it. |
-| `Shift+F8` / `Shift+Del` | Permanent delete. |
+| `Shift+F8` / `Shift+Del` | Permanent delete after confirmation. |
 | `Alt+Enter` | Properties through the active file-system plugin. |
 | `Ctrl+L` / `Alt+D` | Type a plugin path or saved connection alias. |
 | `Alt+F1` / `Alt+F2` | Open the left/right plugin drive menu. |
@@ -94,7 +94,7 @@ Behavior:
 - Usually starts by pressing `Enter` on a supported archive from a `file:` pane.
 - Supports browsing and reading/copying items out of archives.
 - Treats archives as mounted contexts, for example `7z:C:\Downloads\archive.zip|/`.
-- Current archive browsing is read-oriented; destructive operations inside archives should be treated as unsupported unless the UI explicitly enables them.
+- Current archive browsing is read-oriented; destructive operations inside mounted archives should be treated as unsupported unless the UI explicitly enables them. Local ZIP creation/extraction is available separately through **Files -> Pack** and **Files -> Unpack**.
 
 Shortcuts:
 
@@ -226,7 +226,7 @@ Behavior:
 Shortcuts:
 
 - `Enter` opens prefixes or objects.
-- `F3` views an object through the mapped viewer.
+- `F3` views an object through the associated viewer action.
 - `F5` uploads/copies to the other pane when the destination supports it.
 - `F8` / `Del` deletes selected objects.
 - Typing `s3:` with no target opens Connection Manager filtered to S3.
@@ -271,10 +271,12 @@ To disable auto-mount behavior, set `extensions.openWithFileSystemByExtension` t
 
 ## Viewer plugins
 
-Viewers are chosen by **file extension** mapping:
+Viewers are chosen by configured viewer actions and associations:
 
-- Preferences → **Viewers** controls `extension → viewer plugin`
-- `F3` opens the mapped viewer (fallback is the Text viewer when missing/disabled)
+- Preferences -> **Viewers** has **Associations** for `F3` and `Alt+F3`, plus **Actions** for internal viewer plugins and external viewer programs
+- `F3` opens the viewer action associated with the focused file's extension/pattern/computer, falling back to the default `*` association
+- `Alt+F3` opens the associated alternate viewer action when configured
+- **View With** lists applicable configured viewer actions for the focused item
 
 Built-in/available viewers include:
 

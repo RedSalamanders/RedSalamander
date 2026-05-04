@@ -3,6 +3,8 @@
 #include "ConnectionSecrets.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FileActionLauncher.h"
+#include "FileActionResolver.h"
 #include "FolderWindowInternal.h"
 #include "Helpers.h"
 #include "HostServices.h"
@@ -10,25 +12,66 @@
 #include "NavigationLocation.h"
 
 #include "SettingsStore.h"
+#include "ViewerPluginManager.h"
+#include "Win32CallbackHelpers.h"
 #ifdef ENABLE_TESTS
 #include "SelfTestCommon.h"
 #endif
 #include "UiMetrics.h"
 
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <cwctype>
+#include <fstream>
 #include <limits>
 #include <map>
+#include <span>
+#include <string>
+#include <system_error>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include <commctrl.h>
+#include <commdlg.h>
+#include <lm.h>
+#include <oleauto.h>
+#include <shobjidl.h>
+#include <shlwapi.h>
 #include <shellapi.h>
 #include <winnetwk.h>
+
+#ifndef INITGUID
+#define INITGUID
+#define REDSALAMANDER_UNDEF_7ZIP_INITGUID
+#endif
+#include <7zip/CPP/7zip/Archive/IArchive.h>
+#include <7zip/CPP/7zip/IPassword.h>
+#ifdef REDSALAMANDER_UNDEF_7ZIP_INITGUID
+#undef INITGUID
+#undef REDSALAMANDER_UNDEF_7ZIP_INITGUID
+#endif
+
+#pragma comment(lib, "Comdlg32.lib")
+#pragma comment(lib, "Netapi32.lib")
+#pragma comment(lib, "Shlwapi.lib")
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
+#include <yyjson.h>
+#pragma warning(pop)
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
 #pragma warning(disable : 4625 4626 5026 5027)
 #include <wil/resource.h>
+
+#pragma comment(lib, "OleAut32.lib")
 #pragma warning(pop)
 
 namespace
@@ -617,7 +660,6 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
     SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-#ifdef ENABLE_TESTS
 [[nodiscard]] bool IsActuallyVisibleChildWindow(HWND hwnd) noexcept
 {
     if (! hwnd || IsWindowVisible(hwnd) == FALSE)
@@ -660,6 +702,61 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
                      reinterpret_cast<LPARAM>(&count));
     return count;
 }
+
+#ifdef ENABLE_TESTS
+
+[[nodiscard]] std::wstring GetWindowClassNameLocal(HWND hwnd)
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return {};
+    }
+
+    std::array<wchar_t, 128> className{};
+    const int length = GetClassNameW(hwnd, className.data(), static_cast<int>(className.size()));
+    if (length <= 0)
+    {
+        return {};
+    }
+
+    return std::wstring(className.data(), static_cast<size_t>(length));
+}
+
+[[nodiscard]] bool IsNativeDialogTemplateControlClass(std::wstring_view className) noexcept
+{
+    return _wcsicmp(className.data(), L"#32770") == 0 || _wcsicmp(className.data(), L"Button") == 0 ||
+           _wcsicmp(className.data(), L"Edit") == 0 || _wcsicmp(className.data(), L"Static") == 0 ||
+           _wcsicmp(className.data(), L"ComboBox") == 0 || _wcsicmp(className.data(), L"SysListView32") == 0;
+}
+
+[[nodiscard]] size_t CountVisibleNativeChildControlWindowsLocal(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return 0u;
+    }
+
+    size_t count = 0u;
+    EnumChildWindows(hwnd,
+                     [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto* countPtr = reinterpret_cast<size_t*>(lParam);
+        if (! countPtr || ! IsActuallyVisibleChildWindow(child))
+        {
+            return TRUE;
+        }
+
+        std::array<wchar_t, 64> className{};
+        const int length = GetClassNameW(child, className.data(), static_cast<int>(className.size()));
+        if (length > 0 && IsNativeDialogTemplateControlClass(std::wstring_view(className.data(), static_cast<size_t>(length))))
+        {
+            ++(*countPtr);
+        }
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(&count));
+    return count;
+}
 #endif
 
 [[nodiscard]] int ScalePanePromptForDpi(const UINT dpi, const int dip) noexcept
@@ -667,10 +764,35 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
     return MulDiv(dip, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
 }
 
+constexpr float kPaneFilterPromptMarginDip       = 16.0f;
+constexpr float kPaneFilterPromptGapDip          = 8.0f;
+constexpr float kPaneFilterPromptRowHeightDip    = 34.0f;
+constexpr float kPaneFilterPromptLabelHeightDip  = 22.0f;
+constexpr float kPaneFilterPromptToggleWidthDip  = 112.0f;
+constexpr float kPaneFilterPromptHistoryWidthDip = 88.0f;
+constexpr float kPaneFilterPromptHintHeightDip   = 28.0f;
+constexpr float kPaneFilterPromptHelpHeightDip   = 112.0f;
+constexpr float kPaneFilterPromptButtonWidthDip  = 96.0f;
+constexpr float kPaneFilterPromptButtonHeightDip = 34.0f;
+
+[[nodiscard]] constexpr int ResolvePaneFilterPromptClientHeightDip(bool helpExpanded) noexcept
+{
+    float height = kPaneFilterPromptMarginDip + kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip + kPaneFilterPromptLabelHeightDip +
+                   kPaneFilterPromptGapDip + kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip + kPaneFilterPromptHintHeightDip +
+                   kPaneFilterPromptGapDip;
+    if (helpExpanded)
+    {
+        height += kPaneFilterPromptHelpHeightDip + kPaneFilterPromptGapDip;
+    }
+    height += kPaneFilterPromptButtonHeightDip + kPaneFilterPromptMarginDip;
+    return static_cast<int>(height);
+}
+
 constexpr wchar_t kFolderViewPaneFilterPromptClassName[]      = L"RedSalamander.FolderView.PaneFilterPrompt";
 constexpr wchar_t kFolderViewSelectionMaskPromptClassName[]   = L"RedSalamander.FolderView.SelectionMaskPrompt";
 constexpr wchar_t kFolderViewChangeCasePromptClassName[]      = L"RedSalamander.FolderView.ChangeCasePrompt";
 constexpr wchar_t kFolderViewCreateDirectoryPromptClassName[] = L"RedSalamander.FolderView.CreateDirectoryPrompt";
+constexpr wchar_t kFolderViewEditNewPromptClassName[]         = L"RedSalamander.FolderView.EditNewPrompt";
 
 #ifdef ENABLE_TESTS
 enum class FolderViewPaneFilterPromptDebugCommand : uintptr_t
@@ -678,6 +800,8 @@ enum class FolderViewPaneFilterPromptDebugCommand : uintptr_t
     GetSnapshot = 1u,
     SetEnabled,
     SetText,
+    SetTextAndNotify,
+    SetHelpExpanded,
     Confirm,
     Cancel,
 };
@@ -706,9 +830,24 @@ enum class FolderViewCreateDirectoryPromptDebugCommand : uintptr_t
     Cancel,
 };
 
+enum class FolderViewEditNewPromptDebugCommand : uintptr_t
+{
+    GetSnapshot = 1u,
+    SetText,
+    SelectEditor,
+    Confirm,
+    Cancel,
+};
+
 [[nodiscard]] UINT GetFolderViewCreateDirectoryPromptDebugMessage() noexcept
 {
     static const UINT message = RegisterWindowMessageW(L"RedSalamander.FolderView.CreateDirectoryPrompt.Debug");
+    return message;
+}
+
+[[nodiscard]] UINT GetFolderViewEditNewPromptDebugMessage() noexcept
+{
+    static const UINT message = RegisterWindowMessageW(L"RedSalamander.FolderView.EditNewPrompt.Debug");
     return message;
 }
 
@@ -1020,7 +1159,7 @@ private:
 
     [[nodiscard]] int ResolveWindowClientHeightPx(const UINT dpi) const noexcept
     {
-        return ScalePanePromptForDpi(dpi, _helpExpanded ? 286 : 206);
+        return ScalePanePromptForDpi(dpi, ResolvePaneFilterPromptClientHeightDip(_helpExpanded));
     }
 
     [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
@@ -1078,6 +1217,7 @@ private:
         _textField = _root->AddChild<TextField>(_initialText);
         _textField->SetMultiline(false);
         _textField->SetAccessibleName(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER));
+        _textField->SetOnTextChanged([this](std::wstring_view text) noexcept { SyncEnabledForFilterText(text); });
         _textField->SetOnSubmitted([this] { Confirm(); });
 
         _historyButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_HISTORY));
@@ -1161,82 +1301,80 @@ private:
         const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
         _root->SetBounds(client);
 
-        constexpr float kMarginDip       = 16.0f;
-        constexpr float kGapDip          = 8.0f;
-        constexpr float kRowHeightDip    = 34.0f;
-        constexpr float kLabelHeightDip  = 22.0f;
-        constexpr float kToggleWidthDip  = 112.0f;
-        constexpr float kHistoryWidthDip = 88.0f;
-        constexpr float kHintHeightDip   = 28.0f;
-        constexpr float kHelpHeightDip   = 112.0f;
-        constexpr float kButtonWidthDip  = 96.0f;
-        constexpr float kButtonHeightDip = 34.0f;
-
-        const float left         = client.left + kMarginDip;
-        const float right        = std::max(left, client.right - kMarginDip);
+        const float left         = client.left + kPaneFilterPromptMarginDip;
+        const float right        = std::max(left, client.right - kPaneFilterPromptMarginDip);
         const float contentWidth = std::max(0.0f, right - left);
-        float y                  = client.top + kMarginDip;
+        float y                  = client.top + kPaneFilterPromptMarginDip;
 
         if (_useLabel)
         {
-            _useLabel->SetBounds(D2D1::RectF(left, y + 6.0f, std::max(left, right - kToggleWidthDip - kGapDip), y + 6.0f + kLabelHeightDip));
+            _useLabel->SetBounds(D2D1::RectF(left,
+                                             y + 6.0f,
+                                             std::max(left, right - kPaneFilterPromptToggleWidthDip - kPaneFilterPromptGapDip),
+                                             y + 6.0f + kPaneFilterPromptLabelHeightDip));
         }
         if (_toggle)
         {
-            _toggle->SetBounds(D2D1::RectF(std::max(left, right - kToggleWidthDip), y, right, y + kRowHeightDip));
+            _toggle->SetBounds(D2D1::RectF(std::max(left, right - kPaneFilterPromptToggleWidthDip), y, right, y + kPaneFilterPromptRowHeightDip));
         }
-        y += kRowHeightDip + kGapDip;
+        y += kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip;
 
         if (_label)
         {
-            _label->SetBounds(D2D1::RectF(left, y, right, y + kLabelHeightDip));
+            _label->SetBounds(D2D1::RectF(left, y, right, y + kPaneFilterPromptLabelHeightDip));
         }
-        y += kLabelHeightDip + kGapDip;
+        y += kPaneFilterPromptLabelHeightDip + kPaneFilterPromptGapDip;
 
         const bool showHistoryButton = _historyButton && _historyButton->IsVisible();
-        const float historyLeft      = std::max(left, right - kHistoryWidthDip);
-        const float fieldRight       = showHistoryButton ? std::max(left, historyLeft - kGapDip) : right;
+        const float historyLeft      = std::max(left, right - kPaneFilterPromptHistoryWidthDip);
+        const float fieldRight       = showHistoryButton ? std::max(left, historyLeft - kPaneFilterPromptGapDip) : right;
 
         if (_textField)
         {
-            _textField->SetBounds(D2D1::RectF(left, y, fieldRight, y + kRowHeightDip));
+            _textField->SetBounds(D2D1::RectF(left, y, fieldRight, y + kPaneFilterPromptRowHeightDip));
         }
         if (_historyButton)
         {
             _historyButton->SetVisible(showHistoryButton);
             if (showHistoryButton)
             {
-                _historyButton->SetBounds(D2D1::RectF(historyLeft, y, right, y + kRowHeightDip));
+                _historyButton->SetBounds(D2D1::RectF(historyLeft, y, right, y + kPaneFilterPromptRowHeightDip));
             }
         }
-        y += kRowHeightDip + kGapDip;
+        y += kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip;
 
         if (_hintButton)
         {
-            _hintButton->SetBounds(D2D1::RectF(left, y, std::min(right, left + std::min(contentWidth, 160.0f)), y + kHintHeightDip));
+            _hintButton->SetBounds(D2D1::RectF(left, y, std::min(right, left + std::min(contentWidth, 160.0f)), y + kPaneFilterPromptHintHeightDip));
         }
-        y += kHintHeightDip + kGapDip;
+        y += kPaneFilterPromptHintHeightDip + kPaneFilterPromptGapDip;
 
         if (_helpLabel)
         {
-            _helpLabel->SetBounds(D2D1::RectF(left, y, right, y + (_helpExpanded ? kHelpHeightDip : 0.0f)));
+            _helpLabel->SetBounds(D2D1::RectF(left, y, right, y + (_helpExpanded ? kPaneFilterPromptHelpHeightDip : 0.0f)));
         }
         if (_helpExpanded)
         {
-            y += kHelpHeightDip + kGapDip;
+            y += kPaneFilterPromptHelpHeightDip + kPaneFilterPromptGapDip;
         }
 
-        const float buttonsTop = std::max(y, client.bottom - kMarginDip - kButtonHeightDip);
-        const float cancelLeft = std::max(left, right - kButtonWidthDip);
-        const float okLeft     = std::max(left, cancelLeft - kGapDip - kButtonWidthDip);
+        const float buttonsTop = std::max(y, client.bottom - kPaneFilterPromptMarginDip - kPaneFilterPromptButtonHeightDip);
+        const float cancelLeft = std::max(left, right - kPaneFilterPromptButtonWidthDip);
+        const float okLeft     = std::max(left, cancelLeft - kPaneFilterPromptGapDip - kPaneFilterPromptButtonWidthDip);
 
         if (_okButton)
         {
-            _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+            _okButton->SetBounds(D2D1::RectF(okLeft,
+                                             buttonsTop,
+                                             okLeft + kPaneFilterPromptButtonWidthDip,
+                                             buttonsTop + kPaneFilterPromptButtonHeightDip));
         }
         if (_cancelButton)
         {
-            _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+            _cancelButton->SetBounds(D2D1::RectF(cancelLeft,
+                                                 buttonsTop,
+                                                 cancelLeft + kPaneFilterPromptButtonWidthDip,
+                                                 buttonsTop + kPaneFilterPromptButtonHeightDip));
         }
     }
 
@@ -1261,14 +1399,33 @@ private:
                 return;
             }
 
-            _textField->SetText(std::wstring(value));
+            _textField->SetTextAndNotify(std::wstring(value));
             _dxHost.SetFocusControl(_textField);
         });
+    }
+
+    void SetFilterEnabled(bool enabled) noexcept
+    {
+        _enabled = enabled;
+        if (_toggle)
+        {
+            _toggle->SetChecked(enabled);
+        }
+    }
+
+    void SyncEnabledForFilterText(std::wstring_view text) noexcept
+    {
+        SetFilterEnabled(! StringUtils::TrimWhitespaceCopy(std::wstring(text)).empty());
     }
 
     void Confirm() noexcept
     {
         const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(_textField ? std::wstring(_textField->GetText()) : std::wstring{});
+        if (trimmed.empty())
+        {
+            SetFilterEnabled(false);
+        }
+
         if (_enabled)
         {
             const MaskSyntax::WildcardMask mask = MaskSyntax::ParseWildcardMask(trimmed);
@@ -1313,7 +1470,19 @@ private:
                 snapshot.usesDxUiHost            = _dxHost.GetRoot() != nullptr;
                 snapshot.visibleChildWindowCount = CountVisibleChildWindowsLocal(_hWnd.get());
                 snapshot.enabled                 = _enabled;
+                snapshot.helpExpanded            = _helpExpanded;
                 snapshot.text                    = _textField ? std::wstring(_textField->GetText()) : std::wstring{};
+                const D2D1_RECT_F client         = _dxHost.GetClientBoundsDip();
+                snapshot.clientBottomDip         = client.bottom;
+                if (_okButton)
+                {
+                    snapshot.okButtonBottomDip = _okButton->GetBounds().bottom;
+                }
+                if (_cancelButton)
+                {
+                    snapshot.cancelButtonBottomDip = _cancelButton->GetBounds().bottom;
+                }
+                snapshot.commandButtonsFitInClient = snapshot.okButtonBottomDip <= snapshot.clientBottomDip && snapshot.cancelButtonBottomDip <= snapshot.clientBottomDip;
                 {
                     const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
                     g_folderViewPaneFilterPromptDebugSnapshot = std::move(snapshot);
@@ -1344,6 +1513,28 @@ private:
                 _dxHost.SetFocusControl(_textField);
                 return TRUE;
             }
+            case FolderViewPaneFilterPromptDebugCommand::SetTextAndNotify:
+            {
+                if (! _textField)
+                {
+                    return FALSE;
+                }
+
+                std::wstring text;
+                {
+                    const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
+                    text = g_folderViewPaneFilterPromptDebugText;
+                }
+
+                _textField->SetTextAndNotify(std::move(text));
+                _dxHost.SetFocusControl(_textField);
+                return TRUE;
+            }
+            case FolderViewPaneFilterPromptDebugCommand::SetHelpExpanded:
+                _helpExpanded = lParam != 0;
+                UpdateHintUi();
+                ResizeForHelpState();
+                return TRUE;
             case FolderViewPaneFilterPromptDebugCommand::Confirm: Confirm(); return TRUE;
             case FolderViewPaneFilterPromptDebugCommand::Cancel: Cancel(); return TRUE;
         }
@@ -1986,6 +2177,96 @@ bool ContainsPathSeparators(std::wstring_view name) noexcept
     return std::nullopt;
 }
 
+[[nodiscard]] bool IsReservedWindowsDeviceName(std::wstring_view name) noexcept
+{
+    std::wstring_view stem = name;
+    if (const size_t dot = stem.find(L'.'); dot != std::wstring_view::npos)
+    {
+        stem = stem.substr(0, dot);
+    }
+
+    while (! stem.empty() && (stem.back() == L' ' || stem.back() == L'.'))
+    {
+        stem.remove_suffix(1);
+    }
+
+    if (stem.empty())
+    {
+        return false;
+    }
+
+    if (EqualsNoCase(stem, L"CON") || EqualsNoCase(stem, L"PRN") || EqualsNoCase(stem, L"AUX") || EqualsNoCase(stem, L"NUL"))
+    {
+        return true;
+    }
+
+    if (stem.size() == 4u && (StartsWithNoCase(stem, L"COM") || StartsWithNoCase(stem, L"LPT")) && stem[3] >= L'1' && stem[3] <= L'9')
+    {
+        return true;
+    }
+
+    return false;
+}
+
+[[nodiscard]] std::optional<UINT> ResolveEditNewValidationMessageId(std::wstring_view trimmed, const std::filesystem::path& targetFolder) noexcept
+{
+    if (trimmed.empty())
+    {
+        return IDS_MSG_PANE_EDIT_NEW_EMPTY_NAME;
+    }
+    if (trimmed == L"." || trimmed == L"..")
+    {
+        return IDS_MSG_PANE_EDIT_NEW_DOT_NAME;
+    }
+    if (LooksLikeWindowsAbsolutePath(trimmed) || ContainsPathSeparators(trimmed))
+    {
+        return IDS_MSG_PANE_EDIT_NEW_INVALID_CHARS;
+    }
+
+    constexpr std::wstring_view kInvalidNameChars = L":*?\"<>|";
+    if (trimmed.find_first_of(kInvalidNameChars) != std::wstring_view::npos)
+    {
+        return IDS_MSG_PANE_EDIT_NEW_INVALID_CHARS;
+    }
+    if (trimmed.find_first_of(L"\r\n\t") != std::wstring_view::npos)
+    {
+        return IDS_MSG_PANE_EDIT_NEW_INVALID_WHITESPACE;
+    }
+    if (IsReservedWindowsDeviceName(trimmed))
+    {
+        return IDS_MSG_PANE_EDIT_NEW_RESERVED_NAME;
+    }
+
+    if (! targetFolder.empty())
+    {
+        std::error_code ec;
+        const bool exists = std::filesystem::exists(targetFolder / std::filesystem::path(trimmed), ec);
+        if (! ec && exists)
+        {
+            return IDS_MSG_PANE_EDIT_NEW_EXISTS;
+        }
+    }
+
+    return std::nullopt;
+}
+
+std::wstring GetComputerNameTextForFileActions() noexcept
+{
+    wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1]{};
+    DWORD computerNameLength = static_cast<DWORD>(std::size(computerName));
+    if (GetComputerNameW(computerName, &computerNameLength) == FALSE || computerNameLength == 0u)
+    {
+        return {};
+    }
+    return std::wstring(computerName, computerNameLength);
+}
+
+struct EditNewPromptResult final
+{
+    std::wstring fileName;
+    std::wstring editorActionId;
+};
+
 class FolderViewCreateDirectoryPromptWindow final
 {
 public:
@@ -2517,6 +2798,677 @@ std::optional<std::wstring> PromptForCreateDirectoryName(HWND ownerWindow, std::
     return prompt ? prompt->ShowModal() : std::nullopt;
 }
 
+class FolderViewEditNewPromptWindow final
+{
+public:
+    FolderViewEditNewPromptWindow(const FolderViewEditNewPromptWindow&)            = delete;
+    FolderViewEditNewPromptWindow& operator=(const FolderViewEditNewPromptWindow&) = delete;
+    FolderViewEditNewPromptWindow(FolderViewEditNewPromptWindow&&)                 = delete;
+    FolderViewEditNewPromptWindow& operator=(FolderViewEditNewPromptWindow&&)      = delete;
+
+    FolderViewEditNewPromptWindow(HWND ownerWindow,
+                                  std::filesystem::path targetFolder,
+                                  std::wstring displayPath,
+                                  const Common::Settings::EditorFileActionsSettings* editorSettings,
+                                  std::wstring computerName,
+                                  const AppTheme& theme,
+                                  std::wstring initialFileName = {},
+                                  std::wstring captionText     = {},
+                                  bool showEditorControls      = true) noexcept
+        : _ownerWindow(GetOwnerWindowOrSelf(ownerWindow)),
+          _targetFolder(std::move(targetFolder)),
+          _displayPath(std::move(displayPath)),
+          _editorSettings(editorSettings),
+          _computerName(std::move(computerName)),
+          _currentText(std::move(initialFileName)),
+          _captionText(captionText.empty() ? LoadStringResource(nullptr, IDS_CAPTION_EDIT_NEW) : std::move(captionText)),
+          _theme(theme),
+          _showEditorControls(showEditorControls)
+    {
+    }
+
+    [[nodiscard]] std::optional<EditNewPromptResult> ShowModal() noexcept
+    {
+        const HRESULT classHr = EnsureWindowClass();
+        if (FAILED(classHr))
+        {
+            return std::nullopt;
+        }
+
+        const DWORD style   = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle = WS_EX_DLGMODALFRAME;
+        const UINT dpi      = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+
+        RECT bounds{0, 0, ScalePanePromptForDpi(dpi, 520), ScalePanePromptForDpi(dpi, 306)};
+        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
+        {
+            return std::nullopt;
+        }
+
+        const HWND hwnd = CreateWindowExW(exStyle,
+                                          kFolderViewEditNewPromptClassName,
+                                          _captionText.c_str(),
+                                          style,
+                                          CW_USEDEFAULT,
+                                          CW_USEDEFAULT,
+                                          bounds.right - bounds.left,
+                                          bounds.bottom - bounds.top,
+                                          _ownerWindow,
+                                          nullptr,
+                                          GetModuleHandleW(nullptr),
+                                          this);
+        if (! hwnd)
+        {
+            return std::nullopt;
+        }
+        if (! _hWnd)
+        {
+            _hWnd.reset(hwnd);
+        }
+
+        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(_dxHost.PrimeForShow());
+        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+        UpdateWindow(_hWnd.get());
+        SetForegroundWindow(_hWnd.get());
+
+        MSG msg{};
+        while (! _done)
+        {
+            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+            if (getMessageResult == -1)
+            {
+                return std::nullopt;
+            }
+            if (getMessageResult == 0)
+            {
+                _done = true;
+                break;
+            }
+
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+
+        return _result;
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (message == WM_NCCREATE)
+        {
+            auto* cs   = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            auto* self = static_cast<FolderViewEditNewPromptWindow*>(cs ? cs->lpCreateParams : nullptr);
+            if (! self)
+            {
+                return FALSE;
+            }
+
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            if (! self->_hWnd)
+            {
+                self->_hWnd.reset(hwnd);
+            }
+            return TRUE;
+        }
+
+        auto* self = reinterpret_cast<FolderViewEditNewPromptWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (! self)
+        {
+            return DefWindowProcW(hwnd, message, wParam, lParam);
+        }
+
+        bool handled     = false;
+        LRESULT dxResult = 0;
+        if (message != WM_CREATE)
+        {
+            dxResult = self->_dxHost.HandleMessage(hwnd, message, wParam, lParam, handled);
+        }
+        if (handled)
+        {
+            if (message == WM_SIZE || message == WM_DPICHANGED)
+            {
+                self->Layout();
+            }
+            if (message == WM_NCDESTROY)
+            {
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                self->_dxHost.Detach();
+                if (self->_hWnd.get() == hwnd)
+                {
+                    static_cast<void>(self->_hWnd.release());
+                }
+                self->_done = true;
+            }
+            return dxResult;
+        }
+
+#ifdef ENABLE_TESTS
+        if (message == GetFolderViewEditNewPromptDebugMessage())
+        {
+            return self->OnDebugCommand(static_cast<FolderViewEditNewPromptDebugCommand>(wParam), lParam);
+        }
+#endif
+
+        switch (message)
+        {
+            case WM_CREATE: return self->OnCreate(hwnd) ? 0 : -1;
+            case WM_SIZE: self->Layout(); return 0;
+            case WM_DPICHANGED:
+            {
+                const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+                if (suggested)
+                {
+                    SetWindowPos(hwnd,
+                                 nullptr,
+                                 suggested->left,
+                                 suggested->top,
+                                 suggested->right - suggested->left,
+                                 suggested->bottom - suggested->top,
+                                 SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                self->Layout();
+                return 0;
+            }
+            case WM_ERASEBKGND: return 1;
+            case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, self->_theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+            case WM_CLOSE: self->Cancel(); return 0;
+            case WM_NCDESTROY:
+                self->_dxHost.Detach();
+                if (self->_hWnd.get() == hwnd)
+                {
+                    self->_hWnd.release();
+                }
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                self->_done = true;
+                break;
+        }
+
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+private:
+    [[nodiscard]] static HRESULT EnsureWindowClass() noexcept
+    {
+        static ATOM atom = 0;
+        if (atom != 0)
+        {
+            return S_OK;
+        }
+
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = FolderViewEditNewPromptWindow::WndProc;
+        wc.hInstance     = GetModuleHandleW(nullptr);
+        wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kFolderViewEditNewPromptClassName;
+        wc.style         = CS_DBLCLKS;
+
+        atom = RegisterClassExW(&wc);
+        return atom != 0 ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
+    {
+        if (! _dxHost.Attach(hwnd))
+        {
+            return false;
+        }
+
+        BuildUi();
+        if (! _captionText.empty())
+        {
+            SetWindowTextW(hwnd, _captionText.c_str());
+        }
+        if (_nameField && ! _currentText.empty())
+        {
+            _nameField->SetText(_currentText);
+        }
+        ApplyTheme();
+        UpdateEditorChoices();
+        UpdateValidationUi();
+        Layout();
+        if (_nameField)
+        {
+            _dxHost.SetFocusControl(_nameField);
+            const size_t selectionEnd = _currentText.empty() ? 0u : _currentText.size();
+            _nameField->SetSelectionRange(0u, selectionEnd);
+            _dxHost.SyncTextInputBridge(_nameField);
+        }
+        _dxHost.SetDefaultButton(_createButton);
+        _dxHost.SetCancelButton(_cancelButton);
+        return true;
+    }
+
+    void BuildUi()
+    {
+        if (_root != nullptr)
+        {
+            return;
+        }
+
+        using namespace RedSalamander::DxUi;
+
+        _rootStorage = std::make_unique<Panel>();
+        _root        = _rootStorage.get();
+
+        _pathCaptionLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_LABEL_EDIT_NEW_IN));
+        _pathCaptionLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _pathLabel = _root->AddChild<Label>(_displayPath);
+        _pathLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        _pathLabel->SetMultiline(true);
+
+        _nameCaptionLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_LABEL_EDIT_NEW_NAME));
+        _nameCaptionLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _nameField = _root->AddChild<TextField>();
+        _nameField->SetMultiline(false);
+        _nameField->SetOnTextChanged([this](std::wstring_view text)
+        {
+            _currentText.assign(text);
+            if (_validationMessageId.has_value())
+            {
+                _validationMessageId = ResolveEditNewValidationMessageId(StringUtils::TrimWhitespaceCopy(_currentText), _targetFolder);
+            }
+            UpdateEditorChoices();
+            UpdateValidationUi();
+            Layout();
+        });
+
+        if (_showEditorControls)
+        {
+            _editorCaptionLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_LABEL_EDIT_NEW_EDITOR));
+            _editorCaptionLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+            _editorCombo = _root->AddChild<ComboBox>();
+            _editorCombo->SetVariant(ComboBoxVariant::Window);
+            _editorCombo->SetOnSelectionChanged([this](size_t index) noexcept
+            {
+                if (index < _editorActionIds.size())
+                {
+                    _selectedEditorActionId = _editorActionIds[index];
+                }
+            });
+        }
+
+        _validationLabel = _root->AddChild<Label>();
+        _validationLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        _validationLabel->SetMultiline(true);
+
+        _createButton = _root->AddChild<Button>(LoadStringResource(nullptr, _showEditorControls ? IDS_BUTTON_CREATE_AND_EDIT : IDS_BUTTON_CREATE));
+        _createButton->SetPrimary(true);
+        _createButton->SetOnClick([this] { Confirm(); });
+
+        _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
+        _cancelButton->SetOnClick([this] { Cancel(); });
+
+        _dxHost.SetRoot(std::move(_rootStorage));
+    }
+
+    void ApplyTheme() noexcept
+    {
+        _palette = MakeAppThemeDxPalette(_theme, _theme.windowBackground);
+        _dxHost.SetTheme(_palette);
+        if (_validationLabel)
+        {
+            _validationLabel->SetTextColor(_palette.errorText);
+        }
+        if (_hWnd)
+        {
+            if (! _captionText.empty())
+            {
+                SetWindowTextW(_hWnd.get(), _captionText.c_str());
+            }
+            ApplyWindowChromeTheme(_hWnd.get(), _theme, WindowBackdropTarget::Tool, GetActiveWindow() == _hWnd.get());
+            static_cast<void>(RedrawWindow(_hWnd.get(), nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW));
+        }
+    }
+
+    void UpdateValidationUi() noexcept
+    {
+        if (! _validationLabel)
+        {
+            return;
+        }
+
+        _validationText.clear();
+        if (_validationMessageId.has_value())
+        {
+            _validationText = LoadStringResource(nullptr, _validationMessageId.value());
+        }
+        _validationLabel->SetText(_validationText);
+        _validationLabel->SetVisible(! _validationText.empty());
+    }
+
+    void UpdateEditorChoices() noexcept
+    {
+        if (! _editorCombo)
+        {
+            return;
+        }
+
+        const auto startedAt = std::chrono::steady_clock::now();
+        _editorActionIds.clear();
+        _editorDisplayNames.clear();
+        std::vector<RedSalamander::DxUi::ComboBox::Item> items;
+
+        const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(_currentText);
+        std::optional<FileActionResolver::Request> request;
+        if (_editorSettings && ! trimmed.empty())
+        {
+            request = FileActionResolver::Request{
+                .command      = FileActionResolver::Command::EditNew,
+                .filePath     = _targetFolder / std::filesystem::path(trimmed),
+                .computerName = _computerName,
+            };
+            const std::vector<const Common::Settings::FileActionDefinition*> actions =
+                FileActionResolver::CollectAssociatedEditorActions(*_editorSettings, request.value());
+            items.reserve(actions.size());
+
+            for (const Common::Settings::FileActionDefinition* action : actions)
+            {
+                if (! action || action->kind != Common::Settings::FileActionKind::ExternalProgram || action->id.empty() ||
+                    StringUtils::TrimWhitespace(action->executablePath).empty())
+                {
+                    continue;
+                }
+
+                const std::wstring displayName = action->displayName.empty() ? action->id : action->displayName;
+                _editorActionIds.push_back(action->id);
+                _editorDisplayNames.push_back(displayName);
+                items.push_back(RedSalamander::DxUi::ComboBox::Item{action->id, displayName});
+            }
+        }
+
+        std::optional<size_t> selectedIndex;
+        if (! _editorActionIds.empty() && request.has_value())
+        {
+            const FileActionResolver::Resolution preferred =
+                _editorSettings ? FileActionResolver::ResolveEditorAction(*_editorSettings, request.value()) : FileActionResolver::Resolution{};
+            if (preferred.action)
+            {
+                for (size_t index = 0; index < _editorActionIds.size(); ++index)
+                {
+                    if (EqualsNoCase(_editorActionIds[index], preferred.action->id))
+                    {
+                        selectedIndex = index;
+                        break;
+                    }
+                }
+            }
+            if (! selectedIndex.has_value())
+            {
+                selectedIndex = 0u;
+            }
+        }
+
+        _editorCombo->SetItems(std::move(items));
+        _editorCombo->SetEnabled(!_editorActionIds.empty());
+        _editorCombo->SetSelectedIndex(selectedIndex);
+        _selectedEditorActionId = selectedIndex.has_value() ? _editorActionIds[selectedIndex.value()] : std::wstring{};
+
+        Debug::Perf::Emit(L"fileaction.editnew.editor_combo_us",
+                          L"",
+                          Debug::Perf::ElapsedUs(startedAt),
+                          static_cast<uint64_t>(_editorActionIds.size()),
+                          selectedIndex.has_value() ? static_cast<uint64_t>(selectedIndex.value()) : 0u,
+                          S_OK);
+    }
+
+    void Layout() noexcept
+    {
+        if (! _root)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
+        _root->SetBounds(client);
+
+        constexpr float kMarginDip           = 16.0f;
+        constexpr float kGapDip              = 8.0f;
+        constexpr float kCaptionHeightDip    = 22.0f;
+        constexpr float kPathHeightDip       = 54.0f;
+        constexpr float kRowHeightDip        = 34.0f;
+        constexpr float kValidationHeightDip = 40.0f;
+        constexpr float kButtonWidthDip      = 120.0f;
+        constexpr float kButtonHeightDip     = 34.0f;
+
+        const float left  = client.left + kMarginDip;
+        const float right = std::max(left, client.right - kMarginDip);
+        float y           = client.top + kMarginDip;
+
+        if (_pathCaptionLabel)
+        {
+            _pathCaptionLabel->SetBounds(D2D1::RectF(left, y, right, y + kCaptionHeightDip));
+        }
+        y += kCaptionHeightDip + 4.0f;
+
+        if (_pathLabel)
+        {
+            _pathLabel->SetBounds(D2D1::RectF(left, y, right, y + kPathHeightDip));
+        }
+        y += kPathHeightDip + kGapDip;
+
+        if (_nameCaptionLabel)
+        {
+            _nameCaptionLabel->SetBounds(D2D1::RectF(left, y, right, y + kCaptionHeightDip));
+        }
+        y += kCaptionHeightDip + 4.0f;
+
+        if (_nameField)
+        {
+            _nameField->SetBounds(D2D1::RectF(left, y, right, y + kRowHeightDip));
+        }
+        y += kRowHeightDip + kGapDip;
+
+        if (_showEditorControls)
+        {
+            if (_editorCaptionLabel)
+            {
+                _editorCaptionLabel->SetBounds(D2D1::RectF(left, y, right, y + kCaptionHeightDip));
+            }
+            y += kCaptionHeightDip + 4.0f;
+
+            if (_editorCombo)
+            {
+                _editorCombo->SetBounds(D2D1::RectF(left, y, right, y + kRowHeightDip));
+            }
+            y += kRowHeightDip + kGapDip;
+        }
+
+        const bool showValidation = ! _validationText.empty();
+        if (_validationLabel)
+        {
+            _validationLabel->SetBounds(D2D1::RectF(left, y, right, y + (showValidation ? kValidationHeightDip : 0.0f)));
+        }
+        if (showValidation)
+        {
+            y += kValidationHeightDip + kGapDip;
+        }
+
+        const float buttonsTop = std::max(y, client.bottom - kMarginDip - kButtonHeightDip);
+        const float cancelLeft = std::max(left, right - kButtonWidthDip);
+        const float createLeft = std::max(left, cancelLeft - kGapDip - kButtonWidthDip);
+
+        if (_createButton)
+        {
+            _createButton->SetBounds(D2D1::RectF(createLeft, buttonsTop, createLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        }
+        if (_cancelButton)
+        {
+            _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        }
+    }
+
+    void Confirm() noexcept
+    {
+        const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(_nameField ? std::wstring(_nameField->GetText()) : std::wstring{});
+        _validationMessageId       = ResolveEditNewValidationMessageId(trimmed, _targetFolder);
+        UpdateValidationUi();
+        Layout();
+        if (_validationMessageId.has_value())
+        {
+            MessageBeep(MB_ICONWARNING);
+            if (_nameField)
+            {
+                _dxHost.SetFocusControl(_nameField);
+            }
+            return;
+        }
+
+        _result = EditNewPromptResult{.fileName = trimmed, .editorActionId = _selectedEditorActionId};
+        _done   = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            _hWnd.reset();
+        }
+    }
+
+    void Cancel() noexcept
+    {
+        _result.reset();
+        _done = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            _hWnd.reset();
+        }
+    }
+
+#ifdef ENABLE_TESTS
+    LRESULT OnDebugCommand(FolderViewEditNewPromptDebugCommand command, LPARAM lParam) noexcept
+    {
+        switch (command)
+        {
+            case FolderViewEditNewPromptDebugCommand::GetSnapshot:
+            {
+                auto* snapshot = reinterpret_cast<FolderViewEditNewPromptDebugSnapshot*>(lParam);
+                if (! snapshot)
+                {
+                    return FALSE;
+                }
+
+                snapshot->usesDxUiHost            = _dxHost.GetRoot() != nullptr;
+                snapshot->visibleChildWindowCount = CountVisibleChildWindowsLocal(_hWnd.get());
+                snapshot->createInPath            = _displayPath;
+                snapshot->fileNameText            = _nameField ? std::wstring(_nameField->GetText()) : std::wstring{};
+                snapshot->validationText          = _validationText;
+                snapshot->nameFieldFocused        = _dxHost.GetFocusControl() == _nameField;
+                snapshot->selectionStart          = snapshot->fileNameText.size();
+                snapshot->selectionEnd            = snapshot->fileNameText.size();
+                if (_nameField)
+                {
+                    if (const auto selectionRange = _nameField->GetSelectionRange(); selectionRange.has_value())
+                    {
+                        snapshot->selectionStart = selectionRange->first;
+                        snapshot->selectionEnd   = selectionRange->second;
+                    }
+                }
+                snapshot->editorComboEnabled       = _editorCombo && _editorCombo->IsEnabled();
+                snapshot->selectedEditorActionId   = _selectedEditorActionId;
+                snapshot->editorActionIds          = _editorActionIds;
+                snapshot->editorDisplayNames       = _editorDisplayNames;
+                return TRUE;
+            }
+            case FolderViewEditNewPromptDebugCommand::SetText:
+            {
+                const auto* text = reinterpret_cast<const std::wstring*>(lParam);
+                if (! text || ! _nameField)
+                {
+                    return FALSE;
+                }
+                _nameField->SetText(*text);
+                _currentText = *text;
+                _validationMessageId.reset();
+                UpdateEditorChoices();
+                UpdateValidationUi();
+                Layout();
+                _dxHost.SetFocusControl(_nameField);
+                return TRUE;
+            }
+            case FolderViewEditNewPromptDebugCommand::SelectEditor:
+            {
+                const auto* actionId = reinterpret_cast<const std::wstring*>(lParam);
+                if (! actionId || ! _editorCombo)
+                {
+                    return FALSE;
+                }
+                for (size_t index = 0; index < _editorActionIds.size(); ++index)
+                {
+                    if (EqualsNoCase(_editorActionIds[index], *actionId))
+                    {
+                        _editorCombo->SetSelectedIndex(index);
+                        _selectedEditorActionId = _editorActionIds[index];
+                        return TRUE;
+                    }
+                }
+                return FALSE;
+            }
+            case FolderViewEditNewPromptDebugCommand::Confirm: Confirm(); return TRUE;
+            case FolderViewEditNewPromptDebugCommand::Cancel: Cancel(); return TRUE;
+        }
+
+        return FALSE;
+    }
+#endif
+
+private:
+    HWND _ownerWindow = nullptr;
+    std::filesystem::path _targetFolder;
+    std::wstring _displayPath;
+    const Common::Settings::EditorFileActionsSettings* _editorSettings = nullptr;
+    std::wstring _computerName;
+    std::wstring _currentText;
+    std::wstring _selectedEditorActionId;
+    std::vector<std::wstring> _editorActionIds;
+    std::vector<std::wstring> _editorDisplayNames;
+    std::wstring _validationText;
+    std::wstring _captionText;
+    AppTheme _theme{};
+    RedSalamander::DxUi::ThemePalette _palette{};
+    wil::unique_hwnd _hWnd;
+    RedSalamander::DxUi::WindowHost _dxHost;
+    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
+    RedSalamander::DxUi::Panel* _root               = nullptr;
+    RedSalamander::DxUi::Label* _pathCaptionLabel   = nullptr;
+    RedSalamander::DxUi::Label* _pathLabel          = nullptr;
+    RedSalamander::DxUi::Label* _nameCaptionLabel   = nullptr;
+    RedSalamander::DxUi::TextField* _nameField      = nullptr;
+    RedSalamander::DxUi::Label* _editorCaptionLabel = nullptr;
+    RedSalamander::DxUi::ComboBox* _editorCombo     = nullptr;
+    RedSalamander::DxUi::Label* _validationLabel    = nullptr;
+    RedSalamander::DxUi::Button* _createButton      = nullptr;
+    RedSalamander::DxUi::Button* _cancelButton      = nullptr;
+    std::optional<UINT> _validationMessageId;
+    bool _showEditorControls = true;
+    bool _done               = false;
+    std::optional<EditNewPromptResult> _result;
+};
+
+std::optional<EditNewPromptResult> PromptForEditNewFile(HWND ownerWindow,
+                                                        const std::filesystem::path& targetFolder,
+                                                        std::wstring_view displayPath,
+                                                        const Common::Settings::EditorFileActionsSettings* editorSettings,
+                                                        std::wstring_view computerName,
+                                                        const AppTheme& theme,
+                                                        std::wstring_view initialFileName = {},
+                                                        std::wstring_view captionText     = {},
+                                                        bool showEditorControls           = true)
+{
+    auto prompt = std::make_unique<FolderViewEditNewPromptWindow>(
+        ownerWindow,
+        targetFolder,
+        std::wstring(displayPath),
+        editorSettings,
+        std::wstring(computerName),
+        theme,
+        std::wstring(initialFileName),
+        std::wstring(captionText),
+        showEditorControls);
+    return prompt ? prompt->ShowModal() : std::nullopt;
+}
+
 class FolderViewChangeCasePromptWindow final
 {
 public:
@@ -2562,7 +3514,7 @@ public:
         const DWORD exStyle = WS_EX_DLGMODALFRAME;
         const UINT dpi      = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
 
-        RECT bounds{0, 0, ScalePanePromptForDpi(dpi, 448), ScalePanePromptForDpi(dpi, 272)};
+        RECT bounds{0, 0, ScalePanePromptForDpi(dpi, 448), ScalePanePromptForDpi(dpi, 304)};
         if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
         {
             return std::nullopt;
@@ -2803,6 +3755,7 @@ private:
         }
         _styleCombo->SetItems(std::move(styleItems));
         _styleCombo->SetSelectedIndex(0u);
+        _styleCombo->SetOnSelectionChanged([this](size_t) noexcept { UpdateExampleLabel(); });
         _styleCombo->SetOnSubmitted([this] { Confirm(); });
 
         _targetLabel = _root->AddChild<Label>(L"Change");
@@ -2820,6 +3773,11 @@ private:
         }
         _targetCombo->SetItems(std::move(targetItems));
         _targetCombo->SetSelectedIndex(0u);
+        _targetCombo->SetOnSelectionChanged([this](size_t) noexcept { UpdateExampleLabel(); });
+
+        _exampleLabel = _root->AddChild<Label>(BuildExampleText());
+        _exampleLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        _exampleLabel->SetFontRole(FontRole::Body);
 
         _includeSubdirsToggle = _root->AddChild<Toggle>(L"Include subdirectories");
         _includeSubdirsToggle->SetChecked(false);
@@ -2867,6 +3825,7 @@ private:
         constexpr float kGapDip          = 8.0f;
         constexpr float kLabelHeightDip  = 22.0f;
         constexpr float kRowHeightDip    = 34.0f;
+        constexpr float kExampleHeightDip = 24.0f;
         constexpr float kToggleHeightDip = 36.0f;
         constexpr float kButtonWidthDip  = 96.0f;
         constexpr float kButtonHeightDip = 34.0f;
@@ -2897,7 +3856,13 @@ private:
         {
             _targetCombo->SetBounds(D2D1::RectF(left, y, right, y + kRowHeightDip));
         }
-        y += kRowHeightDip + (kGapDip * 1.5f);
+        y += kRowHeightDip + kGapDip;
+
+        if (_exampleLabel)
+        {
+            _exampleLabel->SetBounds(D2D1::RectF(left, y, right, y + kExampleHeightDip));
+        }
+        y += kExampleHeightDip + (kGapDip * 1.5f);
 
         if (_includeSubdirsToggle)
         {
@@ -2920,12 +3885,8 @@ private:
 
     void Confirm() noexcept
     {
-        ChangeCase::Options options{};
-        options.style          = kStyleChoices[std::min(GetStyleIndex(), std::size(kStyleChoices) - 1u)].style;
-        options.target         = kTargetChoices[std::min(GetTargetIndex(), std::size(kTargetChoices) - 1u)].target;
-        options.includeSubdirs = _allowSubdirs && _includeSubdirs;
-        _result                = options;
-        _done                  = true;
+        _result = BuildOptionsFromSelections();
+        _done   = true;
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
             _hWnd.reset();
@@ -2967,6 +3928,41 @@ private:
         {
             _includeSubdirsToggle->SetChecked(_includeSubdirs);
         }
+        UpdateExampleLabel();
+    }
+
+    [[nodiscard]] ChangeCase::Options BuildOptionsFromSelections() const noexcept
+    {
+        ChangeCase::Options options{};
+        options.style          = kStyleChoices[std::min(GetStyleIndex(), std::size(kStyleChoices) - 1u)].style;
+        options.target         = kTargetChoices[std::min(GetTargetIndex(), std::size(kTargetChoices) - 1u)].target;
+        options.includeSubdirs = _allowSubdirs && _includeSubdirs;
+        return options;
+    }
+
+    [[nodiscard]] std::wstring BuildExampleText() const
+    {
+        constexpr std::wstring_view kSampleName = L"Sample File.TXT";
+
+        ChangeCase::Options options = BuildOptionsFromSelections();
+        options.includeSubdirs      = false;
+
+        const std::wstring before(kSampleName);
+        const std::wstring after = ChangeCase::TransformLeafName(before, options);
+        std::wstring text        = FormatStringResource(nullptr, IDS_CHANGE_CASE_EXAMPLE_FMT, before, after);
+        if (text.empty())
+        {
+            text = before + L" -> " + after;
+        }
+        return text;
+    }
+
+    void UpdateExampleLabel() noexcept
+    {
+        if (_exampleLabel)
+        {
+            _exampleLabel->SetText(BuildExampleText());
+        }
     }
 
 #ifdef ENABLE_TESTS
@@ -2989,6 +3985,7 @@ private:
                 snapshot->includeSubdirsChecked   = _includeSubdirs;
                 snapshot->styleIndex              = GetStyleIndex();
                 snapshot->targetIndex             = GetTargetIndex();
+                snapshot->exampleText             = _exampleLabel ? std::wstring(_exampleLabel->GetText()) : std::wstring{};
                 return TRUE;
             }
             case FolderViewChangeCasePromptDebugCommand::SetSelections:
@@ -3032,6 +4029,7 @@ private:
     RedSalamander::DxUi::ComboBox* _styleCombo         = nullptr;
     RedSalamander::DxUi::Label* _targetLabel           = nullptr;
     RedSalamander::DxUi::ComboBox* _targetCombo        = nullptr;
+    RedSalamander::DxUi::Label* _exampleLabel          = nullptr;
     RedSalamander::DxUi::Toggle* _includeSubdirsToggle = nullptr;
     RedSalamander::DxUi::Button* _okButton             = nullptr;
     RedSalamander::DxUi::Button* _cancelButton         = nullptr;
@@ -4045,6 +5043,7 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
             const Common::Settings::FoldersSettings* folders = (_settings && _settings->folders.has_value()) ? &_settings->folders.value() : nullptr;
             const FolderView::NameFilterState filter         = GetFolderHistoryFilterState(folders, displayPath);
             state.folderView.SetNameFilterState(filter, false /* refresh */);
+            UpdatePaneFilterBar(pane);
             state.folderView.SetFolderPath(pluginPath);
         }
 
@@ -4161,6 +5160,12 @@ std::optional<std::filesystem::path> FolderWindow::GetCurrentPluginPath(Pane pan
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.GetFolderPath();
+}
+
+std::optional<std::filesystem::path> FolderWindow::GetFocusedItemPath(Pane pane) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.GetFocusedPath();
 }
 
 std::vector<std::filesystem::path> FolderWindow::GetFolderHistory() const

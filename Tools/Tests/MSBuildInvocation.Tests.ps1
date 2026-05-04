@@ -136,4 +136,21 @@ Describe 'MSBuild invocation helper' {
             -Expected $null `
             -Message 'Ordinary compile progress lines should keep the terminal default color.'
     }
+
+    It 'summarizes MSBuild diagnostics from captured logs' {
+        $logPath = Join-Path $TestDrive 'msbuild.log'
+        @'
+  FolderView.ErrorOverlay.cpp
+Z:\src\RedSalamander\RedSalamander\Preferences.FileActions.cpp(779,20): warning C5245: unreferenced function [Z:\src\RedSalamander\RedSalamander\RedSalamander.vcxproj]
+MSBUILD : error MSB1009: Project file does not exist.
+link : fatal error LNK1120: 1 unresolved externals
+  0 Warning(s)
+  0 Error(s)
+'@ | Set-Content -Path $logPath -Encoding ASCII
+
+        $summary = Get-RSMSBuildDiagnosticSummary -LogPath $logPath
+
+        Assert-RSEqual -Actual $summary.WarningCount -Expected 1 -Message 'The log should report one warning diagnostic.'
+        Assert-RSEqual -Actual $summary.ErrorCount -Expected 2 -Message 'The log should report two error diagnostics.'
+    }
 }

@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:redsalamander:settings-store:11",
-  "title": "RedSalamander Settings Store (v11)",
+  "$id": "urn:redsalamander:settings-store:16",
+  "title": "RedSalamander Settings Store (v16)",
   "type": "object",
   "required": ["schemaVersion"],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "type": "integer", "const": 11 },
+    "schemaVersion": { "type": "integer", "const": 16 },
     "windows": {
       "type": "object",
       "title": "Windows",
@@ -19,6 +19,21 @@
     },
     "theme": { "$ref": "#/$defs/themeSettings" },
     "plugins": { "$ref": "#/$defs/pluginsSettings" },
+    "fileActions": { "$ref": "#/$defs/fileActionsSettings" },
+    "userMenu": {
+      "$ref": "#/$defs/userMenuSettings",
+      "title": "User Menu",
+      "description": "Settings-driven external commands for the Commands > User Menu popup and cmd/pane/userMenu/<itemId> shortcuts.",
+      "x-ui-pane": "UserMenu",
+      "x-ui-control": "custom",
+      "x-ui-order": 0
+    },
+    "makeFileList": {
+      "$ref": "#/$defs/makeFileListSettings",
+      "title": "Make File List",
+      "description": "Last selected non-default options for Commands > Make File List; missing fields load as defaults.",
+      "x-ui-control": "custom"
+    },
     "mainMenu": { "$ref": "#/$defs/mainMenuSettings" },
     "startup": { "$ref": "#/$defs/startupSettings" },
     "ui": { "$ref": "#/$defs/uiSettings" },
@@ -252,10 +267,285 @@
       },
       "additionalProperties": false
     },
+    "fileActionsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "File Actions",
+      "description": "Actions and command associations for viewer and editor command families.",
+      "properties": {
+        "viewers": { "$ref": "#/$defs/viewerFileActionsSettings" },
+        "editors": { "$ref": "#/$defs/editorFileActionsSettings" }
+      },
+      "additionalProperties": false
+    },
+    "viewerFileActionsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Viewer File Actions",
+      "description": "Viewer Actions and Associations used by F3 View, Alt+F3 Alternate View, and View With.",
+      "x-ui-pane": "Viewers",
+      "x-ui-control": "custom",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "default": [],
+          "title": "Viewer Actions",
+          "description": "Named internal viewer-plugin or external viewer actions that can be launched.",
+          "items": { "$ref": "#/$defs/fileActionDefinition" }
+        },
+        "associations": {
+          "type": "array",
+          "default": [],
+          "title": "Viewer Associations",
+          "description": "Rules mapping a file match and optional computer name to F3 and Alt+F3 viewer actions.",
+          "items": { "$ref": "#/$defs/viewerAssociationRule" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "editorFileActionsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Editor File Actions",
+      "description": "Editor Actions and Associations used by F4 Edit, Ctrl+Shift+F4 Alternate Edit, Shift+F4 Edit New, and Edit With.",
+      "x-ui-pane": "Editors",
+      "x-ui-control": "custom",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "default": [],
+          "title": "Editor Actions",
+          "description": "Named external editor actions that can be launched.",
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/fileActionDefinition" },
+              {
+                "properties": {
+                  "kind": { "const": "externalProgram" }
+                }
+              }
+            ]
+          }
+        },
+        "associations": {
+          "type": "array",
+          "default": [],
+          "title": "Editor Associations",
+          "description": "Rules mapping a file match and optional computer name to F4, Ctrl+Shift+F4, and Shift+F4 editor actions.",
+          "items": { "$ref": "#/$defs/editorAssociationRule" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "viewerAssociationRule": {
+      "type": "object",
+      "title": "Viewer Association",
+      "description": "Associates a file match and optional computer override with primary and alternate viewer actions.",
+      "required": ["match", "viewActionId"],
+      "properties": {
+        "match": { "$ref": "#/$defs/fileActionMatch" },
+        "computerName": { "type": "string", "default": "", "maxLength": 63, "title": "Computer", "description": "Exact computer name for an override; empty means any computer." },
+        "viewActionId": { "$ref": "#/$defs/fileActionId", "title": "F3 View", "description": "Action ID used by cmd/pane/view." },
+        "alternateViewActionId": { "$ref": "#/$defs/fileActionId", "title": "Alt+F3 Alternate View", "description": "Action ID used by cmd/pane/alternateView; empty means none." }
+      },
+      "additionalProperties": false
+    },
+    "editorAssociationRule": {
+      "type": "object",
+      "title": "Editor Association",
+      "description": "Associates a file match and optional computer override with edit, alternate edit, and edit-new actions.",
+      "required": ["match", "editActionId"],
+      "properties": {
+        "match": { "$ref": "#/$defs/fileActionMatch" },
+        "computerName": { "type": "string", "default": "", "maxLength": 63, "title": "Computer", "description": "Exact computer name for an override; empty means any computer." },
+        "editActionId": { "$ref": "#/$defs/fileActionId", "title": "F4 Edit", "description": "Action ID used by cmd/pane/edit." },
+        "alternateEditActionId": { "$ref": "#/$defs/fileActionId", "title": "Ctrl+Shift+F4 Alternate Edit", "description": "Action ID used by cmd/pane/alternateEdit; empty means none." },
+        "editNewActionId": { "$ref": "#/$defs/fileActionId", "title": "Shift+F4 Edit New", "description": "Action ID offered by cmd/pane/editNew after creating a new file; empty means none." }
+      },
+      "additionalProperties": false
+    },
+    "fileActionMatch": {
+      "type": "object",
+      "title": "File Match",
+      "description": "Default, extension, or filename-pattern match used by file action applicability and associations.",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["default", "extension", "pattern"], "title": "Match Kind" },
+        "value": { "type": "string", "default": "", "title": "Match Value", "description": "Extension with leading dot or filename glob; empty for default." }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "default" } }, "required": ["kind"] },
+          "then": { "properties": { "value": { "const": "" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "extension" } }, "required": ["kind"] },
+          "then": { "required": ["value"], "properties": { "value": { "$ref": "#/$defs/fileExtension" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "pattern" } }, "required": ["kind"] },
+          "then": { "required": ["value"], "properties": { "value": { "type": "string", "minLength": 1, "maxLength": 512 } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "fileActionApplicability": {
+      "type": "object",
+      "default": {},
+      "title": "Applicability",
+      "description": "Optional file and computer filters for a configured action.",
+      "properties": {
+        "matches": {
+          "type": "array",
+          "default": [],
+          "title": "File Matches",
+          "description": "Allowed file matches for this action; empty means any file.",
+          "items": { "$ref": "#/$defs/fileActionMatch" }
+        },
+        "computerNames": {
+          "type": "array",
+          "default": [],
+          "title": "Computers",
+          "description": "Computer names where this action applies; empty means any computer.",
+          "items": { "type": "string", "minLength": 1, "maxLength": 63 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "userMenuSettings": {
+      "type": "object",
+      "default": {},
+      "x-ui-control": "custom",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "default": [],
+          "title": "Actions",
+          "items": { "$ref": "#/$defs/fileActionDefinition" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "makeFileListSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Make File List",
+      "description": "Persists non-default last-used source, format, output, field, and macro options for cmd/pane/makeFileList; missing fields load as defaults.",
+      "properties": {
+        "sourceMode": {
+          "type": "string",
+          "enum": ["selection", "currentFolder"],
+          "default": "selection",
+          "title": "Source",
+          "description": "selection uses selected items or the focused item; currentFolder enumerates the active folder contents."
+        },
+        "recursive": {
+          "type": "boolean",
+          "default": false,
+          "title": "Recursive",
+          "description": "Include child folders when the source contains folders."
+        },
+        "format": {
+          "type": "string",
+          "enum": ["text", "csv", "json"],
+          "default": "text",
+          "title": "Format",
+          "description": "Output format for the generated list."
+        },
+        "outputTarget": {
+          "type": "string",
+          "enum": ["clipboard", "file"],
+          "default": "clipboard",
+          "title": "Output Target",
+          "description": "Write the generated list to the clipboard or to outputFile."
+        },
+        "textMacro": {
+          "type": "string",
+          "default": "{fullPath}\t{size}\t{modified}",
+          "title": "Text Macro",
+          "description": "Text-format row template. Supported macros include {filename}, {name}, {fullPath}, {path}, {size}, {modified}, {attributes}, and {isDirectory}."
+        },
+        "outputFile": {
+          "type": "string",
+          "default": "",
+          "title": "Output File",
+          "description": "Destination path used when outputTarget is file."
+        },
+        "includeName": { "type": "boolean", "default": true, "title": "Include Name" },
+        "includeFullPath": { "type": "boolean", "default": true, "title": "Include Full Path" },
+        "includeSize": { "type": "boolean", "default": true, "title": "Include Size" },
+        "includeModified": { "type": "boolean", "default": true, "title": "Include Modified Time" },
+        "includeAttributes": { "type": "boolean", "default": false, "title": "Include Attributes" },
+        "includeDirectories": { "type": "boolean", "default": true, "title": "Include Directories" }
+      },
+      "additionalProperties": false
+    },
+    "fileActionDefinition": {
+      "type": "object",
+      "title": "File Action",
+      "description": "Named internal viewer-plugin or external program action used by file commands.",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/fileActionId" },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "User-facing action label shown in picker menus and preferences."
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Disabled actions remain in settings but are not executable."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["viewerPlugin", "externalProgram"],
+          "description": "viewerPlugin opens an internal viewer plugin; externalProgram launches a configured process."
+        },
+        "pluginId": {
+          "$ref": "#/$defs/pluginId",
+          "description": "Viewer plugin ID used when kind is viewerPlugin."
+        },
+        "executablePath": {
+          "type": "string",
+          "description": "External program path. Macro tokens {Path}, {FullPath}, {PathAndFilename}, {Filename}, {SelectedPathsFile}, {OppositePanePath}, and {ComputerName} are allowed and expand as raw text."
+        },
+        "arguments": {
+          "type": "string",
+          "description": "External program arguments. Macro tokens {Path}, {FullPath}, {PathAndFilename}, {Filename}, {SelectedPathsFile}, {OppositePanePath}, and {ComputerName} are allowed; macro values are quoted and escaped as Windows command-line arguments."
+        },
+        "workingDirectory": {
+          "type": "string",
+          "description": "External program working directory. Macro tokens {Path}, {FullPath}, {PathAndFilename}, {Filename}, {SelectedPathsFile}, {OppositePanePath}, and {ComputerName} are allowed and expand as raw text."
+        },
+        "appliesTo": { "$ref": "#/$defs/fileActionApplicability" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "viewerPlugin" } }, "required": ["kind"] },
+          "then": { "required": ["pluginId"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "externalProgram" } }, "required": ["kind"] },
+          "then": { "required": ["executablePath"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "fileActionId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\/-]{0,63}$"
+    },
+    "fileExtension": {
+      "type": "string",
+      "pattern": "^\\.[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$"
+    },
     "extensionsSettings": {
       "type": "object",
       "default": {},
-      "x-ui-pane": "Viewers",
+      "x-ui-pane": "Plugins",
       "x-ui-control": "custom",
       "x-ui-order": 0,
       "properties": {
@@ -264,16 +554,6 @@
           "default": {},
           "title": "File System by Extension",
           "description": "Maps a file extension (lowercase, with leading dot like \".7z\") to a virtual file system plugin ID.",
-          "patternProperties": {
-            "^\\.[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$": { "$ref": "#/$defs/pluginId" }
-          },
-          "additionalProperties": false
-        },
-        "openWithViewerByExtension": {
-          "type": "object",
-          "default": {},
-          "title": "Viewer by Extension",
-          "description": "Maps a file extension (lowercase, with leading dot like \".txt\") to a viewer plugin ID used when opening files in a viewer (F3).",
           "patternProperties": {
             "^\\.[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$": { "$ref": "#/$defs/pluginId" }
           },
@@ -492,7 +772,7 @@
     },
     "folderDisplayMode": {
       "type": "string",
-      "enum": ["brief", "detailed"],
+      "enum": ["brief", "detailed", "extraDetailed", "thumbnails"],
       "default": "brief",
       "title": "Display Mode",
       "description": "How folder items are displayed."
@@ -515,11 +795,15 @@
       "type": "object",
       "default": {},
       "title": "Folder View",
-      "description": "Folder pane view settings (display mode, sorting, status bar).",
+      "description": "Folder pane view settings (display mode, sorting, and pane chrome visibility).",
       "properties": {
-        "display": { "$ref": "#/$defs/folderDisplayMode", "title": "Display", "description": "Brief or detailed view." },
+        "display": { "$ref": "#/$defs/folderDisplayMode", "title": "Display", "description": "Brief, detailed, extra-detailed, or thumbnails view." },
         "sortBy": { "$ref": "#/$defs/folderSortBy", "title": "Sort By", "description": "How items are sorted." },
         "sortDirection": { "$ref": "#/$defs/folderSortDirection", "title": "Direction", "description": "Ascending or descending sort direction." },
+        "fileExtensionsVisible": { "type": "boolean", "default": true, "title": "File Extensions", "description": "Whether file extensions are shown in pane item labels. This is display-only; file operations still use real names." },
+        "thumbnailsVisible": { "type": "boolean", "default": false, "title": "Legacy Thumbnails", "description": "Deprecated compatibility flag. Readers treat true as display=thumbnails; writers persist thumbnails through view.display instead." },
+        "navigationBarVisible": { "type": "boolean", "default": true, "title": "Navigation Bar", "description": "Whether the pane navigation/address bar is visible." },
+        "filterBarVisible": { "type": "boolean", "default": false, "title": "Filter Bar", "description": "Whether the persistent pane filter-state bar is visible." },
         "statusBarVisible": { "type": "boolean", "default": true, "title": "Status Bar", "description": "Whether the status bar is visible." }
       },
       "additionalProperties": false

@@ -41,9 +41,10 @@ enum class PrefCategory : int
     CompareDirectories,
     HotPaths,
     FileOperations,
+    UserMenu,
 };
 
-inline constexpr size_t kPrefCategoryCount = static_cast<size_t>(PrefCategory::FileOperations) + 1u;
+inline constexpr size_t kPrefCategoryCount = static_cast<size_t>(PrefCategory::UserMenu) + 1u;
 
 [[nodiscard]] constexpr size_t PrefCategoryIndex(const PrefCategory category) noexcept
 {

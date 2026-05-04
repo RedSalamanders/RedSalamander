@@ -1883,9 +1883,12 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
         case WM_GETMINMAXINFO:
-            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            if (! _embeddedMode)
             {
-                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 520, 360);
+                if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+                {
+                    Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 520, 360);
+                }
             }
             return 0;
         case WM_PAINT: OnPaint(); return 0;
@@ -1893,13 +1896,13 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_CLOSE: static_cast<void>(Close()); return 0;
         case WM_COMMAND: OnCommand(hwnd, LOWORD(wp)); return 0;
         case WM_SYSKEYDOWN:
-            if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
+            if (! _embeddedMode && (wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
             {
                 return 0;
             }
             break;
         case WM_SYSCHAR:
-            if (wp >= 0x20u && _menuBarHost.ActivateMnemonic(static_cast<wchar_t>(wp)))
+            if (! _embeddedMode && wp >= 0x20u && _menuBarHost.ActivateMnemonic(static_cast<wchar_t>(wp)))
             {
                 return 0;
             }
@@ -1957,11 +1960,11 @@ void ViewerSpace::OnCreate(HWND hwnd)
     _allowEraseBkgnd = true;
     _dpi             = static_cast<float>(GetDpiForWindow(hwnd));
 
-    if (! _menuHandle)
+    if (! _embeddedMode && ! _menuHandle)
     {
         _menuHandle.reset(GetMenu(hwnd));
     }
-    if (_menuHandle)
+    if (! _embeddedMode && _menuHandle)
     {
         _menuBarHost.SetTheme(_hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
@@ -1973,7 +1976,10 @@ void ViewerSpace::OnCreate(HWND hwnd)
     ApplyPendingViewerSpaceClassBackgroundBrush(hwnd);
     EnsureTooltip(hwnd);
     UpdateMenuState(hwnd);
-    _menuBarHost.UpdateLayout();
+    if (! _embeddedMode)
+    {
+        _menuBarHost.UpdateLayout();
+    }
 }
 
 void ViewerSpace::OnNcActivate(HWND hwnd, bool windowActive) noexcept
@@ -2017,7 +2023,10 @@ void ViewerSpace::OnSize(UINT width, UINT height) noexcept
         _renderTarget->Resize(D2D1::SizeU(width, height));
     }
 
-    _menuBarHost.UpdateLayout();
+    if (! _embeddedMode)
+    {
+        _menuBarHost.UpdateLayout();
+    }
     _layoutDirty = true;
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
 }
@@ -3968,6 +3977,7 @@ LRESULT ViewerSpace::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 {
     _menuBarHost.Detach();
     _menuHandle.reset();
+    _embeddedMode = false;
     _hWnd.release();
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
@@ -7154,6 +7164,21 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
         return E_INVALIDARG;
     }
 
+    const bool embeddedMode = (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) != 0u;
+    const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    if (embeddedMode && (! embeddedParent || IsWindow(embeddedParent) == FALSE))
+    {
+        return E_INVALIDARG;
+    }
+    if (_hWnd && _embeddedMode != embeddedMode)
+    {
+        static_cast<void>(Close());
+    }
+    if (_hWnd && embeddedMode && GetParent(_hWnd.get()) != embeddedParent)
+    {
+        static_cast<void>(Close());
+    }
+
     _fileSystem = context->fileSystem;
 
     _fileSystemName = context->fileSystemName ? context->fileSystemName : L"";
@@ -7184,7 +7209,18 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
         int y = CW_USEDEFAULT;
         int w = 1000;
         int h = 700;
-        if (ownerWindow && GetWindowRect(ownerWindow, &ownerRc) != 0)
+        if (embeddedMode)
+        {
+            RECT client{};
+            if (GetClientRect(embeddedParent, &client) != 0)
+            {
+                x = 0;
+                y = 0;
+                w = std::max(1L, client.right - client.left);
+                h = std::max(1L, client.bottom - client.top);
+            }
+        }
+        else if (ownerWindow && GetWindowRect(ownerWindow, &ownerRc) != 0)
         {
             x = ownerRc.left;
             y = ownerRc.top;
@@ -7192,26 +7228,65 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
             h = std::max(1L, ownerRc.bottom - ownerRc.top);
         }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERSPACE_MENU));
-        HWND window = CreateWindowExW(
-            0, kClassName, _metaName.empty() ? L"" : _metaName.c_str(), WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr, menu.get(), g_hInstance, this);
+        HMENU loadedMenu = embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERSPACE_MENU);
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(loadedMenu);
+        const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : WS_OVERLAPPEDWINDOW;
+        const bool previousEmbeddedMode = _embeddedMode;
+        _embeddedMode                   = embeddedMode;
+        HWND window = CreateWindowExW(0,
+                                      kClassName,
+                                      embeddedMode ? L"" : (_metaName.empty() ? L"" : _metaName.c_str()),
+                                      style,
+                                      x,
+                                      y,
+                                      w,
+                                      h,
+                                      embeddedMode ? embeddedParent : nullptr,
+                                      menu.get(),
+                                      g_hInstance,
+                                      this);
         if (! window)
         {
+            _embeddedMode = previousEmbeddedMode;
             return HRESULT_FROM_WIN32(GetLastError());
         }
 
-        menu.release();
+        if (! embeddedMode)
+        {
+            menu.release();
+        }
         _hWnd.reset(window);
 
         ApplyThemeToWindow(_hWnd.get());
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
+        if (! embeddedMode)
+        {
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
     else
     {
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        if (embeddedMode)
+        {
+            RECT client{};
+            if (GetClientRect(embeddedParent, &client) != 0)
+            {
+                SetWindowPos(_hWnd.get(),
+                             nullptr,
+                             0,
+                             0,
+                             std::max(1L, client.right - client.left),
+                             std::max(1L, client.bottom - client.top),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else
+        {
+            ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
 
     StartScan(context->focusedPath);

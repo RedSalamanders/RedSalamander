@@ -4306,12 +4306,6 @@
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Editors/Mouse live note validation.");
     PumpPendingMessages();
 
-    verifyNotePage(kPrefCategoryEditors, 3, IDS_PREFS_CAT_EDITORS, L"Editors");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
     verifyNotePage(kPrefCategoryMouse, 5, IDS_PREFS_CAT_MOUSE, L"Mouse");
     return state.failure.empty();
 }
@@ -4468,13 +4462,163 @@
         sendTab(true, true, PreferencesShellDebugFocusTarget::None, L"reverse wrapped category tree");
     };
 
-    verifyTabSkipForNotePage(kPrefCategoryEditors, 3, L"Editors");
+    verifyTabSkipForNotePage(kPrefCategoryMouse, 5, L"Mouse");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPreferencesDialogViewersEditorsFileActionSettingsApply(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
+    {
+        PostMessageW(existing, WM_CLOSE, 0, 0);
+        state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
+                      L"Existing Preferences window did not close before Viewers/Editors file-action settings validation.");
+    }
+
+    const Common::Settings::Settings baselineSettings = g_settings;
+    const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
+
+    const auto makeExternalAction = [](std::wstring_view id, std::wstring_view name) noexcept
+    {
+        Common::Settings::FileActionDefinition action{};
+        action.id             = std::wstring(id);
+        action.displayName    = std::wstring(name);
+        action.kind           = Common::Settings::FileActionKind::ExternalProgram;
+        action.executablePath = LR"(C:\Windows\System32\cmd.exe)";
+        action.arguments      = L"/c exit 0";
+        return action;
+    };
+
+    g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
+    g_settings.fileActions.viewers.actions.push_back(makeExternalAction(L"viewer-primary", L"Primary Viewer"));
+    g_settings.fileActions.viewers.actions.push_back(makeExternalAction(L"viewer-alt", L"Alternate Viewer"));
+    g_settings.fileActions.viewers.associations.push_back(TestDefaultViewerAssociation(L"viewer-primary", L"viewer-alt"));
+
+    g_settings.fileActions.editors = Common::Settings::EditorFileActionsSettings{};
+    g_settings.fileActions.editors.actions.push_back(makeExternalAction(L"editor-primary", L"Primary Editor"));
+    g_settings.fileActions.editors.actions.push_back(makeExternalAction(L"editor-alt", L"Alternate Editor"));
+    g_settings.fileActions.editors.associations.push_back(TestDefaultEditorAssociation(L"editor-primary", L"editor-alt", L"editor-primary"));
+
+    g_settings.userMenu = Common::Settings::UserMenuSettings{};
+    g_settings.userMenu.actions.push_back(makeExternalAction(L"user-menu-terminal", L"Open Terminal Here"));
+    g_settings.userMenu.actions.push_back(makeExternalAction(L"user-menu-compare", L"Compare Selection"));
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
+    const HWND prefs = WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms));
+    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Viewers/Editors file-action settings validation.");
+    if (! prefs || IsWindow(prefs) == FALSE)
+    {
+        return false;
+    }
+
+    const auto closeWindow = wil::scope_exit([&]() noexcept
+    {
+        if (IsWindow(prefs) != FALSE)
+        {
+            PostMessageW(prefs, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)));
+        }
+    });
+
+    const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            outSnapshot = {};
+            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        outSnapshot = {};
+        return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
+    };
+
+    PreferencesDebugSnapshot snapshot{};
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryEditors), L"Failed to select Editors preferences for file-action settings validation.");
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.currentCategory == kPrefCategoryEditors && value.editorsActionCount == 2u && value.editorsAssociationRowCount == 1u &&
+               value.editorsActionRowCount == 2u && value.editorsPrimaryActionIdText == L"editor-primary" &&
+               value.editorsAlternateActionIdText == L"editor-alt" && value.editorsEditNewActionIdText == L"editor-primary" &&
+               value.editorsPreviewActionIdText == L"editor-primary" && ! value.editorsPreviewReasonText.empty() &&
+               value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
+    },
+                      snapshot),
+                  L"Editors preferences did not expose the seeded primary/alternate editor file-action defaults.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    verifyTabSkipForNotePage(kPrefCategoryMouse, 5, L"Mouse");
+    state.Require(DebugSelectPreferencesEditorsDefaultAction(false, L"editor-alt"), L"Failed to select the alternate editor as the primary editor default.");
+    state.Require(DebugSelectPreferencesEditorsDefaultAction(true, L"editor-primary"),
+                  L"Failed to select the primary editor as the alternate editor default.");
+    state.Require(DebugSelectPreferencesEditorsDefaultEditNewAction(L"editor-alt"), L"Failed to select the alternate editor as the Edit New default.");
+    SendMessageW(prefs, WM_COMMAND, MAKEWPARAM(IDC_PREFS_APPLY, 0), 0);
+    PumpPendingMessages();
+
+    const Common::Settings::EditorAssociationRule* editorDefault = TestFindDefaultEditorAssociationForRead(g_settings.fileActions.editors);
+    state.Require(editorDefault != nullptr && editorDefault->editActionId == L"editor-alt",
+                  L"Preferences Apply did not persist the changed primary editor default.");
+    state.Require(editorDefault != nullptr && editorDefault->alternateEditActionId == L"editor-primary",
+                  L"Preferences Apply did not persist the changed alternate editor default.");
+    state.Require(editorDefault != nullptr && editorDefault->editNewActionId == L"editor-alt",
+                  L"Preferences Apply did not persist the changed Edit New editor default.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers), L"Failed to select Viewers preferences for file-action settings validation.");
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.currentCategory == kPrefCategoryViewers && value.viewersActionCount == 2u && value.viewersListRowCount == 1u &&
+               value.viewersActionRowCount == 2u && value.viewersPrimaryActionIdText == L"viewer-primary" &&
+               value.viewersAlternateActionIdText == L"viewer-alt" && value.viewersPreviewActionIdText == L"viewer-primary" &&
+               ! value.viewersPreviewReasonText.empty() && value.visibleCurrentPageChildWindowCount == 1u &&
+               value.currentPageDxHostResizeFailureCount == 0u;
+    },
+                      snapshot),
+                  L"Viewers preferences did not expose the seeded primary/alternate viewer file-action defaults.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(DebugSelectPreferencesViewersDefaultAction(true, L"viewer-primary"),
+                  L"Failed to select the primary viewer as the alternate viewer default.");
+    SendMessageW(prefs, WM_COMMAND, MAKEWPARAM(IDC_PREFS_APPLY, 0), 0);
+    PumpPendingMessages();
+
+    const Common::Settings::ViewerAssociationRule* viewerDefault = TestFindDefaultViewerAssociationForRead(g_settings.fileActions.viewers);
+    state.Require(viewerDefault != nullptr && viewerDefault->alternateViewActionId == L"viewer-primary",
+                  L"Preferences Apply did not persist the changed alternate viewer default.");
+
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryUserMenu), L"Failed to select User Menu preferences for file-action settings validation.");
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.currentCategory == kPrefCategoryUserMenu && value.userMenuActionCount == 2u && value.visibleCurrentPageChildWindowCount == 1u &&
+               value.currentPageDxHostResizeFailureCount == 0u && value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_USER_MENU);
+    },
+                      snapshot),
+                  L"User Menu preferences did not expose the seeded external command actions.");
     return state.failure.empty();
 }
 
@@ -4488,6 +4632,8 @@
         return LoadStringResource(nullptr, IDS_PREFS_CAT_VIEWERS);
     if (snapshot.currentCategory == kPrefCategoryEditors)
         return LoadStringResource(nullptr, IDS_PREFS_CAT_EDITORS);
+    if (snapshot.currentCategory == kPrefCategoryUserMenu)
+        return LoadStringResource(nullptr, IDS_PREFS_CAT_USER_MENU);
     if (snapshot.currentCategory == kPrefCategoryKeyboard)
         return LoadStringResource(nullptr, IDS_PREFS_CAT_KEYBOARD);
     if (snapshot.currentCategory == kPrefCategoryMouse)

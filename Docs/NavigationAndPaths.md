@@ -125,9 +125,8 @@ The disk info text and usage bar are also visible in the navigation bar:
 
 ![Navigation bar disk info](res/navigation-view.png)
 
-## Not implemented yet
+## Preview Pane
 
-- Filter bar (always-visible)
-- Additional view options toggles (file extensions, thumbnails, preview pane, navigation bar)
+**Left/Right -> Preview Pane** opens the named pane's preview in the opposite pane. The host pane shows Folder and Preview tabs, follows the source pane's focused item, and extends to the function bar or to the bottom of the window when the function bar is hidden.
 
-See: [Planned / TODO features](Todo.md)
+See: [Main window](MainWindow.md)

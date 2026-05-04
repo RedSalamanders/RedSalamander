@@ -10752,6 +10752,152 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     return state.failure.empty();
 }
 
+[[nodiscard]] bool QuickSearchSnapshotHasMatch(const FolderView::IncrementalSearchDebugSnapshot& snapshot,
+                                               std::wstring_view displayName,
+                                               UINT32 startPosition,
+                                               UINT32 length,
+                                               bool startsWith) noexcept
+{
+    return std::any_of(snapshot.matches.begin(),
+                       snapshot.matches.end(),
+                       [&](const FolderView::IncrementalSearchDebugMatch& match) noexcept
+    {
+        return match.displayName == displayName && match.range.startPosition == startPosition && match.range.length == length &&
+               match.startsWith == startsWith;
+    });
+}
+
+[[nodiscard]] bool TestPaneQuickSearchIntegratedNavigation(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"quick_search_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create quick-search test root.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpha.txt", "alpha"), L"Failed to create alpha.txt for quick-search test.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpine.log", "alpine"), L"Failed to create alpine.log for quick-search test.");
+    state.Require(SelfTest::WriteTextFile(root / L"beta-alpha.txt", "beta"), L"Failed to create beta-alpha.txt for quick-search test.");
+    state.Require(SelfTest::WriteTextFile(root / L"gamma.txt", "gamma"), L"Failed to create gamma.txt for quick-search test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for quick-search test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for quick-search test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"alpine.log", L"beta-alpha.txt", L"gamma.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for quick-search test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"gamma.txt"),
+                  L"Failed to focus gamma.txt before quick-search test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Left folder view handle unavailable for quick-search test.");
+    if (! folderView)
+    {
+        return false;
+    }
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
+    PumpPendingMessages();
+
+    FolderView::IncrementalSearchDebugSnapshot snapshot{};
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after command activation.");
+    state.Require(snapshot.active, L"Quick Search command should activate integrated pane search.");
+    state.Require(snapshot.query.empty(), L"Quick Search command should start with an empty query.");
+
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'a'), 0);
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'l'), 0);
+    PumpPendingMessages();
+
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after typing.");
+    state.Require(snapshot.active, L"Quick Search should remain active after typing.");
+    state.Require(snapshot.query == L"al", std::format(L"Quick Search query should be 'al'; got '{}'.", snapshot.query));
+    state.Require(snapshot.focusedDisplayName == L"alpha.txt",
+                  std::format(L"Quick Search should select the first starts-with match; got '{}'.", snapshot.focusedDisplayName));
+    state.Require(snapshot.matches.size() == 3u, std::format(L"Quick Search should highlight three containing matches; got {}.", snapshot.matches.size()));
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"alpha.txt", 0u, 2u, true), L"Quick Search should highlight prefix match alpha.txt.");
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"alpine.log", 0u, 2u, true), L"Quick Search should highlight prefix match alpine.log.");
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"beta-alpha.txt", 5u, 2u, false), L"Quick Search should highlight contained match beta-alpha.txt.");
+
+    SendMessageW(folderView, WM_KEYDOWN, VK_DOWN, 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after first match navigation.");
+    state.Require(snapshot.focusedDisplayName == L"alpine.log",
+                  std::format(L"Quick Search Down should move to the next match; got '{}'.", snapshot.focusedDisplayName));
+
+    SendMessageW(folderView, WM_KEYDOWN, VK_DOWN, 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after second match navigation.");
+    state.Require(snapshot.focusedDisplayName == L"beta-alpha.txt",
+                  std::format(L"Quick Search Down should include contained matches; got '{}'.", snapshot.focusedDisplayName));
+
+    SendMessageW(folderView, WM_KEYDOWN, VK_RETURN, 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after Enter.");
+    state.Require(! snapshot.active, L"Quick Search Enter should accept the current item and exit search mode.");
+    state.Require(snapshot.query.empty(), L"Quick Search Enter should clear the query.");
+    state.Require(snapshot.focusedDisplayName == L"beta-alpha.txt", L"Quick Search Enter should keep focus on the accepted item.");
+    state.Require(g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left).value_or(std::filesystem::path{}) == root,
+                  L"Quick Search Enter should not navigate away from the folder.");
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'z'), 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search no-match snapshot should be available.");
+    state.Require(snapshot.active, L"Quick Search no-match state should remain active.");
+    state.Require(snapshot.query == L"z", L"Quick Search no-match query should remain visible.");
+    state.Require(snapshot.matches.empty(), std::format(L"Quick Search no-match state should expose zero matches; got {}.", snapshot.matches.size()));
+
+    SendMessageW(folderView, WM_KEYDOWN, VK_ESCAPE, 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after Escape.");
+    state.Require(! snapshot.active, L"Quick Search Escape should exit search mode.");
+    state.Require(snapshot.query.empty(), L"Quick Search Escape should clear the query.");
+
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunSearchCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -10770,6 +10916,8 @@ void RunSearchCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpt
     });
     SelfTest::RunCase(
         options, suite, L"cmd_pane_find_dialog_search_ops", [=](CaseState& state) noexcept { return TestFindDialogSearchOps(mainWindow, state); });
+    SelfTest::RunCase(
+        options, suite, L"cmd_pane_quickSearch_integrated_navigation", [=](CaseState& state) noexcept { return TestPaneQuickSearchIntegratedNavigation(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_local_root_overrides_stale_context", [=](CaseState& state) noexcept {
         return TestFindDialogTypedLocalRootOverridesStaleContext(mainWindow, state);
     });

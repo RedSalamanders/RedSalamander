@@ -1610,7 +1610,10 @@ void ViewerWeb::OnCreate(HWND hwnd)
 
             _otherIndex = selectedIndex;
             static_cast<void>(OpenPath(hwnd, _otherFiles[_otherIndex], false));
-            SetFocus(hwnd);
+            if (! _embeddedMode)
+            {
+                SetFocus(hwnd);
+            }
         });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
@@ -2342,6 +2345,19 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
 
     const std::wstring focusedPath(context->focusedPath);
 
+    const bool embeddedMode =
+        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
+    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
+    {
+        Debug::Error(L"ViewerWeb: embedded Open requires a valid ownerWindow parent.");
+        return E_INVALIDARG;
+    }
+    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    {
+        static_cast<void>(Close());
+    }
+
     if (! _hWnd)
     {
         if (! RegisterWndClass(g_hInstance))
@@ -2349,41 +2365,82 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
             return E_FAIL;
         }
 
-        HWND ownerWindow = context->ownerWindow;
         RECT ownerRect{};
-        const bool hasOwnerRect = ownerWindow && GetWindowRect(ownerWindow, &ownerRect) != 0;
+        int x = CW_USEDEFAULT;
+        int y = CW_USEDEFAULT;
+        int w = 1000;
+        int h = 700;
+        if (embeddedMode)
+        {
+            RECT client{};
+            if (GetClientRect(embeddedParent, &client) == 0)
+            {
+                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerWeb: GetClientRect failed for embedded preview parent.");
+                return HRESULT_FROM_WIN32(lastError);
+            }
+            x = 0;
+            y = 0;
+            w = std::max(1L, client.right - client.left);
+            h = std::max(1L, client.bottom - client.top);
+        }
+        else if (context->ownerWindow && GetWindowRect(context->ownerWindow, &ownerRect) != 0)
+        {
+            x = static_cast<int>(ownerRect.left);
+            y = static_cast<int>(ownerRect.top);
+            w = static_cast<int>(std::max<LONG>(1, ownerRect.right - ownerRect.left));
+            h = static_cast<int>(std::max<LONG>(1, ownerRect.bottom - ownerRect.top));
+        }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
-
-        const int x      = hasOwnerRect ? static_cast<int>(ownerRect.left) : CW_USEDEFAULT;
-        const int y      = hasOwnerRect ? static_cast<int>(ownerRect.top) : CW_USEDEFAULT;
-        const LONG wLong = ownerRect.right - ownerRect.left;
-        const LONG hLong = ownerRect.bottom - ownerRect.top;
-        const int w      = hasOwnerRect ? static_cast<int>(std::max<LONG>(1, wLong)) : 1000;
-        const int h      = hasOwnerRect ? static_cast<int>(std::max<LONG>(1, hLong)) : 700;
-
-        HWND window = CreateWindowExW(0, kClassName, L"", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, x, y, w, h, nullptr, menu.get(), g_hInstance, this);
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(
+            embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
+        const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN);
+        HWND window = CreateWindowExW(0, kClassName, L"", style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, menu.get(), g_hInstance, this);
         if (! window)
         {
             const DWORD lastError = Debug::ErrorWithLastError(L"ViewerWeb: CreateWindowExW failed.");
             return HRESULT_FROM_WIN32(lastError);
         }
 
-        menu.release();
+        if (! embeddedMode)
+        {
+            menu.release();
+        }
         _hWnd.reset(window);
+        _embeddedMode = embeddedMode;
 
         ApplyTheme(_hWnd.get());
         ApplyPendingViewerWebClassBackgroundBrush(_hWnd.get());
 
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
+        if (! embeddedMode)
+        {
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
     else
     {
         ApplyPendingViewerWebClassBackgroundBrush(_hWnd.get());
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        if (_embeddedMode)
+        {
+            RECT client{};
+            if (embeddedParent != nullptr && GetClientRect(embeddedParent, &client) != 0)
+            {
+                SetWindowPos(_hWnd.get(),
+                             nullptr,
+                             0,
+                             0,
+                             std::max(1L, client.right - client.left),
+                             std::max(1L, client.bottom - client.top),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else
+        {
+            ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
 
     if (! _hWnd)
@@ -2401,6 +2458,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Close() noexcept
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
+    _embeddedMode = false;
     return S_OK;
 }
 

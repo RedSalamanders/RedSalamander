@@ -2,7 +2,7 @@
 
 ## Overview
 
-Viewer plugins allow RedSalamander to open a **dedicated viewer window** for specific file formats.
+Viewer plugins allow RedSalamander to open a **dedicated viewer window** for specific file formats, or an embedded child window when used by the preview pane.
 The viewer is opened with **F3** based on a file’s **extension** and a user-configurable association in settings.
 
 Key points:
@@ -16,42 +16,54 @@ Key points:
 
 ## Built-in viewer plugins
 
-Embedded:
+Embedded preview-capable:
 - `builtin/viewer-text`: baseline Text/Hex/Diff viewer (see `Specs/Plugins/Plugins_ViewerText.md`).
 - `builtin/viewer-sqlite`: SQLite table/query viewer (see `Specs/Plugins/Plugins_ViewerSqlite.md`).
 - `builtin/viewer-space`: folder disk-usage treemap (see `Specs/Plugins/Plugins_ViewerSpace.md`).
 - `builtin/viewer-imgraw`: image viewer using WIC + LibRaw (see `Specs/Plugins/Plugins_ViewerImgRaw.md`).
+- `builtin/viewer-vlc`: media viewer for video/audio formats supported by the VLC backend.
+- `builtin/viewer-pe`: PE executable/module inspector.
 
-Optional (loaded from `<exeDir>\\Plugins` when present):
+### VLC viewer behavior
+
+`builtin/viewer-vlc` uses libVLC for playback but owns the surrounding RedSalamander UI contract:
+
+- First-time libVLC initialization MUST run asynchronously after the viewer window is created. If initialization is still running after 800 ms, the viewer shows a themed loading overlay with a spinner and a short “Starting VLC” message; playback starts automatically when initialization completes. If VLC cannot be found or initialized, the normal missing-VLC overlay is shown.
+- The playback HUD uses Segoe Fluent Icons through the shared DxUi typography helper for play/pause, stop, snapshot, and volume/mute controls, falling back to Segoe MDL2 Assets only through that helper when needed. Icon controls render as filled, bordered buttons in their normal state; the mute state uses the system mute glyph and accent styling. The HUD exposes a normal volume control: a speaker button toggles mute/unmute, and a horizontal slider adjusts volume from 0-100. The slider value and muted state are persisted in the plugin configuration as `lastVolumePercent` and `muted`; embedded preview closes and plugin replacement must save those values the same way as a standalone viewer window. Fresh configurations default `audioVisualization` to `visual`; existing persisted values, including `goom`, remain honored.
+- Mouse wheel over any visible VLC viewer surface seeks the current media instead of doing nothing, including the main viewer window, the video area, the HUD, overlays, and libVLC-owned child video windows. Positive wheel seeks forward and negative wheel seeks backward. The step sizes are: no modifier = 10 seconds, Shift = 3 seconds, Ctrl = 60 seconds, Shift+Ctrl = 300 seconds. Seeks clamp to the media start/end.
+- Snapshot export MUST request a concrete output size from libVLC using the current visible video surface dimensions. It must not call `libvlc_video_take_snapshot` with a 0x0 size when the video surface has a valid client rectangle.
+- Embedded preview mode follows the general embedded-viewer focus rule: opening or updating VLC preview content must not steal keyboard focus from the source pane. When focus moves between two files that resolve to `builtin/viewer-vlc`, the preview host reuses the existing embedded VLC viewer instance and asks it to open the new file instead of destroying and recreating the plugin window.
+
+Optional embedded preview-capable plugins (loaded from `<exeDir>\\Plugins` when present):
 - `builtin/viewer-web`: WebView2-based HTML/PDF viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 - `builtin/viewer-json`: WebView2-based JSON/JSON5/JSONL viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 - `builtin/viewer-markdown`: WebView2-based Markdown viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 
 ## Settings (host responsibility)
 
-Viewer selection is controlled by a settings map:
+Viewer selection is controlled by schema v16 file-action settings:
 
-`settings.extensions.openWithViewerByExtension`:
-- Key: lowercase extension with leading dot (e.g. `.txt`)
-- Value: viewer plugin id (from `PluginMetaData.id`, e.g. `builtin/viewer-text`)
+- `settings.fileActions.viewers.actions`: configured viewer actions. Internal viewer-plugin actions use `kind: "viewerPlugin"` and store the viewer plugin id in `pluginId`.
+- `settings.fileActions.viewers.associations`: ordered command rules that map a file match and optional computer name to the F3 and Alt+F3 viewer actions.
 
 When F3 is pressed on a file:
-1. Host extracts the extension (lowercase).
-2. Host looks up the viewer plugin id in `openWithViewerByExtension`.
-3. If the plugin is available and enabled, host opens the viewer plugin.
-4. If no association is found (or plugin missing/disabled), host falls back to `builtin/viewer-text` (which may auto-select Text vs Hex based on file contents). If that fails, host falls back to default behavior.
+1. Host resolves the focused file through the viewer file-action resolver.
+2. If the resolved action is an enabled `viewerPlugin` action whose plugin is available and enabled, host opens that viewer plugin.
+3. If no association is found, host falls back to the configured default viewer action, normally `builtin/viewer-text` (which may auto-select Text vs Hex based on file contents). If that fails, host falls back to default behavior.
+4. If the association references a missing, disabled, or filtered-out action, host reports localized pane feedback instead of silently doing nothing.
 
 Default viewer associations route `.diff`, `.patch`, and `.rej` to `builtin/viewer-text`, which may open them in parsed diff mode or raw text depending on the persisted ViewerText diff defaults.
 
 ## Window behavior (host + plugin contract)
 
-- The viewer is a **standard top-level** window (min/max/restore) using `WS_OVERLAPPEDWINDOW` (avoid `WS_EX_TOOLWINDOW` unless a plugin explicitly wants a tool-style window).
+- A normal F3 viewer is a **standard top-level** window (min/max/restore) using `WS_OVERLAPPEDWINDOW` (avoid `WS_EX_TOOLWINDOW` unless a plugin explicitly wants a tool-style window).
 - On first display it is positioned **over** the main application window, using the same size and position
   (host provides a window handle for placement; plugin may use `GetWindowRect(...)`).
 - The viewer window MUST avoid a “white flash” (or any high-contrast flash) on first show:
-  - Host SHOULD call `IViewer::SetTheme()` before `IViewer::Open()` so the plugin can create the window with the correct initial background.
+  - Host SHOULD call `IViewer::SetTheme()` before `IViewer::Open()` so the plugin can create the window with the correct initial background, but plugins MUST accept either order.
   - Plugins SHOULD ensure the window class has a valid `WNDCLASSEXW::hbrBackground` consistent with the current `ViewerTheme.backgroundArgb` and allow `DefWindowProcW(WM_ERASEBKGND)` to run at least until the first `WM_PAINT` (after which returning `1` is fine for full-surface Direct2D renderers to avoid redundant clears/flicker).
 - The viewer behaves like a normal window after opening (it may be in front of or behind the main window); plugins SHOULD NOT rely on Win32 ownership to keep it above the main window.
+- An embedded preview viewer is the exception: it renders as a non-activating child window under `ViewerOpenContext.ownerWindow`, does not own a top-level menu or title bar, and MUST NOT take keyboard focus from the source pane during open or content updates.
 - Pressing **Esc** closes the viewer window.
   - If an in-view alert overlay is visible (errors/info), **Esc** dismisses the alert first, then closes on the next press.
 - “Other Files” navigation is supported using the `otherFiles` list passed at open time.
@@ -207,6 +219,7 @@ enum ViewerOpenFlags : uint32_t
 {
     VIEWER_OPEN_FLAG_NONE        = 0,
     VIEWER_OPEN_FLAG_START_HEX   = 0x1,
+    VIEWER_OPEN_FLAG_EMBEDDED    = 0x2,
 };
 
 struct ViewerOpenContext
@@ -234,7 +247,7 @@ struct ViewerOpenContext
 
 struct ViewerTheme
 {
-    uint32_t version; // 2
+    uint32_t version; // 4
     unsigned int dpi;
 
     uint32_t backgroundArgb;
@@ -270,3 +283,5 @@ interface __declspec(uuid("d1da10b7-0d0d-4d5c-9b3c-30c386c9d3c7")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept = 0;
 };
 ```
+
+`VIEWER_OPEN_FLAG_EMBEDDED` asks the plugin to render inside `ViewerOpenContext.ownerWindow` instead of creating a top-level viewer window. Embedded-capable plugins must create or reuse child-window chrome under that parent, avoid top-level activation/menu ownership, avoid stealing keyboard focus from the source pane, and fail the `Open()` call if embedded hosting is unsupported. The folder preview pane resolves the configured viewer action for the focused item and uses the resolved plugin when it is embedded-capable. If the focused item resolves to the same embedded-capable plugin as the current preview, the host must reuse the existing viewer instance and call `Open()` with the new context; it replaces the preview instance only after resolution chooses a different plugin or the refresh fails. If saved viewer associations are absent or only resolve the default text viewer, preview resolution consults the built-in embedded viewer defaults before falling back to `builtin/viewer-text`; image, media, web/document, PE, SQLite, space, and text previews must not be forced through `builtin/viewer-text` when a better configured or built-in viewer is available. If the resolved plugin is unavailable, disabled, unsupported for embedded hosting, or fails to open, the host falls back to the embedded text viewer or localized preview placeholder text and logs the selected viewer/fallback reason for monitor diagnostics.
