@@ -536,6 +536,8 @@
     },
     "fileActionId": {
       "type": "string",
+      "title": "File Action ID",
+      "description": "Case-sensitive stable action identifier. Association references match action IDs exactly, so IDs that differ only by case are distinct.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\/-]{0,63}$"
     },
     "fileExtension": {

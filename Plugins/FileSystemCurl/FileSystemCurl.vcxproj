@@ -96,7 +96,7 @@
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
@@ -111,7 +111,7 @@
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
@@ -126,7 +126,7 @@
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
@@ -141,7 +141,7 @@
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
@@ -158,7 +158,7 @@
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssh2.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssl-3-x64.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlicommon.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
@@ -175,7 +175,7 @@
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssh2.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssl-3-x64.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcrypto-3-x64.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlicommon.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>

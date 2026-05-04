@@ -261,10 +261,12 @@ Built-in plugin configuration keys are documented in their respective plugin spe
 - `builtin/viewer-imgraw`: `Specs/Plugins/Plugins_ViewerImgRaw.md`
 - `builtin/viewer-space`: `Specs/Plugins/Plugins_ViewerSpace.md`
 - `builtin/viewer-text`: `Specs/Plugins/Plugins_ViewerText.md`
+- `builtin/viewer-vlc`: `Specs/Plugins/Plugins_ViewerPlugins.md`
 - `builtin/viewer-web`, `builtin/viewer-json`, `builtin/viewer-markdown`: `Specs/Plugins/Plugins_ViewerWeb.md`
 
 Current built-in ViewerText configuration includes text/hex defaults plus diff defaults (`diffDefaultLayout`, `diffContextMode`, `diffAutoOpenMode`) persisted under `plugins.configurationByPluginId["builtin/viewer-text"]`.
 
+Current built-in ViewerVLC configuration includes `lastVolumePercent`, `muted`, and `audioVisualization` under `plugins.configurationByPluginId["builtin/viewer-vlc"]`. Fresh ViewerVLC configurations default `audioVisualization` to `visual`; existing persisted values, including `goom`, continue to round-trip. Standalone viewer closes, embedded preview closes, preview-plugin replacement, and app shutdown all persist changed ViewerVLC configuration through the same plugin configuration map.
 
 ## Extensions (v11)
 
@@ -337,7 +339,7 @@ Each editor association rule:
 
 Pattern and extension association rows share the same specificity bucket. If multiple rows in the same priority bucket match, the first row in persisted order wins.
 
-Association action IDs must reference an action in the same `viewers.actions` or `editors.actions` array. The reader rejects duplicate association keys with the same `match` plus `computerName`, duplicate action IDs, malformed matches, unknown action kinds, editor actions that are not `externalProgram`, `viewerPlugin` actions without `pluginId`, and `externalProgram` actions without `executablePath`. Normal `LoadSettings` backs up malformed settings and starts from defaults; no-recovery loads return a failure.
+Association action IDs must reference an action in the same `viewers.actions` or `editors.actions` array. References are exact and case-sensitive: two actions whose IDs differ only by case are distinct candidates and must not collapse during resolution or `View With` / `Edit With` collection. The reader rejects duplicate association keys with the same `match` plus `computerName`, duplicate action IDs, malformed matches, unknown action kinds, editor actions that are not `externalProgram`, `viewerPlugin` actions without `pluginId`, and `externalProgram` actions without `executablePath`. Normal `LoadSettings` backs up malformed settings and starts from defaults; no-recovery loads return a failure.
 
 Launch macro strings are interpreted by the command layer, not by the settings store. Supported macros are `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`. `executablePath` and `workingDirectory` expand macros as raw text. `arguments` expands each macro as a Windows command-line argument by quoting and escaping the macro value; when a macro is already wrapped in literal quotes in the template, the macro content is escaped without adding another quote pair.
 

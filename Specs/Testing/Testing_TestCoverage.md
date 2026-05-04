@@ -59,14 +59,14 @@ Recent UI-retirement evidence:
 **Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (70K+ lines, 360+ cases)
 
 The Commands suite is split into logical `.cpp` family files included from the main orchestrator:
-- `SelfTest\Commands\Commands.SelfTest.Settings.cpp` — Settings hot-reload, store, registry, shortcut defaults (11 cases)
+- `SelfTest\Commands\Commands.SelfTest.Settings.cpp` — Settings hot-reload, store, registry, preview/file-action guards, shortcut defaults (13+ cases)
 - `SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp` — Plugin configuration and file-system plugin (13 cases)
 - `SelfTest\Commands\Commands.SelfTest.Connections.cpp` — Connection manager and credentials (36 cases)
 - `SelfTest\Commands\Commands.SelfTest.Preferences.cpp` coordinator + 7 included chunk files — Preferences dialog automation (129 cases)
 - `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` — Compare directories options, chrome, and progress (11 cases)
 - `SelfTest\Commands\Commands.SelfTest.Search.cpp` — Find dialog, local search index, quick search/filter (52 cases)
 - `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` — Shortcuts window (31 cases)
-- `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` — View commands, selection, sort, pane, tabs (28 cases)
+- `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` — View commands, selection, sort, pane, tabs (29+ cases)
 - `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` — File operations issues pane, speed limit prompt (21 cases)
 - `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` — Navigation location, GoTo, navigation/drive menu shell stability, Escape focus reclaim to the active FolderView, navigation-menu `Go to >` placement before drive rows, nonstandard file-system `Common Folders` submenu coverage, and directory-impact selection preservation
 - `SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp` — Shell-integrated pane commands including Change Attributes attributes/date-time/stream reports and recursive progress
@@ -200,7 +200,7 @@ Connection Manager closeout requires:
 | `cmd_connection_credential_prompt_pointer_click_toggles_secret_visibility` | Secret visibility toggle |
 | `cmd_connection_credential_prompt_theme_cycle_keeps_surface_legible` | Theme cycle surface legibility and shared tool-window backdrop application |
 
-### 1.6 Pane Commands (23 cases)
+### 1.6 Pane Commands (24+ cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
@@ -216,6 +216,7 @@ Connection Manager closeout requires:
 | `cmd_pane_navigationView_history_dropdown_keyboard_navigation` | History dropdown navigation |
 | `cmd_pane_navigationView_path_doubleClick_enters_edit_mode` | Path double-click edit |
 | `cmd_pane_navigationView_region_tab_traversal` | Navigation region tab order |
+| `cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane` | NavigationView actions in an unfocused pane activate that pane, navigate the clicked target, and return keyboard focus to that pane's FolderView |
 | `cmd_pane_navigation_ambient_escape_returns_focus_to_active_folder_view` | Escape from main-window chrome restores active pane FolderView focus without clearing selection |
 | `cmd_pane_navigation_menu_escape_returns_focus_to_active_folder_view` | Escape from the keyboard-owned pane menu restores active pane FolderView focus without clearing selection |
 | `cmd_pane_navigation_nonstandard_menu_common_folders` | Nonstandard file-system NavigationView menus expose a `Common Folders` submenu with local known-folder rows and stock icons |
@@ -356,13 +357,14 @@ Key coverage patterns per page:
 | `cmd_compare_directories_options_uses_dxui_labels_without_visible_legacy_statics` | DxUi labels, zero visible native body/footer controls, and DirectWrite options typography metrics |
 | `cmd_compare_directories_progress_perf` | Compare progress performance |
 
-### 1.12 Settings and Infrastructure (21 cases)
+### 1.12 Settings and Infrastructure (26+ cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
 | `folderView_empty_folder_state` | Empty folder centered state plus row-sized focused `Go to parent` placeholder item |
 | `folderView_filter_watermark_empty_state` | Filter watermark display |
 | `folderView_perf_large_folder_baseline` | Large folder performance baseline |
+| `file_action_resolution_v16_action_ids_are_case_sensitive` | File-action resolver keeps action IDs case-sensitive and preserves distinct IDs that differ only by case |
 | `help_menu_links_external_documentation` | Help menu external documentation command placement and registry binding |
 | `icon_bitmap_alpha_normalization` | Icon alpha normalization including premultiply and AND-mask transparency semantics |
 | `mask_syntax_wildcards` | Wildcard mask syntax parsing |
@@ -373,7 +375,7 @@ Key coverage patterns per page:
 | `red_salamander_help_lists_diagnostics_options` | Help text documents Release diagnostics ETW and perf JSONL switches |
 | `registry_integrity` | Registry settings integrity; every command has a non-empty short function-bar label with guarded examples (`MakeDir`, `UsrMenu`, `ByTime`) |
 | `resource_hresult_details_format_is_valid` | Localized HRESULT details resource uses valid positional `std::format` placeholders |
-| `resource_invalid_format_string_returns_empty` | Runtime resource formatting degrades to an empty fallback instead of throwing when a localized string has invalid `std::format` syntax |
+| `resource_invalid_format_string_returns_empty` | Runtime resource formatting logs the failing resource ID/detail and degrades to an empty fallback instead of throwing when a localized string has invalid `std::format` syntax |
 | `resource_format_placeholders_are_positional` | Product `.rc` resources reject bare `{}` and unindexed `std::format` specs while allowing documented literal file-action macros |
 | `search_local_index_stream_stop_after_first` | Search stream stop semantics |
 | `settings_file_operations_precalc_roundtrip` | Pre-calc settings roundtrip |
@@ -381,6 +383,8 @@ Key coverage patterns per page:
 | `settings_hot_reload_*` | (4 cases) Hot reload merge/suppression |
 | `settings_shortcuts_*` | (2 cases) Shortcut settings roundtrip |
 | `settings_store_search_roundtrip` | Search settings roundtrip |
+| `pane_view_options_preview_uses_configured_embedded_viewer_and_preserves_focus` | Preview uses configured embedded viewers, reuses the same VLC instance across same-plugin media focus changes, forwards wheel seek from VLC child surfaces, preserves source-pane focus, and persists VLC preview volume/mute state |
+| `pane_view_options_preview_uses_builtin_embedded_viewer_with_empty_associations` | Preview consults built-in embedded viewer defaults when saved viewer associations are empty before falling back to ViewerText |
 | `shortcut_defaults_mapping` | Default shortcut mappings |
 | `shortcut_functionbar_dispatch_refresh` | Function bar dispatch and refresh using command short labels |
 

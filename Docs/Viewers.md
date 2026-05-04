@@ -8,6 +8,12 @@ If no specific association matches, the default `*` association normally opens t
 
 The examples below use generated documentation samples, not personal files.
 
+## Preview Pane
+
+![Preview pane showing an embedded Image/RAW viewer](res/preview-pane-image.png)
+
+The Preview Pane hosts the viewer for the focused file in the opposite pane, using the same viewer associations where an embedded viewer is available. The source Folder view keeps keyboard focus, and compatible preview viewers are reused as selection changes.
+
 ## Default Viewer Associations
 
 The default mapping includes:

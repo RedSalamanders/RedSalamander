@@ -86,6 +86,8 @@ The properties dialog can show local or plugin-provided fields: general identity
 - **Left/Right → Filter Bar**: show or hide the named pane's persistent filter summary.
 - **Left/Right → Navigation Bar**: show or hide the named pane's navigation bar. Address-bar commands show it automatically before focusing the address edit.
 
+![Preview pane showing an embedded Image/RAW viewer](res/preview-pane-image.png)
+
 ## Status bar (per pane)
 
 The optional status bar shows:

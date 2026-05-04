@@ -2802,7 +2802,9 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
             embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
         const DWORD style =
             embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VSCROLL);
-        HWND window = CreateWindowExW(0, kClassName, L"", style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, menu.get(), g_hInstance, this);
+        const std::wstring initialTitle = embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERPE_NAME) : _metaName);
+        HWND window =
+            CreateWindowExW(0, kClassName, initialTitle.c_str(), style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, menu.get(), g_hInstance, this);
         if (! window)
         {
             const DWORD lastError = Debug::ErrorWithLastError(L"ViewerPE: CreateWindowExW failed.");
