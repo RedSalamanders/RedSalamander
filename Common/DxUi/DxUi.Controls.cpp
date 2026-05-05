@@ -111,8 +111,10 @@ constexpr float kSliderThumbHoverDiameterDip     = 22.0f;
 constexpr float kSliderThumbPressedDiameterDip   = 18.0f;
 constexpr float kSliderTrackInsetDip             = 10.0f;
 constexpr float kSliderTickLengthDip             = 6.0f;
-constexpr float kTabStripHeightDip               = 36.0f;
-constexpr float kTabCornerRadiusDip              = 8.0f;
+constexpr float kTabStripHeightDip               = 32.0f;
+constexpr float kTabCornerRadiusDip              = 5.0f;
+constexpr float kTabAttachFillExtensionDip       = 1.0f;
+constexpr float kTabAttachStrokeInsetDip         = 1.0f;
 constexpr float kTabHeaderPaddingXDip            = 12.0f;
 constexpr float kTabHeaderGapDip                 = 4.0f;
 constexpr float kTabHeaderMinWidthDip            = 72.0f;
@@ -450,6 +452,125 @@ void DrawRoundedRect(WindowHost& host, const D2D1_RECT_F& rect, const D2D1_COLOR
     const D2D1_ROUNDED_RECT rounded{snappedRect, radiusDip, radiusDip};
     FillRoundedRectWithColor(host, rounded, fill);
     DrawRoundedRectWithColor(host, rounded, stroke, 1.0f);
+}
+
+void DrawTopRoundedAttachedRect(WindowHost& host,
+                                const D2D1_RECT_F& rect,
+                                const D2D1_COLOR_F& fill,
+                                const D2D1_COLOR_F& stroke,
+                                float radiusDip,
+                                float fillBottomExtensionDip,
+                                float strokeBottomInsetDip)
+{
+    auto* dc = host.GetDeviceContext();
+    if (! dc)
+    {
+        return;
+    }
+
+    const D2D1_RECT_F fillRect =
+        SnapRectToPixel(host, D2D1::RectF(rect.left, rect.top, rect.right, rect.bottom + (std::max)(0.0f, fillBottomExtensionDip)));
+    const D2D1_RECT_F strokeRect = SnapRectToPixel(host, rect);
+    const float width            = (std::max)(0.0f, fillRect.right - fillRect.left);
+    const float height           = (std::max)(0.0f, fillRect.bottom - fillRect.top);
+    const float radius            = std::clamp(radiusDip, 0.0f, (std::min)(width * 0.5f, height));
+    if (width <= 0.0f || height <= 0.0f)
+    {
+        return;
+    }
+
+    wil::com_ptr<ID2D1Factory> factory;
+    dc->GetFactory(factory.addressof());
+    if (! factory)
+    {
+        FillRectangleWithColor(host, fillRect, fill);
+        return;
+    }
+
+    wil::com_ptr<ID2D1PathGeometry> fillGeometry;
+    if (FAILED(factory->CreatePathGeometry(fillGeometry.addressof())) || ! fillGeometry)
+    {
+        FillRectangleWithColor(host, fillRect, fill);
+        return;
+    }
+
+    wil::com_ptr<ID2D1GeometrySink> sink;
+    if (FAILED(fillGeometry->Open(sink.addressof())) || ! sink)
+    {
+        FillRectangleWithColor(host, fillRect, fill);
+        return;
+    }
+
+    sink->BeginFigure(D2D1::Point2F(fillRect.left, fillRect.bottom), D2D1_FIGURE_BEGIN_FILLED);
+    sink->AddLine(D2D1::Point2F(fillRect.left, fillRect.top + radius));
+    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(fillRect.left + radius, fillRect.top),
+                                  D2D1::SizeF(radius, radius),
+                                  0.0f,
+                                  D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                                  D2D1_ARC_SIZE_SMALL));
+    sink->AddLine(D2D1::Point2F(fillRect.right - radius, fillRect.top));
+    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(fillRect.right, fillRect.top + radius),
+                                  D2D1::SizeF(radius, radius),
+                                  0.0f,
+                                  D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                                  D2D1_ARC_SIZE_SMALL));
+    sink->AddLine(D2D1::Point2F(fillRect.right, fillRect.bottom));
+    sink->AddLine(D2D1::Point2F(fillRect.left, fillRect.bottom));
+    sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+    if (FAILED(sink->Close()))
+    {
+        FillRectangleWithColor(host, fillRect, fill);
+        return;
+    }
+
+    if (auto* fillBrush = host.GetSolidBrush(fill))
+    {
+        dc->FillGeometry(fillGeometry.get(), fillBrush);
+    }
+
+    if (stroke.a <= 0.0f)
+    {
+        return;
+    }
+
+    wil::com_ptr<ID2D1PathGeometry> strokeGeometry;
+    if (FAILED(factory->CreatePathGeometry(strokeGeometry.addressof())) || ! strokeGeometry)
+    {
+        return;
+    }
+
+    wil::com_ptr<ID2D1GeometrySink> strokeSink;
+    if (FAILED(strokeGeometry->Open(strokeSink.addressof())) || ! strokeSink)
+    {
+        return;
+    }
+
+    const float strokeBottom =
+        std::clamp(SnapDipToPixel(host, rect.bottom - (std::max)(0.0f, strokeBottomInsetDip)), strokeRect.top + radius, fillRect.bottom);
+    strokeSink->BeginFigure(D2D1::Point2F(strokeRect.left, strokeBottom), D2D1_FIGURE_BEGIN_HOLLOW);
+    strokeSink->AddLine(D2D1::Point2F(strokeRect.left, strokeRect.top + radius));
+    strokeSink->AddArc(D2D1::ArcSegment(D2D1::Point2F(strokeRect.left + radius, strokeRect.top),
+                                        D2D1::SizeF(radius, radius),
+                                        0.0f,
+                                        D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                                        D2D1_ARC_SIZE_SMALL));
+    strokeSink->AddLine(D2D1::Point2F(strokeRect.right - radius, strokeRect.top));
+    strokeSink->AddArc(D2D1::ArcSegment(D2D1::Point2F(strokeRect.right, strokeRect.top + radius),
+                                        D2D1::SizeF(radius, radius),
+                                        0.0f,
+                                        D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                                        D2D1_ARC_SIZE_SMALL));
+    strokeSink->AddLine(D2D1::Point2F(strokeRect.right, strokeBottom));
+    strokeSink->EndFigure(D2D1_FIGURE_END_OPEN);
+    if (FAILED(strokeSink->Close()))
+    {
+        return;
+    }
+
+    if (auto* strokeBrush = host.GetSolidBrush(stroke))
+    {
+        dc->DrawGeometry(strokeGeometry.get(), strokeBrush, 1.0f);
+    }
 }
 
 void PaintFocusRing(WindowHost& host, const D2D1_RECT_F& controlBounds, float controlCornerRadiusDip) noexcept
@@ -3416,6 +3537,21 @@ std::wstring_view TabControl::GetTabTitle(size_t index) const noexcept
     return index < _tabs.size() ? _tabs[index].title : std::wstring_view{};
 }
 
+void TabControl::SetTabTooltip(size_t index, std::wstring tooltipText)
+{
+    if (index >= _tabs.size())
+    {
+        return;
+    }
+
+    _tabs[index].tooltipText = std::move(tooltipText);
+}
+
+std::wstring_view TabControl::GetTabTooltip(size_t index) const noexcept
+{
+    return index < _tabs.size() ? _tabs[index].tooltipText : std::wstring_view{};
+}
+
 void TabControl::SetTabClosable(size_t index, bool closable) noexcept
 {
     if (index >= _tabs.size())
@@ -3473,6 +3609,11 @@ const Control* TabControl::GetSelectedPage() const noexcept
 void TabControl::SetOnSelectionChanged(std::function<void(size_t)> onSelectionChanged)
 {
     _onSelectionChanged = std::move(onSelectionChanged);
+}
+
+void TabControl::SetOnTabCloseRequested(std::function<bool(size_t)> onTabCloseRequested)
+{
+    _onTabCloseRequested = std::move(onTabCloseRequested);
 }
 
 void TabControl::SetOnTabClosed(std::function<void(size_t)> onTabClosed)
@@ -3619,6 +3760,18 @@ D2D1_RECT_F TabControl::GetCloseButtonRect(size_t index) const noexcept
                            : D2D1::RectF(tabRect.right - 6.0f - kTabHeaderCloseButtonSizeDip, top, tabRect.right - 6.0f, top + kTabHeaderCloseButtonSizeDip);
 }
 
+bool TabControl::IsCloseButtonVisible(size_t index) const noexcept
+{
+    if (index >= _tabs.size() || ! _tabs[index].closable)
+    {
+        return false;
+    }
+
+    const bool selected = _selectedIndex.has_value() && _selectedIndex.value() == index;
+    const bool hovered  = _hoveredTabIndex.has_value() && _hoveredTabIndex.value() == index;
+    return selected || hovered;
+}
+
 TabControl::HeaderHitInfo TabControl::HitTestHeader(D2D1_POINT_2F point) const noexcept
 {
     if (! PointInRect(GetHeaderRect(), point))
@@ -3646,7 +3799,7 @@ TabControl::HeaderHitInfo TabControl::HitTestHeader(D2D1_POINT_2F point) const n
             continue;
         }
 
-        if (_tabs[index].closable && PointInRect(GetCloseButtonRect(index), point))
+        if (IsCloseButtonVisible(index) && PointInRect(GetCloseButtonRect(index), point))
         {
             return HeaderHitInfo{.part = HeaderPart::CloseButton, .index = index};
         }
@@ -3723,6 +3876,7 @@ void TabControl::SelectTab(WindowHost& host, size_t index, bool focusSelf) noexc
         return;
     }
 
+    const bool changed = _selectedIndex != index;
     _selectedIndex = index;
     if (focusSelf)
     {
@@ -3730,7 +3884,7 @@ void TabControl::SelectTab(WindowHost& host, size_t index, bool focusSelf) noexc
     }
     SyncLayout();
     const std::function<void(size_t)> onSelectionChanged = _onSelectionChanged;
-    if (onSelectionChanged)
+    if (changed && onSelectionChanged)
     {
         onSelectionChanged(index);
     }
@@ -3740,6 +3894,13 @@ void TabControl::CloseTab(WindowHost& host, size_t index) noexcept
 {
     if (index >= _tabs.size())
     {
+        return;
+    }
+
+    const std::function<bool(size_t)> onTabCloseRequested = _onTabCloseRequested;
+    if (onTabCloseRequested && onTabCloseRequested(index))
+    {
+        Invalidate(host);
         return;
     }
 
@@ -3865,8 +4026,19 @@ void TabControl::Paint(WindowHost& host) const
         const D2D1_RECT_F tabRect = GetTabRect(index);
         const bool selected       = _selectedIndex.has_value() && _selectedIndex.value() == index;
         const bool hovered        = _hoveredTabIndex.has_value() && _hoveredTabIndex.value() == index;
-        const D2D1_COLOR_F fill   = selected ? theme.headerBackground : (hovered ? theme.headerHovered : theme.windowBackground);
-        DrawRoundedRect(host, tabRect, fill, theme.borderDefault, kTabCornerRadiusDip);
+        const bool closeVisible   = IsCloseButtonVisible(index);
+        const D2D1_COLOR_F fill   = selected ? theme.cardBackground : (hovered ? theme.headerHovered : theme.windowBackground);
+        const D2D1_COLOR_F transparent = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+        const D2D1_RECT_F attachedTabRect = D2D1::RectF(tabRect.left, tabRect.top, tabRect.right, tabRect.bottom);
+        if (selected)
+        {
+            DrawTopRoundedAttachedRect(
+                host, attachedTabRect, fill, theme.borderDefault, kTabCornerRadiusDip, kTabAttachFillExtensionDip, kTabAttachStrokeInsetDip);
+        }
+        else if (hovered)
+        {
+            DrawTopRoundedAttachedRect(host, attachedTabRect, fill, transparent, kTabCornerRadiusDip, kTabAttachFillExtensionDip, 0.0f);
+        }
 
         const D2D1_RECT_F closeRect = GetCloseButtonRect(index);
         const D2D1_RECT_F textRect = IsRightToLeft()
@@ -3888,7 +4060,7 @@ void TabControl::Paint(WindowHost& host) const
                          false,
                          GetFlowDirection());
 
-        if (_tabs[index].closable)
+        if (closeVisible)
         {
             DrawCenteredText(host,
                              L"\xE711",
@@ -3931,18 +4103,25 @@ bool TabControl::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBu
             Invalidate(host);
             return true;
         case HeaderPart::CloseButton:
-            _closePressedIndex = hit.index;
             host.CaptureMouse(this);
-            host.SetFocusControl(this);
+            _closePressedIndex = hit.index;
+            if (IsFocusable())
+            {
+                host.SetFocusControl(this);
+            }
             Invalidate(host);
             return true;
         case HeaderPart::Tab:
+            SelectTab(host, hit.index, IsFocusable());
+            host.CaptureMouse(this);
             _pressedTabIndex  = hit.index;
             _draggingTabIndex = hit.index;
             _dragStartPoint   = point;
             _dragReordering   = false;
-            host.CaptureMouse(this);
-            host.SetFocusControl(this);
+            if (IsFocusable())
+            {
+                host.SetFocusControl(this);
+            }
             Invalidate(host);
             return true;
     }
@@ -3953,10 +4132,24 @@ bool TabControl::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBu
 bool TabControl::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/)
 {
     const HeaderHitInfo hit               = HitTestHeader(point);
-    const std::optional<size_t> nextHover = hit.part == HeaderPart::Tab ? std::optional<size_t>{hit.index} : std::nullopt;
+    const std::optional<size_t> nextHover =
+        (hit.part == HeaderPart::Tab || hit.part == HeaderPart::CloseButton) ? std::optional<size_t>{hit.index} : std::nullopt;
+    bool tooltipChanged = false;
+    if (nextHover.has_value() && nextHover.value() < _tabs.size() && ! _tabs[nextHover.value()].tooltipText.empty())
+    {
+        tooltipChanged = host.SetTooltipDelayed(std::wstring(_tabs[nextHover.value()].tooltipText), point);
+    }
+    else
+    {
+        tooltipChanged = host.BeginTooltipHideDelay();
+    }
     if (_hoveredTabIndex != nextHover)
     {
         _hoveredTabIndex = nextHover;
+        Invalidate(host);
+    }
+    else if (tooltipChanged)
+    {
         Invalidate(host);
     }
 
@@ -3978,9 +4171,14 @@ bool TabControl::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modif
 
 bool TabControl::OnMouseLeave(WindowHost& host)
 {
+    const bool tooltipChanged = host.BeginTooltipHideDelay();
     if (_hoveredTabIndex.has_value())
     {
         _hoveredTabIndex.reset();
+        Invalidate(host);
+    }
+    else if (tooltipChanged)
+    {
         Invalidate(host);
     }
     return true;
@@ -4006,7 +4204,6 @@ bool TabControl::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButt
         return false;
     }
 
-    host.ReleaseMouseCapture();
     const HeaderHitInfo hit                  = HitTestHeader(point);
     const std::optional<size_t> closePressed = _closePressedIndex;
     const std::optional<size_t> pressedTab   = _pressedTabIndex;
@@ -4015,15 +4212,16 @@ bool TabControl::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButt
     _draggingTabIndex.reset();
     _dragReordering = false;
 
-    if (closePressed.has_value() && hit.part == HeaderPart::CloseButton && hit.index == closePressed.value())
+    if ((closePressed.has_value() && hit.part == HeaderPart::CloseButton && hit.index == closePressed.value()) ||
+        (! closePressed.has_value() && hit.part == HeaderPart::CloseButton))
     {
-        CloseTab(host, closePressed.value());
+        CloseTab(host, hit.index);
         return true;
     }
 
     if (pressedTab.has_value() && hit.part == HeaderPart::Tab && hit.index == pressedTab.value())
     {
-        SelectTab(host, pressedTab.value(), true);
+        SelectTab(host, hit.index, IsFocusable());
         return true;
     }
 
@@ -4106,6 +4304,11 @@ D2D1_RECT_F TabControl::DebugGetTabRect(size_t index) const noexcept
 D2D1_RECT_F TabControl::DebugGetCloseButtonRect(size_t index) const noexcept
 {
     return GetCloseButtonRect(index);
+}
+
+bool TabControl::DebugIsCloseButtonVisible(size_t index) const noexcept
+{
+    return IsCloseButtonVisible(index);
 }
 
 float TabControl::DebugGetHeaderScrollOffsetDip() const noexcept
@@ -4946,6 +5149,9 @@ bool TooltipLayer::SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip)
 
     _text          = std::move(text);
     _originDip     = originDip;
+    _pendingText.clear();
+    _showScheduled = false;
+    _showTickMs    = 0u;
     _hideScheduled = false;
     _hideTickMs    = 0u;
     InvalidateLayoutCache();
@@ -4953,8 +5159,57 @@ bool TooltipLayer::SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip)
     return true;
 }
 
+bool TooltipLayer::SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& originDip, uint64_t nowTickMs, uint64_t delayMs)
+{
+    if (text.empty())
+    {
+        return Clear();
+    }
+
+    if (HasTooltip() && _text == text && TooltipPointsMatch(_originDip, originDip) && ! _hideScheduled)
+    {
+        return false;
+    }
+
+    const uint64_t nextShowTickMs = nowTickMs + delayMs;
+    if (_showScheduled && _pendingText == text)
+    {
+        if (! TooltipPointsMatch(_pendingOriginDip, originDip))
+        {
+            _pendingOriginDip = originDip;
+            return true;
+        }
+        return false;
+    }
+
+    _pendingText      = std::move(text);
+    _pendingOriginDip = originDip;
+    _showScheduled   = true;
+    _showTickMs      = nextShowTickMs;
+    _hideScheduled   = false;
+    _hideTickMs      = 0u;
+
+    bool changed = true;
+    if (IsVisible() || ! _text.empty())
+    {
+        _text.clear();
+        InvalidateLayoutCache();
+        SetVisible(false);
+    }
+
+    return changed;
+}
+
 bool TooltipLayer::BeginHideDelay(uint64_t nowTickMs, uint64_t delayMs) noexcept
 {
+    if (_showScheduled)
+    {
+        _pendingText.clear();
+        _showScheduled = false;
+        _showTickMs    = 0u;
+        return true;
+    }
+
     if (_text.empty() || ! IsVisible())
     {
         return false;
@@ -4985,14 +5240,17 @@ bool TooltipLayer::CancelHideDelay() noexcept
 
 bool TooltipLayer::Clear() noexcept
 {
-    if (_text.empty() && ! IsVisible() && ! _hideScheduled)
+    if (_text.empty() && _pendingText.empty() && ! IsVisible() && ! _showScheduled && ! _hideScheduled)
     {
         return false;
     }
 
     _text.clear();
+    _pendingText.clear();
     InvalidateLayoutCache();
     SetVisible(false);
+    _showScheduled = false;
+    _showTickMs    = 0u;
     _hideScheduled = false;
     _hideTickMs    = 0u;
     return true;
@@ -5008,9 +5266,31 @@ std::wstring_view TooltipLayer::GetTooltipText() const noexcept
     return _text;
 }
 
+#if defined(ENABLE_TESTS)
+std::wstring_view TooltipLayer::DebugGetPendingTooltipText() const noexcept
+{
+    return _showScheduled ? std::wstring_view{_pendingText} : std::wstring_view{};
+}
+#endif
+
 bool TooltipLayer::Tick(WindowHost& host, uint64_t nowTickMs)
 {
     static_cast<void>(host);
+    if (_showScheduled)
+    {
+        if (nowTickMs < _showTickMs)
+        {
+            return true;
+        }
+
+        std::wstring text = std::move(_pendingText);
+        const D2D1_POINT_2F originDip = _pendingOriginDip;
+        _pendingText.clear();
+        _showScheduled = false;
+        _showTickMs    = 0u;
+        return SetTooltip(std::move(text), originDip);
+    }
+
     if (! _hideScheduled)
     {
         return false;

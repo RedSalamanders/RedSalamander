@@ -1569,6 +1569,7 @@ public:
     struct TabItem
     {
         std::wstring title;
+        std::wstring tooltipText;
         bool closable = false;
     };
 
@@ -1589,6 +1590,8 @@ public:
     void RemoveTab(size_t index) noexcept;
     void SetTabTitle(size_t index, std::wstring title);
     [[nodiscard]] std::wstring_view GetTabTitle(size_t index) const noexcept;
+    void SetTabTooltip(size_t index, std::wstring tooltipText);
+    [[nodiscard]] std::wstring_view GetTabTooltip(size_t index) const noexcept;
     void SetTabClosable(size_t index, bool closable) noexcept;
     [[nodiscard]] bool IsTabClosable(size_t index) const noexcept;
     [[nodiscard]] size_t GetTabCount() const noexcept;
@@ -1597,6 +1600,7 @@ public:
     [[nodiscard]] Control* GetSelectedPage() noexcept;
     [[nodiscard]] const Control* GetSelectedPage() const noexcept;
     void SetOnSelectionChanged(std::function<void(size_t)> onSelectionChanged);
+    void SetOnTabCloseRequested(std::function<bool(size_t)> onTabCloseRequested);
     void SetOnTabClosed(std::function<void(size_t)> onTabClosed);
 
     void Paint(WindowHost& host) const override;
@@ -1611,6 +1615,7 @@ public:
 #if defined(ENABLE_TESTS)
     [[nodiscard]] D2D1_RECT_F DebugGetTabRect(size_t index) const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetCloseButtonRect(size_t index) const noexcept;
+    [[nodiscard]] bool DebugIsCloseButtonVisible(size_t index) const noexcept;
     [[nodiscard]] float DebugGetHeaderScrollOffsetDip() const noexcept;
     [[nodiscard]] bool DebugHasOverflowButtons() const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetBackButtonRect() const noexcept;
@@ -1651,6 +1656,7 @@ private:
     [[nodiscard]] D2D1_RECT_F GetForwardButtonRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetTabRect(size_t index) const noexcept;
     [[nodiscard]] D2D1_RECT_F GetCloseButtonRect(size_t index) const noexcept;
+    [[nodiscard]] bool IsCloseButtonVisible(size_t index) const noexcept;
     [[nodiscard]] HeaderHitInfo HitTestHeader(D2D1_POINT_2F point) const noexcept;
     void ScrollHeaderBy(float deltaDip) noexcept;
     void SelectTab(WindowHost& host, size_t index, bool focusSelf) noexcept;
@@ -1661,6 +1667,7 @@ private:
 
     std::vector<TabItem> _tabs;
     std::function<void(size_t)> _onSelectionChanged;
+    std::function<bool(size_t)> _onTabCloseRequested;
     std::function<void(size_t)> _onTabClosed;
     std::optional<size_t> _selectedIndex;
     std::optional<size_t> _hoveredTabIndex;
@@ -2135,12 +2142,14 @@ class TooltipLayer final : public Control
 {
 public:
     bool SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip);
+    bool SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& originDip, uint64_t nowTickMs, uint64_t delayMs);
     bool BeginHideDelay(uint64_t nowTickMs, uint64_t delayMs = 100u) noexcept;
     bool CancelHideDelay() noexcept;
     bool Clear() noexcept;
     [[nodiscard]] bool HasTooltip() const noexcept;
     [[nodiscard]] std::wstring_view GetTooltipText() const noexcept;
 #if defined(ENABLE_TESTS)
+    [[nodiscard]] std::wstring_view DebugGetPendingTooltipText() const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetBoundsDip(const WindowHost& host) const noexcept;
 #endif
 
@@ -2161,8 +2170,12 @@ private:
     [[nodiscard]] bool EnsureLayoutCache(const WindowHost& host) const noexcept;
     [[nodiscard]] D2D1_RECT_F ComputeBoundsDip(const WindowHost& host) const noexcept;
     std::wstring _text;
+    std::wstring _pendingText;
     D2D1_POINT_2F _originDip = D2D1::Point2F();
+    D2D1_POINT_2F _pendingOriginDip = D2D1::Point2F();
     mutable LayoutCache _layoutCache{};
+    bool _showScheduled  = false;
+    uint64_t _showTickMs = 0u;
     bool _hideScheduled  = false;
     uint64_t _hideTickMs = 0u;
 };
@@ -2678,10 +2691,15 @@ public:
     [[nodiscard]] const Control* GetRoot() const noexcept;
 
     bool SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip);
+    bool SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& originDip);
     bool BeginTooltipHideDelay(uint64_t delayMs = 100u) noexcept;
     bool ClearTooltip() noexcept;
     [[nodiscard]] bool HasTooltip() const noexcept;
     [[nodiscard]] std::wstring_view GetTooltipText() const noexcept;
+#if defined(ENABLE_TESTS)
+    [[nodiscard]] std::wstring_view DebugGetPendingTooltipText() const noexcept;
+    [[nodiscard]] bool DebugAdvanceTooltipDelayForTest() noexcept;
+#endif
 
     void SetSmokeOverlayVisible(bool visible) noexcept;
     [[nodiscard]] bool IsSmokeOverlayVisible() const noexcept;

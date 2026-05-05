@@ -41,73 +41,76 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         }
     }
 
+    HWND existingPopup = nullptr;
     {
         std::scoped_lock lock(_mutex);
-        if (_popup)
+        existingPopup = _popup.get();
+    }
+
+    if (existingPopup && IsWindow(existingPopup))
+    {
+        Debug::Perf::EmitCounter(L"FileOps.InfoTask.EnsurePopupVisibleExistingCount");
+        const bool capturePerf       = Debug::Perf::IsCaptureEnabled();
+        const uint64_t showStartedUs = capturePerf ? PerfNowUs() : 0u;
+        ShowWindow(existingPopup, SW_SHOWNOACTIVATE);
+        const uint64_t showUs = capturePerf ? PerfElapsedUs(showStartedUs) : 0u;
+        RECT popupRect{};
+        bool reposition = false;
+        int targetX     = 0;
+        int targetY     = 0;
+        if (GetWindowRect(existingPopup, &popupRect) != 0)
         {
-            Debug::Perf::EmitCounter(L"FileOps.InfoTask.EnsurePopupVisibleExistingCount");
-            const bool capturePerf       = Debug::Perf::IsCaptureEnabled();
-            const uint64_t showStartedUs = capturePerf ? PerfNowUs() : 0u;
-            ShowWindow(_popup.get(), SW_SHOWNOACTIVATE);
-            const uint64_t showUs = capturePerf ? PerfElapsedUs(showStartedUs) : 0u;
-            RECT popupRect{};
-            bool reposition = false;
-            int targetX     = 0;
-            int targetY     = 0;
-            if (GetWindowRect(_popup.get(), &popupRect) != 0)
+            HMONITOR monitor = nullptr;
+            if (ownerWindow)
             {
-                HMONITOR monitor = nullptr;
-                if (ownerWindow)
-                {
-                    monitor = MonitorFromWindow(ownerWindow, MONITOR_DEFAULTTONEAREST);
-                }
-                if (! monitor)
-                {
-                    monitor = MonitorFromWindow(_popup.get(), MONITOR_DEFAULTTONEAREST);
-                }
-
-                MONITORINFO mi{};
-                mi.cbSize = sizeof(mi);
-                if (monitor && GetMonitorInfoW(monitor, &mi) != 0)
-                {
-                    const RECT& work  = mi.rcWork;
-                    const LONG width  = popupRect.right - popupRect.left;
-                    const LONG height = popupRect.bottom - popupRect.top;
-
-                    if (work.right > work.left && width > 0 && work.bottom > work.top && height > 0)
-                    {
-                        const LONG maxX = std::max(work.left, work.right - width);
-                        const LONG maxY = std::max(work.top, work.bottom - height);
-
-                        const LONG clampedX = std::clamp(popupRect.left, work.left, maxX);
-                        const LONG clampedY = std::clamp(popupRect.top, work.top, maxY);
-
-                        targetX = static_cast<int>(clampedX);
-                        targetY = static_cast<int>(clampedY);
-
-                        reposition = clampedX != popupRect.left || clampedY != popupRect.top;
-                    }
-                }
+                monitor = MonitorFromWindow(ownerWindow, MONITOR_DEFAULTTONEAREST);
+            }
+            if (! monitor)
+            {
+                monitor = MonitorFromWindow(existingPopup, MONITOR_DEFAULTTONEAREST);
             }
 
-            const UINT flags = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
-
-            // Keep the popup visible even if it was behind other windows. Avoid stealing focus.
-            const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
-            SetWindowPos(_popup.get(), HWND_TOP, targetX, targetY, 0, 0, flags);
-            const uint64_t positionUs          = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
-            const uint64_t invalidateStartedUs = capturePerf ? PerfNowUs() : 0u;
-            InvalidateRect(_popup.get(), nullptr, FALSE);
-            const uint64_t invalidateUs = capturePerf ? PerfElapsedUs(invalidateStartedUs) : 0u;
-            if (capturePerf)
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+            if (monitor && GetMonitorInfoW(monitor, &mi) != 0)
             {
-                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.ShowWindowUs", L"", showUs, 0u, 1u, S_OK);
-                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.SetWindowPosUs", L"", positionUs, 0u, 1u, S_OK);
-                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.InvalidateUs", L"", invalidateUs, 0u, 1u, S_OK);
+                const RECT& work  = mi.rcWork;
+                const LONG width  = popupRect.right - popupRect.left;
+                const LONG height = popupRect.bottom - popupRect.top;
+
+                if (work.right > work.left && width > 0 && work.bottom > work.top && height > 0)
+                {
+                    const LONG maxX = std::max(work.left, work.right - width);
+                    const LONG maxY = std::max(work.top, work.bottom - height);
+
+                    const LONG clampedX = std::clamp(popupRect.left, work.left, maxX);
+                    const LONG clampedY = std::clamp(popupRect.top, work.top, maxY);
+
+                    targetX = static_cast<int>(clampedX);
+                    targetY = static_cast<int>(clampedY);
+
+                    reposition = clampedX != popupRect.left || clampedY != popupRect.top;
+                }
             }
-            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 0u, 1u, S_OK);
-            return;
         }
+
+        const UINT flags = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
+
+        // Keep the popup visible even if it was behind other windows. Avoid stealing focus.
+        const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
+        SetWindowPos(existingPopup, HWND_TOP, targetX, targetY, 0, 0, flags);
+        const uint64_t positionUs          = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
+        const uint64_t invalidateStartedUs = capturePerf ? PerfNowUs() : 0u;
+        InvalidateRect(existingPopup, nullptr, FALSE);
+        const uint64_t invalidateUs = capturePerf ? PerfElapsedUs(invalidateStartedUs) : 0u;
+        if (capturePerf)
+        {
+            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.ShowWindowUs", L"", showUs, 0u, 1u, S_OK);
+            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.SetWindowPosUs", L"", positionUs, 0u, 1u, S_OK);
+            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.InvalidateUs", L"", invalidateUs, 0u, 1u, S_OK);
+        }
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 0u, 1u, S_OK);
+        return;
     }
 
     std::weak_ptr<void> uiLifetime;

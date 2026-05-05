@@ -19,6 +19,7 @@ Open Preferences from:
 - If the main settings file changes on disk and Preferences has no unsaved edits, the dialog reloads from the live app settings automatically.
 - If Preferences has unsaved edits, it warns you and lets you choose **Reload from disk** or **Keep editing**.
 - If you keep editing, the dialog becomes stale; the next **OK** or **Apply** asks whether to **Overwrite disk**, **Reload from disk**, or **Cancel**.
+- If RedSalamander finds an unsupported settings schema version, such as v15 when v16 is required, it backs up that settings file, restores defaults, and shows a warning that the old file was not migrated automatically.
 - Theme previews are cancelled when an external reload is applied, and the dialog itself switches to the newly applied theme.
 - The modal plugin configuration editor follows the same reload/conflict rules.
 

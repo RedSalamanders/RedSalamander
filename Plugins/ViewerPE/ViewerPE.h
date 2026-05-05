@@ -20,6 +20,7 @@
 
 #include "DxUi/DxUi.h"
 #include "DxUi/DxUiNativeMenuInterop.h"
+#include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
@@ -35,7 +36,7 @@ struct IDWriteTextLayout;
 
 [[nodiscard]] const char* GetViewerPEStaticConfigurationSchema() noexcept;
 
-class ViewerPE final : public IViewer, public IInformations
+class ViewerPE final : public EmbeddedViewerBase<ViewerPE>, public IInformations
 {
 public:
     ViewerPE();
@@ -61,7 +62,6 @@ public:
     HRESULT STDMETHODCALLTYPE Open(const ViewerOpenContext* context) noexcept override;
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
-    HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
 
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
 
@@ -128,11 +128,7 @@ private:
 
     std::string _configurationJson;
 
-    ViewerTheme _theme{};
-    bool _hasTheme  = false;
     bool _isLoading = false;
-
-    RegistrationCallbackState<IViewerCallback> _callbackState;
 
     wil::com_ptr<IHostAlerts> _hostAlerts;
 
@@ -142,8 +138,6 @@ private:
     size_t _otherIndex     = 0;
     bool _syncingFileCombo = false;
 
-    wil::unique_hwnd _hWnd;
-    bool _embeddedMode = false;
     wil::unique_hmenu _menuHandle;
     RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;

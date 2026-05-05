@@ -308,12 +308,12 @@ User Menu settings:
 - `userMenu.actions` (array): ordered external actions shown by `cmd/pane/userMenu` and launched by `cmd/pane/userMenu/<itemId>`.
 
 Each action definition:
-- `id` (string): stable action ID used by settings and command payloads. IDs are case-sensitive, must start with an ASCII letter or digit, may contain ASCII letters, digits, `_`, `.`, `-`, and `/`, and must be unique within the containing action array.
+- `id` (string): stable action ID used by settings and command payloads. IDs preserve configured casing when saved or displayed, but comparisons and uniqueness are case-insensitive. IDs must start with an ASCII letter or digit, may contain ASCII letters, digits, `_`, `.`, `-`, and `/`, and must be unique within the containing action array case-insensitively.
 - `displayName` (string, optional): localized/user-facing label shown in pickers and preferences.
 - `enabled` (bool, optional): default `true`; disabled actions remain configured but cannot be launched.
 - `kind` (string): required; `viewerPlugin` for an internal viewer plugin, or `externalProgram` for an external process. Unknown kinds are invalid.
-- `pluginId` (string, required when `kind` is `viewerPlugin`): viewer plugin ID.
-- `executablePath` (string, required when `kind` is `externalProgram`): process path, which may contain launch macros.
+- `pluginId` (string, required when `kind` is `viewerPlugin`, forbidden when `kind` is `externalProgram`): viewer plugin ID.
+- `executablePath` (string, required when `kind` is `externalProgram`, forbidden when `kind` is `viewerPlugin`): process path, which may contain launch macros.
 - `arguments` (string, optional): process arguments, which may contain launch macros.
 - `workingDirectory` (string, optional): process working directory, which may contain launch macros.
 - `appliesTo.matches` (array, optional): file matches the action can handle; empty means no file-match filter.
@@ -339,7 +339,7 @@ Each editor association rule:
 
 Pattern and extension association rows share the same specificity bucket. If multiple rows in the same priority bucket match, the first row in persisted order wins.
 
-Association action IDs must reference an action in the same `viewers.actions` or `editors.actions` array. References are exact and case-sensitive: two actions whose IDs differ only by case are distinct candidates and must not collapse during resolution or `View With` / `Edit With` collection. The reader rejects duplicate association keys with the same `match` plus `computerName`, duplicate action IDs, malformed matches, unknown action kinds, editor actions that are not `externalProgram`, `viewerPlugin` actions without `pluginId`, and `externalProgram` actions without `executablePath`. Normal `LoadSettings` backs up malformed settings and starts from defaults; no-recovery loads return a failure.
+Association action IDs must reference an action in the same `viewers.actions` or `editors.actions` array. References match action IDs case-insensitively. Two actions whose IDs differ only by case are invalid duplicates and must be rejected by the reader before resolution or `View With` / `Edit With` collection. The reader rejects duplicate association keys with the same `match` plus `computerName`, duplicate action IDs, malformed matches, unknown action kinds, editor actions that are not `externalProgram`, `viewerPlugin` actions without `pluginId`, `viewerPlugin` actions with `executablePath`, `externalProgram` actions without `executablePath`, and `externalProgram` actions with `pluginId`. Normal `LoadSettings` backs up malformed settings and starts from defaults; no-recovery loads return a failure.
 
 Launch macro strings are interpreted by the command layer, not by the settings store. Supported macros are `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`. `executablePath` and `workingDirectory` expand macros as raw text. `arguments` expands each macro as a Windows command-line argument by quoting and escaping the macro value; when a macro is already wrapped in literal quotes in the template, the macro content is escaped without adding another quote pair.
 
@@ -355,7 +355,7 @@ Preferences contract:
 
 User Menu runtime contract:
 - `cmd/pane/userMenu` opens the dynamic User Menu for the focused pane.
-- `cmd/pane/userMenu/<itemId>` launches the exact configured item when it is enabled and applicable.
+- `cmd/pane/userMenu/<itemId>` launches the configured item whose ID matches case-insensitively when it is enabled and applicable.
 - User Menu entries are filtered by enabled state, `appliesTo.matches`, and `appliesTo.computerNames`. Missing external executables are shown disabled in the popup and report a localized unavailable message when launched directly.
 - External-program execution uses the shared macro engine and selected-paths-file lifecycle used by viewer/editor actions.
 

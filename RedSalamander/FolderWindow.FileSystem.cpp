@@ -14,6 +14,7 @@
 #include "SettingsStore.h"
 #include "ViewerPluginManager.h"
 #include "Win32CallbackHelpers.h"
+#include "WindowMessages.h"
 #ifdef ENABLE_TESTS
 #include "SelfTestCommon.h"
 #endif

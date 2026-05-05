@@ -41,6 +41,65 @@ jobs:
           choco install visualstudio2026-workload-vctools -y --no-progress
           if ($LASTEXITCODE -notin 0,3010) { throw "VC workload install failed: $LASTEXITCODE" }
 
+      - name: Install ARM64 MSVC target tools
+        if: ${{ inputs.platform == 'ARM64' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) {
+            throw "vswhere.exe not found: $vswhere"
+          }
+
+          $installPath =
+            (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -property installationPath 2>$null) |
+            Select-Object -First 1
+
+          if ([string]::IsNullOrWhiteSpace($installPath) -or -not (Test-Path $installPath)) {
+            Write-Host "Installed Visual Studio instances:" -ForegroundColor Yellow
+            & $vswhere -all -prerelease -products *
+            throw "Visual Studio 2026 Build Tools install path not found."
+          }
+
+          $installerCandidates = @(
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+          )
+          $installer = $installerCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $installer) {
+            throw "Visual Studio Installer executable not found."
+          }
+
+          Write-Host "Adding ARM64 MSVC target tools to: $installPath"
+          $modifyArgs = @(
+            "modify",
+            "--installPath", $installPath,
+            "--add", "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+            "--quiet",
+            "--norestart",
+            "--wait"
+          )
+
+          & $installer @modifyArgs
+          if ($LASTEXITCODE -notin 0,3010) {
+            throw "VS Installer modify failed with exit code $LASTEXITCODE."
+          }
+
+          $vcToolsRoot = Join-Path $installPath "VC\Tools\MSVC"
+          $arm64Compiler =
+            Get-ChildItem -Path $vcToolsRoot -Directory -ErrorAction SilentlyContinue |
+            Sort-Object -Property Name -Descending |
+            ForEach-Object { Join-Path $_.FullName "bin\Hostx64\arm64\cl.exe" } |
+            Where-Object { Test-Path $_ } |
+            Select-Object -First 1
+
+          if (-not $arm64Compiler) {
+            throw "ARM64 MSVC compiler not found under $vcToolsRoot after component install."
+          }
+
+          Write-Host "ARM64 compiler: $arm64Compiler"
+
       - name: Select MSBuild (VS 2026)
         shell: pwsh
         run: |

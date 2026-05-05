@@ -62,6 +62,7 @@ constexpr wchar_t kHudGlyphStop                      = static_cast<wchar_t>(0xE7
 constexpr wchar_t kHudGlyphSnapshot                  = static_cast<wchar_t>(0xE722);
 constexpr wchar_t kHudGlyphVolume                    = static_cast<wchar_t>(0xE767);
 constexpr wchar_t kHudGlyphMute                      = static_cast<wchar_t>(0xE74F);
+const int kViewerVlcModuleAnchor                     = 0;
 
 constexpr char kViewerVlcSchemaJson[] = R"json(
 {
@@ -850,10 +851,12 @@ struct VlcState
     wil::unique_hmodule module;
 
     libvlc_instance_t*(__cdecl* libvlc_new)(int, const char* const*)                                            = nullptr;
+    void(__cdecl* libvlc_retain)(libvlc_instance_t*)                                                            = nullptr;
     void(__cdecl* libvlc_release)(libvlc_instance_t*)                                                           = nullptr;
     libvlc_media_t*(__cdecl* libvlc_media_new_path)(libvlc_instance_t*, const char*)                            = nullptr;
     void(__cdecl* libvlc_media_release)(libvlc_media_t*)                                                        = nullptr;
     libvlc_media_player_t*(__cdecl* libvlc_media_player_new_from_media)(libvlc_media_t*)                        = nullptr;
+    void(__cdecl* libvlc_media_player_set_media)(libvlc_media_player_t*, libvlc_media_t*)                       = nullptr;
     void(__cdecl* libvlc_media_player_release)(libvlc_media_player_t*)                                          = nullptr;
     void(__cdecl* libvlc_media_player_set_hwnd)(libvlc_media_player_t*, void*)                                  = nullptr;
     int(__cdecl* libvlc_media_player_play)(libvlc_media_player_t*)                                              = nullptr;
@@ -906,6 +909,7 @@ struct VlcState
     };
 
     std::unique_ptr<libvlc_instance_t, InstanceDeleter> instance{nullptr, {}};
+    std::unique_ptr<libvlc_media_t, MediaDeleter> media{nullptr, {}};
     std::unique_ptr<libvlc_media_player_t, PlayerDeleter> player{nullptr, {}};
 
     std::wstring previousDllDirectory;
@@ -939,12 +943,221 @@ struct ViewerVLC::VlcAsyncLoadResult
 
 struct ViewerVLC::VlcAsyncLoadWork
 {
+    VlcAsyncLoadWork()                                      = default;
+    VlcAsyncLoadWork(const VlcAsyncLoadWork&)               = delete;
+    VlcAsyncLoadWork(VlcAsyncLoadWork&&)                    = delete;
+    VlcAsyncLoadWork& operator=(const VlcAsyncLoadWork&)    = delete;
+    VlcAsyncLoadWork& operator=(VlcAsyncLoadWork&&)         = delete;
+
+    wil::unique_hmodule moduleKeepAlive;
     wil::com_ptr<IViewer> self;
     HWND hwnd = nullptr;
     uint64_t generation = 0;
     std::filesystem::path path;
     VlcLoadSpec spec;
 };
+
+namespace
+{
+struct VlcPlayerCleanupWork final
+{
+    VlcPlayerCleanupWork()                                          = default;
+    VlcPlayerCleanupWork(const VlcPlayerCleanupWork&)               = delete;
+    VlcPlayerCleanupWork(VlcPlayerCleanupWork&&)                    = delete;
+    VlcPlayerCleanupWork& operator=(const VlcPlayerCleanupWork&)    = delete;
+    VlcPlayerCleanupWork& operator=(VlcPlayerCleanupWork&&)         = delete;
+
+    wil::unique_hmodule moduleKeepAlive;
+    wil::unique_hmodule vlcModuleKeepAlive;
+    std::unique_ptr<libvlc_instance_t, VlcState::InstanceDeleter> instanceRef{nullptr, {}};
+    std::unique_ptr<libvlc_media_t, VlcState::MediaDeleter> media{nullptr, {}};
+    std::unique_ptr<libvlc_media_player_t, VlcState::PlayerDeleter> player{nullptr, {}};
+    void(__cdecl* stop)(libvlc_media_player_t*) = nullptr;
+#ifdef ENABLE_TESTS
+    uint32_t delayMs = 0;
+#endif
+};
+
+struct VlcStateCleanupWork final
+{
+    VlcStateCleanupWork()                                         = default;
+    VlcStateCleanupWork(const VlcStateCleanupWork&)               = delete;
+    VlcStateCleanupWork(VlcStateCleanupWork&&)                    = delete;
+    VlcStateCleanupWork& operator=(const VlcStateCleanupWork&)    = delete;
+    VlcStateCleanupWork& operator=(VlcStateCleanupWork&&)         = delete;
+
+    wil::unique_hmodule moduleKeepAlive;
+    std::unique_ptr<VlcState> state;
+#ifdef ENABLE_TESTS
+    uint32_t delayMs = 0;
+#endif
+};
+
+#ifdef ENABLE_TESTS
+void ApplyDebugStopDelay(const uint32_t delayMs) noexcept
+{
+    if (delayMs != 0)
+    {
+        Sleep(delayMs);
+    }
+}
+#endif
+
+wil::unique_hmodule KeepLibVlcModuleLoaded(const std::filesystem::path& installDir) noexcept
+{
+    if (installDir.empty())
+    {
+        return {};
+    }
+
+    wil::unique_hmodule module(LoadLibraryW((installDir / L"libvlc.dll").c_str()));
+    if (! module)
+    {
+        Debug::Warning(L"ViewerVLC: failed to pin libvlc.dll while retiring playback state.");
+    }
+    return module;
+}
+
+void RestoreVlcDllDirectory(VlcState& state) noexcept
+{
+    if (! state.dllDirectoryWasSet)
+    {
+        return;
+    }
+
+    if (state.previousDllDirectory.empty())
+    {
+        SetDllDirectoryW(nullptr);
+    }
+    else
+    {
+        SetDllDirectoryW(state.previousDllDirectory.c_str());
+    }
+    state.previousDllDirectory.clear();
+    state.dllDirectoryWasSet = false;
+}
+
+void CleanupVlcPlayer(std::unique_ptr<VlcPlayerCleanupWork> work) noexcept
+{
+    if (! work)
+    {
+        return;
+    }
+
+    static_cast<void>(work->moduleKeepAlive);
+    static_cast<void>(work->vlcModuleKeepAlive);
+
+#ifdef ENABLE_TESTS
+    ApplyDebugStopDelay(work->delayMs);
+#endif
+
+    if (work->player && work->stop)
+    {
+        work->stop(work->player.get());
+    }
+    work->player.reset();
+    work->media.reset();
+    work->instanceRef.reset();
+}
+
+void CleanupVlcState(std::unique_ptr<VlcStateCleanupWork> work) noexcept
+{
+    if (! work)
+    {
+        return;
+    }
+
+    static_cast<void>(work->moduleKeepAlive);
+    VlcState* state = work->state.get();
+    if (state && state->player)
+    {
+#ifdef ENABLE_TESTS
+        ApplyDebugStopDelay(work->delayMs);
+#endif
+        if (state->libvlc_media_player_stop)
+        {
+            state->libvlc_media_player_stop(state->player.get());
+        }
+        state->player.reset();
+    }
+    if (state)
+    {
+        state->media.reset();
+    }
+    work->state.reset();
+}
+
+void QueueVlcPlayerCleanup(std::unique_ptr<VlcPlayerCleanupWork> work) noexcept
+{
+    if (! work)
+    {
+        return;
+    }
+
+    const BOOL queued = TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        CleanupVlcPlayer(std::unique_ptr<VlcPlayerCleanupWork>(static_cast<VlcPlayerCleanupWork*>(context)));
+    },
+        work.get(),
+        nullptr);
+
+    if (queued == 0)
+    {
+        Debug::Warning(L"ViewerVLC: failed to queue async player cleanup; falling back to synchronous cleanup.");
+        CleanupVlcPlayer(std::move(work));
+        return;
+    }
+
+    static_cast<void>(work.release());
+}
+
+void QueueVlcStateCleanup(std::unique_ptr<VlcStateCleanupWork> work) noexcept
+{
+    if (! work)
+    {
+        return;
+    }
+
+    const BOOL queued = TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        CleanupVlcState(std::unique_ptr<VlcStateCleanupWork>(static_cast<VlcStateCleanupWork*>(context)));
+    },
+        work.get(),
+        nullptr);
+
+    if (queued == 0)
+    {
+        Debug::Warning(L"ViewerVLC: failed to queue async VLC state cleanup; falling back to synchronous cleanup.");
+        CleanupVlcState(std::move(work));
+        return;
+    }
+
+    static_cast<void>(work.release());
+}
+
+#ifdef ENABLE_TESTS
+void QueueDebugVlcStopDelay(uint32_t delayMs) noexcept
+{
+    if (delayMs == 0)
+    {
+        return;
+    }
+
+    std::unique_ptr<VlcPlayerCleanupWork> work(new (std::nothrow) VlcPlayerCleanupWork{});
+    if (! work)
+    {
+        ApplyDebugStopDelay(delayMs);
+        return;
+    }
+
+    work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+    work->delayMs         = delayMs;
+    QueueVlcPlayerCleanup(std::move(work));
+}
+#endif
+} // namespace
 
 ViewerVLC::ViewerVLC()
 {
@@ -1653,6 +1866,13 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->loadingActive  = _loadingUiActive;
             snapshot->loadingVisible = _loadingUiVisible;
             snapshot->missingVisible = _missingUiVisible;
+            snapshot->hasVideoChild = _hVideo && IsWindow(_hVideo.get()) != FALSE;
+            if (snapshot->hasVideoChild)
+            {
+                const LONG_PTR style = GetWindowLongPtrW(_hVideo.get(), GWL_STYLE);
+                snapshot->videoChildIsChildWindow = (style & WS_CHILD) != 0;
+                snapshot->videoChildParentIsViewer = GetParent(_hVideo.get()) == _hWnd.get();
+            }
             snapshot->muted          = _hudMuted;
             snapshot->volume         = _hudVolumeValue;
             snapshot->timeMs         = _hudTimeMs;
@@ -1734,6 +1954,17 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             const WPARAM wheelParam = MAKEWPARAM((wheel->shift ? MK_SHIFT : 0) | (wheel->ctrl ? MK_CONTROL : 0),
                                                  static_cast<WORD>(static_cast<short>(wheel->wheelDelta)));
             SendMessageW(_debugWheelVideoChild.get(), WM_MOUSEWHEEL, wheelParam, 0);
+            return TRUE;
+        }
+        case WndMsg::kViewerVlcDebugSetStopDelay:
+        {
+            const auto* delay = reinterpret_cast<const WndMsg::ViewerVlcDebugStopDelay*>(lp);
+            if (! delay)
+            {
+                return FALSE;
+            }
+
+            _debugStopDelayMs = std::min<uint32_t>(delay->delayMs, 10'000u);
             return TRUE;
         }
 #endif
@@ -2146,21 +2377,9 @@ void ViewerVLC::OnDestroy() noexcept
 {
     ++_asyncOpenGeneration;
     SetLoadingUiVisible(false);
-    StopPlayback();
+    RetireVlcStateAsync(std::move(_vlc), true);
 
-    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
-    if (_callbackState.TryCapture(callbackSnapshot))
-    {
-        IViewerCallback* callback = nullptr;
-        void* cookie              = nullptr;
-        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
-        {
-            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
-            AddRef();
-            static_cast<void>(callback->ViewerClosed(cookie));
-            Release();
-        }
-    }
+    NotifyViewerClosed();
 }
 
 LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
@@ -2248,16 +2467,15 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
     const std::filesystem::path path(context->focusedPath);
     _currentPath = path;
 
-    const bool embeddedMode =
-        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
-    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
     {
         Debug::Error(L"ViewerVLC: embedded Open requires a valid ownerWindow parent.");
         return E_INVALIDARG;
     }
     const HWND embeddedFocusReturnWindow = embeddedMode ? GetFocus() : nullptr;
-    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    if (ShouldRecreateViewerWindow(embeddedMode, embeddedParent))
     {
         static_cast<void>(Close());
     }
@@ -2463,12 +2681,6 @@ void ViewerVLC::CreateOrUpdateWindowBackgroundBrush() noexcept
     }
 }
 
-HRESULT STDMETHODCALLTYPE ViewerVLC::SetCallback(IViewerCallback* callback, void* cookie) noexcept
-{
-    _callbackState.Set(callback, cookie);
-    return S_OK;
-}
-
 void ViewerVLC::TogglePlayPause() noexcept
 {
     if (! _vlc || ! _vlc->player)
@@ -2498,12 +2710,7 @@ void ViewerVLC::TogglePlayPause() noexcept
 
 void ViewerVLC::StopCommand() noexcept
 {
-    if (_vlc && _vlc->player && _vlc->libvlc_media_player_stop)
-    {
-        _vlc->libvlc_media_player_stop(_vlc->player.get());
-    }
-
-    UpdatePlaybackUi();
+    RetireCurrentPlayerAsync(true);
 }
 
 void ViewerVLC::SeekAbsoluteMs(int64_t timeMs) noexcept
@@ -4763,6 +4970,7 @@ std::unique_ptr<VlcState> ViewerVLC::LoadVlcState(const VlcLoadSpec& spec, std::
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_new_path", state->libvlc_media_new_path);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_release", state->libvlc_media_release);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_player_new_from_media", state->libvlc_media_player_new_from_media);
+    ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_player_set_media", state->libvlc_media_player_set_media);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_player_release", state->libvlc_media_player_release);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_player_set_hwnd", state->libvlc_media_player_set_hwnd);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_player_play", state->libvlc_media_player_play);
@@ -4783,8 +4991,10 @@ std::unique_ptr<VlcState> ViewerVLC::LoadVlcState(const VlcLoadSpec& spec, std::
         outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_EXPORTS_MISSING);
         return nullptr;
     }
+    static_cast<void>(TryLoadProc(state->module.get(), "libvlc_retain", state->libvlc_retain));
 
     state->instance.get_deleter().release = state->libvlc_release;
+    state->media.get_deleter().release    = state->libvlc_media_release;
     state->player.get_deleter().release   = state->libvlc_media_player_release;
 
     std::vector<const char*> argv;
@@ -4812,12 +5022,12 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec
         return;
     }
 
-    StopPlayback();
-    _vlc.reset();
+    RetireVlcStateAsync(std::move(_vlc), true);
     SetMissingUiVisible(false, {});
     SetLoadingUiVisible(true);
 
     auto work = std::make_unique<VlcAsyncLoadWork>();
+    work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
     work->self       = static_cast<IViewer*>(this);
     work->hwnd       = _hWnd.get();
     work->generation = ++_asyncOpenGeneration;
@@ -4828,6 +5038,7 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
     {
         std::unique_ptr<VlcAsyncLoadWork> work(static_cast<VlcAsyncLoadWork*>(context));
+        static_cast<void>(work->moduleKeepAlive);
 
         auto result        = std::make_unique<VlcAsyncLoadResult>();
         result->generation = work->generation;
@@ -4876,17 +5087,16 @@ void ViewerVLC::OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> resul
         return;
     }
 
-    StopPlayback();
+    RetireVlcStateAsync(std::move(_vlc), true);
     _vlc = std::move(result->state);
     static_cast<void>(StartPlaybackWithLoadedVlc(result->path));
 }
 
 bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
 {
-    StopPlayback();
-
     if (path.empty())
     {
+        RetireCurrentPlayerAsync(true);
         SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PATH_EMPTY));
         return false;
     }
@@ -4894,6 +5104,7 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
     std::error_code ec;
     if (! std::filesystem::exists(path, ec) || ! std::filesystem::is_regular_file(path, ec))
     {
+        RetireCurrentPlayerAsync(true);
         SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE));
         return false;
     }
@@ -4907,6 +5118,7 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
     VlcLoadSpec spec{};
     if (! BuildVlcLoadSpec(enableAudioVisualization, spec, error))
     {
+        RetireCurrentPlayerAsync(true);
         SetMissingUiVisible(true, error);
         return false;
     }
@@ -4929,6 +5141,25 @@ bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) no
         return false;
     }
 
+    if (! _hVideo || IsWindow(_hVideo.get()) == FALSE || GetParent(_hVideo.get()) != _hWnd.get())
+    {
+        Debug::Warning(L"ViewerVLC::StartPlaybackWithLoadedVlc: refusing to start playback without a valid embedded video child window.");
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED));
+        return false;
+    }
+
+    _hudSeekDragging    = false;
+    _hudVolumeDragging  = false;
+    _hudPressed         = HudPart::None;
+    _hudHot             = HudPart::None;
+    _hudTimeMs          = 0;
+    _hudLengthMs        = 0;
+    _hudDragTimeMs      = 0;
+    _hudPlaying         = false;
+    _seekDragWasPlaying = false;
+    ClearSeekPreview();
+    RemoveVideoChildWheelForwarding();
+
     const std::string pathUtf8 = Utf8FromUtf16(path.wstring());
     if (pathUtf8.empty())
     {
@@ -4944,25 +5175,42 @@ bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) no
         return false;
     }
 
-    std::unique_ptr<libvlc_media_player_t, VlcState::PlayerDeleter> player(nullptr, {_vlc->libvlc_media_player_release});
-    player.reset(_vlc->libvlc_media_player_new_from_media(media.get()));
-    if (! player)
+    if (_vlc->player)
     {
-        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED));
-        return false;
+        if (_vlc->libvlc_media_player_set_hwnd)
+        {
+            _vlc->libvlc_media_player_set_hwnd(_vlc->player.get(), _hVideo.get());
+        }
+        _vlc->libvlc_media_player_set_media(_vlc->player.get(), media.get());
+    }
+    else
+    {
+        std::unique_ptr<libvlc_media_player_t, VlcState::PlayerDeleter> player(nullptr, {_vlc->libvlc_media_player_release});
+        player.reset(_vlc->libvlc_media_player_new_from_media(media.get()));
+        if (! player)
+        {
+            SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED));
+            return false;
+        }
+
+        if (_vlc->libvlc_media_player_set_hwnd)
+        {
+            _vlc->libvlc_media_player_set_hwnd(player.get(), _hVideo.get());
+        }
+        _vlc->player = std::move(player);
     }
 
-    if (_vlc->libvlc_media_player_set_hwnd && _hVideo)
+    if (_vlc->libvlc_media_player_set_hwnd)
     {
-        _vlc->libvlc_media_player_set_hwnd(player.get(), _hVideo.get());
+        _vlc->libvlc_media_player_set_hwnd(_vlc->player.get(), _hVideo.get());
     }
 
     if (_vlc->libvlc_media_player_set_rate)
     {
-        _vlc->libvlc_media_player_set_rate(player.get(), std::clamp(_hudRate, 0.25f, 4.0f));
+        _vlc->libvlc_media_player_set_rate(_vlc->player.get(), std::clamp(_hudRate, 0.25f, 4.0f));
     }
 
-    _vlc->player = std::move(player);
+    _vlc->media  = std::move(media);
     ApplyVolumeToPlayer();
 
     SetMissingUiVisible(false, {});
@@ -4973,7 +5221,7 @@ bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) no
         if (rc != 0)
         {
             SetMissingUiVisible(true, FormatStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT, rc));
-            _vlc->player.reset();
+            RetireCurrentPlayerAsync(true);
             return false;
         }
     }
@@ -4992,6 +5240,11 @@ bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) no
 
 void ViewerVLC::StopPlayback() noexcept
 {
+    RetireCurrentPlayerAsync(true);
+}
+
+void ViewerVLC::RetireCurrentPlayerAsync(bool updateUi) noexcept
+{
     if (_hWnd && _uiTimerId != 0)
     {
         KillTimer(_hWnd.get(), _uiTimerId);
@@ -5009,15 +5262,106 @@ void ViewerVLC::StopPlayback() noexcept
 
     if (_vlc && _vlc->player)
     {
-        if (_vlc->libvlc_media_player_stop)
+        std::unique_ptr<VlcPlayerCleanupWork> work(new (std::nothrow) VlcPlayerCleanupWork{});
+        if (work)
         {
-            _vlc->libvlc_media_player_stop(_vlc->player.get());
+            work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+            work->vlcModuleKeepAlive = KeepLibVlcModuleLoaded(_vlc->installDir);
+            work->stop = _vlc->libvlc_media_player_stop;
+            if (_vlc->libvlc_retain && _vlc->libvlc_release && _vlc->instance)
+            {
+                _vlc->libvlc_retain(_vlc->instance.get());
+                work->instanceRef.get_deleter().release = _vlc->libvlc_release;
+                work->instanceRef.reset(_vlc->instance.get());
+            }
+            work->media = std::move(_vlc->media);
+            work->player = std::move(_vlc->player);
+#ifdef ENABLE_TESTS
+            work->delayMs = _debugStopDelayMs;
+#endif
+            QueueVlcPlayerCleanup(std::move(work));
         }
+        else
+        {
+            if (_vlc->libvlc_media_player_stop)
+            {
+                _vlc->libvlc_media_player_stop(_vlc->player.get());
+            }
+            _vlc->player.reset();
+            _vlc->media.reset();
+        }
+    }
+#ifdef ENABLE_TESTS
+    else
+    {
+        QueueDebugVlcStopDelay(_debugStopDelayMs);
+    }
+#endif
 
-        _vlc->player.reset();
+    if (updateUi)
+    {
+        UpdatePlaybackUi();
+    }
+}
+
+void ViewerVLC::RetireVlcStateAsync(std::unique_ptr<VlcState> state, bool updateUi) noexcept
+{
+    if (_hWnd && _uiTimerId != 0)
+    {
+        KillTimer(_hWnd.get(), _uiTimerId);
+        _uiTimerId = 0;
     }
 
-    UpdatePlaybackUi();
+    _hudSeekDragging    = false;
+    _hudVolumeDragging  = false;
+    _hudPressed         = HudPart::None;
+    _hudHot             = HudPart::None;
+    _hudDragTimeMs      = 0;
+    _seekDragWasPlaying = false;
+    ClearSeekPreview();
+    RemoveVideoChildWheelForwarding();
+
+    if (state)
+    {
+        RestoreVlcDllDirectory(*state);
+        std::unique_ptr<VlcStateCleanupWork> work(new (std::nothrow) VlcStateCleanupWork{});
+        if (work)
+        {
+            work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+            work->state = std::move(state);
+#ifdef ENABLE_TESTS
+            work->delayMs = _debugStopDelayMs;
+#endif
+            QueueVlcStateCleanup(std::move(work));
+        }
+        else
+        {
+            if (state->player)
+            {
+#ifdef ENABLE_TESTS
+                ApplyDebugStopDelay(_debugStopDelayMs);
+#endif
+                if (state->libvlc_media_player_stop)
+                {
+                    state->libvlc_media_player_stop(state->player.get());
+                }
+                state->player.reset();
+            }
+            state->media.reset();
+            state.reset();
+        }
+    }
+#ifdef ENABLE_TESTS
+    else
+    {
+        QueueDebugVlcStopDelay(_debugStopDelayMs);
+    }
+#endif
+
+    if (updateUi)
+    {
+        UpdatePlaybackUi();
+    }
 }
 
 void ViewerVLC::TakeSnapshot() noexcept

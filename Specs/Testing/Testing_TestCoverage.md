@@ -364,7 +364,7 @@ Key coverage patterns per page:
 | `folderView_empty_folder_state` | Empty folder centered state plus row-sized focused `Go to parent` placeholder item |
 | `folderView_filter_watermark_empty_state` | Filter watermark display |
 | `folderView_perf_large_folder_baseline` | Large folder performance baseline |
-| `file_action_resolution_v16_action_ids_are_case_sensitive` | File-action resolver keeps action IDs case-sensitive and preserves distinct IDs that differ only by case |
+| `file_action_resolution_v16_action_ids_are_case_insensitive` | File-action resolver matches action IDs case-insensitively, preserves action-definition casing, and collapses case-only references |
 | `help_menu_links_external_documentation` | Help menu external documentation command placement and registry binding |
 | `icon_bitmap_alpha_normalization` | Icon alpha normalization including premultiply and AND-mask transparency semantics |
 | `mask_syntax_wildcards` | Wildcard mask syntax parsing |
@@ -375,7 +375,7 @@ Key coverage patterns per page:
 | `red_salamander_help_lists_diagnostics_options` | Help text documents Release diagnostics ETW and perf JSONL switches |
 | `registry_integrity` | Registry settings integrity; every command has a non-empty short function-bar label with guarded examples (`MakeDir`, `UsrMenu`, `ByTime`) |
 | `resource_hresult_details_format_is_valid` | Localized HRESULT details resource uses valid positional `std::format` placeholders |
-| `resource_invalid_format_string_returns_empty` | Runtime resource formatting logs the failing resource ID/detail and degrades to an empty fallback instead of throwing when a localized string has invalid `std::format` syntax |
+| `resource_invalid_format_string_returns_raw_fallback` | Runtime resource formatting logs the failing resource ID/detail and degrades to the raw localized resource text instead of throwing or returning blank text when a localized string has invalid `std::format` syntax |
 | `resource_format_placeholders_are_positional` | Product `.rc` resources reject bare `{}` and unindexed `std::format` specs while allowing documented literal file-action macros |
 | `search_local_index_stream_stop_after_first` | Search stream stop semantics |
 | `settings_file_operations_precalc_roundtrip` | Pre-calc settings roundtrip |
@@ -383,7 +383,8 @@ Key coverage patterns per page:
 | `settings_hot_reload_*` | (4 cases) Hot reload merge/suppression |
 | `settings_shortcuts_*` | (2 cases) Shortcut settings roundtrip |
 | `settings_store_search_roundtrip` | Search settings roundtrip |
-| `pane_view_options_preview_uses_configured_embedded_viewer_and_preserves_focus` | Preview uses configured embedded viewers, reuses the same VLC instance across same-plugin media focus changes, forwards wheel seek from VLC child surfaces, preserves source-pane focus, and persists VLC preview volume/mute state |
+| `pane_view_options_toggle_preview_pane_tabs_and_selection` | Preview pane tab-strip pointer clicks switch Folder/Preview, selected/hovered Preview close-glyph visibility, delayed Folder tab path tooltip, Preview close glyph closes preview mode, old embedded text content is cleared before rendering the next focused item, and source-pane focus is preserved |
+| `pane_view_options_preview_uses_configured_embedded_viewer_and_preserves_focus` | Preview uses configured embedded viewers, keeps the same embedded instance and HWND across same-plugin image/media focus changes, keeps media-to-media and media-to-image switches responsive while VLC stop/release is slow, verifies VLC video child parenting after video-to-video preview navigation, forwards wheel seek from VLC child surfaces, preserves source-pane focus, and persists VLC preview volume/mute state |
 | `pane_view_options_preview_uses_builtin_embedded_viewer_with_empty_associations` | Preview consults built-in embedded viewer defaults when saved viewer associations are empty before falling back to ViewerText |
 | `shortcut_defaults_mapping` | Default shortcut mappings |
 | `shortcut_functionbar_dispatch_refresh` | Function bar dispatch and refresh using command short labels |
@@ -616,7 +617,7 @@ Each phase represents a test case that exercises one aspect of the file operatio
 
 | Case Name | Coverage Area |
 |-----------|---------------|
-| `Phase10_PermanentDelete` | Confirmed permanent delete |
+| `Phase10_PermanentDelete` | Permanent delete confirmation, cancellation guard, and confirmed execution |
 | `Phase11_CrossFileSystemBridge` | Cross-filesystem bridge |
 | `Phase11_BridgeSingleFolderParallelCopyInFlightLines` | Bridge single-folder parallel |
 | `Phase11_BridgeMultiFolderParallelCopyInFlightLines` | Bridge multi-folder parallel |
@@ -626,7 +627,7 @@ Each phase represents a test case that exercises one aspect of the file operatio
 | `Phase11_ConnectionOverrideClamp` | Connection override clamp |
 | `Phase12_ReparsePointPolicy` | Reparse point policy |
 | `Phase13_PostMortemDiagnostics` | Post-mortem diagnostics |
-| `Phase14_PopupHostLifetimeGuard` | Popup host lifetime guard |
+| `Phase14_PopupHostLifetimeGuard` | Popup host lifetime and reentrant visibility/placement guard |
 | `Phase15_FileSystem7zReadSeekSmoke` | 7z read/seek smoke |
 | `Phase15_FileSystem7zMountPathImpact` | 7z mount path impact |
 

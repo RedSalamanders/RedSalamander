@@ -26,10 +26,10 @@ name: Release
         type: boolean
         default: true
       build_arm64:
-        description: "Also build ARM64 (off by default)."
+        description: "Also build ARM64."
         required: false
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -81,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
+        platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     uses: ./.github/workflows/build-reusable.yml
     with:
       configuration: Release
@@ -101,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
+        platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
+        platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -186,7 +186,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
+        platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

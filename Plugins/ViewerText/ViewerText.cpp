@@ -4869,19 +4869,7 @@ void ViewerText::OnDestroy()
     _windowIconSmall.reset();
     _windowIconBig.reset();
 
-    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
-    if (_callbackState.TryCapture(callbackSnapshot))
-    {
-        IViewerCallback* callback = nullptr;
-        void* cookie              = nullptr;
-        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
-        {
-            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
-            AddRef();
-            static_cast<void>(callback->ViewerClosed(cookie));
-            Release();
-        }
-    }
+    NotifyViewerClosed();
 }
 
 void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bool updateOtherFiles, UINT displayEncodingMenuSelection) noexcept
@@ -9430,7 +9418,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
         _viewMode = ViewMode::Hex;
     }
 
-    const bool embeddedMode = (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) != 0u;
+    const bool embeddedMode = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (! embeddedParent || IsWindow(embeddedParent) == FALSE))
     {
@@ -9438,7 +9426,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
         return E_INVALIDARG;
     }
 
-    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    if (ShouldRecreateViewerWindow(embeddedMode, embeddedParent))
     {
         static_cast<void>(Close());
     }
@@ -9650,12 +9638,6 @@ HRESULT STDMETHODCALLTYPE ViewerText::SetTheme(const ViewerTheme* theme) noexcep
         static_cast<void>(RedrawWindow(_hWnd.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW));
     }
 
-    return S_OK;
-}
-
-HRESULT STDMETHODCALLTYPE ViewerText::SetCallback(IViewerCallback* callback, void* cookie) noexcept
-{
-    _callbackState.Set(callback, cookie);
     return S_OK;
 }
 

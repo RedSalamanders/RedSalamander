@@ -83,6 +83,8 @@ Pack uses the selected items, or the focused item when nothing is selected. The 
 
 Unpack supports stored ZIP entries through the built-in reader and delegates compressed ZIP entries, 7-Zip archives, and other formats supported by the bundled `7zip.dll` to the 7-Zip extraction path. Both extraction paths preserve the same destination, overwrite, mask, and safe-entry-path contract. Unsupported/encrypted methods fail with localized pane feedback.
 
+Archive delete-after options are destructive cleanup operations. When `delete after packing` or `delete after unpacking` is enabled, the host MUST show the permanent-delete confirmation prompt with default Cancel before removing selected sources or selected archive files. Cancelling that prompt MUST prevent the cleanup delete from running.
+
 Archive entry names MUST be relative `/`-separated paths. Both extraction paths MUST reject empty names, absolute paths, drive-qualified paths, UNC-style prefixes, backslashes, `.` / `..` components, colons, embedded NULs, and reserved DOS device names such as `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, and `LPT1`-`LPT9` even when followed by an extension.
 
 After combining an entry name with the chosen destination, both extraction paths MUST verify that the normalized target remains inside the destination directory before creating directories, opening files, or moving temp files into place. 7-Zip extraction MUST reject symbolic-link and hard-link entries with `ERROR_NOT_SUPPORTED`.
@@ -164,6 +166,12 @@ These windows MUST apply the persisted `ui.windowBackdrop` setting through the s
 
 Backdrop regression coverage belongs in `--commands-selftest` cases for the Issues pane and speed-limit prompt/progress popup. Performance validation for backdrop-related changes SHOULD reuse existing File Operations popup metrics such as `FileOps.InfoTask.EnsurePopupVisible.*`, `FileOps.Popup.WmPaintUs`, and `FileOps.Popup.Render.TotalUs`.
 
+## Popup Windowing And Locking Contract
+
+The progress popup may receive synchronous Win32 callbacks while it is being shown, moved, resized, or invalidated. Calls such as `ShowWindow`, `SetWindowPos`, and similar HWND-affecting APIs MUST NOT be made while holding the file-operation state mutex when the target window procedure can re-enter `FileOperationState` (for example to persist the last popup rectangle from `WM_MOVE`). Code that needs to re-show or reposition an existing popup MUST snapshot the HWND and any required state under the mutex, release the mutex, validate the HWND, then perform the Win32 windowing calls.
+
+`--fileops-selftest --selftest-case=Phase14_PopupHostLifetimeGuard` owns regression coverage for this contract, including the hidden/offscreen popup re-entry case that starts a new operation while the popup is being made visible again.
+
 ## Execution Model (Normative)
 
 ### Threading
@@ -233,6 +241,7 @@ Conflict handling covers per-item failures that require a user decision (overwri
 
 - Copy/Move MUST start without allowing overwrite and without allowing replace-readonly (conflicts must surface).
 - Delete SHOULD start by using Recycle Bin when supported.
+- A Delete operation that cannot be guaranteed to use the local Recycle Bin MUST show the permanent-delete confirmation prompt with default Cancel before any file operation task is created. This guard belongs at the host operation boundary, so commands, shortcuts, context menus, drag/drop routing, and future callers cannot bypass it by omitting a separate confirmation flag.
 - Continue-on-error MUST be user-driven (via per-conflict Skip/Skip All decisions), not a default behavior.
 
 #### Conflict detection + bucketing

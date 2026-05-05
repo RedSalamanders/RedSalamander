@@ -51,6 +51,81 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
             return false;
         }
 
+        ShowWindow(popup, SW_HIDE);
+        SetWindowPos(popup, nullptr, -32000, -32000, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
+
+        const std::filesystem::path reentryRoot = state.tempRoot / L"phase14-popup-reentry";
+        const std::filesystem::path sourceDir   = reentryRoot / L"src";
+        const std::filesystem::path destDir     = reentryRoot / L"dst";
+        const std::filesystem::path sourceFile  = sourceDir / L"source.bin";
+        if (! RecreateEmptyDirectory(sourceDir) || ! RecreateEmptyDirectory(destDir))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard failed to reset popup reentry folders.");
+            return true;
+        }
+
+        if (! WriteTestFile(sourceFile, 2048))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard failed to write popup reentry source file.");
+            return true;
+        }
+
+        state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 std::nullopt,
+                                                 state.fsLocal,
+                                                 {sourceFile},
+                                                 destDir,
+                                                 FILESYSTEM_FLAG_NONE,
+                                                 false,
+                                                 0,
+                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard failed to start popup reentry copy task.");
+            return true;
+        }
+
+        state.stepState = 2;
+        return false;
+    }
+
+    if (state.stepState == 2)
+    {
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard lost popup reentry task id.");
+            return true;
+        }
+
+        const auto completed = state.completedTasks.find(state.taskA.value());
+        if (completed == state.completedTasks.end())
+        {
+            return false;
+        }
+
+        if (FAILED(completed->second.hr))
+        {
+            Fail(std::format(L"Phase14_PopupHostLifetimeGuard popup reentry copy failed: 0x{:08X}.",
+                             static_cast<unsigned long>(completed->second.hr)));
+            return true;
+        }
+
+        const std::filesystem::path copiedFile = state.tempRoot / L"phase14-popup-reentry" / L"dst" / L"source.bin";
+        std::error_code existsEc;
+        if (! std::filesystem::exists(copiedFile, existsEc) || existsEc)
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard popup reentry copy did not produce the destination file.");
+            return true;
+        }
+
+        state.stepState = 3;
+        return false;
+    }
+
+    if (state.stepState == 3)
+    {
         auto work     = std::make_unique<Phase14ShutdownWork>();
         work->fileOps = state.fileOps;
         work->done    = &state.phase14ShutdownDone;
@@ -62,11 +137,11 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         }
 
         static_cast<void>(work.release());
-        state.stepState = 2;
+        state.stepState = 4;
         return false;
     }
 
-    if (state.stepState == 2)
+    if (state.stepState == 4)
     {
         if (! state.phase14ShutdownDone.load(std::memory_order_acquire))
         {
@@ -87,11 +162,11 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         dismiss.taskId = state.phase14InfoTask.value_or(0);
         static_cast<void>(InvokePopupSelfTest(popupAfterShutdown, dismiss));
 
-        state.stepState = 3;
+        state.stepState = 5;
         return false;
     }
 
-    if (state.stepState == 3)
+    if (state.stepState == 5)
     {
         if (FindWindowW(kPopupClassName.data(), nullptr))
         {

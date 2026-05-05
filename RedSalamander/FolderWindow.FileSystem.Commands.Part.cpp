@@ -5907,6 +5907,20 @@ constexpr uint16_t kZipDirectoryExternalAttribute = 0x0010u;
 constexpr size_t kZipEndOfCentralDirMinSize       = 22u;
 constexpr size_t kZipMaxCommentSize               = 0xFFFFu;
 constexpr size_t kZipMaxTailSearchSize            = kZipEndOfCentralDirMinSize + kZipMaxCommentSize;
+constexpr uint64_t kMaxArchiveExtractEntryBytes   = 4ull * 1024ull * 1024ull * 1024ull;
+constexpr uint64_t kMaxArchiveExtractTotalBytes   = 8ull * 1024ull * 1024ull * 1024ull;
+
+[[nodiscard]] HRESULT AccumulateArchiveExtractSize(uint64_t& totalBytes, uint64_t entryBytes) noexcept
+{
+    if (entryBytes > kMaxArchiveExtractEntryBytes || totalBytes > kMaxArchiveExtractTotalBytes ||
+        entryBytes > kMaxArchiveExtractTotalBytes - totalBytes)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+    }
+
+    totalBytes += entryBytes;
+    return S_OK;
+}
 
 struct ArchiveEntrySource final
 {
@@ -7514,6 +7528,7 @@ private:
     }
 
     size_t offset = 0u;
+    uint64_t totalUncompressedSize = 0u;
     outEntries.reserve(eocd.entryCount);
     for (uint16_t entryIndex = 0u; entryIndex < eocd.entryCount; ++entryIndex)
     {
@@ -7584,6 +7599,13 @@ private:
         if (! IsArchiveEntryNameSafe(entryName, directory, relativePath))
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        }
+        if (! directory)
+        {
+            if (const HRESULT sizeHr = AccumulateArchiveExtractSize(totalUncompressedSize, uncompressedSize); FAILED(sizeHr))
+            {
+                return sizeHr;
+            }
         }
 
         ZipParsedEntry parsed{};
@@ -8059,6 +8081,10 @@ public:
         {
             return E_POINTER;
         }
+        if (static_cast<uint64_t>(size) > kMaxArchiveExtractEntryBytes - _bytesWritten)
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        }
 
         DWORD bytesWritten = 0u;
         if (WriteFile(_file.get(), data, size, &bytesWritten, nullptr) == FALSE)
@@ -8265,6 +8291,14 @@ public:
         {
             if (_activeFileStream)
             {
+                const uint64_t entryBytes = (_activeEntry->sizeBytes != 0u) ? _activeEntry->sizeBytes : _activeFileStream->BytesWritten();
+                if (const HRESULT sizeHr = AccumulateArchiveExtractSize(_result.bytesProcessed, entryBytes); FAILED(sizeHr))
+                {
+                    _resultHr = sizeHr;
+                    _activeFileStream.reset();
+                    _activeEntry = nullptr;
+                    return sizeHr;
+                }
                 const HRESULT commitHr = _activeFileStream->Commit();
                 if (FAILED(commitHr))
                 {
@@ -8273,7 +8307,6 @@ public:
                     _activeEntry = nullptr;
                     return commitHr;
                 }
-                _result.bytesProcessed += (_activeEntry->sizeBytes != 0u) ? _activeEntry->sizeBytes : _activeFileStream->BytesWritten();
             }
 
             _result.entries.push_back(_activeEntry->entryName);
@@ -8464,6 +8497,7 @@ private:
     const MaskSyntax::WildcardMask mask = maskMatchesAll ? MaskSyntax::WildcardMask{} : MaskSyntax::ParseWildcardMask(maskText);
     outEntries.reserve(itemCount);
 
+    uint64_t totalUncompressedSize = 0u;
     for (UInt32 index = 0u; index < itemCount; ++index)
     {
         std::wstring entryName = ArchiveStringPropertyForExtract(archive, index, kpidPath);
@@ -8517,6 +8551,10 @@ private:
         if (! entry.directory)
         {
             static_cast<void>(ArchiveUInt64PropertyForExtract(archive, index, kpidSize, entry.sizeBytes));
+            if (const HRESULT sizeHr = AccumulateArchiveExtractSize(totalUncompressedSize, entry.sizeBytes); FAILED(sizeHr))
+            {
+                return sizeHr;
+            }
         }
         outEntries.push_back(std::move(entry));
     }
@@ -8790,6 +8828,91 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
     {
         folderView.ForceRefresh();
     }
+}
+
+[[nodiscard]] bool ConfirmPermanentDeletePaths(HWND ownerWindow, const std::vector<std::filesystem::path>& sourcePaths) noexcept
+{
+    if (sourcePaths.empty())
+    {
+        return true;
+    }
+
+    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view
+    { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
+
+    auto ensureTrailingSeparator = [](std::wstring text) noexcept -> std::wstring
+    {
+        if (text.empty())
+        {
+            return text;
+        }
+
+        const wchar_t last = text.back();
+        if (last == L'\\' || last == L'/')
+        {
+            return text;
+        }
+
+        text.push_back(L'\\');
+        return text;
+    };
+
+    auto normalizeSlashes = [](std::wstring& text) noexcept
+    {
+        for (auto& ch : text)
+        {
+            if (ch == L'/')
+            {
+                ch = L'\\';
+            }
+        }
+    };
+
+    const unsigned long long itemCount = static_cast<unsigned long long>(sourcePaths.size());
+    const std::wstring_view itemSuffix = suffixFor(itemCount);
+    const std::wstring what            = FormatStringResource(nullptr, IDS_FMT_FILEOPS_COUNT_ITEM, itemCount, itemSuffix);
+
+    std::wstring fromText;
+    if (sourcePaths.size() == 1u)
+    {
+        fromText = sourcePaths.front().wstring();
+    }
+    else
+    {
+        std::filesystem::path commonParent = sourcePaths.front().parent_path();
+        bool multipleParents               = false;
+        for (size_t index = 1; index < sourcePaths.size(); ++index)
+        {
+            const std::filesystem::path parent = sourcePaths[index].parent_path();
+            if (CompareStringOrdinal(commonParent.c_str(), -1, parent.c_str(), -1, TRUE) != CSTR_EQUAL)
+            {
+                multipleParents = true;
+                break;
+            }
+        }
+
+        fromText = multipleParents ? LoadStringResource(nullptr, IDS_FILEOPS_LOCATION_MULTIPLE) : ensureTrailingSeparator(commonParent.wstring());
+    }
+
+    normalizeSlashes(fromText);
+
+    const std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE, what, fromText);
+    const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_CONFIRM);
+
+    HostPromptRequest prompt{};
+    prompt.version       = 1;
+    prompt.sizeBytes     = sizeof(prompt);
+    prompt.scope         = (ownerWindow && IsWindow(ownerWindow)) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
+    prompt.severity      = HOST_ALERT_WARNING;
+    prompt.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
+    prompt.targetWindow  = prompt.scope == HOST_ALERT_SCOPE_WINDOW ? ownerWindow : nullptr;
+    prompt.title         = caption.c_str();
+    prompt.message       = message.c_str();
+    prompt.defaultResult = HOST_PROMPT_RESULT_CANCEL;
+
+    HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
+    const HRESULT hrPrompt        = HostShowPrompt(prompt, nullptr, &promptResult);
+    return SUCCEEDED(hrPrompt) && promptResult == HOST_PROMPT_RESULT_OK;
 }
 
 [[nodiscard]] HRESULT DeletePackedSources(const std::vector<std::filesystem::path>& selectedPaths) noexcept
@@ -10316,12 +10439,50 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
     out.previewContentUsesDxUiHost = hostState.previewContentHost.GetRoot() != nullptr;
     out.previewUsesEmbeddedViewer  = hostState.previewViewerInstance != nullptr;
     out.folderViewVisible     = hostState.hFolderView && IsWindowVisible(hostState.hFolderView.get()) != FALSE;
+    out.previewTabsHwnd       = hostState.hPreviewTabs.get();
     out.previewContentHwnd    = hostState.hPreviewContent.get();
+    out.previewEmbeddedViewerHwnd = (hostState.previewViewerInstance && hostState.hPreviewContent) ? GetWindow(hostState.hPreviewContent.get(), GW_CHILD) : nullptr;
     out.previewViewerInstanceId = reinterpret_cast<uintptr_t>(hostState.previewViewerInstance);
     out.tabRect               = hostPane == Pane::Left ? _leftPreviewTabsRect : _rightPreviewTabsRect;
     out.contentRect           = hostPane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
     out.previewedPath         = hostState.previewedPath;
     out.previewText           = hostState.previewText;
+#if defined(ENABLE_TESTS) && defined(_DEBUG)
+    if (out.previewEmbeddedViewerHwnd && hostState.previewViewerPluginId == L"builtin/viewer-text")
+    {
+        WndMsg::ViewerTextDebugSnapshot textSnapshot{};
+        if (SendMessageW(out.previewEmbeddedViewerHwnd,
+                         WndMsg::kViewerTextDebugGetSnapshot,
+                         0u,
+                         reinterpret_cast<LPARAM>(&textSnapshot)) != FALSE)
+        {
+            out.previewText = textSnapshot.textPreview;
+        }
+    }
+#endif
+#if defined(ENABLE_TESTS)
+    if (hostState.previewTabsControl)
+    {
+        const auto toClientRect = [&hostState](const D2D1_RECT_F& rect) noexcept
+        {
+            return RECT{static_cast<LONG>(std::lround(hostState.previewTabsHost.DipsToPixels(rect.left))),
+                        static_cast<LONG>(std::lround(hostState.previewTabsHost.DipsToPixels(rect.top))),
+                        static_cast<LONG>(std::lround(hostState.previewTabsHost.DipsToPixels(rect.right))),
+                        static_cast<LONG>(std::lround(hostState.previewTabsHost.DipsToPixels(rect.bottom)))};
+        };
+        out.folderTabClientRect   = toClientRect(hostState.previewTabsControl->DebugGetTabRect(0u));
+        out.previewTabClientRect  = toClientRect(hostState.previewTabsControl->DebugGetTabRect(1u));
+        out.previewCloseClientRect = toClientRect(hostState.previewTabsControl->DebugGetCloseButtonRect(1u));
+        out.previewCloseButtonVisible = hostState.previewTabsControl->DebugIsCloseButtonVisible(1u);
+    }
+#endif
+    if (hostState.previewTabsHost.HasTooltip())
+    {
+        out.previewTabsTooltipText = std::wstring(hostState.previewTabsHost.GetTooltipText());
+    }
+#if defined(ENABLE_TESTS)
+    out.previewTabsPendingTooltipText = std::wstring(hostState.previewTabsHost.DebugGetPendingTooltipText());
+#endif
     out.previewViewerPluginId = hostState.previewViewerPluginId;
     out.previewBytes          = hostState.previewBytes;
     out.sourceFocusedDisplayName = std::wstring(sourceState.folderView.DebugGetFocusedDisplayName());
@@ -10343,6 +10504,17 @@ bool FolderWindow::DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexce
 
     SetPreviewPaneTab(hostPane, previewTab);
     return true;
+}
+
+bool FolderWindow::DebugAdvancePreviewTabsTooltipDelayForTest(Pane hostPane) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! host.previewTabsControl || ! host.hPreviewTabs || IsWindow(host.hPreviewTabs.get()) == FALSE)
+    {
+        return false;
+    }
+
+    return host.previewTabsHost.DebugAdvanceTooltipDelayForTest();
 }
 
 bool FolderWindow::DebugGetOpenedFilesDialogSnapshot(OpenedFilesDebugSnapshot& out) const noexcept
@@ -11185,6 +11357,26 @@ void FolderWindow::CommandPack(Pane pane)
         archivePath->replace_extension(L".zip");
     }
 
+    if (deleteSourcesAfterPack)
+    {
+        HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+        if (! ownerWindow)
+        {
+            ownerWindow = _hWnd.get();
+        }
+
+        if (! ConfirmPermanentDeletePaths(ownerWindow, selectedPaths))
+        {
+            result.archivePath = archivePath.value();
+            result.hr = S_FALSE;
+#ifdef ENABLE_TESTS
+            recordDebugResult(result);
+#endif
+            Debug::Perf::Emit(L"archive.pack_us", L"delete-cancelled", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
+            return;
+        }
+    }
+
     result = selectedPacker.storedZip ? CreateStoredZipArchive(selectedPaths, archivePath.value(), overwrite)
                                       : CreateSevenZipArchive(selectedPaths, archivePath.value(), overwrite, selectedPacker);
 #ifdef ENABLE_TESTS
@@ -11370,6 +11562,27 @@ void FolderWindow::CommandUnpack(Pane pane)
                            result.hr);
         Debug::Perf::Emit(L"archive.unpack_us", L"unsupported-unpacker", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
+    }
+
+    if (deleteArchiveAfterUnpack)
+    {
+        HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+        if (! ownerWindow)
+        {
+            ownerWindow = _hWnd.get();
+        }
+
+        if (! ConfirmPermanentDeletePaths(ownerWindow, selectedPaths))
+        {
+            result.archivePath     = selectedPaths.front();
+            result.destinationPath = destinationPath.value();
+            result.hr              = S_FALSE;
+#ifdef ENABLE_TESTS
+            recordDebugResult(result);
+#endif
+            Debug::Perf::Emit(L"archive.unpack_us", L"delete-cancelled", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
+            return;
+        }
     }
 
     result.destinationPath = destinationPath.value();

@@ -30,6 +30,7 @@
 namespace
 {
 constexpr wchar_t kFolderWindowDxHostClassName[] = L"RedSalamander.FolderWindow.DxHost";
+constexpr UINT_PTR kPreviewPaneRefreshTimerId    = 0x7250;
 
 [[nodiscard]] bool EnsureFolderWindowDxHostClass(HINSTANCE instance) noexcept
 {
@@ -1177,6 +1178,13 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hwnd)); break;
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
+        case WM_TIMER:
+            if (static_cast<UINT_PTR>(wp) == kPreviewPaneRefreshTimerId)
+            {
+                OnPreviewPaneRefreshTimer();
+                return 0;
+            }
+            break;
         case WM_SETFOCUS: OnSetFocus(); return 0;
         case WM_DEVICECHANGE: return OnDeviceChange(static_cast<UINT>(wp), lp);
         case WndMsg::kNetworkConnectivityChanged: OnNetworkConnectivityChanged(); return 0;
@@ -1644,10 +1652,22 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             std::wstring previewTabText = LoadStringResource(nullptr, IDS_PREVIEW_TAB_PREVIEW);
             auto tabs                = std::make_unique<RedSalamander::DxUi::TabControl>();
             state.previewTabsControl = tabs.get();
+            tabs->SetFocusable(false);
             tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(folderTabText));
             tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(previewTabText));
+            tabs->SetTabClosable(1u, true);
             tabs->SetSelectedIndex(0u);
             tabs->SetOnSelectionChanged([this, pane](size_t index) noexcept { SetPreviewPaneTab(pane, index == 1u); });
+            tabs->SetOnTabCloseRequested([this](size_t index) noexcept
+            {
+                if (index != 1u)
+                {
+                    return false;
+                }
+
+                ClosePreviewPane();
+                return true;
+            });
             state.previewTabsHost.SetRoot(std::move(tabs));
             state.previewTabsHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
         }
@@ -1708,7 +1728,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                 OnFolderViewPathChanged(pane, path);
                 if (_previewSourcePane.has_value() && _previewSourcePane.value() == pane)
                 {
-                    RefreshPreviewPane();
+                    RequestPreviewPaneRefresh();
                 }
             });
             state.folderView.SetDirectoryImpactCallback([this, pane](const DirectoryInfoCache::DirectoryImpact& impact) noexcept
@@ -1772,7 +1792,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                 UpdatePaneStatusBar(pane);
                 if (_previewSourcePane.has_value() && _previewSourcePane.value() == pane)
                 {
-                    RefreshPreviewPane();
+                    RequestPreviewPaneRefresh();
                 }
             });
 
@@ -1781,7 +1801,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                 UpdatePaneStatusBar(pane);
                 if (_previewSourcePane.has_value() && _previewSourcePane.value() == pane)
                 {
-                    RefreshPreviewPane();
+                    RequestPreviewPaneRefresh();
                 }
             });
             state.folderView.SetIncrementalSearchChangedCallback([this, pane] { UpdatePaneStatusBar(pane); });
@@ -1968,6 +1988,7 @@ void FolderWindow::DismissPaneAlertOverlay(Pane pane)
 
 void FolderWindow::OnDestroy()
 {
+    CancelPendingPreviewPaneRefresh();
     _networkChangeSubscription.reset();
 
     ShutdownViewers();

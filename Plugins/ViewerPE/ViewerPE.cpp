@@ -530,7 +530,6 @@ enum class ExportFormat
 
     return S_OK;
 }
-
 [[nodiscard]] float ClampScroll(float scrollDip, float contentHeightDip, float viewportHeightDip) noexcept
 {
     const float maxScroll = std::max(0.0f, contentHeightDip - viewportHeightDip);
@@ -831,17 +830,7 @@ LRESULT ViewerPE::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             _hWnd.release();
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
-            RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
-            if (_callbackState.TryCapture(callbackSnapshot))
-            {
-                IViewerCallback* callback = nullptr;
-                void* cookie              = nullptr;
-                if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
-                {
-                    auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
-                    static_cast<void>(callback->ViewerClosed(cookie));
-                }
-            }
+            NotifyViewerClosed();
 
             Release();
             return DefWindowProcW(hwnd, msg, wp, lp);
@@ -2757,15 +2746,14 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
     const std::filesystem::path focused(context->focusedPath);
     const std::wstring fileName = focused.filename().wstring();
 
-    const bool embeddedMode =
-        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
-    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
     {
         Debug::Error(L"ViewerPE: embedded Open requires a valid ownerWindow parent.");
         return E_INVALIDARG;
     }
-    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    if (ShouldRecreateViewerWindow(embeddedMode, embeddedParent))
     {
         static_cast<void>(Close());
     }
@@ -2938,11 +2926,5 @@ HRESULT STDMETHODCALLTYPE ViewerPE::SetTheme(const ViewerTheme* theme) noexcept
         InvalidateRect(_hWnd.get(), nullptr, TRUE);
     }
 
-    return S_OK;
-}
-
-HRESULT STDMETHODCALLTYPE ViewerPE::SetCallback(IViewerCallback* callback, void* cookie) noexcept
-{
-    _callbackState.Set(callback, cookie);
     return S_OK;
 }

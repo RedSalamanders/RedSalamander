@@ -27,6 +27,7 @@
 
 #include "DxUi/DxUi.h"
 #include "DxUi/DxUiNativeMenuInterop.h"
+#include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
@@ -42,7 +43,7 @@ enum class ViewerWebKind : uint8_t
 
 [[nodiscard]] const char* GetViewerWebStaticConfigurationSchema(ViewerWebKind kind) noexcept;
 
-class ViewerWeb final : public IViewer, public IInformations
+class ViewerWeb final : public EmbeddedViewerBase<ViewerWeb>, public IInformations
 {
 public:
     explicit ViewerWeb(ViewerWebKind kind) noexcept;
@@ -68,7 +69,6 @@ public:
     HRESULT STDMETHODCALLTYPE Open(const ViewerOpenContext* context) noexcept override;
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
-    HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
 
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
 
@@ -168,8 +168,6 @@ private:
     IHost* _host = nullptr;
     wil::com_ptr<IHostAlerts> _hostAlerts;
 
-    RegistrationCallbackState<IViewerCallback> _callbackState;
-
     PluginMetaData _metaData{};
     std::wstring _metaId;
     std::wstring _metaShortId;
@@ -179,9 +177,6 @@ private:
     ViewerWebConfig _config{};
     std::string _configurationJson;
 
-    bool _hasTheme = false;
-    ViewerTheme _theme{};
-
     wil::com_ptr<IFileSystem> _fileSystem;
     std::wstring _fileSystemName;
     std::vector<std::wstring> _otherFiles;
@@ -189,8 +184,6 @@ private:
     std::wstring _currentPath;
     bool _syncingFileCombo = false;
 
-    wil::unique_hwnd _hWnd;
-    bool _embeddedMode = false;
     wil::unique_hmenu _menuHandle;
     RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;
