@@ -762,15 +762,23 @@ public:
         bool previewContentUsesDxUiHost = false;
         bool previewUsesEmbeddedViewer  = false;
         bool folderViewVisible     = true;
+        bool previewCloseButtonVisible = false;
+        HWND previewTabsHwnd       = nullptr;
         HWND previewContentHwnd    = nullptr;
+        HWND previewEmbeddedViewerHwnd = nullptr;
         uintptr_t previewViewerInstanceId = 0;
         RECT tabRect{};
+        RECT folderTabClientRect{};
+        RECT previewTabClientRect{};
+        RECT previewCloseClientRect{};
         RECT contentRect{};
         RECT clientRect{};
         RECT functionBarRect{};
         std::filesystem::path previewedPath;
         std::wstring previewText;
         std::wstring previewViewerPluginId;
+        std::wstring previewTabsTooltipText;
+        std::wstring previewTabsPendingTooltipText;
         uint64_t previewBytes = 0;
         std::wstring sourceFocusedDisplayName;
     };
@@ -883,6 +891,7 @@ public:
     void DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThumbnailProviderMode mode) noexcept;
     [[nodiscard]] bool DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
+    [[nodiscard]] bool DebugAdvancePreviewTabsTooltipDelayForTest(Pane hostPane) noexcept;
     [[nodiscard]] bool DebugGetOpenedFilesDialogSnapshot(OpenedFilesDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugSelectOpenedFilesDialogRow(size_t rowIndex) noexcept;
     [[nodiscard]] bool DebugInvokeOpenedFilesDialogFocusItem() noexcept;
@@ -1081,7 +1090,11 @@ private:
     }
     void SetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
     void ClosePreviewPane() noexcept;
+    void RequestPreviewPaneRefresh() noexcept;
+    void CancelPendingPreviewPaneRefresh() noexcept;
+    void OnPreviewPaneRefreshTimer() noexcept;
     void RefreshPreviewPane() noexcept;
+    void UpdatePreviewFolderTabTooltip(Pane hostPane) noexcept;
     void UpdatePreviewTabSelection(Pane hostPane) noexcept;
     void ClosePreviewViewer(Pane hostPane) noexcept;
     void LayoutEmbeddedPreviewViewer(Pane hostPane) noexcept;
@@ -1391,6 +1404,7 @@ private:
     };
     std::optional<SavedSelection> _savedSelection;
     std::optional<Pane> _previewSourcePane;
+    bool _previewRefreshPending = false;
 
     ViewerCallbackState _viewerCallback;
     std::vector<std::unique_ptr<ViewerInstance>> _viewerInstances;

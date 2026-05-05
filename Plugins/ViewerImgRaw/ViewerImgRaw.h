@@ -30,6 +30,7 @@
 
 #include "DxUi/DxUi.h"
 #include "DxUi/DxUiNativeMenuInterop.h"
+#include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
@@ -45,7 +46,7 @@ struct IDWriteTextFormat;
 
 [[nodiscard]] const char* GetViewerImgRawStaticConfigurationSchema() noexcept;
 
-class ViewerImgRaw final : public IViewer, public IInformations
+class ViewerImgRaw final : public EmbeddedViewerBase<ViewerImgRaw>, public IInformations
 {
 public:
     ViewerImgRaw();
@@ -71,7 +72,6 @@ public:
     HRESULT STDMETHODCALLTYPE Open(const ViewerOpenContext* context) noexcept override;
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
-    HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
 
 private:
@@ -263,8 +263,6 @@ private:
     std::string _configJson;
 
     // Viewer state
-    wil::unique_hwnd _hWnd;
-    bool _embeddedMode = false;
     wil::unique_hmenu _menuHandle;
     RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;
@@ -285,9 +283,6 @@ private:
     std::vector<OtherItem> _otherItems;
     size_t _otherIndex     = 0;
     bool _syncingFileCombo = false;
-
-    bool _hasTheme = false;
-    ViewerTheme _theme{};
 
     COLORREF _uiBg       = RGB(255, 255, 255);
     COLORREF _uiText     = RGB(0, 0, 0);
@@ -364,8 +359,6 @@ private:
     wil::com_ptr<IDWriteTextFormat> _uiTextFormatRight;
     wil::com_ptr<ID2D1Bitmap> _imageBitmap;
 
-    // Callback (weak)
-    RegistrationCallbackState<IViewerCallback> _callbackState;
 };
 
 inline constexpr UINT kAsyncOpenCompleteMessage   = WndMsg::kViewerImgRawAsyncOpenComplete;

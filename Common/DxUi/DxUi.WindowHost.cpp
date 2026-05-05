@@ -42,6 +42,9 @@ namespace
 constexpr UINT kModifierAlt              = 0x0100u;
 constexpr int kTextInputBridgeControlId  = 0x7A41;
 constexpr wchar_t kDxUiDiagnosticsProp[] = L"RedSalamander.Preferences.DxDiagnostics";
+constexpr uint64_t kTooltipFallbackShowDelayMs = 500u;
+constexpr uint64_t kTooltipMinShowDelayMs      = 100u;
+constexpr uint64_t kTooltipMaxShowDelayMs      = 2500u;
 
 struct SharedWindowHostGraphicsResources
 {
@@ -83,6 +86,17 @@ struct SharedWindowHostGraphicsResources
         case WM_RBUTTONDBLCLK: return WM_RBUTTONDOWN;
         default: return 0u;
     }
+}
+
+[[nodiscard]] uint64_t ResolveTooltipShowDelayMs() noexcept
+{
+    UINT hoverTimeMs = 0u;
+    if (SystemParametersInfoW(SPI_GETMOUSEHOVERTIME, 0u, &hoverTimeMs, 0u) != FALSE && hoverTimeMs > 0u)
+    {
+        return std::clamp<uint64_t>(hoverTimeMs, kTooltipMinShowDelayMs, kTooltipMaxShowDelayMs);
+    }
+
+    return kTooltipFallbackShowDelayMs;
 }
 
 [[nodiscard]] bool IsWithinSystemDoubleClickBounds(POINT firstPointPx, POINT secondPointPx) noexcept
@@ -973,6 +987,18 @@ bool WindowHost::SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip)
     return changed;
 }
 
+bool WindowHost::SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& originDip)
+{
+    const uint64_t nowTickMs = _lastAnimationTickMs != 0u ? _lastAnimationTickMs : GetTickCount64();
+    const bool changed       = _tooltipLayer.SetTooltipDelayed(std::move(text), originDip, nowTickMs, ResolveTooltipShowDelayMs());
+    if (changed)
+    {
+        RequestAnimation();
+        Invalidate();
+    }
+    return changed;
+}
+
 bool WindowHost::BeginTooltipHideDelay(uint64_t delayMs) noexcept
 {
     const uint64_t nowTickMs = _lastAnimationTickMs != 0u ? _lastAnimationTickMs : GetTickCount64();
@@ -1003,6 +1029,23 @@ std::wstring_view WindowHost::GetTooltipText() const noexcept
 {
     return _tooltipLayer.GetTooltipText();
 }
+
+#if defined(ENABLE_TESTS)
+std::wstring_view WindowHost::DebugGetPendingTooltipText() const noexcept
+{
+    return _tooltipLayer.DebugGetPendingTooltipText();
+}
+
+bool WindowHost::DebugAdvanceTooltipDelayForTest() noexcept
+{
+    const bool changed = _tooltipLayer.Tick(*this, GetTickCount64() + ResolveTooltipShowDelayMs() + 1u);
+    if (changed)
+    {
+        Invalidate();
+    }
+    return changed;
+}
+#endif
 
 void WindowHost::SetSmokeOverlayVisible(bool visible) noexcept
 {
@@ -1865,7 +1908,27 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             return TRUE;
         }
         case WM_MOUSELEAVE:
+        {
             handled = true;
+            POINT cursorScreenPx{};
+            if (GetCursorPos(&cursorScreenPx) != FALSE)
+            {
+                POINT cursorClientPx = cursorScreenPx;
+                RECT clientRectPx{};
+                if (ScreenToClient(hwnd, &cursorClientPx) != FALSE && GetClientRect(hwnd, &clientRectPx) != FALSE &&
+                    PtInRect(&clientRectPx, cursorClientPx) != FALSE)
+                {
+                    TRACKMOUSEEVENT tme{};
+                    tme.cbSize    = sizeof(tme);
+                    tme.dwFlags   = TME_LEAVE;
+                    tme.hwndTrack = hwnd;
+                    TrackMouseEvent(&tme);
+                    UpdateHover(D2D1::Point2F(PixelsToDip(static_cast<float>(cursorClientPx.x)), PixelsToDip(static_cast<float>(cursorClientPx.y))),
+                                GetModifierState());
+                    return 0;
+                }
+            }
+
             if (_hoveredControl)
             {
                 _hoveredControl->OnHoverChanged(*this, false);
@@ -1875,6 +1938,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             ClearTooltip();
             Invalidate();
             return 0;
+        }
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:
         case WM_LBUTTONDBLCLK:
@@ -3158,7 +3222,9 @@ bool WindowHost::OnAnimationTick(uint64_t nowTickMs) noexcept
         return true;
     }
 
-    const bool keepTicking = _root->Tick(*this, nowTickMs) || _tooltipLayer.Tick(*this, nowTickMs);
+    const bool rootTicking    = _root->Tick(*this, nowTickMs);
+    const bool tooltipTicking = _tooltipLayer.Tick(*this, nowTickMs);
+    const bool keepTicking    = rootTicking || tooltipTicking;
     if (! keepTicking)
     {
         _animationSubscriptionId = 0u;

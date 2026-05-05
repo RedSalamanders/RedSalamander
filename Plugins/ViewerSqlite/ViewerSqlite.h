@@ -17,6 +17,7 @@
 #pragma warning(pop)
 
 #include "DxUi/DxUi.h"
+#include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
@@ -28,7 +29,7 @@ struct ViewerSqliteGridModel;
 
 [[nodiscard]] const char* GetViewerSqliteStaticConfigurationSchema() noexcept;
 
-class ViewerSqlite final : public IViewer, public IInformations, public RedSalamander::DxUi::IDxGridDelegate
+class ViewerSqlite final : public EmbeddedViewerBase<ViewerSqlite>, public IInformations, public RedSalamander::DxUi::IDxGridDelegate
 {
 public:
     ViewerSqlite();
@@ -54,7 +55,6 @@ public:
     HRESULT STDMETHODCALLTYPE Open(const ViewerOpenContext* context) noexcept override;
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
-    HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
 
     void OnGridSortRequested(const RedSalamander::DxUi::GridSortSpec& sortSpec) override;
 
@@ -133,11 +133,7 @@ private:
     ViewerSqliteEngine::Config _config{};
     std::string _configurationJson;
 
-    ViewerTheme _theme{};
-    bool _hasTheme = false;
     bool _loading  = false;
-
-    RegistrationCallbackState<IViewerCallback> _callbackState;
 
     wil::com_ptr<IHostAlerts> _hostAlerts;
     wil::com_ptr<IFileSystem> _fileSystem;
@@ -158,8 +154,6 @@ private:
     std::vector<ViewerSqliteEngine::TableInfo> _tables;
     RedSalamander::DxUi::GridSortSpec _tableSortSpec{};
 
-    wil::unique_hwnd _hWnd;
-    bool _embeddedMode = false;
     UINT _dpi = USER_DEFAULT_SCREEN_DPI;
 
     RedSalamander::DxUi::WindowHost _dxHost;

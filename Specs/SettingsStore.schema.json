@@ -525,11 +525,17 @@
       "allOf": [
         {
           "if": { "properties": { "kind": { "const": "viewerPlugin" } }, "required": ["kind"] },
-          "then": { "required": ["pluginId"] }
+          "then": {
+            "required": ["pluginId"],
+            "not": { "required": ["executablePath"] }
+          }
         },
         {
           "if": { "properties": { "kind": { "const": "externalProgram" } }, "required": ["kind"] },
-          "then": { "required": ["executablePath"] }
+          "then": {
+            "required": ["executablePath"],
+            "not": { "required": ["pluginId"] }
+          }
         }
       ],
       "additionalProperties": false
@@ -537,7 +543,7 @@
     "fileActionId": {
       "type": "string",
       "title": "File Action ID",
-      "description": "Case-sensitive stable action identifier. Association references match action IDs exactly, so IDs that differ only by case are distinct.",
+      "description": "Stable action identifier that preserves configured casing, but matches and uniqueness are case-insensitive. IDs that differ only by case are invalid duplicates.",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\/-]{0,63}$"
     },
     "fileExtension": {

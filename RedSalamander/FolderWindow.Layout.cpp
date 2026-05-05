@@ -7,6 +7,9 @@
 
 namespace
 {
+constexpr UINT_PTR kPreviewPaneRefreshTimerId = 0x7250;
+constexpr UINT kPreviewPaneRefreshDebounceMs  = 35;
+
 [[nodiscard]] COLORREF SplitterGripColor(const AppTheme& theme) noexcept
 {
     if (theme.highContrast)
@@ -462,6 +465,15 @@ void FolderWindow::CalculateLayout()
 
 void FolderWindow::AdjustChildWindows()
 {
+    if (_leftPane.previewTabsVisible)
+    {
+        UpdatePreviewFolderTabTooltip(Pane::Left);
+    }
+    if (_rightPane.previewTabsVisible)
+    {
+        UpdatePreviewFolderTabTooltip(Pane::Right);
+    }
+
     struct MoveItem
     {
         HWND hwnd = nullptr;
@@ -856,6 +868,8 @@ void FolderWindow::ClosePreviewPane() noexcept
         return;
     }
 
+    CancelPendingPreviewPaneRefresh();
+
     const Pane hostPane = OppositePane(_previewSourcePane.value());
     PaneState& host    = hostPane == Pane::Left ? _leftPane : _rightPane;
 
@@ -879,9 +893,55 @@ void FolderWindow::ClosePreviewPane() noexcept
     }
 }
 
+void FolderWindow::RequestPreviewPaneRefresh() noexcept
+{
+    if (! _previewSourcePane.has_value())
+    {
+        return;
+    }
+
+    _previewRefreshPending = true;
+    if (! _hWnd)
+    {
+        OnPreviewPaneRefreshTimer();
+        return;
+    }
+
+    static_cast<void>(KillTimer(_hWnd.get(), kPreviewPaneRefreshTimerId));
+    if (SetTimer(_hWnd.get(), kPreviewPaneRefreshTimerId, kPreviewPaneRefreshDebounceMs, nullptr) == 0)
+    {
+        OnPreviewPaneRefreshTimer();
+    }
+}
+
+void FolderWindow::CancelPendingPreviewPaneRefresh() noexcept
+{
+    _previewRefreshPending = false;
+    if (_hWnd)
+    {
+        static_cast<void>(KillTimer(_hWnd.get(), kPreviewPaneRefreshTimerId));
+    }
+}
+
+void FolderWindow::OnPreviewPaneRefreshTimer() noexcept
+{
+    if (_hWnd)
+    {
+        static_cast<void>(KillTimer(_hWnd.get(), kPreviewPaneRefreshTimerId));
+    }
+    if (! _previewRefreshPending)
+    {
+        return;
+    }
+
+    _previewRefreshPending = false;
+    RefreshPreviewPane();
+}
+
 void FolderWindow::RefreshPreviewPane() noexcept
 {
     Debug::Perf::Scope perf(L"paneviewoptions.preview.refresh_us");
+    CancelPendingPreviewPaneRefresh();
     if (! _previewSourcePane.has_value())
     {
         return;
@@ -917,11 +977,28 @@ void FolderWindow::RefreshPreviewPane() noexcept
     FocusPaneFolderView(sourcePane);
 }
 
+void FolderWindow::UpdatePreviewFolderTabTooltip(Pane hostPane) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! host.previewTabsControl)
+    {
+        return;
+    }
+
+    std::wstring tooltipText;
+    if (host.currentPath.has_value() && ! host.currentPath.value().empty())
+    {
+        tooltipText = host.currentPath.value().wstring();
+    }
+    host.previewTabsControl->SetTabTooltip(0u, std::move(tooltipText));
+}
+
 void FolderWindow::UpdatePreviewTabSelection(Pane hostPane) noexcept
 {
     PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
     if (host.previewTabsControl)
     {
+        UpdatePreviewFolderTabTooltip(hostPane);
         host.previewTabsControl->SetSelectedIndex(host.previewTabSelected ? std::optional<size_t>{1u} : std::optional<size_t>{0u});
         host.previewTabsHost.Invalidate();
     }

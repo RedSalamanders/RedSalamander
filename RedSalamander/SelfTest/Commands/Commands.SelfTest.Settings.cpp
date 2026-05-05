@@ -448,7 +448,7 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     vscode.appliesTo.matches  = {{Common::Settings::FileActionMatchKind::Default, L""}};
 
     Common::Settings::FileActionDefinition visualStudio{};
-    visualStudio.id                         = L"visual-studio";
+    visualStudio.id                         = L"Visual-Studio";
     visualStudio.displayName                = L"Visual Studio";
     visualStudio.kind                       = Common::Settings::FileActionKind::ExternalProgram;
     visualStudio.executablePath             = L"C:\\Program Files\\Microsoft Visual Studio\\Common7\\IDE\\devenv.exe";
@@ -525,6 +525,14 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
                   L"Edit New association did not round-trip independently from Edit.");
     state.Require(loaded.fileActions.editors.actions.at(2).appliesTo.matches.at(2).value == L".vcxproj",
                   L"Editor action extension applicability did not round-trip.");
+    FileActionResolver::Request cppRequest{};
+    cppRequest.command      = FileActionResolver::Command::Edit;
+    cppRequest.filePath     = std::filesystem::path(L"C:\\Src\\main.cpp");
+    cppRequest.computerName = L"dev-pc";
+    const FileActionResolver::Resolution loadedCppResolution =
+        FileActionResolver::ResolveEditorAction(loaded.fileActions.editors, cppRequest);
+    state.Require(loadedCppResolution.action && loadedCppResolution.action->id == L"Visual-Studio",
+                  L"Persisted editor action references should resolve case-insensitively.");
 
     state.Require(loaded.userMenu.actions.size() == 1, L"User Menu actions did not round-trip through the dedicated userMenu shape.");
     state.Require(loaded.userMenu.actions.at(0).arguments == L"-d {Path}", L"User Menu macro arguments did not round-trip.");
@@ -619,8 +627,15 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     state.Require(recovery.settingsPath == settingsPath, L"Unsupported schema recovery should report the original settings path.");
     state.Require(! recovery.backupPath.empty(), L"Unsupported schema recovery should report the backup path.");
     state.Require(SelfTest::PathExists(recovery.backupPath), L"Unsupported schema recovery backup file should exist.");
-    const std::wstring recoveryMessage = FormatStringResource(
-        nullptr, IDS_FMT_SETTINGS_RESTORED_DEFAULTS_BACKUP, recovery.settingsPath.wstring(), recovery.backupPath.wstring());
+    const std::wstring recoveryMessage = FormatStringResource(nullptr,
+                                                              IDS_FMT_SETTINGS_RESTORED_DEFAULTS_UNSUPPORTED_SCHEMA_BACKUP,
+                                                              recovery.unsupportedSchemaVersion,
+                                                              recovery.settingsPath.wstring(),
+                                                              recovery.backupPath.wstring());
+    state.Require(recoveryMessage.find(L"schema version 15") != std::wstring::npos,
+                  L"Unsupported schema recovery warning should name the rejected schema version.");
+    state.Require(recoveryMessage.find(L"not migrated automatically") != std::wstring::npos,
+                  L"Unsupported schema recovery warning should say the old settings were not migrated automatically.");
     state.Require(recoveryMessage.find(recovery.settingsPath.wstring()) != std::wstring::npos,
                   L"Unsupported schema recovery warning should include the original settings path.");
     state.Require(recoveryMessage.find(recovery.backupPath.wstring()) != std::wstring::npos,
@@ -652,13 +667,14 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestInvalidResourceFormatStringReturnsEmpty(CaseState& state) noexcept
+[[nodiscard]] bool TestInvalidResourceFormatStringReturnsRawFallback(CaseState& state) noexcept
 {
     try
     {
+        constexpr std::wstring_view kInvalidFormat = L"0x{0:08X}: {1";
         const std::wstring details = FormatLoadedStringResource(
-            0u, std::wstring_view(L"0x{0:08X}: {1"), 0x80070002u, std::wstring(L"The system cannot find the file specified."));
-        state.Require(details.empty(), L"Invalid runtime resource format strings should return an empty fallback.");
+            0u, kInvalidFormat, 0x80070002u, std::wstring(L"The system cannot find the file specified."));
+        state.Require(details == kInvalidFormat, L"Invalid runtime resource format strings should fall back to the raw resource text.");
     }
     catch (const std::format_error&)
     {
@@ -1100,7 +1116,7 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
         std::wstring_view message;
     };
 
-    constexpr std::array<MalformedCase, 6> kCases = {{
+    constexpr std::array<MalformedCase, 11> kCases = {{
         {L"RedSalamanderSelfTestMalformedFileActionMissingPlugin",
          R"json({
   "schemaVersion": 16,
@@ -1113,6 +1129,30 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
   }
 })json",
          L"viewerPlugin file actions without pluginId should be rejected."},
+        {L"RedSalamanderSelfTestMalformedFileActionViewerWithExecutable",
+         R"json({
+  "schemaVersion": 16,
+  "fileActions": {
+    "viewers": {
+      "actions": [
+        { "id": "viewer-with-exe", "kind": "viewerPlugin", "pluginId": "builtin/viewer-text", "executablePath": "notepad.exe" }
+      ]
+    }
+  }
+})json",
+         L"viewerPlugin file actions with executablePath should be rejected."},
+        {L"RedSalamanderSelfTestMalformedFileActionViewerWithEmptyExecutable",
+         R"json({
+  "schemaVersion": 16,
+  "fileActions": {
+    "viewers": {
+      "actions": [
+        { "id": "viewer-with-empty-exe", "kind": "viewerPlugin", "pluginId": "builtin/viewer-text", "executablePath": "" }
+      ]
+    }
+  }
+})json",
+         L"viewerPlugin file actions with an executablePath field should be rejected even when empty."},
         {L"RedSalamanderSelfTestMalformedFileActionMissingExecutable",
          R"json({
   "schemaVersion": 16,
@@ -1125,6 +1165,30 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
   }
 })json",
          L"externalProgram file actions without executablePath should be rejected."},
+        {L"RedSalamanderSelfTestMalformedFileActionExternalWithPlugin",
+         R"json({
+  "schemaVersion": 16,
+  "fileActions": {
+    "viewers": {
+      "actions": [
+        { "id": "external-with-plugin", "kind": "externalProgram", "executablePath": "notepad.exe", "pluginId": "builtin/viewer-text" }
+      ]
+    }
+  }
+})json",
+         L"externalProgram file actions with pluginId should be rejected."},
+        {L"RedSalamanderSelfTestMalformedFileActionExternalWithEmptyPlugin",
+         R"json({
+  "schemaVersion": 16,
+  "fileActions": {
+    "viewers": {
+      "actions": [
+        { "id": "external-with-empty-plugin", "kind": "externalProgram", "executablePath": "notepad.exe", "pluginId": "" }
+      ]
+    }
+  }
+})json",
+         L"externalProgram file actions with a pluginId field should be rejected even when empty."},
         {L"RedSalamanderSelfTestMalformedFileActionUnknownKind",
          R"json({
   "schemaVersion": 16,
@@ -1172,10 +1236,23 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
           "viewActionId": "missing-action"
         }
       ]
-    }
+         }
   }
 })json",
          L"viewer associations that reference missing action ids should be rejected."},
+        {L"RedSalamanderSelfTestMalformedFileActionDuplicateCaseOnlyId",
+         R"json({
+  "schemaVersion": 16,
+  "fileActions": {
+    "editors": {
+      "actions": [
+        { "id": "CaseTool", "kind": "externalProgram", "executablePath": "notepad.exe" },
+        { "id": "casetool", "kind": "externalProgram", "executablePath": "notepad.exe" }
+      ]
+    }
+  }
+})json",
+         L"file actions whose IDs differ only by case should be rejected."},
         {L"RedSalamanderSelfTestMalformedEditorViewerPlugin",
          R"json({
   "schemaVersion": 16,
@@ -1387,26 +1464,21 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestFileActionResolutionV16ActionIdsAreCaseSensitive(CaseState& state) noexcept
+[[nodiscard]] bool TestFileActionResolutionV16ActionIdsAreCaseInsensitive(CaseState& state) noexcept
 {
     Common::Settings::EditorFileActionsSettings editors{};
 
-    Common::Settings::FileActionDefinition upperAction{};
-    upperAction.id      = L"CaseTool";
-    upperAction.enabled = true;
-    TestSetActionExtensions(upperAction, {L".case"});
+    Common::Settings::FileActionDefinition action{};
+    action.id      = L"CaseTool";
+    action.enabled = true;
+    TestSetActionExtensions(action, {L".case"});
 
-    Common::Settings::FileActionDefinition lowerAction{};
-    lowerAction.id      = L"casetool";
-    lowerAction.enabled = true;
-    TestSetActionExtensions(lowerAction, {L".case"});
-
-    editors.actions = {upperAction, lowerAction};
+    editors.actions = {action};
 
     Common::Settings::EditorAssociationRule globalRule{};
     globalRule.match.kind   = Common::Settings::FileActionMatchKind::Extension;
     globalRule.match.value  = L".case";
-    globalRule.editActionId = L"CaseTool";
+    globalRule.editActionId = L"CASETOOL";
 
     Common::Settings::EditorAssociationRule computerRule{};
     computerRule.match.kind   = Common::Settings::FileActionMatchKind::Extension;
@@ -1422,12 +1494,18 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
     request.computerName = L"dev-pc";
 
     const FileActionResolver::Resolution resolution = FileActionResolver::ResolveEditorAction(editors, request);
-    state.Require(resolution.action && resolution.action->id == L"casetool",
-                  L"Editor association action IDs should resolve using exact case.");
+    state.Require(resolution.action && resolution.action->id == L"CaseTool",
+                  L"Editor association action IDs should resolve case-insensitively.");
 
     const std::vector<const Common::Settings::FileActionDefinition*> actions =
         FileActionResolver::CollectAssociatedEditorActions(editors, request);
-    state.Require(actions.size() == 2u, L"Editor action collection should keep IDs that differ only by case distinct.");
+    state.Require(actions.size() == 1u,
+                  L"Editor action collection should collapse case-only action-id references to the same logical action.");
+    if (actions.size() == 1u)
+    {
+        state.Require(actions[0] && actions[0]->id == L"CaseTool",
+                      L"Editor action collection should preserve the configured action definition casing.");
+    }
 
     return state.failure.empty();
 }
@@ -6671,6 +6749,115 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     return output.good();
 }
 
+struct StoredZipDeclaredEntryForCommandSelfTest
+{
+    std::string_view rawEntryName;
+    uint16_t flags = 0u;
+    uint32_t declaredSize = 0u;
+};
+
+[[nodiscard]] bool WriteStoredZipDeclaredSizeFixtureForCommandSelfTest(
+    const std::filesystem::path& archivePath,
+    std::initializer_list<StoredZipDeclaredEntryForCommandSelfTest> entries) noexcept
+{
+    if (entries.size() == 0u || entries.size() > static_cast<size_t>((std::numeric_limits<uint16_t>::max)()))
+    {
+        return false;
+    }
+
+    struct CentralRecord
+    {
+        std::string rawEntryName;
+        uint16_t flags = 0u;
+        uint32_t declaredSize = 0u;
+        uint32_t localHeaderOffset = 0u;
+    };
+
+    std::vector<unsigned char> bytes;
+    std::vector<CentralRecord> records;
+    records.reserve(entries.size());
+    for (const StoredZipDeclaredEntryForCommandSelfTest& entry : entries)
+    {
+        if (entry.rawEntryName.empty() || entry.rawEntryName.size() > static_cast<size_t>((std::numeric_limits<uint16_t>::max)()))
+        {
+            return false;
+        }
+        if (bytes.size() > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()))
+        {
+            return false;
+        }
+
+        const uint32_t localHeaderOffset = static_cast<uint32_t>(bytes.size());
+        AppendZipFixtureLe32(bytes, 0x04034B50u);
+        AppendZipFixtureLe16(bytes, 20u);
+        AppendZipFixtureLe16(bytes, entry.flags);
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe16(bytes, 33u);
+        AppendZipFixtureLe32(bytes, 0u);
+        AppendZipFixtureLe32(bytes, entry.declaredSize);
+        AppendZipFixtureLe32(bytes, entry.declaredSize);
+        AppendZipFixtureLe16(bytes, static_cast<uint16_t>(entry.rawEntryName.size()));
+        AppendZipFixtureLe16(bytes, 0u);
+        bytes.insert(bytes.end(), entry.rawEntryName.begin(), entry.rawEntryName.end());
+
+        records.push_back(CentralRecord{.rawEntryName       = std::string(entry.rawEntryName),
+                                        .flags              = entry.flags,
+                                        .declaredSize       = entry.declaredSize,
+                                        .localHeaderOffset  = localHeaderOffset});
+    }
+
+    if (bytes.size() > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()))
+    {
+        return false;
+    }
+    const uint32_t centralOffset = static_cast<uint32_t>(bytes.size());
+    for (const CentralRecord& record : records)
+    {
+        AppendZipFixtureLe32(bytes, 0x02014B50u);
+        AppendZipFixtureLe16(bytes, 20u);
+        AppendZipFixtureLe16(bytes, 20u);
+        AppendZipFixtureLe16(bytes, record.flags);
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe16(bytes, 33u);
+        AppendZipFixtureLe32(bytes, 0u);
+        AppendZipFixtureLe32(bytes, record.declaredSize);
+        AppendZipFixtureLe32(bytes, record.declaredSize);
+        AppendZipFixtureLe16(bytes, static_cast<uint16_t>(record.rawEntryName.size()));
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe16(bytes, 0u);
+        AppendZipFixtureLe32(bytes, 0u);
+        AppendZipFixtureLe32(bytes, record.localHeaderOffset);
+        bytes.insert(bytes.end(), record.rawEntryName.begin(), record.rawEntryName.end());
+    }
+
+    if (bytes.size() > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()))
+    {
+        return false;
+    }
+    const uint32_t centralSize = static_cast<uint32_t>(bytes.size()) - centralOffset;
+    AppendZipFixtureLe32(bytes, 0x06054B50u);
+    AppendZipFixtureLe16(bytes, 0u);
+    AppendZipFixtureLe16(bytes, 0u);
+    AppendZipFixtureLe16(bytes, static_cast<uint16_t>(records.size()));
+    AppendZipFixtureLe16(bytes, static_cast<uint16_t>(records.size()));
+    AppendZipFixtureLe32(bytes, centralSize);
+    AppendZipFixtureLe32(bytes, centralOffset);
+    AppendZipFixtureLe16(bytes, 0u);
+
+    std::ofstream output(archivePath, std::ios::binary | std::ios::trunc);
+    if (! output)
+    {
+        return false;
+    }
+
+    output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    return output.good();
+}
+
 [[nodiscard]] bool TestMakeFileListGeneratesFormatsAndSavesOptions(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -7346,6 +7533,36 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     state.Require(ReadUtf8TextFileForCommandSelfTest(cp437ExtractRoot / L"caf\x00E9.txt") == L"cp437",
                   L"Stored ZIP extraction should honor CP437 names when the UTF-8 flag is not set.");
 
+    const std::filesystem::path cp437ARingArchivePath = outputRoot / L"cp437_a_ring.zip";
+    std::string cp437ARingEntryName;
+    cp437ARingEntryName.push_back(static_cast<char>(0x8Fu));
+    cp437ARingEntryName.append("ngstrom.txt");
+    state.Require(WriteStoredZipFixtureForCommandSelfTest(cp437ARingArchivePath, cp437ARingEntryName, 0u, "aring"),
+                  L"Failed to create CP437 ZIP fixture with A-ring path.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"cp437_a_ring.zip"}, SelfTest::Scale(3000ms)),
+                  L"Archive output folder did not show cp437_a_ring.zip.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"cp437_a_ring.zip"),
+                  L"Failed to focus CP437 A-ring ZIP fixture.");
+    const std::filesystem::path cp437ARingExtractRoot = root / L"cp437-a-ring-extracted";
+    FolderWindow::ArchiveCommandDebugOptions cp437ARingUnpackOptions{};
+    cp437ARingUnpackOptions.destinationPath = cp437ARingExtractRoot;
+    cp437ARingUnpackOptions.overwrite       = true;
+    g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(cp437ARingUnpackOptions);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"),
+                  L"cmd/pane/unpack should dispatch for CP437 A-ring ZIP fixture.");
+    PumpPendingMessages();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> cp437ARingUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    state.Require(cp437ARingUnpackResult.has_value(), L"CP437 A-ring ZIP unpack should record a debug result.");
+    if (cp437ARingUnpackResult.has_value())
+    {
+        state.Require(SUCCEEDED(cp437ARingUnpackResult->hr),
+                      std::format(L"CP437 A-ring ZIP extraction should succeed; hr=0x{:08X}.",
+                                  static_cast<unsigned long>(cp437ARingUnpackResult->hr)));
+    }
+    state.Require(ReadUtf8TextFileForCommandSelfTest(cp437ARingExtractRoot / L"\x00C5ngstrom.txt") == L"aring",
+                  L"Stored ZIP extraction should decode non-UTF-8 CP437 A-ring paths.");
+
     const std::filesystem::path reservedArchivePath = outputRoot / L"reserved.zip";
     state.Require(WriteStoredZipFixtureForCommandSelfTest(reservedArchivePath, "CON.txt", 0x0800u, "reserved"),
                   L"Failed to create reserved-name ZIP fixture.");
@@ -7371,6 +7588,41 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     }
     state.Require(! SelfTest::PathExists(reservedExtractRoot / L"CON.txt"),
                   L"Reserved-name ZIP extraction should not create the reserved target.");
+
+    const std::filesystem::path bombArchivePath = outputRoot / L"zip-bomb.zip";
+    state.Require(WriteStoredZipDeclaredSizeFixtureForCommandSelfTest(bombArchivePath,
+                                                                      {{.rawEntryName = "huge-a.bin",
+                                                                        .flags = 0x0800u,
+                                                                        .declaredSize = 0xFFFFFFFFu},
+                                                                       {.rawEntryName = "huge-b.bin",
+                                                                        .flags = 0x0800u,
+                                                                        .declaredSize = 0xFFFFFFFFu},
+                                                                       {.rawEntryName = "huge-c.bin",
+                                                                        .flags = 0x0800u,
+                                                                        .declaredSize = 0xFFFFFFFFu}}),
+                  L"Failed to create declared-size ZIP bomb fixture.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"zip-bomb.zip"}, SelfTest::Scale(3000ms)),
+                  L"Archive output folder did not show zip-bomb.zip.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"zip-bomb.zip"),
+                  L"Failed to focus declared-size ZIP bomb fixture.");
+    const std::filesystem::path bombExtractRoot = root / L"zip-bomb-extracted";
+    FolderWindow::ArchiveCommandDebugOptions bombUnpackOptions{};
+    bombUnpackOptions.destinationPath = bombExtractRoot;
+    bombUnpackOptions.overwrite       = true;
+    g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(bombUnpackOptions);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"),
+                  L"cmd/pane/unpack should dispatch for declared-size ZIP bomb fixture.");
+    PumpPendingMessages();
+    const std::optional<FolderWindow::ArchiveCommandDebugResult> bombUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
+    state.Require(bombUnpackResult.has_value(), L"Declared-size ZIP bomb unpack should record a debug result.");
+    if (bombUnpackResult.has_value())
+    {
+        state.Require(bombUnpackResult->hr == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
+                      L"Stored ZIP extraction should reject archives whose decompressed size exceeds the cap.");
+    }
+    state.Require(! SelfTest::PathExists(bombExtractRoot / L"huge-a.bin"),
+                  L"Declared-size ZIP bomb extraction should not create output files.");
 
     FolderWindow::ArchiveCommandDebugOptions invalidDestinationOptions{};
     invalidDestinationOptions.destinationPath.clear();
@@ -7661,8 +7913,57 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left),
                   L"Embedded text preview should not take keyboard focus from the source pane.");
 
+    const auto previewTextContains = [](const FolderWindow::PreviewPaneDebugSnapshot& snapshot, std::wstring_view expected) noexcept {
+        return snapshot.previewText.find(expected) != std::wstring::npos;
+    };
+    const auto waitForPreviewText = [&](std::wstring_view expected,
+                                        std::wstring_view forbidden,
+                                        FolderWindow::PreviewPaneDebugSnapshot& outSnapshot) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        do
+        {
+            PumpPendingMessages();
+            if (g_folderWindow.DebugGetPreviewPaneSnapshot(outSnapshot) && previewTextContains(outSnapshot, expected) &&
+                (forbidden.empty() || ! previewTextContains(outSnapshot, forbidden)))
+            {
+                return true;
+            }
+            Sleep(10);
+        } while (std::chrono::steady_clock::now() < deadline);
+        return false;
+    };
+
+    FolderWindow::PreviewPaneDebugSnapshot alphaPreview{};
+    state.Require(waitForPreviewText(L"alpha preview body", L"beta preview body", alphaPreview),
+                  L"Embedded preview should expose the focused alpha file text before reuse.");
+    state.Require(alphaPreview.previewViewerInstanceId != 0, L"Embedded text preview should expose a stable viewer instance id.");
+    state.Require(alphaPreview.previewEmbeddedViewerHwnd != nullptr, L"Embedded text preview should expose its hosted viewer HWND.");
+    state.Require(alphaPreview.previewTabsHwnd != nullptr, L"Embedded preview should expose its tab strip HWND for pointer validation.");
+
+    const auto rectIsUsable = [](const RECT& rect) noexcept {
+        return rect.right > rect.left && rect.bottom > rect.top;
+    };
+    const auto rectCenterPoint = [](const RECT& rect) noexcept {
+        return MAKELPARAM(rect.left + ((rect.right - rect.left) / 2), rect.top + ((rect.bottom - rect.top) / 2));
+    };
+    const auto clickPreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept {
+        SendMessageW(hwnd, WM_MOUSEMOVE, 0, point);
+        SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, point);
+        SendMessageW(hwnd, WM_LBUTTONUP, 0, point);
+        PumpPendingMessages();
+    };
+    const auto movePreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept {
+        POINT screenPoint{GET_X_LPARAM(point), GET_Y_LPARAM(point)};
+        ClientToScreen(hwnd, &screenPoint);
+        SetCursorPos(screenPoint.x, screenPoint.y);
+        SendMessageW(hwnd, WM_MOUSEMOVE, 0, point);
+    };
+
     const auto switchStarted = std::chrono::steady_clock::now();
-    state.Require(g_folderWindow.DebugSetPreviewPaneTab(FolderWindow::Pane::Right, false), L"Failed to switch preview host to Folder tab.");
+    state.Require(rectIsUsable(alphaPreview.folderTabClientRect), L"Embedded preview should expose a usable Folder tab hit rectangle.");
+    state.Require(alphaPreview.previewCloseButtonVisible, L"Selected Preview tab should display its close button.");
+    clickPreviewTabsPoint(alphaPreview.previewTabsHwnd, rectCenterPoint(alphaPreview.folderTabClientRect));
     PumpPendingMessages();
     const auto switchUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - switchStarted);
 
@@ -7670,31 +7971,62 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(folderTab), L"Could not capture preview-pane state after Folder tab switch.");
     state.Require(folderTab.active && folderTab.tabsVisible, L"Folder tab should keep preview mode open with tabs visible.");
     state.Require(folderTab.tabsUseDxUiHost, L"Folder tab should keep the DxUi tab host.");
-    state.Require(folderTab.folderTabSelected, L"Folder tab should be selected.");
+    state.Require(folderTab.folderTabSelected, L"Folder tab should be selected after a pointer click.");
     state.Require(folderTab.folderViewVisible, L"Right folder view should be visible on the Folder tab.");
     state.Require(! folderTab.previewContentVisible, L"Preview content should be hidden on the Folder tab.");
+    state.Require(! folderTab.previewCloseButtonVisible, L"Inactive Preview tab should hide its close button when it is not hovered.");
+    movePreviewTabsPoint(folderTab.previewTabsHwnd, rectCenterPoint(folderTab.folderTabClientRect));
+    FolderWindow::PreviewPaneDebugSnapshot folderTabImmediateHover{};
+    state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(folderTabImmediateHover), L"Could not capture preview-pane state immediately after hovering Folder tab.");
+    state.Require(folderTabImmediateHover.previewTabsTooltipText.empty(), L"Folder tab tooltip should wait for the standard hover delay before appearing.");
+    state.Require(folderTabImmediateHover.previewTabsPendingTooltipText == rightRoot.wstring(),
+                  std::format(L"Folder tab hover should schedule the delayed host path tooltip. Expected='{}' Actual='{}'",
+                              rightRoot.wstring(),
+                              folderTabImmediateHover.previewTabsPendingTooltipText));
+    state.Require(g_folderWindow.DebugAdvancePreviewTabsTooltipDelayForTest(folderTab.hostPane),
+                  L"Folder tab hover should advance the delayed host path tooltip after the standard delay.");
+    FolderWindow::PreviewPaneDebugSnapshot folderTabDelayedHover{};
+    state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(folderTabDelayedHover),
+                  L"Could not capture preview-pane state after advancing the Folder tab tooltip delay.");
+    state.Require(folderTabDelayedHover.previewTabsTooltipText == rightRoot.wstring(),
+                  std::format(L"Folder tab tooltip should display the host pane path while hovered. Expected='{}' Actual='{}' Pending='{}'",
+                              rightRoot.wstring(),
+                              folderTabDelayedHover.previewTabsTooltipText,
+                              folderTabDelayedHover.previewTabsPendingTooltipText));
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"beta-preview.txt"), L"Failed to focus beta preview item.");
     PumpPendingMessages();
-    state.Require(g_folderWindow.DebugSetPreviewPaneTab(FolderWindow::Pane::Right, true), L"Failed to switch preview host back to Preview tab.");
+    state.Require(rectIsUsable(folderTab.previewTabClientRect), L"Embedded preview should expose a usable Preview tab hit rectangle.");
+    movePreviewTabsPoint(folderTab.previewTabsHwnd, rectCenterPoint(folderTab.previewTabClientRect));
+    FolderWindow::PreviewPaneDebugSnapshot hoveredPreviewTab{};
+    state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(hoveredPreviewTab), L"Could not capture preview-pane state after hovering Preview tab.");
+    state.Require(hoveredPreviewTab.previewCloseButtonVisible, L"Inactive Preview tab should display its close button while hovered.");
+    clickPreviewTabsPoint(folderTab.previewTabsHwnd, rectCenterPoint(folderTab.previewTabClientRect));
     PumpPendingMessages();
     FolderWindow::PreviewPaneDebugSnapshot betaPreview{};
-    state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(betaPreview), L"Could not capture preview-pane state after beta focus.");
+    state.Require(waitForPreviewText(L"beta preview body", L"alpha preview body", betaPreview),
+                  L"Reused embedded preview should clear the old alpha content before rendering beta.");
     state.Require(betaPreview.previewTabSelected, L"Preview tab should be selected after returning from Folder tab.");
     state.Require(betaPreview.previewUsesEmbeddedViewer, L"Preview should keep using the embedded viewer after focus changes.");
     state.Require(betaPreview.previewViewerPluginId == L"builtin/viewer-text", L"Updated text preview should still use the embedded text viewer plugin.");
     state.Require(betaPreview.previewedPath.filename() == L"beta-preview.txt", L"Preview should update to the newly focused beta file.");
+    state.Require(betaPreview.previewViewerInstanceId == alphaPreview.previewViewerInstanceId,
+                  L"Same-plugin text preview refresh should reuse the embedded viewer instance.");
+    state.Require(betaPreview.previewEmbeddedViewerHwnd == alphaPreview.previewEmbeddedViewerHwnd,
+                  L"Same-plugin text preview refresh should keep the embedded viewer HWND instead of closing and recreating it.");
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left),
                   L"Refreshing embedded text preview should keep keyboard focus in the source pane.");
 
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"),
-                  L"Second preview toggle should dispatch through the shortcut path.");
+    state.Require(betaPreview.previewTabsHwnd != nullptr, L"Embedded preview should keep exposing its tab strip HWND before close.");
+    state.Require(rectIsUsable(betaPreview.previewCloseClientRect), L"Preview tab should expose a usable close-button hit rectangle.");
+    state.Require(betaPreview.previewCloseButtonVisible, L"Selected Preview tab should keep its close button visible before close.");
+    clickPreviewTabsPoint(betaPreview.previewTabsHwnd, rectCenterPoint(betaPreview.previewCloseClientRect));
     PumpPendingMessages();
     FolderWindow::PreviewPaneDebugSnapshot afterClose{};
     state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(afterClose), L"Could not capture preview-pane state after close.");
-    state.Require(! afterClose.active, L"Second preview toggle should close preview mode.");
-    state.Require(! afterClose.tabsVisible, L"Closing preview mode should remove the preview tab strip.");
-    state.Require(afterClose.folderViewVisible, L"Closing preview mode should restore the host pane folder view.");
+    state.Require(! afterClose.active, L"Clicking the Preview tab close button should close preview mode.");
+    state.Require(! afterClose.tabsVisible, L"Closing preview from the tab strip should remove the preview tab strip.");
+    state.Require(afterClose.folderViewVisible, L"Closing preview from the tab strip should restore the host pane folder view.");
 
     const std::wstring perfArtifactText =
         std::format(L"{{\n"
@@ -7742,6 +8074,8 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     state.Require(SelfTest::EnsureDirectory(rightRoot), L"Failed to create configured preview host folder.");
     state.Require(TestWriteTinyBmpFile(leftRoot / L"image-preview.bmp"),
                   L"Failed to create configured preview fixture.");
+    state.Require(TestWriteTinyBmpFile(leftRoot / L"image-preview-next.bmp"),
+                  L"Failed to create second configured image preview fixture.");
     state.Require(SelfTest::WriteTextFile(leftRoot / L"media-preview.mp4", "dummy media preview body"),
                   L"Failed to create configured media preview fixture.");
     state.Require(SelfTest::WriteTextFile(leftRoot / L"media-preview-next.mp4", "dummy media preview next body"),
@@ -7813,7 +8147,9 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
                   L"Failed to set left pane path for configured preview test.");
     state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set right pane path for configured preview test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"image-preview.bmp", L"media-preview.mp4", L"media-preview-next.mp4"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
+                                   {L"image-preview.bmp", L"image-preview-next.bmp", L"media-preview.mp4", L"media-preview-next.mp4"},
+                                   SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for configured preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"host.txt"}, SelfTest::Scale(3000ms)),
                   L"Right pane contents not ready for configured preview test.");
@@ -7851,6 +8187,41 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     state.Require(snapshot.previewedPath.filename() == L"image-preview.bmp", L"Configured preview should load the focused file.");
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
                   L"Configured embedded preview should not take keyboard focus from the source pane.");
+
+    const uintptr_t firstImagePreviewInstanceId = snapshot.previewViewerInstanceId;
+    const HWND firstImagePreviewHwnd = snapshot.previewEmbeddedViewerHwnd;
+    state.Require(firstImagePreviewInstanceId != 0, L"Configured image preview should expose a stable embedded viewer instance id.");
+    state.Require(firstImagePreviewHwnd != nullptr, L"Configured image preview should expose its hosted viewer HWND.");
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"image-preview-next.bmp"),
+                  L"Failed to focus second configured image preview item.");
+
+    snapshot = {};
+    const auto nextImageDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < nextImageDeadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
+            snapshot.previewedPath.filename() == L"image-preview-next.bmp" &&
+            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+
+    state.Require(snapshot.active, L"Configured second image preview should remain active.");
+    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-imgraw",
+                  L"Second image preview should keep using the configured image viewer plugin.");
+    state.Require(snapshot.previewedPath.filename() == L"image-preview-next.bmp", L"Second image preview should load the newly focused image file.");
+    state.Require(snapshot.previewViewerInstanceId == firstImagePreviewInstanceId,
+                  L"Switching between image files that resolve to ViewerImgRaw should reuse the embedded image preview instance.");
+    state.Require(snapshot.previewEmbeddedViewerHwnd == firstImagePreviewHwnd,
+                  L"Switching between image files that resolve to ViewerImgRaw should keep the embedded image preview HWND hot.");
+    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
+                  L"Refreshing image preview for a second image should keep keyboard focus in the source pane.");
+
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"media-preview.mp4"),
                   L"Failed to focus configured media preview item.");
 
@@ -7878,6 +8249,8 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
 
     const uintptr_t firstVlcPreviewInstanceId = snapshot.previewViewerInstanceId;
     state.Require(firstVlcPreviewInstanceId != 0, L"Configured media preview should expose a stable embedded viewer instance id.");
+    const HWND firstVlcPreviewHwnd = snapshot.previewEmbeddedViewerHwnd;
+    state.Require(firstVlcPreviewHwnd != nullptr, L"Configured media preview should expose its hosted viewer HWND.");
     HWND vlcWindow = FindDescendantWindowByClass(snapshot.previewContentHwnd, L"RedSalamander.ViewerVLC");
     state.Require(vlcWindow != nullptr, L"Configured media preview should host a VLC viewer window.");
     if (vlcWindow)
@@ -7899,11 +8272,21 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
         state.Require(SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&vlcSnapshot)) == TRUE,
                       L"Failed to read VLC preview snapshot after wheel forwarding.");
         state.Require(vlcSnapshot.timeMs == 30'000, L"Mouse wheel over a VLC child surface should seek by the normal 10-second step.");
+        state.Require(vlcSnapshot.hasVideoChild, L"VLC preview should expose an embedded video child window.");
+        state.Require(vlcSnapshot.videoChildIsChildWindow, L"VLC preview video surface should stay a child window.");
+        state.Require(vlcSnapshot.videoChildParentIsViewer, L"VLC preview video surface should stay parented to the embedded viewer window.");
     }
+
+    WndMsg::ViewerVlcDebugStopDelay slowVlcStop{};
+    slowVlcStop.delayMs = 1200;
+    state.Require(vlcWindow != nullptr &&
+                      SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugSetStopDelay, 0, reinterpret_cast<LPARAM>(&slowVlcStop)) == TRUE,
+                  L"Failed to enable slow VLC stop simulation for preview responsiveness coverage.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"media-preview-next.mp4"),
                   L"Failed to focus second configured media preview item.");
 
+    const auto samePluginSwitchStarted = std::chrono::steady_clock::now();
     snapshot = {};
     const auto nextMediaDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < nextMediaDeadline)
@@ -7925,13 +8308,28 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     state.Require(snapshot.previewedPath.filename() == L"media-preview-next.mp4", L"Second media preview should load the newly focused media file.");
     state.Require(snapshot.previewViewerInstanceId == firstVlcPreviewInstanceId,
                   L"Switching between media files that resolve to VLC should reuse the embedded VLC preview instance.");
+    state.Require(snapshot.previewEmbeddedViewerHwnd == firstVlcPreviewHwnd,
+                  L"Switching between media files that resolve to VLC should keep the embedded VLC preview HWND hot.");
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
                   L"Refreshing VLC preview for a second media file should keep keyboard focus in the source pane.");
+    state.Require(std::chrono::steady_clock::now() - samePluginSwitchStarted < SelfTest::Scale(900ms),
+                  L"Refreshing VLC preview for another media file should not block on slow media-player teardown.");
 
     vlcWindow = FindDescendantWindowByClass(snapshot.previewContentHwnd, L"RedSalamander.ViewerVLC");
     state.Require(vlcWindow != nullptr, L"Second media preview should still host a VLC viewer window.");
     if (vlcWindow)
     {
+        WndMsg::ViewerVlcDebugSnapshot nextVlcSnapshot{};
+        state.Require(SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&nextVlcSnapshot)) == TRUE,
+                      L"Failed to read second VLC preview snapshot.");
+        state.Require(nextVlcSnapshot.hasVideoChild, L"Second VLC preview should expose an embedded video child window.");
+        state.Require(nextVlcSnapshot.videoChildIsChildWindow, L"Second VLC preview video surface should stay a child window.");
+        state.Require(nextVlcSnapshot.videoChildParentIsViewer,
+                      L"Switching to the next video should keep the VLC video surface parented to the embedded viewer window.");
+
+        state.Require(SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugSetStopDelay, 0, reinterpret_cast<LPARAM>(&slowVlcStop)) == TRUE,
+                      L"Failed to keep slow VLC stop simulation enabled for cross-plugin preview coverage.");
+
         WndMsg::ViewerVlcDebugPlaybackState volumeState{};
         volumeState.timeMs   = 5'000;
         volumeState.lengthMs = 90'000;
@@ -7940,6 +8338,52 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
         state.Require(SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugSetPlaybackState, 0, reinterpret_cast<LPARAM>(&volumeState)) == TRUE,
                       L"Failed to seed VLC preview volume state.");
     }
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"image-preview.bmp"),
+                  L"Failed to focus image preview item after media preview.");
+
+    const auto crossPluginSwitchStarted = std::chrono::steady_clock::now();
+    snapshot = {};
+    const auto crossPluginDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < crossPluginDeadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
+            snapshot.previewedPath.filename() == L"image-preview.bmp" &&
+            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+
+    state.Require(snapshot.active, L"Configured image preview should reopen after media preview.");
+    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-imgraw",
+                  L"Switching from media preview back to image preview should resolve to ViewerImgRaw.");
+    state.Require(std::chrono::steady_clock::now() - crossPluginSwitchStarted < SelfTest::Scale(900ms),
+                  L"Switching away from VLC preview should not block on slow media-player teardown.");
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"media-preview-next.mp4"),
+                  L"Failed to refocus media preview before close/reopen persistence check.");
+    snapshot = {};
+    const auto mediaRefocusDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < mediaRefocusDeadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
+            snapshot.previewedPath.filename() == L"media-preview-next.mp4" &&
+            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+    state.Require(snapshot.active && snapshot.previewViewerPluginId == L"builtin/viewer-vlc",
+                  L"Media preview should reopen before close/reopen persistence check.");
+    vlcWindow = FindDescendantWindowByClass(snapshot.previewContentHwnd, L"RedSalamander.ViewerVLC");
+    state.Require(vlcWindow != nullptr, L"Refocused media preview should host a VLC viewer window.");
 
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"),
                   L"Preview pane toggle should close the configured media preview.");
@@ -9147,7 +9591,7 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
 
     g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
     Common::Settings::FileActionDefinition textViewer{};
-    textViewer.id          = L"explicit-text";
+    textViewer.id          = L"Explicit-Text";
     textViewer.displayName = L"Explicit Text Viewer";
     textViewer.enabled     = true;
     textViewer.kind        = Common::Settings::FileActionKind::ViewerPlugin;
@@ -9236,7 +9680,7 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
 
     g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
     Common::Settings::FileActionDefinition externalViewer{};
-    externalViewer.id             = L"external-marker";
+    externalViewer.id             = L"External-Marker";
     externalViewer.displayName    = L"External Marker Viewer";
     externalViewer.enabled        = true;
     externalViewer.kind           = Common::Settings::FileActionKind::ExternalProgram;
@@ -9330,7 +9774,7 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
 
     g_settings.fileActions.editors = Common::Settings::EditorFileActionsSettings{};
     Common::Settings::FileActionDefinition externalEditor{};
-    externalEditor.id               = L"external-editor";
+    externalEditor.id               = L"External-Editor";
     externalEditor.displayName      = L"External Marker Editor";
     externalEditor.enabled          = true;
     externalEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
@@ -9903,7 +10347,7 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
 
     g_settings.userMenu = Common::Settings::UserMenuSettings{};
     Common::Settings::FileActionDefinition disabledAction{};
-    disabledAction.id               = L"disabled-user-menu";
+    disabledAction.id               = L"Disabled-User-Menu";
     disabledAction.displayName      = L"Disabled User Menu";
     disabledAction.enabled          = false;
     disabledAction.kind             = Common::Settings::FileActionKind::ExternalProgram;
@@ -9939,7 +10383,7 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Disabled User Menu action should report a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_USER_MENU_UNAVAILABLE_TITLE),
                   L"Disabled User Menu action should use the localized unavailable title.");
-    state.Require(alert.message.find(L"disabled-user-menu") != std::wstring::npos,
+    state.Require(alert.message.find(L"Disabled-User-Menu") != std::wstring::npos,
                   L"Disabled User Menu alert should name the unavailable action id.");
     state.Require(alert.message.find(L"disabled.usermenu") != std::wstring::npos, L"Disabled User Menu alert should name the focused file.");
 
@@ -10196,8 +10640,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"resource_hresult_details_format_is_valid", [](CaseState& state) noexcept {
         return TestHResultDetailsResourceUsesValidFormatString(state);
     });
-    SelfTest::RunCase(options, suite, L"resource_invalid_format_string_returns_empty", [](CaseState& state) noexcept {
-        return TestInvalidResourceFormatStringReturnsEmpty(state);
+    SelfTest::RunCase(options, suite, L"resource_invalid_format_string_returns_raw_fallback", [](CaseState& state) noexcept {
+        return TestInvalidResourceFormatStringReturnsRawFallback(state);
     });
     SelfTest::RunCase(options, suite, L"resource_format_placeholders_are_positional", [](CaseState& state) noexcept {
         return TestResourceFormatPlaceholdersArePositional(state);
@@ -10214,8 +10658,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"file_action_resolution_v16_explains_priority", [](CaseState& state) noexcept {
         return TestFileActionResolutionV16ExplainsPriority(state);
     });
-    SelfTest::RunCase(options, suite, L"file_action_resolution_v16_action_ids_are_case_sensitive", [](CaseState& state) noexcept {
-        return TestFileActionResolutionV16ActionIdsAreCaseSensitive(state);
+    SelfTest::RunCase(options, suite, L"file_action_resolution_v16_action_ids_are_case_insensitive", [](CaseState& state) noexcept {
+        return TestFileActionResolutionV16ActionIdsAreCaseInsensitive(state);
     });
     SelfTest::RunCase(options, suite, L"file_action_resolution_v16_command_keys_are_distinct", [](CaseState& state) noexcept {
         return TestFileActionResolutionV16CommandKeysAreDistinct(state);

@@ -18,6 +18,7 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
+#include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -31,7 +32,7 @@ struct IDWriteTextFormat;
 
 [[nodiscard]] const char* GetViewerVlcStaticConfigurationSchema() noexcept;
 
-class ViewerVLC final : public IViewer, public IInformations
+class ViewerVLC final : public EmbeddedViewerBase<ViewerVLC>, public IInformations
 {
 public:
     ViewerVLC();
@@ -57,7 +58,6 @@ public:
     HRESULT STDMETHODCALLTYPE Open(const ViewerOpenContext* context) noexcept override;
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
-    HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
 
 private:
     enum class HudPart : uint8_t;
@@ -136,6 +136,8 @@ private:
     void BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec&& spec) noexcept;
     void OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> result) noexcept;
     void StopPlayback() noexcept;
+    void RetireCurrentPlayerAsync(bool updateUi) noexcept;
+    void RetireVlcStateAsync(std::unique_ptr<VlcState> state, bool updateUi) noexcept;
 
     void TakeSnapshot() noexcept;
 
@@ -220,13 +222,8 @@ private:
 
     wil::com_ptr<IHostAlerts> _hostAlerts;
 
-    ViewerTheme _theme{};
-    bool _hasTheme = false;
-
     ViewerVlcConfig _config;
 
-    wil::unique_hwnd _hWnd;
-    bool _embeddedMode = false;
     HWND _embeddedFocusReturnWindow = nullptr;
     wil::unique_hwnd _hVideo;
     wil::unique_hwnd _hHud;
@@ -317,8 +314,8 @@ private:
 
     std::filesystem::path _currentPath;
 
-    RegistrationCallbackState<IViewerCallback> _callbackState;
 #ifdef ENABLE_TESTS
     wil::unique_hwnd _debugWheelVideoChild;
+    uint32_t _debugStopDelayMs = 0;
 #endif
 };

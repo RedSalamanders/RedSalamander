@@ -200,6 +200,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
+    <ClInclude Include="..\EmbeddedViewerBase.h" />
     <ClInclude Include="..\LocalizationManager.h" />
   </ItemGroup>
   <ItemGroup>

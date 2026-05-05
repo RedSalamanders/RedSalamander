@@ -6528,9 +6528,18 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     if (! anySelfTest && settingsRecovery.backedUp && ! settingsRecovery.backupPath.empty())
     {
-        const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_SETTINGS_RESTORED_DEFAULTS);
-        const std::wstring message = FormatStringResource(
-            nullptr, IDS_FMT_SETTINGS_RESTORED_DEFAULTS_BACKUP, settingsRecovery.settingsPath.wstring(), settingsRecovery.backupPath.wstring());
+        const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_SETTINGS_RESTORED_DEFAULTS);
+        const std::wstring message =
+            settingsRecovery.reason == Common::Settings::SettingsLoadRecoveryReason::UnsupportedSchemaVersion
+                ? FormatStringResource(nullptr,
+                                       IDS_FMT_SETTINGS_RESTORED_DEFAULTS_UNSUPPORTED_SCHEMA_BACKUP,
+                                       settingsRecovery.unsupportedSchemaVersion,
+                                       settingsRecovery.settingsPath.wstring(),
+                                       settingsRecovery.backupPath.wstring())
+                : FormatStringResource(nullptr,
+                                       IDS_FMT_SETTINGS_RESTORED_DEFAULTS_BACKUP,
+                                       settingsRecovery.settingsPath.wstring(),
+                                       settingsRecovery.backupPath.wstring());
         MessageBoxCenteredText(nullptr, message, title, MB_OK | MB_ICONWARNING);
     }
 

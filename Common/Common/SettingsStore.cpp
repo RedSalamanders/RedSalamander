@@ -136,6 +136,18 @@ std::string Utf8FromUtf16(std::wstring_view text) noexcept
     return result;
 }
 
+[[nodiscard]] wchar_t ToLower(wchar_t ch) noexcept
+{
+    return static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
+}
+
+[[nodiscard]] std::wstring NormalizeFileActionIdKey(std::wstring_view text)
+{
+    std::wstring normalized(text);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](wchar_t ch) noexcept { return ToLower(ch); });
+    return normalized;
+}
+
 std::wstring_view DescribeJsonReadError(yyjson_read_code code) noexcept
 {
     switch (code)
@@ -1789,7 +1801,9 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
     return ParseStringArray(appliesTo, "computerNames", action.appliesTo.computerNames);
 }
 
-[[nodiscard]] HRESULT ValidateFileActionDefinition(const Common::Settings::FileActionDefinition& action) noexcept
+[[nodiscard]] HRESULT ValidateFileActionDefinition(const Common::Settings::FileActionDefinition& action,
+                                                   bool pluginIdPresent,
+                                                   bool executablePathPresent) noexcept
 {
     if (! IsValidFileActionId(action.id))
     {
@@ -1799,15 +1813,23 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
     switch (action.kind)
     {
         case Common::Settings::FileActionKind::ViewerPlugin:
-            if (action.pluginId.empty())
+            if (! pluginIdPresent || action.pluginId.empty())
             {
                 return InvalidFileActionSettings(std::format(L"viewerPlugin file action '{}' is missing pluginId", action.id));
             }
+            if (executablePathPresent)
+            {
+                return InvalidFileActionSettings(std::format(L"viewerPlugin file action '{}' must not specify executablePath", action.id));
+            }
             break;
         case Common::Settings::FileActionKind::ExternalProgram:
-            if (action.executablePath.empty())
+            if (! executablePathPresent || action.executablePath.empty())
             {
                 return InvalidFileActionSettings(std::format(L"externalProgram file action '{}' is missing executablePath", action.id));
+            }
+            if (pluginIdPresent)
+            {
+                return InvalidFileActionSettings(std::format(L"externalProgram file action '{}' must not specify pluginId", action.id));
             }
             break;
     }
@@ -1850,7 +1872,7 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
         {
             return InvalidFileActionSettings(std::format(L"invalid file-action id '{}'", action.id));
         }
-        if (! actionIds.insert(action.id).second)
+        if (! actionIds.insert(NormalizeFileActionIdKey(action.id)).second)
         {
             return InvalidFileActionSettings(std::format(L"duplicate file-action id '{}'", action.id));
         }
@@ -1877,11 +1899,13 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
         }
         action.kind = kind.value();
 
-        if (const HRESULT hr = ReadOptionalWideString(item, "pluginId", action.pluginId); FAILED(hr))
+        bool pluginIdPresent = false;
+        if (const HRESULT hr = ReadOptionalWideString(item, "pluginId", action.pluginId, &pluginIdPresent); FAILED(hr))
         {
             return hr;
         }
-        if (const HRESULT hr = ReadOptionalWideString(item, "executablePath", action.executablePath); FAILED(hr))
+        bool executablePathPresent = false;
+        if (const HRESULT hr = ReadOptionalWideString(item, "executablePath", action.executablePath, &executablePathPresent); FAILED(hr))
         {
             return hr;
         }
@@ -1904,7 +1928,7 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
         {
             return hr;
         }
-        if (const HRESULT hr = ValidateFileActionDefinition(action); FAILED(hr))
+        if (const HRESULT hr = ValidateFileActionDefinition(action, pluginIdPresent, executablePathPresent); FAILED(hr))
         {
             return hr;
         }
@@ -1949,7 +1973,7 @@ template <typename Rule>
     ids.reserve(actions.size());
     for (const Common::Settings::FileActionDefinition& action : actions)
     {
-        ids.insert(action.id);
+        ids.insert(NormalizeFileActionIdKey(action.id));
     }
     return ids;
 }
@@ -1967,7 +1991,7 @@ template <typename Rule>
     {
         return InvalidFileActionSettings(std::format(L"invalid file-action reference '{}' in '{}'", actionId, fieldName));
     }
-    if (actionIds.find(actionId) == actionIds.end())
+    if (actionIds.find(NormalizeFileActionIdKey(actionId)) == actionIds.end())
     {
         return InvalidFileActionSettings(std::format(L"file-action reference '{}' in '{}' does not match an action id", actionId, fieldName));
     }

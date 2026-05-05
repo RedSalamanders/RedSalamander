@@ -48,10 +48,14 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         SessionState::UpdateActiveFileSystemPluginIdsAndOperation({sourcePluginId, destinationPluginId}, SessionState::OperationKind::Copy);
     }
 
+    const bool sourceIsLocalFilePlugin = NavigationLocation::IsFilePluginShortId(sourcePluginShortId);
+    const bool deleteBypassesRecycleBin =
+        operation == FILESYSTEM_DELETE && ((flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) == 0 || ! sourceIsLocalFilePlugin);
+
     const bool allowPreCalcForOperation =
         operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE ||
         // For Recycle Bin deletes, the shell can provide progress without blocking on a full recursive preflight scan.
-        (operation == FILESYSTEM_DELETE && ((flags & FILESYSTEM_FLAG_USE_RECYCLE_BIN) == 0 || ! NavigationLocation::IsFilePluginShortId(sourcePluginShortId)));
+        deleteBypassesRecycleBin;
     const unsigned int preCalcMaxWorkers = GetPreCalcMaxWorkersFromSettings(_owner._settings);
     const bool enablePreCalc             = allowPreCalcForOperation && GetPreCalcEnabledFromSettings(_owner._settings);
     const bool supportsBandwidthLimit    = operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE;
@@ -287,7 +291,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
             }
         }
     }
-    else if (operation == FILESYSTEM_DELETE && requireConfirmation)
+    else if (operation == FILESYSTEM_DELETE && (requireConfirmation || deleteBypassesRecycleBin))
     {
         unsigned long long fileCount    = 0;
         unsigned long long folderCount  = 0;

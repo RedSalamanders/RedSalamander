@@ -551,6 +551,13 @@ HRESULT FolderWindow::ReopenViewerInstance(ViewerInstance& instance,
     }
 
     UpdateViewerInstanceContext(instance, context, openedBy, pane, source);
+    const ViewerTheme theme = BuildViewerTheme();
+    static_cast<void>(instance.viewer->SetTheme(&theme));
+    const HRESULT callbackHr = instance.viewer->SetCallback(&_viewerCallback, &instance);
+    if (FAILED(callbackHr))
+    {
+        return callbackHr;
+    }
     return instance.viewer->Open(&instance.openContext);
 }
 
@@ -665,10 +672,14 @@ void FolderWindow::ClosePreviewViewer(Pane hostPane) noexcept
 
 bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPane) noexcept
 {
+    Debug::Perf::Scope previewPerf(L"preview.switch_us");
+    previewPerf.SetDetail(hostPane == Pane::Left ? L"host-left" : L"host-right");
+
     PaneState& sourceState = sourcePane == Pane::Left ? _leftPane : _rightPane;
     PaneState& hostState   = hostPane == Pane::Left ? _leftPane : _rightPane;
     if (! _settings || ! sourceState.fileSystem || ! hostState.hPreviewContent || hostState.previewedPath.empty())
     {
+        previewPerf.SetHr(E_INVALIDARG);
         return false;
     }
 
@@ -683,6 +694,7 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
         ClosePreviewViewer(hostPane);
         hostState.previewViewerPluginId.clear();
         SetPreviewPlaceholder(hostPane, FormatStringResource(nullptr, IDS_PREVIEW_FOLDER_FMT, name));
+        previewPerf.SetDetail(L"folder-placeholder");
         return true;
     }
 
@@ -764,10 +776,12 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
                     pluginIdStorage,
                     resolutionSource);
     }
+    previewPerf.SetDetail(pluginIdStorage);
 
     if (hostState.previewViewerInstance && OrdinalString::EqualsNoCase(hostState.previewViewerPluginId, pluginIdStorage) &&
         OrdinalString::EqualsNoCase(hostState.previewedPath.wstring(), hostState.previewViewerInstance->focusedPath))
     {
+        previewPerf.SetValue0(2u);
         SetPreviewPlaceholder(hostPane, {});
         LayoutEmbeddedPreviewViewer(hostPane);
         FocusPaneFolderView(sourcePane);
@@ -830,6 +844,7 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     HRESULT openHr = S_OK;
     if (hostState.previewViewerInstance && OrdinalString::EqualsNoCase(hostState.previewViewerPluginId, pluginIdStorage))
     {
+        previewPerf.SetValue0(1u);
         instance = hostState.previewViewerInstance;
         openHr  = ReopenViewerInstance(*instance, context, openedBy, sourcePane, OpenedFileSourceKind::Preview);
         if (SUCCEEDED(openHr))
@@ -844,6 +859,7 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
                        pluginIdStorage,
                        hostState.previewedPath.wstring(),
                        static_cast<unsigned long>(openHr));
+        previewPerf.SetHr(openHr);
         ClosePreviewViewer(hostPane);
         instance = nullptr;
     }
@@ -870,6 +886,7 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
                        pluginIdStorage,
                        hostState.previewedPath.wstring(),
                        static_cast<unsigned long>(openHr));
+        previewPerf.SetHr(openHr);
         return false;
     }
 

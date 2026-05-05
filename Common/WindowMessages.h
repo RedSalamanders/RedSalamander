@@ -322,6 +322,9 @@ struct ViewerVlcDebugSnapshot
     bool loadingActive = false;
     bool loadingVisible = false;
     bool missingVisible = false;
+    bool hasVideoChild = false;
+    bool videoChildIsChildWindow = false;
+    bool videoChildParentIsViewer = false;
     bool hasVolumeMuteButton = false;
     bool hasVolumeSlider = false;
     bool muted = false;
@@ -354,12 +357,18 @@ struct ViewerVlcDebugWheel
     bool ctrl = false;
 };
 
+struct ViewerVlcDebugStopDelay
+{
+    uint32_t delayMs = 0;
+};
+
 inline constexpr UINT kViewerVlcDebugGetSnapshot         = WM_APP + 0x614;
 inline constexpr UINT kViewerVlcDebugForceLoadingVisible = WM_APP + 0x615;
 inline constexpr UINT kViewerVlcDebugSetPlaybackState    = WM_APP + 0x616;
 inline constexpr UINT kViewerVlcDebugWheel               = WM_APP + 0x617;
 inline constexpr UINT kViewerVlcDebugToggleMute          = WM_APP + 0x618;
 inline constexpr UINT kViewerVlcDebugWheelVideoChild     = WM_APP + 0x619;
+inline constexpr UINT kViewerVlcDebugSetStopDelay        = WM_APP + 0x61A;
 #endif
 
 // RedSalamanderMonitor / ColorTextView

@@ -23,6 +23,7 @@
 
 #include "DxUi/DxUi.h"
 #include "DxUi/DxUiNativeMenuInterop.h"
+#include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
@@ -39,7 +40,7 @@ struct DiffReferenceCache;
 
 [[nodiscard]] const char* GetViewerTextStaticConfigurationSchema() noexcept;
 
-class ViewerText final : public IViewer, public IInformations
+class ViewerText final : public EmbeddedViewerBase<ViewerText>, public IInformations
 {
 public:
     static constexpr size_t kHexBytesPerLine = 16;
@@ -91,7 +92,6 @@ public:
     HRESULT STDMETHODCALLTYPE Open(const ViewerOpenContext* context) noexcept override;
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
-    HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
 
 private:
@@ -543,18 +543,12 @@ private:
     std::string _configurationJson;
     ViewerTextConfig _config;
 
-    RegistrationCallbackState<IViewerCallback> _callbackState;
-
-    ViewerTheme _theme{};
-    bool _hasTheme                = false;
-    bool _embeddedMode            = false;
     bool _allowEraseBkgnd         = true;
     bool _allowEraseBkgndTextView = true;
     bool _allowEraseBkgndHexView  = true;
 
     wil::unique_hmodule _msftEditModule;
 
-    wil::unique_hwnd _hWnd;
     wil::unique_hmenu _menuHandle;
     RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hEdit;

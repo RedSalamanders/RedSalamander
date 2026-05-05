@@ -35,6 +35,7 @@
 #pragma warning(pop)
 
 #include "DxUi/DxUiNativeMenuInterop.h"
+#include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
@@ -43,7 +44,7 @@
 
 [[nodiscard]] const char* GetViewerSpaceStaticConfigurationSchema() noexcept;
 
-class ViewerSpace final : public IViewer, public IInformations
+class ViewerSpace final : public EmbeddedViewerBase<ViewerSpace>, public IInformations
 {
 public:
     ViewerSpace();
@@ -69,7 +70,6 @@ public:
     HRESULT STDMETHODCALLTYPE Open(const ViewerOpenContext* context) noexcept override;
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
-    HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
 
 private:
     enum class ScanState : uint8_t
@@ -257,8 +257,6 @@ private:
     std::string _configurationJson;
     Config _config{};
 
-    RegistrationCallbackState<IViewerCallback> _callbackState;
-
     wil::com_ptr<IHostPaneExecute> _hostPaneExecute;
 
     wil::com_ptr<IFileSystem> _fileSystem;
@@ -266,12 +264,7 @@ private:
     std::wstring _fileSystemShortId;
     bool _fileSystemIsWin32 = true;
 
-    ViewerTheme _theme{};
-    bool _hasTheme        = false;
     bool _allowEraseBkgnd = true;
-    bool _embeddedMode    = false;
-
-    wil::unique_hwnd _hWnd;
     wil::unique_hmenu _menuHandle;
     RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
 

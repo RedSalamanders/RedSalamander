@@ -864,17 +864,7 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
                 static_cast<void>(UnregisterClassW(GetWindowClassName().c_str(), g_hInstance));
             }
 
-            RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
-            if (_callbackState.TryCapture(callbackSnapshot))
-            {
-                IViewerCallback* callback = nullptr;
-                void* cookie              = nullptr;
-                if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
-                {
-                    auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
-                    static_cast<void>(callback->ViewerClosed(cookie));
-                }
-            }
+            NotifyViewerClosed();
 
             Release();
             return 0;
@@ -901,15 +891,14 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Open(const ViewerOpenContext* context) n
     LoadOtherFiles(context);
     _currentPath = _otherFiles.empty() ? std::wstring(context->focusedPath) : _otherFiles[_otherIndex];
 
-    const bool embeddedMode =
-        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
-    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
     {
         Debug::Error(L"ViewerSqlite: embedded Open requires a valid ownerWindow parent.");
         return E_INVALIDARG;
     }
-    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    if (ShouldRecreateViewerWindow(embeddedMode, embeddedParent))
     {
         static_cast<void>(Close());
     }
@@ -1035,12 +1024,6 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::SetTheme(const ViewerTheme* theme) noexc
         Layout();
     }
 
-    return S_OK;
-}
-
-HRESULT STDMETHODCALLTYPE ViewerSqlite::SetCallback(IViewerCallback* callback, void* cookie) noexcept
-{
-    _callbackState.Set(callback, cookie);
     return S_OK;
 }
 

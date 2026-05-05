@@ -11,6 +11,7 @@
 #include <ranges>
 
 #include "Helpers.h"
+#include "Resource.h"
 
 namespace
 {
@@ -146,21 +147,21 @@ namespace
     switch (reason)
     {
         case FileActionResolver::Reason::ComputerExtensionRule:
-            return std::format(L"{} override for {}", computerName, matchText);
+            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_COMPUTER_RULE_FMT, computerName, matchText);
         case FileActionResolver::Reason::GlobalExtensionRule:
-            return std::format(L"Global rule for {}", matchText);
+            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_GLOBAL_RULE_FMT, matchText);
         case FileActionResolver::Reason::ComputerDefaultRule:
-            return std::format(L"{} default rule", computerName);
+            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_COMPUTER_DEFAULT_FMT, computerName);
         case FileActionResolver::Reason::GlobalDefaultRule:
-            return L"Global default rule";
+            return LoadStringResource(nullptr, IDS_FILEACTION_REASON_GLOBAL_DEFAULT);
         case FileActionResolver::Reason::ActionMissing:
-            return std::format(L"Action '{}' was not found", matchText);
+            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_MISSING_FMT, matchText);
         case FileActionResolver::Reason::ActionDisabled:
-            return std::format(L"Action '{}' is disabled", matchText);
+            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_DISABLED_FMT, matchText);
         case FileActionResolver::Reason::ActionNotApplicable:
-            return std::format(L"Action '{}' does not apply to this file or computer", matchText);
+            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_NOT_APPLICABLE_FMT, matchText);
         case FileActionResolver::Reason::NoAssociation:
-            return L"No matching association";
+            return LoadStringResource(nullptr, IDS_FILEACTION_REASON_NO_ASSOCIATION);
         case FileActionResolver::Reason::None:
             break;
     }
@@ -212,7 +213,7 @@ namespace
     }
 
     const auto it = std::find_if(actions.begin(), actions.end(), [&](const Common::Settings::FileActionDefinition& action) noexcept {
-        return action.id == actionId;
+        return EqualsNoCase(action.id, actionId);
     });
     return it == actions.end() ? nullptr : &(*it);
 }
@@ -308,20 +309,20 @@ template <typename Settings>
     if (! resolution.action)
     {
         resolution.reason     = FileActionResolver::Reason::ActionMissing;
-        resolution.reasonText = std::format(L"Action '{}' was not found", resolution.actionId);
+        resolution.reasonText = FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_MISSING_FMT, resolution.actionId);
         return resolution;
     }
     if (! resolution.action->enabled)
     {
         resolution.reason     = FileActionResolver::Reason::ActionDisabled;
-        resolution.reasonText = std::format(L"Action '{}' is disabled", resolution.actionId);
+        resolution.reasonText = FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_DISABLED_FMT, resolution.actionId);
         resolution.action     = nullptr;
         return resolution;
     }
     if (! FileActionResolver::ActionAppliesToContext(*resolution.action, request.filePath, request.computerName))
     {
         resolution.reason     = FileActionResolver::Reason::ActionNotApplicable;
-        resolution.reasonText = std::format(L"Action '{}' does not apply to this file or computer", resolution.actionId);
+        resolution.reasonText = FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_NOT_APPLICABLE_FMT, resolution.actionId);
         resolution.action     = nullptr;
         return resolution;
     }
@@ -414,7 +415,7 @@ std::vector<const Common::Settings::FileActionDefinition*> CollectAssociatedEdit
         }
 
         const bool alreadyIncluded = std::ranges::any_of(candidates, [&](const Candidate& candidate) noexcept {
-            return candidate.action && candidate.action->id == action->id;
+            return candidate.action && EqualsNoCase(candidate.action->id, action->id);
         });
         if (alreadyIncluded)
         {

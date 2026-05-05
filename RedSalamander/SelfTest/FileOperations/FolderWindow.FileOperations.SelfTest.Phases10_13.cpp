@@ -7,8 +7,9 @@ case SelfTestState::Step::Phase10_PermanentDelete:
         return true;
     }
 
-    const std::filesystem::path delDir  = state.tempRoot / L"perm-delete";
-    const std::filesystem::path delFile = delDir / L"perm.bin";
+    const std::filesystem::path delDir     = state.tempRoot / L"perm-delete";
+    const std::filesystem::path delFile    = delDir / L"perm.bin";
+    const std::filesystem::path cancelFile = delDir / L"cancelled-perm.bin";
 
     if (state.stepState == 0)
     {
@@ -18,28 +19,82 @@ case SelfTestState::Step::Phase10_PermanentDelete:
             return true;
         }
 
+        if (! WriteTestFile(cancelFile, 1024))
+        {
+            Fail(L"Failed to write permanent-delete cancellation test file.");
+            return true;
+        }
+
+        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+        HostResetTestPromptRequestCount();
+        {
+            HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+            const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+            const std::optional<std::uint64_t> cancelledTask =
+                StartFileOperationAndGetId(state.fileOps,
+                                           FILESYSTEM_DELETE,
+                                           FolderWindow::Pane::Left,
+                                           std::nullopt,
+                                           state.fsLocal,
+                                           {cancelFile},
+                                           {},
+                                           flags,
+                                           false,
+                                           0,
+                                           FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                           false);
+            if (cancelledTask.has_value())
+            {
+                Fail(L"Permanent delete without Recycle Bin started even though its confirmation prompt was cancelled.");
+                return true;
+            }
+        }
+
+        if (HostGetTestPromptRequestCount() != 1u)
+        {
+            Fail(std::format(L"Permanent delete cancellation expected one confirmation prompt, got {}.", HostGetTestPromptRequestCount()));
+            return true;
+        }
+
+        std::error_code cancelExistsEc;
+        if (! std::filesystem::exists(cancelFile, cancelExistsEc) || cancelExistsEc)
+        {
+            Fail(L"Cancelled permanent delete removed the source file.");
+            return true;
+        }
+
         if (! WriteTestFile(delFile, 4096))
         {
             Fail(L"Failed to write perm-delete test file.");
             return true;
         }
 
-        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
-                                                                 FILESYSTEM_DELETE,
-                                                                 FolderWindow::Pane::Left,
-                                                                 std::nullopt,
-                                                                 state.fsLocal,
-                                                                 {delFile},
-                                                                 {},
-                                                                 flags,
-                                                                 false,
-                                                                 0,
-                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                                 true);
+        HostResetTestPromptRequestCount();
+        {
+            HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+            const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+            state.taskA                    = StartFileOperationAndGetId(state.fileOps,
+                                                     FILESYSTEM_DELETE,
+                                                     FolderWindow::Pane::Left,
+                                                     std::nullopt,
+                                                     state.fsLocal,
+                                                     {delFile},
+                                                     {},
+                                                     flags,
+                                                     false,
+                                                     0,
+                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                     false);
+        }
         if (! state.taskA.has_value())
         {
             Fail(L"Failed to start confirmed permanent-delete task.");
+            return true;
+        }
+
+        if (HostGetTestPromptRequestCount() != 1u)
+        {
+            Fail(std::format(L"Confirmed permanent delete expected one confirmation prompt, got {}.", HostGetTestPromptRequestCount()));
             return true;
         }
 

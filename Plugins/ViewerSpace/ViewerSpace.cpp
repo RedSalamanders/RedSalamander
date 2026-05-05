@@ -1998,19 +1998,7 @@ void ViewerSpace::OnDestroy()
     _fileSystemShortId.clear();
     _fileSystemIsWin32 = true;
 
-    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
-    if (_callbackState.TryCapture(callbackSnapshot))
-    {
-        IViewerCallback* callback = nullptr;
-        void* cookie              = nullptr;
-        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
-        {
-            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
-            AddRef();
-            static_cast<void>(callback->ViewerClosed(cookie));
-            Release();
-        }
-    }
+    NotifyViewerClosed();
 }
 
 void ViewerSpace::OnSize(UINT width, UINT height) noexcept
@@ -7164,17 +7152,13 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
         return E_INVALIDARG;
     }
 
-    const bool embeddedMode = (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) != 0u;
+    const bool embeddedMode = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (! embeddedParent || IsWindow(embeddedParent) == FALSE))
     {
         return E_INVALIDARG;
     }
-    if (_hWnd && _embeddedMode != embeddedMode)
-    {
-        static_cast<void>(Close());
-    }
-    if (_hWnd && embeddedMode && GetParent(_hWnd.get()) != embeddedParent)
+    if (ShouldRecreateViewerWindow(embeddedMode, embeddedParent))
     {
         static_cast<void>(Close());
     }
@@ -7327,11 +7311,5 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::SetTheme(const ViewerTheme* theme) noexce
     }
 
     ApplyThemeToTooltip();
-    return S_OK;
-}
-
-HRESULT STDMETHODCALLTYPE ViewerSpace::SetCallback(IViewerCallback* callback, void* cookie) noexcept
-{
-    _callbackState.Set(callback, cookie);
     return S_OK;
 }
