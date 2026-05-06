@@ -4199,6 +4199,8 @@ void TabControl::OnCaptureLost(WindowHost& host)
 
 bool TabControl::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT /*modifiers*/)
 {
+    host.ReleaseMouseCapture();
+
     if (rightButton)
     {
         return false;

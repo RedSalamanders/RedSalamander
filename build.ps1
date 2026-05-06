@@ -830,6 +830,20 @@ try {
             exit 1
         }
 
+        $msixVersionScript = Join-Path -Path $SolutionDir -ChildPath "Installer\msix\UpdateManifestVersion.ps1"
+        if (-not (Test-Path $msixVersionScript)) {
+            Write-Error "MSIX version update script not found: $msixVersionScript"
+            exit 1
+        }
+
+        try {
+            & $msixVersionScript -Version $versionContext.PackagingVersion -Platform $Platform
+        }
+        catch {
+            Write-Error "MSIX manifest version update failed: $_"
+            exit 1
+        }
+
         $targetPlatformVersion = $null
         try {
             $targetPlatformVersion = Resolve-UapTargetPlatformVersion -WapProjPath $installerProject
@@ -1036,20 +1050,18 @@ try {
         Write-Host "Generating winget manifest..." -ForegroundColor Yellow
 
         $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
-        $MsiPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*.msi" -Recurse -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -notlike "*Symbols*" } |
+        $ZipPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*-x64-Portable.zip" -Recurse -ErrorAction SilentlyContinue |
             Sort-Object -Property LastWriteTime -Descending |
             Select-Object -First 1 -ExpandProperty FullName
-        
-        $ZipPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*-Portable.zip" -Recurse -ErrorAction SilentlyContinue |
+        $Arm64ZipPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*-ARM64-Portable.zip" -Recurse -ErrorAction SilentlyContinue |
             Sort-Object -Property LastWriteTime -Descending |
             Select-Object -First 1 -ExpandProperty FullName
 
         try {
             $wingetParams = @{}
             $wingetParams['BuildNumber'] = $versionContext.BuildNumber
-            if ($MsiPath) { $wingetParams['MsiPath'] = $MsiPath }
             if ($ZipPath) { $wingetParams['ZipPath'] = $ZipPath }
+            if ($Arm64ZipPath) { $wingetParams['Arm64ZipPath'] = $Arm64ZipPath }
             
             & $wingetScript @wingetParams
         }

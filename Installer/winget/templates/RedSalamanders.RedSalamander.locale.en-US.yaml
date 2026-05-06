@@ -1,19 +1,19 @@
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
 
 PackageIdentifier: RedSalamanders.RedSalamander
-PackageVersion: {VERSION}
+PackageVersion: { VERSION }
 PackageLocale: en-US
 Publisher: RedSalamanders
 PublisherUrl: https://github.com/RedSalamanders
 PublisherSupportUrl: https://github.com/RedSalamanders/RedSalamander/issues
-# PrivacyUrl: 
+# PrivacyUrl:
 Author: RedSalamanders
 PackageName: RedSalamander
 PackageUrl: https://github.com/RedSalamanders/RedSalamander
 License: MIT
 LicenseUrl: https://github.com/RedSalamanders/RedSalamander/blob/master/LICENSE.txt
-# Copyright: 
-# CopyrightUrl: 
+# Copyright:
+# CopyrightUrl:
 ShortDescription: Windows file manager with advanced features and plugin support
 Description: |-
   RedSalamander is a Windows-native dual-pane file manager with plugin-based virtual file systems,
@@ -22,7 +22,6 @@ Description: |-
   - Plugin architecture for custom file systems (7z, S3, cloud drives)
   - Advanced text viewer with Direct2D rendering
   - Comparison tools and search capabilities
-  - Real-time monitoring with Event Tracing for Windows (ETW)
 Moniker: red-salamander
 Tags:
   - file-manager
@@ -35,10 +34,12 @@ Tags:
   - plugins
 ReleaseNotes: See https://github.com/RedSalamanders/RedSalamander/releases/tag/v{VERSION}
 ReleaseNotesUrl: https://github.com/RedSalamanders/RedSalamander/releases/tag/v{VERSION}
-# PurchaseUrl: 
-# InstallationNotes: 
+# PurchaseUrl:
+InstallationNotes: |-
+  RedSalamander installed.
+  Run RedSalamander from a new terminal.
 Documentations:
   - DocumentLabel: Getting Started
-    DocumentUrl: https://github.com/RedSalamanders/RedSalamander/blob/master/Docs/GettingStarted.md
+    DocumentUrl: https://github.com/RedSalamanders/RedSalamander/blob/master/Docs/README.md
 ManifestType: defaultLocale
-ManifestVersion: 1.6.0
+ManifestVersion: 1.12.0

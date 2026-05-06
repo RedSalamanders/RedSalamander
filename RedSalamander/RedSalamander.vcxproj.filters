@@ -195,6 +195,7 @@
     <Image Include="res\logo_background.ico" />
     <Image Include="res\logo2.png" />
     <Image Include="res\logo2_background.png" />
+    <Image Include="res\logo64.png" />
     <Image Include="res\logo256.png" />
     <Image Include="res\RedSalamander.ico" />
     <Image Include="res\small.ico" />

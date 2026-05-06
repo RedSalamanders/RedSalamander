@@ -25,20 +25,18 @@
 #define VERSINFO_DESCRIPTION VERSINFO_TEXT("RedSalamander, File Manager")
 #define VERSINFO_COMMENT VERSINFO_TEXT("A two-pane file manager with plugin architecture.")
 
-// Human-maintained semantic digits.
+// Human-maintained product line. CI supplies the build number.
 //
-// MINORA and MINORB are the packed two-digit minor version:
-// - 7.50 => VERSINFO_MAJOR=7, VERSINFO_MINORA=5, VERSINFO_MINORB=0
-// - 7.53 => VERSINFO_MAJOR=7, VERSINFO_MINORA=5, VERSINFO_MINORB=3
+// Official versions use:
+//   <major>.<minor>.<build>
 //
-// The build number is intentionally not edited here anymore.
+// The build number is intentionally not edited here:
 // - Local beta builds reuse the saved per-worktree build number under .build\version\ so ordinary
 //   incremental builds keep the same version stamp until the caller supplies a new number.
-// - Official release builds must receive a CI/global build number from the build invocation.
+// - CI builds use GITHUB_RUN_NUMBER unless the caller supplies an explicit build number.
 // This keeps git clean while making CI the source of truth for release numbering.
 #define VERSINFO_MAJOR 7
-#define VERSINFO_MINORA 0
-#define VERSINFO_MINORB 0
+#define VERSINFO_MINOR 0
 
 // Conversion macros num->str / num->wide-str.
 #define VERSINFO_STR_IMPL(s) #s
@@ -48,9 +46,6 @@
 #define VERSINFO_WSTR_EXPAND(s) VERSINFO_WSTR_IMPL(s)
 #define VERSINFO_WSTR(s) VERSINFO_WSTR_EXPAND(VERSINFO_STR(s))
 #endif
-#define VERSINFO_JOIN_DIGITS_IMPL(a, b) a##b
-#define VERSINFO_JOIN_DIGITS(a, b) VERSINFO_JOIN_DIGITS_IMPL(a, b)
-
 // The build system overrides this value through RSVersionOverrides.h.
 // Keep the fallback at 0 so direct single-file compilation still succeeds.
 #ifndef VERSINFO_BUILDNUMBER
@@ -99,30 +94,21 @@
 #define VERSINFO_BUILD_FLAVOR_SHORT VERSINFO_TEXT("BR")
 #endif
 
-// Keep the packed minor version token-based so the resource compiler can consume it in
-// FILEVERSION/PRODUCTVERSION without tripping over arithmetic expressions.
-#define VERSINFO_MINOR_PACKED VERSINFO_JOIN_DIGITS(VERSINFO_MINORA, VERSINFO_MINORB)
-#define VERSINFO_FILEVERSION_VALUES VERSINFO_MAJOR, VERSINFO_MINORA, VERSINFO_MINORB, VERSINFO_BUILDNUMBER
-#define VERSINFO_PRODUCTVERSION_VALUES VERSINFO_MAJOR, VERSINFO_MINORA, VERSINFO_MINORB, VERSINFO_BUILDNUMBER
+// Windows VERSIONINFO numeric values require four integer components. The visible FileVersion
+// string below stays normalized as <major>.<minor>.<build>.
+#define VERSINFO_FILEVERSION_VALUES VERSINFO_MAJOR, VERSINFO_MINOR, VERSINFO_BUILDNUMBER, 0
+#define VERSINFO_PRODUCTVERSION_VALUES VERSINFO_MAJOR, VERSINFO_MINOR, VERSINFO_BUILDNUMBER, 0
 
-#if (VERSINFO_MINORB == 0)
-#define VERSINFO_VERSION_BASE VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_TEXT(".") VERSINFO_WSTR(VERSINFO_MINORA)
-#define VERSINFO_REDSALAMANDER_SHORT VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_WSTR(VERSINFO_MINORA) VERSINFO_BUILD_FLAVOR_SHORT REDSALAMANDER_VER_PLATFORM
-#else
-#define VERSINFO_VERSION_BASE VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_TEXT(".") VERSINFO_WSTR(VERSINFO_MINORA) VERSINFO_WSTR(VERSINFO_MINORB)
-#define VERSINFO_REDSALAMANDER_SHORT                                                                                                                           \
-    VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_WSTR(VERSINFO_MINORA) VERSINFO_WSTR(VERSINFO_MINORB) VERSINFO_BUILD_FLAVOR_SHORT REDSALAMANDER_VER_PLATFORM
-#endif
+#define VERSINFO_VERSION_BASE VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_TEXT(".") VERSINFO_WSTR(VERSINFO_MINOR)
+#define VERSINFO_PACKAGE_VERSION VERSINFO_VERSION_BASE VERSINFO_TEXT(".") VERSINFO_WSTR(VERSINFO_BUILDNUMBER)
+#define VERSINFO_REDSALAMANDER_SHORT VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_WSTR(VERSINFO_MINOR) VERSINFO_BUILD_FLAVOR_SHORT REDSALAMANDER_VER_PLATFORM
 
 #if defined(RSV_OFFICIAL_RELEASE)
-#define VERSINFO_VERSION                                                                                                                                       \
-    VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER) VERSINFO_TEXT(" (") REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT(")")
-#define VERSINFO_VERSION_NO_PLATFORM VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER)
+#define VERSINFO_VERSION VERSINFO_PACKAGE_VERSION
+#define VERSINFO_VERSION_NO_PLATFORM VERSINFO_PACKAGE_VERSION
 #else
-#define VERSINFO_VERSION                                                                                                                                       \
-    VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER) VERSINFO_BUILD_FLAVOR_TXT VERSINFO_TEXT(" (")                           \
-        REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT(")")
-#define VERSINFO_VERSION_NO_PLATFORM VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER) VERSINFO_BUILD_FLAVOR_TXT_NO_PLATFORM
+#define VERSINFO_VERSION VERSINFO_PACKAGE_VERSION VERSINFO_BUILD_FLAVOR_TXT VERSINFO_TEXT(" (") REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT(")")
+#define VERSINFO_VERSION_NO_PLATFORM VERSINFO_PACKAGE_VERSION VERSINFO_BUILD_FLAVOR_TXT_NO_PLATFORM
 #endif
 
 #define VERSINFO_REDSALAMANDER VERSINFO_VERSION
@@ -131,7 +117,7 @@
 
 // Used to check plugin/host SDK compatibility. The SDK contract now follows the human-maintained
 // semantic digits automatically so it cannot drift from the declared product version.
-#define LAST_VERSION_OF_SALAMANDER ((VERSINFO_MAJOR * 100) + VERSINFO_MINOR_PACKED)
+#define LAST_VERSION_OF_SALAMANDER ((VERSINFO_MAJOR * 100) + VERSINFO_MINOR)
 #define REQUIRE_LAST_VERSION_OF_REDSALAMANDER                                                                                                                  \
     VERSINFO_TEXT("This plugin requires RedSalamander ") VERSINFO_VERSION_BASE VERSINFO_TEXT(" (") REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT(") or later.")
 

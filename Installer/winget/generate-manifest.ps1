@@ -5,22 +5,19 @@
     Package version (e.g., 7.0.183). If not provided, derives it from the shared version helper.
 .PARAMETER BuildNumber
     Build number override used when Version is omitted.
-.PARAMETER MsiPath
-    Path to the MSI installer (to calculate SHA256).
 .PARAMETER ZipPath
-    Path to the ZIP installer (to calculate SHA256).
+    Path to the x64 ZIP installer (to calculate SHA256).
+.PARAMETER Arm64ZipPath
+    Path to the ARM64 ZIP installer (to calculate SHA256).
 .PARAMETER OutputDir
     Output directory for manifest files. Default: .build\AppPackages\winget-manifest
-.PARAMETER ProductCode
-    MSI Product Code GUID. If not provided, extracts from MSI.
 #>
 param(
     [string]$Version,
     [int]$BuildNumber = 0,
-    [string]$MsiPath,
     [string]$ZipPath,
-    [string]$OutputDir = ".build\AppPackages\winget-manifest",
-    [string]$ProductCode
+    [string]$Arm64ZipPath,
+    [string]$OutputDir = ".build\AppPackages\winget-manifest"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,17 +44,9 @@ if (-not $Version) {
 
 Write-Host "Generating winget manifest for version $Version..." -ForegroundColor Cyan
 
-# Calculate SHA256 for installers
-$MsiSha256 = ""
+# Calculate SHA256 for the portable archive
 $ZipSha256 = ""
-
-if ($MsiPath -and (Test-Path $MsiPath)) {
-    Write-Host "  Calculating MSI SHA256..." -ForegroundColor Gray
-    $MsiSha256 = (Get-FileHash -Path $MsiPath -Algorithm SHA256).Hash
-} else {
-    Write-Warning "MSI path not provided or not found. SHA256 will be placeholder."
-    $MsiSha256 = "MSI_SHA256_PLACEHOLDER"
-}
+$Arm64ZipSha256 = "ARM64_ZIP_SHA256_PLACEHOLDER"
 
 if ($ZipPath -and (Test-Path $ZipPath)) {
     Write-Host "  Calculating ZIP SHA256..." -ForegroundColor Gray
@@ -67,23 +56,11 @@ if ($ZipPath -and (Test-Path $ZipPath)) {
     $ZipSha256 = "ZIP_SHA256_PLACEHOLDER"
 }
 
-# Extract Product Code from MSI if not provided
-if (-not $ProductCode -and $MsiPath -and (Test-Path $MsiPath)) {
-    Write-Host "  Extracting Product Code from MSI..." -ForegroundColor Gray
-    try {
-        $WindowsInstaller = New-Object -ComObject WindowsInstaller.Installer
-        $Database = $WindowsInstaller.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $WindowsInstaller, @($MsiPath, 0))
-        $View = $Database.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $Database, @("SELECT Value FROM Property WHERE Property='ProductCode'"))
-        $View.GetType().InvokeMember("Execute", "InvokeMethod", $null, $View, $null)
-        $Record = $View.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $View, $null)
-        $ProductCode = $Record.GetType().InvokeMember("StringData", "GetProperty", $null, $Record, 1)
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($WindowsInstaller) | Out-Null
-    } catch {
-        Write-Warning "Could not extract Product Code from MSI: $_"
-        $ProductCode = "PRODUCT_CODE_PLACEHOLDER"
-    }
-} elseif (-not $ProductCode) {
-    $ProductCode = "PRODUCT_CODE_PLACEHOLDER"
+if ($Arm64ZipPath -and (Test-Path $Arm64ZipPath)) {
+    Write-Host "  Calculating ARM64 ZIP SHA256..." -ForegroundColor Gray
+    $Arm64ZipSha256 = (Get-FileHash -Path $Arm64ZipPath -Algorithm SHA256).Hash
+} else {
+    throw "ARM64 ZIP path not provided or not found: $Arm64ZipPath"
 }
 
 # Release date (today)
@@ -95,10 +72,13 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 # Template substitutions
 $Replacements = @{
     '{VERSION}' = $Version
-    '{MSI_SHA256}' = $MsiSha256
+    '{ VERSION }' = $Version
     '{ZIP_SHA256}' = $ZipSha256
-    '{PRODUCT_CODE}' = $ProductCode
+    '{ ZIP_SHA256 }' = $ZipSha256
+    '{ARM64_ZIP_SHA256}' = $Arm64ZipSha256
+    '{ ARM64_ZIP_SHA256 }' = $Arm64ZipSha256
     '{RELEASE_DATE}' = $ReleaseDate
+    '{ RELEASE_DATE }' = $ReleaseDate
 }
 
 # Process each template

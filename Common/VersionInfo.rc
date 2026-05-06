@@ -49,12 +49,12 @@ BEGIN
             VALUE "Comments", RS_VERSION_COMMENTS
             VALUE "CompanyName", VERSINFO_COMPANY
             VALUE "FileDescription", RS_VERSION_FILEDESCRIPTION
-            VALUE "FileVersion", VERSINFO_VERSION
+            VALUE "FileVersion", VERSINFO_PACKAGE_VERSION
             VALUE "InternalName", RS_VERSION_INTERNALNAME
             VALUE "LegalCopyright", VERSINFO_COPYRIGHT
             VALUE "OriginalFilename", RS_VERSION_ORIGINALFILENAME
             VALUE "ProductName", VERSINFO_PRODUCTNAME
-            VALUE "ProductVersion", VERSINFO_VERSION
+            VALUE "ProductVersion", VERSINFO_PACKAGE_VERSION
         END
     END
     BLOCK "VarFileInfo"

@@ -1,20 +1,8 @@
 name: Release
 
 "on":
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
-      release_tag:
-        description: "GitHub release tag to publish. CI still controls the binary build number via github.run_number."
-        required: false
-        type: string
-      build_msi:
-        description: "Also build MSI (off by default)."
-        required: false
-        type: boolean
-        default: false
       build_msix:
         description: "Also build MSIX (off by default)."
         required: false
@@ -46,31 +34,29 @@ jobs:
       release_tag: ${{ steps.version.outputs.release_tag }}
       release_version: ${{ steps.version.outputs.release_version }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Resolve release version
         id: version
         shell: pwsh
         run: |
-          $buildNumber = "${{ github.run_number }}"
-          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace("${{ inputs.release_tag }}")) {
-            "${{ inputs.release_tag }}"
-          } elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            ""
-          } else {
-            "${{ github.ref_name }}"
-          }
+          $ErrorActionPreference = "Stop"
+          . (Join-Path $env:GITHUB_WORKSPACE "Tools\Versioning.ps1")
 
-          if ([string]::IsNullOrWhiteSpace($tag)) {
-            $version = ""
-          } else {
-            $version = $tag.TrimStart('v')
-            if ($version -match '^\d+(?:\.\d+)+$') {
-              $parts = $version.Split('.')
-              $tagBuildNumber = $parts[$parts.Length - 1]
-              if ($tagBuildNumber -ne $buildNumber) {
-                Write-Host "Warning: release tag '$tag' does not match CI build number '$buildNumber'. Official binaries will use build number $buildNumber." -ForegroundColor Yellow
-              }
-            }
-          }
+          $versionContext = Get-RSVersionContext `
+            -RepoRoot $env:GITHUB_WORKSPACE `
+            -Configuration Release `
+            -Platform x64 `
+            -OfficialRelease
+
+          $buildNumber = $versionContext.BuildNumber
+          $version = $versionContext.PackagingVersion
+          $tag = "v$version"
+
+          Write-Host "Release version: $version"
+          Write-Host "Release tag: $tag"
+          Write-Host "Build number: $buildNumber"
 
           "release_tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "release_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -128,55 +114,7 @@ jobs:
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════════════
-  # Job 3: Package MSI (no VS needed — WiX CLI only)
-  # ══════════════════════════════════════════════════════════════════════
-
-  package-msi:
-    runs-on: windows-latest
-    needs: [version-info, build]
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.build_msi }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download build output
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output-${{ matrix.platform }}
-          path: .build/${{ matrix.platform }}/Release/
-
-      - name: Install WiX Toolset CLI
-        shell: pwsh
-        run: |
-          winget install --exact --id WiXToolset.WiXCLI --accept-source-agreements --accept-package-agreements
-
-      - name: Build MSI
-        shell: pwsh
-        run: |
-          $msiScript = Join-Path $env:GITHUB_WORKSPACE "Installer\msi\build-msi.ps1"
-          if (-not (Test-Path $msiScript)) { throw "MSI build script not found at: $msiScript" }
-          & $msiScript -Configuration Release -Platform ${{ matrix.platform }} -BuildNumber "${{ needs.version-info.outputs.build_number }}"
-
-      - name: Build Symbols MSI (PDB)
-        shell: pwsh
-        run: |
-          $msiSymbolsScript = Join-Path $env:GITHUB_WORKSPACE "Installer\msi\build-msi-symbols.ps1"
-          if (-not (Test-Path $msiSymbolsScript)) { throw "Symbols MSI build script not found at: $msiSymbolsScript" }
-          & $msiSymbolsScript -Configuration Release -Platform ${{ matrix.platform }} -BuildNumber "${{ needs.version-info.outputs.build_number }}"
-
-      - name: Upload MSI packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: msi-package-${{ matrix.platform }}
-          path: .build/AppPackages/*.msi
-          retention-days: 1
-
-  # ══════════════════════════════════════════════════════════════════════
-  # Job 4: Package MSIX (conditional — needs VS + Windows SDK)
+  # Job 3: Package MSIX (conditional — needs VS + Windows SDK)
   # ══════════════════════════════════════════════════════════════════════
 
   package-msix:
@@ -243,6 +181,14 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           & (Join-Path $env:GITHUB_WORKSPACE "Installer\msix\GenerateAssets.ps1")
+
+      - name: Update MSIX version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & (Join-Path $env:GITHUB_WORKSPACE "Installer\msix\UpdateManifestVersion.ps1") `
+            -Version "${{ needs.version-info.outputs.release_version }}" `
+            -Platform "${{ matrix.platform }}"
 
       - name: Build MSIX package
         shell: pwsh
@@ -338,31 +284,21 @@ jobs:
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════════════
-  # Job 5: Release — download all artifacts, create GitHub Release
+  # Job 4: Release — download all artifacts, create GitHub Release
   # ══════════════════════════════════════════════════════════════════════
 
   release:
     runs-on: windows-latest
-    needs: [version-info, package-portable, package-msi, package-msix]
+    needs: [version-info, package-portable, package-msix]
     if: >-
       always() &&
-      !cancelled() &&
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
+      !cancelled()
     steps:
       - name: Download portable packages
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: portable-package-*
-          path: artifacts
-          merge-multiple: true
-
-      - name: Download MSI packages
-        if: ${{ needs.package-msi.result == 'success' }}
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          pattern: msi-package-*
           path: artifacts
           merge-multiple: true
 
@@ -382,7 +318,7 @@ jobs:
           if (-not (Test-Path artifacts)) {
             throw "No artifacts directory found — all builds failed."
           }
-          $files = Get-ChildItem -Path artifacts -File -Recurse | Where-Object { $_.Extension -in '.msi','.zip','.msix' }
+          $files = Get-ChildItem -Path artifacts -File -Recurse | Where-Object { $_.Extension -in '.zip','.msix' }
           if (-not $files -or $files.Count -eq 0) {
             throw "No release artifacts found (all platforms failed)."
           }
@@ -393,7 +329,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $files = Get-ChildItem -Path artifacts -File -Recurse | Where-Object { $_.Extension -in '.msi','.zip','.msix' }
+          $files = Get-ChildItem -Path artifacts -File -Recurse | Where-Object { $_.Extension -in '.zip','.msix' }
           $checksums = foreach ($f in $files) {
             $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash
             "$hash  $($f.Name)"
@@ -406,9 +342,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version-info.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: false
           files: |
-            artifacts/*.msi
             artifacts/*.zip
             artifacts/*.sha256
 
@@ -417,5 +353,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.version-info.outputs.release_tag }}
+          target_commitish: ${{ github.sha }}
           fail_on_unmatched_files: true
           files: artifacts/*.msix
