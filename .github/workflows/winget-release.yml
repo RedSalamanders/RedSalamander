@@ -21,13 +21,21 @@ jobs:
         id: version
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            $version = "${{ github.event.inputs.version }}"
+            $rawVersion = "${{ github.event.inputs.version }}".Trim()
+            $version = $rawVersion -replace '^[vV]', ''
             $tag = "v$version"
           } else {
-            $tag = "${{ github.event.release.tag_name }}"
-            $version = $tag.TrimStart('v')
+            $tag = "${{ github.event.release.tag_name }}".Trim()
+            $version = $tag -replace '^[vV]', ''
           }
+
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version must be a three-part version, optionally prefixed with 'v' for manual runs. Received: '$version'"
+          }
+
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
           Write-Host "Version: $version"
@@ -91,6 +99,9 @@ jobs:
       - name: Validate Winget manifest
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          Write-Host "winget.exe version:"
+          winget --version
           winget validate --manifest "winget-manifest"
 
       - name: Submit to Winget
