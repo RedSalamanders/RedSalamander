@@ -4551,7 +4551,7 @@ namespace
 [[nodiscard]] std::wstring GetVersionedSettingsFileName(std::wstring_view appId)
 {
     std::wstring fileName(appId);
-    fileName += std::format(L"-{}.{}", VERSINFO_MAJOR, VERSINFO_MINORA);
+    fileName += std::format(L"-{}.{}", VERSINFO_MAJOR, VERSINFO_MINOR);
     fileName += L".settings.json";
     return fileName;
 }

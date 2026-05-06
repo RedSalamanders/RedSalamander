@@ -65,8 +65,8 @@ The symbols MSI includes:
 
 MSI uses a 3-part version (`major.minor.build`) derived from `Common/Version.h`:
 - `major` = `VERSINFO_MAJOR`
-- `minor` = `VERSINFO_MINORA`
-- `build` = `VERSINFO_BUILDNUMBER`
+- `minor` = `VERSINFO_MINOR`
+- `build` = the shared build number resolved by `Tools/Versioning.ps1`
 
 Example:
 - `7.0.183`

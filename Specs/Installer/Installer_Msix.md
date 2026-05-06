@@ -9,6 +9,7 @@ Primary files:
 - `Installer/msix/Package.appxmanifest`
 - `Installer/msix/Assets/*`
 - `Installer/msix/GenerateAssets.ps1` (generates `Installer/msix/Assets/*` from `RedSalamander/res/logo.png`)
+- `Installer/msix/UpdateManifestVersion.ps1` (stamps the generated package identity version and architecture)
 
 ## Goals
 
@@ -51,8 +52,10 @@ Capabilities:
 - `runFullTrust`
 
 Versioning:
-- The `Identity` version must match `Common/Version.h` (currently `7.0.0.183`).
-- Update both when cutting a release.
+- The source manifest keeps a neutral `7.0.0.0` identity version.
+- Before packaging, `Installer/msix/UpdateManifestVersion.ps1` stamps the identity as `<major>.<minor>.<build>.0`, for example `7.0.183.0`.
+- The same script stamps `ProcessorArchitecture` from the target platform.
+- The build number comes from `Tools/Versioning.ps1`, using `GITHUB_RUN_NUMBER` in CI.
 
 ## Build
 

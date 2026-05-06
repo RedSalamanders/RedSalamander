@@ -75,7 +75,7 @@ jobs:
           $modifyArgs = @(
             "modify",
             "--installPath", $installPath,
-            "--add", "Microsoft.VisualStudio.Component.VC.Tools.ARM64",
+            "--add", "Microsoft.VisualStudio.Component.VC.14.50.18.0.ARM64",
             "--quiet",
             "--norestart",
             "--wait"

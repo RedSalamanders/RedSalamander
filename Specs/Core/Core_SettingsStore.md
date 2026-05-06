@@ -44,7 +44,7 @@ Example (typical):
 
 To avoid cross-process contention and keep settings scoped correctly, each executable uses its own file:
 - Debug builds: `<AppId>-debug.settings.json`
-- Release builds: `<AppId>-<Major>.<Minor>.settings.json` (from `Common/Version.h`: `VERSINFO_MAJOR` and `VERSINFO_MINORA`)
+- Release builds: `<AppId>-<Major>.<Minor>.settings.json` (from `Common/Version.h`: `VERSINFO_MAJOR` and `VERSINFO_MINOR`)
 - Legacy name (pre-versioning, supported for migration): `<AppId>.settings.json`
 - Schema file pattern (always unversioned): `<AppId>.settings.schema.json`
 - `AppId` examples:

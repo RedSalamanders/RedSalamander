@@ -51,7 +51,7 @@ $versionContext = if ($BuildNumber -gt 0) {
     if ($savedContext) { $savedContext } else { Get-RSVersionContext -RepoRoot $solutionDir -Configuration $Configuration -Platform $Platform }
 }
 
-if ($versionContext.Major -gt 255 -or $versionContext.MinorPacked -gt 255 -or $versionContext.BuildNumber -gt 65535) {
+if ($versionContext.Major -gt 255 -or $versionContext.Minor -gt 255 -or $versionContext.BuildNumber -gt 65535) {
     throw "MSI version components out of range (major/minor must be <=255, build must be <=65535): $($versionContext.PackagingVersion)"
 }
 

@@ -54,6 +54,14 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         ShowWindow(popup, SW_HIDE);
         SetWindowPos(popup, nullptr, -32000, -32000, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER);
 
+        FileOperationsPopupInternal::PopupSelfTestInvoke destroyOnNextShow{};
+        destroyOnNextShow.data = FileOperationsPopupInternal::kPopupSelfTestDestroyOnNextShowData;
+        if (! InvokePopupSelfTest(popup, destroyOnNextShow))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard failed to arm popup stale-HWND selftest.");
+            return true;
+        }
+
         const std::filesystem::path reentryRoot = state.tempRoot / L"phase14-popup-reentry";
         const std::filesystem::path sourceDir   = reentryRoot / L"src";
         const std::filesystem::path destDir     = reentryRoot / L"dst";
@@ -117,6 +125,12 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
         if (! std::filesystem::exists(copiedFile, existsEc) || existsEc)
         {
             Fail(L"Phase14_PopupHostLifetimeGuard popup reentry copy did not produce the destination file.");
+            return true;
+        }
+
+        if (! FindWindowW(kPopupClassName.data(), nullptr))
+        {
+            Fail(L"Phase14_PopupHostLifetimeGuard did not recreate the popup after it was destroyed during ShowWindow.");
             return true;
         }
 

@@ -16,8 +16,7 @@ function New-RSTestVersionRepo {
     @'
 // WARNING: minimal test header
 #define VERSINFO_MAJOR 7
-#define VERSINFO_MINORA 0
-#define VERSINFO_MINORB 0
+#define VERSINFO_MINOR 0
 '@ | Set-Content -Path (Join-Path $commonDir 'Version.h') -Encoding ASCII
 }
 
@@ -53,5 +52,33 @@ Describe 'Versioning helper' {
         $secondContext = Get-RSVersionContext -RepoRoot $testRepo -Configuration Debug -Platform x64
 
         $secondContext.BuildNumber | Should Be ($firstContext.BuildNumber + 1)
+    }
+
+    It 'uses major minor build as the package version' {
+        $testRepo = Join-Path $TestDrive 'MajorMinorBuildPackageVersion'
+        New-RSTestVersionRepo -Root $testRepo
+
+        $context = Get-RSVersionContext -RepoRoot $testRepo -Configuration Release -Platform x64 -BuildNumber 184 -OfficialRelease
+
+        $context.DisplayBaseVersion | Should Be '7.0'
+        $context.DisplayVersion | Should Be '7.0.184'
+        $context.PackagingVersion | Should Be '7.0.184'
+    }
+
+    It 'uses GITHUB_RUN_NUMBER as the CI build number' {
+        $testRepo = Join-Path $TestDrive 'GithubRunNumberBuild'
+        New-RSTestVersionRepo -Root $testRepo
+
+        $oldRunNumber = $env:GITHUB_RUN_NUMBER
+        try {
+            $env:GITHUB_RUN_NUMBER = '185'
+            $context = Get-RSVersionContext -RepoRoot $testRepo -Configuration Release -Platform x64 -OfficialRelease
+        }
+        finally {
+            $env:GITHUB_RUN_NUMBER = $oldRunNumber
+        }
+
+        $context.BuildNumber | Should Be 185
+        $context.PackagingVersion | Should Be '7.0.185'
     }
 }

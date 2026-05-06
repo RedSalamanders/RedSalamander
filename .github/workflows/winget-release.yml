@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 7.0.183)'
+        description: "Version to publish (e.g., 7.0.183)"
         required: true
         type: string
 
@@ -15,44 +15,83 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
-      
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
+    steps:
       - name: Get version
         id: version
         shell: pwsh
         run: |
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
             $version = "${{ github.event.inputs.version }}"
+            $tag = "v$version"
           } else {
-            $version = "${{ github.event.release.tag_name }}".TrimStart('v')
+            $tag = "${{ github.event.release.tag_name }}"
+            $version = $tag.TrimStart('v')
           }
-          echo "version=$version" >> $env:GITHUB_OUTPUT
-          echo "Version: $version"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Version: $version"
+          Write-Host "Tag: $tag"
 
-      - name: Download release assets
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.tag }}
+
+      - name: Download portable release assets
+        id: portable
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "${{ steps.version.outputs.tag }}"
+          $assetNames = @(
+            "RedSalamander-$version-x64-Portable.zip",
+            "RedSalamander-$version-ARM64-Portable.zip"
+          )
+          $headers = @{
+            Accept = "application/vnd.github+json"
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+
+          $release = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/$tag"
+          foreach ($assetName in $assetNames) {
+            $asset = $release.assets | Where-Object { $_.name -eq $assetName } | Select-Object -First 1
+            if (-not $asset) {
+              $available = ($release.assets | ForEach-Object { "  $($_.name)" }) -join "`n"
+              throw "Expected portable asset '$assetName' was not found on release '$tag'. Available assets:`n$available"
+            }
+
+            $outFile = if ($assetName -like "*ARM64*") { "RedSalamander-ARM64.zip" } else { "RedSalamander-x64.zip" }
+            Write-Host "Downloading $assetName from $($asset.browser_download_url)"
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $outFile
+            Get-ChildItem $outFile | ForEach-Object { Write-Host "Downloaded $($_.Name) - $($_.Length) bytes" }
+          }
+
+      - name: Generate Winget manifest
         shell: pwsh
         run: |
-          $version = "${{ steps.version.outputs.version }}"
-          $msiUrl = "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64.msi"
-          $zipUrl = "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64-Portable.zip"
-          
-          Write-Host "Downloading MSI from $msiUrl"
-          Invoke-WebRequest -Uri $msiUrl -OutFile "RedSalamander.msi"
-          
-          Write-Host "Downloading ZIP from $zipUrl"
-          Invoke-WebRequest -Uri $zipUrl -OutFile "RedSalamander.zip"
-          
-          Write-Host "Downloaded files:"
-          Get-ChildItem *.msi, *.zip | ForEach-Object { Write-Host "  $($_.Name) - $($_.Length) bytes" }
+          $ErrorActionPreference = "Stop"
+          .\Installer\winget\generate-manifest.ps1 `
+            -Version "${{ steps.version.outputs.version }}" `
+            -ZipPath "RedSalamander-x64.zip" `
+            -Arm64ZipPath "RedSalamander-ARM64.zip" `
+            -OutputDir "winget-manifest"
+          Get-ChildItem winget-manifest | ForEach-Object { Write-Host "Generated $($_.Name)" }
 
       - name: Install winget-create
         shell: pwsh
         run: |
           Write-Host "Installing winget-create..."
-          winget install --id Microsoft.WingetCreate --silent --accept-source-agreements --accept-package-agreements
+          winget install --exact --id Microsoft.WingetCreate --silent --accept-source-agreements --accept-package-agreements
+
+      - name: Validate Winget manifest
+        shell: pwsh
+        run: |
+          winget validate --manifest "winget-manifest"
 
       - name: Submit to Winget
         shell: pwsh
@@ -63,21 +102,20 @@ jobs:
             Write-Error "WINGET_TOKEN secret is not set. Please add it to repository secrets."
             exit 1
           }
-          
+
           $version = "${{ steps.version.outputs.version }}"
-          
-          Write-Host "Submitting version $version to winget..."
-          wingetcreate update RedSalamanders.RedSalamander `
-            --version $version `
-            --urls "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64.msi|x64" `
-                   "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64-Portable.zip|x64|portable" `
-            --submit `
-            --token $env:WINGET_TOKEN
+
+          Write-Host "Submitting portable package version $version to winget..."
+          wingetcreate submit `
+            --prtitle "RedSalamander $version" `
+            --token $env:WINGET_TOKEN `
+            --no-open `
+            "winget-manifest"
 
       - name: Summary
         if: success()
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          Write-Host "✓ Successfully submitted RedSalamander $version to winget!" -ForegroundColor Green
+          Write-Host "Successfully submitted RedSalamander $version portable ZIP to winget." -ForegroundColor Green
           Write-Host "The winget community repository maintainers will review the PR."

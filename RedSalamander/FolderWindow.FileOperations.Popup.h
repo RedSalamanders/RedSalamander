@@ -39,6 +39,8 @@ struct PopupHitTest
 };
 
 #ifdef ENABLE_TESTS
+inline constexpr uint32_t kPopupSelfTestDestroyOnNextShowData = 0xD1570001u;
+
 struct PopupSelfTestInvoke
 {
     PopupHitTest::Kind kind = PopupHitTest::Kind::None;
@@ -314,6 +316,9 @@ private:
     bool _trackingMouse = false;
     bool _inSizeMove    = false;
     bool _inThemeChange = false;
+#ifdef ENABLE_TESTS
+    bool _destroyOnNextShowForSelfTest = false;
+#endif
 
     CaptionStatus _captionStatus = CaptionStatus::None;
 

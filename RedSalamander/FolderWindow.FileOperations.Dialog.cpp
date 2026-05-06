@@ -47,13 +47,26 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         existingPopup = _popup.get();
     }
 
-    if (existingPopup && IsWindow(existingPopup))
+    while (existingPopup && IsWindow(existingPopup))
     {
         Debug::Perf::EmitCounter(L"FileOps.InfoTask.EnsurePopupVisibleExistingCount");
         const bool capturePerf       = Debug::Perf::IsCaptureEnabled();
         const uint64_t showStartedUs = capturePerf ? PerfNowUs() : 0u;
         ShowWindow(existingPopup, SW_SHOWNOACTIVATE);
         const uint64_t showUs = capturePerf ? PerfElapsedUs(showStartedUs) : 0u;
+
+        if (! IsWindow(existingPopup))
+        {
+            if (capturePerf)
+            {
+                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.ShowWindowUs", L"", showUs, 0u, 0u, E_HANDLE);
+            }
+
+            std::scoped_lock lock(_mutex);
+            existingPopup = _popup.get();
+            continue;
+        }
+
         RECT popupRect{};
         bool reposition = false;
         int targetX     = 0;
@@ -96,10 +109,30 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
 
         const UINT flags = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
 
+        if (! IsWindow(existingPopup))
+        {
+            std::scoped_lock lock(_mutex);
+            existingPopup = _popup.get();
+            continue;
+        }
+
         // Keep the popup visible even if it was behind other windows. Avoid stealing focus.
         const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
         SetWindowPos(existingPopup, HWND_TOP, targetX, targetY, 0, 0, flags);
         const uint64_t positionUs          = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
+
+        if (! IsWindow(existingPopup))
+        {
+            if (capturePerf)
+            {
+                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.SetWindowPosUs", L"", positionUs, 0u, 0u, E_HANDLE);
+            }
+
+            std::scoped_lock lock(_mutex);
+            existingPopup = _popup.get();
+            continue;
+        }
+
         const uint64_t invalidateStartedUs = capturePerf ? PerfNowUs() : 0u;
         InvalidateRect(existingPopup, nullptr, FALSE);
         const uint64_t invalidateUs = capturePerf ? PerfElapsedUs(invalidateStartedUs) : 0u;
@@ -141,6 +174,15 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
     const uint64_t showStartedUs = capturePerf ? PerfNowUs() : 0u;
     ShowWindow(popup, SW_SHOWNOACTIVATE);
     const uint64_t showUs = capturePerf ? PerfElapsedUs(showStartedUs) : 0u;
+    if (! IsWindow(popup))
+    {
+        if (capturePerf)
+        {
+            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.ShowWindowUs", L"", showUs, 1u, 0u, E_HANDLE);
+        }
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 1u, 0u, E_HANDLE);
+        return;
+    }
     RECT popupRect{};
     bool reposition = false;
     int targetX     = 0;
@@ -185,6 +227,15 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
     const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
     SetWindowPos(popup, HWND_TOP, targetX, targetY, 0, 0, flags);
     const uint64_t positionUs      = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
+    if (! IsWindow(popup))
+    {
+        if (capturePerf)
+        {
+            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.SetWindowPosUs", L"", positionUs, 1u, 0u, E_HANDLE);
+        }
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 1u, 0u, E_HANDLE);
+        return;
+    }
     const uint64_t redrawStartedUs = capturePerf ? PerfNowUs() : 0u;
     RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
     const uint64_t redrawUs = capturePerf ? PerfElapsedUs(redrawStartedUs) : 0u;

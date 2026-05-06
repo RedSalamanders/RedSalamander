@@ -6185,6 +6185,12 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
         return 0;
     }
 
+    if (payload->kind == PopupHitTest::Kind::None && payload->data == kPopupSelfTestDestroyOnNextShowData)
+    {
+        _destroyOnNextShowForSelfTest = true;
+        return 1;
+    }
+
     if (payload->kind == PopupHitTest::Kind::TaskSpeedLimit && payload->data == 1u)
     {
         return ShowCustomSpeedLimitPromptForTask(hwnd, payload->taskId) ? 1 : 0;
@@ -6314,6 +6320,16 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
     switch (msg)
     {
         case WM_CREATE: return OnCreate(hwnd);
+#ifdef ENABLE_TESTS
+        case WM_SHOWWINDOW:
+            if (wp != FALSE && _destroyOnNextShowForSelfTest)
+            {
+                _destroyOnNextShowForSelfTest = false;
+                DestroyWindow(hwnd);
+                return 0;
+            }
+            break;
+#endif
         case WM_NCDESTROY: return OnNcDestroy(hwnd);
         case WM_NCACTIVATE: return OnNcActivate(hwnd, wp, lp);
         case WM_NCPAINT: return OnNcPaint(hwnd, wp, lp);

@@ -5,7 +5,7 @@
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap desktop rescap">
-  <Identity Name="RedSalamander" Publisher="CN=RedSalmanders" Version="7.0.0.183" ProcessorArchitecture="x64" />
+  <Identity Name="RedSalamander" Publisher="CN=RedSalmanders" Version="7.0.0.0" ProcessorArchitecture="x64" />
   <Properties>
     <DisplayName>RedSalamander</DisplayName>
     <PublisherDisplayName>RedSalamander</PublisherDisplayName>

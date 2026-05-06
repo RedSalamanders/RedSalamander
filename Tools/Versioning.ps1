@@ -78,24 +78,15 @@ function Get-RSVersionBaseInfo {
     }
 
     $major = & $readDefine "VERSINFO_MAJOR"
-    $minorA = & $readDefine "VERSINFO_MINORA"
-    $minorB = & $readDefine "VERSINFO_MINORB"
-    $minorPacked = ($minorA * 10) + $minorB
-
-    $displayBaseVersion = if ($minorB -eq 0) {
-        "$major.$minorA"
-    } else {
-        "$major.$minorA$minorB"
-    }
+    $minor = & $readDefine "VERSINFO_MINOR"
+    $displayBaseVersion = "$major.$minor"
 
     [pscustomobject]@{
         HeaderPath = $headerPath
         Major = $major
-        MinorA = $minorA
-        MinorB = $minorB
-        MinorPacked = $minorPacked
+        Minor = $minor
         DisplayBaseVersion = $displayBaseVersion
-        LastVersionOfSalamander = ($major * 100) + $minorPacked
+        LastVersionOfSalamander = ($major * 100) + $minor
     }
 }
 
@@ -211,19 +202,21 @@ function Get-RSVersionContext {
 
     $baseInfo = Get-RSVersionBaseInfo -RepoRoot $RepoRoot
     $resolvedBuildNumber = Resolve-RSBuildNumber -RepoRoot $RepoRoot -BuildNumber $BuildNumber -Configuration $Configuration -Platform $Platform -OfficialRelease:$OfficialRelease
+    if ($baseInfo.Major -gt 65535 -or $baseInfo.Minor -gt 65535 -or $resolvedBuildNumber -gt 65535) {
+        throw "Version components must fit Windows VERSIONINFO 16-bit fields: $($baseInfo.Major).$($baseInfo.Minor).$resolvedBuildNumber"
+    }
+
     $platformLabel = if ($Platform -eq "ARM64") { "ARM64" } else { "x64" }
     $configurationLabel = if ($Configuration -eq "ASan Debug") { "ASan Debug" } else { $Configuration }
     $displayVersion = if ($OfficialRelease) {
-        $baseInfo.DisplayBaseVersion
+        "$($baseInfo.DisplayBaseVersion).$resolvedBuildNumber"
     } else {
-        "$($baseInfo.DisplayBaseVersion) build $resolvedBuildNumber beta $configurationLabel ($platformLabel)"
+        "$($baseInfo.DisplayBaseVersion).$resolvedBuildNumber beta $configurationLabel ($platformLabel)"
     }
 
     [pscustomobject]@{
         Major = $baseInfo.Major
-        MinorA = $baseInfo.MinorA
-        MinorB = $baseInfo.MinorB
-        MinorPacked = $baseInfo.MinorPacked
+        Minor = $baseInfo.Minor
         BuildNumber = $resolvedBuildNumber
         Configuration = $Configuration
         ConfigurationLabel = $configurationLabel
@@ -232,7 +225,7 @@ function Get-RSVersionContext {
         OfficialRelease = [bool]$OfficialRelease
         DisplayBaseVersion = $baseInfo.DisplayBaseVersion
         DisplayVersion = $displayVersion
-        PackagingVersion = "$($baseInfo.Major).$($baseInfo.MinorPacked).$resolvedBuildNumber"
+        PackagingVersion = "$($baseInfo.Major).$($baseInfo.Minor).$resolvedBuildNumber"
         LastVersionOfSalamander = $baseInfo.LastVersionOfSalamander
         HeaderPath = $baseInfo.HeaderPath
     }
