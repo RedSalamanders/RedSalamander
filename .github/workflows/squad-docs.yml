@@ -6,8 +6,8 @@ on:
   push:
     branches: [preview]
     paths:
-      - 'docs/**'
-      - '.github/workflows/squad-docs.yml'
+      - "docs/**"
+      - ".github/workflows/squad-docs.yml"
 
 permissions:
   contents: read
@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build docs
         run: |

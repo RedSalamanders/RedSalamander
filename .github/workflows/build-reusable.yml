@@ -28,7 +28,7 @@ jobs:
       VCPKG_DEFAULT_TRIPLET: ${{ inputs.platform == 'ARM64' && 'arm64-windows' || 'x64-windows' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ── Setup toolchain ──────────────────────────────────────────────
 
@@ -38,10 +38,16 @@ jobs:
           $ErrorActionPreference = "Stop"
           choco install visualstudio2026buildtools -y --no-progress
           if ($LASTEXITCODE -notin 0,3010) { throw "VS Build Tools install failed: $LASTEXITCODE" }
-          choco install visualstudio2026-workload-vctools -y --no-progress
+
+          $vcPackageParameters = "--includeRecommended"
+          if ("${{ inputs.platform }}" -eq "ARM64") {
+            $vcPackageParameters += " --add Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          }
+
+          choco install visualstudio2026-workload-vctools -y --no-progress --package-parameters $vcPackageParameters
           if ($LASTEXITCODE -notin 0,3010) { throw "VC workload install failed: $LASTEXITCODE" }
 
-      - name: Install ARM64 MSVC target tools
+      - name: Verify ARM64 MSVC target tools
         if: ${{ inputs.platform == 'ARM64' }}
         shell: pwsh
         run: |
@@ -62,29 +68,17 @@ jobs:
             throw "Visual Studio 2026 Build Tools install path not found."
           }
 
-          $installerCandidates = @(
-            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe",
-            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-          )
-          $installer = $installerCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $installer) {
-            throw "Visual Studio Installer executable not found."
-          }
+          $componentId = "Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          $arm64InstallPath =
+            (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -requires $componentId -property installationPath 2>$null) |
+            Select-Object -First 1
 
-          Write-Host "Adding ARM64 MSVC target tools to: $installPath"
-          $modifyArgs = @(
-            "modify",
-            "--installPath", $installPath,
-            "--add", "Microsoft.VisualStudio.Component.VC.14.50.18.0.ARM64",
-            "--quiet",
-            "--norestart",
-            "--wait"
-          )
-
-          & $installer @modifyArgs
-          if ($LASTEXITCODE -notin 0,3010) {
-            throw "VS Installer modify failed with exit code $LASTEXITCODE."
+          if ([string]::IsNullOrWhiteSpace($arm64InstallPath)) {
+            Write-Host "Installed Visual Studio instances:" -ForegroundColor Yellow
+            & $vswhere -all -prerelease -products *
+            throw "Visual Studio 2026 Build Tools does not report required component: $componentId."
           }
+          $installPath = $arm64InstallPath
 
           $vcToolsRoot = Join-Path $installPath "VC\Tools\MSVC"
           $arm64Compiler =
@@ -95,7 +89,7 @@ jobs:
             Select-Object -First 1
 
           if (-not $arm64Compiler) {
-            throw "ARM64 MSVC compiler not found under $vcToolsRoot after component install."
+            throw "ARM64 MSVC compiler not found under $vcToolsRoot after installing $componentId."
           }
 
           Write-Host "ARM64 compiler: $arm64Compiler"
@@ -133,7 +127,7 @@ jobs:
       # ── Restore dependencies ─────────────────────────────────────────
 
       - name: Cache vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             .build/vcpkg_installed
@@ -332,7 +326,7 @@ jobs:
 
       - name: Upload build output
         if: ${{ inputs.upload_build_output }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-output-${{ inputs.platform }}
           path: .build/${{ inputs.platform }}/${{ inputs.configuration }}/
