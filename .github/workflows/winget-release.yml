@@ -100,9 +100,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          Write-Host "winget.exe version:"
-          winget --version
-          winget validate --manifest "winget-manifest"
+          . (Join-Path $env:GITHUB_WORKSPACE "Installer\winget\WingetValidation.ps1")
+          Invoke-RSWingetManifestValidation -ManifestPath "winget-manifest"
 
       - name: Submit to Winget
         shell: pwsh
