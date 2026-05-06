@@ -35,7 +35,7 @@ jobs:
       release_version: ${{ steps.version.outputs.release_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Resolve release version
         id: version
@@ -90,10 +90,10 @@ jobs:
         platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download build output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-output-${{ matrix.platform }}
           path: .build/${{ matrix.platform }}/Release/
@@ -107,7 +107,7 @@ jobs:
           & $zipScript -Configuration Release -Platform "${{ matrix.platform }}" -BuildNumber "${{ needs.version-info.outputs.build_number }}"
 
       - name: Upload portable package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: portable-package-${{ matrix.platform }}
           path: .build/AppPackages/*.zip
@@ -127,10 +127,10 @@ jobs:
         platform: ${{ fromJson((github.event_name != 'workflow_dispatch' || inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download build output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-output-${{ matrix.platform }}
           path: .build/${{ matrix.platform }}/Release/
@@ -141,7 +141,13 @@ jobs:
           $ErrorActionPreference = "Stop"
           choco install visualstudio2026buildtools -y --no-progress
           if ($LASTEXITCODE -notin 0,3010) { throw "VS Build Tools install failed: $LASTEXITCODE" }
-          choco install visualstudio2026-workload-vctools -y --no-progress
+
+          $vcPackageParameters = "--includeRecommended"
+          if ("${{ matrix.platform }}" -eq "ARM64") {
+            $vcPackageParameters += " --add Microsoft.VisualStudio.Component.VC.Tools.ARM64"
+          }
+
+          choco install visualstudio2026-workload-vctools -y --no-progress --package-parameters $vcPackageParameters
           if ($LASTEXITCODE -notin 0,3010) { throw "VC workload install failed: $LASTEXITCODE" }
           choco install visualstudio2026-workload-universalbuildtools -y --no-progress
           if ($LASTEXITCODE -notin 0,3010) { throw "UWP workload install failed: $LASTEXITCODE" }
@@ -277,7 +283,7 @@ jobs:
           }
 
       - name: Upload MSIX package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: msix-package-${{ matrix.platform }}
           path: .build/AppPackages/**/*.msix
@@ -296,7 +302,7 @@ jobs:
     steps:
       - name: Download portable packages
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: portable-package-*
           path: artifacts
@@ -305,7 +311,7 @@ jobs:
       - name: Download MSIX packages
         if: ${{ needs.package-msix.result == 'success' }}
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: msix-package-*
           path: artifacts
@@ -339,7 +345,7 @@ jobs:
           $checksums | ForEach-Object { Write-Host "  $_" }
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.version-info.outputs.release_tag }}
           target_commitish: ${{ github.sha }}
@@ -350,7 +356,7 @@ jobs:
 
       - name: Upload MSIX to release
         if: ${{ needs.package-msix.result == 'success' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.version-info.outputs.release_tag }}
           target_commitish: ${{ github.sha }}

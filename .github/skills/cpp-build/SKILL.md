@@ -80,6 +80,7 @@ metadata:
 - **WIL** - Windows Implementation Library (RAII wrappers)
 - **fmt** - Modern C++ formatting library
 - **DirectX** - Graphics and multimedia APIs (D2D, D3D11, DXGI)
+- CI ARM64 builds install `Microsoft.VisualStudio.Component.VC.Tools.ARM64` with the Visual Studio 2026 VC++ workload and verify `Hostx64\arm64\cl.exe` before building.
 
 ## Build Script Features
 
