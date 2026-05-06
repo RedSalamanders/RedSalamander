@@ -99,7 +99,7 @@ The workflow:
 3. Reads the GitHub release asset list through the GitHub API.
 4. Fails with the available asset names if either `RedSalamander-<version>-x64-Portable.zip` or `RedSalamander-<version>-ARM64-Portable.zip` is missing.
 5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
-6. Runs `winget validate --manifest`.
+6. Runs `Invoke-RSWingetManifestValidation`, which wraps `winget validate --manifest`. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
 7. Submits the generated manifest directory with `wingetcreate submit`.
 
 `WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs`.
