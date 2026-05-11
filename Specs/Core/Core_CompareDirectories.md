@@ -631,7 +631,7 @@ The Compare Directories Options panel reads/writes the same settings; Preference
 - Manual UI checks:
   - Shortcuts (function keys, selection, copy/move/delete) behave like the main window.
   - Compare scope behavior: OK/Rescan establishes roots; navigation outside roots cancels compare mode (with a prompt if scan/content compare is active) until the next OK/Rescan.
-  - Options panel theming and scroll behavior at small window sizes.
+  - Options panel theming, scroll behavior, and forward/reverse keyboard traversal at small window sizes.
   - Progress appears in the compare banner and in the File Operations popup task card; it disappears when idle.
   - All three display modes (Alt+2, Alt+3, Alt+4) render correctly.
   - Directory sync-copy only copies different items (verify identical files are skipped).

@@ -250,8 +250,10 @@ Layout (using RedSalamander theming):
   - `<Quick Connect>` is always the first row.
   - All other visible connections are sorted alphabetically by display name (case-insensitive).
   - `New…`, `Rename…`, `Remove…`
+  - The list and command-button row consume the full left pane height; the gap below the buttons should visually match the top window/list gap.
 - Right pane: connection editor
   - Scrollable when the editor content exceeds the available height (bottom buttons remain pinned and content does not overlap them).
+  - Fields are grouped into cards under section titles, matching Preferences: section titles sit above their card, cards must not touch or overlap vertically, and card content must keep a visible gap from the right edge/scrollbar.
   - Address (host), Port, Initial path
   - Copy/Move max concurrency (0 = default), Delete max concurrency (0 = default)
   - User name, Password/Passphrase (masked, with Show/Hide control)
@@ -262,7 +264,7 @@ Layout (using RedSalamander theming):
   - IMAP: `Ignore trust for SSL` (optional)
   - S3 / S3 Table:
     - `Region` uses an editable dropdown populated with known AWS region names/codes; selecting an entry inserts the region code into the field.
-    - `Endpoint override` (optional; for S3-compatible endpoints)
+    - `Endpoint override` (optional; for S3-compatible endpoints) is visually grouped inside the S3 card.
     - `Use HTTPS`, `Verify TLS certificate`
     - S3 only: `Use virtual-hosted style addressing`
   - Google Drive:

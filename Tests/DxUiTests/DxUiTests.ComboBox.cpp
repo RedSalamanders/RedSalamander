@@ -457,6 +457,48 @@ void TestComboBoxPopupScrollbarPagesLongLists()
             "popup scrollbar track paging reveals later rows");
 }
 
+void TestComboBoxPopupScrollbarThumbGutterDragThroughWindowHost()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_SIZE, 0, MAKELPARAM(220, 260), handled));
+    Require(handled, "host size update handled for combo thumb gutter drag");
+
+    auto root    = std::make_unique<Panel>();
+    auto* combo  = root->AddChild<ComboBox>();
+    combo->SetBounds(D2D1::RectF(10.0f, 10.0f, 170.0f, 38.0f));
+    std::vector<ComboBox::Item> items;
+    for (size_t index = 0; index < 20u; ++index)
+    {
+        items.push_back(ComboBox::Item{std::format(L"value{:02}", index), std::format(L"Item {:02}", index)});
+    }
+    combo->SetItems(std::move(items));
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 260.0f));
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(162, 24), handled));
+    Require(handled, "combo opens for popup thumb gutter drag");
+
+    const D2D1_RECT_F popup = combo->DebugGetPopupBounds();
+    RequireRectHasArea(popup, "combo popup exposes geometry for thumb gutter drag");
+
+    const LONG gutterX = static_cast<LONG>(popup.right - 11.0f);
+    const LONG gutterY = static_cast<LONG>(popup.top + 5.0f);
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(gutterX, gutterY), handled));
+    Require(handled, "combo popup handles scrollbar thumb gutter mouse-down as a drag");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(gutterX, gutterY + 48), handled));
+    Require(handled, "combo popup handles captured scrollbar thumb gutter mouse-move");
+    const D2D1_RECT_F firstItemRect = combo->DebugGetPopupItemRect(0u, &host);
+    Require(firstItemRect.right <= firstItemRect.left || firstItemRect.bottom <= firstItemRect.top, "combo popup thumb gutter drag scrolls past the first item");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(gutterX, gutterY + 48), handled));
+    Require(handled, "combo popup handles captured scrollbar thumb gutter mouse-up");
+}
+
 void TestComboBoxPopupCapsVisibleItemsAndScrolls()
 {
     using namespace RedSalamander::DxUi;
@@ -725,6 +767,7 @@ void RunComboBoxTests()
     runTest("TestComboBoxPopupWidensForLongVisibleEntries", TestComboBoxPopupWidensForLongVisibleEntries);
     runTest("TestComboBoxPopupWidthRemainsStableAcrossPopupScroll", TestComboBoxPopupWidthRemainsStableAcrossPopupScroll);
     runTest("TestComboBoxPopupScrollbarPagesLongLists", TestComboBoxPopupScrollbarPagesLongLists);
+    runTest("TestComboBoxPopupScrollbarThumbGutterDragThroughWindowHost", TestComboBoxPopupScrollbarThumbGutterDragThroughWindowHost);
     runTest("TestComboBoxPopupCapsVisibleItemsAndScrolls", TestComboBoxPopupCapsVisibleItemsAndScrolls);
     runTest("TestComboBoxTypeaheadSelectsMatchingItem", TestComboBoxTypeaheadSelectsMatchingItem);
     runTest("TestComboBoxEightItemsAllFitInDefaultPopup", TestComboBoxEightItemsAllFitInDefaultPopup);

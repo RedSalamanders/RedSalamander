@@ -11661,7 +11661,7 @@ void FolderWindow::CommandUnpack(Pane pane)
                        pane,
                        IDS_CMD_UNPACK,
                        FolderView::OverlaySeverity::Information,
-                       FormatStringResource(nullptr, IDS_FMT_ARCHIVE_UNPACK_COMPLETED, result.archivePath.wstring(), result.entryCount),
+                       FormatStringResource(nullptr, IDS_FMT_ARCHIVE_UNPACK_COMPLETED, result.entryCount, result.archivePath.wstring()),
                        S_OK);
 }
 

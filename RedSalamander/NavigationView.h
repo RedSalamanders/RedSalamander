@@ -98,6 +98,10 @@ struct NavigationViewDebugSnapshot
     RECT historyRegionRect                       = {};
     RECT diskInfoRegionRect                      = {};
     RECT pathEllipsisRect                        = {};
+    RECT pathCurrentSegmentRect                  = {};
+    bool pathCurrentSegmentVisible               = false;
+    RECT pathLastSegmentRect                     = {};
+    bool pathLastSegmentVisible                  = false;
     RECT pathAncestorSegmentRect                 = {};
     bool pathAncestorSegmentVisible              = false;
     RECT fullPathPopupAncestorSegmentRect        = {};
@@ -324,10 +328,10 @@ private:
     void GetBreadcrumbTextLayoutAndWidth(std::wstring_view text, float height, wil::com_ptr<IDWriteTextLayout>& layout, float& width) noexcept;
 
     // Menus
-    void ShowMenuDropdown(bool ignoreInitialLeftButtonUp = false);
+    void ShowMenuDropdown(bool ignoreInitialLeftButtonUp = false, bool focusFirstNavigableItem = false);
     void ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButtonUp = false);
-    void ShowHistoryDropdown(bool ignoreInitialLeftButtonUp = false);
-    void ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp = false);
+    void ShowHistoryDropdown(bool ignoreInitialLeftButtonUp = false, bool focusFirstNavigableItem = false);
+    void ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp = false, bool focusFirstNavigableItem = false);
     void ShowSiblingsDropdown(size_t segmentIndex);
     void RequestFullPathPopup(const D2D1_RECT_F& anchorBounds);
     void ShowFullPathPopup();

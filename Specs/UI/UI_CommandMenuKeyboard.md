@@ -44,6 +44,7 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - Opening a root popup by mouse MUST NOT synthesize a keyboard or hover selection from the checked item; checked, radio, and toggle state MUST be shown only by the item glyph until actual pointer movement or keyboard navigation selects an item.
 - When a submenu is already open and the pointer moves back onto the parent item that opened that submenu, the submenu MUST remain open and any pending child-close timer MUST be canceled.
 - When a submenu is already open and the pointer settles on a different sibling item that does not keep that submenu active, the existing child submenu chain MUST close after the standard cascade hover delay unless a replacement submenu opens instead.
+- During an active top-level menu session, moving the pointer directly from one enabled root menu item to another MUST switch the open root popup without requiring the pointer to first enter an item inside the original popup.
 - Exiting a DxUi top-level menu session without transferring focus to another control MUST restore keyboard focus to the pane/control that owned focus before menu mode started.
 - Pressing `Escape` while a top-level menu bar, menu popup, or pane-owned context menu has keyboard ownership MUST dismiss that transient UI first, then restore keyboard focus to the active pane's `FolderView` unless the chosen command intentionally opens another focus-owning surface.
 
@@ -98,6 +99,7 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - `cmd/pane/clipboardCut` writes selected or focused local file-system items as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_MOVE`. It does not delete or move files immediately.
 - `cmd/pane/clipboardPaste` copies clipboard file-drop paths into the current local folder using the file-operation copy path.
 - `cmd/pane/clipboardPasteShortcut` reads clipboard file-drop paths and creates `.lnk` shortcuts in the current local folder. Shortcut names MUST be unique in the destination folder, the pane MUST refresh after creation, and the last created shortcut SHOULD become the focused item when visible.
+- Copy-as-text commands (`cmd/pane/copyPathAndNameAsText`, `cmd/pane/copyNameAsText`, `cmd/pane/copyPathAsText`, and `cmd/pane/copyUncPathAndNameAsText`) write `CF_UNICODETEXT` for the selected items, or the focused item when nothing is selected. Clipboard writes MUST tolerate short-lived clipboard contention by retrying `OpenClipboard(...)` for a bounded period before showing localized pane feedback.
 - Unsupported providers, empty selections, clipboard contents without file paths, and shortcut creation failures keep the pane in place and show localized pane feedback instead of falling through to a generic not-implemented command.
 - Command selftests MUST keep correctness and responsiveness visible with `clipboard.cut_us`, `clipboard.paste_shortcut_us`, and `clipboard.feedback_us` metrics.
 
@@ -147,9 +149,9 @@ Pane view option commands target the focused pane, or the active pane when focus
 - The command is application-scoped and is available from **Commands -> Reread Associations**.
 - It reads the current settings file through the non-destructive hot-reload path. Invalid JSON, unsupported schema, or unreadable settings keep the current runtime settings in place and show the localized invalid-reload alert.
 - Disk settings are authoritative for `fileActions` viewer/editor actions and associations, User Menu actions, file-system extension mappings, plugin settings, shortcuts, and other persisted preference sections, but current pane folders and already-open window placement are preserved.
-- After a successful reload, the app rebuilds dynamic View With, Edit With, User Menu, ShellNew, and file-system-plugin menus, clears normal and association icon caches, refreshes both panes, preserves the active pane, and notifies settings-reload participants.
+- After a successful reload, the app rebuilds dynamic View With, Edit With, User Menu, ShellNew, and file-system-plugin menus, clears normal and association icon caches before pane refresh can repopulate them, refreshes both panes, preserves the active pane, and notifies settings-reload participants.
 - Stale dynamic menu ids from before the reload MUST NOT launch old actions after the menus are rebuilt.
-- Command selftests MUST keep correctness and responsiveness visible with `rereadAssociations.total_us`, menu-rebuild assertions, pane-refresh assertions, icon-association cache clearing, and preserved live pane paths.
+- Command selftests MUST keep correctness and responsiveness visible with `rereadAssociations.total_us`, menu-rebuild assertions, pane-refresh assertions, icon-association cache clearing sampled immediately after the clear, and preserved live pane paths.
 
 ### Make File List
 

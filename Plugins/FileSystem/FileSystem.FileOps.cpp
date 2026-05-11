@@ -2325,6 +2325,17 @@ HRESULT GetPathBasicInformation(const std::wstring& path, FILE_BASIC_INFO* info)
     return S_OK;
 }
 
+FILETIME FileTimeFromQuadPart(LONGLONG value) noexcept
+{
+    ULARGE_INTEGER raw{};
+    raw.QuadPart = static_cast<ULONGLONG>(value);
+
+    FILETIME fileTime{};
+    fileTime.dwLowDateTime  = raw.LowPart;
+    fileTime.dwHighDateTime = raw.HighPart;
+    return fileTime;
+}
+
 HRESULT SetPathBasicInformation(const std::wstring& path, const FILE_BASIC_INFO& info) noexcept
 {
     wil::unique_handle handle(::CreateFileW(path.c_str(),
@@ -2341,6 +2352,14 @@ HRESULT SetPathBasicInformation(const std::wstring& path, const FILE_BASIC_INFO&
 
     FILE_BASIC_INFO mutableInfo = info;
     if (! ::SetFileInformationByHandle(handle.get(), FileBasicInfo, &mutableInfo, sizeof(mutableInfo)))
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    const FILETIME creationTime   = FileTimeFromQuadPart(info.CreationTime.QuadPart);
+    const FILETIME lastAccessTime = FileTimeFromQuadPart(info.LastAccessTime.QuadPart);
+    const FILETIME lastWriteTime  = FileTimeFromQuadPart(info.LastWriteTime.QuadPart);
+    if (! ::SetFileTime(handle.get(), &creationTime, &lastAccessTime, &lastWriteTime))
     {
         return HRESULT_FROM_WIN32(::GetLastError());
     }
@@ -3250,6 +3269,8 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
         return returnFailure(HRESULT_FROM_WIN32(error));
     }
 
+    findHandle.reset();
+
     if (createdDestination)
     {
         CopyPathBasicInformationBestEffort(source.extended, destination.extended);
@@ -3428,6 +3449,22 @@ struct RecursiveCopyWorkItem
     RecursiveCopyQueue queue{};
     const size_t maxQueuedItems = std::max<size_t>(512u, static_cast<size_t>(concurrency) * 128u);
 
+    struct CreatedDirectoryMetadataTarget final
+    {
+        std::wstring sourcePath;
+        std::wstring destinationPath;
+    };
+
+    std::mutex createdDirectoriesMutex;
+    std::vector<CreatedDirectoryMetadataTarget> createdDirectories;
+
+    const auto rememberCreatedDirectory = [&](const PathInfo& directorySource, const PathInfo& directoryDestination) noexcept
+    {
+        std::scoped_lock lock(createdDirectoriesMutex);
+        createdDirectories.push_back(
+            CreatedDirectoryMetadataTarget{.sourcePath = directorySource.extended, .destinationPath = directoryDestination.extended});
+    };
+
     const auto initializeChildContext = [&](OperationContext& context, uint64_t progressStreamId) noexcept
     {
         InitializeOperationContext(
@@ -3567,8 +3604,9 @@ struct RecursiveCopyWorkItem
             {
                 if (createdDestination)
                 {
-                    CopyPathBasicInformationBestEffort(item.source.extended, item.destination.extended);
+                    rememberCreatedDirectory(item.source, item.destination);
                 }
+                processedDirectories.fetch_add(1, std::memory_order_relaxed);
                 return S_OK;
             }
             return HRESULT_FROM_WIN32(error);
@@ -3656,9 +3694,11 @@ struct RecursiveCopyWorkItem
             return HRESULT_FROM_WIN32(enumError);
         }
 
+        findHandle.reset();
+
         if (createdDestination)
         {
-            CopyPathBasicInformationBestEffort(item.source.extended, item.destination.extended);
+            rememberCreatedDirectory(item.source, item.destination);
         }
 
         processedDirectories.fetch_add(1, std::memory_order_relaxed);
@@ -3829,6 +3869,22 @@ struct RecursiveCopyWorkItem
         {
             return returnFailure(firstError);
         }
+    }
+
+    std::vector<CreatedDirectoryMetadataTarget> directoriesToRestore;
+    {
+        std::scoped_lock lock(createdDirectoriesMutex);
+        directoriesToRestore = createdDirectories;
+    }
+    std::sort(directoriesToRestore.begin(),
+              directoriesToRestore.end(),
+              [](const CreatedDirectoryMetadataTarget& left, const CreatedDirectoryMetadataTarget& right) noexcept
+    {
+        return left.destinationPath.size() > right.destinationPath.size();
+    });
+    for (const CreatedDirectoryMetadataTarget& directory : directoriesToRestore)
+    {
+        CopyPathBasicInformationBestEffort(directory.sourcePath, directory.destinationPath);
     }
 
     if (hadFailure.load(std::memory_order_acquire) || hadSkipped.load(std::memory_order_acquire))

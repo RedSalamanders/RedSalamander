@@ -1,5 +1,9 @@
 #include "FolderViewInternal.h"
 
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
+
 namespace
 {
 [[nodiscard]] bool IsBuiltinFileSystemPlugin(std::wstring_view pluginId) noexcept
@@ -131,17 +135,20 @@ void ShowClipboardFormattedOverlay(FolderView& view,
 
     if (OpenClipboard(ownerWindow) == 0)
     {
+        Debug::Warning(L"FolderView::SetFileDropClipboard: OpenClipboard failed (error={}).", GetLastError());
         return false;
     }
     const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
 
     if (EmptyClipboard() == 0)
     {
+        Debug::Warning(L"FolderView::SetFileDropClipboard: EmptyClipboard failed (error={}).", GetLastError());
         return false;
     }
 
     if (SetClipboardData(CF_HDROP, drop.get()) == nullptr)
     {
+        Debug::Warning(L"FolderView::SetFileDropClipboard: SetClipboardData(CF_HDROP) failed (error={}).", GetLastError());
         return false;
     }
     drop.release();
@@ -149,6 +156,10 @@ void ShowClipboardFormattedOverlay(FolderView& view,
     const UINT preferredDropEffectFormat = PreferredDropEffectFormat();
     if (preferredDropEffectFormat == 0u || SetClipboardData(preferredDropEffectFormat, effect.get()) == nullptr)
     {
+        Debug::Warning(
+            L"FolderView::SetFileDropClipboard: SetClipboardData(Preferred DropEffect) failed (format={}, error={}).",
+            preferredDropEffectFormat,
+            GetLastError());
         return false;
     }
     effect.release();
@@ -181,9 +192,10 @@ void ShowClipboardFormattedOverlay(FolderView& view,
             continue;
         }
 
-        std::wstring path(length, L'\0');
+        std::wstring path(static_cast<size_t>(length) + 1u, L'\0');
         if (DragQueryFileW(static_cast<HDROP>(handle), index, path.data(), length + 1u) == length)
         {
+            path.resize(length);
             result.emplace_back(path);
         }
     }
@@ -675,14 +687,30 @@ bool FolderView::PasteShortcutFromClipboard()
 {
     Debug::Perf::Scope perf(L"clipboard.paste_shortcut_us");
 
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"PasteShortcutFromClipboard enter hwnd=0x{:X} focus=0x{:X} plugin='{}' currentFolder='{}'",
+                                              reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                              reinterpret_cast<uintptr_t>(GetFocus()),
+                                              _fileSystemPluginId,
+                                              _currentFolder.has_value() ? _currentFolder->wstring() : std::wstring()));
+#endif
+
     if (! _currentFolder.has_value() || _currentFolder.value().empty() || ! IsBuiltinFileSystemPlugin(_fileSystemPluginId))
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"PasteShortcutFromClipboard blocked: local built-in folder required");
+#endif
         ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT, IDS_MSG_CLIPBOARD_LOCAL_FOLDER_REQUIRED, OverlaySeverity::Warning);
         return false;
     }
 
     std::vector<std::filesystem::path> sources = ReadFileDropClipboard(_hWnd.get());
     perf.SetValue0(static_cast<uint64_t>(sources.size()));
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"PasteShortcutFromClipboard sources={} first='{}'",
+                                              sources.size(),
+                                              ! sources.empty() ? sources.front().wstring() : std::wstring()));
+#endif
     if (sources.empty())
     {
         ShowClipboardOverlay(*this, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT, IDS_MSG_CLIPBOARD_NO_SHORTCUT_SOURCE, OverlaySeverity::Warning);
@@ -712,6 +740,12 @@ bool FolderView::PasteShortcutFromClipboard()
     }
 
     perf.SetValue1(static_cast<uint64_t>(createdLinks.size()));
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"PasteShortcutFromClipboard created={} firstFailure=0x{:08X} last='{}'",
+                                              createdLinks.size(),
+                                              static_cast<unsigned long>(firstFailure),
+                                              ! createdLinks.empty() ? createdLinks.back().wstring() : std::wstring()));
+#endif
 
     if (! createdLinks.empty())
     {

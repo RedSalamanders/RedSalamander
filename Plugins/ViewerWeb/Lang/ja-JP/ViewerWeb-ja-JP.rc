@@ -1,0 +1,89 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+IDR_VIEWERWEB_MENU MENU
+BEGIN
+    POPUP "ファイル(&F)"
+    BEGIN
+        MENUITEM "名前を付けて保存(&A)...\tCtrl+S", IDM_VIEWERWEB_FILE_SAVE_AS
+        MENUITEM "更新(&R)\tF5", IDM_VIEWERWEB_FILE_REFRESH
+        POPUP "その他のファイル(&F)"
+        BEGIN
+            MENUITEM "次へ(&N)\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
+            MENUITEM "前へ(&P)\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "最初(&F)\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
+            MENUITEM "最後(&L)\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "終了(&X)\tEsc", IDM_VIEWERWEB_FILE_EXIT
+    END
+    POPUP "検索(&S)"
+    BEGIN
+        MENUITEM "探す(&F)...\tCtrl+F", IDM_VIEWERWEB_SEARCH_FIND
+        MENUITEM "次を探す(&N)\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
+        MENUITEM "前を検索(&P)\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
+    END
+    POPUP "表示(&V)"
+    BEGIN
+        MENUITEM "ズームイン(&I)\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
+        MENUITEM "ズームアウト(&O)\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
+        MENUITEM "ズームリセット(&R)\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
+        MENUITEM SEPARATOR
+        MENUITEM "Toggle 開発ツール(&D)\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
+    END
+    POPUP "ツール(&T)"
+    BEGIN
+        MENUITEM "URL をコピー(&U)\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
+        MENUITEM "ブラウザーで開く(&B)\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM SEPARATOR
+        MENUITEM "すべて展開 (JSON/JSONL)(&E)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
+        MENUITEM "すべて折りたたむ (JSON/JSONL)(&C)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL
+        MENUITEM SEPARATOR
+        MENUITEM "マークダウンソースの切り替え(&S)\tCtrl+`", IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERWEB_NAME "ウェブビューアー"
+    IDS_VIEWERWEB_DESCRIPTION "HTML および PDF ファイル用の WebView2 ベースのビューアー。"
+
+    IDS_VIEWERJSON_NAME "JSON ビューアー"
+    IDS_VIEWERJSON_DESCRIPTION "折りたたみ機能と構文ハイライト機能を備えた WebView2 ベースの JSON/JSON5/JSONL ビューアー。"
+
+    IDS_VIEWERMARKDOWN_NAME "マークダウンビューアー"
+    IDS_VIEWERMARKDOWN_DESCRIPTION "構文強調表示を備えた WebView2 ベースの Markdown ビューアー。"
+
+    IDS_VIEWERWEB_ERROR_TITLE "Web ビューアー"
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING "Microsoft Edge WebView2 ランタイムがインストールされていません。"
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED "WebView2の初期化に失敗しました。"
+    IDS_VIEWERWEB_ERROR_BUILD_FILE_URL "ファイル URL の作成に失敗しました。"
+    IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT "HTML ドキュメントの作成に失敗しました。"
+    IDS_VIEWERWEB_ERROR_NAVIGATE_TO_STRING_FAILED_FMT "NavigateToString が失敗しました (hr=0x{0:08X})。"
+    IDS_VIEWERWEB_ERROR_NAVIGATE_FAILED_FMT "ナビゲートに失敗しました (hr=0x{0:08X})。"
+    IDS_VIEWERWEB_ERROR_FILE_SYSTEM_UNAVAILABLE "ファイル システムが使用できません。"
+    IDS_VIEWERWEB_ERROR_NO_FILE_IO "アクティブなファイル システムはファイル I/O をサポートしていません。"
+    IDS_VIEWERWEB_ERROR_OPEN_FOR_VIEWING_FAILED "表示するファイルを開けませんでした。"
+    IDS_VIEWERWEB_STATUS_LOADING "読み込み中..."
+    IDS_VIEWERWEB_ERROR_GET_TEMP_FOLDER_FAILED "一時フォルダーの取得に失敗しました。"
+    IDS_VIEWERWEB_ERROR_CREATE_TEMP_FILE_FAILED "一時ファイルの作成に失敗しました。"
+    IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED "一時ファイルの書き込みに失敗しました。"
+    IDS_VIEWERWEB_ERROR_READ_FILE_FAILED "ファイルの読み込みに失敗しました。"
+    IDS_VIEWERWEB_ERROR_READ_FILE_SIZE_FAILED "ファイルサイズの読み込みに失敗しました。"
+    IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT "ファイルが大きすぎます ({0})。制限は {1} です。"
+    IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED "JSON/JSON5/JSONL ドキュメントの解析に失敗しました。"
+    IDS_VIEWERWEB_ERROR_FORMAT_JSON_FAILED "JSON/JSONL ドキュメントのフォーマットに失敗しました。"
+    IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED "名前を付けて保存できませんでした。"
+    IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO "名前を付けて保存に失敗しました (ファイル システム I/O はサポートされていません)。"
+    IDS_VIEWERWEB_ERROR_SAVE_AS_OPEN_FAILED "名前を付けて保存に失敗しました (ファイルを開けません)。"
+    IDS_VIEWERWEB_ERROR_SAVE_AS_SEEK_FAILED "名前を付けて保存に失敗しました (シークに失敗しました)。"
+    IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED "名前を付けて保存に失敗しました (読み取りに失敗しました)。"
+    IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED "名前を付けて保存に失敗しました (書き込みに失敗しました)。"
+    IDS_VIEWERWEB_ERROR_OPEN_BROWSER_FAILED "ブラウザーで開けませんでした。"
+    IDS_VIEWERWEB_WARNING_DEVTOOLS_DISABLED "DevTools はプラグイン設定で無効になっています。"
+    IDS_VIEWERWEB_PROMPT_OPEN_TEXT_VIEWER_FMT "{0} 代わりにテキスト ビューアーで開きますか?"
+    IDS_VIEWERWEB_ERROR_OPEN_TEXT_VIEWER_FAILED "テキスト ビューアーで開くことができませんでした。"
+END

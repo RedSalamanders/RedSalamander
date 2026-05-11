@@ -1412,18 +1412,12 @@ HRESULT PersistInitialVolumeSeed(
     if (options.persistentStoreKind == PersistentStoreKind::Sqlite && snapshotMissingOnStart)
     {
         const HRESULT sqliteHr = MirrorVolumeToConfiguredSqliteStore(volume, options, outSqliteStoreChanged);
-        if (SUCCEEDED(sqliteHr))
+        if (FAILED(sqliteHr))
         {
-            // Skip the compatibility snapshot when the initial sqlite seed succeeded.
-            stats.snapshotSaved = false;
-            stats.snapshotPath.clear();
-            stats.snapshotFileBytes = 0u;
-            return S_OK;
+            Debug::Warning(L"LocalSearchIndexCore: initial SQLite sidecar mirror failed for root='{}'. hr=0x{:08X}",
+                           volume.normalizedRootPath,
+                           static_cast<unsigned long>(sqliteHr));
         }
-
-        Debug::Warning(L"LocalSearchIndexCore: initial SQLite seed fallback to snapshot for root='{}'. hr=0x{:08X}",
-                       volume.normalizedRootPath,
-                       static_cast<unsigned long>(sqliteHr));
     }
 
     return SaveSnapshot(volume, stats);

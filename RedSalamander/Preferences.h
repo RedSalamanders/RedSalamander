@@ -52,16 +52,32 @@ enum class PreferencesPluginsDebugFocusTarget : uint8_t
 enum class PreferencesViewersDebugFocusTarget : uint8_t
 {
     None = 0u,
+    Tabs,
     SearchField,
     MappingsGrid,
-    ExtensionField,
-    ViewerCombo,
+    MatchKindCombo,
+    MatchValueField,
+    ComputerField,
+    PrimaryActionCombo,
+    AlternateActionCombo,
+    EditNewActionCombo,
+    TestFileField,
     SaveButton,
     RemoveButton,
     ResetButton,
     ActionsGrid,
     ActionIdField,
-    TestFileField,
+    ActionNameField,
+    ActionKindCombo,
+    ActionEnabledCheckbox,
+    PluginIdField,
+    ExecutableField,
+    ArgumentsField,
+    WorkingDirectoryField,
+    AppliesToField,
+    ComputersField,
+    ActionSaveButton,
+    ActionRemoveButton,
 };
 
 enum class PreferencesGeneralDebugFocusTarget : uint8_t
@@ -184,11 +200,23 @@ enum class PreferencesShellDebugFocusTarget : uint8_t
 
 struct PreferencesGridPointerDebugState
 {
-    uint64_t headerResizeDownCount = 0u;
-    uint64_t resizeMoveCount       = 0u;
-    bool resizeActive              = false;
-    float lastResizeDeltaDip       = 0.0f;
-    float lastResizeWidthDip       = 0.0f;
+    uint64_t headerResizeDownCount                    = 0u;
+    uint64_t resizeMoveCount                          = 0u;
+    bool resizeActive                                 = false;
+    float lastResizeDeltaDip                          = 0.0f;
+    float lastResizeWidthDip                          = 0.0f;
+    bool pressedHeaderActive                          = false;
+    size_t pressedHeaderColumn                        = 0u;
+    bool reorderActive                                = false;
+    size_t reorderColumn                              = 0u;
+    size_t reorderTargetDisplayIndex                  = 0u;
+    uint64_t headerReorderStartCount                  = 0u;
+    uint64_t headerReorderCommitCount                 = 0u;
+    uint64_t headerReorderNoOpCount                   = 0u;
+    size_t lastHeaderReorderColumn                    = 0u;
+    size_t lastHeaderReorderFromDisplayIndex          = 0u;
+    size_t lastHeaderReorderRawTargetDisplayIndex     = 0u;
+    size_t lastHeaderReorderNormalizedTargetDisplayIndex = 0u;
 };
 
 struct PreferencesKeyboardDebugSnapshot
@@ -201,6 +229,7 @@ struct PreferencesKeyboardDebugSnapshot
     std::wstring keyboardSearchText;
     std::wstring keyboardSelectedCommandIdText;
     std::wstring keyboardSelectedChordText;
+    std::wstring keyboardListColumnLayoutText;
     PreferencesKeyboardDebugFocusTarget keyboardFocusTarget = PreferencesKeyboardDebugFocusTarget::None;
     bool keyboardCaptureActive                              = false;
     size_t visibleCurrentPageChildWindowCount               = 0u;
@@ -212,6 +241,8 @@ struct PreferencesDebugSnapshot
     bool categoryTreeUsesDxUiHost         = false;
     bool shellUsesDxUiHost                = false;
     bool pageHostUsesDxUiHost             = false;
+    bool pageHostDxContentRootUsesScrollPanel = false;
+    bool pageHostDxInternalScrollbarEnabled   = false;
     size_t themesListRowCount             = 0u;
     size_t themesListVisibleRowCount      = 0u;
     size_t themesListVisibleColumnCount   = 0u;
@@ -271,6 +302,11 @@ struct PreferencesDebugSnapshot
     PreferencesViewersDebugFocusTarget viewersFocusTarget = PreferencesViewersDebugFocusTarget::None;
     size_t editorsActionCount                            = 0u;
     size_t editorsAssociationRowCount                    = 0u;
+    size_t editorsAssociationVisibleRowCount             = 0u;
+    size_t editorsAssociationVisibleColumnCount          = 0u;
+    size_t editorsAssociationVisibleCellCount            = 0u;
+    bool editorsAssociationHasVerticalScrollbar          = false;
+    float editorsAssociationVerticalScrollDip            = 0.0f;
     size_t editorsActionRowCount                         = 0u;
     std::wstring editorsPrimaryActionIdText;
     std::wstring editorsAlternateActionIdText;
@@ -289,6 +325,7 @@ struct PreferencesDebugSnapshot
     uint64_t keyboardListResizeFailureCount               = 0u;
     std::wstring keyboardSearchText;
     std::wstring keyboardHintText;
+    std::wstring keyboardListColumnLayoutText;
     PreferencesKeyboardDebugFocusTarget keyboardFocusTarget = PreferencesKeyboardDebugFocusTarget::None;
     bool keyboardCaptureActive                              = false;
     size_t pluginsMainListRowCount                          = 0u;
@@ -348,8 +385,63 @@ struct PreferencesDebugSnapshot
     size_t categoryTreeSelectedVisibleIndex               = 0u;
     float categoryTreeVerticalScrollDip                   = 0.0f;
     bool pageHostShowsVerticalScroll                      = false;
+    bool pageHostHasNativeVerticalScroll                  = false;
+    int categoryTreeTopPx                                 = 0;
+    int categoryTreeTopClientPx                           = 0;
+    int categoryTreeBottomClientPx                        = 0;
+    int categoryTreeBottomGapPx                           = 0;
+    int dialogClientBottomPx                              = 0;
+    int pageHostTopPx                                     = 0;
+    int shellHostTopPx                                    = 0;
+    int shellHostClientWidthPx                            = 0;
+    int shellHostClientHeightPx                           = 0;
+    RECT shellOkButtonBoundsPx{};
+    RECT shellCancelButtonBoundsPx{};
+    RECT shellApplyButtonBoundsPx{};
+    bool shellFooterButtonsInsideHost                     = false;
+    bool shellFooterButtonsInsideClip                     = false;
+    bool shellOkButtonInteriorSampled                     = false;
+    bool shellOkButtonInteriorLooksPainted                = false;
+    uint32_t shellOkButtonInteriorBgra                    = 0u;
+    bool shellFooterBackgroundSampled                     = false;
+    bool shellFooterBackgroundLooksThemed                 = false;
+    uint32_t shellFooterBackgroundBgra                    = 0u;
+    RECT pageHostDxScrollbarThumbHitRectPx{};
+    bool pageHostDxHostAttachedToPageHost                 = false;
+    bool pageHostDxThumbCenterHitAnyControl               = false;
+    bool pageHostDxThumbCenterHitScrollPanel              = false;
+    int pageHostRightmostCardRightPx                      = 0;
+    int pageHostScrollbarTrackLeftPx                      = 0;
+    int pageHostCardToScrollbarGapPx                      = 0;
+    int pageHostDxScrollOffsetPx                         = 0;
     int pageScrollY                                       = 0;
     int pageScrollMaxY                                    = 0;
+    bool pageHostLastWheelRouteSeen                       = false;
+    bool pageHostLastWheelRouteForwarded                  = false;
+    bool pageHostLastWheelRouteTargetWasPageHost          = false;
+    bool pageHostLastWheelRouteTargetWasCategoryTree      = false;
+    bool pageHostLastWheelRouteTargetHadVerticalScroll    = false;
+    bool pageHostLastWheelWindowFromPointWasPageHost      = false;
+    bool pageHostLastWheelWindowFromPointWasCategoryTree  = false;
+    bool pageHostLastWheelWndProcSeen                     = false;
+    bool pageHostLastWheelDxHandled                       = false;
+    bool pageHostLastWheelFallbackCalled                  = false;
+    bool pageHostLastWheelFallbackHandled                 = false;
+    int pageHostLastWheelDelta                            = 0;
+    int pageHostLastWheelClientX                          = 0;
+    int pageHostLastWheelClientY                          = 0;
+    int pageHostLastWheelBeforeY                          = 0;
+    int pageHostLastWheelBeforeMaxY                       = 0;
+    int pageHostLastWheelAfterY                           = 0;
+    int pageHostLastWheelAfterMaxY                        = 0;
+    uint64_t pageHostScrollRequestCount                   = 0u;
+    uint64_t pageHostScrollCoalescedRequestCount          = 0u;
+    uint64_t pageHostScrollApplyCount                     = 0u;
+    uint64_t pageHostScrollMovedChildCountTotal           = 0u;
+    uint64_t pageHostDxScrollMovedControlCountTotal       = 0u;
+    uint64_t pageHostDxScrollLastMovedControlCount        = 0u;
+    uint64_t pageHostScrollLastApplyUs                    = 0u;
+    bool pageHostScrollApplyPending                       = false;
     size_t visibleLegacyTreeViewCount                     = 0u;
     size_t visibleLegacyShellStaticCount                  = 0u;
     size_t visibleLegacyFooterButtonCount                 = 0u;
@@ -371,6 +463,7 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugSelectPreferencesPluginsTreeChild(size_t childIndex) noexcept;
 [[nodiscard]] bool DebugScrollPreferencesCategoryTreeByWheelDelta(int wheelDelta) noexcept;
 [[nodiscard]] bool DebugScrollPreferencesCategoryTreeByWheelDetents(int detents) noexcept;
+[[nodiscard]] bool DebugDragPreferencesPageHostDxScrollbarThumb(int distancePx, int moveCount) noexcept;
 [[nodiscard]] bool DebugSelectPreferencesPluginsMainListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugClickPreferencesPluginsMainListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugFindPreferencesPluginsToggleableMainListRow(size_t& outRowIndex, bool& outEnabled) noexcept;
@@ -399,6 +492,11 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugSelectPreferencesViewersListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugGetPreferencesViewersListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetPreferencesViewersListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
+[[nodiscard]] bool DebugHitTestPreferencesViewersListClientPoint(
+    POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) noexcept;
+[[nodiscard]] bool DebugGetPreferencesViewersListPointerState(PreferencesGridPointerDebugState& outState) noexcept;
+[[nodiscard]] bool DebugGetPreferencesViewersTabClientRect(size_t tabIndex, RECT& outRect) noexcept;
+[[nodiscard]] bool DebugGetPreferencesViewersSelectedTabIndex(size_t& outIndex) noexcept;
 [[nodiscard]] bool DebugSelectPreferencesThemesListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugGetPreferencesThemesListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetPreferencesThemesListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;

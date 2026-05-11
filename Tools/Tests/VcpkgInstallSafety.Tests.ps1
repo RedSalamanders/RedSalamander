@@ -48,4 +48,23 @@ Describe 'Vcpkg install safety helper' {
         Assert-ThrowsTerminatingError { Resolve-RSVcpkgSafeChildPath -Root $root -Child '..\outside' -Description 'test triplet' }
         Assert-ThrowsTerminatingError { Resolve-RSVcpkgSafeChildPath -Root $root -Child '..\..' -Description 'test triplet' }
     }
+
+    It 'merges a single source file while StrictMode is active' {
+        $root = Join-Path ([System.IO.Path]::GetTempPath()) "rs-vcpkg-single-file-merge-$([System.Guid]::NewGuid())"
+        try {
+            $src = Join-Path $root 'src\test-triplet'
+            $dst = Join-Path $root 'dst\test-triplet'
+            New-Item -ItemType Directory -Path (Join-Path $src 'include') -Force | Out-Null
+            New-Item -ItemType Directory -Path $dst -Force | Out-Null
+            [System.IO.File]::WriteAllText((Join-Path $src 'include\header.h'), '// v1')
+
+            $result = Merge-RSVcpkgTripletSafe -SourcePath $src -DestinationPath $dst -TripletName 'test-triplet'
+
+            $result.FilesTotal | Should Be 1
+            $result.FilesCopied | Should Be 1
+            Test-Path -LiteralPath (Join-Path $dst 'include\header.h') | Should Be $true
+        } finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
 }

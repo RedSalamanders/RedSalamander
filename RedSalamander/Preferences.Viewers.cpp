@@ -89,14 +89,35 @@ bool ViewersPane::DebugUsesDxUiTypographyMetrics() const noexcept
     return _page.DebugUsesDxUiTypographyMetrics();
 }
 
-bool ViewersPane::DebugGetListRowClientRect(const size_t rowIndex, RECT& outRect) const noexcept
+bool ViewersPane::DebugGetListRowClientRect(const size_t rowIndex, RECT& outRect) noexcept
 {
     return _page.DebugGetAssociationRowClientRect(rowIndex, outRect);
 }
 
-bool ViewersPane::DebugGetListHeaderClientRect(const size_t columnIndex, RECT& outRect) const noexcept
+bool ViewersPane::DebugGetListHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
 {
     return _page.DebugGetAssociationHeaderClientRect(columnIndex, outRect);
+}
+
+bool ViewersPane::DebugHitTestListClientPoint(
+    const POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) const noexcept
+{
+    return _page.DebugHitTestAssociationClientPoint(clientPoint, outZone, outColumnIndex, outHeaderResize, outHostHitsList);
+}
+
+bool ViewersPane::DebugGetListPointerState(PreferencesGridPointerDebugState& outState) const noexcept
+{
+    return _page.DebugGetAssociationPointerState(outState);
+}
+
+bool ViewersPane::DebugGetTabClientRect(const size_t tabIndex, RECT& outRect) const noexcept
+{
+    return _page.DebugGetTabClientRect(tabIndex, outRect);
+}
+
+bool ViewersPane::DebugGetSelectedTabIndex(size_t& outIndex) const noexcept
+{
+    return _page.DebugGetSelectedTabIndex(outIndex);
 }
 
 bool ViewersPane::DebugSelectListRow(const size_t rowIndex) noexcept

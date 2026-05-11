@@ -1,0 +1,11 @@
+#pragma code_page(65001)
+#include "../../FileSystem7zResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEM7Z_NAME "7-ジップ"
+    IDS_FILESYSTEM7Z_DESCRIPTION "アーカイブ ファイルを仮想ファイル システムとして参照します。"
+END

@@ -56,6 +56,11 @@ size_t EditorsPane::DebugAssociationRowCount() const noexcept
     return _page.DebugAssociationRowCount();
 }
 
+RedSalamander::DxUi::GridVisibleWorkMetrics EditorsPane::DebugAssociationVisibleWorkMetrics() const noexcept
+{
+    return _page.DebugAssociationVisibleWorkMetrics();
+}
+
 size_t EditorsPane::DebugActionRowCount() const noexcept
 {
     return _page.DebugActionRowCount();

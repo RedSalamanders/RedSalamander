@@ -45,6 +45,7 @@
 #include "SettingsStore.h"
 
 #include "Helpers.h"
+#include "ThemeDefinitionIo.h"
 #include "Version.h"
 
 namespace
@@ -7150,40 +7151,19 @@ HRESULT LoadThemeDefinitionsFromDirectory(const std::filesystem::path& directory
             continue;
         }
 
-        yyjson_read_err err{};
-        yyjson_doc* doc = yyjson_read_opts(bytes.data(), bytes.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
-        if (! doc)
-        {
-            LogJsonParseError(L"theme file", path, err);
-            continue;
-        }
-
-        auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
-
-        yyjson_val* root = yyjson_doc_get_root(doc);
-        if (! root || ! yyjson_is_obj(root))
-        {
-            Debug::Error(L"Failed to get root of theme file {}", path.c_str());
-            continue;
-        }
-
-        const auto idText   = GetString(root, "id");
-        const auto nameText = GetString(root, "name");
-        const auto baseText = GetString(root, "baseThemeId");
-        yyjson_val* colors  = GetObj(root, "colors");
-        if (! idText || ! nameText || ! baseText || ! colors)
-        {
-            Debug::Error(L"Failed to get theme properties from file {}", path.c_str());
-            continue;
-        }
-
         ThemeDefinition def;
-        def.id          = Utf16FromUtf8(*idText);
-        def.name        = Utf16FromUtf8(*nameText);
-        def.baseThemeId = Utf16FromUtf8(*baseText);
-        if (def.id.empty() || def.name.empty() || def.baseThemeId.empty())
+        ThemeDefinitionIoError parseError = ThemeDefinitionIoError::None;
+        std::wstring parseMessage;
+        if (FAILED(ParseThemeDefinitionJson5(bytes, def, &parseError, &parseMessage)))
         {
-            Debug::Error(L"Invalid theme properties in file {}", path.c_str());
+            if (! parseMessage.empty())
+            {
+                Debug::Error(L"Invalid theme definition in file {}: {}", path.c_str(), parseMessage.c_str());
+            }
+            else
+            {
+                Debug::Error(L"Invalid theme definition in file {} error={}", path.c_str(), static_cast<int>(parseError));
+            }
             continue;
         }
 
@@ -7192,43 +7172,6 @@ HRESULT LoadThemeDefinitionsFromDirectory(const std::filesystem::path& directory
         {
             Debug::Error(L"Duplicate theme ID '{}' in file {}", def.id.c_str(), path.c_str());
             continue;
-        }
-
-        yyjson_val* colorKey = nullptr;
-        yyjson_val* colorVal = nullptr;
-        yyjson_obj_iter iter = yyjson_obj_iter_with(colors);
-        while ((colorKey = yyjson_obj_iter_next(&iter)))
-        {
-            colorVal = yyjson_obj_iter_get_val(colorKey);
-            if (! colorVal || ! yyjson_is_str(colorKey) || ! yyjson_is_str(colorVal))
-            {
-                Debug::Error(L"Invalid color entry in theme file {}", path.c_str());
-                continue;
-            }
-
-            const char* keyStr = yyjson_get_str(colorKey);
-            const char* valStr = yyjson_get_str(colorVal);
-            if (! keyStr || ! valStr)
-            {
-                Debug::Error(L"Failed to get color entry in theme file {}", path.c_str());
-                continue;
-            }
-
-            uint32_t argb = 0;
-            if (! TryParseColorUtf8(valStr, argb))
-            {
-                Debug::Error(L"Failed to parse color value '{}' in theme file {}", Utf16FromUtf8(valStr).c_str(), path.c_str());
-                continue;
-            }
-
-            const std::wstring keyWide = Utf16FromUtf8(keyStr);
-            if (keyWide.empty())
-            {
-                Debug::Error(L"Invalid color key in theme file {}", path.c_str());
-                continue;
-            }
-
-            def.colors[keyWide] = argb;
         }
 
         out.push_back(std::move(def));

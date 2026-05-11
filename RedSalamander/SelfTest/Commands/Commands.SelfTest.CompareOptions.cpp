@@ -8,6 +8,33 @@
     return (hwnd && IsWindowVisible(hwnd) != FALSE) ? hwnd : nullptr;
 }
 
+[[nodiscard]] bool PrepareCompareDirectoriesPaneRoots(const std::filesystem::path& leftFolder,
+                                                      const std::filesystem::path& rightFolder,
+                                                      CaseState& state,
+                                                      std::wstring_view context) noexcept
+{
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Right);
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  std::format(L"Failed to select the built-in file-system plugin for the left pane before {}.", context));
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  std::format(L"Failed to select the built-in file-system plugin for the right pane before {}.", context));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftFolder, SelfTest::Scale(std::chrono::milliseconds{5000})),
+                  std::format(L"Left pane did not settle on the Compare Directories selftest folder before {}.", context));
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightFolder, SelfTest::Scale(std::chrono::milliseconds{5000})),
+                  std::format(L"Right pane did not settle on the Compare Directories selftest folder before {}.", context));
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestCompareDirectoriesOptionsStaticsUseDxUi(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -65,8 +92,10 @@
 
     const auto openCompareWindow = [&](std::wstring_view context) noexcept
     {
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+        if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, context))
+        {
+            return HWND{};
+        }
 
         SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
         compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(2000ms));
@@ -293,8 +322,10 @@
     {
         closeCompareWindow();
 
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+        if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, std::format(L"cycle {}", cycle)))
+        {
+            return false;
+        }
 
         SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
         const HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(3000ms));
@@ -452,8 +483,10 @@
         return false;
     }
 
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+    if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, L"live DX body interaction validation"))
+    {
+        return false;
+    }
 
     HWND compare                 = nullptr;
     const auto openCompareWindow = [&]() noexcept
@@ -919,8 +952,10 @@
         return false;
     }
 
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+    if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, L"options theme-cycle validation"))
+    {
+        return false;
+    }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
     const HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(3000ms));
@@ -1213,8 +1248,10 @@
         return false;
     }
 
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+    if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, L"pointer-toggle validation"))
+    {
+        return false;
+    }
 
     HWND compare = nullptr;
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
@@ -1360,8 +1397,10 @@
         return false;
     }
 
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+    if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, L"DX options tab-traversal validation"))
+    {
+        return false;
+    }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
     const HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(3000ms));
@@ -1481,6 +1520,9 @@
 
     const auto sendTab = [&](const bool reverse, const CompareDirectoriesOptionsDebugFocusTarget expectedTarget, std::wstring_view label) noexcept
     {
+        CompareDirectoriesOptionsDebugSnapshot beforeSnapshot{};
+        static_cast<void>(DebugGetCompareDirectoriesOptionsSnapshot(beforeSnapshot));
+
         HWND targetWindow = GetFocus();
         if (! targetWindow || IsWindow(targetWindow) == FALSE)
         {
@@ -1493,6 +1535,17 @@
             return;
         }
 
+        std::array<wchar_t, 128> targetClass{};
+        static_cast<void>(GetClassNameW(targetWindow, targetClass.data(), static_cast<int>(targetClass.size())));
+        Trace(std::format(L"compare_options_tab: label='{}' reverse={} target=0x{:X} class='{}' beforeFocus={} beforeScroll={}/{}",
+                          label,
+                          reverse,
+                          reinterpret_cast<uintptr_t>(targetWindow),
+                          std::wstring_view(targetClass.data()),
+                          static_cast<int>(beforeSnapshot.focusTarget),
+                          beforeSnapshot.bodyScrollOffset,
+                          beforeSnapshot.bodyScrollMax));
+
         if (reverse)
         {
             SendMessageW(targetWindow, WM_KEYDOWN, VK_SHIFT, 0);
@@ -1504,27 +1557,41 @@
             SendMessageW(targetWindow, WM_KEYUP, VK_SHIFT, 0);
         }
 
-        state.Require(waitForOptionsSnapshot(
-                          [&](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
+        const bool reachedExpectedTarget = waitForOptionsSnapshot(
+            [&](const CompareDirectoriesOptionsDebugSnapshot& value) noexcept
         {
             return value.focusTarget == expectedTarget && value.optionsDialogVisible && value.optionsUsesDxUiStatics && value.optionsUsesDxUiButtons &&
                    value.optionsUsesDxUiToggles && value.optionsUsesDxUiEdits && value.visibleLegacyStaticCount == 0u &&
                    value.visibleLegacyFooterButtonCount == 0u && value.visibleLegacyToggleCount == 0u && value.visibleLegacyEditCount == 0u &&
                    value.visibleBodyRenderedDxHostCount == 1u && value.bodyDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
-                      std::format(L"Compare Directories options {} focus target not reached during tab traversal. actualFocus={} "
-                                  L"visibleLegacyEdits={} visibleLegacyToggles={} visibleDxBodyCards={} optionsVisible={} usesDxStatics={} "
-                                  L"usesDxToggles={} usesDxEdits={}.",
-                                  label,
-                                  static_cast<int>(snapshot.focusTarget),
-                                  snapshot.visibleLegacyEditCount,
-                                  snapshot.visibleLegacyToggleCount,
-                                  snapshot.visibleDxBodyCardCount,
-                                  snapshot.optionsDialogVisible,
-                                  snapshot.optionsUsesDxUiStatics,
-                                  snapshot.optionsUsesDxUiToggles,
-                                  snapshot.optionsUsesDxUiEdits));
+            snapshot);
+        if (! reachedExpectedTarget)
+        {
+            state.Require(false,
+                          std::format(L"Compare Directories options {} focus target not reached during tab traversal. actualFocus={} "
+                                      L"visibleLegacyEdits={} visibleLegacyToggles={} visibleDxBodyCards={} optionsVisible={} usesDxStatics={} "
+                                      L"usesDxToggles={} usesDxEdits={} routedTo=0x{:X} class='{}' beforeFocus={} scroll={}/{}.",
+                                      label,
+                                      static_cast<int>(snapshot.focusTarget),
+                                      snapshot.visibleLegacyEditCount,
+                                      snapshot.visibleLegacyToggleCount,
+                                      snapshot.visibleDxBodyCardCount,
+                                      snapshot.optionsDialogVisible,
+                                      snapshot.optionsUsesDxUiStatics,
+                                      snapshot.optionsUsesDxUiToggles,
+                                      snapshot.optionsUsesDxUiEdits,
+                                      reinterpret_cast<uintptr_t>(targetWindow),
+                                      std::wstring_view(targetClass.data()),
+                                      static_cast<int>(beforeSnapshot.focusTarget),
+                                      snapshot.bodyScrollOffset,
+                                      snapshot.bodyScrollMax));
+        }
+        Trace(std::format(L"compare_options_tab: label='{}' afterFocus={} afterScroll={}/{}",
+                          label,
+                          static_cast<int>(snapshot.focusTarget),
+                          snapshot.bodyScrollOffset,
+                          snapshot.bodyScrollMax));
     };
 
     const auto requireUsableTargetBounds =
@@ -1678,8 +1745,10 @@
         return false;
     }
 
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+    if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, L"options scroll-stability validation"))
+    {
+        return false;
+    }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
     const HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(3000ms));
@@ -1998,8 +2067,10 @@
 
     const auto runPass = [&](const bool accept, std::wstring_view label) noexcept
     {
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+        if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, label))
+        {
+            return;
+        }
 
         SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
         HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(3000ms));
@@ -2321,8 +2392,10 @@
         return false;
     }
 
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+    if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, L"access-key validation"))
+    {
+        return false;
+    }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
     const HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(3000ms));
@@ -2525,8 +2598,10 @@
         }
     });
 
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftFolder);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
+    if (! PrepareCompareDirectoriesPaneRoots(leftFolder, rightFolder, state, L"DX chrome validation"))
+    {
+        return false;
+    }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
     compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(3000ms));
@@ -2899,8 +2974,10 @@
 
         Trace(L"compare_progress_perf: dataset prepared");
 
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
-        g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
+        if (! PrepareCompareDirectoriesPaneRoots(leftRoot, rightRoot, state, L"the progress perf test"))
+        {
+            return false;
+        }
         Trace(L"compare_progress_perf: pane paths set");
 
         SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);

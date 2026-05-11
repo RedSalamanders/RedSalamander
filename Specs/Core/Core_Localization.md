@@ -17,6 +17,7 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
   - `FormatStringResource()`
   - `MessageBoxResource()`
 - Formatted resource strings use `std::format` syntax and MUST use positional placeholders such as `{0}` and `{1:08X}` so translators can reorder arguments. Bare `{}` and unindexed format specs such as `{:08X}` are forbidden in `.rc` resources.
+- Embedded/source resource strings MUST introduce placeholders in argument order (`{0}`, then `{1}`, then `{2}`, etc.) with no skipped indexes. The `FormatStringResource(...)` argument list MUST follow that same source-string order. Translated satellite strings MAY reorder placeholders for grammar, but they MUST use the same placeholder tokens as the source string; translations must not add, drop, duplicate, renumber, or change format specs such as `:L` or `:08X`.
 - If a formatted resource string has invalid `std::format` syntax, the helper returns an empty fallback string and logs the failing resource ID plus the format error detail once through diagnostics. `std::bad_alloc` remains fatal and must not be swallowed by the formatting fallback.
 - Command labels have two localized forms:
   - Full display names (`IDS_CMD_*`) for menus, Preferences, and shortcut lists.
@@ -30,6 +31,12 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
 - Satellite DLLs are named `<OwnerName>-<culture>.dll`, where `<OwnerName>` matches the owning executable or plugin DLL stem, for example `RedSalamander-fr-FR.dll`, `RedSalamanderMonitor-fr-FR.dll`, or `ViewerText-fr-FR.dll`.
 - Language resource projects output to `.build\<Platform>\<Configuration>\Lang\`. Normal executable and plugin binary output locations do not change.
 - Language resource projects must be resource-only DLLs and must not introduce executable entry points.
+
+## RedConfigure authoring
+
+`RedConfigure.exe` may generate satellite `.rc` files for a selected resource owner and culture. Generated files must keep resource text UTF-16/resource-compiler safe, use deterministic ordering, and preserve positional `std::format` placeholders. RedConfigure must block export when a target translation introduces bare `{}`, unindexed specs such as `{:08X}`, printf-style placeholders, or a placeholder set that does not match the source string exactly.
+
+Resource forms that RedConfigure can parse but cannot safely rewrite yet must remain visible as inventory and must not be written silently.
 
 ## Runtime resource lookup
 

@@ -1,0 +1,147 @@
+#pragma code_page(65001)
+#include "../../Resource.h"
+#include "../../../Common/Version.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+IDC_REDSALAMANDERMONITOR MENU
+BEGIN
+    POPUP "ファイル(&F)"
+    BEGIN
+        MENUITEM "新しい(&N)\tCtrl+N",                IDM_FILE_NEW
+        MENUITEM "開く(&O)...\tCtrl+O",            IDM_FILE_OPEN
+        MENUITEM "名前を付けて保存(&A)...",                 IDM_FILE_SAVE_AS
+        MENUITEM SEPARATOR
+        MENUITEM "終了(&X)",                       IDM_EXIT
+    END
+    POPUP "編集(&E)"
+    BEGIN
+        MENUITEM "コピー(&C)\tCtrl+C",               IDM_EDIT_COPY
+        MENUITEM SEPARATOR
+        MENUITEM "探す(&F)...\tCtrl+F",            IDM_EDIT_FIND
+        MENUITEM "次を探す(&N)\tF3",              IDM_EDIT_FIND_NEXT
+        MENUITEM "前を検索(&P)\tShift+F3",    IDM_EDIT_FIND_PREV
+    END
+    POPUP "表示(&V)"
+    BEGIN
+        MENUITEM "ツールバー(&T)",                    IDM_VIEW_TOOLBAR
+        MENUITEM "行番号(&L)",               IDM_VIEW_LINE_NUMBERS
+        MENUITEM SEPARATOR
+        POPUP "テーマ(&T)"
+        BEGIN
+            MENUITEM "ハイコントラスト（システム）(&C)",     IDM_VIEW_THEME_HIGH_CONTRAST, GRAYED
+            MENUITEM SEPARATOR
+            MENUITEM "システム(&S)",                     IDM_VIEW_THEME_SYSTEM
+            MENUITEM "ライト(&L)",                      IDM_VIEW_THEME_LIGHT
+            MENUITEM "暗い(&D)",                       IDM_VIEW_THEME_DARK
+            MENUITEM "レインボー(&R)",                    IDM_VIEW_THEME_RAINBOW
+            MENUITEM "ハイコントラスト（アプリ）(&C)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP
+        END
+    END
+    POPUP "オプション(&O)"
+    BEGIN
+        MENUITEM "常にトップに(&A)",              IDM_OPTION_TOP
+        MENUITEM "自動スクロール(&S)\tEnd",           IDM_OPTION_AUTO_SCROLL
+        MENUITEM SEPARATOR
+        MENUITEM "プロセスID/スレッドIDを表示(&P)",  IDM_OPTION_ID
+        MENUITEM SEPARATOR
+        POPUP "アクティブフィルター(&F)"
+        BEGIN
+            MENUITEM "テキストを表示(&T)",              IDM_FILTER_TEXT, CHECKED
+            MENUITEM "エラーを表示(&E)",            IDM_FILTER_ERROR, CHECKED
+            MENUITEM "警告を表示する(&W)",          IDM_FILTER_WARNING, CHECKED
+            MENUITEM "番組情報(&I)",              IDM_FILTER_INFO, CHECKED
+            MENUITEM "パフォーマンスの表示(&P)",              IDM_FILTER_PERF, CHECKED
+            MENUITEM "デバッグを表示(&D)",             IDM_FILTER_DEBUG, CHECKED
+            MENUITEM SEPARATOR
+            MENUITEM "プリセット: エラーのみ",     IDM_FILTER_PRESET_ERRORS_ONLY
+            MENUITEM "プリセット: エラー+警告", IDM_FILTER_PRESET_ERRORS_WARNINGS
+            MENUITEM "プリセット: エラー+パフォーマンス+デバッグ", IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "プリセット: すべてのタイプ",       IDM_FILTER_PRESET_ALL
+        END
+    END
+    POPUP "ヘルプ(&H)"
+    BEGIN
+        MENUITEM "について(&A)...",                  IDM_ABOUT
+    END
+END
+
+IDD_ABOUTBOX DIALOGEX 0, 0, 260, 78
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "RedSalamanderMonitor について"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    ICON            IDI_REDSALAMANDERMONITOR,IDC_STATIC,14,14,21,20
+    LTEXT           "RedSalamanderMonitor",IDC_STATIC,42,14,180,8,SS_NOPREFIX
+    LTEXT           "",IDC_ABOUT_VERSION,42,27,205,18,SS_NOPREFIX
+    LTEXT           VERSINFO_COPYRIGHT,IDC_STATIC,42,47,205,8
+    DEFPUSHBUTTON   "OK",IDOK,203,57,50,14,WS_GROUP
+END
+
+IDD_MODAL_MESSAGE DIALOGEX 0, 0, 360, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "RedSalamander Monitor"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_MODAL_MESSAGE_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
+    DEFPUSHBUTTON   "",IDOK,303,142,50,14,WS_GROUP
+END
+
+IDD_MODAL_CONFIRM DIALOGEX 0, 0, 360, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "RedSalamander Monitor"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_MODAL_MESSAGE_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
+    DEFPUSHBUTTON   "",IDYES,247,142,50,14,WS_GROUP
+    PUSHBUTTON      "",IDNO,303,142,50,14
+END
+
+STRINGTABLE
+BEGIN
+    IDS_APP_TITLE           "RedSalamander Monitor"
+    IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) が実行されていません。 RedSalamander は潜在的なクラッシュに対処できません。 RedSalamander を再起動してください。"
+    IDS_CAPTION_ERROR "エラー"
+    IDS_CAPTION_OPEN "開く"
+    IDS_CAPTION_PRINT "印刷する"
+    IDS_CAPTION_ETW_WARNING "ETW リスナーの警告"
+    IDS_BTN_OK              "OK"
+    IDS_BTN_YES             "はい"
+    IDS_BTN_NO              "いいえ"
+    IDS_FIND_LABEL "検索:"
+    IDS_FIND_CASE_LABEL "ああ"
+    IDS_FIND_FROM_CURRENT_POSITION "現在の位置"
+    IDS_FIND_FROM_TOP "トップへ"
+    IDS_FIND_FROM_BOTTOM "下"
+    IDS_MSG_OPEN_FAILED_READ "ファイルの読み取りに失敗したか、ファイルが空です。"
+    IDS_MSG_CREATE_COLORTEXTVIEW_FAILED "ColorTextView の作成に失敗しました。"
+    IDS_MSG_INSTANCE_GUARD_FAILED "RedSalamander Monitor インスタンス ガードを作成できません。"
+    IDS_MSG_PRINT_NOT_IMPLEMENTED "印刷はまだ実装されていません。"
+    IDS_MSG_ETW_STARTED "ETW リスナーが正常に開始されました - リアルタイム イベント監視がアクティブです"
+    IDS_FMT_ETW_START_FAILED "ETW リスナーの起動に失敗しました: {0}"
+    IDS_MSG_ETW_ELEVATE_PROMPT "RedSalamander Monitor は、現在の権限で ETW リスナーを開始できませんでした。\r\n\r\n今すぐ管理者として再起動しますか?\r\n\r\n(リアルタイムの ETW 監視を行わずに続行するには、[いいえ] を選択してください。UAC プロンプトを回避するには、ユーザーを Performance Log Users グループに追加してサインアウト/サインインします。)"
+    IDS_FATAL_ERROR_CAPTION "RedSalamander Monitor - 致命的なエラー"
+    IDS_FATAL_EXCEPTION_FMT "RedSalamanderMonitor\r\n\r\n例外での致命的な例外: {0} (0x{1:08X})\r\n\r\nアプリケーションは終了します。"
+    IDS_FILE_FILTER_OPEN "テキスト ファイル (*.txt;*.log)\0*.txt;*.log\0すべてのファイル (*.*)\0*.*\0\0"
+    IDS_FILE_FILTER_SAVE "テキスト ファイル (*.txt)\0*.txt\0すべてのファイル (*.*)\0*.*\0\0"
+    IDS_FILE_DEFAULT_EXT_TXT "テキスト"
+    IDS_FILTER_TYPE_TEXT "テキスト"
+    IDS_FILTER_TYPE_ERROR "エラー"
+    IDS_FILTER_TYPE_WARNING "警告"
+    IDS_FILTER_TYPE_INFO "情報"
+    IDS_FILTER_TYPE_PERF "パフォーマンス"
+    IDS_FILTER_TYPE_DEBUG "デバッグ"
+    IDS_STATUS_FILTER_ALL "フィルター: すべて"
+    IDS_STATUS_FILTER_NONE "フィルター: なし"
+    IDS_STATUS_FILTER_ONE_FMT "フィルタ: {0}"
+    IDS_STATUS_FILTER_MULTI_PREFIX "フィルター:"
+    IDS_STATUS_VISIBLE_FMT "表示可能: {0:L}"
+    IDS_STATUS_TOTAL_FMT "合計: {0:L}"
+    IDS_STATUS_ETW_RECEIVED_FMT "ETW 受信: {0:L}"
+    IDS_STATUS_FILTER_MULTI_JOINER "+"
+    IDS_STATUS_AUTOSCROLL_ON "自動: オン"
+    IDS_STATUS_AUTOSCROLL_OFF "自動: オフ"
+    IDS_SAMPLE_TEXT "ColorTextView 正常に初期化されました!\r\nこれは右側のパネルです。"
+    IDC_REDSALAMANDERMONITOR "レッドサラマンダーモニター"
+END

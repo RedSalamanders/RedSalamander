@@ -128,6 +128,14 @@
     <ClInclude Include="FileSystemDummyResources.h" />
     <ResourceCompile Include="FileSystemDummyResources.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Lang\ja-JP\FileSystemDummy-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{5454557d-f021-56c9-b71d-cda1d46de1cf}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

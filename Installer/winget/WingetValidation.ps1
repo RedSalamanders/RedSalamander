@@ -63,15 +63,21 @@ function Test-RSLegacyWingetSchemaHeaderWarning {
 function Invoke-RSWingetManifestValidation {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ManifestPath
+        [string]$ManifestPath,
+
+        [string]$WingetCommand = 'winget'
     )
 
     if (-not (Test-Path $ManifestPath)) {
         throw "Winget manifest path not found: $ManifestPath"
     }
 
+    if (-not (Get-Command -Name $WingetCommand -ErrorAction SilentlyContinue)) {
+        throw "winget executable not found: $WingetCommand"
+    }
+
     Write-Host "winget.exe version:"
-    $wingetVersion = (& winget --version).Trim()
+    $wingetVersion = (& $WingetCommand --version).Trim()
     Write-Host $wingetVersion
 
     $hasNativeErrorPreference = Test-Path variable:PSNativeCommandUseErrorActionPreference
@@ -82,7 +88,7 @@ function Invoke-RSWingetManifestValidation {
             $PSNativeCommandUseErrorActionPreference = $false
         }
 
-        $validationOutput = @(& winget validate --manifest $ManifestPath 2>&1 | ForEach-Object { $_.ToString() })
+        $validationOutput = @(& $WingetCommand validate --manifest $ManifestPath 2>&1 | ForEach-Object { $_.ToString() })
         $validationExitCode = $LASTEXITCODE
     }
     finally {

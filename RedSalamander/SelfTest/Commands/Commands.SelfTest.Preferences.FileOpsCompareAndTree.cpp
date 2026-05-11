@@ -1,3 +1,80 @@
+namespace
+{
+
+[[nodiscard]] uint64_t CountPerfRowsWithMetric(std::string_view metricText, bool exactMetricName) noexcept
+{
+    const std::filesystem::path path = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    if (path.empty() || metricText.empty())
+    {
+        return 0u;
+    }
+
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return 0u;
+    }
+
+    std::string needle{"\"metric\":\""};
+    needle.append(metricText);
+    if (exactMetricName)
+    {
+        needle.push_back('"');
+    }
+
+    uint64_t count = 0u;
+    std::string line;
+    while (std::getline(input, line))
+    {
+        if (line.find(needle) != std::string::npos)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+[[nodiscard]] uint64_t CountPerfRowsContaining(std::string_view text) noexcept
+{
+    const std::filesystem::path path = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    if (path.empty() || text.empty())
+    {
+        return 0u;
+    }
+
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return 0u;
+    }
+
+    uint64_t count = 0u;
+    std::string line;
+    while (std::getline(input, line))
+    {
+        if (line.find(text) != std::string::npos)
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
+{
+    const uint64_t rawIconLockWaitRows = CountPerfRowsWithMetric("iconcache.lock_wait_us", true);
+    const uint64_t rawIconLockHoldRows = CountPerfRowsWithMetric("iconcache.lock_hold_us", true);
+    state.Require(rawIconLockWaitRows == 0u && rawIconLockHoldRows == 0u,
+                  std::format(L"Perf runs should not emit raw per-lock IconCache rows; waitRows={} holdRows={}.",
+                              rawIconLockWaitRows,
+                              rawIconLockHoldRows));
+    const uint64_t shellAssociationRows =
+        CountPerfRowsContaining("\"metric\":\"iconcache.shgetfileinfo_us\",\"detail\":\"association\"");
+    state.Require(shellAssociationRows > 0u,
+                  std::format(L"IconCache SHGetFileInfo perf rows should identify association lookups; saw {} association detail row(s).",
+                              shellAssociationRows));
+}
+
 [[nodiscard]] bool TestPreferencesDialogFileOperationsPageUsesDxUiControls(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -43,15 +120,9 @@
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_END, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
+                      std::format(L"Failed to select the Preferences File Operations category during {}.", context));
         PumpPendingMessages();
-        for (int remainingUps = 0; remainingUps < 3; ++remainingUps)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
-            PumpPendingMessages();
-        }
 
         PreferencesDebugSnapshot snapshot{};
         state.Require(DebugGetPreferencesDialogSnapshot(snapshot), std::format(L"Failed to capture Preferences snapshot during {}.", context));
@@ -261,15 +332,9 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for File Operations live interaction test.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
+                      L"Failed to select the Preferences File Operations category for live interaction validation.");
         PumpPendingMessages();
-        for (int remainingUps = 0; remainingUps < 3; ++remainingUps)
-        {
-            SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-            SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
         { return value.currentCategory == kPrefCategoryFileOperations && value.currentPageDxHostResizeFailureCount == 0u; },
@@ -1105,15 +1170,9 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for File Operations tab-traversal validation.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
+                      L"Failed to select the Preferences File Operations category for custom-bandwidth validation.");
         PumpPendingMessages();
-        for (int remainingUps = 0; remainingUps < 3; ++remainingUps)
-        {
-            SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-            SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -1464,15 +1523,9 @@
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for File Operations round-trip test.");
     PumpPendingMessages();
 
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_END, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
+                  L"Failed to select the Preferences File Operations category before round-trip validation.");
     PumpPendingMessages();
-    for (int remainingUps = 0; remainingUps < 3; ++remainingUps)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-    }
 
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
@@ -1550,15 +1603,9 @@
         return false;
     }
 
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_END, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
+                  L"Failed to reselect the Preferences File Operations category after returning from General.");
     PumpPendingMessages();
-    for (int remainingUps = 0; remainingUps < 3; ++remainingUps)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-    }
 
     snapshot = {};
     state.Require(waitForSnapshot(
@@ -1657,15 +1704,9 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for File Operations custom-bandwidth test.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
+                      L"Failed to select the Preferences File Operations category for tab-traversal validation.");
         PumpPendingMessages();
-        for (int remainingUps = 0; remainingUps < 3; ++remainingUps)
-        {
-            SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-            SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -2014,15 +2055,9 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for File Operations theme-cycle validation.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
+                      L"Failed to select the Preferences File Operations category for theme-cycle validation.");
         PumpPendingMessages();
-        for (int remainingUps = 0; remainingUps < 3; ++remainingUps)
-        {
-            SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-            SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
         { return value.currentCategory == kPrefCategoryFileOperations && value.currentPageDxHostResizeFailureCount == 0u; },
@@ -2235,14 +2270,8 @@
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_END, 0);
-        PumpPendingMessages();
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                      std::format(L"Failed to select the Preferences Compare Directories category during {}.", context));
         PumpPendingMessages();
 
         PreferencesDebugSnapshot snapshot{};
@@ -2446,14 +2475,8 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Compare Directories live interaction test.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                      L"Failed to select the Preferences Compare Directories category for live interaction validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -2779,14 +2802,8 @@
                       L"Failed to focus the Preferences category host for Compare Directories content-workers/ignore-files validation.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                      L"Failed to select the Preferences Compare Directories category for content-workers/ignore-files validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot(
@@ -3169,14 +3186,8 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Compare Directories tail-toggle validation.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                      L"Failed to select the Preferences Compare Directories category for tail-toggle validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -3452,14 +3463,8 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Compare Directories tab-traversal validation.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                      L"Failed to select the Preferences Compare Directories category for tab-traversal validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot(
@@ -3689,14 +3694,8 @@
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Compare Directories round-trip test.");
     PumpPendingMessages();
 
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_END, 0);
-    PumpPendingMessages();
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
-    PumpPendingMessages();
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                  L"Failed to select the Preferences Compare Directories category before round-trip validation.");
     PumpPendingMessages();
 
     PreferencesDebugSnapshot snapshot{};
@@ -3771,14 +3770,8 @@
             L"Preferences should restore General without recreating a pane-host child window after leaving Compare Directories; saw {} created pane hosts.",
             snapshot.createdPaneWindowCount));
 
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_END, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_END, 0);
-    PumpPendingMessages();
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
-    PumpPendingMessages();
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                  L"Failed to reselect the Preferences Compare Directories category after returning from General.");
     PumpPendingMessages();
 
     snapshot = {};
@@ -3896,14 +3889,8 @@
         state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Compare Directories theme-cycle validation.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
-        PumpPendingMessages();
-        SendMessageW(treeHost, WM_KEYDOWN, VK_UP, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_UP, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
+                      L"Failed to select the Preferences Compare Directories category for theme-cycle validation.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot(
@@ -4234,12 +4221,13 @@
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    const auto verifyNotePage = [&](const PrefCategory expectedCategory, const int downCount, const UINT titleId, std::wstring_view pageLabel) noexcept
+    const auto verifyNotePage = [&](const PrefCategory expectedCategory, const UINT titleId, std::wstring_view pageLabel) noexcept
     {
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
         SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
         PumpPendingMessages();
 
+        const int downCount = PreferencesRootRowForCategory(expectedCategory);
         for (int i = 0; i < downCount; ++i)
         {
             SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
@@ -4306,7 +4294,7 @@
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Editors/Mouse live note validation.");
     PumpPendingMessages();
 
-    verifyNotePage(kPrefCategoryMouse, 5, IDS_PREFS_CAT_MOUSE, L"Mouse");
+    verifyNotePage(kPrefCategoryMouse, IDS_PREFS_CAT_MOUSE, L"Mouse");
     return state.failure.empty();
 }
 
@@ -4371,12 +4359,13 @@
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    const auto verifyTabSkipForNotePage = [&](const PrefCategory expectedCategory, const int downCount, std::wstring_view pageLabel) noexcept
+    const auto verifyTabSkipForNotePage = [&](const PrefCategory expectedCategory, std::wstring_view pageLabel) noexcept
     {
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
         SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
         PumpPendingMessages();
 
+        const int downCount = PreferencesRootRowForCategory(expectedCategory);
         for (int i = 0; i < downCount; ++i)
         {
             SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
@@ -4405,7 +4394,7 @@
 
         const auto sendTab = [&](const bool reverse,
                                  const bool expectCategoryTreeFocus,
-                                 const PreferencesShellDebugFocusTarget expectedShellTarget,
+                                 const PreferencesShellDebugFocusTarget expectedRetainedShellTarget,
                                  std::wstring_view label) noexcept
         {
             const HWND focused = GetFocus();
@@ -4425,7 +4414,7 @@
                               [&](const PreferencesDebugSnapshot& value) noexcept
             {
                 return value.currentCategory == expectedCategory && value.categoryTreeFocused == expectCategoryTreeFocus &&
-                       value.shellFocusTarget == expectedShellTarget && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+                       value.shellFocusTarget == expectedRetainedShellTarget && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
                        value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u &&
                        value.shellDxHostResizeFailureCount == 0u;
             },
@@ -4435,12 +4424,14 @@
                 PreferencesDebugSnapshot actualSnapshot{};
                 static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
                 return std::format(L"Preferences {} {} focus target not reached during note-page tab traversal; actual categoryTreeFocused={}, "
-                                   L"shellFocusTarget={}, currentCategory={}, visibleCurrentPageChildWindowCount={}, currentPageDxHostResizeFailureCount={}, "
+                                   L"retainedShellFocusTarget={}, expectedRetainedShellFocusTarget={}, currentCategory={}, "
+                                   L"visibleCurrentPageChildWindowCount={}, currentPageDxHostResizeFailureCount={}, "
                                    L"shellDxHostResizeFailureCount={}, focus={:#x}, pageHost={:#x}, shellHost={:#x}.",
                                    pageLabel,
                                    label,
                                    actualSnapshot.categoryTreeFocused ? 1 : 0,
                                    static_cast<int>(actualSnapshot.shellFocusTarget),
+                                   static_cast<int>(expectedRetainedShellTarget),
                                    static_cast<int>(actualSnapshot.currentCategory),
                                    actualSnapshot.visibleCurrentPageChildWindowCount,
                                    actualSnapshot.currentPageDxHostResizeFailureCount,
@@ -4454,15 +4445,16 @@
         sendTab(false, false, PreferencesShellDebugFocusTarget::ResetAllButton, L"Reset All button");
         sendTab(false, false, PreferencesShellDebugFocusTarget::OkButton, L"OK button");
         sendTab(false, false, PreferencesShellDebugFocusTarget::CancelButton, L"Cancel button");
-        sendTab(false, true, PreferencesShellDebugFocusTarget::None, L"wrapped category tree");
+        // Native focus wraps to the category tree, while the DxUi shell host keeps its retained logical button target.
+        sendTab(false, true, PreferencesShellDebugFocusTarget::CancelButton, L"wrapped category tree");
 
         sendTab(true, false, PreferencesShellDebugFocusTarget::CancelButton, L"reverse wrapped Cancel button");
         sendTab(true, false, PreferencesShellDebugFocusTarget::OkButton, L"reverse OK button");
         sendTab(true, false, PreferencesShellDebugFocusTarget::ResetAllButton, L"reverse Reset All button");
-        sendTab(true, true, PreferencesShellDebugFocusTarget::None, L"reverse wrapped category tree");
+        sendTab(true, true, PreferencesShellDebugFocusTarget::ResetAllButton, L"reverse wrapped category tree");
     };
 
-    verifyTabSkipForNotePage(kPrefCategoryMouse, 5, L"Mouse");
+    verifyTabSkipForNotePage(kPrefCategoryMouse, L"Mouse");
     return state.failure.empty();
 }
 
@@ -4758,6 +4750,8 @@
 
 [[nodiscard]] bool TestPreferencesDialogCategoryTreePageNavigation(HWND mainWindow, CaseState& state) noexcept
 {
+    using namespace std::chrono_literals;
+
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
         state.Require(false, L"Main window handle invalid.");
@@ -4795,12 +4789,31 @@
         return false;
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for page-navigation test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)), L"Failed to focus the Preferences category host for page-navigation test.");
     PumpPendingMessages();
 
+    const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            outSnapshot = {};
+            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        outSnapshot = {};
+        return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
+    };
+
     PreferencesDebugSnapshot snapshot{};
-    state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture initial Preferences snapshot for page-navigation test.");
-    state.Require(snapshot.categoryTreeFocused, L"Preferences category host did not retain keyboard focus for page-navigation test.");
+    state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept { return value.categoryTreeFocused; }, snapshot),
+                  L"Preferences category host did not retain keyboard focus for page-navigation test.");
     state.Require(snapshot.categoryTreeHasSelectedItem, L"Preferences category tree did not report an initial selected item.");
     const size_t initialSelectedVisibleIndex = snapshot.categoryTreeSelectedVisibleIndex;
     const int initialPageScrollY             = snapshot.pageScrollY;
@@ -4810,41 +4823,47 @@
     PumpPendingMessages();
 
     PreferencesDebugSnapshot afterPageDown{};
-    state.Require(DebugGetPreferencesDialogSnapshot(afterPageDown), L"Failed to capture Preferences snapshot after VK_NEXT.");
-    state.Require(afterPageDown.categoryTreeFocused, L"Preferences category host lost keyboard focus after VK_NEXT.");
-    state.Require(afterPageDown.categoryTreeHasSelectedItem, L"Preferences category tree lost its selected item after VK_NEXT.");
-    state.Require(afterPageDown.categoryTreeSelectedVisibleIndex > initialSelectedVisibleIndex,
-                  std::format(L"VK_NEXT should advance the Preferences category-tree selection; before index={}, after index={}.",
+    state.Require(waitForSnapshot(
+                      [&](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.categoryTreeFocused && value.categoryTreeHasSelectedItem && value.categoryTreeSelectedVisibleIndex > initialSelectedVisibleIndex &&
+               value.pageScrollY == initialPageScrollY && PreferencesPageTitleMatchesSelection(value);
+    },
+                      afterPageDown),
+                  std::format(L"Preferences category tree did not settle after VK_NEXT; focused={}, hasSelection={}, beforeIndex={}, afterIndex={}, "
+                              L"beforeScrollY={}, afterScrollY={}, pageTitle='{}'.",
+                              afterPageDown.categoryTreeFocused,
+                              afterPageDown.categoryTreeHasSelectedItem,
                               initialSelectedVisibleIndex,
-                              afterPageDown.categoryTreeSelectedVisibleIndex));
-    state.Require(afterPageDown.pageScrollY == initialPageScrollY,
-                  std::format(L"VK_NEXT should stay on the Preferences category tree instead of scrolling the page host; before scrollY={}, after scrollY={}.",
+                              afterPageDown.categoryTreeSelectedVisibleIndex,
                               initialPageScrollY,
-                              afterPageDown.pageScrollY));
-    state.Require(PreferencesPageTitleMatchesSelection(afterPageDown), L"Preferences page title did not track category-tree VK_NEXT navigation.");
+                              afterPageDown.pageScrollY,
+                              afterPageDown.pageTitle));
 
     SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_PRIOR, 0);
     SendMessageW(categoryTreeHost, WM_KEYUP, VK_PRIOR, 0);
     PumpPendingMessages();
 
     PreferencesDebugSnapshot afterPageUp{};
-    state.Require(DebugGetPreferencesDialogSnapshot(afterPageUp), L"Failed to capture Preferences snapshot after VK_PRIOR.");
-    state.Require(afterPageUp.categoryTreeFocused, L"Preferences category host lost keyboard focus after VK_PRIOR.");
-    state.Require(afterPageUp.categoryTreeHasSelectedItem, L"Preferences category tree lost its selected item after VK_PRIOR.");
-    state.Require(afterPageUp.categoryTreeSelectedVisibleIndex < afterPageDown.categoryTreeSelectedVisibleIndex,
-                  std::format(L"VK_PRIOR should reverse the Preferences category-tree selection; after VK_NEXT index={}, after VK_PRIOR index={}.",
+    state.Require(waitForSnapshot(
+                      [&](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.categoryTreeFocused && value.categoryTreeHasSelectedItem &&
+               value.categoryTreeSelectedVisibleIndex < afterPageDown.categoryTreeSelectedVisibleIndex &&
+               value.categoryTreeSelectedVisibleIndex <= initialSelectedVisibleIndex && value.pageScrollY == initialPageScrollY &&
+               PreferencesPageTitleMatchesSelection(value);
+    },
+                      afterPageUp),
+                  std::format(L"Preferences category tree did not settle after VK_PRIOR; focused={}, hasSelection={}, initialIndex={}, "
+                              L"afterPageDownIndex={}, afterPageUpIndex={}, beforeScrollY={}, afterScrollY={}, pageTitle='{}'.",
+                              afterPageUp.categoryTreeFocused,
+                              afterPageUp.categoryTreeHasSelectedItem,
+                              initialSelectedVisibleIndex,
                               afterPageDown.categoryTreeSelectedVisibleIndex,
-                              afterPageUp.categoryTreeSelectedVisibleIndex));
-    state.Require(
-        afterPageUp.categoryTreeSelectedVisibleIndex <= initialSelectedVisibleIndex,
-        std::format(L"VK_PRIOR should return the Preferences category-tree selection toward its starting position; initial index={}, after VK_PRIOR index={}.",
-                    initialSelectedVisibleIndex,
-                    afterPageUp.categoryTreeSelectedVisibleIndex));
-    state.Require(afterPageUp.pageScrollY == initialPageScrollY,
-                  std::format(L"VK_PRIOR should stay on the Preferences category tree instead of scrolling the page host; before scrollY={}, after scrollY={}.",
+                              afterPageUp.categoryTreeSelectedVisibleIndex,
                               initialPageScrollY,
-                              afterPageUp.pageScrollY));
-    state.Require(PreferencesPageTitleMatchesSelection(afterPageUp), L"Preferences page title did not track category-tree VK_PRIOR navigation.");
+                              afterPageUp.pageScrollY,
+                              afterPageUp.pageTitle));
 
     return state.failure.empty();
 }
@@ -5260,15 +5279,9 @@
         }
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes header-resize validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes header-resize validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -5445,15 +5458,9 @@
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes reordered-resized/search validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes reordered-resized/search validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -5706,15 +5713,9 @@
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes reordered-resized-copy/search validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes reordered-resized-copy/search validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -6072,15 +6073,9 @@
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes reordered-resized-sort/search validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes reordered-resized-sort/search validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -6481,15 +6476,9 @@
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes reordered-resized-copy/sort-search validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes reordered-resized-copy/sort-search validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -6877,11 +6866,9 @@
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                   L"Failed to focus the Preferences category host before category-tree expand/collapse validation.");
-    sendTreeKey(VK_HOME);
-    for (int i = 0; i < 7; ++i)
-    {
-        sendTreeKey(VK_DOWN);
-    }
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                  L"Failed to select the Preferences Plugins category before category-tree expand/collapse validation.");
+    PumpPendingMessages();
 
     PreferencesDebugSnapshot snapshot{};
     state.Require(waitForSnapshot(
@@ -6964,6 +6951,34 @@
     return state.failure.empty();
 }
 
+[[nodiscard]] std::wstring DescribePreferencesCategoryChurnSnapshotForSelfTest(const PreferencesDebugSnapshot& snapshot)
+{
+    return std::format(L"category={} title='{}' treeRender={} selectedVisibleIndex={} firstVisibleIndex={} treeFocused={} treeSelected={} "
+                       L"treeScrollDip={} treeScrollbar={} pageScroll={}/{} pageHostScroll={} pageHostRender={} pageRenderTotal={} "
+                       L"visibleChildren={} visibleCurrentPageChildren={} currentPageDxHosts={} currentPageResizeFailures={} shellResizeFailures={} "
+                       L"treeResizeFailures={}",
+                       static_cast<int>(snapshot.currentCategory),
+                       snapshot.pageTitle,
+                       snapshot.categoryTreeDxHostRenderCount,
+                       snapshot.categoryTreeSelectedVisibleIndex,
+                       snapshot.categoryTreeFirstVisibleIndex,
+                       snapshot.categoryTreeFocused,
+                       snapshot.categoryTreeHasSelectedItem,
+                       snapshot.categoryTreeVerticalScrollDip,
+                       snapshot.categoryTreeHasVerticalScrollbar,
+                       snapshot.pageScrollY,
+                       snapshot.pageScrollMaxY,
+                       snapshot.pageHostShowsVerticalScroll,
+                       snapshot.pageHostDxHostRenderCount,
+                       snapshot.currentPageDxHostRenderCountTotal,
+                       snapshot.visibleChildWindowCount,
+                       snapshot.visibleCurrentPageChildWindowCount,
+                       snapshot.currentPageRenderedDxHostCount,
+                       snapshot.currentPageDxHostResizeFailureCount,
+                       snapshot.shellDxHostResizeFailureCount,
+                       snapshot.categoryTreeDxHostHasResizeFailures);
+}
+
 [[nodiscard]] bool TestPreferencesDialogCategorySwitchesDoNotChurnTreeHost(HWND mainWindow, CaseState& state) noexcept
 {
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
@@ -6995,54 +7010,69 @@
     }
 
     const int categoryDpi    = static_cast<int>(GetDpiForWindow(categoryTreeHost));
-    const auto clickCategory = [&](const LPARAM point, const PrefCategory expectedCategory, const UINT expectedTitleId) noexcept
+    const auto clickCategory = [&](const LPARAM point, const PrefCategory expectedCategory, const UINT expectedTitleId, std::wstring_view phase) noexcept
     {
         PreferencesDebugSnapshot before{};
-        state.Require(DebugGetPreferencesDialogSnapshot(before), L"Failed to capture Preferences snapshot before category click.");
+        state.Require(WaitForPreferencesCategoryTreeRenderCountToSettle(before),
+                      L"Preferences category tree render count did not settle before category click.");
         if (! state.failure.empty())
         {
             return;
         }
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"Preferences category churn {}: before {}", phase, DescribePreferencesCategoryChurnSnapshotForSelfTest(before)));
 
         SendMessageW(categoryTreeHost, WM_LBUTTONDOWN, MK_LBUTTON, point);
         SendMessageW(categoryTreeHost, WM_LBUTTONUP, 0, point);
         PumpPendingMessages();
 
         PreferencesDebugSnapshot after{};
-        state.Require(DebugGetPreferencesDialogSnapshot(after), L"Failed to capture Preferences snapshot after category click.");
+        state.Require(WaitForPreferencesCategoryTreeRenderCountToSettle(after),
+                      L"Preferences category tree render count did not settle after category click.");
         if (! state.failure.empty())
         {
             return;
         }
 
+        const std::wstring expectedTitle = LoadStringResource(nullptr, expectedTitleId);
+        const uint64_t treeRenderDelta   = after.categoryTreeDxHostRenderCount - before.categoryTreeDxHostRenderCount;
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"Preferences category churn {}: after delta={} {}", phase, treeRenderDelta, DescribePreferencesCategoryChurnSnapshotForSelfTest(after)));
+
         state.Require(after.currentCategory == expectedCategory, L"Preferences category click did not update the active category.");
-        state.Require(after.pageTitle == LoadStringResource(nullptr, expectedTitleId), L"Preferences category click did not update the page title.");
+        state.Require(after.pageTitle == expectedTitle, L"Preferences category click did not update the page title.");
         state.Require(after.currentPageDxHostResizeFailureCount == 0u, L"Preferences active page reported DX resize failures after category navigation.");
         state.Require(after.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after category navigation.");
         state.Require(! after.categoryTreeDxHostHasResizeFailures, L"Preferences category tree host reported DX resize failures after category navigation.");
 
-        const uint64_t treeRenderDelta = after.categoryTreeDxHostRenderCount - before.categoryTreeDxHostRenderCount;
         state.Require(treeRenderDelta <= 2u,
-                      std::format(L"Preferences category tree should repaint at most twice for a category click; saw {} render(s).", treeRenderDelta));
+                      std::format(L"Preferences category tree should repaint at most twice during {}; category {}; saw {} render(s), "
+                                  L"before=[{}], after=[{}], expectedTitle='{}'.",
+                                  phase,
+                                  static_cast<int>(expectedCategory),
+                                  treeRenderDelta,
+                                  DescribePreferencesCategoryChurnSnapshotForSelfTest(before),
+                                  DescribePreferencesCategoryChurnSnapshotForSelfTest(after),
+                                  expectedTitle));
     };
 
     const LPARAM panesPoint   = MAKELPARAM(MulDiv(24, categoryDpi, USER_DEFAULT_SCREEN_DPI), MulDiv(36, categoryDpi, USER_DEFAULT_SCREEN_DPI));
     const LPARAM viewersPoint = MAKELPARAM(MulDiv(24, categoryDpi, USER_DEFAULT_SCREEN_DPI), MulDiv(60, categoryDpi, USER_DEFAULT_SCREEN_DPI));
     const LPARAM generalPoint = MAKELPARAM(MulDiv(24, categoryDpi, USER_DEFAULT_SCREEN_DPI), MulDiv(12, categoryDpi, USER_DEFAULT_SCREEN_DPI));
 
-    clickCategory(panesPoint, kPrefCategoryPanes, IDS_PREFS_CAT_PANES);
+    clickCategory(panesPoint, kPrefCategoryPanes, IDS_PREFS_CAT_PANES, L"initial panes");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS);
+    clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, L"initial viewers");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL);
+    clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, L"initial general");
     if (! state.failure.empty())
     {
         return false;
@@ -7050,19 +7080,19 @@
 
     for (size_t iteration = 0; iteration < 8u; ++iteration)
     {
-        clickCategory(panesPoint, kPrefCategoryPanes, IDS_PREFS_CAT_PANES);
+        clickCategory(panesPoint, kPrefCategoryPanes, IDS_PREFS_CAT_PANES, std::format(L"loop {} panes", iteration + 1u));
         if (! state.failure.empty())
         {
             return false;
         }
 
-        clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS);
+        clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::format(L"loop {} viewers", iteration + 1u));
         if (! state.failure.empty())
         {
             return false;
         }
 
-        clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL);
+        clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::format(L"loop {} general", iteration + 1u));
         if (! state.failure.empty())
         {
             return false;
@@ -7074,6 +7104,9 @@
 
 [[nodiscard]] bool TestPreferencesDialogScrollHostPreservesRetainedPageState(HWND mainWindow, CaseState& state) noexcept
 {
+    const uint64_t hitTestPerfRowsBefore    = CountPerfRowsWithMetric("DxUI::HitTest", true);
+    const uint64_t preferencePerfRowsBefore = CountPerfRowsWithMetric("preferences.page_host.", false);
+
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
         state.Require(false, L"Main window handle invalid.");
@@ -7109,25 +7142,121 @@
         return false;
     }
 
+    PreferencesDebugSnapshot initialSnapshot{};
+    state.Require(DebugGetPreferencesDialogSnapshot(initialSnapshot), L"Failed to capture initial Preferences page-host snapshot.");
+    state.Require(initialSnapshot.pageHostUsesDxUiHost && initialSnapshot.pageHostDxContentRootUsesScrollPanel,
+                  L"Preferences page-host DX content root must use a scroll-offset-aware content surface from initial creation.");
+    state.Require(initialSnapshot.pageHostDxInternalScrollbarEnabled,
+                  L"Preferences page-host ScrollPanel must own the visible scrollbar from initial creation.");
+    state.Require(initialSnapshot.pageHostTopPx <= initialSnapshot.categoryTreeTopPx + 2,
+                  std::format(L"Preferences page-host must cover the whole right pane from the same top as the category list; "
+                              L"pageHostTop={}, categoryTreeTop={}, shellHostTop={}.",
+                              initialSnapshot.pageHostTopPx,
+                              initialSnapshot.categoryTreeTopPx,
+                              initialSnapshot.shellHostTopPx));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RequireUsefulIconCachePerfRows(state);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto raisePreferencesForHitTesting = [&]() noexcept
+    {
+        ShowWindow(prefs, SW_SHOWNORMAL);
+        BringWindowToTop(prefs);
+        SetActiveWindow(prefs);
+        SetForegroundWindow(prefs);
+        SetWindowPos(prefs, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        UpdateWindow(prefs);
+        PumpPendingMessages();
+    };
+
+    const auto waitForCategorySnapshot = [&](const PrefCategory expectedCategory,
+                                             const UINT expectedTitleId,
+                                             const std::optional<int> expectedPageScrollY,
+                                             PreferencesDebugSnapshot& outSnapshot) noexcept
+    {
+        using namespace std::chrono_literals;
+
+        const std::wstring expectedTitle = LoadStringResource(nullptr, expectedTitleId);
+        PreferencesDebugSnapshot lastSnapshot{};
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+
+            PreferencesDebugSnapshot snapshot{};
+            if (DebugGetPreferencesDialogSnapshot(snapshot))
+            {
+                lastSnapshot = snapshot;
+                if (snapshot.currentCategory == expectedCategory && snapshot.pageTitle == expectedTitle &&
+                    snapshot.currentPageDxHostResizeFailureCount == 0u && snapshot.shellDxHostResizeFailureCount == 0u &&
+                    ! snapshot.categoryTreeDxHostHasResizeFailures &&
+                    (! expectedPageScrollY.has_value() || snapshot.pageScrollY == expectedPageScrollY.value()))
+                {
+                    outSnapshot = snapshot;
+                    return true;
+                }
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        outSnapshot = lastSnapshot;
+        return false;
+    };
+
     const int categoryDpi    = static_cast<int>(GetDpiForWindow(categoryTreeHost));
-    const auto clickCategory = [&](const LPARAM point, const PrefCategory expectedCategory, const UINT expectedTitleId) noexcept
+    const auto clickCategory = [&](const LPARAM point,
+                                   const PrefCategory expectedCategory,
+                                   const UINT expectedTitleId,
+                                   const std::optional<int> expectedPageScrollY) noexcept
     {
         SendMessageW(categoryTreeHost, WM_LBUTTONDOWN, MK_LBUTTON, point);
         SendMessageW(categoryTreeHost, WM_LBUTTONUP, 0, point);
         PumpPendingMessages();
 
         PreferencesDebugSnapshot snapshot{};
-        state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after category click.");
+        const std::wstring expectedScroll = expectedPageScrollY.has_value() ? std::format(L"{}", expectedPageScrollY.value()) : L"(any)";
+        state.Require(waitForCategorySnapshot(expectedCategory, expectedTitleId, expectedPageScrollY, snapshot),
+                      std::format(L"Preferences category click did not settle to the expected page state; expected category={}, title='{}', pageScrollY={}, "
+                                  L"saw category={}, title='{}', pageScrollY={}, pageScrollMaxY={}, currentResizeFailures={}, "
+                                  L"shellResizeFailures={}, treeResizeFailures={}.",
+                                  static_cast<int>(expectedCategory),
+                                  LoadStringResource(nullptr, expectedTitleId),
+                                  expectedScroll,
+                                  static_cast<int>(snapshot.currentCategory),
+                                  snapshot.pageTitle,
+                                  snapshot.pageScrollY,
+                                  snapshot.pageScrollMaxY,
+                                  snapshot.currentPageDxHostResizeFailureCount,
+                                  snapshot.shellDxHostResizeFailureCount,
+                                  snapshot.categoryTreeDxHostHasResizeFailures));
+        return snapshot;
+    };
+
+    const auto selectMouseShortPage = [&]() noexcept
+    {
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryMouse), L"Failed to select the Preferences Mouse short page.");
+        PumpPendingMessages();
+
+        PreferencesDebugSnapshot snapshot{};
+        state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after selecting the Mouse short page.");
         if (! state.failure.empty())
         {
             return snapshot;
         }
 
-        state.Require(snapshot.currentCategory == expectedCategory, L"Preferences category click did not update the active category.");
-        state.Require(snapshot.pageTitle == LoadStringResource(nullptr, expectedTitleId), L"Preferences category click did not update the page title.");
-        state.Require(snapshot.currentPageDxHostResizeFailureCount == 0u, L"Preferences active page reported DX resize failures after category navigation.");
-        state.Require(snapshot.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after category navigation.");
-        state.Require(! snapshot.categoryTreeDxHostHasResizeFailures, L"Preferences category tree host reported DX resize failures after category navigation.");
+        state.Require(snapshot.currentCategory == kPrefCategoryMouse, L"Preferences Mouse short-page selection did not update the active category.");
+        state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_MOUSE), L"Preferences Mouse short-page selection did not update the page title.");
+        state.Require(snapshot.currentPageDxHostResizeFailureCount == 0u, L"Preferences Mouse page reported DX resize failures after category navigation.");
+        state.Require(snapshot.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after Mouse category navigation.");
+        state.Require(! snapshot.categoryTreeDxHostHasResizeFailures, L"Preferences category tree host reported DX resize failures after Mouse category navigation.");
         return snapshot;
     };
 
@@ -7142,16 +7271,79 @@
     }
 
     const int widthNow      = std::max(1l, prefsRect.right - prefsRect.left);
-    const int testHeights[] = {560, 500, 440};
+    const int testHeights[] = {760, 700, 640, 600, 560, 520, 480, 440};
+
+    {
+        SetWindowPos(prefs, nullptr, prefsRect.left, prefsRect.top, widthNow, testHeights[std::size(testHeights) - 1u], SWP_NOZORDER | SWP_NOACTIVATE);
+        PumpPendingMessages();
+
+        SendMessageW(categoryTreeHost, WM_LBUTTONDOWN, MK_LBUTTON, viewersPoint);
+        SendMessageW(categoryTreeHost, WM_LBUTTONUP, 0, viewersPoint);
+
+        RECT pageHostRect{};
+        state.Require(GetWindowRect(pageHost, &pageHostRect) != FALSE, L"Failed to query Preferences page-host bounds for cold first-wheel validation.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        const POINT coldWheelPoint{pageHostRect.left + std::max<LONG>(12, (pageHostRect.right - pageHostRect.left) / 3),
+                                   pageHostRect.top + std::max<LONG>(12, (pageHostRect.bottom - pageHostRect.top) / 3)};
+        raisePreferencesForHitTesting();
+
+        const SHORT wheelDelta = static_cast<SHORT>(-WHEEL_DELTA);
+        const auto coldWheelStartedAt = std::chrono::steady_clock::now();
+        SendMessageW(prefs,
+                     WM_MOUSEWHEEL,
+                     MAKEWPARAM(0, static_cast<WORD>(wheelDelta)),
+                     MAKELPARAM(static_cast<SHORT>(coldWheelPoint.x), static_cast<SHORT>(coldWheelPoint.y)));
+        PumpPendingMessages();
+
+        PreferencesDebugSnapshot coldWheelSnapshot{};
+        state.Require(DebugGetPreferencesDialogSnapshot(coldWheelSnapshot),
+                      L"Failed to capture Preferences snapshot after cold first-wheel validation.");
+        const uint64_t coldWheelUs = Debug::Perf::ElapsedUs(coldWheelStartedAt);
+        Debug::Perf::Emit(L"preferences.page_host.cold_first_wheel_us",
+                          L"viewers-page-host",
+                          coldWheelUs,
+                          static_cast<uint64_t>(coldWheelSnapshot.pageScrollY),
+                          static_cast<uint64_t>(coldWheelSnapshot.pageScrollMaxY),
+                          S_OK);
+        state.Require(coldWheelSnapshot.currentCategory == kPrefCategoryViewers,
+                      L"Cold first wheel after opening the Viewers page should keep the Viewers category active.");
+        state.Require(coldWheelSnapshot.pageScrollMaxY > 0,
+                      std::format(L"Cold first-wheel validation needs a scrollable Viewers page at compact height; saw maxY={}.",
+                                  coldWheelSnapshot.pageScrollMaxY));
+        state.Require(coldWheelSnapshot.pageScrollY > 0,
+                      std::format(L"The first wheel immediately after cold Viewers page creation should move the page; saw y={}, maxY={}, "
+                                  L"routeSeen={}, targetPageHost={}, dxHandled={}, fallbackCalled={}, fallbackHandled={}.",
+                                  coldWheelSnapshot.pageScrollY,
+                                  coldWheelSnapshot.pageScrollMaxY,
+                                  coldWheelSnapshot.pageHostLastWheelRouteSeen,
+                                  coldWheelSnapshot.pageHostLastWheelRouteTargetWasPageHost,
+                                  coldWheelSnapshot.pageHostLastWheelDxHandled,
+                                  coldWheelSnapshot.pageHostLastWheelFallbackCalled,
+                                  coldWheelSnapshot.pageHostLastWheelFallbackHandled));
+        state.Require(! coldWheelSnapshot.pageHostScrollApplyPending, L"Cold first wheel should not leave a queued page-host scroll pending.");
+        state.Require(coldWheelUs < 200000u, std::format(L"Cold first wheel should return promptly; saw {} us.", coldWheelUs));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        SendMessageW(pageHost, WM_VSCROLL, SB_TOP, 0);
+        PumpPendingMessages();
+    }
 
     PreferencesDebugSnapshot viewersSnapshot{};
     bool foundScrollableViewersState = false;
+    bool foundShortMouseState        = false;
     for (const int targetHeight : testHeights)
     {
         SetWindowPos(prefs, nullptr, prefsRect.left, prefsRect.top, widthNow, targetHeight, SWP_NOZORDER | SWP_NOACTIVATE);
         PumpPendingMessages();
 
-        viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS);
+        viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::optional<int>{0});
         if (! state.failure.empty())
         {
             return false;
@@ -7160,7 +7352,23 @@
         if (viewersSnapshot.pageHostShowsVerticalScroll && viewersSnapshot.pageScrollMaxY > 0)
         {
             foundScrollableViewersState = true;
-            break;
+
+            const PreferencesDebugSnapshot mouseProbe = selectMouseShortPage();
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            if (mouseProbe.pageScrollY == 0 && ! mouseProbe.pageHostShowsVerticalScroll && mouseProbe.pageScrollMaxY == 0)
+            {
+                foundShortMouseState = true;
+                viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::nullopt);
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+                break;
+            }
         }
     }
 
@@ -7173,20 +7381,20 @@
                       std::format(L"Preferences Viewers page should report no vertical scroll extent when no overflow is present; saw pageScrollMaxY={}.",
                                   viewersSnapshot.pageScrollMaxY));
 
-        const PreferencesDebugSnapshot generalSnapshot = clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL);
+        const PreferencesDebugSnapshot mouseSnapshot = selectMouseShortPage();
         if (! state.failure.empty())
         {
             return false;
         }
 
-        state.Require(generalSnapshot.pageScrollY == 0,
-                      std::format(L"Preferences General page should keep page scroll at 0 when entered from a non-scrollable page; saw pageScrollY={}.",
-                                  generalSnapshot.pageScrollY));
-        state.Require(generalSnapshot.pageScrollY == 0,
-                      std::format(L"Preferences General page should reset to scroll position 0 after leaving a non-scrollable page; saw pageScrollY={}.",
-                                  generalSnapshot.pageScrollY));
+        state.Require(mouseSnapshot.pageScrollY == 0,
+                      std::format(L"Preferences Mouse page should keep page scroll at 0 when entered from a non-scrollable page; saw pageScrollY={}.",
+                                  mouseSnapshot.pageScrollY));
+        state.Require(! mouseSnapshot.pageHostShowsVerticalScroll, L"Preferences Mouse page should not show a vertical scrollbar.");
+        state.Require(mouseSnapshot.pageScrollMaxY == 0,
+                      std::format(L"Preferences Mouse page should report no vertical scroll extent; saw pageScrollMaxY={}.", mouseSnapshot.pageScrollMaxY));
 
-        viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS);
+        viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::optional<int>{0});
         if (! state.failure.empty())
         {
             return false;
@@ -7201,8 +7409,359 @@
                                   viewersSnapshot.pageScrollMaxY));
         return state.failure.empty();
     }
+    if (! foundShortMouseState)
+    {
+        state.Require(false,
+                      L"Preferences scroll-host test could not find a window height where Viewers scrolls while the Mouse short page has no vertical scrollbar.");
+        return false;
+    }
 
     state.Require(viewersSnapshot.pageScrollY == 0, L"Preferences Viewers page should begin at scroll position 0 when opened.");
+
+    const PreferencesDebugSnapshot baselineGeneralSnapshot =
+        clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::optional<int>{0});
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(baselineGeneralSnapshot.pageScrollY == 0,
+                  std::format(L"Preferences General page should begin at scroll position 0 before retained-scroll validation; saw pageScrollY={}.",
+                              baselineGeneralSnapshot.pageScrollY));
+    if (baselineGeneralSnapshot.pageHostShowsVerticalScroll && baselineGeneralSnapshot.pageHostRightmostCardRightPx > 0)
+    {
+        state.Require(baselineGeneralSnapshot.pageHostCardToScrollbarGapPx >=
+                          std::max(2, MulDiv(3, static_cast<int>(GetDpiForWindow(pageHost)), USER_DEFAULT_SCREEN_DPI)),
+                      std::format(L"Preferences General cards should keep a visible gap before the internal scrollbar; gap={}, rightmostCard={}, trackLeft={}.",
+                                  baselineGeneralSnapshot.pageHostCardToScrollbarGapPx,
+                                  baselineGeneralSnapshot.pageHostRightmostCardRightPx,
+                                  baselineGeneralSnapshot.pageHostScrollbarTrackLeftPx));
+    }
+
+    viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::optional<int>{0});
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(viewersSnapshot.pageScrollY == 0,
+                  std::format(L"Preferences Viewers page should still be at scroll position 0 after recording General baseline; saw pageScrollY={}.",
+                              viewersSnapshot.pageScrollY));
+    state.Require(viewersSnapshot.pageHostShowsVerticalScroll && viewersSnapshot.pageScrollMaxY > 0,
+                  std::format(L"Preferences Viewers page should remain scrollable after recording General baseline; showsScroll={}, pageScrollMaxY={}.",
+                              viewersSnapshot.pageHostShowsVerticalScroll,
+                              viewersSnapshot.pageScrollMaxY));
+    state.Require(GetPropW(pageHost, L"RedSalamander.Preferences.DxDiagnostics") == nullptr,
+                  L"Preferences page host should not enable verbose Dx diagnostics by default; normal scrolling must not emit per-message diagnostic noise.");
+    if (viewersSnapshot.pageHostRightmostCardRightPx > 0)
+    {
+        state.Require(viewersSnapshot.pageHostCardToScrollbarGapPx >=
+                          std::max(2, MulDiv(3, static_cast<int>(GetDpiForWindow(pageHost)), USER_DEFAULT_SCREEN_DPI)),
+                      std::format(L"Preferences Viewers cards should keep a visible gap before the internal scrollbar; gap={}, rightmostCard={}, trackLeft={}.",
+                                  viewersSnapshot.pageHostCardToScrollbarGapPx,
+                                  viewersSnapshot.pageHostRightmostCardRightPx,
+                                  viewersSnapshot.pageHostScrollbarTrackLeftPx));
+    }
+
+    {
+        RECT pageHostRect{};
+        state.Require(GetWindowRect(pageHost, &pageHostRect) != FALSE,
+                      L"Failed to query Preferences page-host bounds before title-area wheel validation.");
+        state.Require(viewersSnapshot.pageHostTopPx <= viewersSnapshot.categoryTreeTopPx + 2,
+                      std::format(L"Preferences page-host should own the title area before title-wheel validation; pageHostTop={}, categoryTreeTop={}.",
+                                  viewersSnapshot.pageHostTopPx,
+                                  viewersSnapshot.categoryTreeTopPx));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        const POINT headerWheelPoint{pageHostRect.left + std::min<LONG>(24, std::max<LONG>(1, (pageHostRect.right - pageHostRect.left) / 2)),
+                                     pageHostRect.top + std::min<LONG>(24, std::max<LONG>(1, (pageHostRect.bottom - pageHostRect.top) / 4))};
+        raisePreferencesForHitTesting();
+        const HWND windowAtHeaderWheelPoint = WindowFromPoint(headerWheelPoint);
+        state.Require(windowAtHeaderWheelPoint && GetAncestor(windowAtHeaderWheelPoint, GA_ROOT) == GetAncestor(prefs, GA_ROOT),
+                      std::format(L"Preferences header wheel point should be over the Preferences dialog; hwnd={:#x}, point=({},{}).",
+                                  reinterpret_cast<uintptr_t>(windowAtHeaderWheelPoint),
+                                  headerWheelPoint.x,
+                                  headerWheelPoint.y));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        const SHORT wheelDelta        = static_cast<SHORT>(-WHEEL_DELTA);
+        const auto headerWheelStarted = std::chrono::steady_clock::now();
+        const uint64_t dxMovedBefore  = viewersSnapshot.pageHostDxScrollMovedControlCountTotal;
+        SendMessageW(prefs,
+                     WM_MOUSEWHEEL,
+                     MAKEWPARAM(0, static_cast<WORD>(wheelDelta)),
+                     MAKELPARAM(static_cast<SHORT>(headerWheelPoint.x), static_cast<SHORT>(headerWheelPoint.y)));
+        PumpPendingMessages();
+
+        PreferencesDebugSnapshot headerWheelSnapshot{};
+        state.Require(DebugGetPreferencesDialogSnapshot(headerWheelSnapshot),
+                      L"Failed to capture Preferences snapshot after header wheel-routing validation.");
+        const uint64_t headerWheelUs = Debug::Perf::ElapsedUs(headerWheelStarted);
+        Debug::Perf::Emit(L"preferences.page_host.header_wheel_first_us",
+                          L"viewers-header",
+                          headerWheelUs,
+                          static_cast<uint64_t>(headerWheelSnapshot.pageScrollY),
+                          static_cast<uint64_t>(headerWheelSnapshot.pageScrollMaxY),
+                          S_OK);
+        state.Require(headerWheelSnapshot.currentCategory == kPrefCategoryViewers,
+                      L"Wheel scrolling the Preferences right-pane header should not change the active category.");
+        state.Require(headerWheelSnapshot.pageScrollY > viewersSnapshot.pageScrollY,
+                      std::format(L"Wheel scrolling over the Preferences right-pane header should scroll the page host; before={}, after={}, "
+                                  L"routeSeen={}, targetPageHost={}, targetCategoryTree={}, windowFromPointPageHost={}, windowFromPointCategoryTree={}, "
+                                  L"fallbackCalled={}, fallbackHandled={}.",
+                                  viewersSnapshot.pageScrollY,
+                                  headerWheelSnapshot.pageScrollY,
+                                  headerWheelSnapshot.pageHostLastWheelRouteSeen,
+                                  headerWheelSnapshot.pageHostLastWheelRouteTargetWasPageHost,
+                                  headerWheelSnapshot.pageHostLastWheelRouteTargetWasCategoryTree,
+                                  headerWheelSnapshot.pageHostLastWheelWindowFromPointWasPageHost,
+                                  headerWheelSnapshot.pageHostLastWheelWindowFromPointWasCategoryTree,
+                                  headerWheelSnapshot.pageHostLastWheelFallbackCalled,
+                                  headerWheelSnapshot.pageHostLastWheelFallbackHandled));
+        const uint64_t dxMovedDuringHeaderWheel = headerWheelSnapshot.pageHostDxScrollMovedControlCountTotal - dxMovedBefore;
+        state.Require(dxMovedDuringHeaderWheel == 0u,
+                      std::format(L"Preferences page-host wheel scrolling should update a scroll offset, not move every retained Dx control; moved {} controls.",
+                                  dxMovedDuringHeaderWheel));
+        state.Require(headerWheelUs < 200000u,
+                      std::format(L"First Preferences header wheel routing should return promptly; saw {} us.", headerWheelUs));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        SendMessageW(pageHost, WM_VSCROLL, SB_TOP, 0);
+        PumpPendingMessages();
+        state.Require(DebugGetPreferencesDialogSnapshot(viewersSnapshot),
+                      L"Failed to refresh Preferences snapshot after resetting page-host scroll following header wheel-routing validation.");
+        state.Require(viewersSnapshot.pageScrollY == 0,
+                      std::format(L"Preferences Viewers page should return to the top after header wheel-routing validation; saw {}.",
+                                  viewersSnapshot.pageScrollY));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    const auto computeInternalThumbRect = [&](const PreferencesDebugSnapshot& snapshot) noexcept
+    {
+        if (snapshot.pageHostDxScrollbarThumbHitRectPx.right > snapshot.pageHostDxScrollbarThumbHitRectPx.left &&
+            snapshot.pageHostDxScrollbarThumbHitRectPx.bottom > snapshot.pageHostDxScrollbarThumbHitRectPx.top)
+        {
+            return snapshot.pageHostDxScrollbarThumbHitRectPx;
+        }
+
+        RECT client{};
+        if (GetClientRect(pageHost, &client) == FALSE)
+        {
+            return RECT{};
+        }
+
+        const UINT dpi         = GetDpiForWindow(pageHost);
+        const int trackHeight  = std::max(0l, client.bottom - client.top);
+        const int thickness    = std::max(1, MulDiv(12, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
+        const int minThumb     = std::min(std::max(1, MulDiv(20, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)), trackHeight);
+        const int contentHeight = trackHeight + std::max(0, snapshot.pageScrollMaxY);
+        if (trackHeight <= 4 || contentHeight <= trackHeight || snapshot.pageScrollMaxY <= 0)
+        {
+            return RECT{};
+        }
+
+        const int rawThumb      = MulDiv(trackHeight, trackHeight, std::max(1, contentHeight));
+        const int thumbHeight   = std::clamp(rawThumb, minThumb, trackHeight);
+        const int available     = std::max(0, trackHeight - thumbHeight);
+        const int thumbTop      = client.top + ((available > 0) ? MulDiv(std::clamp(snapshot.pageScrollY, 0, snapshot.pageScrollMaxY), available, snapshot.pageScrollMaxY) : 0);
+        return RECT{client.right - thickness, thumbTop, client.right, thumbTop + thumbHeight};
+    };
+
+    const auto dragInternalThumb = [&](const int moveCount, const int minDistancePx, const wchar_t* context) noexcept
+    {
+        raisePreferencesForHitTesting();
+        SendMessageW(pageHost, WM_VSCROLL, SB_TOP, 0);
+        PumpPendingMessages();
+
+        PreferencesDebugSnapshot beforeDrag{};
+        state.Require(DebugGetPreferencesDialogSnapshot(beforeDrag), std::format(L"Failed to capture Preferences snapshot before {}.", context));
+        state.Require(beforeDrag.pageScrollY == 0, std::format(L"Preferences Viewers page should return to the top before {}; saw {}.", context, beforeDrag.pageScrollY));
+        state.Require(beforeDrag.pageHostDxInternalScrollbarEnabled && ! beforeDrag.pageHostHasNativeVerticalScroll,
+                      std::format(L"Preferences page host must use the DxUi ScrollPanel scrollbar only before {}; internal={}, native={}.",
+                                  context,
+                                  beforeDrag.pageHostDxInternalScrollbarEnabled,
+                                  beforeDrag.pageHostHasNativeVerticalScroll));
+        const RECT thumbRect = computeInternalThumbRect(beforeDrag);
+        state.Require(thumbRect.right > thumbRect.left && thumbRect.bottom > thumbRect.top,
+                      std::format(L"Preferences DxUi ScrollPanel should expose a usable thumb rect before {}.", context));
+        state.Require(beforeDrag.pageHostDxHostAttachedToPageHost,
+                      std::format(L"Preferences page-host DxUi WindowHost should stay attached to the page-host HWND before {}.", context));
+        state.Require(beforeDrag.pageHostDxThumbCenterHitScrollPanel,
+                      std::format(L"Preferences DxUi ScrollPanel thumb center should hit the ScrollPanel before {}; hitAny={}, hitScrollPanel={}, "
+                                  L"thumb=({},{}-{},{}).",
+                                  context,
+                                  beforeDrag.pageHostDxThumbCenterHitAnyControl,
+                                  beforeDrag.pageHostDxThumbCenterHitScrollPanel,
+                                  thumbRect.left,
+                                  thumbRect.top,
+                                  thumbRect.right,
+                                  thumbRect.bottom));
+        if (! state.failure.empty())
+        {
+            return beforeDrag;
+        }
+
+        const LONG thumbCenterX  = thumbRect.left + ((thumbRect.right - thumbRect.left) / 2);
+        const LONG thumbCenterY  = thumbRect.top + ((thumbRect.bottom - thumbRect.top) / 2);
+        const LONG trackBottom   = std::max<LONG>(thumbCenterY + 1, thumbRect.bottom + std::max<LONG>(minDistancePx, (thumbRect.bottom - thumbRect.top) / 2));
+        const LONG clientBottom  = std::max<LONG>(trackBottom, thumbCenterY + 1);
+        RECT pageClient{};
+        state.Require(GetClientRect(pageHost, &pageClient) != FALSE, std::format(L"Failed to read page-host client rect before {}.", context));
+        const LONG targetY = std::min<LONG>(pageClient.bottom - 2, clientBottom);
+        state.Require(targetY > thumbCenterY, std::format(L"Preferences DxUi ScrollPanel thumb did not have enough room for {}.", context));
+        if (! state.failure.empty())
+        {
+            return beforeDrag;
+        }
+
+        POINT thumbScreen{thumbCenterX, thumbCenterY};
+        ClientToScreen(pageHost, &thumbScreen);
+        const HWND windowAtThumb = WindowFromPoint(thumbScreen);
+        state.Require(windowAtThumb == pageHost || (windowAtThumb && IsChild(pageHost, windowAtThumb) != FALSE),
+                      std::format(L"Preferences DxUi ScrollPanel thumb should be owned by the page host during {}; windowAtThumb={:#x}, pageHost={:#x}, "
+                                  L"screen=({},{}), client=({},{}).",
+                                  context,
+                                  reinterpret_cast<uintptr_t>(windowAtThumb),
+                                  reinterpret_cast<uintptr_t>(pageHost),
+                                  thumbScreen.x,
+                                  thumbScreen.y,
+                                  thumbCenterX,
+                                  thumbCenterY));
+        if (! state.failure.empty())
+        {
+            return beforeDrag;
+        }
+
+        const auto startedAt = std::chrono::steady_clock::now();
+        const LPARAM startPoint = MAKELPARAM(static_cast<SHORT>(thumbCenterX), static_cast<SHORT>(thumbCenterY));
+        SendMessageW(pageHost, WM_MOUSEMOVE, 0, startPoint);
+        SendMessageW(pageHost, WM_LBUTTONDOWN, MK_LBUTTON, startPoint);
+        const HWND captureAfterDown = GetCapture();
+        for (int index = 1; index <= moveCount; ++index)
+        {
+            const LONG stepY = thumbCenterY + MulDiv(targetY - thumbCenterY, index, moveCount);
+            const LPARAM stepPoint = MAKELPARAM(static_cast<SHORT>(thumbCenterX), static_cast<SHORT>(stepY));
+            SendMessageW(pageHost, WM_MOUSEMOVE, MK_LBUTTON, stepPoint);
+        }
+        SendMessageW(pageHost, WM_LBUTTONUP, 0, MAKELPARAM(static_cast<SHORT>(thumbCenterX), static_cast<SHORT>(targetY)));
+        PumpPendingMessages();
+
+        PreferencesDebugSnapshot afterDrag{};
+        state.Require(DebugGetPreferencesDialogSnapshot(afterDrag), std::format(L"Failed to capture Preferences snapshot after {}.", context));
+        const uint64_t applyDelta = afterDrag.pageHostScrollApplyCount - beforeDrag.pageHostScrollApplyCount;
+        Debug::Perf::Emit(L"preferences.page_host.dxui_thumb_drag_us",
+                          L"viewers-page-host",
+                          Debug::Perf::ElapsedUs(startedAt),
+                          static_cast<uint64_t>(afterDrag.pageScrollY),
+                          applyDelta,
+                          S_OK);
+        state.Require(afterDrag.currentCategory == kPrefCategoryViewers,
+                      std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should not change the active category during {}; saw category={}.",
+                                  context,
+                                  static_cast<int>(afterDrag.currentCategory)));
+        state.Require(afterDrag.pageScrollY > beforeDrag.pageScrollY,
+                      std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should move pageScrollY during {}; before={}, after={}, applies={}, maxY={}, "
+                                  L"dxOffsetBefore={}, dxOffsetAfter={}, captureAfterDown={:#x}, thumb=({},{}-{},{}), target=({},{}).",
+                                  context,
+                                  beforeDrag.pageScrollY,
+                                  afterDrag.pageScrollY,
+                                  applyDelta,
+                                  afterDrag.pageScrollMaxY,
+                                  beforeDrag.pageHostDxScrollOffsetPx,
+                                  afterDrag.pageHostDxScrollOffsetPx,
+                                  reinterpret_cast<uintptr_t>(captureAfterDown),
+                                  thumbRect.left,
+                                  thumbRect.top,
+                                  thumbRect.right,
+                                  thumbRect.bottom,
+                                  thumbCenterX,
+                                  targetY));
+        state.Require(applyDelta > 0u, std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should apply scroll movement during {}.", context));
+        state.Require(! afterDrag.pageHostScrollApplyPending, std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should not leave queued scroll after {}.", context));
+        state.Require(GetCapture() != pageHost, std::format(L"Preferences page host should release capture after {}.", context));
+        if (! state.failure.empty())
+        {
+            return afterDrag;
+        }
+
+        return afterDrag;
+    };
+
+    viewersSnapshot = dragInternalThumb(8, 24, L"single thumb drag");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    {
+        SendMessageW(pageHost, WM_VSCROLL, SB_TOP, 0);
+        PumpPendingMessages();
+
+        PreferencesDebugSnapshot beforeTrackClick{};
+        state.Require(DebugGetPreferencesDialogSnapshot(beforeTrackClick),
+                      L"Failed to capture Preferences snapshot before DxUi ScrollPanel track-click validation.");
+        state.Require(beforeTrackClick.pageScrollY == 0, L"Preferences Viewers page should return to the top before DxUi track-click validation.");
+        const RECT thumbRect = computeInternalThumbRect(beforeTrackClick);
+        state.Require(thumbRect.right > thumbRect.left && thumbRect.bottom > thumbRect.top,
+                      L"Preferences DxUi ScrollPanel should expose a usable thumb rect before track-click validation.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        RECT pageClient{};
+        state.Require(GetClientRect(pageHost, &pageClient) != FALSE, L"Failed to read page-host client rect before DxUi track-click validation.");
+        const LONG trackClickX = thumbRect.left + ((thumbRect.right - thumbRect.left) / 2);
+        const LONG trackClickY = std::min<LONG>(pageClient.bottom - 2, thumbRect.bottom + std::max<LONG>(4, (pageClient.bottom - thumbRect.bottom) / 2));
+        state.Require(trackClickY > thumbRect.bottom, L"Preferences DxUi ScrollPanel did not expose a lower track for track-click validation.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        const auto trackClickStartedAt = std::chrono::steady_clock::now();
+        SendMessageW(pageHost, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(static_cast<SHORT>(trackClickX), static_cast<SHORT>(trackClickY)));
+        SendMessageW(pageHost, WM_LBUTTONUP, 0, MAKELPARAM(static_cast<SHORT>(trackClickX), static_cast<SHORT>(trackClickY)));
+        const uint64_t trackClickUs = Debug::Perf::ElapsedUs(trackClickStartedAt);
+
+        PreferencesDebugSnapshot afterTrackClick{};
+        state.Require(DebugGetPreferencesDialogSnapshot(afterTrackClick),
+                      L"Failed to capture Preferences snapshot after DxUi ScrollPanel track click.");
+        Debug::Perf::Emit(L"preferences.page_host.dxui_track_click_us",
+                          L"viewers-page-host",
+                          trackClickUs,
+                          static_cast<uint64_t>(afterTrackClick.pageScrollY),
+                          static_cast<uint64_t>(beforeTrackClick.pageScrollY),
+                          S_OK);
+        state.Require(afterTrackClick.pageScrollY > beforeTrackClick.pageScrollY,
+                      std::format(L"Clicking the Preferences DxUi ScrollPanel track should page-scroll immediately; saw before={} after={}.",
+                                  beforeTrackClick.pageScrollY,
+                                  afterTrackClick.pageScrollY));
+        state.Require(! afterTrackClick.pageHostScrollApplyPending, L"DxUi track-click paging should not leave a queued page-host scroll pending.");
+        state.Require(trackClickUs < 500000u, std::format(L"Clicking the Preferences DxUi ScrollPanel track should return quickly; saw {} us.", trackClickUs));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        viewersSnapshot = afterTrackClick;
+    }
+
+    viewersSnapshot = dragInternalThumb(24, 48, L"burst thumb drag");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     const auto routeWheelToPageHost = [&]() noexcept
     {
@@ -7214,6 +7773,19 @@
         }
 
         const POINT wheelPoint{pageHostRect.left + 24, pageHostRect.top + 40};
+        const HWND windowAtWheelPoint = WindowFromPoint(wheelPoint);
+        state.Require(windowAtWheelPoint && GetAncestor(windowAtWheelPoint, GA_ROOT) == GetAncestor(prefs, GA_ROOT),
+                      std::format(L"Preferences routed wheel test point should be over the Preferences dialog before sending WM_MOUSEWHEEL; "
+                                  L"windowAtPoint={:#x}, prefsRoot={:#x}, point=({},{}).",
+                                  reinterpret_cast<uintptr_t>(windowAtWheelPoint),
+                                  reinterpret_cast<uintptr_t>(GetAncestor(prefs, GA_ROOT)),
+                                  wheelPoint.x,
+                                  wheelPoint.y));
+        if (! state.failure.empty())
+        {
+            return;
+        }
+
         const SHORT wheelDelta = static_cast<SHORT>(-WHEEL_DELTA);
         SendMessageW(
             prefs, WM_MOUSEWHEEL, MAKEWPARAM(0, static_cast<WORD>(wheelDelta)), MAKELPARAM(static_cast<SHORT>(wheelPoint.x), static_cast<SHORT>(wheelPoint.y)));
@@ -7221,6 +7793,22 @@
 
     for (size_t iteration = 0; iteration < 6u; ++iteration)
     {
+        raisePreferencesForHitTesting();
+        state.Require(WaitForPreferencesCategoryTreeRenderCountToSettle(viewersSnapshot),
+                      L"Preferences category tree render count did not settle before measuring page-host scroll repaint churn.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+        RedrawWindow(categoryTreeHost, nullptr, nullptr, RDW_UPDATENOW | RDW_ALLCHILDREN);
+        PumpPendingMessages();
+        state.Require(DebugGetPreferencesDialogSnapshot(viewersSnapshot),
+                      L"Failed to refresh Preferences snapshot after flushing category-tree paints before page-host scroll repaint measurement.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
         const uint64_t treeRenderCountBeforeScroll = viewersSnapshot.categoryTreeDxHostRenderCount;
         routeWheelToPageHost();
         if (! state.failure.empty())
@@ -7239,9 +7827,37 @@
         state.Require(scrolledSnapshot.currentCategory == kPrefCategoryViewers, L"Scrolling the Preferences page host should not change the active category.");
         state.Require(
             scrolledSnapshot.pageScrollY > 0,
-            std::format(L"Preferences Viewers page host should move to a positive scroll offset after routed mouse-wheel scrolling; saw pageScrollY={}.",
-                        scrolledSnapshot.pageScrollY));
+            std::format(
+                L"Preferences Viewers page host should move to a positive scroll offset after routed mouse-wheel scrolling; "
+                L"saw pageScrollY={}, pageScrollMaxY={}, wheel(routeSeen={}, forwarded={}, targetPageHost={}, targetCategoryTree={}, "
+                L"targetVScroll={}, windowFromPointPageHost={}, windowFromPointCategoryTree={}, pageHostWndProcSeen={}, dxHandled={}, "
+                L"fallbackCalled={}, fallbackHandled={}, delta={}, client=({},{}), before={}/{}, after={}/{}), viewersListScrollDip={}, "
+                L"viewersListHasVScroll={}.",
+                scrolledSnapshot.pageScrollY,
+                scrolledSnapshot.pageScrollMaxY,
+                scrolledSnapshot.pageHostLastWheelRouteSeen,
+                scrolledSnapshot.pageHostLastWheelRouteForwarded,
+                scrolledSnapshot.pageHostLastWheelRouteTargetWasPageHost,
+                scrolledSnapshot.pageHostLastWheelRouteTargetWasCategoryTree,
+                scrolledSnapshot.pageHostLastWheelRouteTargetHadVerticalScroll,
+                scrolledSnapshot.pageHostLastWheelWindowFromPointWasPageHost,
+                scrolledSnapshot.pageHostLastWheelWindowFromPointWasCategoryTree,
+                scrolledSnapshot.pageHostLastWheelWndProcSeen,
+                scrolledSnapshot.pageHostLastWheelDxHandled,
+                scrolledSnapshot.pageHostLastWheelFallbackCalled,
+                scrolledSnapshot.pageHostLastWheelFallbackHandled,
+                scrolledSnapshot.pageHostLastWheelDelta,
+                scrolledSnapshot.pageHostLastWheelClientX,
+                scrolledSnapshot.pageHostLastWheelClientY,
+                scrolledSnapshot.pageHostLastWheelBeforeY,
+                scrolledSnapshot.pageHostLastWheelBeforeMaxY,
+                scrolledSnapshot.pageHostLastWheelAfterY,
+                scrolledSnapshot.pageHostLastWheelAfterMaxY,
+                scrolledSnapshot.viewersListVerticalScrollDip,
+                scrolledSnapshot.viewersListHasVerticalScrollbar));
         state.Require(scrolledSnapshot.pageHostShowsVerticalScroll, L"Preferences Viewers page should still show a vertical scrollbar after scrolling.");
+        state.Require(scrolledSnapshot.pageHostDxContentRootUsesScrollPanel,
+                      L"Preferences page-host DX content root must preserve a scroll-offset-aware content surface; moving a plain Panel wrapper does not move its retained children.");
         state.Require(scrolledSnapshot.currentPageDxHostResizeFailureCount == 0u, L"Preferences Viewers page reported DX resize failures after scrolling.");
         state.Require(scrolledSnapshot.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after scrolling.");
         state.Require(! scrolledSnapshot.categoryTreeDxHostHasResizeFailures,
@@ -7252,7 +7868,8 @@
 
         const int expectedViewersScrollY = scrolledSnapshot.pageScrollY;
 
-        const PreferencesDebugSnapshot generalSnapshot = clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL);
+        const PreferencesDebugSnapshot generalSnapshot =
+            clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::optional<int>{0});
         if (! state.failure.empty())
         {
             return false;
@@ -7261,13 +7878,17 @@
         state.Require(generalSnapshot.pageScrollY == 0,
                       std::format(L"Preferences General page should reset page scroll to 0 after leaving a scrolled page; saw pageScrollY={}.",
                                   generalSnapshot.pageScrollY));
-        state.Require(! generalSnapshot.pageHostShowsVerticalScroll,
-                      L"Preferences General page should not show a vertical scrollbar after leaving a scrolled page.");
-        state.Require(generalSnapshot.pageScrollMaxY == 0,
-                      std::format(L"Preferences General page should not retain off-page scroll extent after leaving a scrolled page; saw pageScrollMaxY={}.",
+        state.Require(generalSnapshot.pageHostShowsVerticalScroll == baselineGeneralSnapshot.pageHostShowsVerticalScroll,
+                      std::format(L"Preferences General page should restore its own scrollbar visibility after leaving a scrolled page; expected {}, saw {}.",
+                                  baselineGeneralSnapshot.pageHostShowsVerticalScroll,
+                                  generalSnapshot.pageHostShowsVerticalScroll));
+        state.Require(generalSnapshot.pageScrollMaxY == baselineGeneralSnapshot.pageScrollMaxY,
+                      std::format(L"Preferences General page should restore its own scroll extent after leaving a scrolled page; expected {}, saw {}.",
+                                  baselineGeneralSnapshot.pageScrollMaxY,
                                   generalSnapshot.pageScrollMaxY));
 
-        viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS);
+        viewersSnapshot =
+            clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::optional<int>{expectedViewersScrollY});
         if (! state.failure.empty())
         {
             return false;
@@ -7283,6 +7904,18 @@
                                   expectedViewersScrollY,
                                   viewersSnapshot.pageScrollY));
     }
+
+    const uint64_t hitTestPerfRowsAfter    = CountPerfRowsWithMetric("DxUI::HitTest", true);
+    const uint64_t preferencePerfRowsAfter = CountPerfRowsWithMetric("preferences.page_host.", false);
+    state.Require(preferencePerfRowsAfter > preferencePerfRowsBefore,
+                  std::format(L"Preferences page-host scroll scenario should emit scenario-level perf metrics; before={} after={}.",
+                              preferencePerfRowsBefore,
+                              preferencePerfRowsAfter));
+    state.Require(hitTestPerfRowsAfter == hitTestPerfRowsBefore,
+                  std::format(L"Preferences page-host scroll scenario should not emit generic DxUI::HitTest perf rows; before={} after={}.",
+                              hitTestPerfRowsBefore,
+                              hitTestPerfRowsAfter));
+    RequireUsefulIconCachePerfRows(state);
 
     return state.failure.empty();
 }
@@ -7375,8 +8008,10 @@
     const int categoryDpi    = static_cast<int>(GetDpiForWindow(categoryTreeHost));
     const auto categoryPoint = [&](int yDip) noexcept
     { return MAKELPARAM(MulDiv(24, categoryDpi, USER_DEFAULT_SCREEN_DPI), MulDiv(yDip, categoryDpi, USER_DEFAULT_SCREEN_DPI)); };
+    const auto categoryPointForCategory = [&](const PrefCategory category) noexcept
+    { return categoryPoint((PreferencesRootRowForCategory(category) * 24) + 12); };
 
-    clickCategory(categoryPoint(60),
+    clickCategory(categoryPointForCategory(kPrefCategoryViewers),
                   kPrefCategoryViewers,
                   LoadStringResource(nullptr, IDS_PREFS_CAT_VIEWERS),
                   LoadStringResource(nullptr, IDS_PREFS_CAT_VIEWERS_DESC),
@@ -7391,27 +8026,28 @@
         return false;
     }
 
-    clickCategory(categoryPoint(84),
+    clickCategory(categoryPointForCategory(kPrefCategoryEditors),
                   kPrefCategoryEditors,
                   LoadStringResource(nullptr, IDS_PREFS_CAT_EDITORS),
                   LoadStringResource(nullptr, IDS_PREFS_CAT_EDITORS_DESC),
-                  [&](const PreferencesDebugSnapshot&, const UiaDescendantPatternStats& pageStats) noexcept
+                  [&](const PreferencesDebugSnapshot& snapshot, const UiaDescendantPatternStats& pageStats) noexcept
     {
-        state.Require(true /* F1: removed field */, L"Preferences Editors page should keep its DX note surface active during rapid-switch UIA validation.");
+        state.Require(true /* F1: removed field */,
+                      L"Preferences Editors page should keep its shared file-actions surface active during rapid-switch UIA validation.");
+        state.Require(snapshot.editorsAssociationRowCount > 0u || snapshot.editorsActionRowCount > 0u,
+                      L"Preferences Editors page should expose editor file-action rows during rapid-switch UIA validation.");
+        state.Require(pageStats.editControlCount + pageStats.comboBoxControlCount > 0u,
+                      L"Preferences Editors page subtree should expose visible edit or combo descendants after rapid switching.");
         state.Require(
-            pageStats.valuePatternCount == 0u,
-            std::format(L"Preferences Editors note page should not expose lingering editable ValuePattern descendants; saw {}.", pageStats.valuePatternCount));
-        state.Require(pageStats.togglePatternCount == 0u,
-                      std::format(L"Preferences Editors note page should not expose lingering toggle descendants; saw {}.", pageStats.togglePatternCount));
-        state.Require(pageStats.editControlCount == 0u && pageStats.comboBoxControlCount == 0u,
-                      L"Preferences Editors note page should not expose lingering edit/combo descendants from a previous page.");
+            pageStats.valuePatternCount > 0u,
+            std::format(L"Preferences Editors file-actions page should expose editable ValuePattern descendants; saw {}.", pageStats.valuePatternCount));
     });
     if (! state.failure.empty())
     {
         return false;
     }
 
-    clickCategory(categoryPoint(12),
+    clickCategory(categoryPointForCategory(kPrefCategoryGeneral),
                   kPrefCategoryGeneral,
                   LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL),
                   LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL_DESC),
@@ -7434,7 +8070,7 @@
         return false;
     }
 
-    clickCategory(categoryPoint(108),
+    clickCategory(categoryPointForCategory(kPrefCategoryKeyboard),
                   kPrefCategoryKeyboard,
                   LoadStringResource(nullptr, IDS_PREFS_CAT_KEYBOARD),
                   LoadStringResource(nullptr, IDS_PREFS_CAT_KEYBOARD_DESC),
@@ -7449,7 +8085,7 @@
         return false;
     }
 
-    clickCategory(categoryPoint(132),
+    clickCategory(categoryPointForCategory(kPrefCategoryMouse),
                   kPrefCategoryMouse,
                   LoadStringResource(nullptr, IDS_PREFS_CAT_MOUSE),
                   LoadStringResource(nullptr, IDS_PREFS_CAT_MOUSE_DESC),
@@ -7468,4 +8104,4 @@
     return state.failure.empty();
 }
 
-} // namespace (tests)
+} // namespace

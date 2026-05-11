@@ -541,6 +541,16 @@ bool ComboBox::IsEditable() const noexcept
     return _editable;
 }
 
+void ComboBox::SetAutoOpenOnTextInput(bool autoOpen) noexcept
+{
+    _autoOpenOnTextInput = autoOpen;
+}
+
+bool ComboBox::GetAutoOpenOnTextInput() const noexcept
+{
+    return _autoOpenOnTextInput;
+}
+
 void ComboBox::SetItems(std::vector<Item> items)
 {
     _items            = std::move(items);
@@ -904,7 +914,7 @@ bool ComboBox::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButt
 
         if (HasPopupScrollbar() && PointInRect(GetPopupScrollbarRect(), point))
         {
-            const D2D1_RECT_F thumb = GetPopupScrollbarThumbRect();
+            const D2D1_RECT_F thumb = GetPopupScrollbarThumbHitRect();
             if (PointInRect(thumb, point))
             {
                 _dragPopupScrollbar          = true;
@@ -1065,6 +1075,19 @@ bool ComboBox::OnMouseUp(WindowHost& host, D2D1_POINT_2F /*point*/, bool rightBu
         Invalidate(host);
     }
     return wasDragging || wasSelecting;
+}
+
+void ComboBox::OnCaptureLost(WindowHost& host)
+{
+    const bool wasDragging       = _dragPopupScrollbar;
+    const bool wasSelecting      = _dragSelecting;
+    _dragPopupScrollbar          = false;
+    _dragSelecting               = false;
+    _popupScrollbarDragOffsetDip = 0.0f;
+    if (wasDragging || wasSelecting)
+    {
+        Invalidate(host);
+    }
 }
 
 bool ComboBox::OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT /*modifiers*/)
@@ -1596,6 +1619,7 @@ bool ComboBox::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
     SyncEditableSelectionFromText();
     RebuildPopupItems(&host);
     EnsurePopupSelectionVisible(&host);
+    MaybeAutoOpenPopup(host);
     NotifyTextChanged();
     ResetEditableCaretBlink(host);
     EnsureEditableCaretVisible(&host, std::max(1.0f, GetEditableTextRect().right - GetEditableTextRect().left));
@@ -1902,6 +1926,14 @@ void ComboBox::ClosePopup() noexcept
     _activePopupIndex.reset();
     _hoveredPopupIndex.reset();
     ResetPopupLayout();
+}
+
+void ComboBox::MaybeAutoOpenPopup(WindowHost& host) noexcept
+{
+    if (_editable && _autoOpenOnTextInput && ! _open && ! _items.empty())
+    {
+        OpenPopup(host);
+    }
 }
 
 void ComboBox::CapturePopupBackdrop(WindowHost& host) noexcept
@@ -2395,6 +2427,30 @@ D2D1_RECT_F ComboBox::GetPopupScrollbarThumbRect() const noexcept
     return D2D1::RectF(track.left + 2.0f, thumbTop + 2.0f, track.right - 2.0f, thumbTop + thumbHeight - 2.0f);
 }
 
+D2D1_RECT_F ComboBox::GetPopupScrollbarThumbHitRect() const noexcept
+{
+    const D2D1_RECT_F track = GetPopupScrollbarRect();
+    if (track.right <= track.left || track.bottom <= track.top)
+    {
+        return D2D1::RectF();
+    }
+
+    const size_t visibleCount = GetPopupVisibleItemCount();
+    const size_t itemCount    = GetPopupItemCount();
+    if (visibleCount == 0u || itemCount == 0u || itemCount <= visibleCount)
+    {
+        return D2D1::RectF();
+    }
+
+    const float trackHeight = std::max(0.0f, track.bottom - track.top);
+    const float thumbHeight = std::clamp((static_cast<float>(visibleCount) / static_cast<float>(itemCount)) * trackHeight, kScrollbarMinThumbDip, trackHeight);
+    const size_t maxScrollIndex = itemCount - visibleCount;
+    const float available       = std::max(0.0f, trackHeight - thumbHeight);
+    const float thumbTop =
+        track.top + ((maxScrollIndex == 0u) ? 0.0f : ((static_cast<float>(_popupScrollIndex) / static_cast<float>(maxScrollIndex)) * available));
+    return D2D1::RectF(track.left, thumbTop, track.right, thumbTop + thumbHeight);
+}
+
 D2D1_RECT_F ComboBox::GetPopupItemRect(size_t popupListIndex, const WindowHost* host) const noexcept
 {
     if (! _open)
@@ -2443,7 +2499,7 @@ void ComboBox::DragPopupScrollbarThumb(D2D1_POINT_2F point) noexcept
     }
 
     const D2D1_RECT_F track     = GetPopupScrollbarRect();
-    const D2D1_RECT_F thumb     = GetPopupScrollbarThumbRect();
+    const D2D1_RECT_F thumb     = GetPopupScrollbarThumbHitRect();
     const float thumbHeight     = std::max(0.0f, thumb.bottom - thumb.top);
     const float available       = std::max(0.0f, (track.bottom - track.top) - thumbHeight);
     const size_t maxScrollIndex = itemCount - visibleCount;

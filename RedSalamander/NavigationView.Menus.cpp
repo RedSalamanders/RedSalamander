@@ -806,7 +806,7 @@ bool NavigationView::ExecuteDriveMenuAction(UINT menuId)
     return false;
 }
 
-void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp)
+void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focusFirstNavigableItem)
 {
     if (! _showMenuSection || ! _navigationMenu)
     {
@@ -1360,6 +1360,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp)
 
     RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
+    sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
 
     const auto startedAt  = std::chrono::steady_clock::now();
     const auto selectedId = RedSalamander::DxUi::ContextMenu::Show(
@@ -1865,7 +1866,7 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
     }
 }
 
-void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp)
+void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool focusFirstNavigableItem)
 {
     if (_pathHistory.empty())
     {
@@ -1958,6 +1959,7 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp)
 
     RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
+    sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
     sessionCallbacks.rootHorizontalAlignment   = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
 
     const auto startedAt = std::chrono::steady_clock::now();
@@ -1989,7 +1991,7 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp)
     }
 }
 
-void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp)
+void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool focusFirstNavigableItem)
 {
     if (! _showDiskInfoSection || ! _currentPluginPath || ! _driveInfo)
         return;
@@ -2204,6 +2206,7 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp)
 
     RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
+    sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
     sessionCallbacks.rootHorizontalAlignment   = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
 
     const auto startedAt = std::chrono::steady_clock::now();

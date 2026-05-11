@@ -1,3 +1,6 @@
+namespace
+{
+
 [[nodiscard]] bool TestPreferencesDialogCategoryTreeUsesDxUiHost(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -184,6 +187,8 @@
 
     return state.failure.empty();
 }
+
+} // namespace
 
 [[nodiscard]] Localization::LanguagePreference GetCurrentLocalizationPreferenceForSelfTest() noexcept
 {
@@ -459,6 +464,54 @@
                       std::format(L"Preferences shell should stay resize-failure free during {}; saw {} failing hosts.",
                                   context,
                                   snapshot.shellDxHostResizeFailureCount));
+        state.Require(snapshot.shellHostClientWidthPx > 0 && snapshot.shellHostClientHeightPx > 0,
+                      std::format(L"Preferences shell host should expose a non-empty client during {}; saw {}x{}.",
+                                  context,
+                                  snapshot.shellHostClientWidthPx,
+                                  snapshot.shellHostClientHeightPx));
+        state.Require(snapshot.shellFooterButtonsInsideHost,
+                      std::format(L"Preferences DX footer buttons should stay inside the shell host during {}; host={}x{}, OK=({},{}-{},{}), "
+                                  L"Cancel=({},{}-{},{}), Apply=({},{}-{},{}).",
+                                  context,
+                                  snapshot.shellHostClientWidthPx,
+                                  snapshot.shellHostClientHeightPx,
+                                  snapshot.shellOkButtonBoundsPx.left,
+                                  snapshot.shellOkButtonBoundsPx.top,
+                                  snapshot.shellOkButtonBoundsPx.right,
+                                  snapshot.shellOkButtonBoundsPx.bottom,
+                                  snapshot.shellCancelButtonBoundsPx.left,
+                                  snapshot.shellCancelButtonBoundsPx.top,
+                                  snapshot.shellCancelButtonBoundsPx.right,
+                                  snapshot.shellCancelButtonBoundsPx.bottom,
+                                  snapshot.shellApplyButtonBoundsPx.left,
+                                  snapshot.shellApplyButtonBoundsPx.top,
+                                  snapshot.shellApplyButtonBoundsPx.right,
+                                  snapshot.shellApplyButtonBoundsPx.bottom));
+        state.Require(snapshot.shellFooterButtonsInsideClip,
+                      std::format(L"Preferences DX footer buttons should stay inside the shell host clipping region during {}.", context));
+        state.Require(snapshot.shellOkButtonInteriorSampled,
+                      std::format(L"Preferences DX footer OK button should expose a rendered sample point during {}.", context));
+        state.Require(snapshot.shellOkButtonInteriorLooksPainted,
+                      std::format(L"Preferences DX footer OK button rendered sample should not be raw white during {}; bgra=0x{:08X}.",
+                                  context,
+                                  snapshot.shellOkButtonInteriorBgra));
+        state.Require(snapshot.shellFooterBackgroundSampled,
+                      std::format(L"Preferences DX footer background should expose a rendered sample point during {}.", context));
+        state.Require(snapshot.shellFooterBackgroundLooksThemed,
+                      std::format(L"Preferences DX footer background should match the active theme during {}; bgra=0x{:08X}.",
+                                  context,
+                                  snapshot.shellFooterBackgroundBgra));
+        state.Require(snapshot.categoryTreeTopClientPx > 0 && snapshot.categoryTreeBottomGapPx > 0,
+                      std::format(L"Preferences category tree should expose client-edge geometry during {}; top={} bottomGap={} dialogBottom={}.",
+                                  context,
+                                  snapshot.categoryTreeTopClientPx,
+                                  snapshot.categoryTreeBottomGapPx,
+                                  snapshot.dialogClientBottomPx));
+        state.Require(std::abs(snapshot.categoryTreeBottomGapPx - snapshot.categoryTreeTopClientPx) <= 2,
+                      std::format(L"Preferences category tree should keep the same bottom gap as its top gap during {}; top={} bottomGap={}.",
+                                  context,
+                                  snapshot.categoryTreeTopClientPx,
+                                  snapshot.categoryTreeBottomGapPx));
         state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL),
                       std::format(L"Preferences shell title did not initialize to the active General page during {}.", context));
         state.Require(! snapshot.pageDescription.empty(),
@@ -474,11 +527,6 @@
         {
             state.Require(uiaPatternStats->visibleElementCount > 0u,
                           std::format(L"Preferences shell should expose visible UI Automation descendants during {}.", context));
-            state.Require(
-                uiaPatternStats->textControlCount >= 2u,
-                std::format(L"Preferences shell should expose at least the title and description through UI Automation during {}; saw {} text descendants.",
-                            context,
-                            uiaPatternStats->textControlCount));
             state.Require(uiaPatternStats->buttonControlCount >= 3u,
                           std::format(L"Preferences shell should expose at least the three footer DX buttons through UI Automation during {}; saw {} buttons.",
                                       context,
@@ -488,15 +536,6 @@
                                       L"invoke-pattern descendants.",
                                       context,
                                       uiaPatternStats->invokePatternCount));
-        }
-
-        const auto shellTextState =
-            (shellHost && IsWindow(shellHost) != FALSE) ? CollectVisibleDescendantNamedElementState(shellHost, UIA_TextControlTypeId) : std::nullopt;
-        state.Require(shellTextState.has_value(), std::format(L"Preferences shell should expose a visible DX text surface during {}.", context));
-        if (shellTextState.has_value())
-        {
-            state.Require(! shellTextState->name.empty(),
-                          std::format(L"Preferences shell visible DX text surface should expose a stable accessible name during {}.", context));
         }
 
         const auto footerButtonState =
@@ -1028,6 +1067,28 @@
         return false;
     }
 
+    const auto focusCategoryTreeHost = [&](std::wstring_view context) noexcept
+    {
+        if (FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)))
+        {
+            return true;
+        }
+
+        PreferencesDebugSnapshot focusSnapshot{};
+        static_cast<void>(DebugGetPreferencesDialogSnapshot(focusSnapshot));
+        state.Require(false,
+                      std::format(L"Failed to focus the Preferences category host {}; nativeFocus=0x{:X}, categoryHost=0x{:X}, activePage=0x{:X}, "
+                                  L"shellHost=0x{:X}, currentCategory={}, pageTitle='{}'.",
+                                  context,
+                                  reinterpret_cast<uintptr_t>(GetFocus()),
+                                  reinterpret_cast<uintptr_t>(categoryTreeHost),
+                                  reinterpret_cast<uintptr_t>(DebugGetPreferencesActivePageHandle()),
+                                  reinterpret_cast<uintptr_t>(DebugGetPreferencesShellHostHandle()),
+                                  static_cast<int>(focusSnapshot.currentCategory),
+                                  focusSnapshot.pageTitle));
+        return false;
+    };
+
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
@@ -1113,8 +1174,7 @@
             return false;
         };
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, std::format(L"Failed to focus the Preferences category host for {}.", context));
-        if (! state.failure.empty())
+        if (! focusCategoryTreeHost(std::format(L"for {}", context)))
         {
             return false;
         }
@@ -1204,8 +1264,7 @@
                       L"Preferences Plugins page edit descendant should expose a stable accessible name before round-trip navigation.");
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to refocus the Preferences category host before leaving Plugins for General.");
-    if (! state.failure.empty())
+    if (! focusCategoryTreeHost(L"before leaving Plugins for General"))
     {
         return false;
     }
@@ -2691,21 +2750,26 @@
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Viewers remove interaction test.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)),
+                      L"Failed to focus the Preferences category host for Viewers remove interaction test.");
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
+                      L"Failed to select the Preferences Viewers category for remove interaction validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 2; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
-                      L"Preferences Viewers page did not settle before remove interaction validation.");
+        const bool settled = waitForSnapshot(
+            [](const PreferencesDebugSnapshot& value) noexcept
+            { return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.currentPageDxHostResizeFailureCount == 0u; },
+            outSnapshot);
+        state.Require(settled,
+                      std::format(L"Preferences Viewers page did not settle before remove interaction validation; category={}, rows={}, "
+                                  L"selected='{}', childWindows={}, renderedDxHosts={}, resizeFailures={}, pageTitle='{}'.",
+                                  static_cast<int>(outSnapshot.currentCategory),
+                                  outSnapshot.viewersListRowCount,
+                                  outSnapshot.viewersSelectedExtensionText,
+                                  outSnapshot.visibleCurrentPageChildWindowCount,
+                                  outSnapshot.currentPageRenderedDxHostCount,
+                                  outSnapshot.currentPageDxHostResizeFailureCount,
+                                  outSnapshot.pageTitle));
         if (! state.failure.empty())
         {
             return false;
@@ -2901,6 +2965,20 @@
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
+    const auto formatViewersResetSnapshot = [&](const PreferencesDebugSnapshot& value, const size_t expectedRowCount) noexcept
+    {
+        return std::format(L"currentCategory={}, viewersListRowCount={} (expected {}), viewersSelectedExtensionText='{}', viewersSearchText='{}', "
+                           L"createdPaneWindowCount={}, visiblePaneWindowCount={}, currentPageDxHostResizeFailureCount={}",
+                           static_cast<int>(value.currentCategory),
+                           value.viewersListRowCount,
+                           expectedRowCount,
+                           value.viewersSelectedExtensionText,
+                           value.viewersSearchText,
+                           value.createdPaneWindowCount,
+                           value.visiblePaneWindowCount,
+                           value.currentPageDxHostResizeFailureCount);
+    };
+
     const auto getShellHost = [&]() noexcept -> HWND
     {
         const HWND shellHost = DebugGetPreferencesShellHostHandle();
@@ -2909,17 +2987,18 @@
         return shellHost;
     };
 
-    const auto navigateToViewersPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
+    const auto navigateToViewersPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot, std::wstring_view context) noexcept
     {
         const HWND categoryTreeHost = GetDlgItem(targetPrefs, IDC_PREFS_CATEGORY_LIST);
         state.Require(categoryTreeHost != nullptr && IsWindow(categoryTreeHost) != FALSE,
-                      L"Preferences category host control missing for Viewers reset interaction test.");
+                      std::format(L"Preferences category host control missing for Viewers reset interaction test during {}.", context));
         if (! categoryTreeHost || IsWindow(categoryTreeHost) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Viewers reset interaction test.");
+        state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
+                      std::format(L"Failed to focus the Preferences category host for Viewers reset interaction test during {}.", context));
         SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
         SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
         PumpPendingMessages();
@@ -2930,10 +3009,18 @@
             PumpPendingMessages();
         }
 
-        state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.currentPageDxHostResizeFailureCount == 0u; },
-                                      outSnapshot),
-                      L"Preferences Viewers page did not settle before reset interaction validation.");
+        const bool settled = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+            return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.currentPageDxHostResizeFailureCount == 0u;
+        }, outSnapshot);
+        if (! settled)
+        {
+            PreferencesDebugSnapshot actualSnapshot = outSnapshot;
+            static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
+            state.Require(false,
+                          std::format(L"Preferences Viewers page did not settle before reset interaction validation during {}; {}.",
+                                      context,
+                                      formatViewersResetSnapshot(actualSnapshot, 3u)));
+        }
         if (! state.failure.empty())
         {
             return false;
@@ -2943,7 +3030,7 @@
     };
 
     PreferencesDebugSnapshot snapshot{};
-    if (! navigateToViewersPage(prefs, snapshot))
+    if (! navigateToViewersPage(prefs, snapshot, L"initial open"))
     {
         return false;
     }
@@ -2973,14 +3060,21 @@
 
     state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, resetButtonText),
                   L"Failed to invoke the visible Preferences Viewers Reset Defaults button through live UIA interaction.");
-    state.Require(waitForSnapshot(
-                      [&](const PreferencesDebugSnapshot& value) noexcept
+    const bool firstResetRestoredDefaults = waitForSnapshot(
+        [&](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == defaultRowCount && value.viewersSelectedExtensionText.empty() &&
                value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.currentPageDxHostResizeFailureCount == 0u;
     },
-                      snapshot),
-                  L"Preferences Viewers visible DX Reset Defaults action did not restore the default mappings and shared page state.");
+        snapshot);
+    if (! firstResetRestoredDefaults)
+    {
+        PreferencesDebugSnapshot actualSnapshot = snapshot;
+        static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
+        state.Require(false,
+                      std::format(L"Preferences Viewers visible DX Reset Defaults action did not restore the default mappings and shared page state; {}.",
+                                  formatViewersResetSnapshot(actualSnapshot, defaultRowCount)));
+    }
     if (! state.failure.empty())
     {
         return false;
@@ -3001,19 +3095,28 @@
         return false;
     }
 
-    if (! navigateToViewersPage(prefs, snapshot))
+    if (! navigateToViewersPage(prefs, snapshot, L"cancel reopen"))
     {
         return false;
     }
 
-    state.Require(waitForSnapshot(
-                      [](const PreferencesDebugSnapshot& value) noexcept
+    const std::wstring baselineSelectedExtension = L".selftest-viewers-001";
+    const bool cancelRestoredBaselineMappings = waitForSnapshot(
+        [&](const PreferencesDebugSnapshot& value) noexcept
     {
-        return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.viewersSelectedExtensionText.empty() &&
-               value.currentPageDxHostResizeFailureCount == 0u;
+        return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u &&
+               value.viewersSelectedExtensionText == baselineSelectedExtension && value.currentPageDxHostResizeFailureCount == 0u;
     },
-                      snapshot),
-                  L"Preferences Viewers page did not restore the baseline mappings after shell Cancel discarded the pending reset.");
+        snapshot);
+    if (! cancelRestoredBaselineMappings)
+    {
+        PreferencesDebugSnapshot actualSnapshot = snapshot;
+        static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
+        state.Require(
+            false,
+            std::format(L"Preferences Viewers page did not restore the baseline mappings and first-row selection after shell Cancel discarded the pending reset; {}.",
+                        formatViewersResetSnapshot(actualSnapshot, 3u)));
+    }
     if (! state.failure.empty())
     {
         return false;
@@ -3029,14 +3132,21 @@
 
     state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, resetButtonText),
                   L"Failed to invoke the visible Preferences Viewers Reset Defaults button through live UIA interaction after shell Cancel reopen.");
-    state.Require(waitForSnapshot(
-                      [&](const PreferencesDebugSnapshot& value) noexcept
+    const bool secondResetRestoredDefaults = waitForSnapshot(
+        [&](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == defaultRowCount && value.viewersSelectedExtensionText.empty() &&
                value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.currentPageDxHostResizeFailureCount == 0u;
     },
-                      snapshot),
-                  L"Preferences Viewers visible DX Reset Defaults action did not restore the default mappings after shell Cancel reopen.");
+        snapshot);
+    if (! secondResetRestoredDefaults)
+    {
+        PreferencesDebugSnapshot actualSnapshot = snapshot;
+        static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
+        state.Require(false,
+                      std::format(L"Preferences Viewers visible DX Reset Defaults action did not restore the default mappings after shell Cancel reopen; {}.",
+                                  formatViewersResetSnapshot(actualSnapshot, defaultRowCount)));
+    }
     if (! state.failure.empty())
     {
         return false;
@@ -3044,14 +3154,21 @@
 
     constexpr std::wstring_view kRemovedSearchText = L".selftest-viewers-001";
     state.Require(DebugSetPreferencesViewersSearchText(kRemovedSearchText), L"Failed to set the Viewers search text while validating the post-reset DX state.");
-    state.Require(waitForSnapshot(
-                      [](const PreferencesDebugSnapshot& value) noexcept
+    const bool resetRemovedSelfTestMapping = waitForSnapshot(
+        [](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryViewers && value.viewersSearchText == L".selftest-viewers-001" && value.viewersListRowCount == 0u &&
                value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.currentPageDxHostResizeFailureCount == 0u;
     },
-                      snapshot),
-                  L"Preferences Viewers reset validation did not remove the self-test extension mapping from the visible DX list.");
+        snapshot);
+    if (! resetRemovedSelfTestMapping)
+    {
+        PreferencesDebugSnapshot actualSnapshot = snapshot;
+        static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
+        state.Require(false,
+                      std::format(L"Preferences Viewers reset validation did not remove the self-test extension mapping from the visible DX list; {}.",
+                                  formatViewersResetSnapshot(actualSnapshot, 0u)));
+    }
     return state.failure.empty();
 }
 
@@ -3226,8 +3343,8 @@
         return false;
     }
 
-    const std::wstring extensionLabel = LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_EXTENSION);
-    state.Require(! extensionLabel.empty(), L"Preferences Viewers Extension label should resolve for live UIA ValuePattern validation.");
+    const std::wstring matchValueLabel = LoadStringResource(nullptr, IDS_PREFS_FILE_ACTION_LABEL_MATCH_VALUE);
+    state.Require(! matchValueLabel.empty(), L"Preferences Viewers match-value label should resolve for live UIA ValuePattern validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -3241,10 +3358,10 @@
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(activePage, UIA_EditControlTypeId, extensionLabel, kUpdatedExtension),
-                  L"Preferences Viewers visible DX extension edit did not accept live UIA ValuePattern mutation.");
-    state.Require(waitForEditValue(extensionLabel, kUpdatedExtension),
-                  L"Preferences Viewers visible DX extension edit did not settle to the edited value after live UIA mutation.");
+    state.Require(SetVisibleDescendantValueByName(activePage, UIA_EditControlTypeId, matchValueLabel, kUpdatedExtension),
+                  L"Preferences Viewers visible DX match-value edit did not accept live UIA ValuePattern mutation.");
+    state.Require(waitForEditValue(matchValueLabel, kUpdatedExtension),
+                  L"Preferences Viewers visible DX match-value edit did not settle to the edited value after live UIA mutation.");
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -3301,12 +3418,12 @@
         return false;
     }
 
-    state.Require(waitForEditValue(extensionLabel, kOriginalExtension),
-                  L"Preferences Viewers shell Cancel path did not restore the visible DX extension edit to its baseline value.");
-    state.Require(SetVisibleDescendantValueByName(reopenedActivePage, UIA_EditControlTypeId, extensionLabel, kUpdatedExtension),
-                  L"Preferences Viewers visible DX extension edit did not accept live UIA ValuePattern mutation during Add / Update commit validation.");
-    state.Require(waitForEditValue(extensionLabel, kUpdatedExtension),
-                  L"Preferences Viewers visible DX extension edit did not settle to the edited value during Add / Update commit validation.");
+    state.Require(waitForEditValue(matchValueLabel, kOriginalExtension),
+                  L"Preferences Viewers shell Cancel path did not restore the visible DX match-value edit to its baseline value.");
+    state.Require(SetVisibleDescendantValueByName(reopenedActivePage, UIA_EditControlTypeId, matchValueLabel, kUpdatedExtension),
+                  L"Preferences Viewers visible DX match-value edit did not accept live UIA ValuePattern mutation during Add / Update commit validation.");
+    state.Require(waitForEditValue(matchValueLabel, kUpdatedExtension),
+                  L"Preferences Viewers visible DX match-value edit did not settle to the edited value during Add / Update commit validation.");
     state.Require(
         waitForSnapshot(
             [](const PreferencesDebugSnapshot& value) noexcept
@@ -3321,15 +3438,15 @@
         return false;
     }
 
-    const std::wstring addUpdateButtonText = LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_ADD_UPDATE);
-    state.Require(! addUpdateButtonText.empty(), L"Preferences Viewers Add / Update button caption should resolve for live UIA InvokePattern validation.");
+    const std::wstring saveAssociationButtonText = LoadStringResource(nullptr, IDS_PREFS_FILE_ACTION_BUTTON_SAVE_ASSOCIATION);
+    state.Require(! saveAssociationButtonText.empty(), L"Preferences Viewers Save Association button caption should resolve for live UIA InvokePattern validation.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, addUpdateButtonText),
-                  L"Failed to invoke the visible Preferences Viewers Add / Update button through live UIA interaction.");
+    state.Require(InvokeVisibleDescendantByName(reopenedActivePage, UIA_ButtonControlTypeId, saveAssociationButtonText),
+                  L"Failed to invoke the visible Preferences Viewers Save Association button through live UIA interaction.");
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
     {

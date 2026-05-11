@@ -2076,6 +2076,16 @@ Checkbox::Checkbox(std::wstring text) : Toggle(std::move(text))
 {
 }
 
+bool Checkbox::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
+{
+    if (virtualKey == VK_RETURN)
+    {
+        return false;
+    }
+
+    return Toggle::OnKeyDown(host, virtualKey, modifiers);
+}
+
 void Checkbox::SetIndeterminate(bool indeterminate) noexcept
 {
     _indeterminate = indeterminate;
@@ -3365,9 +3375,13 @@ std::optional<size_t> MenuBar::GetVisualHighlightIndex() const noexcept
 std::optional<size_t> MenuBar::HitTestItem(const WindowHost& host, PointDip pointDip) const noexcept
 {
     const D2D1_POINT_2F point = pointDip.AsD2D();
+    const D2D1_RECT_F bounds  = GetBounds();
     for (size_t index = 0; index < _items.size(); ++index)
     {
-        if (PointInRect(GetItemRect(host, index), point))
+        D2D1_RECT_F hitRect = GetItemRect(host, index);
+        hitRect.top         = bounds.top;
+        hitRect.bottom      = bounds.bottom;
+        if (PointInRect(hitRect, point))
         {
             return index;
         }
@@ -3844,8 +3858,11 @@ void TabControl::EnsureSelectedTabVisible() noexcept
 
 void TabControl::UpdateVisiblePageBounds() noexcept
 {
+    Debug::Perf::Scope updatePerf(L"dxui.tabcontrol.update_visible_pages_us");
     auto& children                = AccessChildren();
     const D2D1_RECT_F contentRect = GetContentRect();
+    updatePerf.SetValue0(_selectedIndex.has_value() ? static_cast<uint64_t>(_selectedIndex.value()) : 0u);
+    updatePerf.SetValue1(static_cast<uint64_t>(children.size()));
     for (size_t index = 0u; index < children.size(); ++index)
     {
         if (! children[index])
@@ -3854,16 +3871,22 @@ void TabControl::UpdateVisiblePageBounds() noexcept
         }
 
         const bool visible = _selectedIndex.has_value() && _selectedIndex.value() == index;
+        if (visible)
+        {
+            children[index]->SetBounds(contentRect);
+        }
         children[index]->SetVisible(visible);
-        children[index]->SetBounds(contentRect);
     }
 }
 
 void TabControl::SyncLayout() noexcept
 {
+    Debug::Perf::Scope syncPerf(L"dxui.tabcontrol.sync_layout_us");
     const float viewportWidth = (std::max)(0.0f, GetHeaderViewportRight() - GetHeaderViewportLeft());
     const float maxOffset     = (std::max)(0.0f, GetTotalTabWidthDip() - viewportWidth);
     _headerScrollOffsetDip    = (std::clamp)(_headerScrollOffsetDip, 0.0f, maxOffset);
+    syncPerf.SetValue0(_selectedIndex.has_value() ? static_cast<uint64_t>(_selectedIndex.value()) : 0u);
+    syncPerf.SetValue1(static_cast<uint64_t>(_tabs.size()));
     UpdateVisiblePageBounds();
     EnsureSelectedTabVisible();
     RequestInvalidate();
@@ -3877,6 +3900,18 @@ void TabControl::SelectTab(WindowHost& host, size_t index, bool focusSelf) noexc
     }
 
     const bool changed = _selectedIndex != index;
+    Debug::Perf::Scope selectPerf(L"dxui.tabcontrol.select_tab_us");
+    selectPerf.SetValue0(static_cast<uint64_t>(index));
+    selectPerf.SetValue1(changed ? 1u : 0u);
+    if (! changed)
+    {
+        if (focusSelf)
+        {
+            host.SetFocusControl(this);
+        }
+        return;
+    }
+
     _selectedIndex = index;
     if (focusSelf)
     {
@@ -3990,8 +4025,35 @@ void TabControl::Paint(WindowHost& host) const
 
     FillRectangleWithColor(host, bounds, theme.windowBackground);
     FillRectangleWithColor(host, contentRect, theme.cardBackground);
-    DrawLineWithColor(
-        host, D2D1::Point2F(bounds.left, headerRect.bottom - 1.0f), D2D1::Point2F(bounds.right, headerRect.bottom - 1.0f), theme.borderDefault, 1.0f);
+    if (contentRect.right > contentRect.left && contentRect.bottom > contentRect.top)
+    {
+        const auto drawHeaderSeparatorSegment = [&](const float fromX, const float toX) noexcept
+        {
+            const float left  = std::clamp(fromX, contentRect.left, contentRect.right);
+            const float right = std::clamp(toX, contentRect.left, contentRect.right);
+            if (right - left > 0.5f)
+            {
+                DrawLineWithColor(host, D2D1::Point2F(left, contentRect.top), D2D1::Point2F(right, contentRect.top), theme.borderDefault, 1.0f);
+            }
+        };
+
+        if (_selectedIndex.has_value() && _selectedIndex.value() < _tabs.size())
+        {
+            const D2D1_RECT_F selectedTabRect = GetTabRect(_selectedIndex.value());
+            drawHeaderSeparatorSegment(contentRect.left, selectedTabRect.left);
+            drawHeaderSeparatorSegment(selectedTabRect.right, contentRect.right);
+        }
+        else
+        {
+            drawHeaderSeparatorSegment(contentRect.left, contentRect.right);
+        }
+
+        DrawLineWithColor(host, D2D1::Point2F(contentRect.left, contentRect.top), D2D1::Point2F(contentRect.left, contentRect.bottom), theme.borderDefault, 1.0f);
+        DrawLineWithColor(
+            host, D2D1::Point2F(contentRect.right - 1.0f, contentRect.top), D2D1::Point2F(contentRect.right - 1.0f, contentRect.bottom), theme.borderDefault, 1.0f);
+        DrawLineWithColor(
+            host, D2D1::Point2F(contentRect.left, contentRect.bottom - 1.0f), D2D1::Point2F(contentRect.right, contentRect.bottom - 1.0f), theme.borderDefault, 1.0f);
+    }
 
     if (NeedsOverflowButtons())
     {
@@ -4118,11 +4180,6 @@ bool TabControl::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBu
             _draggingTabIndex = hit.index;
             _dragStartPoint   = point;
             _dragReordering   = false;
-            if (IsFocusable())
-            {
-                host.SetFocusControl(this);
-            }
-            Invalidate(host);
             return true;
     }
 
@@ -4729,6 +4786,7 @@ void StackPanel::ApplyLayout()
 void ScrollPanel::ClearChildren() noexcept
 {
     _innerHoveredChild  = nullptr;
+    _innerCapturedChild = nullptr;
     _scrollbarHotPart   = HotPart::None;
     _dragThumb          = false;
     _dragThumbOffsetDip = 0.0f;
@@ -4737,9 +4795,11 @@ void ScrollPanel::ClearChildren() noexcept
 
 void ScrollPanel::SetContentHeight(float heightDip) noexcept
 {
+    const float previousOffset = _scrollOffsetDip;
     _contentHeightDip = (std::max)(0.0f, heightDip);
     ClampScrollOffset();
     RequestInvalidate();
+    NotifyScrollChanged(previousOffset);
 }
 
 void StackPanel::OnFlowDirectionChanged() noexcept
@@ -4766,20 +4826,41 @@ float ScrollPanel::GetScrollOffset() const noexcept
 
 void ScrollPanel::SetScrollOffset(float offsetDip) noexcept
 {
-    _scrollOffsetDip = offsetDip;
+    const float previousOffset = _scrollOffsetDip;
+    _scrollOffsetDip           = offsetDip;
     ClampScrollOffset();
-    RequestInvalidate();
+    if (_scrollOffsetDip != previousOffset)
+    {
+        RequestInvalidate();
+        NotifyScrollChanged(previousOffset);
+    }
 }
 
 void ScrollPanel::ScrollToTop() noexcept
 {
-    _scrollOffsetDip = 0.0f;
-    RequestInvalidate();
+    SetScrollOffset(0.0f);
 }
 
 void ScrollPanel::SetScrollStepDip(float stepDip) noexcept
 {
     _scrollStepDip = (std::max)(1.0f, stepDip);
+}
+
+void ScrollPanel::SetInternalScrollbarEnabled(bool enabled) noexcept
+{
+    if (_internalScrollbarEnabled != enabled)
+    {
+        _internalScrollbarEnabled = enabled;
+        _scrollbarHotPart         = HotPart::None;
+        _dragThumb                = false;
+        _dragThumbOffsetDip       = 0.0f;
+        RequestInvalidate();
+    }
+}
+
+void ScrollPanel::SetOnScrollChanged(std::function<void(float)> callback) noexcept
+{
+    _onScrollChanged = std::move(callback);
 }
 
 bool ScrollPanel::NeedsScrollbar() const noexcept
@@ -4794,6 +4875,23 @@ float ScrollPanel::GetScrollbarThickness() const noexcept
     return kScrollbarThicknessDip;
 }
 
+bool ScrollPanel::IsInternalScrollbarEnabled() const noexcept
+{
+    return _internalScrollbarEnabled;
+}
+
+bool ScrollPanel::DebugGetScrollbarThumbHitRect(D2D1_RECT_F& out) const noexcept
+{
+    if (! UsesInternalScrollbar())
+    {
+        out = D2D1::RectF();
+        return false;
+    }
+
+    out = GetScrollbarThumbHitRect();
+    return out.right > out.left && out.bottom > out.top;
+}
+
 float ScrollPanel::GetScrollableExtent() const noexcept
 {
     const D2D1_RECT_F bounds   = GetBounds();
@@ -4801,10 +4899,15 @@ float ScrollPanel::GetScrollableExtent() const noexcept
     return (std::max)(0.0f, _contentHeightDip - viewportHeight);
 }
 
+bool ScrollPanel::UsesInternalScrollbar() const noexcept
+{
+    return _internalScrollbarEnabled && NeedsScrollbar();
+}
+
 D2D1_RECT_F ScrollPanel::GetViewportRect() const noexcept
 {
     D2D1_RECT_F bounds = GetBounds();
-    if (NeedsScrollbar())
+    if (UsesInternalScrollbar())
     {
         if (IsRightToLeft())
         {
@@ -4834,10 +4937,27 @@ D2D1_RECT_F ScrollPanel::GetScrollbarThumbRect() const noexcept
     return ComputeScrollbarThumbRect(track, ScrollbarOrientation::Vertical, viewportHeight, _contentHeightDip, _scrollOffsetDip, extent);
 }
 
+D2D1_RECT_F ScrollPanel::GetScrollbarThumbHitRect() const noexcept
+{
+    const D2D1_RECT_F track    = GetScrollbarTrackRect();
+    const D2D1_RECT_F bounds   = GetBounds();
+    const float viewportHeight = bounds.bottom - bounds.top;
+    const float extent         = GetScrollableExtent();
+    return ComputeScrollbarThumbHitRect(track, ScrollbarOrientation::Vertical, viewportHeight, _contentHeightDip, _scrollOffsetDip, extent);
+}
+
 void ScrollPanel::ClampScrollOffset() noexcept
 {
     const float extent = GetScrollableExtent();
     _scrollOffsetDip   = (extent <= 0.0f) ? 0.0f : (std::clamp)(_scrollOffsetDip, 0.0f, extent);
+}
+
+void ScrollPanel::NotifyScrollChanged(float previousOffsetDip) noexcept
+{
+    if (_scrollOffsetDip != previousOffsetDip && _onScrollChanged)
+    {
+        _onScrollChanged(_scrollOffsetDip);
+    }
 }
 
 D2D1_POINT_2F ScrollPanel::ToContentSpace(D2D1_POINT_2F viewportPoint) const noexcept
@@ -4918,7 +5038,7 @@ void ScrollPanel::Paint(WindowHost& host) const
     dc->PopAxisAlignedClip();
 
     // Paint scrollbar
-    if (NeedsScrollbar())
+    if (UsesInternalScrollbar())
     {
         const D2D1_RECT_F track = GetScrollbarTrackRect();
         const D2D1_RECT_F thumb = GetScrollbarThumbRect();
@@ -4965,12 +5085,12 @@ bool ScrollPanel::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightB
     }
 
     // Scrollbar interaction
-    if (NeedsScrollbar())
+    if (UsesInternalScrollbar())
     {
         const D2D1_RECT_F track = GetScrollbarTrackRect();
         if (PointInRect(track, point))
         {
-            const D2D1_RECT_F thumb = GetScrollbarThumbRect();
+            const D2D1_RECT_F thumb = GetScrollbarThumbHitRect();
             if (PointInRect(thumb, point))
             {
                 _dragThumb          = true;
@@ -4982,9 +5102,11 @@ bool ScrollPanel::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightB
             {
                 // Page scroll: jump toward click
                 const float pageStep = (GetBounds().bottom - GetBounds().top) * 0.8f;
+                const float previousOffset = _scrollOffsetDip;
                 _scrollOffsetDip += (point.y < thumb.top) ? -pageStep : pageStep;
                 ClampScrollOffset();
                 _scrollbarHotPart = HotPart::Track;
+                NotifyScrollChanged(previousOffset);
             }
             RequestInvalidate();
             return true;
@@ -4998,7 +5120,12 @@ bool ScrollPanel::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightB
         const D2D1_POINT_2F contentPoint = ToContentSpace(point);
         if (Control* child = FindChildAtContent(contentPoint))
         {
-            return child->OnMouseDown(host, contentPoint, rightButton, modifiers);
+            if (child->OnMouseDown(host, contentPoint, rightButton, modifiers))
+            {
+                _innerCapturedChild = child;
+                host.CaptureMouse(this);
+                return true;
+            }
         }
     }
 
@@ -5027,30 +5154,38 @@ bool ScrollPanel::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool
 
 bool ScrollPanel::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers)
 {
+    if (_innerCapturedChild)
+    {
+        _innerCapturedChild->OnMouseMove(host, ToContentSpace(point), modifiers);
+        return true;
+    }
+
     if (_dragThumb)
     {
         const D2D1_RECT_F track = GetScrollbarTrackRect();
-        const D2D1_RECT_F thumb = GetScrollbarThumbRect();
+        const D2D1_RECT_F thumb = GetScrollbarThumbHitRect();
         const float thumbHeight = thumb.bottom - thumb.top;
         const float available   = (std::max)(0.0f, (track.bottom - track.top) - thumbHeight);
         if (available > 0.0f)
         {
+            const float previousOffset = _scrollOffsetDip;
             const float thumbTop = (std::clamp)(point.y - _dragThumbOffsetDip, track.top, track.bottom - thumbHeight);
             _scrollOffsetDip     = ((thumbTop - track.top) / available) * GetScrollableExtent();
             ClampScrollOffset();
+            NotifyScrollChanged(previousOffset);
         }
         RequestInvalidate();
         return true;
     }
 
     // Update scrollbar hover
-    if (NeedsScrollbar())
+    if (UsesInternalScrollbar())
     {
         const D2D1_RECT_F track = GetScrollbarTrackRect();
         HotPart newHot          = HotPart::None;
         if (PointInRect(track, point))
         {
-            const D2D1_RECT_F thumb = GetScrollbarThumbRect();
+            const D2D1_RECT_F thumb = GetScrollbarThumbHitRect();
             newHot                  = PointInRect(thumb, point) ? HotPart::Thumb : HotPart::Track;
         }
         if (_scrollbarHotPart != newHot)
@@ -5075,6 +5210,15 @@ bool ScrollPanel::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifi
 
 bool ScrollPanel::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers)
 {
+    if (_innerCapturedChild)
+    {
+        Control* const capturedChild = _innerCapturedChild;
+        _innerCapturedChild          = nullptr;
+        const bool handled           = capturedChild->OnMouseUp(host, ToContentSpace(point), rightButton, modifiers);
+        UpdateInnerHover(host, point);
+        return handled;
+    }
+
     if (_dragThumb)
     {
         _dragThumb = false;
@@ -5084,7 +5228,7 @@ bool ScrollPanel::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightBut
         const D2D1_RECT_F track = GetScrollbarTrackRect();
         if (PointInRect(track, point))
         {
-            const D2D1_RECT_F thumb = GetScrollbarThumbRect();
+            const D2D1_RECT_F thumb = GetScrollbarThumbHitRect();
             _scrollbarHotPart       = PointInRect(thumb, point) ? HotPart::Thumb : HotPart::Track;
         }
         else
@@ -5111,8 +5255,23 @@ bool ScrollPanel::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightBut
 
 bool ScrollPanel::OnMouseWheel([[maybe_unused]] WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers)
 {
-    static_cast<void>(point);
-    static_cast<void>(modifiers);
+    const D2D1_RECT_F viewport = GetViewportRect();
+    if (PointInRect(viewport, point))
+    {
+        const D2D1_POINT_2F contentPoint = ToContentSpace(point);
+        if (Control* child = FindChildAtContent(contentPoint))
+        {
+            if (child->OnMouseWheel(host, contentPoint, wheelDelta, modifiers))
+            {
+                return true;
+            }
+        }
+    }
+
+    if (! _internalScrollbarEnabled)
+    {
+        return false;
+    }
 
     if (GetScrollableExtent() <= 0.0f)
     {
@@ -5120,14 +5279,21 @@ bool ScrollPanel::OnMouseWheel([[maybe_unused]] WindowHost& host, D2D1_POINT_2F 
     }
 
     const float steps = wheelDelta / static_cast<float>(WHEEL_DELTA);
+    const float previousOffset = _scrollOffsetDip;
     _scrollOffsetDip -= steps * _scrollStepDip;
     ClampScrollOffset();
     RequestInvalidate();
+    NotifyScrollChanged(previousOffset);
     return true;
 }
 
 bool ScrollPanel::OnMouseLeave(WindowHost& host)
 {
+    if (_innerCapturedChild)
+    {
+        return true;
+    }
+
     if (_innerHoveredChild)
     {
         _innerHoveredChild->OnHoverChanged(host, false);
@@ -5139,6 +5305,24 @@ bool ScrollPanel::OnMouseLeave(WindowHost& host)
         RequestInvalidate();
     }
     return true;
+}
+
+void ScrollPanel::OnCaptureLost(WindowHost& host)
+{
+    const bool hadDrag = _dragThumb || _innerCapturedChild != nullptr;
+    if (_innerCapturedChild)
+    {
+        _innerCapturedChild->OnCaptureLost(host);
+        _innerCapturedChild = nullptr;
+    }
+
+    _dragThumb          = false;
+    _dragThumbOffsetDip = 0.0f;
+    _scrollbarHotPart   = HotPart::None;
+    if (hadDrag)
+    {
+        Invalidate(host);
+    }
 }
 
 bool TooltipLayer::SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip)

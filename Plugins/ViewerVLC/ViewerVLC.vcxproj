@@ -128,6 +128,14 @@
     <ClInclude Include="ViewerVLC.h" />
     <ResourceCompile Include="ViewerVLCResources.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Lang\ja-JP\ViewerVLC-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{d860dfd2-fe55-5b8d-86e0-1b874470e845}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

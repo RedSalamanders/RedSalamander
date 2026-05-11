@@ -49,10 +49,12 @@ struct SelfTestOptions
 {
     // Abort the run immediately after the first case failure.
     bool failFast = false;
-    // Multiply every timeout by this factor (use > 1.0 on slow CI machines).
+    // Multiply every timeout by this bounded finite factor (use > 1.0 on slow CI machines).
     double timeoutScale = 1.0;
     // Write a results.json file to the suite artifact directory on completion.
     bool writeJsonSummary = true;
+    // Enumerate declared cases without executing their bodies.
+    bool listCasesOnly = false;
     // When set, run the exact matching case name (case-insensitive), or every case with that
     // case-insensitive prefix when the filter ends in '_'.
     std::wstring caseFilter;
@@ -161,6 +163,13 @@ struct CaseState
     return true;
 }
 
+void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noexcept;
+void AppendCaseResult(SelfTestSuiteResult& suite,
+                      std::wstring_view name,
+                      SelfTestCaseResult::Status status,
+                      std::wstring_view reason,
+                      uint64_t durationMs) noexcept;
+
 template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSuiteResult& suite, std::wstring_view name, Func&& func) noexcept
 {
     if (! CaseFilterMatches(options.caseFilter, name))
@@ -171,12 +180,19 @@ template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSu
     SelfTestCaseResult result{};
     result.name = std::wstring(name);
 
+    if (options.listCasesOnly)
+    {
+        result.status = SelfTestCaseResult::Status::skipped;
+        result.reason = L"listed only";
+        AppendCaseResult(suite, std::move(result));
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         result.status = SelfTestCaseResult::Status::skipped;
         result.reason = L"not executed (fail-fast)";
-        suite.cases.push_back(std::move(result));
-        ++suite.skipped;
+        AppendCaseResult(suite, std::move(result));
         return;
     }
 
@@ -205,13 +221,7 @@ template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSu
     {
         result.status = SelfTestCaseResult::Status::failed;
         result.reason = state.failure.empty() ? L"failed" : state.failure;
-        suite.cases.push_back(std::move(result));
-        ++suite.failed;
-
-        if (suite.failureMessage.empty())
-        {
-            suite.failureMessage = suite.cases.back().reason;
-        }
+        AppendCaseResult(suite, std::move(result));
         return;
     }
 
@@ -219,14 +229,12 @@ template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSu
     {
         result.status = SelfTestCaseResult::Status::skipped;
         result.reason = state.skipped;
-        suite.cases.push_back(std::move(result));
-        ++suite.skipped;
+        AppendCaseResult(suite, std::move(result));
         return;
     }
 
     result.status = SelfTestCaseResult::Status::passed;
-    suite.cases.push_back(std::move(result));
-    ++suite.passed;
+    AppendCaseResult(suite, std::move(result));
 }
 
 struct SelfTestRunResult

@@ -72,7 +72,12 @@ void NavigationView::OnLButtonDown(POINT pt)
                 return;
             }
 
-            // Navigate to this segment's path
+            if (i + 1u == _segments.size())
+            {
+                return;
+            }
+
+            // Navigate to this ancestor segment's path.
             RequestPathChange(segment.fullPath);
             return;
         }
@@ -767,20 +772,20 @@ void NavigationView::ActivateFocusedRegion()
         case FocusRegion::Menu:
             if (_hWnd)
             {
-                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowMenuDropdown, 0, 0);
+                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowMenuDropdown, 1, 0);
             }
             break;
         case FocusRegion::Path: EnterEditMode(); break;
         case FocusRegion::History:
             if (_hWnd)
             {
-                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowHistoryDropdown, 0, 0);
+                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowHistoryDropdown, 1, 0);
             }
             break;
         case FocusRegion::DiskInfo:
             if (_hWnd)
             {
-                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowDiskInfoDropdown, 0, 0);
+                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowDiskInfoDropdown, 1, 0);
             }
             break;
     }

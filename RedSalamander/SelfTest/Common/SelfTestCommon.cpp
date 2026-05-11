@@ -4,6 +4,7 @@
 #include "Helpers.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <format>
@@ -57,10 +58,12 @@ constexpr std::wstring_view kTraceFileName{L"trace.txt"};
 constexpr std::wstring_view kPerfMetricsFileName{L"perf_metrics.jsonl"};
 constexpr std::wstring_view kRepoSpecsDirName{L"Specs"};
 constexpr std::wstring_view kRepoTestRunsDirName{L"TestRuns"};
+constexpr std::wstring_view kRepoGitDirName{L".git"};
 constexpr std::wstring_view kSelfTestRootOverrideEnvVar{L"REDSALAMANDER_SELFTEST_ROOT"};
 constexpr const char* kSuiteCompareName  = "CompareDirectories";
 constexpr const char* kSuiteFileOpsName  = "FileOperations";
 constexpr const char* kSuiteCommandsName = "Commands";
+constexpr int kRepoRootParentWalkLimit   = 10;
 
 SelfTestOptions g_options{};
 std::wstring g_runStartedUtcIso;
@@ -313,14 +316,30 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
     return {};
 }
 
+[[nodiscard]] bool PathExistsNoThrow(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    std::error_code ec;
+    return std::filesystem::exists(path, ec) && ! ec;
+}
+
+[[nodiscard]] bool IsRepoRootCandidate(const std::filesystem::path& candidate) noexcept
+{
+    return PathExistsNoThrow(candidate / kRepoGitDirName) && PathExistsNoThrow(candidate / L"RedSalamander.sln") &&
+           PathExistsNoThrow(candidate / kRepoSpecsDirName / kRepoTestRunsDirName);
+}
+
 [[nodiscard]] std::filesystem::path TryFindRepoRoot() noexcept
 {
     const std::wstring envRoot = GetEnvironmentString(L"REDSALAMANDER_REPO_ROOT");
     if (! envRoot.empty())
     {
-        std::error_code ec;
         const std::filesystem::path root = std::filesystem::path(envRoot);
-        if (std::filesystem::exists(root / kRepoSpecsDirName / kRepoTestRunsDirName, ec) && ! ec)
+        if (IsRepoRootCandidate(root))
         {
             return root;
         }
@@ -332,13 +351,10 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
         return {};
     }
 
-    std::error_code ec;
-    for (int i = 0; i < 10; ++i)
+    for (int i = 0; i < kRepoRootParentWalkLimit; ++i)
     {
         const std::filesystem::path candidate = cursor;
-        const std::filesystem::path testRuns  = candidate / kRepoSpecsDirName / kRepoTestRunsDirName;
-        const std::filesystem::path sln       = candidate / L"RedSalamander.sln";
-        if (std::filesystem::exists(testRuns, ec) && ! ec && std::filesystem::exists(sln, ec) && ! ec)
+        if (IsRepoRootCandidate(candidate))
         {
             return candidate;
         }
@@ -1004,7 +1020,17 @@ const std::filesystem::path& SelfTestRoot() noexcept
         const std::filesystem::path overrideRoot = GetSelfTestRootOverrideFromEnvironment();
         if (! overrideRoot.empty())
         {
-            return overrideRoot;
+            std::error_code ec;
+            if (! overrideRoot.is_absolute())
+            {
+                const std::filesystem::path absoluteRoot = std::filesystem::absolute(overrideRoot, ec);
+                if (! ec && ! absoluteRoot.empty())
+                {
+                    return absoluteRoot.lexically_normal();
+                }
+            }
+
+            return overrideRoot.lexically_normal();
         }
 
         const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
@@ -1176,6 +1202,39 @@ void AppendSuiteTrace(SelfTestSuite suite, std::wstring_view msg) noexcept
     AppendUtf16LogLine(GetSuiteArtifactPath(suite, kTraceFileName), msg);
 }
 
+void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noexcept
+{
+    suite.cases.push_back(std::move(result));
+    switch (suite.cases.back().status)
+    {
+        case SelfTestCaseResult::Status::passed: ++suite.passed; break;
+        case SelfTestCaseResult::Status::failed:
+        {
+            ++suite.failed;
+            if (suite.failureMessage.empty())
+            {
+                suite.failureMessage = suite.cases.back().reason;
+            }
+            break;
+        }
+        case SelfTestCaseResult::Status::skipped: ++suite.skipped; break;
+    }
+}
+
+void AppendCaseResult(SelfTestSuiteResult& suite,
+                      std::wstring_view name,
+                      SelfTestCaseResult::Status status,
+                      std::wstring_view reason,
+                      uint64_t durationMs) noexcept
+{
+    SelfTestCaseResult result{};
+    result.name       = std::wstring(name);
+    result.status     = status;
+    result.durationMs = durationMs;
+    result.reason     = std::wstring(reason);
+    AppendCaseResult(suite, std::move(result));
+}
+
 void SetRunStartedUtcIso(std::wstring_view startedUtcIso) noexcept
 {
     g_runStartedUtcIso.assign(startedUtcIso);
@@ -1306,10 +1365,20 @@ bool PathExists(const std::filesystem::path& p)
 
 uint64_t ScaleTimeout(uint64_t baseMs)
 {
-    const double scaled = static_cast<double>(baseMs) * GetSelfTestOptions().timeoutScale;
-    if (scaled <= 0.0)
+    if (baseMs == 0u)
     {
-        return 0;
+        return 0u;
+    }
+
+    const double scaled = static_cast<double>(baseMs) * GetSelfTestOptions().timeoutScale;
+    if (! std::isfinite(scaled))
+    {
+        return std::numeric_limits<uint64_t>::max();
+    }
+
+    if (baseMs > 0u && scaled < 1.0)
+    {
+        return 1u;
     }
 
     if (scaled > static_cast<double>(std::numeric_limits<uint64_t>::max()))

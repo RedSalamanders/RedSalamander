@@ -13,6 +13,29 @@ struct ShellActionProbeState final
     return path.wstring();
 }
 
+[[nodiscard]] std::wstring DescribeDirectoryEntriesForShellCommandTest(const std::filesystem::path& directory)
+{
+    std::vector<std::wstring> names;
+    std::error_code ec;
+    for (std::filesystem::directory_iterator it(directory, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        names.push_back(it->path().filename().wstring());
+    }
+
+    std::sort(names.begin(), names.end());
+
+    std::wstring result;
+    for (const std::wstring& name : names)
+    {
+        if (! result.empty())
+        {
+            result.append(L", ");
+        }
+        result.append(name);
+    }
+    return result;
+}
+
 [[nodiscard]] bool TestPaneOpenSecurityRoutesFocusedItem(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -872,10 +895,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
         return false;
     }
 
-    const std::filesystem::path root       = suiteRoot / L"work" / (L"go_to_lnk_dir_" + NewGuidText());
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"gld_" + NewGuidText());
     const std::filesystem::path linksRoot  = root / L"links";
-    const std::filesystem::path targetRoot = root / L"target-folder";
-    const std::filesystem::path linkFile   = linksRoot / L"target-folder.lnk";
+    const std::filesystem::path targetRoot = root / L"d";
+    const std::filesystem::path linkFile   = linksRoot / L"d.lnk";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     ec.clear();
@@ -907,10 +930,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set left pane path for .lnk directory-target test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target-folder.lnk"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"d.lnk"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for .lnk directory-target test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"target-folder.lnk"),
-                  L"Failed to focus target-folder.lnk for .lnk directory-target test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"d.lnk"),
+                  L"Failed to focus d.lnk for .lnk directory-target test.");
     if (! state.failure.empty())
     {
         return false;
@@ -1095,10 +1118,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
         return false;
     }
 
-    const std::filesystem::path root         = suiteRoot / L"work" / (L"go_to_junction_" + NewGuidText());
+    const std::filesystem::path root         = suiteRoot / L"work" / (L"gj_" + NewGuidText());
     const std::filesystem::path linksRoot    = root / L"links";
-    const std::filesystem::path targetRoot   = root / L"target-folder";
-    const std::filesystem::path junctionPath = linksRoot / L"target-junction";
+    const std::filesystem::path targetRoot   = root / L"d";
+    const std::filesystem::path junctionPath = linksRoot / L"j";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     ec.clear();
@@ -1130,10 +1153,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set left pane path for junction test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target-junction"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"j"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for junction test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"target-junction"),
-                  L"Failed to focus target-junction for junction test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"j"),
+                  L"Failed to focus j for junction test.");
     if (! state.failure.empty())
     {
         return false;
@@ -1167,10 +1190,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
         return false;
     }
 
-    const std::filesystem::path root         = suiteRoot / L"work" / (L"execute_open_junction_" + NewGuidText());
-    const std::filesystem::path sourceRoot   = root / L"source";
-    const std::filesystem::path targetRoot   = root / L"target-folder";
-    const std::filesystem::path junctionPath = sourceRoot / L"target-junction";
+    const std::filesystem::path root         = suiteRoot / L"work" / (L"xj_" + NewGuidText());
+    const std::filesystem::path sourceRoot   = root / L"s";
+    const std::filesystem::path targetRoot   = root / L"d";
+    const std::filesystem::path junctionPath = sourceRoot / L"j";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     ec.clear();
@@ -1203,10 +1226,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceRoot);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set left pane path for execute-open junction test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target-junction"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"j"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for execute-open junction test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"target-junction"),
-                  L"Failed to focus target-junction for execute-open junction test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"j"),
+                  L"Failed to focus j for execute-open junction test.");
     if (! state.failure.empty())
     {
         return false;
@@ -1240,12 +1263,12 @@ struct MountPointReparseDataBufferForShellCommandTest final
         return false;
     }
 
-    const std::filesystem::path root         = suiteRoot / L"work" / (L"properties_link_targets_" + NewGuidText());
-    const std::filesystem::path targetRoot   = root / L"target-folder";
-    const std::filesystem::path targetFile   = targetRoot / L"target.txt";
-    const std::filesystem::path linkFile     = root / L"target.lnk";
-    const std::filesystem::path urlFile      = root / L"target.url";
-    const std::filesystem::path junctionPath = root / L"target-junction";
+    const std::filesystem::path root         = suiteRoot / L"work" / (L"pp_" + NewGuidText());
+    const std::filesystem::path targetRoot   = root / L"d";
+    const std::filesystem::path targetFile   = targetRoot / L"t.txt";
+    const std::filesystem::path linkFile     = root / L"a.lnk";
+    const std::filesystem::path urlFile      = root / L"b.url";
+    const std::filesystem::path junctionPath = root / L"j";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     ec.clear();
@@ -1282,7 +1305,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
                   L"Failed to set left pane path for item-properties link-target test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target.lnk", L"target.url", L"target-junction"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.lnk", L"b.url", L"j"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for item-properties link-target test.");
     if (! state.failure.empty())
     {
@@ -1634,71 +1657,175 @@ struct MountPointReparseDataBufferForShellCommandTest final
     return true;
 }
 
-[[nodiscard]] std::vector<std::filesystem::path> ReadClipboardDropPathsForShellCommandTest(HWND ownerWindow) noexcept
+struct ClipboardDropPathsReadStatus
 {
+    bool opened              = false;
+    DWORD openError          = ERROR_SUCCESS;
+    HWND openClipboardWindow = nullptr;
+    bool hasHdrop            = false;
+    UINT fileCount           = 0u;
+};
+
+struct ClipboardDropEffectReadStatus
+{
+    bool opened              = false;
+    DWORD openError          = ERROR_SUCCESS;
+    HWND openClipboardWindow = nullptr;
+    UINT format              = 0u;
+    bool formatAvailable     = false;
+    bool hasHandle           = false;
+    bool locked              = false;
+};
+
+[[nodiscard]] std::vector<std::filesystem::path> ReadClipboardDropPathsForShellCommandTest(
+    HWND ownerWindow,
+    ClipboardDropPathsReadStatus* status = nullptr) noexcept
+{
+    using namespace std::chrono_literals;
+
     std::vector<std::filesystem::path> result;
-    if (OpenClipboard(ownerWindow) == 0)
+    for (uint32_t attempt = 0; attempt < 20u; ++attempt)
     {
-        return result;
-    }
-    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
-
-    HANDLE handle = GetClipboardData(CF_HDROP);
-    if (! handle)
-    {
-        return result;
-    }
-
-    const auto fileCount = DragQueryFileW(static_cast<HDROP>(handle), 0xFFFFFFFFu, nullptr, 0u);
-    result.reserve(fileCount);
-    for (UINT index = 0; index < fileCount; ++index)
-    {
-        const UINT length = DragQueryFileW(static_cast<HDROP>(handle), index, nullptr, 0u);
-        if (length == 0u)
+        if (OpenClipboard(ownerWindow) == 0)
         {
+            if (status)
+            {
+                status->opened              = false;
+                status->openError           = GetLastError();
+                status->openClipboardWindow = GetOpenClipboardWindow();
+            }
+            std::this_thread::sleep_for(10ms);
             continue;
         }
 
-        std::wstring pathText(length, L'\0');
-        const UINT copied = DragQueryFileW(static_cast<HDROP>(handle), index, pathText.data(), length + 1u);
-        if (copied == length)
+        const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+        if (status)
         {
-            result.emplace_back(pathText);
+            status->opened              = true;
+            status->openError           = ERROR_SUCCESS;
+            status->openClipboardWindow = nullptr;
         }
+
+        HANDLE handle = GetClipboardData(CF_HDROP);
+        if (! handle)
+        {
+            if (status)
+            {
+                status->hasHdrop = false;
+            }
+            return result;
+        }
+        if (status)
+        {
+            status->hasHdrop = true;
+        }
+
+        const auto fileCount = DragQueryFileW(static_cast<HDROP>(handle), 0xFFFFFFFFu, nullptr, 0u);
+        if (status)
+        {
+            status->fileCount = fileCount;
+        }
+        result.reserve(fileCount);
+        for (UINT index = 0; index < fileCount; ++index)
+        {
+            const UINT length = DragQueryFileW(static_cast<HDROP>(handle), index, nullptr, 0u);
+            if (length == 0u)
+            {
+                continue;
+            }
+
+            std::wstring pathText(static_cast<size_t>(length) + 1u, L'\0');
+            const UINT copied = DragQueryFileW(static_cast<HDROP>(handle), index, pathText.data(), length + 1u);
+            if (copied == length)
+            {
+                pathText.resize(length);
+                result.emplace_back(pathText);
+            }
+        }
+
+        return result;
     }
 
     return result;
 }
 
-[[nodiscard]] std::optional<DWORD> ReadClipboardPreferredDropEffectForShellCommandTest(HWND ownerWindow) noexcept
+[[nodiscard]] std::optional<DWORD> ReadClipboardPreferredDropEffectForShellCommandTest(
+    HWND ownerWindow,
+    ClipboardDropEffectReadStatus* status = nullptr) noexcept
 {
-    if (OpenClipboard(ownerWindow) == 0)
-    {
-        return std::nullopt;
-    }
-    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+    using namespace std::chrono_literals;
 
-    const UINT preferredDropEffectFormat = RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
-    if (preferredDropEffectFormat == 0u)
+    for (uint32_t attempt = 0; attempt < 20u; ++attempt)
     {
-        return std::nullopt;
+        if (OpenClipboard(ownerWindow) == 0)
+        {
+            if (status)
+            {
+                status->opened              = false;
+                status->openError           = GetLastError();
+                status->openClipboardWindow = GetOpenClipboardWindow();
+            }
+            std::this_thread::sleep_for(10ms);
+            continue;
+        }
+
+        const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+        if (status)
+        {
+            status->opened              = true;
+            status->openError           = ERROR_SUCCESS;
+            status->openClipboardWindow = nullptr;
+        }
+
+        const UINT preferredDropEffectFormat = RegisterClipboardFormatW(CFSTR_PREFERREDDROPEFFECT);
+        if (status)
+        {
+            status->format = preferredDropEffectFormat;
+        }
+        if (preferredDropEffectFormat == 0u)
+        {
+            return std::nullopt;
+        }
+
+        if (status)
+        {
+            status->formatAvailable = IsClipboardFormatAvailable(preferredDropEffectFormat) != FALSE;
+        }
+
+        HANDLE handle = GetClipboardData(preferredDropEffectFormat);
+        if (! handle)
+        {
+            if (status)
+            {
+                status->hasHandle = false;
+            }
+            return std::nullopt;
+        }
+        if (status)
+        {
+            status->hasHandle = true;
+        }
+
+        auto* effect = static_cast<DWORD*>(GlobalLock(handle));
+        if (! effect)
+        {
+            if (status)
+            {
+                status->locked = false;
+            }
+            return std::nullopt;
+        }
+        if (status)
+        {
+            status->locked = true;
+        }
+        const DWORD result = *effect;
+        GlobalUnlock(handle);
+
+        return result;
     }
 
-    HANDLE handle = GetClipboardData(preferredDropEffectFormat);
-    if (! handle)
-    {
-        return std::nullopt;
-    }
-
-    auto* effect = static_cast<DWORD*>(GlobalLock(handle));
-    if (! effect)
-    {
-        return std::nullopt;
-    }
-    const DWORD result = *effect;
-    GlobalUnlock(handle);
-
-    return result;
+    return std::nullopt;
 }
 
 [[nodiscard]] bool ContainsPathForShellCommandTest(const std::vector<std::filesystem::path>& paths, const std::filesystem::path& expected) noexcept
@@ -1807,17 +1934,62 @@ struct MountPointReparseDataBufferForShellCommandTest final
     }
 
     ClearClipboardContents(mainWindow);
-    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before Clipboard Cut.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const FolderWindow::Pane focusedPaneBeforeCommand = g_folderWindow.GetFocusedPane();
+    const HWND focusedViewBeforeCommand              = g_folderWindow.GetFocusedFolderViewHwnd();
+    const size_t leftSelectedBeforeCommand           = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+    const size_t rightSelectedBeforeCommand          = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right);
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_CUT, 0), 0);
     PumpPendingMessages();
 
-    const std::vector<std::filesystem::path> dropPaths = ReadClipboardDropPathsForShellCommandTest(mainWindow);
-    state.Require(dropPaths.size() == 2u, std::format(L"Clipboard Cut should write two CF_HDROP paths; got {}.", dropPaths.size()));
+    const FolderWindow::Pane focusedPaneAfterCommand = g_folderWindow.GetFocusedPane();
+    const HWND focusedViewAfterCommand              = g_folderWindow.GetFocusedFolderViewHwnd();
+    const size_t leftSelectedAfterCommand           = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+    const size_t rightSelectedAfterCommand          = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right);
+    ClipboardDropPathsReadStatus dropReadStatus{};
+    const std::vector<std::filesystem::path> dropPaths = ReadClipboardDropPathsForShellCommandTest(mainWindow, &dropReadStatus);
+    state.Require(
+        dropPaths.size() == 2u,
+        std::format(L"Clipboard Cut should write two CF_HDROP paths; got {}; opened={}, openError={}, openOwner={:#x}, hasHdrop={}, fileCount={}, "
+                    L"focusedPaneBefore={}, focusedPaneAfter={}, focusedViewBefore={:#x}, focusedViewAfter={:#x}, leftView={:#x}, "
+                    L"leftSelectedBefore={}, leftSelectedAfter={}, rightSelectedBefore={}, rightSelectedAfter={}.",
+                    dropPaths.size(),
+                    dropReadStatus.opened ? 1 : 0,
+                    dropReadStatus.openError,
+                    reinterpret_cast<uintptr_t>(dropReadStatus.openClipboardWindow),
+                    dropReadStatus.hasHdrop ? 1 : 0,
+                    dropReadStatus.fileCount,
+                    static_cast<int>(focusedPaneBeforeCommand),
+                    static_cast<int>(focusedPaneAfterCommand),
+                    reinterpret_cast<uintptr_t>(focusedViewBeforeCommand),
+                    reinterpret_cast<uintptr_t>(focusedViewAfterCommand),
+                    reinterpret_cast<uintptr_t>(leftView),
+                    leftSelectedBeforeCommand,
+                    leftSelectedAfterCommand,
+                    rightSelectedBeforeCommand,
+                    rightSelectedAfterCommand));
     state.Require(ContainsPathForShellCommandTest(dropPaths, alphaPath), L"Clipboard Cut should include alpha.txt in CF_HDROP.");
     state.Require(ContainsPathForShellCommandTest(dropPaths, betaPath), L"Clipboard Cut should include beta.txt in CF_HDROP.");
 
-    const std::optional<DWORD> effect = ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow);
-    state.Require(effect.has_value(), L"Clipboard Cut should publish Preferred DropEffect metadata.");
+    ClipboardDropEffectReadStatus effectReadStatus{};
+    const std::optional<DWORD> effect = ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow, &effectReadStatus);
+    state.Require(
+        effect.has_value(),
+        std::format(L"Clipboard Cut should publish Preferred DropEffect metadata; opened={}, openError={}, openOwner={:#x}, format={}, available={}, "
+                    L"hasHandle={}, locked={}.",
+                    effectReadStatus.opened ? 1 : 0,
+                    effectReadStatus.openError,
+                    reinterpret_cast<uintptr_t>(effectReadStatus.openClipboardWindow),
+                    effectReadStatus.format,
+                    effectReadStatus.formatAvailable ? 1 : 0,
+                    effectReadStatus.hasHandle ? 1 : 0,
+                    effectReadStatus.locked ? 1 : 0));
     state.Require(effect.value_or(DROPEFFECT_NONE) == DROPEFFECT_MOVE, L"Clipboard Cut should publish Preferred DropEffect = DROPEFFECT_MOVE.");
 
     return state.failure.empty();
@@ -1886,15 +2058,40 @@ struct MountPointReparseDataBufferForShellCommandTest final
 
     ClearClipboardContents(mainWindow);
     state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath, betaPath}), L"Failed to seed CF_HDROP clipboard paths.");
+    const std::vector<std::filesystem::path> seededDropPaths = ReadClipboardDropPathsForShellCommandTest(mainWindow);
+    const std::optional<DWORD> seededDropEffect              = ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow);
+    state.Require(seededDropPaths.size() == 2u,
+                  std::format(L"Paste Shortcut clipboard seed should expose two CF_HDROP paths; got {}.", seededDropPaths.size()));
+    state.Require(ContainsPathForShellCommandTest(seededDropPaths, alphaPath), L"Paste Shortcut clipboard seed should include alpha.txt.");
+    state.Require(ContainsPathForShellCommandTest(seededDropPaths, betaPath), L"Paste Shortcut clipboard seed should include beta.txt.");
+    state.Require(seededDropEffect.has_value(), L"Paste Shortcut clipboard seed should expose Preferred DropEffect metadata.");
+    state.Require(seededDropEffect.value_or(DROPEFFECT_NONE) == DROPEFFECT_COPY,
+                  L"Paste Shortcut clipboard seed should use Preferred DropEffect = DROPEFFECT_COPY.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
-    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before Paste Shortcut.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
     PumpPendingMessages();
 
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
-                                   {L"alpha - Shortcut.lnk", L"alpha - Shortcut (2).lnk", L"beta - Shortcut.lnk"},
-                                   SelfTest::Scale(3000ms)),
-                  L"Paste Shortcut should refresh the pane with unique .lnk files.");
+    const bool refreshed = WaitForPaneItems(FolderWindow::Pane::Left,
+                                            {L"alpha - Shortcut.lnk", L"alpha - Shortcut (2).lnk", L"beta - Shortcut.lnk"},
+                                            SelfTest::Scale(3000ms));
+    state.Require(refreshed,
+                  std::format(L"Paste Shortcut should refresh the pane with unique .lnk files; focusedPane={} focusedView=0x{:X} expectedView=0x{:X}; "
+                              L"destEntries='{}'.",
+                              static_cast<int>(g_folderWindow.GetFocusedPane()),
+                              reinterpret_cast<UINT_PTR>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                              reinterpret_cast<UINT_PTR>(leftView),
+                              DescribeDirectoryEntriesForShellCommandTest(destRoot)));
     state.Require(std::filesystem::exists(alphaLink, ec), L"Paste Shortcut should create a unique alpha shortcut.");
     ec.clear();
     state.Require(std::filesystem::exists(betaLink, ec), L"Paste Shortcut should create the beta shortcut.");

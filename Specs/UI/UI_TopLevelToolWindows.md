@@ -24,6 +24,9 @@ Native OS dialogs remain out of scope here. Transient app-owned prompts, confirm
 - The main folder window MUST remain interactive while a tool window is open.
 - A tool window MAY use the invoking window only as a placement reference for initial size, monitor choice, centering, or DPI selection.
 - A tool window MAY be single-instance and reuse its existing window instead of opening duplicates.
+- When a modeless tool window closes and its invoking owner is still the main
+  folder window, the close path MUST request active-pane `FolderView` focus
+  restoration instead of leaving keyboard focus on the root main-window HWND.
 - RedSalamander tool windows MUST register their large and small window-class icons from the app icon resources so captions and Alt-Tab/task-switch UI do not fall back to the generic system icon.
 - Resizable app-owned top-level windows MUST expose a DPI-scaled minimum track size via `WM_GETMINMAXINFO` so the window cannot be resized into an unusable layout. New implementations SHOULD use the shared `Common/WindowSizing.h` helper rather than ad-hoc pixel constants.
 - On application shutdown, unowned RedSalamander top-level tool windows MUST be closed during shutdown teardown so graphics resources are released before process exit.

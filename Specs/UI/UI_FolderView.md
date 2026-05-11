@@ -930,7 +930,7 @@ auto bitmap = IconCache::GetInstance().GetIconBitmap(item.iconIndex, _d2dContext
 - Visible items processed first (high priority)
 - Offscreen items queued (low priority)
 - Parallel extraction using Windows Thread Pool
-- Telemetry logged: total requests, visible requests, cache hits, extracted count, duration
+- Telemetry logged: total requests, visible requests, cache hits, extracted count, duration. IconCache lock diagnostics MUST be thresholded slow-path rows (`iconcache.lock_wait_slow_us` / `iconcache.lock_hold_slow_us`) with the IconCache stage in `detail`; raw per-lock wait/hold rows are too noisy for archived perf runs and MUST NOT be emitted. Shell icon lookup timings (`iconcache.shgetfileinfo_us`) MUST identify the lookup kind in `detail` (`association`, `path_attributes`, or `path_live`) and carry file attributes plus SHGFI flags in the value fields.
 
 **Cache Warming:**
 - Common extensions pre-cached at startup (50+ types including .txt, .pdf, .zip, .jpg, etc.)

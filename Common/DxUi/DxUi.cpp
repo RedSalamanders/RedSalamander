@@ -21,9 +21,6 @@ void Control::SetBounds(const D2D1_RECT_F& bounds) noexcept
     {
         _bounds = bounds;
         OnBoundsChanged();
-        const float widthDip  = (std::max)(0.0f, bounds.right - bounds.left);
-        const float heightDip = (std::max)(0.0f, bounds.bottom - bounds.top);
-        Debug::Perf::Emit(L"DxUI::Layout", L"SetBounds", 0u, static_cast<uint64_t>(widthDip * 100.0f), static_cast<uint64_t>(heightDip * 100.0f));
         RequestInvalidate();
     }
 }

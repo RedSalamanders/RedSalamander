@@ -22,6 +22,116 @@
     return DebugIsMainMenuBarSurfaceVisible(mainWindow) == expectedVisible;
 }
 
+[[nodiscard]] std::wstring DescribeWindowHandleForSelfTest(HWND hwnd)
+{
+    if (! hwnd)
+    {
+        return L"null";
+    }
+
+    std::array<wchar_t, 128> className{};
+    static_cast<void>(GetClassNameW(hwnd, className.data(), static_cast<int>(className.size())));
+    return std::format(L"0x{:X} class='{}' visible={}",
+                       reinterpret_cast<uintptr_t>(hwnd),
+                       className.data(),
+                       IsWindowVisible(hwnd) != FALSE ? L"yes" : L"no");
+}
+
+[[nodiscard]] std::wstring DescribeWindowHandleAndRectForSelfTest(HWND hwnd)
+{
+    if (! hwnd)
+    {
+        return L"null";
+    }
+
+    std::array<wchar_t, 128> className{};
+    static_cast<void>(GetClassNameW(hwnd, className.data(), static_cast<int>(className.size())));
+    RECT rect{};
+    const bool isWindow = IsWindow(hwnd) != FALSE;
+    const bool gotRect  = isWindow && GetWindowRect(hwnd, &rect) != FALSE;
+    return std::format(L"0x{:X} isWindow={} class='{}' visible={} rect=({},{}-{},{} )",
+                       reinterpret_cast<uintptr_t>(hwnd),
+                       isWindow ? L"yes" : L"no",
+                       className.data(),
+                       IsWindowVisible(hwnd) != FALSE ? L"yes" : L"no",
+                       gotRect ? rect.left : 0,
+                       gotRect ? rect.top : 0,
+                       gotRect ? rect.right : 0,
+                       gotRect ? rect.bottom : 0);
+}
+
+[[nodiscard]] std::wstring FormatRectForSelfTest(const RECT& rect)
+{
+    return std::format(L"({},{}-{},{} )", rect.left, rect.top, rect.right, rect.bottom);
+}
+
+[[nodiscard]] std::wstring DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane pane, HWND expectedNavigationView)
+{
+    NavigationViewDebugSnapshot snapshot{};
+    const bool snapshotOk = g_folderWindow.DebugGetNavigationViewSnapshot(pane, snapshot);
+    const std::optional<std::filesystem::path> panePath = g_folderWindow.GetCurrentPath(pane);
+    const HWND currentNavigationView                    = g_folderWindow.DebugGetNavigationViewHwnd(pane);
+    const std::optional<FolderWindow::Pane> zoomedPane  = g_folderWindow.GetZoomedPane();
+    RECT mainClient{};
+    const bool mainClientOk = GetClientRect(g_folderWindow.GetHwnd(), &mainClient) != FALSE;
+    FolderWindow::PaneViewOptionsDebugSnapshot paneOptions{};
+    const bool paneOptionsOk = g_folderWindow.DebugGetPaneViewOptionsSnapshot(pane, paneOptions);
+    FolderWindow::PreviewPaneDebugSnapshot preview{};
+    const bool previewOk = g_folderWindow.DebugGetPreviewPaneSnapshot(preview);
+    FolderWindow::CommandLineDebugSnapshot commandLine{};
+    const bool commandLineOk = g_folderWindow.DebugGetCommandLineSnapshot(commandLine);
+    FolderWindow::FolderWindowFunctionBarDebugSnapshot functionBar{};
+    const bool functionBarOk = g_folderWindow.DebugGetFunctionBarSnapshot(functionBar);
+    const HWND paneFolderView = g_folderWindow.GetFolderViewHwnd(pane);
+
+    return std::format(L"pane={}, storedVisible={}, currentNav={}, expectedNav={}, activePane={}, focusedWindow=0x{:X}, "
+                       L"focusedFolderView=0x{:X}, leftNavVisible={}, rightNavVisible={}, panePath='{}', snapshotOk={}, "
+                       L"snapshotPath='{}', focusTarget={}, editMode={}, visibleChildren={}, zoomedPane={}, mainClientOk={}, mainClient={}, "
+                       L"paneFolderView={}, paneOptionsOk={}, paneOptionsNavWindowVisible={}, paneOptionsFilterVisible={}, previewOk={}, "
+                       L"previewActive={}, previewSource={}, previewHost={}, previewTabSelected={}, folderTabSelected={}, folderViewVisible={}, "
+                       L"previewClient={}, previewContent={}, previewFunctionBar={}, commandLineOk={}, commandLineVisible={}, commandLinePane={}, "
+                       L"functionBarOk={}, functionBarVisible={}, functionBarWindowVisible={}, functionBarRect={}",
+                       pane == FolderWindow::Pane::Left ? L"left" : L"right",
+                       g_folderWindow.GetNavigationBarVisible(pane) ? L"yes" : L"no",
+                       DescribeWindowHandleAndRectForSelfTest(currentNavigationView),
+                       DescribeWindowHandleAndRectForSelfTest(expectedNavigationView),
+                       g_folderWindow.GetActivePane() == FolderWindow::Pane::Left ? L"left" : L"right",
+                       reinterpret_cast<uintptr_t>(GetFocus()),
+                       reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                       g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left) ? L"yes" : L"no",
+                       g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Right) ? L"yes" : L"no",
+                       panePath.has_value() ? panePath.value().wstring() : L"",
+                       snapshotOk ? L"yes" : L"no",
+                       snapshotOk ? snapshot.currentPathText : L"",
+                       snapshotOk ? static_cast<int>(snapshot.focusTarget) : -1,
+                       snapshotOk && snapshot.editMode ? L"yes" : L"no",
+                       snapshotOk ? snapshot.visibleChildWindowCount : 0u,
+                       zoomedPane.has_value() ? (zoomedPane.value() == FolderWindow::Pane::Left ? L"left" : L"right") : L"none",
+                       mainClientOk ? L"yes" : L"no",
+                       FormatRectForSelfTest(mainClient),
+                       DescribeWindowHandleAndRectForSelfTest(paneFolderView),
+                       paneOptionsOk ? L"yes" : L"no",
+                       paneOptionsOk && paneOptions.navigationViewWindowVisible ? L"yes" : L"no",
+                       paneOptionsOk && paneOptions.filterBarVisible ? L"yes" : L"no",
+                       previewOk ? L"yes" : L"no",
+                       previewOk && preview.active ? L"yes" : L"no",
+                       previewOk ? (preview.sourcePane == FolderWindow::Pane::Left ? L"left" : L"right") : L"unknown",
+                       previewOk ? (preview.hostPane == FolderWindow::Pane::Left ? L"left" : L"right") : L"unknown",
+                       previewOk && preview.previewTabSelected ? L"yes" : L"no",
+                       previewOk && preview.folderTabSelected ? L"yes" : L"no",
+                       previewOk && preview.folderViewVisible ? L"yes" : L"no",
+                       previewOk ? FormatRectForSelfTest(preview.clientRect) : L"",
+                       previewOk ? FormatRectForSelfTest(preview.contentRect) : L"",
+                       previewOk ? FormatRectForSelfTest(preview.functionBarRect) : L"",
+                       commandLineOk ? L"yes" : L"no",
+                       commandLineOk && commandLine.visible ? L"yes" : L"no",
+                       commandLineOk ? (commandLine.pane == FolderWindow::Pane::Left ? L"left" : L"right") : L"unknown",
+                       functionBarOk ? L"yes" : L"no",
+                       functionBarOk && functionBar.visible ? L"yes" : L"no",
+                       functionBarOk && functionBar.windowVisible ? L"yes" : L"no",
+                       functionBarOk ? FormatRectForSelfTest(functionBar.rect) : L"");
+}
+
 [[nodiscard]] bool ColorNear(COLORREF actual, COLORREF expected, int tolerance) noexcept
 {
     return std::abs(static_cast<int>(GetRValue(actual)) - static_cast<int>(GetRValue(expected))) <= tolerance &&
@@ -1521,6 +1631,9 @@ struct TopLevelMenuMapping
     const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
     const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const std::optional<FolderWindow::Pane> zoomBefore     = g_folderWindow.GetZoomedPane();
+    const std::optional<float> zoomRestoreBefore           = g_folderWindow.GetZoomRestoreSplitRatio();
+    const auto restoreZoom                                 = wil::scope_exit([&] { g_folderWindow.SetZoomState(zoomBefore, zoomRestoreBefore); });
     const auto restorePanes                                = wil::scope_exit([&]
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -1534,6 +1647,15 @@ struct TopLevelMenuMapping
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
         }
     });
+
+    g_folderWindow.SetZoomState(std::nullopt, std::nullopt);
+    PumpPendingMessages();
+    state.Require(! g_folderWindow.GetZoomedPane().has_value(),
+                  L"Unfocused-pane navigation click validation requires both panes visible and could not clear the prior zoom state.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
@@ -1677,6 +1799,53 @@ struct TopLevelMenuMapping
     return state.failure.empty();
 }
 
+class ScopedNavigationBarVisibilityRestore final
+{
+public:
+    ScopedNavigationBarVisibilityRestore() noexcept
+        : _leftVisible(g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left)),
+          _rightVisible(g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Right))
+    {
+    }
+
+    ScopedNavigationBarVisibilityRestore(const ScopedNavigationBarVisibilityRestore&)            = delete;
+    ScopedNavigationBarVisibilityRestore& operator=(const ScopedNavigationBarVisibilityRestore&) = delete;
+
+    ~ScopedNavigationBarVisibilityRestore() noexcept
+    {
+        g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Left, _leftVisible);
+        g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Right, _rightVisible);
+        PumpPendingMessages();
+    }
+
+private:
+    bool _leftVisible{};
+    bool _rightVisible{};
+};
+
+[[nodiscard]] bool EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane pane, HWND navigationView, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    g_folderWindow.SetNavigationBarVisible(pane, true);
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.GetNavigationBarVisible(pane) && navigationView != nullptr && IsWindow(navigationView) != FALSE &&
+            IsWindowVisible(navigationView) != FALSE)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    PumpPendingMessages();
+    return g_folderWindow.GetNavigationBarVisible(pane) && navigationView != nullptr && IsWindow(navigationView) != FALSE &&
+           IsWindowVisible(navigationView) != FALSE;
+}
+
 [[nodiscard]] bool TestPaneFocusAddressBarTabTraversal(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -1741,6 +1910,14 @@ struct TopLevelMenuMapping
         return false;
     }
 
+    const bool originalLeftNavigationBarVisible  = g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left);
+    const bool originalRightNavigationBarVisible = g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Right);
+    const auto restoreNavigationBars             = wil::scope_exit([&]() noexcept
+    {
+        g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Left, originalLeftNavigationBarVisible);
+        g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Right, originalRightNavigationBarVisible);
+    });
+
     const std::wstring expectedFocusedItem = L"alpha.txt";
     const uint64_t baselineRefreshCount    = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     const size_t baselineItemCount         = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
@@ -1772,18 +1949,38 @@ struct TopLevelMenuMapping
 
     const auto focusAddressBarAndWait = [&](std::wstring_view context, NavigationViewDebugSnapshot& snapshot) noexcept
     {
+        if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow && GetActiveWindow() != rootWindow)
+        {
+            SetActiveWindow(rootWindow);
+        }
         state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/focusAddressBar"),
                       std::format(L"Shortcut dispatch failed for cmd/pane/focusAddressBar during {}.", context));
-        state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                    [&](const NavigationViewDebugSnapshot& value) noexcept
+        const bool editModeReady = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
         {
-            return value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode && ! value.currentEditText.empty() &&
+            return g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left) &&
+                   value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode && ! value.currentEditText.empty() &&
                    value.visibleChildWindowCount == 1u && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode &&
                    value.currentPathText == root.wstring();
         },
-                                                    SelfTest::Scale(3000ms),
-                                                    &snapshot),
-                      std::format(L"Navigation view did not enter address-bar edit mode during {}.", context));
+                                                                 SelfTest::Scale(3000ms),
+                                                                 &snapshot);
+        state.Require(editModeReady,
+                      std::format(L"Navigation view did not enter address-bar edit mode during {}; focusTarget={}, editMode={}, editText='{}', "
+                                  L"pathText='{}', visibleChildren={}, navigationBarVisible={}, fullPathPopupVisible={}, fullPathPopupEditMode={}, "
+                                  L"focusedPane={}, focusedView={:#x}, leftView={:#x}.",
+                                  context,
+                                  static_cast<int>(snapshot.focusTarget),
+                                  snapshot.editMode ? 1 : 0,
+                                  snapshot.currentEditText,
+                                  snapshot.currentPathText,
+                                  snapshot.visibleChildWindowCount,
+                                  g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left) ? 1 : 0,
+                                  snapshot.fullPathPopupVisible ? 1 : 0,
+                                  snapshot.fullPathPopupEditMode ? 1 : 0,
+                                  static_cast<int>(g_folderWindow.GetFocusedPane()),
+                                  reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                                  reinterpret_cast<uintptr_t>(folderView)));
         if (! state.failure.empty())
         {
             return false;
@@ -1977,10 +2174,80 @@ struct TopLevelMenuMapping
         return state.failure.empty();
     };
 
+    NavigationViewDebugSnapshot snapshot{};
     const auto sendTabFromFocusedWindow = [&](const bool reverse, std::wstring_view context) noexcept
     {
-        const HWND focused = GetFocus();
-        state.Require(focused != nullptr && IsWindow(focused) != FALSE, std::format(L"Focused window unavailable before {}.", context));
+        const auto describeFocusState = [&](const NavigationViewDebugSnapshot& snapshot) noexcept
+        {
+            return std::format(L"focus={}, active=0x{:X}, host={}, bridge={}, focusTarget={}, editMode={}, editText='{}', "
+                               L"visibleChildren={}, folderFocus=0x{:X}, expectedFolder=0x{:X}.",
+                               DescribeWindowHandleForSelfTest(GetFocus()),
+                               reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                               DescribeWindowHandleForSelfTest(snapshot.currentEditHostHwnd),
+                               DescribeWindowHandleForSelfTest(snapshot.currentEditBridgeHwnd),
+                               static_cast<int>(snapshot.focusTarget),
+                               snapshot.editMode ? 1 : 0,
+                               snapshot.currentEditText,
+                               snapshot.visibleChildWindowCount,
+                               reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                               reinterpret_cast<uintptr_t>(folderView));
+        };
+
+        const auto focusBelongsToEditSurface = [](HWND focus, const NavigationViewDebugSnapshot& snapshot) noexcept
+        {
+            return focus && IsWindow(focus) != FALSE &&
+                   ((snapshot.currentEditHostHwnd && focus == snapshot.currentEditHostHwnd) ||
+                    (snapshot.currentEditBridgeHwnd && focus == snapshot.currentEditBridgeHwnd) ||
+                    (snapshot.currentEditHostHwnd && IsChild(snapshot.currentEditHostHwnd, focus) != FALSE));
+        };
+
+        NavigationViewDebugSnapshot tabSnapshot = snapshot;
+        HWND focused              = nullptr;
+        const auto focusDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
+        while (std::chrono::steady_clock::now() < focusDeadline)
+        {
+            focused = GetFocus();
+            if (focusBelongsToEditSurface(focused, tabSnapshot))
+            {
+                break;
+            }
+
+            const bool editSurfaceReady = tabSnapshot.editMode && tabSnapshot.focusTarget == NavigationViewDebugFocusTarget::PathEdit &&
+                                          tabSnapshot.visibleChildWindowCount == 1u && ! tabSnapshot.currentEditText.empty() &&
+                                          tabSnapshot.currentEditText.find(root.wstring()) != std::wstring::npos;
+            if (editSurfaceReady)
+            {
+                const HWND preferredTarget =
+                    (tabSnapshot.currentEditBridgeHwnd && IsWindow(tabSnapshot.currentEditBridgeHwnd) != FALSE) ? tabSnapshot.currentEditBridgeHwnd
+                                                                                                               : tabSnapshot.currentEditHostHwnd;
+                if (preferredTarget && IsWindow(preferredTarget) != FALSE)
+                {
+                    if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow && GetActiveWindow() != rootWindow)
+                    {
+                        SetActiveWindow(rootWindow);
+                    }
+                    SetFocus(preferredTarget);
+                    focused = GetFocus();
+                    if (focusBelongsToEditSurface(focused, tabSnapshot))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            PumpPendingMessages();
+
+            NavigationViewDebugSnapshot currentSnapshot{};
+            if (g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, currentSnapshot))
+            {
+                tabSnapshot = currentSnapshot;
+            }
+
+            std::this_thread::sleep_for(10ms);
+        }
+
+        state.Require(focusBelongsToEditSurface(focused, tabSnapshot),
+                      std::format(L"Focused edit window unavailable before {}; {}.", context, describeFocusState(tabSnapshot)));
         if (! state.failure.empty())
         {
             return false;
@@ -2037,7 +2304,22 @@ struct TopLevelMenuMapping
         return state.failure.empty();
     };
 
-    NavigationViewDebugSnapshot snapshot{};
+    state.Require(waitForFolderFocus(L"initial address-bar focus setup"),
+                  L"Pane folder view did not hold stable left focus before opening the address-bar edit surface.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Left, false);
+    PumpPendingMessages();
+    state.Require(! g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left),
+                  L"Navigation-view traversal test could not hide the left navigation bar before command reveal validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     state.Require(focusAddressBarAndWait(L"forward tab handoff", snapshot),
                   L"Navigation view did not expose the live address-bar edit surface before forward tab handoff.");
     if (! state.failure.empty())
@@ -2129,6 +2411,14 @@ struct TopLevelMenuMapping
         return false;
     }
 
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view path double-click test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     const std::wstring expectedFocusedItem = L"alpha.txt";
     const uint64_t baselineRefreshCount    = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     const size_t baselineItemCount         = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
@@ -2139,7 +2429,9 @@ struct TopLevelMenuMapping
     {
         return ! value.editMode && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
                value.currentPathText == root.wstring() && value.pathRegionRect.right > value.pathRegionRect.left &&
-               value.pathRegionRect.bottom > value.pathRegionRect.top;
+               value.pathRegionRect.bottom > value.pathRegionRect.top && value.pathLastSegmentVisible &&
+               value.pathLastSegmentRect.right > value.pathLastSegmentRect.left &&
+               value.pathLastSegmentRect.bottom > value.pathLastSegmentRect.top;
     },
                                                 SelfTest::Scale(3000ms),
                                                 &baselineSnapshot),
@@ -2156,31 +2448,132 @@ struct TopLevelMenuMapping
         return false;
     }
 
-    const LONG clickX       = baselineSnapshot.pathRegionRect.right - std::clamp<LONG>(pathWidth / 6, 12, 64);
-    const LONG clickY       = (baselineSnapshot.pathRegionRect.top + baselineSnapshot.pathRegionRect.bottom) / 2;
-    const LPARAM clickPoint = MAKELPARAM(clickX, clickY);
+    const auto makePathClickPoint = [](const NavigationViewDebugSnapshot& snapshot) noexcept
+    {
+        const RECT& target = snapshot.pathLastSegmentVisible ? snapshot.pathLastSegmentRect : snapshot.pathRegionRect;
+        POINT point{};
+        point.x = (target.left + target.right) / 2;
+        point.y = (target.top + target.bottom) / 2;
+        return point;
+    };
 
-    SendMouseClickToResolvedPointWindow(navigationView, clickPoint);
-    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    const POINT singleClickPoint   = makePathClickPoint(baselineSnapshot);
+    const LPARAM singleClickLParam = MAKELPARAM(singleClickPoint.x, singleClickPoint.y);
+    SendMouseClickToResolvedPointWindow(navigationView, singleClickLParam);
+
+    NavigationViewDebugSnapshot afterSingleSnapshot{};
+    const bool singleClickStable = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
     {
         return ! value.editMode && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
-               value.currentPathText == root.wstring() && g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+               value.currentPathText == root.wstring() && value.pathRegionRect.right > value.pathRegionRect.left &&
+               value.pathRegionRect.bottom > value.pathRegionRect.top &&
+               value.pathLastSegmentVisible && value.pathLastSegmentRect.right > value.pathLastSegmentRect.left &&
+               value.pathLastSegmentRect.bottom > value.pathLastSegmentRect.top &&
+               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
                g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
     },
-                                                SelfTest::Scale(3000ms)),
-                  L"Single-clicking the navigation-view path region should keep the shell stable before the edit-mode double-click.");
+                                                                 SelfTest::Scale(3000ms),
+                                                                 &afterSingleSnapshot);
+    const std::optional<std::filesystem::path> panePathAfterSingle = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    state.Require(singleClickStable,
+                  std::format(L"Single-clicking the navigation-view path region should keep the shell stable before the edit-mode double-click; "
+                              L"focusTarget={}, editMode={}, path='{}', childWindows={}, pathRect=({},{}-{},{}), lastVisible={}, "
+                              L"lastRect=({},{}-{},{}), panePath='{}', "
+                              L"click=({},{}), refresh={}/{}, items={}/{}, selected={}/{}.",
+                              static_cast<int>(afterSingleSnapshot.focusTarget),
+                              afterSingleSnapshot.editMode ? 1 : 0,
+                              afterSingleSnapshot.currentPathText,
+                              afterSingleSnapshot.visibleChildWindowCount,
+                              afterSingleSnapshot.pathRegionRect.left,
+                              afterSingleSnapshot.pathRegionRect.top,
+                              afterSingleSnapshot.pathRegionRect.right,
+                              afterSingleSnapshot.pathRegionRect.bottom,
+                              afterSingleSnapshot.pathLastSegmentVisible ? 1 : 0,
+                              afterSingleSnapshot.pathLastSegmentRect.left,
+                              afterSingleSnapshot.pathLastSegmentRect.top,
+                              afterSingleSnapshot.pathLastSegmentRect.right,
+                              afterSingleSnapshot.pathLastSegmentRect.bottom,
+                              panePathAfterSingle.has_value() ? panePathAfterSingle->wstring() : std::wstring(),
+                              singleClickPoint.x,
+                              singleClickPoint.y,
+                              g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                              baselineRefreshCount,
+                              g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                              baselineItemCount,
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                              baselineSelectedCount));
     if (! state.failure.empty())
     {
         return false;
     }
 
-    SendMouseDoubleClickToResolvedPointWindow(navigationView, clickPoint);
+    NavigationViewDebugSnapshot preDoubleSnapshot{};
+    const bool preDoubleStable = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                               [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return ! value.editMode && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
+               value.currentPathText == root.wstring() && value.pathRegionRect.right > value.pathRegionRect.left &&
+               value.pathRegionRect.bottom > value.pathRegionRect.top &&
+               value.pathLastSegmentVisible && value.pathLastSegmentRect.right > value.pathLastSegmentRect.left &&
+               value.pathLastSegmentRect.bottom > value.pathLastSegmentRect.top &&
+               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+               g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
+    },
+                                                               SelfTest::Scale(1000ms),
+                                                               &preDoubleSnapshot);
+    const std::optional<std::filesystem::path> panePathBeforeDouble = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    state.Require(preDoubleStable,
+                  std::format(L"Navigation-view path region should be stable immediately before the edit-mode double-click; "
+                              L"focusTarget={}, editMode={}, path='{}', childWindows={}, pathRect=({},{}-{},{}), lastVisible={}, "
+                              L"lastRect=({},{}-{},{}), panePath='{}', "
+                              L"refresh={}/{}, items={}/{}, selected={}/{}.",
+                              static_cast<int>(preDoubleSnapshot.focusTarget),
+                              preDoubleSnapshot.editMode ? 1 : 0,
+                              preDoubleSnapshot.currentPathText,
+                              preDoubleSnapshot.visibleChildWindowCount,
+                              preDoubleSnapshot.pathRegionRect.left,
+                              preDoubleSnapshot.pathRegionRect.top,
+                              preDoubleSnapshot.pathRegionRect.right,
+                              preDoubleSnapshot.pathRegionRect.bottom,
+                              preDoubleSnapshot.pathLastSegmentVisible ? 1 : 0,
+                              preDoubleSnapshot.pathLastSegmentRect.left,
+                              preDoubleSnapshot.pathLastSegmentRect.top,
+                              preDoubleSnapshot.pathLastSegmentRect.right,
+                              preDoubleSnapshot.pathLastSegmentRect.bottom,
+                              panePathBeforeDouble.has_value() ? panePathBeforeDouble->wstring() : std::wstring(),
+                              g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                              baselineRefreshCount,
+                              g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                              baselineItemCount,
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                              baselineSelectedCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const POINT clickPoint        = makePathClickPoint(preDoubleSnapshot);
+    const LPARAM clickPointLParam = MAKELPARAM(clickPoint.x, clickPoint.y);
+    const HWND clickTarget        = ResolveMouseInputWindowForHostPoint(navigationView, clickPointLParam);
+    const HWND messageTarget      = (clickTarget != nullptr && IsWindow(clickTarget) != FALSE) ? clickTarget : navigationView;
+    const LPARAM targetClickPoint =
+        (clickTarget != nullptr && IsWindow(clickTarget) != FALSE) ? MapClientPointLParam(navigationView, clickTarget, clickPointLParam) : clickPointLParam;
+
+    SendMessageW(messageTarget, WM_MOUSEMOVE, 0, targetClickPoint);
+    SendMessageW(messageTarget, WM_LBUTTONDOWN, MK_LBUTTON, targetClickPoint);
+    SendMessageW(messageTarget, WM_LBUTTONUP, 0, targetClickPoint);
+    NavigationViewDebugSnapshot afterLeadingClickSnapshot{};
+    const bool afterLeadingClickSnapshotAvailable = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, afterLeadingClickSnapshot);
+    SendMessageW(messageTarget, WM_LBUTTONDBLCLK, MK_LBUTTON, targetClickPoint);
+    SendMessageW(messageTarget, WM_LBUTTONUP, 0, targetClickPoint);
+    PumpPendingMessages();
 
     NavigationViewDebugSnapshot editSnapshot{};
-    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    const bool reachedEditMode = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                               [&](const NavigationViewDebugSnapshot& value) noexcept
     {
         return value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode && ! value.currentEditText.empty() &&
                value.visibleChildWindowCount == 1u && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.currentEditHostHwnd != nullptr &&
@@ -2191,9 +2584,80 @@ struct TopLevelMenuMapping
                g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
     },
-                                                SelfTest::Scale(3000ms),
-                                                &editSnapshot),
-                  L"Navigation view did not enter address-bar edit mode after path-region double-click.");
+                                                               SelfTest::Scale(3000ms),
+                                                               &editSnapshot);
+    const std::optional<std::filesystem::path> panePathAfterDouble = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    state.Require(reachedEditMode,
+                  std::format(L"Navigation view did not enter address-bar edit mode after path-region double-click; focusTarget={}, editMode={}, "
+                              L"path='{}', edit='{}', childWindows={}, editHost=0x{:X}, editBridge=0x{:X}, hasSelection={}, selection=[{},{}), "
+                              L"fullPathPopup={}, fullPathPopupEdit={}, suggestPopup={}, navVisible={}, navWindowVisible={}, focusedWindow=0x{:X}, "
+                              L"navigationView=0x{:X}, folderView=0x{:X}, click=({},{}), clickTarget=0x{:X}, mappedClick=({},{}), "
+                              L"pathRect=({},{}-{},{}), ellipsisVisible={}, ellipsisRect=({},{}-{},{}), prePath='{}', preRect=({},{}-{},{}), "
+                              L"lastVisible={}, lastRect=({},{}-{},{}), leadingSnapshot={}, leadingPath='{}', leadingEditMode={}, "
+                              L"leadingRect=({},{}-{},{}), leadingLastVisible={}, leadingLastRect=({},{}-{},{}), leadingChildren={}, "
+                              L"panePath='{}', refresh={}/{}, items={}/{}, selected={}/{}.",
+                              static_cast<int>(editSnapshot.focusTarget),
+                              editSnapshot.editMode ? 1 : 0,
+                              editSnapshot.currentPathText,
+                              editSnapshot.currentEditText,
+                              editSnapshot.visibleChildWindowCount,
+                              reinterpret_cast<uintptr_t>(editSnapshot.currentEditHostHwnd),
+                              reinterpret_cast<uintptr_t>(editSnapshot.currentEditBridgeHwnd),
+                              editSnapshot.currentEditHasSelection ? 1 : 0,
+                              editSnapshot.currentEditSelectionStart,
+                              editSnapshot.currentEditSelectionEnd,
+                              editSnapshot.fullPathPopupVisible ? 1 : 0,
+                              editSnapshot.fullPathPopupEditMode ? 1 : 0,
+                              editSnapshot.editSuggestPopupVisible ? 1 : 0,
+                              g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left) ? 1 : 0,
+                              IsWindowVisible(navigationView) != FALSE ? 1 : 0,
+                              reinterpret_cast<uintptr_t>(GetFocus()),
+                              reinterpret_cast<uintptr_t>(navigationView),
+                              reinterpret_cast<uintptr_t>(folderView),
+                              clickPoint.x,
+                              clickPoint.y,
+                              reinterpret_cast<uintptr_t>(clickTarget),
+                              GET_X_LPARAM(targetClickPoint),
+                              GET_Y_LPARAM(targetClickPoint),
+                              editSnapshot.pathRegionRect.left,
+                              editSnapshot.pathRegionRect.top,
+                              editSnapshot.pathRegionRect.right,
+                              editSnapshot.pathRegionRect.bottom,
+                              editSnapshot.pathEllipsisVisible ? 1 : 0,
+                              editSnapshot.pathEllipsisRect.left,
+                              editSnapshot.pathEllipsisRect.top,
+                              editSnapshot.pathEllipsisRect.right,
+                              editSnapshot.pathEllipsisRect.bottom,
+                              preDoubleSnapshot.currentPathText,
+                              preDoubleSnapshot.pathRegionRect.left,
+                              preDoubleSnapshot.pathRegionRect.top,
+                              preDoubleSnapshot.pathRegionRect.right,
+                              preDoubleSnapshot.pathRegionRect.bottom,
+                              editSnapshot.pathLastSegmentVisible ? 1 : 0,
+                              editSnapshot.pathLastSegmentRect.left,
+                              editSnapshot.pathLastSegmentRect.top,
+                              editSnapshot.pathLastSegmentRect.right,
+                              editSnapshot.pathLastSegmentRect.bottom,
+                              afterLeadingClickSnapshotAvailable ? 1 : 0,
+                              afterLeadingClickSnapshot.currentPathText,
+                              afterLeadingClickSnapshot.editMode ? 1 : 0,
+                              afterLeadingClickSnapshot.pathRegionRect.left,
+                              afterLeadingClickSnapshot.pathRegionRect.top,
+                              afterLeadingClickSnapshot.pathRegionRect.right,
+                              afterLeadingClickSnapshot.pathRegionRect.bottom,
+                              afterLeadingClickSnapshot.pathLastSegmentVisible ? 1 : 0,
+                              afterLeadingClickSnapshot.pathLastSegmentRect.left,
+                              afterLeadingClickSnapshot.pathLastSegmentRect.top,
+                              afterLeadingClickSnapshot.pathLastSegmentRect.right,
+                              afterLeadingClickSnapshot.pathLastSegmentRect.bottom,
+                              afterLeadingClickSnapshot.visibleChildWindowCount,
+                              panePathAfterDouble.has_value() ? panePathAfterDouble->wstring() : std::wstring(),
+                              g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
+                              baselineRefreshCount,
+                              g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                              baselineItemCount,
+                              g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                              baselineSelectedCount));
     if (! state.failure.empty())
     {
         return false;
@@ -2359,6 +2823,14 @@ struct TopLevelMenuMapping
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for navigation-view path keyboard validation.");
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
                   L"Navigation view handle unavailable for navigation-view path keyboard validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view path keyboard validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -2537,6 +3009,14 @@ struct TopLevelMenuMapping
         return false;
     }
 
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before breadcrumb ancestor-click validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     NavigationViewDebugSnapshot baselineSnapshot{};
     state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
@@ -2621,6 +3101,9 @@ struct TopLevelMenuMapping
     const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
     const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const std::optional<FolderWindow::Pane> zoomBefore     = g_folderWindow.GetZoomedPane();
+    const std::optional<float> zoomRestoreBefore           = g_folderWindow.GetZoomRestoreSplitRatio();
+    const auto restoreZoom                                 = wil::scope_exit([&] { g_folderWindow.SetZoomState(zoomBefore, zoomRestoreBefore); });
     const auto restorePanes                                = wil::scope_exit([&]
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -2634,6 +3117,44 @@ struct TopLevelMenuMapping
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
         }
     });
+
+    g_folderWindow.SetZoomState(std::nullopt, std::nullopt);
+    PumpPendingMessages();
+    state.Require(! g_folderWindow.GetZoomedPane().has_value(),
+                  L"Unfocused-pane navigation click validation requires both panes visible and could not clear the prior zoom state.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FolderWindow::PreviewPaneDebugSnapshot inheritedPreview{};
+    if (g_folderWindow.DebugGetPreviewPaneSnapshot(inheritedPreview) && inheritedPreview.active)
+    {
+        g_folderWindow.TogglePreviewPane(inheritedPreview.sourcePane);
+        const auto previewCloseDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        bool previewClosed              = false;
+        do
+        {
+            PumpPendingMessages();
+            FolderWindow::PreviewPaneDebugSnapshot currentPreview{};
+            previewClosed = g_folderWindow.DebugGetPreviewPaneSnapshot(currentPreview) && ! currentPreview.active;
+            if (previewClosed)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(20ms);
+        } while (std::chrono::steady_clock::now() < previewCloseDeadline);
+
+        state.Require(previewClosed,
+                      std::format(L"Unfocused-pane navigation click validation could not close inherited preview pane state; source={} host={} previewTab={}.",
+                                  inheritedPreview.sourcePane == FolderWindow::Pane::Left ? L"left" : L"right",
+                                  inheritedPreview.hostPane == FolderWindow::Pane::Left ? L"left" : L"right",
+                                  inheritedPreview.previewTabSelected ? L"yes" : L"no"));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
 
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
@@ -2674,6 +3195,15 @@ struct TopLevelMenuMapping
                   L"Right navigation-view handle unavailable for unfocused-pane navigation click validation.");
     state.Require(WaitForFocusedFolderViewForMainMenu(leftFolderView, SelfTest::Scale(2000ms)),
                   L"Left folder view did not take baseline focus before unfocused-pane navigation click validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Right, rightNavigationView, SelfTest::Scale(3000ms)),
+                  std::format(L"Right navigation bar did not become visible before unfocused-pane navigation click validation; {}.",
+                              DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane::Right, rightNavigationView)));
     if (! state.failure.empty())
     {
         return false;
@@ -2777,6 +3307,14 @@ struct TopLevelMenuMapping
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for navigation-view full-path popup test.");
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
                   L"Navigation view handle unavailable for navigation-view full-path popup test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view full-path popup test.");
     if (! state.failure.empty())
     {
         return false;
@@ -3133,6 +3671,14 @@ struct TopLevelMenuMapping
         return false;
     }
 
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before full-path popup ancestor-click validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     const DWORD processId      = GetCurrentProcessId();
     const auto baselineWindows = SnapshotTopLevelWindowsForProcess(processId);
     NavigationViewDebugSnapshot baselineSnapshot{};
@@ -3324,6 +3870,14 @@ struct TopLevelMenuMapping
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for navigation-view region traversal test.");
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
                   L"Navigation view handle unavailable for navigation-view region traversal test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view region traversal test.");
     if (! state.failure.empty())
     {
         return false;
@@ -3602,6 +4156,14 @@ struct TopLevelMenuMapping
     FocusFolderViewPane(FolderWindow::Pane::Left);
     const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE, L"Navigation view handle unavailable for history-dropdown validation.");
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before history-dropdown validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::History),
                   L"Failed to focus the NavigationView history region before keyboard dropdown validation.");
     if (! state.failure.empty())
@@ -3826,6 +4388,14 @@ struct TopLevelMenuMapping
         return false;
     }
 
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view menu-region keyboard activation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     const uint64_t baselineRefreshCount = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     const size_t baselineItemCount      = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
     const size_t baselineSelectedCount  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
@@ -4008,6 +4578,14 @@ struct TopLevelMenuMapping
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for navigation-view disk-info keyboard activation.");
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
                   L"Navigation view handle unavailable for navigation-view disk-info keyboard activation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view disk-info keyboard activation.");
     if (! state.failure.empty())
     {
         return false;
@@ -4205,6 +4783,14 @@ struct TopLevelMenuMapping
                   L"Folder view handle unavailable for navigation-view pointer-click dropdown validation.");
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
                   L"Navigation view handle unavailable for navigation-view pointer-click dropdown validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view pointer-click dropdown validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -4431,6 +5017,14 @@ struct TopLevelMenuMapping
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for history-dropdown escape validation.");
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
                   L"Navigation view handle unavailable for history-dropdown escape validation.");
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before history-dropdown escape validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::History),
                   L"Failed to focus the NavigationView history region before history-dropdown escape validation.");
     if (! state.failure.empty())
@@ -4578,6 +5172,14 @@ struct TopLevelMenuMapping
     const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for navigation-view edit-suggest test.");
     state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE, L"Navigation view handle unavailable for navigation-view edit-suggest test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+    state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                  L"Left navigation bar did not become visible before navigation-view edit-suggest test.");
     if (! state.failure.empty())
     {
         return false;
@@ -5542,8 +6144,27 @@ struct TopLevelMenuMapping
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_MENUBAR, 0), 0);
     state.Require(DebugIsMainMenuBarSurfaceVisible(mainWindow) == menuBarBefore, L"ToggleMenuBar did not restore the visible DxUI menu-bar surface.");
 
+    const auto toggleFunctionBarCommand = [&]() noexcept
+    {
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_FUNCTIONBAR, 0), 0);
+        PumpPendingMessages();
+    };
     const bool funcBefore = g_folderWindow.GetFunctionBarVisible();
-    g_folderWindow.SetFunctionBarVisible(true);
+    const auto restoreFunctionBar = wil::scope_exit([&]() noexcept
+    {
+        for (int attempt = 0; attempt < 3 && g_folderWindow.GetFunctionBarVisible() != funcBefore; ++attempt)
+        {
+            toggleFunctionBarCommand();
+        }
+        if (g_folderWindow.GetFunctionBarVisible() != funcBefore)
+        {
+            g_folderWindow.SetFunctionBarVisible(funcBefore);
+        }
+    });
+    for (int attempt = 0; attempt < 2 && ! g_folderWindow.GetFunctionBarVisible(); ++attempt)
+    {
+        toggleFunctionBarCommand();
+    }
     FolderWindow::FolderWindowFunctionBarDebugSnapshot functionBarSnapshot{};
     state.Require(g_folderWindow.DebugGetFunctionBarSnapshot(functionBarSnapshot) && functionBarSnapshot.visible && functionBarSnapshot.windowVisible &&
                       functionBarSnapshot.rect.bottom > functionBarSnapshot.rect.top,
@@ -5574,14 +6195,18 @@ struct TopLevelMenuMapping
     state.Require(WindowContainsPixelDifferentFromColor(functionBarHwnd, observedFunctionBarBackground),
                   L"Visible Function bar should draw key glyphs, separators, or labels instead of painting only an empty background.");
 
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_FUNCTIONBAR, 0), 0);
-    const bool funcAfter = g_folderWindow.GetFunctionBarVisible();
+    toggleFunctionBarCommand();
+    bool funcAfter = g_folderWindow.GetFunctionBarVisible();
+    if (funcAfter)
+    {
+        toggleFunctionBarCommand();
+        funcAfter = g_folderWindow.GetFunctionBarVisible();
+    }
     state.Require(! funcAfter, L"ToggleFunctionBar did not hide the visible FolderWindow function bar.");
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_FUNCTIONBAR, 0), 0);
+    toggleFunctionBarCommand();
     state.Require(g_folderWindow.GetFunctionBarVisible(), L"ToggleFunctionBar did not restore FolderWindow function bar visibility.");
     state.Require(g_folderWindow.DebugGetFunctionBarSnapshot(functionBarSnapshot) && functionBarSnapshot.windowVisible,
                   L"Restored Function bar should be visible at the HWND level.");
-    g_folderWindow.SetFunctionBarVisible(funcBefore);
 
     const std::optional<FolderWindow::Pane> zoomBefore = g_folderWindow.GetZoomedPane();
     const std::optional<float> zoomRestoreBefore       = g_folderWindow.GetZoomRestoreSplitRatio();
@@ -6111,16 +6736,27 @@ struct TopLevelMenuMapping
         return false;
     }
 
-    POINT firstPoint{(firstItemRect.left + firstItemRect.right) / 2, (firstItemRect.top + firstItemRect.bottom) / 2};
-    POINT secondPoint{(secondItemRect.left + secondItemRect.right) / 2, (secondItemRect.top + secondItemRect.bottom) / 2};
+    const POINT firstScreenPoint{(firstItemRect.left + firstItemRect.right) / 2, (firstItemRect.top + firstItemRect.bottom) / 2};
+    const POINT secondScreenPoint{(secondItemRect.left + secondItemRect.right) / 2, (secondItemRect.top + secondItemRect.bottom) / 2};
+    POINT firstPoint = firstScreenPoint;
     state.Require(ScreenToClient(menuBarWindow, &firstPoint) != FALSE, L"Failed to map the first menu-bar item to client coordinates.");
-    state.Require(ScreenToClient(menuBarWindow, &secondPoint) != FALSE, L"Failed to map the second menu-bar item to client coordinates.");
     if (! state.failure.empty())
     {
         return false;
     }
 
+    POINT originalCursor{};
+    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
+
     std::atomic<bool> popupDriverDone{false};
+    std::atomic<bool> hoverCursorMoved{false};
     std::atomic<bool> firstMenuSelected{false};
     std::atomic<bool> initialPopupObserved{false};
     std::atomic<bool> secondMenuSelected{false};
@@ -6134,6 +6770,7 @@ struct TopLevelMenuMapping
     {
         const auto done = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
 
+        SetCursorPos(firstScreenPoint.x, firstScreenPoint.y);
         PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(firstPoint.x, firstPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(firstPoint.x, firstPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(firstPoint.x, firstPoint.y));
@@ -6146,15 +6783,13 @@ struct TopLevelMenuMapping
         }
 
         initialPopupObserved.store(true, std::memory_order_release);
-        RECT initialPopupRect{};
-        if (! GetWindowRect(initialPopup, &initialPopupRect))
+        hoverCursorMoved.store(SetCursorPos(secondScreenPoint.x, secondScreenPoint.y) != FALSE, std::memory_order_release);
+        if (! hoverCursorMoved.load(std::memory_order_acquire))
         {
+            PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+            initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
             return;
         }
-
-        const LONG hoverClientX = static_cast<LONG>(secondItemRect.left + ((secondItemRect.right - secondItemRect.left) / 2) - initialPopupRect.left);
-        const LONG hoverClientY = static_cast<LONG>(secondItemRect.top + ((secondItemRect.bottom - secondItemRect.top) / 2) - initialPopupRect.top);
-        PostMessageW(initialPopup, WM_MOUSEMOVE, 0, MAKELPARAM(hoverClientX, hoverClientY));
 
         const HWND replacementPopup = WaitForReplacementDxUiContextMenuWindow(initialPopup, SelfTest::Scale(2000ms));
         secondMenuSelected.store(replacementPopup != nullptr || WaitForMainMenuBarSelectedIndex(secondIndex, SelfTest::Scale(250ms)),
@@ -6186,6 +6821,7 @@ struct TopLevelMenuMapping
 
     state.Require(firstMenuSelected.load(std::memory_order_acquire), L"Menu-bar click did not select the expected first top-level menu.");
     state.Require(initialPopupObserved.load(std::memory_order_acquire), L"Menu-bar click did not open the initial DxUI popup.");
+    state.Require(hoverCursorMoved.load(std::memory_order_acquire), L"Failed to move the real cursor to the neighboring temporary menu item.");
     state.Require(secondMenuSelected.load(std::memory_order_acquire),
                   L"Hovering a neighboring top-level menu did not activate the replacement top-level popup.");
     state.Require(replacementPopupObserved.load(std::memory_order_acquire), L"Hover-switching did not replace the active DxUI popup.");
@@ -6198,6 +6834,206 @@ struct TopLevelMenuMapping
 
     state.Require(WaitForMainMenuBarVisibility(mainWindow, false, SelfTest::Scale(2000ms)),
                   L"Temporary DxUI menu-bar surface did not dismiss after hover-switch validation.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestMainMenuPersistentDirectHoverSwitchesTopLevelPopup(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const HMENU mainMenu = DebugGetMainMenuModelHandle();
+    state.Require(mainMenu != nullptr, L"Main menu handle not available.");
+    if (! mainMenu)
+    {
+        return false;
+    }
+
+    const auto topLevelIndices = FindFirstTwoEnabledTopLevelMenuIndices(mainMenu);
+    state.Require(topLevelIndices.has_value(), L"Need at least two enabled top-level menus to validate persistent direct hover switching.");
+    if (! topLevelIndices.has_value())
+    {
+        return false;
+    }
+
+    const auto [firstIndex, secondIndex] = topLevelIndices.value();
+
+    if (const HWND existingPopup = FindVisibleDxUiContextMenuWindow(); existingPopup)
+    {
+        PostMessageW(existingPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+        state.Require(WaitForWindowClosed(existingPopup, SelfTest::Scale(2000ms)),
+                      L"Failed to dismiss pre-existing DxUI context menu before persistent direct hover-switch validation.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    const bool menuBarInitiallyVisible = DebugIsMainMenuBarSurfaceVisible(mainWindow);
+    const auto restoreMenuBar          = wil::scope_exit([&]
+    {
+        const bool visibleNow = DebugIsMainMenuBarSurfaceVisible(mainWindow);
+        if (visibleNow != menuBarInitiallyVisible)
+        {
+            SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_MENUBAR, 0), 0);
+            static_cast<void>(WaitForMainMenuBarVisibility(mainWindow, menuBarInitiallyVisible, SelfTest::Scale(2000ms)));
+        }
+    });
+
+    if (! menuBarInitiallyVisible)
+    {
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_MENUBAR, 0), 0);
+        state.Require(WaitForMainMenuBarVisibility(mainWindow, true, SelfTest::Scale(2000ms)),
+                      L"Failed to show persistent menu bar before persistent direct hover-switch validation.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    POINT originalCursor{};
+    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
+
+    const HWND menuBarWindow = FindMainMenuBarWindow(mainWindow);
+    state.Require(menuBarWindow != nullptr, L"Failed to find the persistent DxUI main menu-bar window.");
+    if (! menuBarWindow)
+    {
+        return false;
+    }
+
+    RECT firstItemRect{};
+    RECT secondItemRect{};
+    state.Require(DebugGetMainMenuBarItemScreenRect(mainWindow, firstIndex, firstItemRect), L"Failed to query the first top-level menu item screen rect.");
+    state.Require(DebugGetMainMenuBarItemScreenRect(mainWindow, secondIndex, secondItemRect), L"Failed to query the second top-level menu item screen rect.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const POINT firstScreenPoint{(firstItemRect.left + firstItemRect.right) / 2, (firstItemRect.top + firstItemRect.bottom) / 2};
+    const POINT secondScreenPoint{(secondItemRect.left + secondItemRect.right) / 2, (secondItemRect.top + secondItemRect.bottom) / 2};
+    POINT firstClientPoint = firstScreenPoint;
+    state.Require(ScreenToClient(menuBarWindow, &firstClientPoint) != FALSE, L"Failed to map the first menu-bar item to client coordinates.");
+    RECT menuBarWindowRect{};
+    state.Require(GetWindowRect(menuBarWindow, &menuBarWindowRect) != FALSE, L"Failed to query the persistent DxUI main menu-bar window bounds.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const LONG lowerHoverY =
+        secondItemRect.bottom < (menuBarWindowRect.bottom - 1)
+            ? secondItemRect.bottom + std::max<LONG>(1, (menuBarWindowRect.bottom - secondItemRect.bottom) / 2)
+            : secondScreenPoint.y;
+    const POINT secondLowerEdgeScreenPoint{secondScreenPoint.x, std::min<LONG>(lowerHoverY, menuBarWindowRect.bottom - 1)};
+
+    std::atomic<bool> popupDriverDone{false};
+    std::atomic<bool> clickInputSent{false};
+    std::atomic<bool> hoverCursorMoved{false};
+    std::atomic<bool> hoverHitResolved{false};
+    std::atomic<int> hoverHitIndex{-1};
+    std::atomic<bool> firstMenuSelected{false};
+    std::atomic<bool> initialPopupObserved{false};
+    std::atomic<bool> secondMenuSelected{false};
+    std::atomic<bool> replacementPopupObserved{false};
+    std::atomic<bool> initialPopupClosed{false};
+    std::atomic<bool> replacementPopupClosed{false};
+    std::jthread popupDriver([&](std::stop_token) noexcept
+    {
+        const auto done = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
+
+        BringWindowToTop(mainWindow);
+        SetForegroundWindow(mainWindow);
+        SetCursorPos(firstScreenPoint.x, firstScreenPoint.y);
+
+        const bool postedOpen =
+            PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE &&
+            PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE &&
+            PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE;
+        clickInputSent.store(postedOpen, std::memory_order_release);
+        if (! clickInputSent.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        firstMenuSelected.store(WaitForMainMenuBarSelectedIndex(firstIndex, SelfTest::Scale(2000ms)), std::memory_order_release);
+        const HWND initialPopup = WaitForWindow([]() noexcept { return FindVisibleDxUiContextMenuWindow(); }, SelfTest::Scale(2000ms));
+        if (! initialPopup)
+        {
+            return;
+        }
+
+        initialPopupObserved.store(true, std::memory_order_release);
+
+        size_t hitIndex = 0u;
+        if (DebugHitTestMainMenuBarScreenPoint(mainWindow, secondLowerEdgeScreenPoint, hitIndex))
+        {
+            hoverHitResolved.store(true, std::memory_order_release);
+            hoverHitIndex.store(static_cast<int>(hitIndex), std::memory_order_release);
+        }
+
+        hoverCursorMoved.store(SetCursorPos(secondLowerEdgeScreenPoint.x, secondLowerEdgeScreenPoint.y) != FALSE, std::memory_order_release);
+        if (! hoverCursorMoved.load(std::memory_order_acquire))
+        {
+            PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+            initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+            return;
+        }
+
+        const HWND replacementPopup = WaitForReplacementDxUiContextMenuWindow(initialPopup, SelfTest::Scale(2000ms));
+        secondMenuSelected.store(replacementPopup != nullptr || WaitForMainMenuBarSelectedIndex(secondIndex, SelfTest::Scale(250ms)),
+                                 std::memory_order_release);
+        if (! replacementPopup)
+        {
+            PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+            initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+            return;
+        }
+
+        replacementPopupObserved.store(true, std::memory_order_release);
+        initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+        PostMessageW(replacementPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+        replacementPopupClosed.store(WaitForWindowClosed(replacementPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+    });
+
+    const auto driverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < driverDeadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+    popupDriver.join();
+
+    state.Require(clickInputSent.load(std::memory_order_acquire), L"Failed to post a mouse click on the persistent menu bar.");
+    state.Require(hoverCursorMoved.load(std::memory_order_acquire), L"Failed to move the real cursor to the neighboring persistent menu item.");
+    state.Require(hoverHitResolved.load(std::memory_order_acquire) && hoverHitIndex.load(std::memory_order_acquire) == static_cast<int>(secondIndex),
+                  std::format(L"Neighboring persistent menu item lower-edge hover did not resolve through the menu-bar hit-test; resolved={} hitIndex={} expected={} point=({},{}).",
+                              hoverHitResolved.load(std::memory_order_acquire),
+                              hoverHitIndex.load(std::memory_order_acquire),
+                              secondIndex,
+                              secondLowerEdgeScreenPoint.x,
+                              secondLowerEdgeScreenPoint.y));
+    state.Require(firstMenuSelected.load(std::memory_order_acquire), L"Persistent menu-bar click did not select the expected first top-level menu.");
+    state.Require(initialPopupObserved.load(std::memory_order_acquire), L"Persistent menu-bar click did not open the initial DxUI popup.");
+    state.Require(secondMenuSelected.load(std::memory_order_acquire),
+                  L"Directly hovering a neighboring persistent top-level menu did not select the replacement top-level menu.");
+    state.Require(replacementPopupObserved.load(std::memory_order_acquire),
+                  L"Direct persistent top-level hover did not replace the active DxUI popup before entering the first popup item.");
+    state.Require(initialPopupClosed.load(std::memory_order_acquire), L"Initial DxUI popup did not close after persistent direct hover-switching.");
+    state.Require(replacementPopupClosed.load(std::memory_order_acquire), L"Replacement DxUI popup did not dismiss after Escape.");
+
     return state.failure.empty();
 }
 
@@ -6384,8 +7220,11 @@ struct TopLevelMenuMapping
         std::format(L"Mouse-opened popup should not draw a selected item fill until pointer movement or keyboard navigation, but {} item(s) were highlighted.",
                     highlightedItemCount.load(std::memory_order_acquire)));
     state.Require(popupClosed.load(std::memory_order_acquire), L"Mouse-opened DxUI popup did not dismiss after Escape.");
-    state.Require(WaitForFocusedFolderViewForMainMenu(expectedFolderView, SelfTest::Scale(2000ms)),
-                  L"Mouse-opened main menu popup should restore keyboard focus to the active pane folder view after closing.");
+    const bool firstFocusRestored = WaitForFocusedFolderViewForMainMenu(expectedFolderView, SelfTest::Scale(2000ms));
+    state.Require(firstFocusRestored,
+                  std::format(L"Mouse-opened main menu popup should restore keyboard focus to the active pane folder view after closing; expected={}, actual={}.",
+                              DescribeWindowHandleForSelfTest(expectedFolderView),
+                              DescribeWindowHandleForSelfTest(GetFocus())));
     state.Require(WaitForMainMenuBarSelectedIndex(std::nullopt, SelfTest::Scale(2000ms)),
                   L"Mouse-opened main menu popup should clear the selected top-level menu after closing.");
     state.Require(WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms)),
@@ -6435,8 +7274,12 @@ struct TopLevelMenuMapping
 
     state.Require(secondPopupObserved.load(std::memory_order_acquire), L"Second mouse click on the pane top-level menu did not open a DxUI popup.");
     state.Require(secondPopupClosed.load(std::memory_order_acquire), L"Second mouse-opened DxUI popup did not dismiss after Escape.");
-    state.Require(WaitForFocusedFolderViewForMainMenu(expectedFolderView, SelfTest::Scale(2000ms)),
-                  L"Mouse-opened main menu popup should restore keyboard focus even when the menu bar owned focus before opening.");
+    const bool secondFocusRestored = WaitForFocusedFolderViewForMainMenu(expectedFolderView, SelfTest::Scale(2000ms));
+    state.Require(secondFocusRestored,
+                  std::format(
+                      L"Mouse-opened main menu popup should restore keyboard focus even when the menu bar owned focus before opening; expected={}, actual={}.",
+                      DescribeWindowHandleForSelfTest(expectedFolderView),
+                      DescribeWindowHandleForSelfTest(GetFocus())));
     state.Require(WaitForMainMenuBarSelectedIndex(std::nullopt, SelfTest::Scale(2000ms)),
                   L"Second mouse-opened main menu popup should clear the selected top-level menu after closing.");
     state.Require(WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms)),
@@ -6767,6 +7610,13 @@ struct TopLevelMenuMapping
     std::atomic<bool> rootPopupClosed{false};
     std::atomic<int> horizontalDeltaPx{-1};
     std::atomic<int> verticalDeltaPx{-1};
+    std::atomic<int> rootKeyboardIndex{-2};
+    std::atomic<int> rootHoveredIndex{-2};
+    std::atomic<int> rootScrollOffsetPx{-1};
+    std::atomic<int> parentTopPx{-1};
+    std::atomic<int> parentBottomPx{-1};
+    std::atomic<int> expectedSubmenuTopPx{-1};
+    std::atomic<int> actualSubmenuTopPx{-1};
     std::atomic<bool> opensToRight{true};
     std::atomic<int> placementTolerancePx{0};
     std::jthread popupDriver([&](std::stop_token) noexcept
@@ -6811,10 +7661,16 @@ struct TopLevelMenuMapping
         RECT rootPopupRect{};
         GetWindowRect(rootPopup, &rootPopupRect);
         const float scale = static_cast<float>(rootPopupState.dpi) / 96.0f;
+        rootKeyboardIndex.store(rootPopupState.keyboardIndex.has_value() ? static_cast<int>(rootPopupState.keyboardIndex.value()) : -1,
+                                std::memory_order_release);
+        rootHoveredIndex.store(rootPopupState.hoveredIndex.has_value() ? static_cast<int>(rootPopupState.hoveredIndex.value()) : -1, std::memory_order_release);
+        rootScrollOffsetPx.store(static_cast<int>(rootPopupState.scrollOffsetDip * scale + 0.5f), std::memory_order_release);
         const RECT parentItemRectPx{rootPopupRect.left + static_cast<LONG>(parentItemRectDip.left * scale + 0.5f),
                                     rootPopupRect.top + static_cast<LONG>(parentItemRectDip.top * scale + 0.5f),
                                     rootPopupRect.left + static_cast<LONG>(parentItemRectDip.right * scale + 0.5f),
                                     rootPopupRect.top + static_cast<LONG>(parentItemRectDip.bottom * scale + 0.5f)};
+        parentTopPx.store(parentItemRectPx.top, std::memory_order_release);
+        parentBottomPx.store(parentItemRectPx.bottom, std::memory_order_release);
 
         PostMessageW(rootPopup, WM_KEYDOWN, VK_RIGHT, 0);
         PostMessageW(rootPopup, WM_KEYUP, VK_RIGHT, 0);
@@ -6860,22 +7716,39 @@ struct TopLevelMenuMapping
         }
 
         const float submenuScale = static_cast<float>(submenuPopupState.dpi) / 96.0f;
-        const RECT submenuSurfaceRectPx{
-            submenuRect.left + static_cast<LONG>(submenuPopupState.viewportRectDip.left * submenuScale + 0.5f),
-            submenuRect.top + static_cast<LONG>(submenuPopupState.viewportRectDip.top * submenuScale + 0.5f),
-            submenuRect.left + static_cast<LONG>((submenuPopupState.viewportRectDip.left + submenuPopupState.visibleWidthDip) * submenuScale + 0.5f),
-            submenuRect.top + static_cast<LONG>((submenuPopupState.viewportRectDip.top + submenuPopupState.visibleHeightDip) * submenuScale + 0.5f)};
+        const RECT submenuSurfaceRectPx    = submenuPopupState.surfaceRectPx;
 
-        const int expectedVerticalOffsetPx = static_cast<int>(4.0f * scale + 0.5f);
-        const bool submenuOpensToRight     = submenuSurfaceRectPx.left >= parentItemRectPx.left;
+        RECT expectedSubmenuSurfaceRectPx{};
+        const POINT submenuAnchor{parentItemRectPx.right, parentItemRectPx.top};
+        if (! RedSalamander::DxUi::DebugComputeContextMenuPopupPosition(submenuAnchor,
+                                                                        submenuPopupState.visibleWidthDip,
+                                                                        submenuPopupState.visibleHeightDip,
+                                                                        submenuPopupState.dpi,
+                                                                        true,
+                                                                        &rootPopupRect,
+                                                                        &parentItemRectPx,
+                                                                        RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::Start,
+                                                                        RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Below,
+                                                                        expectedSubmenuSurfaceRectPx))
+        {
+            PostMessageW(submenuPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+            static_cast<void>(WaitForWindowClosed(submenuPopup, SelfTest::Scale(2000ms)));
+            PostMessageW(rootPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+            static_cast<void>(WaitForWindowClosed(rootPopup, SelfTest::Scale(2000ms)));
+            return;
+        }
+
+        const bool submenuOpensToRight = submenuSurfaceRectPx.left >= parentItemRectPx.left;
         const int submenuHorizontalDeltaPx =
             submenuOpensToRight ? std::abs(submenuSurfaceRectPx.left - parentItemRectPx.right) : std::abs(submenuSurfaceRectPx.right - parentItemRectPx.left);
-        const int submenuVerticalDeltaPx = std::abs(submenuSurfaceRectPx.top - (parentItemRectPx.top + expectedVerticalOffsetPx));
+        const int submenuVerticalDeltaPx = std::abs(submenuSurfaceRectPx.top - expectedSubmenuSurfaceRectPx.top);
 
+        expectedSubmenuTopPx.store(expectedSubmenuSurfaceRectPx.top, std::memory_order_release);
+        actualSubmenuTopPx.store(submenuSurfaceRectPx.top, std::memory_order_release);
         opensToRight.store(submenuOpensToRight, std::memory_order_release);
         horizontalDeltaPx.store(submenuHorizontalDeltaPx, std::memory_order_release);
         verticalDeltaPx.store(submenuVerticalDeltaPx, std::memory_order_release);
-        placementTolerancePx.store((std::max)(6, static_cast<int>(4.0f * scale + 0.5f)), std::memory_order_release);
+        placementTolerancePx.store((std::max)(6, static_cast<int>(4.0f * submenuScale + 0.5f)), std::memory_order_release);
 
         const LONG submenuClientX = static_cast<LONG>(((submenuSurfaceRectPx.left + submenuSurfaceRectPx.right) / 2) - submenuRect.left);
         const LONG submenuClientY = static_cast<LONG>(((submenuSurfaceRectPx.top + submenuSurfaceRectPx.bottom) / 2) - submenuRect.top);
@@ -6909,8 +7782,17 @@ struct TopLevelMenuMapping
                               horizontalDeltaPx.load(std::memory_order_acquire),
                               opensToRight.load(std::memory_order_acquire) ? L"yes" : L"no"));
     state.Require(verticalDeltaPx.load(std::memory_order_acquire) <= placementTolerancePx.load(std::memory_order_acquire),
-                  std::format(L"Cascading submenu should honor the 4 DIP vertical offset from the parent item (delta={} px).",
-                              verticalDeltaPx.load(std::memory_order_acquire)));
+                  std::format(L"Cascading submenu should honor the 4 DIP vertical offset with work-area clamping (delta={} px, tolerance={} px, "
+                              L"parentTop={}, parentBottom={}, expectedTop={}, actualTop={}, rootKeyboardIndex={}, rootHoveredIndex={}, rootScroll={} px).",
+                              verticalDeltaPx.load(std::memory_order_acquire),
+                              placementTolerancePx.load(std::memory_order_acquire),
+                              parentTopPx.load(std::memory_order_acquire),
+                              parentBottomPx.load(std::memory_order_acquire),
+                              expectedSubmenuTopPx.load(std::memory_order_acquire),
+                              actualSubmenuTopPx.load(std::memory_order_acquire),
+                              rootKeyboardIndex.load(std::memory_order_acquire),
+                              rootHoveredIndex.load(std::memory_order_acquire),
+                              rootScrollOffsetPx.load(std::memory_order_acquire)));
     state.Require(submenuStayedOpenOnParentReturn.load(std::memory_order_acquire),
                   L"Cascading submenu should remain open when the pointer returns to the parent item that owns it.");
     state.Require(submenuClosed.load(std::memory_order_acquire), L"Cascading submenu did not close after Escape.");
@@ -7059,22 +7941,24 @@ struct TopLevelMenuMapping
                                                   std::wstring_view context) noexcept
     {
         NavigationViewDebugSnapshot snapshot{};
-        state.Require(
-            WaitForNavigationViewSnapshot(pane,
-                                          [&](const NavigationViewDebugSnapshot& value) noexcept
+        const bool stable = WaitForNavigationViewSnapshot(pane,
+                                                          [&](const NavigationViewDebugSnapshot& value) noexcept
         {
             return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
                    ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
                    value.currentPathText == expectedPath.wstring() && value.historyCount == baselineSnapshot.historyCount &&
                    g_folderWindow.DebugGetItemCount(pane) == expectedItemCount && g_folderWindow.DebugGetSelectedCount(pane) == 0u &&
-                   ! g_folderWindow.DebugIsNameFilterActive(pane) &&
-                   (! requireFocusedFolderView || g_folderWindow.GetFocusedFolderViewHwnd() == leftFolderView);
+                    ! g_folderWindow.DebugIsNameFilterActive(pane) &&
+                    (! requireFocusedFolderView || g_folderWindow.GetFocusedFolderViewHwnd() == leftFolderView);
         },
-                                          SelfTest::Scale(3000ms),
-                                          &snapshot),
+                                                          SelfTest::Scale(3000ms),
+                                                          &snapshot);
+        state.Require(
+            stable,
             std::format(
                 L"Navigation shell did not stay quiet during {}; pane={}, focusTarget={}, editMode={}, historyVisible={}, suggestVisible={}, popupVisible={}, "
-                L"childWindows={}, currentPath='{}', historyCount={}, itemCount={}, selectedCount={}, nameFilterActive={}, focusedFolderViewMatches={}.",
+                L"childWindows={}, currentPath='{}', historyCount={}, itemCount={}, selectedCount={}, nameFilterActive={}, focusedFolderViewMatches={}, "
+                L"focusedWindow={}.",
                 context,
                 static_cast<unsigned>(pane),
                 static_cast<unsigned>(snapshot.focusTarget),
@@ -7088,7 +7972,8 @@ struct TopLevelMenuMapping
                 g_folderWindow.DebugGetItemCount(pane),
                 g_folderWindow.DebugGetSelectedCount(pane),
                 g_folderWindow.DebugIsNameFilterActive(pane) ? L"yes" : L"no",
-                g_folderWindow.GetFocusedFolderViewHwnd() == leftFolderView ? L"yes" : L"no"));
+                g_folderWindow.GetFocusedFolderViewHwnd() == leftFolderView ? L"yes" : L"no",
+                DescribeWindowHandleForSelfTest(GetFocus())));
     };
     const auto waitForPreferencesSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
@@ -10169,6 +11054,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"cmd_app_menuBar_hover_switches_top_level_popup", [=](CaseState& state) noexcept {
         return TestMainMenuHoverSwitchesTopLevelPopup(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_app_menuBar_persistent_direct_hover_switches_top_level_popup", [=](CaseState& state) noexcept {
+        return TestMainMenuPersistentDirectHoverSwitchesTopLevelPopup(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_app_menuBar_mouse_open_keeps_popup_selection_clear", [=](CaseState& state) noexcept {
         return TestMainMenuMouseOpenKeepsPopupSelectionClear(mainWindow, state);

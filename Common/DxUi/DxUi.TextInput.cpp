@@ -1497,7 +1497,7 @@ LRESULT WindowHost::HandleTextInputBridgeWindowMessage(HWND hwnd, UINT msg, WPAR
                 _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
                 return commitState(beforeState.value(), afterState, true, ReplaceTextInputBridgeSelection(afterState, L"\n"));
             }
-            if (wp < 0x20u)
+            if (std::iswcntrl(static_cast<wint_t>(wp)) != 0)
             {
                 return 0;
             }
@@ -3129,7 +3129,7 @@ bool TextField::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
         _caretIndex += 1u;
         _selectionAnchorIndex.reset();
     }
-    else if (ch >= 0x20u && (_multiline || ch != L'\t'))
+    else if (std::iswcntrl(static_cast<wint_t>(ch)) == 0 && (_multiline || ch != L'\t'))
     {
         RecordUndoStateForDirectEdit();
         _preferredMultilineXOffsetDip.reset();

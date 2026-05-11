@@ -116,6 +116,33 @@ void TestFocusRingPaintPathsHandleMissingDeviceContext()
     Require(true, "focus-ring paint paths tolerate a missing device context");
 }
 
+void TestScrollPanelThumbGutterDragThroughWindowHost()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root       = std::make_unique<Panel>();
+    auto* scroll    = root->AddChild<ScrollPanel>();
+    auto* filler    = scroll->AddChild<Panel>();
+    const auto rect = D2D1::RectF(0.0f, 0.0f, 100.0f, 100.0f);
+    scroll->SetBounds(rect);
+    filler->SetBounds(D2D1::RectF(0.0f, 0.0f, 88.0f, 300.0f));
+    scroll->SetContentHeight(300.0f);
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(rect);
+
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(99, 1), handled));
+    Require(handled, "scroll panel handles thumb gutter mouse-down as a thumb drag");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(99, 50), handled));
+    Require(handled, "scroll panel handles captured thumb gutter mouse-move");
+    Require(scroll->GetScrollOffset() > 1.0f, "scroll panel thumb gutter drag moves the scroll offset");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(99, 50), handled));
+    Require(handled, "scroll panel handles captured thumb gutter mouse-up");
+}
+
 void TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState()
 {
     using namespace RedSalamander::DxUi;
@@ -531,6 +558,7 @@ void RunControlTests()
     TestToggleStateLabelsReserveTextLaneWithoutPrimaryLabel();
     TestToggleStateLabelsFollowCheckedState();
     TestFocusRingPaintPathsHandleMissingDeviceContext();
+    TestScrollPanelThumbGutterDragThroughWindowHost();
     TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState();
     TestToggleMouseActivationCanReplaceRootSafely();
     TestColorSwatchStoresConfiguredArgbAndEmptyState();

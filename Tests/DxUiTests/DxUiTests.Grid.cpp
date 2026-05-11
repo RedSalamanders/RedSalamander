@@ -1,5 +1,7 @@
 #include "DxUiTestHelpers.h"
 
+#include <cmath>
+
 namespace
 {
 
@@ -114,6 +116,38 @@ void TestGroupedGridProgrammaticSelectionAllowsOffscreenExpandedRows()
             "grouped grid programmatic selection records the offscreen expanded row");
 }
 
+void TestGridMouseWheelReportsUnhandledAtScrollEdges()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 160.0f));
+    grid->SetRowHeightDip(24.0f);
+    grid->SetHeaderHeightDip(32.0f);
+
+    LargeGridModel shortModel(2u, 1u, 120.0f);
+    grid->SetModel(&shortModel);
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 160.0f));
+
+    Require(! grid->OnMouseWheel(host, D2D1::Point2F(20.0f, 80.0f), -static_cast<float>(WHEEL_DELTA), 0u),
+            "grid wheel returns unhandled when there is no vertical extent");
+
+    LargeGridModel longModel(80u, 1u, 120.0f);
+    grid->SetModel(&longModel);
+    grid->DebugSetScrollOffsets(0.0f, 0.0f);
+    Require(! grid->OnMouseWheel(host, D2D1::Point2F(20.0f, 80.0f), static_cast<float>(WHEEL_DELTA), 0u),
+            "grid wheel returns unhandled at the top edge for upward wheel input");
+    Require(grid->OnMouseWheel(host, D2D1::Point2F(20.0f, 80.0f), -static_cast<float>(WHEEL_DELTA), 0u),
+            "grid wheel returns handled when the wheel changes the vertical offset");
+
+    grid->DebugSetScrollOffsets(1'000'000.0f, 0.0f);
+    Require(! grid->OnMouseWheel(host, D2D1::Point2F(20.0f, 80.0f), -static_cast<float>(WHEEL_DELTA), 0u),
+            "grid wheel returns unhandled at the bottom edge for downward wheel input");
+}
+
 void TestGroupedGridLongRunScrollKeepsVisibleRowRects()
 {
     using namespace RedSalamander::DxUi;
@@ -209,12 +243,16 @@ void TestGroupedGridLongRunScrollKeepsVisibleRowRects()
     grid->DebugSetScrollOffsets(0.0f, 0.0f);
 
     Require(grid->OnMouseWheel(host, D2D1::Point2F(0.0f, 0.0f), -static_cast<float>(WHEEL_DELTA), 0u), "wide grouped grid handles overlap probe wheel scroll");
+    bool reachedScrollEdge = false;
     for (size_t chunk = 0u; chunk < 8u; ++chunk)
     {
         for (size_t detent = 0u; detent < 12u; ++detent)
         {
-            Require(grid->OnMouseWheel(host, D2D1::Point2F(0.0f, 0.0f), -static_cast<float>(WHEEL_DELTA), 0u),
-                    "wide grouped grid handles long-run wheel scroll");
+            if (! reachedScrollEdge)
+            {
+                reachedScrollEdge =
+                    ! grid->OnMouseWheel(host, D2D1::Point2F(0.0f, 0.0f), -static_cast<float>(WHEEL_DELTA), 0u);
+            }
         }
 
         const GridVisibleWorkMetrics metrics = grid->GetVisibleWorkMetrics();
@@ -244,6 +282,85 @@ void TestGroupedGridLongRunScrollKeepsVisibleRowRects()
             RequireRectHasArea(keyCellRect.value(), "wide grouped grid first visible key-cell rect has area after wheel chunks");
         }
     }
+}
+
+void TestScrollPanelForwardsCapturedChildGridScrollbarDrag()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* scroll = root->AddChild<ScrollPanel>();
+    scroll->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
+    scroll->SetContentHeight(160.0f);
+    auto* grid = scroll->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
+    grid->SetHeaderHeightDip(24.0f);
+    grid->SetRowHeightDip(24.0f);
+
+    LargeGridModel model(200u, 1u, 180.0f);
+    grid->SetModel(&model);
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
+
+    const ThemePalette theme           = MakeDefaultThemePalette(true);
+    GridScrollbarVisualState state = grid->DebugGetScrollbarVisualState(theme);
+    Require(state.hasVerticalScrollbar, "scroll-panel child grid exposes a vertical scrollbar");
+    RequireRectHasArea(state.verticalThumbRect, "scroll-panel child grid exposes a visible scrollbar thumb");
+
+    const LONG thumbX = static_cast<LONG>(std::lround((state.verticalThumbRect.left + state.verticalThumbRect.right) * 0.5f));
+    const LONG thumbY = static_cast<LONG>(std::lround((state.verticalThumbRect.top + state.verticalThumbRect.bottom) * 0.5f));
+
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(thumbX, thumbY), handled));
+    Require(handled, "scroll-panel child grid handles scrollbar thumb mouse-down");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(thumbX, 220), handled));
+    Require(handled, "scroll-panel forwards captured child scrollbar mouse-move outside the viewport");
+    Require(grid->GetVisibleWorkMetrics().verticalScrollDip > 0.5f, "scroll-panel child grid scrollbar thumb drag moves the vertical scroll offset");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(thumbX, 220), handled));
+    Require(handled, "scroll-panel child grid handles scrollbar thumb mouse-up");
+    state = grid->DebugGetScrollbarVisualState(theme);
+    Require(! state.verticalThumbDragging, "scroll-panel child grid clears scrollbar drag state on mouse-up");
+}
+
+void TestGridScrollbarThumbGutterDragThroughWindowHost()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
+    grid->SetHeaderHeightDip(24.0f);
+    grid->SetRowHeightDip(24.0f);
+
+    LargeGridModel model(200u, 1u, 180.0f);
+    grid->SetModel(&model);
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
+
+    const ThemePalette theme           = MakeDefaultThemePalette(true);
+    const GridScrollbarVisualState state = grid->DebugGetScrollbarVisualState(theme);
+    Require(state.hasVerticalScrollbar, "grid exposes a vertical scrollbar for thumb gutter drag");
+    RequireRectHasArea(state.verticalThumbRect, "grid exposes a visible vertical scrollbar thumb for gutter drag");
+
+    const LONG gutterX = static_cast<LONG>(std::floor(state.verticalTrackRect.left + 1.0f));
+    const LONG thumbY  = static_cast<LONG>(std::lround((state.verticalThumbRect.top + state.verticalThumbRect.bottom) * 0.5f));
+
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(gutterX, thumbY), handled));
+    Require(handled, "grid handles scrollbar thumb gutter mouse-down as a drag");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(gutterX, thumbY + 48), handled));
+    Require(handled, "grid handles captured scrollbar thumb gutter mouse-move");
+    Require(grid->GetVisibleWorkMetrics().verticalScrollDip > 0.5f, "grid thumb gutter drag moves the vertical scroll offset");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(gutterX, thumbY + 48), handled));
+    Require(handled, "grid handles captured scrollbar thumb gutter mouse-up");
 }
 
 void TestGroupedGridLayoutOffsetsRowsBelowHeaders()
@@ -1322,7 +1439,10 @@ void RunGridTests()
     TestGridVisibleWorkMetricsStayBoundedForLargeDatasets();
     TestGroupedGridVisibleWorkMetricsIncludeHeaders();
     TestGroupedGridProgrammaticSelectionAllowsOffscreenExpandedRows();
+    TestGridMouseWheelReportsUnhandledAtScrollEdges();
     TestGroupedGridLongRunScrollKeepsVisibleRowRects();
+    TestScrollPanelForwardsCapturedChildGridScrollbarDrag();
+    TestGridScrollbarThumbGutterDragThroughWindowHost();
     TestGroupedGridLayoutOffsetsRowsBelowHeaders();
     TestHeaderlessGridStartsFirstRowAtTopEdge();
     TestGroupedGridHeaderClickDoesNotSelectRows();

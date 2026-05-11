@@ -9,6 +9,11 @@ on:
         description: "Version to publish (e.g., 7.0.183)"
         required: true
         type: string
+      submit:
+        description: "Submit to microsoft/winget-pkgs after validation and install test."
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   publish-winget:
@@ -163,6 +168,7 @@ jobs:
           throw "winget validate failed with exit code $validationExitCode."
 
       - name: Submit to Winget
+        if: ${{ github.event_name == 'release' || inputs.submit }}
         shell: pwsh
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
@@ -186,5 +192,9 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          Write-Host "Successfully submitted RedSalamander $version portable ZIP to winget." -ForegroundColor Green
-          Write-Host "The winget community repository maintainers will review the PR."
+          if ("${{ github.event_name }}" -eq "release" -or "${{ inputs.submit }}" -eq "true") {
+            Write-Host "Successfully submitted RedSalamander $version portable ZIP to winget." -ForegroundColor Green
+            Write-Host "The winget community repository maintainers will review the PR."
+          } else {
+            Write-Host "Validated and install-tested RedSalamander $version winget manifest. Submission was skipped for this manual run." -ForegroundColor Green
+          }

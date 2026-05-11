@@ -22,6 +22,7 @@ bool HostGetAutoAcceptPrompts() noexcept;
 // Debug/testing hook: force the next prompts to return a specific supported result.
 // Used by self-tests that need to exercise non-default prompt branches.
 void HostSetTestPromptResultOverride(HostPromptResult result) noexcept;
+HostPromptResult HostGetTestPromptResultOverride() noexcept;
 void HostClearTestPromptResultOverride() noexcept;
 void HostResetTestPromptRequestCount() noexcept;
 uint64_t HostGetTestPromptRequestCount() noexcept;

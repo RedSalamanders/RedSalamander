@@ -1,3 +1,6 @@
+namespace
+{
+
 void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_category_tree_uses_dxui_host_without_visible_legacy_treeview", [=](CaseState& state) noexcept {
@@ -13,6 +16,9 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
                       suite,
                       L"cmd_preferences_dialog_shell_uses_dxui_header_footer_without_visible_legacy_shell_controls",
                       [=](CaseState& state) noexcept { return TestPreferencesDialogShellUsesDxUiChrome(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_escape_prompts_before_dirty_close", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogEscapePromptsBeforeDirtyClose(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_page_host_uses_dxui_surface", [=](CaseState& state) noexcept {
         return TestPreferencesDialogPageHostUsesDxUiSurface(mainWindow, state);
     });
@@ -124,6 +130,9 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_viewers_long_run_list_scrolling_stays_bounded", [=](CaseState& state) noexcept {
         return TestPreferencesDialogViewersLongRunListScrollingStaysBounded(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_viewers_editors_adaptive_list_height_uses_window_height", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogViewersEditorsAdaptiveListHeightUsesWindowHeight(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_themes_long_run_list_scrolling_stays_bounded", [=](CaseState& state) noexcept {
         return TestPreferencesDialogThemesLongRunListScrollingStaysBounded(mainWindow, state);
     });
@@ -141,6 +150,9 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_viewers_tab_traversal_live_dx_interaction", [=](CaseState& state) noexcept {
         return TestPreferencesDialogViewersTabTraversalLiveDxInteraction(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_viewers_tab_header_switches_quickly", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogViewersTabHeaderSwitchesQuickly(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_viewers_pointer_click_selects_live_dx_row", [=](CaseState& state) noexcept {
         return TestPreferencesDialogViewersPointerClickSelectsLiveDxRow(mainWindow, state);
@@ -526,3 +538,5 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
         return TestPreferencesDialogRapidSwitchesKeepPageSpecificUiaSubtrees(mainWindow, state);
     });
 }
+
+} // namespace

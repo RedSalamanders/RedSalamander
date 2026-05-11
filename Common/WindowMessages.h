@@ -110,6 +110,7 @@ inline constexpr UINT kChangeAttributesCompleted  = WM_APP + 0x52C;
 inline constexpr UINT kPreferencesApplyComboThemeDeferred   = WM_APP + 0x530;
 inline constexpr UINT kPreferencesSelectPluginDetails       = WM_APP + 0x531;
 inline constexpr UINT kPreferencesDeferredPaneAction        = WM_APP + 0x532;
+inline constexpr UINT kPreferencesApplyPageHostScroll       = WM_APP + 0x538;
 inline constexpr UINT kDxUiTextInputBridgeSync              = WM_APP + 0x533;
 inline constexpr UINT kDxUiTextInputBridgeSpecialKey        = WM_APP + 0x534;
 inline constexpr UINT kDxUiTextInputBridgeBlur              = WM_APP + 0x535;

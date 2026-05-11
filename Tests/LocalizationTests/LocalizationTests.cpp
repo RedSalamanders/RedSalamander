@@ -276,7 +276,7 @@ bool TestUiLanguageSettings() noexcept
     {
         Common::Settings::Settings loaded;
         const std::wstring appId = UniqueSettingsAppId(L"MissingLanguage");
-        if (LoadSettingsForJson(appId, R"({"schemaVersion":11,"ui":{}})", loaded, success, L"settings JSON with empty ui is written"))
+        if (LoadSettingsForJson(appId, R"({"schemaVersion":16,"ui":{}})", loaded, success, L"settings JSON with empty ui is written"))
         {
             Check(loaded.ui.has_value(), L"empty ui object loads ui settings", success);
             Check(loaded.ui.value().language == L"system", L"missing ui.language loads as system", success);
@@ -286,7 +286,7 @@ bool TestUiLanguageSettings() noexcept
     {
         Common::Settings::Settings loaded;
         const std::wstring appId = UniqueSettingsAppId(L"SystemLanguage");
-        if (LoadSettingsForJson(appId, R"({"schemaVersion":11,"ui":{"language":"system"}})", loaded, success, L"settings JSON with system language is written"))
+        if (LoadSettingsForJson(appId, R"({"schemaVersion":16,"ui":{"language":"system"}})", loaded, success, L"settings JSON with system language is written"))
         {
             Check(loaded.ui.has_value(), L"system language loads ui settings", success);
             Check(loaded.ui.value().language == L"system", L"ui.language system loads as system", success);
@@ -296,7 +296,7 @@ bool TestUiLanguageSettings() noexcept
     {
         Common::Settings::Settings loaded;
         const std::wstring appId = UniqueSettingsAppId(L"FrenchLanguage");
-        if (LoadSettingsForJson(appId, R"({"schemaVersion":11,"ui":{"language":"fr-FR"}})", loaded, success, L"settings JSON with fr-FR language is written"))
+        if (LoadSettingsForJson(appId, R"({"schemaVersion":16,"ui":{"language":"fr-FR"}})", loaded, success, L"settings JSON with fr-FR language is written"))
         {
             Check(loaded.ui.has_value(), L"fr-FR language loads ui settings", success);
             Check(loaded.ui.value().language == L"fr-FR", L"ui.language fr-FR loads as fr-FR", success);
@@ -306,7 +306,7 @@ bool TestUiLanguageSettings() noexcept
     {
         Common::Settings::Settings loaded;
         const std::wstring appId = UniqueSettingsAppId(L"ParentFrenchLanguage");
-        if (LoadSettingsForJson(appId, R"({"schemaVersion":11,"ui":{"language":"fr"}})", loaded, success, L"settings JSON with fr language is written"))
+        if (LoadSettingsForJson(appId, R"({"schemaVersion":16,"ui":{"language":"fr"}})", loaded, success, L"settings JSON with fr language is written"))
         {
             Check(loaded.ui.has_value(), L"fr language loads ui settings", success);
             Check(loaded.ui.value().language == L"fr", L"ui.language fr loads as fr", success);
@@ -314,13 +314,12 @@ bool TestUiLanguageSettings() noexcept
     }
 
     {
-        Common::Settings::Settings loaded;
         const std::wstring appId = UniqueSettingsAppId(L"InvalidLanguage");
-        if (LoadSettingsForJson(
-                appId, R"({"schemaVersion":11,"ui":{"language":"..\\bad"}})", loaded, success, L"settings JSON with invalid language is written"))
+        Common::Settings::Settings loaded;
+        if (LoadSettingsForJson(appId, R"({"schemaVersion":16,"ui":{"language":"..\\bad"}})", loaded, success, L"settings JSON with invalid language is written"))
         {
             Check(loaded.ui.has_value(), L"invalid language loads ui settings", success);
-            Check(loaded.ui.value().language == L"system", L"invalid ui.language falls back to system", success);
+            Check(loaded.ui.value().language == L"system", L"invalid ui.language loads as system", success);
         }
     }
 

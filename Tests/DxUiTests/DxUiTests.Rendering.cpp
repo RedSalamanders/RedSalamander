@@ -663,11 +663,13 @@ void TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader()
     ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
     window.PumpMessages();
 
-    for (int stepIndex = 0; stepIndex < 8; ++stepIndex)
+    bool reachedScrollEdge = false;
+    for (int stepIndex = 0; stepIndex < 8 && ! reachedScrollEdge; ++stepIndex)
     {
-        Require(grid->OnMouseWheel(window.Host(), D2D1::Point2F(24.0f, 48.0f), -static_cast<float>(WHEEL_DELTA), 0),
-                "attached grid bottom-alignment test handles wheel scrolling");
+        reachedScrollEdge =
+            ! grid->OnMouseWheel(window.Host(), D2D1::Point2F(24.0f, 48.0f), -static_cast<float>(WHEEL_DELTA), 0);
     }
+    Require(reachedScrollEdge, "attached grid bottom-alignment test reaches the bottom scroll edge");
 
     const std::optional<D2D1_RECT_F> headerRect = grid->GetVisibleColumnHeaderRect(0u);
     Require(headerRect.has_value(), "attached grid bottom-alignment test exposes the visible header rect");

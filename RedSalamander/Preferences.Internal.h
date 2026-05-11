@@ -349,9 +349,21 @@ struct PreferencesDialogState
     int categoryListWidthPx = 0;
     SIZE minTrackSizePx{};
 
-    int pageScrollY             = 0;
-    int pageScrollMaxY          = 0;
-    int pageWheelDeltaRemainder = 0;
+    int pageScrollY                            = 0;
+    int pageScrollMaxY                         = 0;
+    int pageWheelDeltaRemainder                = 0;
+#ifdef ENABLE_TESTS
+    uint64_t pageHostScrollRequestCount         = 0u;
+    uint64_t pageHostScrollCoalescedRequestCount = 0u;
+    uint64_t pageHostScrollApplyCount           = 0u;
+    uint64_t pageHostScrollMovedChildCountTotal = 0u;
+    uint64_t pageHostDxScrollMovedControlCountTotal = 0u;
+    uint64_t pageHostDxScrollLastMovedControlCount  = 0u;
+    uint64_t pageHostScrollLastApplyUs              = 0u;
+#endif
+    int pageHostPendingScrollY                  = 0;
+    bool pageHostScrollApplyPending             = false;
+    bool pageHostSyncingScrollPanel             = false;
     std::array<int, kPrefCategoryCount> retainedPageScrollYByCategory{};
     int pageHostDirectContentBottomPx = 0;
     std::vector<RECT> pageSettingCards;
@@ -360,6 +372,27 @@ struct PreferencesDialogState
     bool updatingPageText           = false;
     std::array<bool, kPrefCategoryCount> paneFirstCreateDone{};
     std::array<RedSalamander::DxUi::Panel*, kPrefCategoryCount> paneWrapperPanels{};
+
+#ifdef ENABLE_TESTS
+    bool debugLastWheelRouteSeen                      = false;
+    bool debugLastWheelRouteForwarded                 = false;
+    bool debugLastWheelRouteTargetWasPageHost         = false;
+    bool debugLastWheelRouteTargetWasCategoryTree     = false;
+    bool debugLastWheelRouteTargetHadVerticalScroll   = false;
+    bool debugLastWheelWindowFromPointWasPageHost     = false;
+    bool debugLastWheelWindowFromPointWasCategoryTree = false;
+    bool debugLastWheelWndProcSeen                    = false;
+    bool debugLastWheelDxHandled                      = false;
+    bool debugLastWheelFallbackCalled                 = false;
+    bool debugLastWheelFallbackHandled                = false;
+    int debugLastWheelDelta                           = 0;
+    int debugLastWheelClientX                         = 0;
+    int debugLastWheelClientY                         = 0;
+    int debugLastWheelBeforeY                         = 0;
+    int debugLastWheelBeforeMaxY                      = 0;
+    int debugLastWheelAfterY                          = 0;
+    int debugLastWheelAfterMaxY                       = 0;
+#endif
 
     // Theme Resources (RAII-managed)
     wil::unique_hbrush backgroundBrush;
@@ -377,6 +410,7 @@ struct PreferencesDialogState
     bool pageHostUsesDxUi                                    = false;
     RedSalamander::DxUi::WindowHost* pageHostDxHost          = nullptr;
     RedSalamander::DxUi::Panel* pageHostDxRootControl        = nullptr;
+    RedSalamander::DxUi::ScrollPanel* pageHostDxScrollPanelControl = nullptr;
     RedSalamander::DxUi::Panel* pageHostDxContentRootControl = nullptr;
     RedSalamander::DxUi::Control* pageHostDxNoteControl      = nullptr;
     HWND pageHostWindow                                      = nullptr;
@@ -574,8 +608,10 @@ namespace PrefsFile
 
 namespace PrefsPageHost
 {
-void ApplyScrollDelta(HWND pageHostWindow, int dy) noexcept;
+void ApplyScrollDelta(HWND pageHostWindow, int dy, bool syncScrollPanel = true) noexcept;
 void ScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept;
+void RequestScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept;
+void FlushPendingScroll(HWND pageHostWindow, PreferencesDialogState& state) noexcept;
 void EnsureControlVisible(HWND pageHostWindow, PreferencesDialogState& state, HWND control) noexcept;
 } // namespace PrefsPageHost
 

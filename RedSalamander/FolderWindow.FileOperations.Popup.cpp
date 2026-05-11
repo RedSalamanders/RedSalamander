@@ -6193,7 +6193,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
 
     if (payload->kind == PopupHitTest::Kind::TaskSpeedLimit && payload->data == 1u)
     {
-        return ShowCustomSpeedLimitPromptForTask(hwnd, payload->taskId) ? 1 : 0;
+        // Let self-test callers advance their state before the modal prompt loop starts.
+        return PostMessageW(hwnd, kFileOperationsPopupDeferredSpeedLimitPromptMessage, 0, static_cast<LPARAM>(payload->taskId)) != FALSE ? 1 : 0;
     }
 
     return OnActivatedHit(hwnd, PopupHitTest{payload->kind, payload->taskId, payload->data});

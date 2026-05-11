@@ -30,6 +30,7 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugSelectPluginsTreeChild(size_t childIndex) noexcept;
 [[nodiscard]] bool DebugScrollCategoryTreeByWheelDelta(int wheelDelta) noexcept;
 [[nodiscard]] bool DebugScrollCategoryTreeByWheelDetents(int detents) noexcept;
+[[nodiscard]] bool DebugDragPageHostDxScrollbarThumb(int distancePx, int moveCount) noexcept;
 [[nodiscard]] bool DebugSelectPluginsMainListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugClickPluginsMainListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugFindToggleablePluginsMainListRow(size_t& outRowIndex, bool& outEnabled) noexcept;
@@ -54,6 +55,11 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugSelectViewersListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugGetViewersListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetViewersListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
+[[nodiscard]] bool DebugHitTestViewersListClientPoint(
+    POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) noexcept;
+[[nodiscard]] bool DebugGetViewersListPointerState(::PreferencesGridPointerDebugState& outState) noexcept;
+[[nodiscard]] bool DebugGetViewersTabClientRect(size_t tabIndex, RECT& outRect) noexcept;
+[[nodiscard]] bool DebugGetViewersSelectedTabIndex(size_t& outIndex) noexcept;
 [[nodiscard]] bool DebugSelectThemesListRow(size_t rowIndex) noexcept;
 [[nodiscard]] bool DebugGetThemesListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetThemesListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;

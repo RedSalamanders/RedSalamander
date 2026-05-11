@@ -21,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 # Paths
 $RepoRoot = Split-Path -Parent $PSScriptRoot | Split-Path -Parent
 $VersioningScript = Join-Path $RepoRoot "Tools\Versioning.ps1"
+$VcRuntimeScript = Join-Path $PSScriptRoot "VcRuntime.ps1"
 $BuildOutputDir = Join-Path $RepoRoot ".build\$Platform\$Configuration"
 $PackageOutputDir = Join-Path $RepoRoot ".build\AppPackages"
 $TempDir = Join-Path $env:TEMP "RedSalamanderZip_$([Guid]::NewGuid())"
@@ -29,7 +30,12 @@ if (-not (Test-Path $VersioningScript)) {
     throw "Version helper script not found: $VersioningScript"
 }
 
+if (-not (Test-Path $VcRuntimeScript)) {
+    throw "VC runtime helper script not found: $VcRuntimeScript"
+}
+
 . $VersioningScript
+. $VcRuntimeScript
 $VersionContext = if ($BuildNumber -gt 0) {
     Get-RSVersionContext -RepoRoot $RepoRoot -Configuration $Configuration -Platform $Platform -BuildNumber $BuildNumber
 } else {
@@ -73,6 +79,11 @@ try {
         $_.Name -notlike "concrt*.dll"
     } | Copy-Item -Destination $TempDir
 
+    # Bundle the app-local MSVC CRT so Winget validation and direct ZIP installs
+    # can launch RedSalamander on clean machines without preinstalled runtimes.
+    $VcRuntimeDlls = Copy-RSVcRuntimeDependencies -Platform $Platform -DestinationDir $TempDir
+    Write-Host "  Bundled MSVC runtime DLLs: $($VcRuntimeDlls -join ', ')" -ForegroundColor Gray
+
     # Copy Plugins folder
     $PluginsSource = Join-Path $BuildOutputDir "Plugins"
     if (Test-Path $PluginsSource) {
@@ -106,6 +117,11 @@ GETTING STARTED
 ---------------
 1. Run RedSalamander.exe to launch the file manager
 2. Run RedSalamanderMonitor.exe for debugging/monitoring
+
+RUNTIME REQUIREMENT
+-------------------
+This package includes the Microsoft Visual C++ runtime DLLs required for this
+CPU architecture.
 
 PORTABLE MODE
 -------------

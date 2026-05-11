@@ -3567,22 +3567,57 @@
     const uint64_t initialVisibleRows  = snapshot.visibleWork.visibleRowCount;
     const size_t initialVisibleColumns = snapshot.visibleWork.visibleColumnCount;
     const uint64_t initialResizeCount  = snapshot.dxResizeCount;
-    uint64_t previousRenderCount       = snapshot.dxRenderCount;
+    state.Require(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(pane, 120),
+                  L"Issues pane did not accept top reset before long-run scrolling validation.");
+    RedrawWindow(pane, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    state.Require(waitForSnapshot([](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
+    { return value.visibleWork.verticalScrollDip <= 0.5f; },
+                                  SelfTest::Scale(3000ms),
+                                  snapshot),
+                  std::format(L"Issues pane did not reset to the top before long-run scrolling validation; scrollDip={}.",
+                              snapshot.visibleWork.verticalScrollDip));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    uint64_t previousRenderCount = snapshot.dxRenderCount;
 
     for (size_t chunk = 0; chunk < 8u; ++chunk)
     {
-        state.Require(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(pane, -12),
+        const int detents              = (chunk % 2u) == 0u ? -6 : 6;
+        const float previousScrollDip  = snapshot.visibleWork.verticalScrollDip;
+        const uint64_t beforeRender    = previousRenderCount;
+        const bool expectedScrollDown  = detents < 0;
+        const auto scrollMovedExpected = [expectedScrollDown, previousScrollDip](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
+        {
+            const float currentScrollDip = value.visibleWork.verticalScrollDip;
+            return expectedScrollDown ? currentScrollDip > previousScrollDip + 0.5f : currentScrollDip + 0.5f < previousScrollDip;
+        };
+
+        state.Require(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(pane, detents),
                       std::format(L"Issues pane did not accept long-run scroll chunk {}.", chunk));
         if (! state.failure.empty())
         {
             return false;
         }
+        RedrawWindow(pane, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
 
         state.Require(waitForSnapshot([&](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
-        { return value.dxRenderCount > previousRenderCount; },
+        { return scrollMovedExpected(value) && value.dxRenderCount > beforeRender; },
                                       SelfTest::Scale(3000ms),
                                       snapshot),
-                      std::format(L"Issues pane did not repaint after long-run scroll chunk {}.", chunk));
+                      std::format(L"Issues pane did not move and repaint after long-run scroll chunk {}; detents={}, beforeScrollDip={}, afterScrollDip={}, "
+                                  L"beforeRender={}, afterRender={}, rows={}, visibleRows={}, verticalScrollbar={}.",
+                                  chunk,
+                                  detents,
+                                  previousScrollDip,
+                                  snapshot.visibleWork.verticalScrollDip,
+                                  beforeRender,
+                                  snapshot.dxRenderCount,
+                                  snapshot.rowCount,
+                                  snapshot.visibleWork.visibleRowCount,
+                                  snapshot.visibleWork.hasVerticalScrollbar));
         if (! state.failure.empty())
         {
             return false;

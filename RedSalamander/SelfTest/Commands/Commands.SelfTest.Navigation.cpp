@@ -3490,7 +3490,12 @@ struct OwnedMenuSessionEscapeResult
         bool popupOwnerValid             = true;
         bool commonFoldersPresent        = false;
         bool commonFoldersHasSubmenu     = false;
+        bool commonFoldersKeyboardFocused = false;
+        bool submenuPopupObserved        = false;
         bool submenuObserved             = false;
+        int commonFoldersIndex           = -1;
+        int rootKeyboardIndex            = -1;
+        size_t submenuCandidateCount     = 0u;
         size_t commonFolderChildRowCount = 0u;
         size_t commonFolderBitmapCount   = 0u;
         bool sessionClosed               = false;
@@ -3583,6 +3588,7 @@ struct OwnedMenuSessionEscapeResult
 
                 if (matchedRows >= 4u)
                 {
+                    menuResult.submenuPopupObserved        = true;
                     menuResult.submenuObserved             = true;
                     menuResult.commonFolderChildRowCount   = matchedRows;
                     menuResult.commonFolderBitmapCount     = bitmapRows;
@@ -3594,6 +3600,57 @@ struct OwnedMenuSessionEscapeResult
                 {
                     menuResult.observedSubmenuOrder = std::move(observedOrder);
                 }
+                return false;
+            };
+
+            const auto readRootKeyboardIndex = [&](HWND popup, std::optional<size_t>& outIndex) noexcept -> bool
+            {
+                RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
+                if (! RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState) || ! popupState.keyboardIndex.has_value())
+                {
+                    return false;
+                }
+
+                outIndex                    = popupState.keyboardIndex.value();
+                menuResult.rootKeyboardIndex = static_cast<int>(popupState.keyboardIndex.value());
+                return true;
+            };
+
+            const auto postPopupKey = [](HWND popup, WPARAM virtualKey) noexcept
+            {
+                PostMessageW(popup, WM_KEYDOWN, virtualKey, 0);
+                PostMessageW(popup, WM_KEYUP, virtualKey, 0);
+            };
+
+            const auto focusRootPopupItemWithKeyboard = [&](HWND popup, size_t targetIndex) noexcept -> bool
+            {
+                postPopupKey(popup, VK_HOME);
+                std::this_thread::sleep_for(SelfTest::Scale(50ms));
+
+                for (size_t step = 0u; step < 64u && ! stopToken.stop_requested(); ++step)
+                {
+                    std::optional<size_t> keyboardIndex;
+                    if (readRootKeyboardIndex(popup, keyboardIndex) && keyboardIndex.value() == targetIndex)
+                    {
+                        return true;
+                    }
+
+                    postPopupKey(popup, VK_DOWN);
+                    std::this_thread::sleep_for(SelfTest::Scale(30ms));
+                }
+
+                const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(500ms);
+                while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < deadline)
+                {
+                    std::optional<size_t> keyboardIndex;
+                    if (readRootKeyboardIndex(popup, keyboardIndex) && keyboardIndex.value() == targetIndex)
+                    {
+                        return true;
+                    }
+
+                    std::this_thread::sleep_for(20ms);
+                }
+
                 return false;
             };
 
@@ -3630,21 +3687,17 @@ struct OwnedMenuSessionEscapeResult
                         menuResult.commonFoldersPresent = commonFoldersIndex.has_value();
                         if (commonFoldersIndex.has_value())
                         {
+                            menuResult.commonFoldersIndex = static_cast<int>(commonFoldersIndex.value());
+
                             RedSalamander::DxUi::ContextMenuPopupItemLayoutDebugState itemLayout{};
                             menuResult.commonFoldersHasSubmenu =
                                 RedSalamander::DxUi::DebugGetContextMenuPopupItemLayout(popup, commonFoldersIndex.value(), itemLayout) &&
                                 itemLayout.chevronRectDip.right > itemLayout.chevronRectDip.left;
 
-                            RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
-                            if (menuResult.commonFoldersHasSubmenu && RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState))
+                            if (menuResult.commonFoldersHasSubmenu && focusRootPopupItemWithKeyboard(popup, commonFoldersIndex.value()))
                             {
-                                const float scale       = static_cast<float>(popupState.dpi) / 96.0f;
-                                const float centerXDip  = (itemLayout.itemRectDip.left + itemLayout.itemRectDip.right) * 0.5f;
-                                const float centerYDip  = (itemLayout.itemRectDip.top + itemLayout.itemRectDip.bottom) * 0.5f;
-                                const auto clientXPx    = static_cast<int>(centerXDip * scale + 0.5f);
-                                const auto clientYPx    = static_cast<int>(centerYDip * scale + 0.5f);
-                                const LPARAM mousePoint = MAKELPARAM(clientXPx, clientYPx);
-                                PostMessageW(popup, WM_MOUSEMOVE, 0, mousePoint);
+                                menuResult.commonFoldersKeyboardFocused = true;
+                                postPopupKey(popup, VK_RIGHT);
 
                                 const auto submenuDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
                                 while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < submenuDeadline)
@@ -3655,6 +3708,12 @@ struct OwnedMenuSessionEscapeResult
                                         if (candidate != popup && inspectCommonFoldersSubmenu(candidate))
                                         {
                                             break;
+                                        }
+
+                                        if (candidate != popup && IsWindowVisible(candidate) != FALSE && popupHasExpectedOwner(candidate))
+                                        {
+                                            menuResult.submenuPopupObserved = true;
+                                            ++menuResult.submenuCandidateCount;
                                         }
                                     }
 
@@ -3725,10 +3784,22 @@ struct OwnedMenuSessionEscapeResult
     state.Require(menuResult.popupOwnerValid, L"Nonstandard file-system menu popup should stay owned by the active pane window hierarchy.");
     state.Require(menuResult.commonFoldersPresent,
                   std::format(L"Nonstandard file-system menu should expose a Common Folders submenu. Observed root: {}", menuResult.observedRootOrder));
-    state.Require(menuResult.commonFoldersHasSubmenu, L"Common Folders menu entry should expose a submenu chevron.");
+    state.Require(menuResult.commonFoldersHasSubmenu,
+                  std::format(L"Common Folders menu entry should expose a submenu chevron; index={}, observed root: {}",
+                              menuResult.commonFoldersIndex,
+                              menuResult.observedRootOrder));
+    state.Require(menuResult.commonFoldersKeyboardFocused,
+                  std::format(L"Common Folders root menu row should be focusable by keyboard before opening its submenu; index={}, focusedIndex={}.",
+                              menuResult.commonFoldersIndex,
+                              menuResult.rootKeyboardIndex));
     state.Require(menuResult.submenuObserved,
-                  std::format(L"Common Folders submenu should expose the local common-folder entries. Observed submenu: {}",
-                              menuResult.observedSubmenuOrder));
+                  std::format(L"Common Folders submenu should expose the local common-folder entries. Observed submenu: {}; root index={}, "
+                              L"focusedIndex={}, submenuPopupObserved={}, submenuCandidates={}.",
+                              menuResult.observedSubmenuOrder,
+                              menuResult.commonFoldersIndex,
+                              menuResult.rootKeyboardIndex,
+                              menuResult.submenuPopupObserved ? L"yes" : L"no",
+                              menuResult.submenuCandidateCount));
     state.Require(menuResult.commonFolderChildRowCount >= 4u, L"Common Folders submenu should expose the standard common-folder rows.");
     state.Require(menuResult.commonFolderBitmapCount == menuResult.commonFolderChildRowCount,
                   L"Common Folders submenu rows should preserve their stock bitmap icons.");
@@ -5233,15 +5304,54 @@ struct OwnedMenuSessionEscapeResult
         return false;
     }
 
-    const uint32_t beforeRefreshCount = enumCount.load(std::memory_order_acquire);
-    DirectoryInfoCache& cache         = DirectoryInfoCache::GetInstance();
+    const auto describePaneState = [&]() noexcept -> std::wstring
+    {
+        const std::optional<std::filesystem::path> current = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+        const FolderView::NameFilterState filterState      = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+        return std::format(L"path='{}', itemCount={}, selectedCount={}, focused='{}', filterEnabled={}, filterText='{}', showHidden={}, enumCount={}, "
+                           L"renameNewVisible={}, renameNewSelected={}, unselectedNewVisible={}, unselectedNewSelected={}, untouchedVisible={}, "
+                           L"renameOldVisible={}, renameMidVisible={}, renameNextVisible={}, unselectedOldVisible={}",
+                           current.has_value() ? current->native() : std::wstring(L"<none>"),
+                           g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                           g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
+                           g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                           filterState.enabled ? L"yes" : L"no",
+                           filterState.text,
+                           g_folderWindow.CanShowHiddenNames(FolderWindow::Pane::Left) ? L"yes" : L"no",
+                           enumCount.load(std::memory_order_acquire),
+                           g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-new.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"rename-new.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"unselected-new.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"unselected-new.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"untouched.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-old.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-mid.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-next.txt") ? L"yes" : L"no",
+                           g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"unselected-old.txt") ? L"yes" : L"no");
+    };
+
+    const uint32_t beforeFirstRefreshCount = enumCount.load(std::memory_order_acquire);
+    DirectoryInfoCache& cache              = DirectoryInfoCache::GetInstance();
     cache.NotifyPathMoved(fileSystem.get(), oldPath, midPath);
+
+    state.Require(WaitForAtomicAtLeast(enumCount, beforeFirstRefreshCount + 1u, SelfTest::Scale(3000ms)),
+                  std::format(L"First chained rename hint did not refresh the pane before the remaining chain; before={}, state: {}.",
+                              beforeFirstRefreshCount,
+                              describePaneState()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const uint32_t beforeRemainingRefreshCount = enumCount.load(std::memory_order_acquire);
     cache.NotifyPathMoved(fileSystem.get(), midPath, nextPath);
     cache.NotifyPathMoved(fileSystem.get(), nextPath, newPath);
     cache.NotifyPathMoved(fileSystem.get(), unselectedOldPath, unselectedNewPath);
 
-    state.Require(WaitForAtomicAtLeast(enumCount, beforeRefreshCount + 1u, SelfTest::Scale(3000ms)),
-                  L"Directory-impact callback did not refresh the pane after chained rename notifications.");
+    state.Require(WaitForAtomicAtLeast(enumCount, beforeRemainingRefreshCount + 1u, SelfTest::Scale(3000ms)),
+                  std::format(L"Directory-impact callback did not refresh the pane after remaining chained rename notifications; before={}, state: {}.",
+                              beforeRemainingRefreshCount,
+                              describePaneState()));
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"rename-new.txt", L"unselected-new.txt", L"untouched.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents did not settle after chained-rename selection refresh.");
 
@@ -5271,14 +5381,15 @@ struct OwnedMenuSessionEscapeResult
     state.Require(waitForSelectionContract(),
                   std::format(L"Chained directory-impact refresh did not preserve selection onto the final rename target; selectedCount={}, "
                               L"renameNewSelected={}, unselectedNewSelected={}, renameOldVisible={}, renameMidVisible={}, renameNextVisible={}, "
-                              L"unselectedOldVisible={}.",
+                              L"unselectedOldVisible={}; state: {}.",
                               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
                               g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"rename-new.txt") ? L"yes" : L"no",
                               g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"unselected-new.txt") ? L"yes" : L"no",
                               g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-old.txt") ? L"yes" : L"no",
                               g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-mid.txt") ? L"yes" : L"no",
                               g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-next.txt") ? L"yes" : L"no",
-                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"unselected-old.txt") ? L"yes" : L"no"));
+                              g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"unselected-old.txt") ? L"yes" : L"no",
+                              describePaneState()));
 
     return state.failure.empty();
 }
@@ -5968,22 +6079,48 @@ struct OwnedMenuSessionEscapeResult
     }
 
     NavigationViewDebugSnapshot snapshot{};
-    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    std::optional<std::filesystem::path> restoredPath;
+    bool snapshotAvailable    = false;
+    bool shellRestored        = false;
+    const auto restoreDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    while (std::chrono::steady_clock::now() < restoreDeadline)
     {
-        return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
-               ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
-               value.currentPathText == root.wstring() && value.historyCount == baselineSnapshot.historyCount &&
-               g_folderWindow.GetFocusedFolderViewHwnd() == folderView && g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"b.log" &&
-               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
-               g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
-               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
-    },
-                                                SelfTest::Scale(3000ms),
-                                                &snapshot),
-                  std::format(L"Navigation shell did not restore cleanly after Hot Paths close; focusTarget={}, editMode={}, historyVisible={}, "
-                              L"suggestVisible={}, popupVisible={}, childWindows={}, currentPath='{}', historyCount={}, refreshCount={}, itemCount={}, "
-                              L"selectedCount={}, focusedItem='{}'.",
+        PumpPendingMessages();
+
+        restoredPath      = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+        snapshot          = {};
+        snapshotAvailable = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot);
+
+        const bool panePathStable = restoredPath.has_value() && OrdinalString::EqualsNoCasePath(restoredPath.value(), root);
+        const HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+        if (snapshotAvailable && snapshot.focusTarget == NavigationViewDebugFocusTarget::None && ! snapshot.editMode &&
+            ! snapshot.historyDropdownVisible && ! snapshot.editSuggestPopupVisible && ! snapshot.fullPathPopupVisible &&
+            ! snapshot.fullPathPopupEditMode && snapshot.visibleChildWindowCount == 0u && snapshot.currentPathText == root.wstring() &&
+            panePathStable && snapshot.historyCount == baselineSnapshot.historyCount && focusedFolderView == folderView &&
+            g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"b.log" &&
+            g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+            g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+            g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount)
+        {
+            shellRestored = true;
+            break;
+        }
+
+        Sleep(20);
+    }
+
+    const HWND navigationViewHwnd = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+    const HWND focusedFolderView  = g_folderWindow.GetFocusedFolderViewHwnd();
+    const HWND focusedWindow      = GetFocus();
+    state.Require(shellRestored,
+                  std::format(L"Navigation shell did not restore cleanly after Hot Paths close; snapshotAvailable={}, navigationBarVisible={}, "
+                              L"navigationViewHwnd=0x{:X}, navigationViewWindow={}, focusTarget={}, editMode={}, historyVisible={}, "
+                              L"suggestVisible={}, popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', historyCount={}, refreshCount={}, "
+                              L"itemCount={}, selectedCount={}, focusedItem='{}', focusedFolderView=0x{:X}, expectedFolderView=0x{:X}, focusedWindow=0x{:X}.",
+                              snapshotAvailable ? L"yes" : L"no",
+                              g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left) ? L"yes" : L"no",
+                              static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(navigationViewHwnd)),
+                              navigationViewHwnd && IsWindow(navigationViewHwnd) != FALSE ? L"yes" : L"no",
                               static_cast<unsigned>(snapshot.focusTarget),
                               snapshot.editMode ? L"yes" : L"no",
                               snapshot.historyDropdownVisible ? L"yes" : L"no",
@@ -5991,11 +6128,15 @@ struct OwnedMenuSessionEscapeResult
                               snapshot.fullPathPopupVisible ? L"yes" : L"no",
                               snapshot.visibleChildWindowCount,
                               snapshot.currentPathText,
+                              restoredPath.has_value() ? restoredPath->wstring() : std::wstring{},
                               snapshot.historyCount,
                               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
                               g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
                               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
-                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left)));
+                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                              static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(focusedFolderView)),
+                              static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(folderView)),
+                              static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(focusedWindow))));
     return state.failure.empty();
 }
 

@@ -63,6 +63,12 @@ public:
     void SetText(const std::wstring& text);
     void AppendText(const std::wstring& more);
     void AppendInfoLine(const std::wstring& text, const Debug::InfoParam& info);
+    struct InfoLineInput
+    {
+        Debug::InfoParam info{};
+        std::wstring text;
+    };
+    void AppendInfoLines(std::vector<InfoLineInput> lines);
     void Clear();
 
     // Content queries
@@ -91,6 +97,8 @@ public:
     // Display row mapping (VisibleLine architecture)
     UINT32 DisplayRowForVisible(size_t visibleIndex) const;
     size_t VisibleIndexFromDisplayRow(UINT32 displayRow) const;
+    std::optional<size_t> SourceLineForDisplayRow(UINT32 displayRow) const;
+    std::optional<size_t> ClosestVisibleSourceLine(size_t sourceIndex) const;
     UINT32 TotalDisplayRows() const;
     UINT32 DisplayRowForSource(size_t sourceIndex) const; // Helper: map source line to display row
 
@@ -173,6 +181,8 @@ private:
     void OnLineLengthChanged(size_t index, size_t oldLen, size_t newLen) const;
     void UpdateDirtyRange(size_t first, size_t last);
     void ResetDirtyRange();
+    void ReserveForAdditionalLines(size_t additionalLineCount);
+    void AppendInfoLineUnsafe(std::wstring text, const Debug::InfoParam& info);
 
     // Unsafe methods - assume caller already holds appropriate lock
     void MarkAllDirtyUnsafe();

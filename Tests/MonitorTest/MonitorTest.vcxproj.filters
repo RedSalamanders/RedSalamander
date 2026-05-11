@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\RedSalamanderMonitor\Document.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="MonitorTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -202,12 +202,14 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="..\EmbeddedViewerBase.h" />
     <ClInclude Include="..\LocalizationManager.h" />
+    <ClInclude Include="..\ThemeDefinitionIo.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
     <ClCompile Include="LocalizationManager.cpp" />
     <ClCompile Include="PerfJsonl.cpp" />
     <ClCompile Include="SettingsStore.cpp" />
+    <ClCompile Include="ThemeDefinitionIo.cpp" />
     <ClCompile Include="TraceProvider.cpp" />
     <ClCompile Include="dllmain.cpp" />
   </ItemGroup>

@@ -7,6 +7,7 @@
 #include <io.h>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <string>
 #include <thread>
@@ -26,6 +27,8 @@ static_assert(! RedSalamanderMonitor::kInvalidRectVisualizationEnabled,
 // so external trace sessions will receive events from both.
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "ExceptionHelpers.h"
+#include "ColorTextScrollBars.h"
+#include "Document.h"
 #include "Helpers.h"
 #include "MonitorDiagnostics.h"
 
@@ -66,6 +69,77 @@ namespace
 
     Debug::detail::SetRuntimeMonitorDiagnosticsEnabled(false);
     return defaultQuiet && runtimeEnabled;
+}
+
+[[nodiscard]] bool RunMonitorScrollbarModelSelfTest()
+{
+    using RedSalamanderMonitor::ColorTextScrollBarInputs;
+    using RedSalamanderMonitor::ComputeColorTextViewScrollBars;
+
+    const auto coupled = ComputeColorTextViewScrollBars(ColorTextScrollBarInputs{
+        .clientWidthDip             = 100.0f,
+        .clientHeightDip            = 100.0f,
+        .contentWidthDip            = 90.1f,
+        .contentHeightDip           = 120.0f,
+        .textChromeWidthDip         = 10.0f,
+        .verticalScrollbarWidthDip  = 10.0f,
+        .horizontalScrollbarHeightDip = 10.0f,
+        .currentVerticalVisible     = false,
+        .currentHorizontalVisible   = false,
+    });
+
+    const bool coupledStable = coupled.verticalVisible && coupled.horizontalVisible && coupled.verticalPageDip == 90.0f && coupled.horizontalPageDip == 80.0f;
+
+    const auto cleared = ComputeColorTextViewScrollBars(ColorTextScrollBarInputs{
+        .clientWidthDip             = 90.0f,
+        .clientHeightDip            = 90.0f,
+        .contentWidthDip            = 50.0f,
+        .contentHeightDip           = 50.0f,
+        .textChromeWidthDip         = 10.0f,
+        .verticalScrollbarWidthDip  = 10.0f,
+        .horizontalScrollbarHeightDip = 10.0f,
+        .currentVerticalVisible     = true,
+        .currentHorizontalVisible   = true,
+    });
+
+    const bool clearsStaleBars = ! cleared.verticalVisible && ! cleared.horizontalVisible && cleared.verticalPageDip == 100.0f && cleared.horizontalPageDip == 90.0f;
+
+    return coupledStable && clearsStaleBars;
+}
+
+[[nodiscard]] Debug::InfoParam MakeTestInfo(Debug::InfoParam::Type type, uint32_t ordinal)
+{
+    Debug::InfoParam info{};
+    info.processID = 1000u + ordinal;
+    info.threadID  = 2000u + ordinal;
+    info.type      = type;
+    return info;
+}
+
+[[nodiscard]] bool RunMonitorDocumentBatchFilterSelfTest()
+{
+    Document document;
+    std::vector<Document::InfoLineInput> lines;
+    lines.push_back(Document::InfoLineInput{.info = MakeTestInfo(Debug::InfoParam::Type::Info, 0u), .text = L"info row"});
+    lines.push_back(Document::InfoLineInput{.info = MakeTestInfo(Debug::InfoParam::Type::Error, 1u), .text = L"error row"});
+    lines.push_back(Document::InfoLineInput{.info = MakeTestInfo(Debug::InfoParam::Type::Warning, 2u), .text = L"warning row\nwrapped detail"});
+    lines.push_back(Document::InfoLineInput{.info = MakeTestInfo(Debug::InfoParam::Type::Debug, 3u), .text = L"debug row"});
+
+    document.AppendInfoLines(std::move(lines));
+    const bool batchAppended = document.TotalLineCount() == 4u && document.VisibleLineCount() == 4u;
+
+    document.SetFilterMask(Debug::FilterBitForType(Debug::InfoParam::Type::Error) | Debug::FilterBitForType(Debug::InfoParam::Type::Warning));
+
+    const auto firstVisibleSource  = document.SourceLineForDisplayRow(0u);
+    const auto wrappedVisibleSource = document.SourceLineForDisplayRow(2u);
+    const auto forwardAnchor       = document.ClosestVisibleSourceLine(0u);
+    const auto exactAnchor         = document.ClosestVisibleSourceLine(2u);
+    const auto backwardAnchor      = document.ClosestVisibleSourceLine(3u);
+
+    constexpr size_t kNoSourceLine = std::numeric_limits<size_t>::max();
+    return batchAppended && document.VisibleLineCount() == 2u && document.TotalDisplayRows() == 3u && firstVisibleSource.value_or(kNoSourceLine) == 1u &&
+           wrappedVisibleSource.value_or(kNoSourceLine) == 2u && forwardAnchor.value_or(kNoSourceLine) == 1u && exactAnchor.value_or(kNoSourceLine) == 2u &&
+           backwardAnchor.value_or(kNoSourceLine) == 2u && document.DisplayRowForSource(1u) == 0u && document.DisplayRowForSource(2u) == 1u;
 }
 } // namespace
 
@@ -308,6 +382,18 @@ static int RunMonitorTest()
         return 2;
     }
 
+    if (! RunMonitorScrollbarModelSelfTest())
+    {
+        std::wcerr << L"Monitor scrollbar model self-test failed\n";
+        return 2;
+    }
+
+    if (! RunMonitorDocumentBatchFilterSelfTest())
+    {
+        std::wcerr << L"Monitor document batch/filter self-test failed\n";
+        return 2;
+    }
+
     // Force ETW registration at startup
     const bool registered = Debug::detail::EnsureTraceLoggingRegistered();
 
@@ -370,6 +456,14 @@ int main(int argc, char** argv)
     if (argc > 1 && argv[1] != nullptr && lstrcmpA(argv[1], "--diagnostics-gate-selftest") == 0)
     {
         return RunMonitorDiagnosticsGateSelfTest() ? 0 : 2;
+    }
+    if (argc > 1 && argv[1] != nullptr && lstrcmpA(argv[1], "--scrollbar-model-selftest") == 0)
+    {
+        return RunMonitorScrollbarModelSelfTest() ? 0 : 2;
+    }
+    if (argc > 1 && argv[1] != nullptr && lstrcmpA(argv[1], "--document-model-selftest") == 0)
+    {
+        return RunMonitorDocumentBatchFilterSelfTest() ? 0 : 2;
     }
 
     // Use SEH to catch all exceptions (no C++ objects in this scope)

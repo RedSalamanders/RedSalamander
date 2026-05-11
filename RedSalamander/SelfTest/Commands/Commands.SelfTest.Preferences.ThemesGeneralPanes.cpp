@@ -1,3 +1,78 @@
+namespace
+{
+
+[[nodiscard]] std::wstring FormatThemesDiagnosticRectForSelfTest(const RECT& rect)
+{
+    return std::format(L"({},{})-({},{})", rect.left, rect.top, rect.right, rect.bottom);
+}
+
+[[nodiscard]] std::wstring DescribeThemesWindowForSelfTest(HWND hwnd)
+{
+    const bool isWindow = hwnd != nullptr && IsWindow(hwnd) != FALSE;
+    const bool visible  = isWindow && IsWindowVisible(hwnd) != FALSE;
+    RECT rect{};
+    if (isWindow)
+    {
+        static_cast<void>(GetWindowRect(hwnd, &rect));
+    }
+
+    wchar_t className[128]{};
+    if (isWindow)
+    {
+        static_cast<void>(GetClassNameW(hwnd, className, static_cast<int>(std::size(className))));
+    }
+
+    return std::format(L"0x{:X}:isWindow={} visible={} class='{}' rect={}",
+                       reinterpret_cast<std::uintptr_t>(hwnd),
+                       isWindow,
+                       visible,
+                       className,
+                       FormatThemesDiagnosticRectForSelfTest(rect));
+}
+
+[[nodiscard]] std::wstring DescribePreferencesThemesGridSelectionSetupForSelfTest(const PreferencesDebugSnapshot& snapshot)
+{
+    PreferencesDebugSnapshot currentSnapshot{};
+    const bool haveCurrentSnapshot             = DebugGetPreferencesDialogSnapshot(currentSnapshot);
+    const PreferencesDebugSnapshot& diagnostic = haveCurrentSnapshot ? currentSnapshot : snapshot;
+
+    const HWND prefs        = GetPreferencesDialogHandle();
+    const HWND activePage   = DebugGetPreferencesActivePageHandle();
+    const HWND activeDxHost = DebugGetPreferencesActivePageDxHostHandle();
+    const HWND focus        = GetFocus();
+
+    return std::format(L"haveSnapshot={} category={} title='{}' themesRows={} visibleRows={} visibleColumns={} visibleCells={} "
+                       L"search='{}' selectedTheme='{}' selectedColor='{}' colorText='{}' focusTarget={} renders={} resizes={} resizeFailures={} "
+                       L"pageChildren={} renderedDxHosts={} paneWindows={}/{} pageResizeFailures={} shellFocus={} categoryFocused={} "
+                       L"prefsWindow=[{}] activePage=[{}] activeDxHost=[{}] focus=[{}]",
+                       haveCurrentSnapshot,
+                       static_cast<int>(diagnostic.currentCategory),
+                       diagnostic.pageTitle,
+                       diagnostic.themesListRowCount,
+                       diagnostic.themesListVisibleRowCount,
+                       diagnostic.themesListVisibleColumnCount,
+                       diagnostic.themesListVisibleCellCount,
+                       diagnostic.themesSearchText,
+                       diagnostic.themesSelectedThemeIdText,
+                       diagnostic.themesSelectedColorKeyText,
+                       diagnostic.themesColorText,
+                       static_cast<int>(diagnostic.themesFocusTarget),
+                       diagnostic.themesListRenderCount,
+                       diagnostic.themesListResizeCount,
+                       diagnostic.themesListResizeFailureCount,
+                       diagnostic.visibleCurrentPageChildWindowCount,
+                       diagnostic.currentPageRenderedDxHostCount,
+                       diagnostic.createdPaneWindowCount,
+                       diagnostic.visiblePaneWindowCount,
+                       diagnostic.currentPageDxHostResizeFailureCount,
+                       static_cast<int>(diagnostic.shellFocusTarget),
+                       diagnostic.categoryTreeFocused,
+                       DescribeThemesWindowForSelfTest(prefs),
+                       DescribeThemesWindowForSelfTest(activePage),
+                       DescribeThemesWindowForSelfTest(activeDxHost),
+                       DescribeThemesWindowForSelfTest(focus));
+}
+
 [[nodiscard]] bool TestPreferencesDialogThemesSearchRoundTripPreservesRetainedState(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -90,15 +165,9 @@
             return true;
         }
 
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category before retained-search round-trip validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         return waitForSnapshot(hasStableThemesPageState, snapshot);
     };
@@ -272,15 +341,9 @@
             return true;
         }
 
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category before retained-selection validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         return waitForSnapshot(hasStableThemesPageState, snapshot);
     };
@@ -417,15 +480,9 @@
         }
 
         static_cast<void>(SetFocus(categoryTreeHost));
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category before color retained-selection validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         return waitForSnapshot(hasStableThemesPageState, snapshot);
     };
@@ -482,6 +539,7 @@
 [[nodiscard]] bool TestPreferencesDialogThemesPageExposesLiveGridSelection(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
+    constexpr auto kSuite = SelfTest::SelfTestSuite::Commands;
 
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
@@ -522,16 +580,12 @@
     }
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes grid UIA selection test.");
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                  L"Failed to select the Preferences Themes category for Themes grid UIA selection test.");
     PumpPendingMessages();
-
-    for (int i = 0; i < 6; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
+    SelfTest::AppendSuiteTrace(kSuite,
+                               std::format(L"Preferences Themes grid UIA selection after category select: {}",
+                                           DescribePreferencesThemesGridSelectionSetupForSelfTest({})));
 
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
@@ -561,11 +615,15 @@
                && value.themesListRowCount >= 2u;
     },
                       snapshot),
-                  L"Preferences Themes page did not expose its DX grid surface for UIA selection validation.");
+                  std::format(L"Preferences Themes page did not expose its DX grid surface for UIA selection validation; {}.",
+                              DescribePreferencesThemesGridSelectionSetupForSelfTest(snapshot)));
     if (! state.failure.empty())
     {
         return false;
     }
+    SelfTest::AppendSuiteTrace(kSuite,
+                               std::format(L"Preferences Themes grid UIA selection page ready: {}",
+                                           DescribePreferencesThemesGridSelectionSetupForSelfTest(snapshot)));
 
     state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_THEMES),
                   L"Preferences page title did not switch to Themes before UIA selection validation.");
@@ -935,15 +993,9 @@
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes pointer-selection validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes pointer-selection validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -1111,15 +1163,9 @@
         }
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes header-reorder validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes header-reorder validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -1292,15 +1338,9 @@
         }
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes reordered-copy validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes reordered-copy validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -2359,6 +2399,52 @@
     return state.failure.empty();
 }
 
+[[nodiscard]] std::wstring_view GeneralFocusTargetName(const PreferencesGeneralDebugFocusTarget target) noexcept
+{
+    switch (target)
+    {
+        case PreferencesGeneralDebugFocusTarget::None: return L"None";
+        case PreferencesGeneralDebugFocusTarget::MenuBarToggle: return L"MenuBarToggle";
+        case PreferencesGeneralDebugFocusTarget::FunctionBarToggle: return L"FunctionBarToggle";
+        case PreferencesGeneralDebugFocusTarget::LanguageCombo: return L"LanguageCombo";
+        case PreferencesGeneralDebugFocusTarget::CompactModeToggle: return L"CompactModeToggle";
+        case PreferencesGeneralDebugFocusTarget::ReducedMotionCombo: return L"ReducedMotionCombo";
+        case PreferencesGeneralDebugFocusTarget::WindowBackdropCombo: return L"WindowBackdropCombo";
+        case PreferencesGeneralDebugFocusTarget::SplashScreenToggle: return L"SplashScreenToggle";
+    }
+
+    return L"Unknown";
+}
+
+[[nodiscard]] std::wstring FormatGeneralThemeCycleSnapshot(const PreferencesDebugSnapshot& value, const AppTheme& expectedTheme)
+{
+    return std::format(
+        L"expected(dark={}, highContrast={}, rainbow={}), actual(category={}, dark={}, highContrast={}, rainbow={}, visiblePageChildren={}, "
+        L"renderedPageDxHosts={}, pageResizeFailures={}, pageRenderTotal={}, pageScroll={}/{}, generalFocus={}, shellFocus={}, "
+        L"shellResizeFailures={}, shellRenderedHosts={}, visibleDialogChildren={}, pageTitle='{}', primaryBackdrop={}, toolBackdrop={})",
+        expectedTheme.dark,
+        expectedTheme.highContrast,
+        expectedTheme.menu.rainbowMode,
+        static_cast<int>(value.currentCategory),
+        value.themeDark,
+        value.themeHighContrast,
+        value.themeRainbow,
+        value.visibleCurrentPageChildWindowCount,
+        value.currentPageRenderedDxHostCount,
+        value.currentPageDxHostResizeFailureCount,
+        value.currentPageDxHostRenderCountTotal,
+        value.pageScrollY,
+        value.pageScrollMaxY,
+        GeneralFocusTargetName(value.generalFocusTarget),
+        static_cast<int>(value.shellFocusTarget),
+        value.shellDxHostResizeFailureCount,
+        value.visibleShellRenderedDxHostCount,
+        value.visibleChildWindowCount,
+        value.pageTitle,
+        static_cast<int>(value.themePrimaryBackdrop),
+        static_cast<int>(value.themeToolBackdrop));
+}
+
 [[nodiscard]] bool TestPreferencesDialogGeneralTabTraversalLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -2482,18 +2568,28 @@
             SendMessageW(activePage, WM_KEYUP, VK_SHIFT, 0);
         }
 
-        state.Require(waitForSnapshot(
-                          [&](const PreferencesDebugSnapshot& value) noexcept
+        const bool reachedTarget = waitForSnapshot(
+            [&](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryGeneral && value.generalFocusTarget == expectedTarget && value.createdPaneWindowCount == 0u &&
                    value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
-                      std::format(L"Preferences General {} focus target not reached during tab traversal.", label));
+            snapshot);
+        state.Require(reachedTarget,
+                      std::format(L"Preferences General {} focus target not reached during tab traversal (expected={}, actual={}, category={}, childWindows={}, "
+                                  L"renderedDxHosts={}, resizeFailures={}).",
+                                  label,
+                                  GeneralFocusTargetName(expectedTarget),
+                                  GeneralFocusTargetName(snapshot.generalFocusTarget),
+                                  static_cast<unsigned int>(snapshot.currentCategory),
+                                  snapshot.visibleCurrentPageChildWindowCount,
+                                  snapshot.currentPageRenderedDxHostCount,
+                                  snapshot.currentPageDxHostResizeFailureCount));
     };
 
     sendTab(false, PreferencesGeneralDebugFocusTarget::FunctionBarToggle, L"function-bar toggle");
+    sendTab(false, PreferencesGeneralDebugFocusTarget::LanguageCombo, L"language combo");
     sendTab(false, PreferencesGeneralDebugFocusTarget::CompactModeToggle, L"compact-mode toggle");
     sendTab(false, PreferencesGeneralDebugFocusTarget::ReducedMotionCombo, L"reduced-motion combo");
     sendTab(false, PreferencesGeneralDebugFocusTarget::WindowBackdropCombo, L"window-backdrop combo");
@@ -2503,6 +2599,7 @@
     sendTab(true, PreferencesGeneralDebugFocusTarget::WindowBackdropCombo, L"reverse window-backdrop combo");
     sendTab(true, PreferencesGeneralDebugFocusTarget::ReducedMotionCombo, L"reverse reduced-motion combo");
     sendTab(true, PreferencesGeneralDebugFocusTarget::CompactModeToggle, L"reverse compact-mode toggle");
+    sendTab(true, PreferencesGeneralDebugFocusTarget::LanguageCombo, L"reverse language combo");
     sendTab(true, PreferencesGeneralDebugFocusTarget::FunctionBarToggle, L"reverse function-bar toggle");
     sendTab(true, PreferencesGeneralDebugFocusTarget::MenuBarToggle, L"reverse wrapped menu-bar toggle");
 
@@ -3676,15 +3773,18 @@
     const auto requireTheme = [&](std::wstring_view label, const AppTheme& theme, const bool expectRainbow, const bool expectHighContrast) noexcept
     {
         UpdatePreferencesWindowsTheme(theme);
-        state.Require(waitForSnapshot(
-                          [&](const PreferencesDebugSnapshot& value) noexcept
-        {
-            return value.currentCategory == kPrefCategoryGeneral && value.themeDark == theme.dark && value.themeHighContrast == theme.highContrast &&
-                   value.themeRainbow == theme.menu.rainbowMode && value.currentPageDxHostResizeFailureCount == 0u &&
-                   value.visibleCurrentPageChildWindowCount <= 1u;
-        },
-                          snapshot),
-                      std::format(L"Preferences General page did not settle after the {} theme update.", label));
+        const bool themeSettled = waitForSnapshot(
+            [&](const PreferencesDebugSnapshot& value) noexcept
+            {
+                return value.currentCategory == kPrefCategoryGeneral && value.themeDark == theme.dark && value.themeHighContrast == theme.highContrast &&
+                       value.themeRainbow == theme.menu.rainbowMode && value.currentPageDxHostResizeFailureCount == 0u &&
+                       value.visibleCurrentPageChildWindowCount <= 1u;
+            },
+            snapshot);
+        state.Require(themeSettled,
+                      std::format(L"Preferences General page did not settle after the {} theme update: {}.",
+                                  label,
+                                  FormatGeneralThemeCycleSnapshot(snapshot, theme)));
         if (! state.failure.empty())
         {
             return;
@@ -5101,3 +5201,5 @@
 
     return exerciseComboThenToggle(L"reopened Panes combo/toggle pass");
 }
+
+} // namespace

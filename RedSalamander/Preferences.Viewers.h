@@ -33,8 +33,13 @@ public:
     [[nodiscard]] PreferencesViewersDebugFocusTarget DebugGetFocusTarget() const noexcept;
     [[nodiscard]] bool DebugUsesDxUiTypographyContext() const noexcept;
     [[nodiscard]] bool DebugUsesDxUiTypographyMetrics() const noexcept;
-    [[nodiscard]] bool DebugGetListRowClientRect(size_t rowIndex, RECT& outRect) const noexcept;
-    [[nodiscard]] bool DebugGetListHeaderClientRect(size_t columnIndex, RECT& outRect) const noexcept;
+    [[nodiscard]] bool DebugGetListRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
+    [[nodiscard]] bool DebugGetListHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
+    [[nodiscard]] bool DebugHitTestListClientPoint(
+        POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) const noexcept;
+    [[nodiscard]] bool DebugGetListPointerState(PreferencesGridPointerDebugState& outState) const noexcept;
+    [[nodiscard]] bool DebugGetTabClientRect(size_t tabIndex, RECT& outRect) const noexcept;
+    [[nodiscard]] bool DebugGetSelectedTabIndex(size_t& outIndex) const noexcept;
     [[nodiscard]] bool DebugSelectListRow(size_t rowIndex) noexcept;
     [[nodiscard]] bool DebugSetSearchText(std::wstring_view text) noexcept;
     [[nodiscard]] bool DebugSelectDefaultAction(bool alternate, std::wstring_view actionId) noexcept;

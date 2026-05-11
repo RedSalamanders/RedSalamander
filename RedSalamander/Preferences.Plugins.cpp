@@ -1644,7 +1644,6 @@ bool PluginsPane::DebugScrollMainListByWheelDetents(const int detents) noexcept
         return false;
     }
 
-    _pageHostDx->SetFocusControl(_dxState->page.listControl);
     const float wheelDelta = detents >= 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
     const int steps        = std::abs(detents);
     for (int i = 0; i < steps; ++i)
@@ -1661,7 +1660,6 @@ bool PluginsPane::DebugScrollCustomPathsListByWheelDetents(const int detents) no
         return false;
     }
 
-    _pageHostDx->SetFocusControl(_dxState->page.customPathsListControl);
     const float wheelDelta = detents >= 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
     const int steps        = std::abs(detents);
     for (int i = 0; i < steps; ++i)

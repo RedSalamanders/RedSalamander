@@ -165,6 +165,20 @@ void Document::OnLineLengthChanged(size_t index, [[maybe_unused]] size_t oldLen,
     }
 }
 
+void Document::ReserveForAdditionalLines(size_t additionalLineCount)
+{
+    if (additionalLineCount == 0)
+        return;
+
+    const size_t currentSize = _lines.size();
+    const size_t desiredSize = currentSize + additionalLineCount;
+    if (_lines.capacity() >= desiredSize)
+        return;
+
+    const size_t grownCapacity = _lines.capacity() + (_lines.capacity() / 2u) + 100u;
+    _lines.reserve(std::max(desiredSize, grownCapacity));
+}
+
 void Document::EnsureTotalLengthValid() const
 {
     if (_totalLengthValid)
@@ -317,18 +331,27 @@ void Document::AppendText(const std::wstring& more)
 void Document::AppendInfoLine(const std::wstring& text, const Debug::InfoParam& info)
 {
     std::unique_lock lock(_rwMutex); // Write operation
+    ReserveForAdditionalLines(1u);
+    AppendInfoLineUnsafe(std::wstring{text}, info);
+}
 
-    // Optimization - Reserve vector capacity proactively to reduce reallocations
-    const size_t currentSize     = _lines.size();
-    const size_t currentCapacity = _lines.capacity();
-    if (currentCapacity - currentSize < 100)
+void Document::AppendInfoLines(std::vector<InfoLineInput> lines)
+{
+    if (lines.empty())
+        return;
+
+    std::unique_lock lock(_rwMutex); // Write operation
+    ReserveForAdditionalLines(lines.size());
+    for (auto& input : lines)
     {
-        const size_t newCapacity = currentCapacity + (currentCapacity / 2) + 100;
-        _lines.reserve(newCapacity);
+        AppendInfoLineUnsafe(std::move(input.text), input.info);
     }
+}
 
+void Document::AppendInfoLineUnsafe(std::wstring text, const Debug::InfoParam& info)
+{
     Line line;
-    line.text = text;
+    line.text = std::move(text);
     StripCarriageReturns(line.text);
     line.newlineCount       = static_cast<UINT32>(std::count(line.text.begin(), line.text.end(), L'\n'));
     line.cachedDisplayValid = false;
@@ -610,6 +633,38 @@ size_t Document::VisibleIndexFromDisplayRow(UINT32 displayRow) const
         return 0;
 
     return static_cast<size_t>(std::distance(_visibleLines.begin(), it - 1));
+}
+
+std::optional<size_t> Document::SourceLineForDisplayRow(UINT32 displayRow) const
+{
+    std::shared_lock lock(_rwMutex);
+
+    if (_visibleLines.empty())
+        return std::nullopt;
+
+    auto it =
+        std::upper_bound(_visibleLines.begin(), _visibleLines.end(), displayRow, [](UINT32 row, const VisibleLine& vl) { return row < vl.displayRowStart; });
+
+    if (it == _visibleLines.begin())
+        return _visibleLines.front().sourceIndex;
+
+    --it;
+    return it->sourceIndex;
+}
+
+std::optional<size_t> Document::ClosestVisibleSourceLine(size_t sourceIndex) const
+{
+    std::shared_lock lock(_rwMutex);
+
+    if (_visibleLines.empty())
+        return std::nullopt;
+
+    auto it = std::lower_bound(_visibleLines.begin(), _visibleLines.end(), sourceIndex, [](const VisibleLine& vl, size_t src) { return vl.sourceIndex < src; });
+
+    if (it != _visibleLines.end())
+        return it->sourceIndex;
+
+    return _visibleLines.back().sourceIndex;
 }
 
 UINT32 Document::TotalDisplayRows() const

@@ -5,7 +5,30 @@
 This document provides a comprehensive inventory of every declared test case across all
 RedSalamander test suites. It serves as the authoritative reference for test coverage.
 
-Total declared cases: **520+ self-test cases** across 3 suites, plus PoC and performance tests.
+Current runner-native inventory as of 2026-05-10:
+
+- Commands: 599 listed cases.
+- CompareDirectories: 149 listed cases.
+- FileOperations: 75 listed phases: 73 active ordered phases, plus setup and
+  cleanup.
+- PerformanceTests2: 7 CppUnitTest `TEST_METHOD`s.
+- MonitorTest: 3 ETW burst scenarios plus 3 fast guards
+  (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
+  `--document-model-selftest`).
+- Tooling scripts: 65 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
+  synthetic vcpkg merge cases.
+
+`RedSalamander.exe --selftest-list-cases` emits the authoritative in-product
+self-test case inventory as JSON. `Tools\Get-TestInventory.ps1 -Format Json`
+emits a source-derived fallback manifest for static/doc linting; it intentionally
+keeps the older static `RunCase` call-site counts visible because those are not
+equivalent to runner-listed cases.
+
+Current source-derived fallback counts:
+
+- Commands: 570 static `SelfTest::RunCase` call-site registrations.
+- CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
+- FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
 
 Related documents:
 - `Specs/Testing/Testing_SelfTests.md` — result contract
@@ -13,11 +36,305 @@ Related documents:
 - `Specs/Testing/Testing_SelfTestRemoteCredentials.md` — remote credential setup
 - `Tests/README.md` — test infrastructure index
 
+Current test-review evidence:
+
+- `.build/logs/msbuild-20260510_191142_208.log` — Debug x64 `RedConfigure`
+  build after fixing the compact first-open Localization overlap and increasing
+  the initial window size; build wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/x64/Debug/RedConfigureTests.exe` on 2026-05-10 — passed after the
+  compact Localization layout fix.
+- `.build/logs/msbuild-20260510_182424_353.log` — Debug x64
+  `RedConfigureTests` build after adding translation table view coverage for
+  search, ID/status filters, and ascending/descending sort; build wrapper
+  diagnostics: 0 warnings, 0 errors.
+- `.build/x64/Debug/RedConfigureTests.exe` on 2026-05-10 — passed after adding
+  the translation view search/filter/sort regression.
+- `.build/logs/msbuild-20260510_182741_417.log` — Debug x64 `RedConfigure`
+  build after replacing the two-table Localization layout with one sortable,
+  searchable, filterable resource table and adding readable culture display
+  names; build wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/logs/msbuild-20260510_175909_149.log` — Debug x64
+  `RedConfigureTests` build after workspace-root normalization coverage was
+  added; build wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/x64/Debug/RedConfigureTests.exe` on 2026-05-10 — passed after adding
+  coverage for resolving `.build\x64\Debug` launch paths back to the
+  repository root.
+- `.build/logs/msbuild-20260510_180124_816.log` — Debug x64 `DxUiTests` build
+  after the repeated `Ctrl+Backspace` path-editing regression was added; build
+  wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/x64/Debug/DxUiTests.exe TextInputBridge` on 2026-05-10 — passed after
+  fixing repeated Ctrl+Backspace path segment deletion and translated delete
+  character suppression in the DxUi text bridge.
+- `.build/logs/msbuild-20260510_180753_126.log` — Debug x64 `RedConfigure`
+  build after moving culture/owner controls into Localization, adding official
+  culture choices, root auto-normalization, richer theme samples, preview
+  click-to-select, active-theme authored color keys, and first theme group batch controls; build wrapper
+  diagnostics: 0 warnings, 0 errors.
+- `.build/logs/msbuild-20260510_172040_185.log` — Debug x64
+  `RedConfigureTests` build after task-mode navigation and theme expression
+  model coverage were added; build wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/x64/Debug/RedConfigureTests.exe` on 2026-05-10 — passed after adding
+  coverage for four RedConfigure task modes, expression-authored theme preview
+  colors, cycle rejection, and flattened expression export.
+- `.build/logs/msbuild-20260510_172059_204.log` — Debug x64
+  `RedConfigure` build after task-mode UI, icon resource, and theme expression
+  authoring changes; build wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/logs/msbuild-20260509_191136_532.log` — Debug x64
+  `MonitorTest` build after the monitor document batch/filter guard was added;
+  build wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/logs/msbuild-20260509_191616_355.log` — Debug x64
+  `RedSalamanderMonitor` build after the deque-backed ETW queue drain,
+  document batch append, filter-anchor helper usage, and stale Comctl32
+  dependency removal; build wrapper diagnostics: 0 warnings, 0 errors.
+- `Specs/TestRuns/4cb089111a23/Monitor/2026-05-09_191537/` —
+  `RedSalamanderMonitor.exe --chrome-selftest` after test-enabled build;
+  passed including the synthetic ETW batch queue drain guard
+  (`before=0 after=260 expectedDelta=260`) and perf metrics for the 200 + 60
+  bounded document-append batches.
+- `.build/logs/msbuild-20260505_162852_589.log` — Debug x64
+  `RedSalamander` build after shared result-emission helper wiring,
+  runner-level emitted-once validation, and the duplicate
+  `empty_directories` CompareDirectories case-name fix; build wrapper
+  diagnostics: 0 warnings, 0 errors.
+- `.build/logs/msbuild-20260505_180248_152.log` — Debug x64
+  `RedSalamander` build after FileOperations custom speed-limit prompt,
+  postmortem diagnostic, and parallel directory metadata fixes; build wrapper
+  diagnostics: 0 warnings, 0 errors.
+- `.build/logs/msbuild-20260505_182728_031.log` — Debug x64
+  `RedSalamander` build after FileOperations phase-prefix filter support; build
+  wrapper diagnostics: 0 warnings, 0 errors.
+- `.build/logs/msbuild-20260505_160654_612.log` — Debug x64
+  `RedSalamander` build after bounded self-test timeout parsing, stricter
+  archive repo-root discovery, Preferences self-test namespace cleanup, and
+  runner-native self-test case listing; build wrapper diagnostics: 0 warnings,
+  0 errors.
+- `.build/logs/msbuild-20260505_154051_915.log` — Debug x64 `DxUiTests`
+  build after explicit unknown/empty CLI argument rejection; diagnostics: 0
+  warnings, 0 errors.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_154805/` — focused
+  `red_salamander_help_lists_diagnostics_options` Commands self-test, passed
+  with 1 passed / 0 failed / 0 skipped after archive discovery began requiring
+  `.git` identity.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_160043/` — focused
+  `cmd_preferences_dialog_category_tree_uses_dxui_host_without_visible_legacy_treeview`
+  Commands self-test after Preferences namespace cleanup; passed with 1 passed
+  / 0 failed / 0 skipped.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_163030/` — focused
+  `cmd_preferences_dialog_category_tree_uses_dxui_host_without_visible_legacy_treeview`
+  Commands self-test through `Tools/Run-AllTests.ps1`, including runner-native
+  expected/result name validation; passed with 1 passed / 0 failed / 0 skipped.
+- `Specs/TestRuns/4cb089111a23/Tests/2026-05-05_163053_selftest_case_inventory/`
+  — `RedSalamander.exe --selftest-list-cases` runner-native inventory emitted
+  the pre-fix 817 total entries: 145 CompareDirectories, 597 Commands, and 75
+  FileOperations phases, with zero duplicate case names across all suites. The
+  filtered form
+  `--selftest-list-cases --commands-selftest --selftest-case=cmd_preferences_`
+  emitted 168 Commands cases.
+- `Specs/TestRuns/4cb089111a23/FileOperations/2026-05-05_1738_prompt_async_focus_after_assertion/`
+  — focused `Phase7_ParallelCopyMoveKnobs` run after async custom speed-limit
+  prompt dispatch; passed with 0 failures.
+- `Specs/TestRuns/4cb089111a23/FileOperations/2026-05-05_1747_phase12_phase13_focus_after_fix/Phase13_PostMortemDiagnostics/`
+  — focused Phase13 run after self-contained diagnostic seeding; passed with 0
+  failures.
+- `Specs/TestRuns/78ac7c415c54/FileOperations/2026-05-05_1805_phase12_parallel_directory_metadata_after_fix/`
+  — focused `Phase12_ReparsePointPolicy` run after deferred parallel directory
+  metadata restoration; passed with 3 passed / 0 failed / 0 skipped.
+- `Specs/TestRuns/78ac7c415c54/FileOperations/2026-05-05_1830_phase5_prefix_filter_pass/`
+  — `Run-AllTests.ps1 -Suite FileOps -CaseFilter Phase5_` prefix-filter run;
+  passed with 9 passed / 0 failed / 0 skipped.
+- `Specs/TestRuns/78ac7c415c54/FileOperations/2026-05-05_1842_fileops_full_after_fixes_pass/`
+  — full `Run-AllTests.ps1 -Suite FileOps -SkipBuild -TimeoutMultiplier 2`
+  recheck after the FileOperations fixes; passed with 55 passed / 0 failed / 20
+  expected skips.
+- `Specs/TestRuns/78ac7c415c54/FileOperations/2026-05-05_1914_phase7_speed_prompt_blocker_regression_pass/`
+  — focused `Phase7_ParallelCopyMoveKnobs` recheck for the custom speed-limit
+  prompt blocker; passed with 3 passed / 0 failed / 0 skipped and no lingering
+  prompt process.
+- `Specs/TestRuns/4cb089111a23/FileOps/2026-05-05_203552/` — focused
+  `Phase14_PopupHostLifetimeGuard` recheck through `Run-AllTests.ps1` with
+  `REDSALAMANDER_SELFTEST_ROOT` pointed at an isolated worktree-local root;
+  passed with 3 passed / 0 failed / 0 skipped and proved the runner reads the
+  same isolated `last_run` tree as the native harness.
+- `.build/logs/msbuild-20260505_212109_674.log` — Debug x64 full build after
+  the Connection Manager scrollable-editor pointer-toggle fix; build wrapper
+  diagnostics: 0 warnings, 0 errors.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_212251/` — focused
+  `cmd_connection_manager_window_pointer_click_toggles_visible_dx_toggle`
+  recheck after scrolling the S3 `Use HTTPS` toggle into view and mapping the
+  debug rectangle through the editor `ScrollPanel` offset; passed with 1 passed
+  / 0 failed / 0 skipped. `selftest_run_trace.txt` records the toggle rect
+  moving from the failing offscreen content-space range to client
+  `(564,576)-(1050,612)` before the two real pointer clicks.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_212506/`,
+  `2026-05-05_212508/`, `2026-05-05_212512/`, and
+  `2026-05-05_212513/` — adjacent pointer-toggle rechecks after the
+  Connection Manager scrollable-editor fix; Plugin Configuration `Use HTTPS`,
+  credential prompt secret visibility, Compare Options, and Find recursive
+  checkbox each passed with 1 passed / 0 failed / 0 skipped.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_212659/` — full
+  `cmd_connection_manager_window_` family recheck after the scrollable-editor
+  pointer fix; passed with 29 passed / 0 failed / 0 skipped.
+- `.build/logs/msbuild-20260505_200710_000.log` — Debug x64 full build after
+  the Compare/Search service no-wait, direct-SQLite precondition, isolated
+  foreground-store, and request-budget fixes; build wrapper diagnostics: 0
+  warnings, 0 errors.
+- `Specs/TestRuns/78ac7c415c54/CompareDirectories/2026-05-05_2012_compare_full_after_service_cleanup_pass/`
+  — full `Run-AllTests.ps1 -Suite Compare -SkipBuild -TimeoutMultiplier 2`
+  recheck after the Compare/Search cleanup; passed with 125 passed / 0 failed /
+  24 expected skips. The direct-SQLite-only service failure/prefilter cases
+  skipped on this machine because the live NTFS journal cursor was unavailable.
+- `.build/logs/msbuild-20260505_224017_123.log` — Debug x64 build after
+  Commands Compare Options pane-settle guards; build wrapper diagnostics: 0
+  warnings, 0 errors.
+- `.build/logs/msbuild-20260505_224402_884.log` — Debug x64 build after
+  app-side `REDSALAMANDER_SELFTEST_ROOT` absolute normalization; build wrapper
+  diagnostics: 0 warnings, 0 errors.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_224215/` — focused
+  `cmd_compare_directories_options_live_dx_body_interaction` regression run
+  before app-side self-test root normalization; failed quickly with a bounded
+  pane-settle diagnostic instead of hanging on stale `C:\` pane roots.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_225225/` — same focused
+  Compare Options live-DxUi case after absolute self-test root normalization;
+  passed with 1 passed / 0 failed / 0 skipped, but exposed an unacceptably slow
+  405 s runtime and a 227 MB perf log from unbounded Commands message pumping.
+- `.build/logs/msbuild-20260505_225908_817.log` — Debug x64 full build after
+  bounding the shared Commands message pump; build wrapper diagnostics: 0
+  warnings, 0 errors.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-05_230056/` — focused
+  `cmd_compare_directories_options_live_dx_body_interaction` recheck after the
+  bounded message pump; passed with 1 passed / 0 failed / 0 skipped in about 5
+  seconds and reduced the perf log to about 1.7 MB.
+- `.build/logs/msbuild-20260506_084509_961.log` — Debug x64 build after the
+  Compare Options retained-focus restoration and post-wait diagnostic fix;
+  build wrapper diagnostics: 0 warnings, 0 errors.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-06_084721/`,
+  `2026-05-06_084755/`, and `2026-05-06_084811/` — three fresh-root foreground
+  Compare Options family repeats after the retained-focus restoration; each
+  passed with 9 passed / 0 failed / 0 skipped. The traversal trace records the
+  formerly failing reverse step as `afterFocus=7 afterScroll=162/312`.
+- `Invoke-Pester .\Tools\Tests -ExcludeTag RequiresBuildToolchain -PassThru`
+  on 2026-05-05 — 47 artifact-safe tooling tests passed, 0 failed; the single
+  excluded test remains tagged `RequiresBuildToolchain`.
+
+## Current Coverage Challenge Notes (2026-05-05)
+
+The 2026-05-05 test review challenged the named gap areas against the current
+code before adding duplicate tests. Treat this section as the durable summary of
+what is covered now, what remains intentionally blocked, and which cases are
+correctness-only rather than performance gates.
+
+Commands coverage resolved by audit:
+
+- `Commands.SelfTest.ShellCommands.cpp` covers focused-item Security shell
+  action routing, current-directory context-menu routing, NTFS alternate data
+  stream removal, recursive Change Attributes progress, shortcut/link targets,
+  junction navigation, Shell New templates, and clipboard shortcut paths.
+- Plugin Configuration dialog tests cover visible UIA provider counts,
+  Value/Toggle/Invoke pattern exposure, accessible names, live DxUi edit
+  mutation, Browse cancel behavior, OK/Cancel invocation through UIA, tab
+  traversal, access keys, pointer toggles, theme cycling, and long-run
+  open/close/scroll stability.
+- Connection Manager pointer-toggle coverage now exercises the S3 `Use HTTPS`
+  toggle through the real pointer path after explicitly scrolling the
+  scrollable editor field into the viewport; debug rectangles used by that
+  test are client-space rectangles after `ScrollPanel` offset is applied.
+- Compare Options live-DxUi interaction coverage now prepares absolute,
+  settled left/right pane roots before opening Compare Directories and relies
+  on a bounded Commands message pump so hover/cursor traffic cannot mask the
+  duration of the actual UI interaction steps. Its tab-traversal case covers
+  focus changes that scroll the retained DxUi body and verifies that retained
+  body focus survives the resulting layout pass.
+- Compare Options and Plugin Configuration cancel-persistence paths already
+  verify that live DxUi edits/toggles are discarded on cancel and preserved only
+  on accepted save paths.
+- Connection Manager covers clean external reload refresh and dirty/stale save
+  prompts while open. It does not simulate a remote provider refreshing an
+  already-open secret; that belongs with deterministic provider failure seams.
+- No implemented Commands long-poll product contract was found. Do not add a
+  synthetic long-poll case until a durable product requirement names the loop,
+  cadence, and user-visible failure mode.
+
+CompareDirectories remaining gaps:
+
+- Covered today: OAuth auth-mode and refresh-token storage/deletion/session
+  behavior, Google Drive missing-refresh-token gates, SQLite bootstrap,
+  compaction, WAL checkpoint/truncation, legacy upgrade, future-schema
+  rejection, content compare equal/different/no-I/O/Unicode/short-read paths,
+  synthetic crash-quarantine markers, bounded cancellation, service no-wait
+  live-scan degradation when SQLite is not ready/current, service-vs-host
+  warning semantics, startup fixed-root discovery with isolated stores, and
+  rebuild control through a deterministic snapshot-backed foreground service.
+- Blocked until deterministic seams exist: expired/revoked OAuth refresh,
+  network failure during refresh, HTTP 429/retry-after backoff, hard
+  content-compare read failures such as sharing violation or access denied, and
+  true search-service process death mid-query.
+- Partial future breadth: a narrowly timed cancel during a content-compare
+  stamp update is not isolated from the broader bounded-cancel and pending
+  content-comparison coverage.
+
+FileOperations remaining gaps:
+
+- Covered today: pre-calc cancel, queued cancel, local bandwidth cancel
+  latency, active-worker cancellation in the recursive matrix, bridge
+  throughput/concurrency, conflict prompts, async custom speed-limit prompts,
+  settings defaults, connection overrides, directory metadata preservation in
+  recursive copy, postmortem diagnostic export, and junction/reparse policy
+  including protected junctions, out-of-tree junctions, copied reparse tags,
+  move rollback, bridge copy/move of reparse items, and reparse delete target
+  preservation.
+- Blocked until deterministic OS/test-environment seams exist: disk-full or
+  quota failures, ACL-denied copy destinations with issues-pane assertions, UNC
+  destination fixtures, and cloud-placeholder recall behavior.
+- Partial future breadth: mid-bridge cancel/rollback, concurrent destination
+  rename races, relative symlink behavior, and runtime bandwidth/parallelism
+  settings mutation after data transfer begins.
+
+Standalone and DxUi coverage notes:
+
+- DxUiTests already covers typeahead, scrollbars, single-line editing,
+  TextField bridge routing, ComboBox popup scrolling/hover, Tree
+  selection/context/toggle, reduced motion, and UIA provider patterns. Future
+  additions should target controls with only visual-baseline coverage.
+- MonitorTest is intentionally narrow: ETW TraceLogging emit/receive,
+  self-diagnostic suppression, invalid-rectangle opt-in, self-originated
+  event rejection, and the ColorTextView scrollbar visibility model are
+  covered, but the full Monitor window state machine and a rich ETW
+  filtering-rule matrix are not.
+- LocalizationTests covers embedded fallback, satellite string/menu/dialog
+  lookup, localized dialog templates, invalid-culture fallback, and persisted
+  `ui.language` roundtrips. It does not enumerate every shipped satellite.
+- PerformanceTests2 covers 7 CppUnitTest cases focused on icon enumeration,
+  duplicate-path refresh/compact-mode hit testing, splash close guard, and
+  empty plugin-manager discovery; it is not a general rendering/search/Compare
+  throughput suite.
+
+Self-test metric-family map:
+
+- Commands self-test metrics currently come from ViewerText diff/hex baselines:
+  `viewer.diff.*` open-to-first-visible, semantic paint, visible row counts,
+  theme switch, scroll repaint, hunk jump, context expansion, viewport
+  rehydration/backtrack, referenced-byte growth, deferred rows, and placeholder
+  rows/bands.
+- CompareDirectories self-test metrics currently cover local wide-tree search:
+  `compare.selftest.local_search_scan_wide_tree_workers_us` and
+  `compare.selftest.local_search_scan_wide_tree_us`. The Commands case
+  `cmd_compare_directories_progress_perf` is a progress correctness/stability
+  guard today; it must emit a self-test-local metric before being used as a
+  performance gate.
+- FileOperations self-test metrics currently cover pre-calc cancel latency,
+  local and parallel bandwidth throttling, copy/move concurrency, auto
+  concurrency, recursive copy matrices, recycle-bin batching, default bandwidth
+  limits, conflict convergence, bridge pipeline, connection overrides, and the
+  global connection gate.
+- No new performance instrumentation was added by the 2026-05-05 test review
+  helper/listing/reporting changes, so no before/after `perf_metrics.jsonl`
+  archive is required for those changes.
+
 Recent UI-retirement evidence:
 
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-29_111643/` — Connection Manager battle-test family after dialog shim retirement; `cmd_connection_manager_window_` passed 25 passed / 0 failed / 0 skipped and archived `perf/perf_metrics.jsonl`.
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-26_012857_remaining_win32_ui_dependency_post_closeout_recheck/` — post-closeout broad HFONT/GDI/native-control audit recheck. Audit perf: 3.446 seconds; zero unallowlisted findings.
-- `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_012857_remaining_win32_ui_dependency_post_closeout_menu/` — post-closeout `.build\x64\Debug\DxUiTests.exe --filter Menu` run, exited 0 in 15.373 seconds.
+- `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_012857_remaining_win32_ui_dependency_post_closeout_menu/` — post-closeout focused DxUi menu run, exited 0 in 15.373 seconds. Current focused invocation syntax is `.build\x64\Debug\DxUiTests.exe --suite=Menu`.
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-26_012017_remaining_win32_ui_dependency_final_recheck/` — final wrapper broad HFONT/GDI/native-control audit recheck. Audit perf: 3.315 seconds; zero unallowlisted findings.
 - `.build/logs/msbuild-20260426_010339_544.log` and `.build/logs/msbuild-20260426_010518_794.log` — wrapper-pass Debug/Release builds after the Function Bar paint-DC stabilization and final closeout documentation refresh.
 - `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_011821_remaining_win32_ui_dependency_final_full_dxui/` — full `.build\x64\Debug\DxUiTests.exe` run, exited 0 in 110.547 seconds.
@@ -25,10 +342,10 @@ Recent UI-retirement evidence:
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-26_005800_remaining_win32_ui_dependency_final_recheck/` — final broad HFONT/GDI/native-control audit recheck. Audit perf: 3.352 seconds; zero unallowlisted findings.
 - `.build/logs/msbuild-20260426_005323_200.log` and `.build/logs/msbuild-20260426_005751_693.log` — final Debug/Release `RedSalamander` builds after the Function Bar layout/material-tolerant pixel guard.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-26_005455/`, `2026-04-26_005540/`, and `2026-04-26_005709/` — final focused command recheck for UI chrome, status bar shell stability, and Compare Options; all passed with zero failures. The failed `2026-04-26_005614/` Compare Options attempt is non-gating because the same failed case passed in isolation at `2026-04-26_005634/` and the full family passed on rerun.
-- `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_005914_remaining_win32_ui_dependency_final_menu/` — final `DxUiTests.exe --filter Menu` recheck, exited 0 in 14.632 seconds.
+- `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_005914_remaining_win32_ui_dependency_final_menu/` — final focused DxUi menu recheck, exited 0 in 14.632 seconds. Current focused invocation syntax is `DxUiTests.exe --suite=Menu`.
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-26_001034_remaining_win32_ui_dependency_recheck/` — current-day broad HFONT/GDI/native-control audit recheck. Audit perf: 3.339 seconds; zero unallowlisted findings.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-26_001212/`, `2026-04-26_001216/`, and `2026-04-26_001234/` — current-day focused command recheck for UI chrome, status bar shell stability, and Compare Options; all passed with zero failures. The failed `2026-04-26_001047/` and `2026-04-26_001156/` `cmd_app_toggleUiChrome` attempts are non-gating because they launched the visibility-sensitive GUI selftest with a hidden top-level window.
-- `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_001241_remaining_win32_ui_dependency_recheck_menu/` — current-day `DxUiTests.exe --filter Menu` recheck, exited 0 in 15.259 seconds.
+- `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_001241_remaining_win32_ui_dependency_recheck_menu/` — current-day focused DxUi menu recheck, exited 0 in 15.259 seconds. Current focused invocation syntax is `DxUiTests.exe --suite=Menu`.
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-25_235110_remaining_win32_ui_dependency_closeout/` — broad HFONT/GDI/native-control audit after the remaining app-owned HDC paint/selection seams moved behind `D2DHdcPaint::Session` and the last Compare Options legacy `STATIC` fallback was replaced. Audit perf: 3.219 seconds; zero unallowlisted findings.
 - `.build/logs/msbuild-20260425_234924_528.log` — Debug build after the remaining paint/static closeout.
 - `.build/logs/msbuild-20260425_235255_302.log` — Release build after the remaining paint/static closeout.
@@ -46,7 +363,7 @@ Recent UI-retirement evidence:
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-25_224400_remaining_win32_ui_bridge_allowlist_uimetrics_viewerweb_candidate/` — broad HFONT/GDI/native-control audit after hidden text bridge allowlist, `Win32UiHelpers` deletion/`UiMetrics` split, dead HFONT measurement bridge removal, dialog base-`LOGFONT` cloning removal, and ViewerWeb DirectWrite status drawing. Audit perf: 3.331 seconds.
 - `.build/logs/msbuild-20260425_222825_786.log` — Debug build after the helper split/native-font bridge cleanup.
 - `.build/logs/msbuild-20260425_224509_797.log` — Release build after the helper split/native-font bridge cleanup.
-- `.build\x64\Debug\DxUiTests.exe --filter TextInputBridge` — focused hidden text-service bridge regression, exited 0.
+- `.build\x64\Debug\DxUiTests.exe --suite=TextInputBridge` — focused hidden text-service bridge regression, exited 0.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-25_224155/` — Connection Manager focused family, 13 passed, 0 failed.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-25_224242/` — Plugin Configuration focused family, 10 passed, 0 failed.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-25_224312/`, `2026-04-25_224320/`, `2026-04-25_224331/`, and `2026-04-25_224338/` — Preferences shell/page-host/general/panes focused guards.
@@ -56,7 +373,7 @@ Recent UI-retirement evidence:
 
 ## 1. Commands Suite (`--commands-selftest`)
 
-**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (70K+ lines, 360+ cases)
+**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (599 runner-listed cases; 569 static `SelfTest::RunCase` call sites)
 
 The Commands suite is split into logical `.cpp` family files included from the main orchestrator:
 - `SelfTest\Commands\Commands.SelfTest.Settings.cpp` — Settings hot-reload, store, registry, preview/file-action guards, shortcut defaults (13+ cases)
@@ -76,7 +393,7 @@ The suitetests UI automation, dialog interactions, preferences, shortcuts,
 themes, navigation, and command dispatch. All cases run inside the live application
 window using UIAutomation and direct Win32 message simulation.
 
-### 1.1 Application-Level Commands (17 cases)
+### 1.1 Application-Level Commands (18 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
@@ -94,6 +411,7 @@ window using UIAutomation and direct Win32 message simulation.
 | `cmd_app_fatal_error_uses_dxui_surface` | Fatal error DxUi surface |
 | `cmd_app_fullScreen` | Full-screen toggle |
 | `cmd_app_menuBar_mouse_open_keeps_popup_selection_clear` | Mouse-opened menu popups keep item selection empty until pointer movement or keyboard navigation |
+| `cmd_app_menuBar_persistent_direct_hover_switches_top_level_popup` | Persistent menu-bar mouse-opened popup switches directly to a neighboring top-level menu without requiring popup-item hover first |
 | `cmd_app_menuBar_submenu_placement_matches_spec` | Menu submenu placement and parent-hover retention |
 | `cmd_app_swapPanes` | Pane swap command |
 | `cmd_app_toggleUiChrome` | UI chrome visibility toggle, function bar layout, painted themed pixels, DirectWrite text metrics, and splitter arrow affordances |
@@ -355,7 +673,7 @@ Key coverage patterns per page:
 | `cmd_compare_directories_options_tab_traversal_live_dx_interaction` | Tab traversal |
 | `cmd_compare_directories_options_theme_cycle_keeps_surface_legible` | Theme legibility |
 | `cmd_compare_directories_options_uses_dxui_labels_without_visible_legacy_statics` | DxUi labels, zero visible native body/footer controls, and DirectWrite options typography metrics |
-| `cmd_compare_directories_progress_perf` | Compare progress performance |
+| `cmd_compare_directories_progress_perf` | Compare progress correctness/stability; future perf-gate use requires a self-test-local metric |
 
 ### 1.12 Settings and Infrastructure (26+ cases)
 
@@ -393,7 +711,7 @@ Key coverage patterns per page:
 
 ## 2. CompareDirectories Suite (`--compare-selftest`)
 
-**Source:** `RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp` coordinator + 3 included case files (141 cases)
+**Source:** `RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp` coordinator + 3 included case files (149 runner-listed cases; 141 static `SelfTest::RunCase` call sites)
 
 Tests the Compare Directories engine, search backends, SQLite index store,
 crash quarantine, OAuth, and remote storage comparisons.
@@ -545,7 +863,7 @@ See `Specs/Testing/Testing_SelfTestRemoteCredentials.md`.
 
 ## 3. FileOperations Suite (`--fileops-selftest`)
 
-**Source:** `RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp` coordinator + 4 included phase files (68 phases)
+**Source:** `RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp` coordinator + 4 included phase files (75 runner-listed phases: 73 active phases plus setup and cleanup)
 
 Tests file operations (copy, move, delete, rename) using a tick-driven async state machine.
 Each phase represents a test case that exercises one aspect of the file operations pipeline.
@@ -562,10 +880,11 @@ Each phase represents a test case that exercises one aspect of the file operatio
 | `Phase5_SwitchParallelToWaitDuringPreCalc` | Parallel to wait mode switch |
 | `Phase5_SwitchWaitToParallelResume` | Wait to parallel resume |
 
-### 3.2 Phase 6 — Popup and Bandwidth (4 cases)
+### 3.2 Phase 6 — Popup and Bandwidth (5 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
+| `Phase6_PopupRateSmoothing` | Popup rate/ETA smoothing contract |
 | `Phase6_PopupSmokeResizeAndPause` | Popup resize and pause UI |
 | `Phase6_DeleteBytesMeaningful` | Delete bytes tracking |
 | `Phase6_LocalBandwidthThrottle` | Local bandwidth throttling |
@@ -582,10 +901,12 @@ Each phase represents a test case that exercises one aspect of the file operatio
 | `Phase7_CrossPaneRelocateLocal` | Cross-pane relocate |
 | `Phase7_LargeDirectoryEnumeration` | Large directory enumeration |
 | `Phase7_ParallelCopyMoveKnobs` | Parallel copy/move knobs |
-| `Phase7_CopyRecursiveParallelismMatrix` | Recursive copy/move matrix including copied reparse items, nested concurrency 1, forced and optional real cross-volume move fallback, partial error, and active-worker cancellation |
 | `Phase7_CopyMoveConcurrency16Perf` | 16-thread concurrency performance |
+| `Phase7_CopyRecursiveParallelismMatrix` | Recursive copy/move matrix including copied reparse items, nested concurrency 1, forced and optional real cross-volume move fallback, partial error, and active-worker cancellation |
 | `Phase7_AutoConcurrencyHints` | Auto concurrency hints |
 | `Phase7_PerItemDirectoryCopyInFlightLines` | Per-item directory copy in-flight |
+| `Phase7_CopyItemsSingleFolderRecursiveParallelism` | Single-folder recursive per-item parallelism |
+| `Phase7_CopyItemsMultiRootUnevenRecursiveParallelism` | Multi-root uneven recursive per-item parallelism |
 | `Phase7_SharedPerItemScheduler` | Shared per-item scheduler |
 | `Phase7_ParallelDeleteKnobs` | Parallel delete knobs |
 | `Phase7_RecycleBinBatchDelete` | Recycle bin batch delete |
@@ -671,13 +992,30 @@ These cases skip when connection profiles or secrets are absent.
 
 | Test Class / File | Cases | Coverage Area |
 |-------------------|-------|---------------|
-| `FolderIconEnumerationPerfTest` | 1+ | Icon enumeration caching under load |
-| `FolderIconEnumerationDuplicatePathPerfTest` | 1+ | Duplicate path icon edge cases |
-| `FolderViewRefreshDuplicatePathPerfTest` | 1+ | FolderView refresh with duplicate paths |
+| `FolderIconEnumerationPerfTest` | 1 | Icon enumeration caching under load |
+| `FolderIconEnumerationDuplicatePathPerfTest` | 1 | Duplicate path icon edge cases |
+| `FolderViewRefreshDuplicatePathPerfTest` | 2 | FolderView refresh with duplicate paths and compact-mode hit testing |
+| `PerformanceTests2.cpp` | 3 | Splash close guard and empty plugin-manager discovery failures |
 
 ---
 
 ## 5. PoC Tests
+
+These harnesses are currently executable-level gates, not shared per-case JSON
+reporters. DxUiTests has suite filtering (`--suite=<name>`) but many assertions
+fail fast via `Require(...)->std::exit(1)`. ViewerPETests,
+ViewerSqliteTests, MonitorTest, and LocalizationTests use local success
+aggregation. Adding true per-case machine-readable reporting requires a named
+case registry/common reporter contract for these harnesses.
+
+`Tools\Run-AllTests.ps1 -Suite Full` must preserve stdout/stderr for standalone
+EXE and CppUnitTest entries through per-suite `*.output.log` files and
+`output_log_path` in `run-all-tests-results.json`; an executable-only exit code
+is not enough for closeout triage. ViewerPETests has nested fresh-process
+coverage: normal isolated viewer cases use the default 120-second process cap,
+while the six-cycle `TestViewerShellComboHostsLongRunOpenCloseStayStable`
+stress entry has its own 600-second outer cap so the parent harness does not
+kill valid nested churn before the per-child checks can report their result.
 
 | Project | Cases | Coverage Area |
 |---------|-------|---------------|
@@ -685,7 +1023,7 @@ These cases skip when connection profiles or secrets are absent.
 | **LocalizationTests** | ~5 | Resource owner registration, satellite string/menu/dialog lookup, localized dialog templates with executable-owned custom child classes, fallback to embedded resources, and persisted `ui.language` roundtrips |
 | **ViewerPETests** | ~20+ | PE viewer plugin, image viewer, text viewer including AppTheme-driven parsed diff semantic colors with runtime theme switching, explicit rainbow-mode coverage, and high-contrast coverage, base-background unchanged rows plus dim diff-marker metadata, clickable hidden-context banners in hunks-only diff mode, non-anchor parsed hunk presentation, pane-local side-by-side visual-layout metadata and visible split-row counters for parsed diff viewports, split-row top-visible text snapshot coverage after hunk navigation, parsed hunk count and active-hunk snapshot metadata, next/previous hunk navigation, diff presentation, lazy referenced-file expansion, parsed-document reuse across diff variants, active-section-only unchanged-text hydration with on-demand section jumps, viewport-windowed unchanged-row rehydration on scroll, range-bounded referenced-file reads for viewport-nearby unchanged context, cached reuse when revisiting already hydrated viewport ranges, referenced-file content reuse across expanded layouts, hatched placeholder-gap metadata for unresolved rows, diff section navigation, horizontal scrolling in both parsed diff layouts after wrap is disabled including side-by-side to inline presentation switches, shared viewer combo-host popup expansion/collapse and clean close behavior across `ViewerPE`, `ViewerWeb`, `ViewerImgRaw`, and `ViewerText`, larger fully buffered diff parsing including promotion beyond the normal text buffer size for both extension-recognized and header-sniffed diffs, raw streamed multi-file section indexing/navigation beyond the fully buffered parse cap, and parser-fallback coverage, space viewer, VLC viewer |
 | **ViewerSqliteTests** | ~15+ | SQLite engine, query execution, schema inspection, UI rendering |
-| **MonitorTest** | ~5 | ETW TraceLogging provider emit/receive validation plus compile-time/runtime guards that invalid rectangle visualization remains opt-in, normal Debug and Release monitor self diagnostics suppress Info/Perf output unless the runtime ETW flag is enabled, and normal monitor display rejects self-originated ETW events |
+| **MonitorTest** | ~6 | ETW TraceLogging provider emit/receive validation plus compile-time/runtime guards that invalid rectangle visualization remains opt-in, normal Debug and Release monitor self diagnostics suppress Info/Perf output unless the runtime ETW flag is enabled, normal monitor display rejects self-originated ETW events, and ColorTextView scrollbar visibility reaches a stable minimal state |
 
 ---
 
@@ -693,7 +1031,20 @@ These cases skip when connection profiles or secrets are absent.
 
 | Test File | Coverage Area |
 |-----------|---------------|
+| `Tools\Tests\BuildProjectSelection.Tests.ps1` | Project selection and direct vcxproj builds |
+| `Tools\Tests\MSBuildInvocation.Tests.ps1` | MSBuild invocation planning and diagnostic parsing |
+| `Tools\Tests\ProcessStreaming.Tests.ps1` | Process output streaming and logging |
+| `Tools\Tests\RedSalamanderPluginDeployment.Tests.ps1` | Targeted RedSalamander build repopulates sibling binaries/plugins and plugin language resources; tagged `RequiresBuildToolchain`, excluded from artifact-only CI test jobs, and bounded with captured build logs |
+| `Tools\Tests\ResourceLocalizationContracts.Tests.ps1` | Resource placeholder positional-order and satellite placeholder-equivalence contract |
+| `Tools\Tests\RunAllTestsPlan.Tests.ps1` | Full runner test-plan enumeration and result-coverage validation |
+| `Tools\Tests\SanitizedEnvironment.Tests.ps1` | Child process environment normalization |
+| `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` | Source guards for test harness CLI/error handling, case-listing, result-emission, and duplicate-name contracts |
+| `Tools\Tests\TestInventory.Tests.ps1` | Source-derived test inventory manifest, FileOperations phase-order drift guard, and doc-count lint |
 | `Tools\Tests\VcpkgInstallSafety.Tests.ps1` | vcpkg triplet leaf-name validation and staging/install child path containment |
+| `Tools\Tests\Versioning.Tests.ps1` | Local build-number reuse/allocation |
+| `Tools\Tests\WingetValidation.Tests.ps1` | Winget validation warning suppression, failure propagation, portable manifest metadata, and VC runtime ZIP helper coverage |
+| `Tests\vcpkg-merge-synthetic-test.ps1` | Fast synthetic vcpkg lock/merge cases |
+| `Tests\vcpkg-merge-lock-validation.ps1` | Manual-only vcpkg install/lock validation; intentionally excluded from PR CI and `Run-AllTests.ps1 -Suite Full` because it mutates `.build` |
 
 ---
 

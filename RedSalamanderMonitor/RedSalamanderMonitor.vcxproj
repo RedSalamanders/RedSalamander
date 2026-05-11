@@ -197,6 +197,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="ColorTextView.h" />
+    <ClInclude Include="ColorTextScrollBars.h" />
     <ClInclude Include="Configuration.h" />
     <ClInclude Include="Document.h" />
     <ClInclude Include="EtwListener.h" />
@@ -237,6 +238,12 @@
     </ProjectReference>
     <ProjectReference Include="Lang\fr-FR\RedSalamanderMonitor-fr-FR.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
       <Project>{463d2b6c-325f-4586-a036-06ec94577521}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+    <ProjectReference Include="Lang\ja-JP\RedSalamanderMonitor-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{9ddda511-c89b-50e5-be51-d88be7aecde4}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>

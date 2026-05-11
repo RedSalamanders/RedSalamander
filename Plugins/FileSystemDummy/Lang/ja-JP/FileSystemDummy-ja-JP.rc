@@ -1,0 +1,11 @@
+#pragma code_page(65001)
+#include "../../FileSystemDummyResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMDUMMY_NAME "ダミー ファイル システム"
+    IDS_FILESYSTEMDUMMY_DESCRIPTION "テスト用の決定的なメモリ内ダミー ファイル システム。"
+END

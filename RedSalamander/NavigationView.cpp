@@ -359,9 +359,9 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             ShowSiblingsDropdown(static_cast<size_t>(wp));
             return 0;                                                            // Deferred menu opening
         case WndMsg::kNavigationMenuShowFullPath: ShowFullPathPopup(); return 0; // Deferred full-path popup opening
-        case WndMsg::kNavigationViewShowHistoryDropdown: ShowHistoryDropdown(); return 0;
-        case WndMsg::kNavigationViewShowMenuDropdown: ShowMenuDropdown(); return 0;
-        case WndMsg::kNavigationViewShowDiskInfoDropdown: ShowDiskInfoDropdown(); return 0;
+        case WndMsg::kNavigationViewShowHistoryDropdown: ShowHistoryDropdown(false, wp != 0); return 0;
+        case WndMsg::kNavigationViewShowMenuDropdown: ShowMenuDropdown(false, wp != 0); return 0;
+        case WndMsg::kNavigationViewShowDiskInfoDropdown: ShowDiskInfoDropdown(false, wp != 0); return 0;
         case WndMsg::kNavigationViewShowDriveMenuDropdown: ShowFileSystemDriveMenuDropdown(); return 0;
         case WndMsg::kNavigationViewRestoreFolderFocus:
             if (_requestFolderViewFocusCallback && _hWnd)
@@ -1037,11 +1037,29 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     out.pathRegionRect        = _sectionPathRect;
     out.historyRegionRect     = _sectionHistoryRect;
     out.diskInfoRegionRect    = _sectionDiskInfoRect;
+    if (! _segments.empty() && ! _segments.back().isEllipsis)
+    {
+        const auto& lastSegment       = _segments.back();
+        out.pathLastSegmentVisible    = true;
+        out.pathLastSegmentRect.left  = _sectionPathRect.left + static_cast<LONG>(std::floor(lastSegment.bounds.left));
+        out.pathLastSegmentRect.top   = _sectionPathRect.top + static_cast<LONG>(std::floor(lastSegment.bounds.top));
+        out.pathLastSegmentRect.right = _sectionPathRect.left + static_cast<LONG>(std::ceil(lastSegment.bounds.right));
+        out.pathLastSegmentRect.bottom =
+            _sectionPathRect.top + static_cast<LONG>(std::ceil(lastSegment.bounds.bottom));
+    }
     for (const auto& segment : _segments)
     {
         if (! segment.isEllipsis)
         {
-            if (_currentPath.has_value() && segment.fullPath != _currentPath.value())
+            if (_currentPath.has_value() && segment.fullPath == _currentPath.value())
+            {
+                out.pathCurrentSegmentVisible     = true;
+                out.pathCurrentSegmentRect.left   = _sectionPathRect.left + static_cast<LONG>(std::floor(segment.bounds.left));
+                out.pathCurrentSegmentRect.top    = _sectionPathRect.top + static_cast<LONG>(std::floor(segment.bounds.top));
+                out.pathCurrentSegmentRect.right  = _sectionPathRect.left + static_cast<LONG>(std::ceil(segment.bounds.right));
+                out.pathCurrentSegmentRect.bottom = _sectionPathRect.top + static_cast<LONG>(std::ceil(segment.bounds.bottom));
+            }
+            else if (_currentPath.has_value())
             {
                 out.pathAncestorSegmentVisible     = true;
                 out.pathAncestorSegmentRect.left   = _sectionPathRect.left + static_cast<LONG>(std::floor(segment.bounds.left));
@@ -1317,7 +1335,7 @@ void NavigationView::OpenHistoryDropdownFromKeyboard()
     if (_hWnd)
     {
         SetFocus(_hWnd.get());
-        PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowHistoryDropdown, 0, 0);
+        PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowHistoryDropdown, 1, 0);
     }
 }
 

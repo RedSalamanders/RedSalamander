@@ -1516,6 +1516,18 @@ Grid::GridDebugPointerState Grid::DebugGetPointerState() const noexcept
         .resizeActive          = _resizeColumn.has_value(),
         .lastResizeDeltaDip    = _debugLastResizeDeltaDip,
         .lastResizeWidthDip    = _debugLastResizeWidthDip,
+        .pressedHeaderActive   = _pressedHeaderColumn.has_value(),
+        .pressedHeaderColumn   = _pressedHeaderColumn.value_or(0u),
+        .reorderActive         = _dragReorderColumn.has_value(),
+        .reorderColumn         = _dragReorderColumn.value_or(0u),
+        .reorderTargetDisplayIndex = _dragReorderTargetDisplayIndex,
+        .headerReorderStartCount   = _debugHeaderReorderStartCount,
+        .headerReorderCommitCount  = _debugHeaderReorderCommitCount,
+        .headerReorderNoOpCount    = _debugHeaderReorderNoOpCount,
+        .lastHeaderReorderColumn = _debugLastHeaderReorderColumn,
+        .lastHeaderReorderFromDisplayIndex = _debugLastHeaderReorderFromDisplayIndex,
+        .lastHeaderReorderRawTargetDisplayIndex = _debugLastHeaderReorderRawTargetDisplayIndex,
+        .lastHeaderReorderNormalizedTargetDisplayIndex = _debugLastHeaderReorderNormalizedTargetDisplayIndex,
     };
 }
 
@@ -2386,7 +2398,7 @@ bool Grid::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
     if (_dragVerticalThumb)
     {
         const D2D1_RECT_F track = GetVerticalScrollbarRect();
-        const D2D1_RECT_F thumb = GetVerticalThumbRect();
+        const D2D1_RECT_F thumb = GetVerticalThumbHitRect();
         const float available   = std::max(0.0f, (track.bottom - track.top) - (thumb.bottom - thumb.top));
         if (available > 0.0f)
         {
@@ -2403,7 +2415,7 @@ bool Grid::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
     if (_dragHorizontalThumb)
     {
         const D2D1_RECT_F track = GetHorizontalScrollbarRect();
-        const D2D1_RECT_F thumb = GetHorizontalThumbRect();
+        const D2D1_RECT_F thumb = GetHorizontalThumbHitRect();
         const float available   = std::max(0.0f, (track.right - track.left) - (thumb.right - thumb.left));
         if (available > 0.0f)
         {
@@ -2432,6 +2444,10 @@ bool Grid::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
     {
         _dragReorderColumn             = _pressedHeaderColumn;
         _dragReorderTargetDisplayIndex = ResolveHeaderReorderTargetDisplayIndex(point.x);
+        ++_debugHeaderReorderStartCount;
+        _debugLastHeaderReorderColumn                = _dragReorderColumn.value_or(0u);
+        _debugLastHeaderReorderRawTargetDisplayIndex = _dragReorderTargetDisplayIndex;
+        _debugLastHeaderReorderNormalizedTargetDisplayIndex = _dragReorderTargetDisplayIndex;
         Invalidate(host);
         return true;
     }
@@ -2600,7 +2616,7 @@ bool Grid::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         case HitZone::VerticalScrollbar:
             if (! rightButton)
             {
-                const D2D1_RECT_F thumb = GetVerticalThumbRect();
+                const D2D1_RECT_F thumb = GetVerticalThumbHitRect();
                 if (hit.onScrollbarThumb)
                 {
                     _dragVerticalThumb  = true;
@@ -2623,7 +2639,7 @@ bool Grid::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         case HitZone::HorizontalScrollbar:
             if (! rightButton)
             {
-                const D2D1_RECT_F thumb = GetHorizontalThumbRect();
+                const D2D1_RECT_F thumb = GetHorizontalThumbHitRect();
                 if (hit.onScrollbarThumb)
                 {
                     _dragHorizontalThumb = true;
@@ -2646,6 +2662,25 @@ bool Grid::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         case HitZone::None: break;
     }
     return false;
+}
+
+void Grid::OnCaptureLost(WindowHost& host)
+{
+    const bool hadDrag =
+        _resizeColumn.has_value() || _dragVerticalThumb || _dragHorizontalThumb || _dragReorderColumn.has_value() || _pressedHeaderColumn.has_value();
+    _resizeColumn.reset();
+    _dragVerticalThumb       = false;
+    _dragHorizontalThumb     = false;
+    _dragThumbOffsetDip      = 0.0f;
+    _dragReorderColumn.reset();
+    _pressedHeaderColumn.reset();
+    _pressedHeaderOriginXDip = 0.0f;
+    UpdateScrollbarHotState(HitInfo{});
+    SyncScrollbarAnimation(host);
+    if (hadDrag)
+    {
+        Invalidate(host);
+    }
 }
 
 bool Grid::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers)
@@ -2744,16 +2779,29 @@ bool Grid::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UI
         {
             const size_t fromDisplayIndex       = _columnDisplayIndexByModel[draggedColumn];
             size_t normalizedTargetDisplayIndex = std::min(rawTargetDisplayIndex, _columnDisplayOrder.size());
+            _debugLastHeaderReorderColumn                = draggedColumn;
+            _debugLastHeaderReorderFromDisplayIndex       = fromDisplayIndex;
+            _debugLastHeaderReorderRawTargetDisplayIndex  = rawTargetDisplayIndex;
             if (normalizedTargetDisplayIndex > fromDisplayIndex)
             {
                 --normalizedTargetDisplayIndex;
             }
+            _debugLastHeaderReorderNormalizedTargetDisplayIndex = normalizedTargetDisplayIndex;
 
             if (normalizedTargetDisplayIndex != fromDisplayIndex)
             {
                 MoveColumnToDisplayIndex(draggedColumn, normalizedTargetDisplayIndex);
+                ++_debugHeaderReorderCommitCount;
                 Invalidate(host);
             }
+            else
+            {
+                ++_debugHeaderReorderNoOpCount;
+            }
+        }
+        else
+        {
+            ++_debugHeaderReorderNoOpCount;
         }
         return true;
     }
@@ -2782,8 +2830,19 @@ bool Grid::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UI
 
 bool Grid::OnMouseWheel(WindowHost& host, D2D1_POINT_2F /*point*/, float wheelDelta, UINT /*modifiers*/)
 {
+    if (GetVerticalScrollableExtent() <= 0.0f)
+    {
+        return false;
+    }
+
+    const float beforeScrollDip = _verticalScrollDip;
     _verticalScrollDip -= (wheelDelta / WHEEL_DELTA) * (_rowHeightDip * 3.0f);
     ClampScrollOffsets();
+    if (std::fabs(_verticalScrollDip - beforeScrollDip) <= kVisibleBoundaryEpsilonDip)
+    {
+        return false;
+    }
+
     Invalidate(host);
     return true;
 }
@@ -3114,14 +3173,14 @@ Grid::HitInfo Grid::HitTestPoint(PointDip pointDip) const noexcept
     {
         hit.zone             = HitZone::VerticalScrollbar;
         hit.rectDip          = GetVerticalScrollbarRect();
-        hit.onScrollbarThumb = PointInRect(GetVerticalThumbRect(), point);
+        hit.onScrollbarThumb = PointInRect(GetVerticalThumbHitRect(), point);
         return hit;
     }
     if (PointInRect(GetHorizontalScrollbarRect(), point))
     {
         hit.zone             = HitZone::HorizontalScrollbar;
         hit.rectDip          = GetHorizontalScrollbarRect();
-        hit.onScrollbarThumb = PointInRect(GetHorizontalThumbRect(), point);
+        hit.onScrollbarThumb = PointInRect(GetHorizontalThumbHitRect(), point);
         return hit;
     }
 
@@ -3827,6 +3886,34 @@ D2D1_RECT_F Grid::GetHorizontalThumbRect() const noexcept
     const D2D1_RECT_F contentRect = NormalizeFiniteRect(GetContentRect());
     const float viewportDip       = std::max(1.0f, contentRect.right - contentRect.left);
     return ComputeScrollbarThumbRect(track, ScrollbarOrientation::Horizontal, viewportDip, viewportDip + extent, _horizontalScrollDip, extent);
+}
+
+D2D1_RECT_F Grid::GetVerticalThumbHitRect() const noexcept
+{
+    const D2D1_RECT_F track = NormalizeFiniteRect(GetVerticalScrollbarRect());
+    const float extent      = SanitizeNonNegative(GetVerticalScrollableExtent());
+    if (extent <= 0.0f)
+    {
+        return D2D1::RectF();
+    }
+
+    const D2D1_RECT_F contentRect = NormalizeFiniteRect(GetContentRect());
+    const float viewportDip       = std::max(1.0f, contentRect.bottom - contentRect.top);
+    return ComputeScrollbarThumbHitRect(track, ScrollbarOrientation::Vertical, viewportDip, viewportDip + extent, _verticalScrollDip, extent);
+}
+
+D2D1_RECT_F Grid::GetHorizontalThumbHitRect() const noexcept
+{
+    const D2D1_RECT_F track = NormalizeFiniteRect(GetHorizontalScrollbarRect());
+    const float extent      = SanitizeNonNegative(GetHorizontalScrollableExtent());
+    if (extent <= 0.0f)
+    {
+        return D2D1::RectF();
+    }
+
+    const D2D1_RECT_F contentRect = NormalizeFiniteRect(GetContentRect());
+    const float viewportDip       = std::max(1.0f, contentRect.right - contentRect.left);
+    return ComputeScrollbarThumbHitRect(track, ScrollbarOrientation::Horizontal, viewportDip, viewportDip + extent, _horizontalScrollDip, extent);
 }
 
 float Grid::GetColumnLeftDip(size_t columnIndex) const noexcept
