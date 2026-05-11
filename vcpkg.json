@@ -18,7 +18,7 @@
     },
     {
       "name": "sqlite3",
-      "version>=": "3.53.0"
+      "version>=": "3.53.1"
     },
     {
       "name": "libraw",
