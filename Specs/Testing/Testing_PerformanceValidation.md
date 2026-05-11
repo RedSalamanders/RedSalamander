@@ -141,6 +141,7 @@ Avoid relying only on:
 - ad hoc logging with no archived metric,
 - one-off manual stopwatch measurements,
 - broad “total duration” metrics when the decision requires stage attribution.
+- repeated hot-path rows that only report pointer coordinates and sub-millisecond callback duration, such as per-hit-test/per-pointer-move traces, when the user-visible scenario needs input-to-visible latency, queue counts, scroll-apply cost, or paint cost instead.
 
 ## Test and Archive Requirements
 

@@ -54,6 +54,9 @@ constexpr int kViewerImgRawFileComboId               = 2001;
 constexpr int kViewerTextFileComboId                 = 1003;
 constexpr UINT kViewerTextFindCommandId              = 40101u;
 constexpr UINT kViewerTextGotoCommandId              = 40203u;
+constexpr auto kViewerHarnessDefaultTimeout          = 120000ms;
+constexpr auto kViewerShellComboLongRunTimeout       = 600000ms;
+static_assert(kViewerShellComboLongRunTimeout > kViewerHarnessDefaultTimeout);
 
 struct UiaHostPatternStats
 {
@@ -65,6 +68,12 @@ struct UiaHostPatternStats
     bool hasExpandCollapsePattern = false;
     std::wstring comboName;
     std::wstring valueText;
+};
+
+struct IsolatedViewerTest
+{
+    std::wstring_view name;
+    std::chrono::milliseconds timeout;
 };
 
 void PumpPendingMessages() noexcept
@@ -4305,14 +4314,14 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
     for (size_t cycleIndex = 0; cycleIndex < 6u; ++cycleIndex)
     {
         std::wcout << std::format(L"[INFO] Viewer shell churn cycle {}/6\n", cycleIndex + 1u);
-        success = RunFilteredSelfExecutable(L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", 120000ms, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", 120000ms, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo", 120000ms, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", 120000ms, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", 120000ms, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", 120000ms, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", 120000ms, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", 120000ms, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout, success) && success;
     }
 
     return success;
@@ -4322,25 +4331,25 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
 {
     bool success = true;
 
-    std::vector<std::wstring_view> isolatedTests{
-        L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo",
-        L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo",
-        L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo",
-        L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo",
-        L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses",
-        L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly",
-        L"TestViewerVlcConfigurationPersistsLastVolumeAndMute",
-        L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts",
-        L"TestViewerShellComboHostsLongRunOpenCloseStayStable",
+    std::vector<IsolatedViewerTest> isolatedTests{
+        {L"TestViewerPEUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
+        {L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
+        {L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
+        {L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout},
+        {L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout},
+        {L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout},
+        {L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout},
+        {L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout},
+        {L"TestViewerShellComboHostsLongRunOpenCloseStayStable", kViewerShellComboLongRunTimeout},
     };
 #ifdef _DEBUG
-    isolatedTests.push_back(L"TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback");
-    isolatedTests.push_back(L"TestViewerTextDiffModesAndPlaceholders");
+    isolatedTests.push_back({L"TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback", kViewerHarnessDefaultTimeout});
+    isolatedTests.push_back({L"TestViewerTextDiffModesAndPlaceholders", kViewerHarnessDefaultTimeout});
 #endif
 
-    for (const std::wstring_view testName : isolatedTests)
+    for (const IsolatedViewerTest& test : isolatedTests)
     {
-        success = RunFilteredSelfExecutable(testName, 120000ms, success) && success;
+        success = RunFilteredSelfExecutable(test.name, test.timeout, success) && success;
     }
 
     return success;

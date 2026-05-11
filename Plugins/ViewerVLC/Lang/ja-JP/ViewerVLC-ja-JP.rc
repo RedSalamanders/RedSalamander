@@ -1,0 +1,37 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERVLC_NAME "VLC"
+    IDS_VIEWERVLC_DESCRIPTION "VLC メディア プレーヤー (libVLC) を使用してビデオ ファイルを再生します。"
+    IDS_VIEWERVLC_WINDOW_CAPTION "VLC ビューアー"
+    IDS_VIEWERVLC_BUTTON_PLAY "再生"
+    IDS_VIEWERVLC_BUTTON_PAUSE "一時停止"
+    IDS_VIEWERVLC_BUTTON_STOP "停止"
+    IDS_VIEWERVLC_BUTTON_SNAPSHOT_ELLIPSIS "スナップショット..."
+    IDS_VIEWERVLC_LABEL_TIME_UNKNOWN "--:-- / --:--"
+    IDS_VIEWERVLC_MISSING_TITLE "VLC メディア プレーヤーが必要です。"
+    IDS_VIEWERVLC_MISSING_BODY "VLC メディア プレーヤーをインストールするか、[環境設定] > [プラグイン] > [VLC ビューアー] で VLC インストール フォルダーを設定します。"
+    IDS_VIEWERVLC_MISSING_LINK "<a href=""https://www.videolan.org/vlc/"">VLC メディア プレーヤーをダウンロード</a>"
+    IDS_VIEWERVLC_MISSING_LINK_LABEL "VLC メディア プレーヤーをダウンロード"
+    IDS_VIEWERVLC_FILEDLG_FILTER_PNG "PNG ファイル (*.png)\0*.png\0すべてのファイル (*.*)\0*.*\0"
+    IDS_VIEWERVLC_FILEDLG_TITLE_SNAPSHOT "スナップショットの保存"
+    IDS_VIEWERVLC_DETAILS_CONFIGURED_PATH_INVALID_FMT "構成された VLC パスは VLC インストール フォルダーではありません:\r\n{0}"
+    IDS_VIEWERVLC_DETAILS_INSTALL_NOT_FOUND "VLC インストールが見つかりません。"
+    IDS_VIEWERVLC_DETAILS_EXPORTS_MISSING "libvlc.dll からの libVLC エクスポートを解決できませんでした。"
+    IDS_VIEWERVLC_DETAILS_LIBVLC_NEW_FAILED "libvlc_new が失敗しました。"
+    IDS_VIEWERVLC_DETAILS_PATH_EMPTY "ファイルパスが空です。"
+    IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE "このファイルはローカル ファイル パスとして使用できません。"
+    IDS_VIEWERVLC_DETAILS_LIBVLC_UNAVAILABLE "libVLC は使用できません。"
+    IDS_VIEWERVLC_DETAILS_UTF8_PATH_FAILED "ファイルパスのUTF-8への変換に失敗しました。"
+    IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED "libvlc_media_new_path が失敗しました。"
+    IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED "libvlc_media_player_new_from_media が失敗しました。"
+    IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT "libvlc_media_player_play が失敗しました (コード {0})。"
+    IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "スナップショットが失敗しました (コード {0})。"
+    IDS_VIEWERVLC_LOADING_TITLE "VLC を開始します..."
+    IDS_VIEWERVLC_LOADING_BODY "VLC エンジンをロードしています。自動的に再生が始まります。"
+END

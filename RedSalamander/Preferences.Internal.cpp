@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cwchar>
 #include <cwctype>
 #include <fstream>
@@ -47,47 +48,6 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
 [[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, originalWndProcProp, msg, wp, lp);
-}
-
-void OffsetDxControlBranch(RedSalamander::DxUi::Control* control, float dyDip) noexcept
-{
-    if (! control || dyDip == 0.0f)
-    {
-        return;
-    }
-
-    const D2D1_RECT_F bounds = control->GetBounds();
-    control->SetBounds(D2D1::RectF(bounds.left, bounds.top + dyDip, bounds.right, bounds.bottom + dyDip));
-
-    if (auto* panel = dynamic_cast<RedSalamander::DxUi::Panel*>(control))
-    {
-        for (const auto& child : panel->GetChildren())
-        {
-            OffsetDxControlBranch(child.get(), dyDip);
-        }
-    }
-}
-
-// Offset only the children of a panel container without moving the container
-// itself.  This keeps the container's hit-test bounds covering the full visible
-// area while the content inside scrolls.
-void OffsetDxPanelChildren(RedSalamander::DxUi::Control* container, float dyDip) noexcept
-{
-    if (! container || dyDip == 0.0f)
-    {
-        return;
-    }
-
-    auto* panel = dynamic_cast<RedSalamander::DxUi::Panel*>(container);
-    if (! panel)
-    {
-        return;
-    }
-
-    for (const auto& child : panel->GetChildren())
-    {
-        OffsetDxControlBranch(child.get(), dyDip);
-    }
 }
 
 void ApplyAncestorRedrawSuppression(HWND hwnd) noexcept
@@ -150,18 +110,73 @@ LRESULT CALLBACK PrefsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) n
 
 namespace PrefsPageHost
 {
-void ApplyScrollDelta(HWND pageHostWindow, int dy) noexcept
+namespace
 {
-    if (! pageHostWindow || dy == 0)
+void SyncDxScrollPanelOffset(HWND pageHostWindow, PreferencesDialogState& state) noexcept
+{
+    if (! pageHostWindow || ! state.pageHostUsesDxUi)
     {
         return;
     }
 
+    const UINT dpi = GetDpiForWindow(pageHostWindow);
+    if (dpi == 0u)
+    {
+        return;
+    }
+
+    const float scrollDip = (static_cast<float>(state.pageScrollY) * 96.0f) / static_cast<float>(dpi);
+    if (auto* scrollPanel = state.pageHostDxScrollPanelControl)
+    {
+        scrollPanel->SetScrollOffset(scrollDip);
+    }
+}
+} // namespace
+
+void ApplyScrollDelta(HWND pageHostWindow, int dy, bool syncScrollPanel) noexcept
+{
+    if (! pageHostWindow)
+    {
+        return;
+    }
+
+    PreferencesDialogState* state = reinterpret_cast<PreferencesDialogState*>(GetWindowLongPtrW(pageHostWindow, GWLP_USERDATA));
+    if (dy == 0)
+    {
+        if (syncScrollPanel && state)
+        {
+            SyncDxScrollPanelOffset(pageHostWindow, *state);
+        }
+        return;
+    }
+
+    const auto scrollApplyStartedAt = std::chrono::steady_clock::now();
+    Debug::Perf::Scope scrollApplyPerf(L"preferences.page_host.scroll_apply_us");
     int childCount = 0;
     for (HWND child = GetWindow(pageHostWindow, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
     {
         ++childCount;
     }
+
+#ifdef ENABLE_TESTS
+    uint64_t dxMovedControlCount = 0u;
+    const auto recordApply = [&]() noexcept
+    {
+        if (! state)
+        {
+            return;
+        }
+
+        ++state->pageHostScrollApplyCount;
+        state->pageHostScrollMovedChildCountTotal += static_cast<uint64_t>(childCount);
+        state->pageHostScrollLastApplyUs = Debug::Perf::ElapsedUs(scrollApplyStartedAt);
+    };
+#else
+    const auto recordApply = []() noexcept {};
+#endif
+
+    scrollApplyPerf.SetValue0(static_cast<uint64_t>(childCount));
+    scrollApplyPerf.SetValue1(static_cast<uint64_t>(std::abs(dy)));
 
     HDWP hdwp = BeginDeferWindowPos(std::max(1, childCount));
     if (! hdwp)
@@ -176,6 +191,7 @@ void ApplyScrollDelta(HWND pageHostWindow, int dy) noexcept
             MapWindowPoints(nullptr, pageHostWindow, reinterpret_cast<POINT*>(&rc), 2);
             SetWindowPos(child, nullptr, rc.left, rc.top + dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
         }
+        recordApply();
         return;
     }
 
@@ -199,24 +215,27 @@ void ApplyScrollDelta(HWND pageHostWindow, int dy) noexcept
         static_cast<void>(EndDeferWindowPos(hdwp));
     }
 
-    PreferencesDialogState* state = reinterpret_cast<PreferencesDialogState*>(GetWindowLongPtrW(pageHostWindow, GWLP_USERDATA));
-    if (! state || ! state->pageHostUsesDxUi)
+    recordApply();
+
+    if (! syncScrollPanel || ! state || ! state->pageHostUsesDxUi)
     {
         return;
     }
 
-    const UINT dpi = GetDpiForWindow(pageHostWindow);
-    if (dpi == 0u)
+    if (state->pageHostDxScrollPanelControl)
     {
-        return;
+        SyncDxScrollPanelOffset(pageHostWindow, *state);
+#ifdef ENABLE_TESTS
+        ++dxMovedControlCount;
+#endif
     }
-
-    const float dyDip = (static_cast<float>(dy) * 96.0f) / static_cast<float>(dpi);
-    OffsetDxPanelChildren(state->pageHostDxContentRootControl, dyDip);
-    OffsetDxPanelChildren(state->pageHostDxNoteControl, dyDip);
+#ifdef ENABLE_TESTS
+    state->pageHostDxScrollMovedControlCountTotal += dxMovedControlCount;
+    state->pageHostDxScrollLastMovedControlCount = dxMovedControlCount;
+#endif
 }
 
-void ScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept
+void ApplyScrollToPosition(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept
 {
     if (! pageHostWindow)
     {
@@ -226,6 +245,7 @@ void ScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY
     newScrollY = std::clamp(newScrollY, 0, state.pageScrollMaxY);
     if (newScrollY == state.pageScrollY)
     {
+        ApplyScrollDelta(pageHostWindow, 0);
         return;
     }
 
@@ -242,6 +262,66 @@ void ScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY
     ApplyScrollDelta(pageHostWindow, dy);
     // Avoid RDW_UPDATENOW — let Windows coalesce into a single WM_PAINT.
     RedrawWindow(pageHostWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME);
+}
+
+void ScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept
+{
+    if (! pageHostWindow)
+    {
+        return;
+    }
+
+#ifdef ENABLE_TESTS
+    ++state.pageHostScrollRequestCount;
+#endif
+    state.pageHostScrollApplyPending = false;
+    ApplyScrollToPosition(pageHostWindow, state, newScrollY);
+}
+
+void RequestScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept
+{
+    if (! pageHostWindow)
+    {
+        return;
+    }
+
+#ifdef ENABLE_TESTS
+    ++state.pageHostScrollRequestCount;
+#endif
+    newScrollY = std::clamp(newScrollY, 0, state.pageScrollMaxY);
+    if (state.pageHostScrollApplyPending)
+    {
+#ifdef ENABLE_TESTS
+        ++state.pageHostScrollCoalescedRequestCount;
+#endif
+        state.pageHostPendingScrollY = newScrollY;
+        return;
+    }
+
+    if (newScrollY == state.pageScrollY)
+    {
+        return;
+    }
+
+    state.pageHostPendingScrollY      = newScrollY;
+    state.pageHostScrollApplyPending = true;
+    if (PostMessageW(pageHostWindow, WndMsg::kPreferencesApplyPageHostScroll, 0, 0) == FALSE)
+    {
+        state.pageHostScrollApplyPending = false;
+        ApplyScrollToPosition(pageHostWindow, state, newScrollY);
+    }
+}
+
+void FlushPendingScroll(HWND pageHostWindow, PreferencesDialogState& state) noexcept
+{
+    if (! pageHostWindow || ! state.pageHostScrollApplyPending)
+    {
+        return;
+    }
+
+    const int pendingScrollY          = state.pageHostPendingScrollY;
+    state.pageHostScrollApplyPending = false;
+    ApplyScrollToPosition(pageHostWindow, state, pendingScrollY);
 }
 
 void EnsureControlVisible(HWND pageHostWindow, PreferencesDialogState& state, HWND control) noexcept

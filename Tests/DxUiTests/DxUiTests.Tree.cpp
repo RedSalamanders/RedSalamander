@@ -1,5 +1,6 @@
 #include "DxUiTestHelpers.h"
 
+#include <cmath>
 #include <clocale>
 
 namespace
@@ -375,6 +376,49 @@ void TestTreeMouseWheelScrollAffectsLaterHitTesting()
     Require(tree.GetSelectedItemId().value() == 4u, "tree wheel scroll updates hit-testing for later pointer selection");
     Require(delegate.selectionChangedCount == 1u, "tree click after wheel scroll notifies selection");
     Require(delegate.lastSelectedItemId == 4u, "tree click after wheel scroll selects the scrolled top row");
+}
+
+void TestTreeScrollbarThumbGutterDragThroughWindowHost()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* tree = root->AddChild<Tree>();
+    tree->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 120.0f));
+    tree->SetRowHeightDip(24.0f);
+
+    MutableTreeModel model;
+    std::vector<TreeItemData> items;
+    items.reserve(40u);
+    for (uint64_t id = 1u; id <= 40u; ++id)
+    {
+        items.push_back(TreeItemData{.id = id, .text = L"Item " + std::to_wstring(id)});
+    }
+    model.SetVisibleItems(std::move(items));
+    tree->SetModel(&model);
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 120.0f));
+
+    const ThemePalette theme             = MakeDefaultThemePalette(true);
+    const TreeScrollbarVisualState state = tree->DebugGetScrollbarVisualState(theme);
+    Require(state.hasVerticalScrollbar, "tree exposes a vertical scrollbar for thumb gutter drag");
+    RequireRectHasArea(state.verticalThumbRect, "tree exposes a visible vertical scrollbar thumb for gutter drag");
+
+    const LONG gutterX = static_cast<LONG>(std::floor(state.verticalTrackRect.left + 1.0f));
+    const LONG thumbY  = static_cast<LONG>(std::lround((state.verticalThumbRect.top + state.verticalThumbRect.bottom) * 0.5f));
+
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(gutterX, thumbY), handled));
+    Require(handled, "tree handles scrollbar thumb gutter mouse-down as a drag");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(gutterX, thumbY + 48), handled));
+    Require(handled, "tree handles captured scrollbar thumb gutter mouse-move");
+    Require(tree->DebugGetVerticalScrollDip() > 0.5f, "tree thumb gutter drag moves the vertical scroll offset");
+
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(gutterX, thumbY + 48), handled));
+    Require(handled, "tree handles captured scrollbar thumb gutter mouse-up");
 }
 
 void TestTreeLargeWheelDeltaUsesFullMagnitude()
@@ -831,6 +875,7 @@ void RunTreeTests()
     TestTreeHomeAndEndNavigateToBoundaries();
     TestTreePageAndBoundaryKeysClampAtExtremes();
     TestTreeMouseWheelScrollAffectsLaterHitTesting();
+    TestTreeScrollbarThumbGutterDragThroughWindowHost();
     TestTreeLargeWheelDeltaUsesFullMagnitude();
     TestTreeAccumulatesPartialWheelDelta();
     TestTreeScrollbarFeedbackFollowsHoverAndDragState();

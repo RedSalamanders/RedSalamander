@@ -1368,6 +1368,7 @@ public:
     [[nodiscard]] bool IsIndeterminate() const noexcept;
 
     void Paint(WindowHost& host) const override;
+    bool OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers) override;
 
 private:
     bool _indeterminate = false;
@@ -1836,6 +1837,8 @@ public:
     void SetMaxVisibleItems(size_t maxItems) noexcept;
     void SetEditable(bool editable) noexcept;
     [[nodiscard]] bool IsEditable() const noexcept;
+    void SetAutoOpenOnTextInput(bool autoOpen) noexcept;
+    [[nodiscard]] bool GetAutoOpenOnTextInput() const noexcept;
     void SetItems(std::vector<Item> items);
     [[nodiscard]] std::span<const Item> GetItems() const noexcept;
     void SetSelectedIndex(std::optional<size_t> selectedIndex) noexcept;
@@ -1863,6 +1866,7 @@ public:
     bool OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers) override;
     bool OnMouseLeave(WindowHost& host) override;
     bool OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
+    void OnCaptureLost(WindowHost& host) override;
     bool OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers) override;
     bool OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers) override;
     bool OnChar(WindowHost& host, wchar_t ch, UINT modifiers) override;
@@ -1897,6 +1901,7 @@ private:
     void NotifyTextChanged() const;
     void OpenPopup(WindowHost& host) noexcept;
     void ClosePopup() noexcept;
+    void MaybeAutoOpenPopup(WindowHost& host) noexcept;
     void CapturePopupBackdrop(WindowHost& host) noexcept;
     void RebuildPopupItems(const WindowHost* host = nullptr) noexcept;
     void CommitSelection(WindowHost& host, size_t itemIndex, bool closePopup);
@@ -1919,6 +1924,7 @@ private:
     [[nodiscard]] D2D1_RECT_F GetPopupItemTextRect(size_t popupListIndex, const WindowHost* host = nullptr) const noexcept;
     [[nodiscard]] D2D1_RECT_F GetPopupScrollbarRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetPopupScrollbarThumbRect() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetPopupScrollbarThumbHitRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetDropButtonRect() const noexcept;
     void DragPopupScrollbarThumb(D2D1_POINT_2F point) noexcept;
 
@@ -1952,6 +1958,7 @@ private:
     float _popupScrollbarDragOffsetDip = 0.0f;
     ComboBoxVariant _variant           = ComboBoxVariant::Modern;
     bool _editable                     = false;
+    bool _autoOpenOnTextInput          = false;
     bool _open                         = false;
     size_t _maxVisibleItemsOverride    = 0u;
 };
@@ -2095,9 +2102,13 @@ public:
     void ScrollToTop() noexcept;
 
     void SetScrollStepDip(float stepDip) noexcept;
+    void SetInternalScrollbarEnabled(bool enabled) noexcept;
+    void SetOnScrollChanged(std::function<void(float)> callback) noexcept;
 
     [[nodiscard]] bool NeedsScrollbar() const noexcept;
     [[nodiscard]] float GetScrollbarThickness() const noexcept;
+    [[nodiscard]] bool IsInternalScrollbarEnabled() const noexcept;
+    [[nodiscard]] bool DebugGetScrollbarThumbHitRect(D2D1_RECT_F& out) const noexcept;
 
     // Control overrides
     void Paint(WindowHost& host) const override;
@@ -2109,11 +2120,13 @@ public:
     bool OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers) override;
     bool OnMouseLeave(WindowHost& host) override;
+    void OnCaptureLost(WindowHost& host) override;
 
 private:
     float _contentHeightDip = 0.0f;
     float _scrollOffsetDip  = 0.0f;
     float _scrollStepDip    = 40.0f;
+    bool _internalScrollbarEnabled = true;
 
     bool _dragThumb           = false;
     float _dragThumbOffsetDip = 0.0f;
@@ -2127,15 +2140,21 @@ private:
     HotPart _scrollbarHotPart = HotPart::None;
 
     Control* _innerHoveredChild = nullptr;
+    Control* _innerCapturedChild = nullptr;
 
     [[nodiscard]] float GetScrollableExtent() const noexcept;
+    [[nodiscard]] bool UsesInternalScrollbar() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetViewportRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetScrollbarTrackRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetScrollbarThumbRect() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetScrollbarThumbHitRect() const noexcept;
     void ClampScrollOffset() noexcept;
+    void NotifyScrollChanged(float previousOffsetDip) noexcept;
     [[nodiscard]] D2D1_POINT_2F ToContentSpace(D2D1_POINT_2F viewportPoint) const noexcept;
     Control* FindChildAtContent(D2D1_POINT_2F contentPoint);
     void UpdateInnerHover(WindowHost& host, D2D1_POINT_2F viewportPoint);
+
+    std::function<void(float)> _onScrollChanged;
 };
 
 class TooltipLayer final : public Control
@@ -2219,6 +2238,7 @@ public:
     bool OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
+    void OnCaptureLost(WindowHost& host) override;
     bool OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers) override;
     bool OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers) override;
     bool OnChar(WindowHost& host, wchar_t ch, UINT modifiers) override;
@@ -2253,6 +2273,7 @@ private:
     [[nodiscard]] D2D1_RECT_F GetContentRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetVerticalScrollbarRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetVerticalThumbRect() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetVerticalThumbHitRect() const noexcept;
     [[nodiscard]] TreeItemLayoutMetrics ComputeItemLayoutMetrics(const WindowHost& host, size_t visibleIndex, const TreeItemData& item) const noexcept;
     [[nodiscard]] TreeItemLayoutMetrics ComputeItemLayoutMetrics(const WindowHost& host, float rowTopDip, const TreeItemData& item) const noexcept;
     void ClampScrollOffset() noexcept;
@@ -2386,6 +2407,18 @@ public:
         bool resizeActive              = false;
         float lastResizeDeltaDip       = 0.0f;
         float lastResizeWidthDip       = 0.0f;
+        bool pressedHeaderActive       = false;
+        size_t pressedHeaderColumn     = 0u;
+        bool reorderActive             = false;
+        size_t reorderColumn           = 0u;
+        size_t reorderTargetDisplayIndex = 0u;
+        uint64_t headerReorderStartCount = 0u;
+        uint64_t headerReorderCommitCount = 0u;
+        uint64_t headerReorderNoOpCount = 0u;
+        size_t lastHeaderReorderColumn = 0u;
+        size_t lastHeaderReorderFromDisplayIndex = 0u;
+        size_t lastHeaderReorderRawTargetDisplayIndex = 0u;
+        size_t lastHeaderReorderNormalizedTargetDisplayIndex = 0u;
     };
 
     [[nodiscard]] bool DebugGetRowVisualState(const ThemePalette& theme, size_t rowIndex, GridDebugRowVisualState& out) const noexcept;
@@ -2408,6 +2441,7 @@ public:
     bool OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
+    void OnCaptureLost(WindowHost& host) override;
     bool OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers) override;
     bool OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers) override;
     bool OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2F pointDip) override;
@@ -2492,6 +2526,8 @@ private:
     [[nodiscard]] D2D1_RECT_F GetHorizontalScrollbarRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetVerticalThumbRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetHorizontalThumbRect() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetVerticalThumbHitRect() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetHorizontalThumbHitRect() const noexcept;
     [[nodiscard]] float GetColumnLeftDip(size_t columnIndex) const noexcept;
     [[nodiscard]] GridCellLayoutMetrics ComputeCellLayoutMetrics(const WindowHost& host,
                                                                  const D2D1_RECT_F& cellRect,
@@ -2557,6 +2593,13 @@ private:
     uint64_t _debugResizeMoveCount       = 0u;
     float _debugLastResizeDeltaDip       = 0.0f;
     float _debugLastResizeWidthDip       = 0.0f;
+    uint64_t _debugHeaderReorderStartCount = 0u;
+    uint64_t _debugHeaderReorderCommitCount = 0u;
+    uint64_t _debugHeaderReorderNoOpCount = 0u;
+    size_t _debugLastHeaderReorderColumn = 0u;
+    size_t _debugLastHeaderReorderFromDisplayIndex = 0u;
+    size_t _debugLastHeaderReorderRawTargetDisplayIndex = 0u;
+    size_t _debugLastHeaderReorderNormalizedTargetDisplayIndex = 0u;
     struct SortGlyphTransitionState final
     {
         GridSortSpec from{};
@@ -2778,6 +2821,7 @@ public:
     [[nodiscard]] bool DebugHasFallbackBrush() const noexcept;
     [[nodiscard]] bool DebugHasD2DContext() const noexcept;
     [[nodiscard]] size_t DebugGetConfiguredTextFormatCount() const noexcept;
+    [[nodiscard]] UINT DebugGetModifierState() const noexcept;
     [[nodiscard]] bool DebugGetNonVisibleTextServiceBridgeFont(LOGFONTW& outLogFont) const noexcept;
     void DebugSetForceNullSolidBrushes(bool force) noexcept;
     [[nodiscard]] const Control* DebugHitTestControl(D2D1_POINT_2F pointDip) noexcept;
@@ -2812,7 +2856,7 @@ private:
     void OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggestedRect) noexcept;
     void OnSize(UINT widthPx, UINT heightPx) noexcept;
     void OnSetFocus() noexcept;
-    void OnKillFocus() noexcept;
+    void OnKillFocus(bool clearRetainedFocus) noexcept;
     [[nodiscard]] bool EnsureTextInputBridge(bool multiline) noexcept;
     void DestroyTextInputBridge() noexcept;
     void UpdateTextInputBridgeBounds(Control* control, bool multiline) noexcept;

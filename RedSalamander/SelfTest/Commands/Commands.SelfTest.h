@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "SelfTestCommon.h"
 
@@ -18,6 +19,7 @@ void DebugResetConnectionManagerConnectNavigation() noexcept;
 
 namespace CommandsSelfTest
 {
+std::vector<std::wstring> ListCases(const SelfTest::SelfTestOptions& options = {}) noexcept;
 [[nodiscard]] bool Run(HWND mainWindow, const SelfTest::SelfTestOptions& options = {}, SelfTest::SelfTestSuiteResult* outResult = nullptr) noexcept;
 }
 

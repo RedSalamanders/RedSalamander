@@ -1079,6 +1079,18 @@ bool KeyboardPane::DebugGetSnapshot(PreferencesKeyboardDebugSnapshot& out) const
     out.keyboardListRowCount  = DebugListRowCount();
     out.keyboardSearchText    = _state->keyboardSearchText;
     out.keyboardCaptureActive = _state->keyboardCaptureActive;
+    if (_dxState && _dxState->page.listControl)
+    {
+        const auto columnLayout = _dxState->page.listControl->CaptureColumnLayout();
+        for (const auto& entry : columnLayout)
+        {
+            if (! out.keyboardListColumnLayoutText.empty())
+            {
+                out.keyboardListColumnLayoutText += L";";
+            }
+            out.keyboardListColumnLayoutText += std::format(L"{}@{}:{:.1f}", entry.columnId, entry.displayIndex, entry.widthDip);
+        }
+    }
     if (const auto rowIndexOpt = TryGetSelectedRowIndex(); rowIndexOpt.has_value() && rowIndexOpt.value() < _state->keyboardRows.size())
     {
         const KeyboardShortcutRow& row    = _state->keyboardRows[rowIndexOpt.value()];
@@ -1170,6 +1182,18 @@ bool KeyboardPane::DebugGetListPointerState(PreferencesGridPointerDebugState& ou
     outState.resizeActive                                            = gridState.resizeActive;
     outState.lastResizeDeltaDip                                      = gridState.lastResizeDeltaDip;
     outState.lastResizeWidthDip                                      = gridState.lastResizeWidthDip;
+    outState.pressedHeaderActive                                     = gridState.pressedHeaderActive;
+    outState.pressedHeaderColumn                                     = gridState.pressedHeaderColumn;
+    outState.reorderActive                                           = gridState.reorderActive;
+    outState.reorderColumn                                           = gridState.reorderColumn;
+    outState.reorderTargetDisplayIndex                               = gridState.reorderTargetDisplayIndex;
+    outState.headerReorderStartCount                                 = gridState.headerReorderStartCount;
+    outState.headerReorderCommitCount                                = gridState.headerReorderCommitCount;
+    outState.headerReorderNoOpCount                                  = gridState.headerReorderNoOpCount;
+    outState.lastHeaderReorderColumn                                 = gridState.lastHeaderReorderColumn;
+    outState.lastHeaderReorderFromDisplayIndex                       = gridState.lastHeaderReorderFromDisplayIndex;
+    outState.lastHeaderReorderRawTargetDisplayIndex                  = gridState.lastHeaderReorderRawTargetDisplayIndex;
+    outState.lastHeaderReorderNormalizedTargetDisplayIndex           = gridState.lastHeaderReorderNormalizedTargetDisplayIndex;
     return true;
 }
 
@@ -1311,8 +1335,6 @@ bool KeyboardPane::DebugScrollListByWheelDetents(const int detents) noexcept
     {
         return false;
     }
-
-    _pageHostDx->SetFocusControl(_dxState->page.listControl);
 
     const int direction = detents < 0 ? -1 : 1;
     const int steps     = std::abs(detents);

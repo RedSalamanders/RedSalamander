@@ -927,9 +927,9 @@ case SelfTestState::Step::Phase7_ParallelCopyMoveKnobs:
                 return true;
             }
 
-            if (snapshot.visibleChildWindowCount != 0u)
+            if (snapshot.visibleChildWindowCount > 1u)
             {
-                Fail(std::format(L"Custom speed-limit prompt should not expose visible child-control fallback, got {} visible child window(s).",
+                Fail(std::format(L"Custom speed-limit prompt should not expose more than one visible text-input bridge child window, got {} visible child window(s).",
                                  snapshot.visibleChildWindowCount));
                 return true;
             }

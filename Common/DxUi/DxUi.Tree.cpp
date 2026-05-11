@@ -649,7 +649,7 @@ bool Tree::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
     if (_dragVerticalThumb)
     {
         const D2D1_RECT_F track = GetVerticalScrollbarRect();
-        const D2D1_RECT_F thumb = GetVerticalThumbRect();
+        const D2D1_RECT_F thumb = GetVerticalThumbHitRect();
         const float thumbHeight = (std::max)(0.0f, thumb.bottom - thumb.top);
         const float available   = (std::max)(0.0f, (track.bottom - track.top) - thumbHeight);
         const float extent      = GetVerticalScrollableExtent();
@@ -737,7 +737,7 @@ bool Tree::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         if (hit.onScrollbarThumb)
         {
             _dragVerticalThumb  = true;
-            _dragThumbOffsetDip = point.y - GetVerticalThumbRect().top;
+            _dragThumbOffsetDip = point.y - GetVerticalThumbHitRect().top;
             SyncScrollbarAnimation(host);
         }
         else
@@ -745,7 +745,7 @@ bool Tree::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
             const size_t visibleRows =
                 (std::max<size_t>)(1u, static_cast<size_t>(std::floor((std::max)(1.0f, GetContentRect().bottom - GetContentRect().top) / _rowHeightDip)));
             _verticalScrollDip +=
-                point.y < GetVerticalThumbRect().top ? -(_rowHeightDip * static_cast<float>(visibleRows)) : (_rowHeightDip * static_cast<float>(visibleRows));
+                point.y < GetVerticalThumbHitRect().top ? -(_rowHeightDip * static_cast<float>(visibleRows)) : (_rowHeightDip * static_cast<float>(visibleRows));
             ClampScrollOffset();
             SyncScrollbarAnimation(host);
         }
@@ -817,6 +817,18 @@ bool Tree::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UI
         Invalidate(host);
     }
     return wasDragging;
+}
+
+void Tree::OnCaptureLost(WindowHost& host)
+{
+    if (_dragVerticalThumb)
+    {
+        _dragVerticalThumb  = false;
+        _dragThumbOffsetDip = 0.0f;
+        UpdateScrollbarHotState(HitInfo{});
+        SyncScrollbarAnimation(host);
+        Invalidate(host);
+    }
 }
 
 bool Tree::OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT /*modifiers*/)
@@ -1103,7 +1115,7 @@ Tree::HitInfo Tree::HitTestPoint(PointDip pointDip) const noexcept
         HitInfo hit;
         hit.zone             = HitZone::VerticalScrollbar;
         hit.rectDip          = scrollbarRect;
-        hit.onScrollbarThumb = PointInRect(GetVerticalThumbRect(), point);
+        hit.onScrollbarThumb = PointInRect(GetVerticalThumbHitRect(), point);
         return hit;
     }
 
@@ -1187,6 +1199,19 @@ D2D1_RECT_F Tree::GetVerticalThumbRect() const noexcept
     const float viewportHeight = (std::max)(1.0f, GetContentRect().bottom - GetContentRect().top);
     const float totalHeight    = (std::max)(viewportHeight, static_cast<float>(_model->GetVisibleItemCount()) * _rowHeightDip);
     return ComputeScrollbarThumbRect(track, ScrollbarOrientation::Vertical, viewportHeight, totalHeight, _verticalScrollDip, GetVerticalScrollableExtent());
+}
+
+D2D1_RECT_F Tree::GetVerticalThumbHitRect() const noexcept
+{
+    const D2D1_RECT_F track = GetVerticalScrollbarRect();
+    if (track.right <= track.left || track.bottom <= track.top || ! _model || _model->GetVisibleItemCount() == 0u)
+    {
+        return D2D1::RectF();
+    }
+
+    const float viewportHeight = (std::max)(1.0f, GetContentRect().bottom - GetContentRect().top);
+    const float totalHeight    = (std::max)(viewportHeight, static_cast<float>(_model->GetVisibleItemCount()) * _rowHeightDip);
+    return ComputeScrollbarThumbHitRect(track, ScrollbarOrientation::Vertical, viewportHeight, totalHeight, _verticalScrollDip, GetVerticalScrollableExtent());
 }
 
 void Tree::ClampScrollOffset() noexcept

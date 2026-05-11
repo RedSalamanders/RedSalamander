@@ -265,6 +265,14 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
     <ClInclude Include="FileSystemS3Resources.h" />
     <ResourceCompile Include="FileSystemS3Resources.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Lang\ja-JP\FileSystemS3-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{fa2125e0-aaf0-54d4-bc1a-e53b33ac8739}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -10823,10 +10823,30 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
         return false;
     }
 
+    const DWORD processId                = GetCurrentProcessId();
+    const auto baselineTopLevelWindows   = SnapshotTopLevelWindowsForProcess(processId);
     FocusFolderViewPane(FolderWindow::Pane::Left);
     HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Left folder view handle unavailable for quick-search test.");
     if (! folderView)
+    {
+        return false;
+    }
+
+    const auto paneLabel = [](FolderWindow::Pane pane) noexcept -> std::wstring_view {
+        return pane == FolderWindow::Pane::Left ? L"Left" : L"Right";
+    };
+    const auto focusDiagnostics = [&]() {
+        return std::format(L"focus=0x{:X}, focusedFolderView=0x{:X}, focusedPane={}, expectedLeftFolderView=0x{:X}",
+                           reinterpret_cast<uintptr_t>(GetFocus()),
+                           reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                           paneLabel(g_folderWindow.GetFocusedPane()),
+                           reinterpret_cast<uintptr_t>(folderView));
+    };
+
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not have stable focus before Quick Search activation; {}.", focusDiagnostics()));
+    if (! state.failure.empty())
     {
         return false;
     }
@@ -10839,6 +10859,12 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
                   L"Quick Search snapshot should be available after command activation.");
     state.Require(snapshot.active, L"Quick Search command should activate integrated pane search.");
     state.Require(snapshot.query.empty(), L"Quick Search command should start with an empty query.");
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not retain stable focus after Quick Search activation; {}.", focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'a'), 0);
     SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'l'), 0);
@@ -10879,13 +10905,60 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     state.Require(g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left).value_or(std::filesystem::path{}) == root,
                   L"Quick Search Enter should not navigate away from the folder.");
 
+    state.Require(WaitForNoNonBaselineWindows(processId, baselineTopLevelWindows, mainWindow, SelfTest::Scale(3000ms)),
+                  L"Quick Search Enter activation left a transient top-level window open before no-match reactivation.");
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(folderView != nullptr && IsWindow(folderView) != FALSE,
+                  L"Left folder view handle unavailable before Quick Search no-match reactivation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not have stable focus before Quick Search no-match reactivation; {}.", focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after no-match reactivation.");
+    FolderView::IncrementalSearchDebugSnapshot rightSnapshot{};
+    const bool haveRightSnapshot = g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Right, rightSnapshot);
+    state.Require(snapshot.active,
+                  std::format(L"Quick Search no-match reactivation should enter search mode; active={}, query='{}', focused='{}'; "
+                              L"rightSnapshot={}, rightActive={}, rightQuery='{}', rightFocused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              haveRightSnapshot ? 1 : 0,
+                              haveRightSnapshot && rightSnapshot.active ? 1 : 0,
+                              haveRightSnapshot ? rightSnapshot.query : std::wstring{},
+                              haveRightSnapshot ? rightSnapshot.focusedDisplayName : std::wstring{},
+                               focusDiagnostics()));
+    state.Require(snapshot.query.empty(), std::format(L"Quick Search no-match reactivation should clear the query; got '{}'.", snapshot.query));
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not retain stable focus after Quick Search no-match reactivation; {}.", focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'z'), 0);
     PumpPendingMessages();
     state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
                   L"Quick Search no-match snapshot should be available.");
-    state.Require(snapshot.active, L"Quick Search no-match state should remain active.");
-    state.Require(snapshot.query == L"z", L"Quick Search no-match query should remain visible.");
+    state.Require(snapshot.active,
+                  std::format(L"Quick Search no-match state should remain active; active={}, query='{}', matches={}, focused='{}'; {}.",
+                               snapshot.active ? 1 : 0,
+                               snapshot.query,
+                               snapshot.matches.size(),
+                               snapshot.focusedDisplayName,
+                               focusDiagnostics()));
+    state.Require(snapshot.query == L"z", std::format(L"Quick Search no-match query should remain visible; got '{}'.", snapshot.query));
     state.Require(snapshot.matches.empty(), std::format(L"Quick Search no-match state should expose zero matches; got {}.", snapshot.matches.size()));
 
     SendMessageW(folderView, WM_KEYDOWN, VK_ESCAPE, 0);

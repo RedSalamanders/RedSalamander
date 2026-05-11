@@ -3,15 +3,13 @@
 #include "Framework.h"
 
 #include "Preferences.Themes.h"
+#include "ThemeDefinitionIo.h"
 
 #include <algorithm>
 #include <array>
-#include <cstdlib>
-#include <cwchar>
 #include <cwctype>
 #include <filesystem>
 #include <format>
-#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -28,11 +26,6 @@
 #pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
-#pragma warning(pop)
-
-#pragma warning(push)
-#pragma warning(disable : 6297 28182) // yyjson warnings
-#include <yyjson.h>
 #pragma warning(pop)
 
 #include "D2DHdcPaint.h"
@@ -162,51 +155,6 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
         return;
     }
     paint.FillRoundedRectangle(rc, static_cast<float>(radius), fill, border);
-}
-
-[[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
-{
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-    return result;
-}
-
-[[nodiscard]] std::string Utf8FromUtf16(std::wstring_view text) noexcept
-{
-    if (text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return {};
-    }
-
-    const int required = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::string result(static_cast<size_t>(required), '\0');
-    const int written =
-        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required, nullptr, nullptr);
-    if (written != required)
-    {
-        return {};
-    }
-    return result;
 }
 
 [[nodiscard]] uint64_t MakeThemesStableRowId(std::wstring_view key) noexcept
@@ -440,66 +388,12 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 
 [[nodiscard]] bool IsValidThemeColorKey(std::wstring_view key) noexcept
 {
-    if (key.empty() || key.size() > 64)
-    {
-        return false;
-    }
-
-    for (const wchar_t ch : key)
-    {
-        const bool ok = (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9') || ch == L'_' || ch == L'.' || ch == L'-';
-        if (! ok)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-[[nodiscard]] bool IsValidUserThemeId(std::wstring_view id) noexcept
-{
-    constexpr std::wstring_view prefix = L"user/";
-    if (id.rfind(prefix, 0) != 0)
-    {
-        return false;
-    }
-
-    const std::wstring_view suffix = id.substr(prefix.size());
-    if (suffix.empty() || suffix.size() > 64)
-    {
-        return false;
-    }
-
-    const wchar_t first = suffix.front();
-    const bool firstOk  = (first >= L'A' && first <= L'Z') || (first >= L'a' && first <= L'z') || (first >= L'0' && first <= L'9');
-    if (! firstOk)
-    {
-        return false;
-    }
-
-    for (const wchar_t ch : suffix)
-    {
-        const bool ok = (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9') || ch == L'_' || ch == L'.' || ch == L'-';
-        if (! ok)
-        {
-            return false;
-        }
-    }
-
-    return true;
+    return Common::Settings::IsValidThemeColorKey(key);
 }
 
 [[nodiscard]] bool IsBuiltinThemeId(std::wstring_view themeId) noexcept
 {
-    for (const auto& option : kBuiltinThemeOptions)
-    {
-        if (option.id == themeId)
-        {
-            return true;
-        }
-    }
-    return false;
+    return Common::Settings::IsBuiltinThemeId(themeId);
 }
 
 [[nodiscard]] bool DoesThemeIdExist(const PreferencesDialogState& state, std::wstring_view themeId) noexcept
@@ -844,220 +738,65 @@ bool DebugCancelPreferencesThemesNextBrowseImpl() noexcept
     outError.clear();
     outTheme = {};
 
-    if (jsonText.empty())
+    Common::Settings::ThemeDefinitionIoError error = Common::Settings::ThemeDefinitionIoError::None;
+    std::wstring parserMessage;
+    const HRESULT hr = Common::Settings::ParseThemeDefinitionJson5(jsonText, outTheme, &error, &parserMessage);
+    if (SUCCEEDED(hr))
     {
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FILE_EMPTY);
-        return false;
-    }
-
-    std::string buffer(jsonText);
-    yyjson_read_err err{};
-    wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free> doc(
-        yyjson_read_opts(buffer.data(), buffer.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err));
-    if (! doc)
-    {
-        const std::wstring msg = (err.msg && err.msg[0] != '\0') ? Utf16FromUtf8(err.msg) : std::wstring{};
-        outError               = msg.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : msg;
-        return false;
-    }
-
-    yyjson_val* root = yyjson_doc_get_root(doc.get());
-    if (! root || ! yyjson_is_obj(root))
-    {
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_ROOT_NOT_OBJECT);
-        return false;
-    }
-
-    const auto requireString = [&](const char* key, std::wstring& dest) -> bool
-    {
-        yyjson_val* val = yyjson_obj_get(root, key);
-        if (! val || ! yyjson_is_str(val))
-        {
-            outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, Utf16FromUtf8(std::string_view(key)));
-            return false;
-        }
-
-        const char* text = yyjson_get_str(val);
-        dest             = (text && text[0] != '\0') ? Utf16FromUtf8(text) : std::wstring{};
-        if (dest.empty())
-        {
-            outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_EMPTY_FMT, Utf16FromUtf8(std::string_view(key)));
-            return false;
-        }
-
         return true;
-    };
-
-    if (! requireString("id", outTheme.id))
-    {
-        return false;
     }
-    if (! IsValidUserThemeId(outTheme.id))
+
+    switch (error)
     {
+    case Common::Settings::ThemeDefinitionIoError::EmptyInput:
+        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FILE_EMPTY);
+        break;
+    case Common::Settings::ThemeDefinitionIoError::ParseFailed:
+        outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage;
+        break;
+    case Common::Settings::ThemeDefinitionIoError::RootNotObject:
+        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_ROOT_NOT_OBJECT);
+        break;
+    case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidId:
+        outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"id");
+        break;
+    case Common::Settings::ThemeDefinitionIoError::InvalidId:
         outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_INVALID_ID);
-        return false;
-    }
-
-    if (! requireString("name", outTheme.name))
-    {
-        return false;
-    }
-    if (! requireString("baseThemeId", outTheme.baseThemeId))
-    {
-        return false;
-    }
-    if (! IsBuiltinThemeId(outTheme.baseThemeId))
-    {
+        break;
+    case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidName:
+        outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"name");
+        break;
+    case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidBaseThemeId:
+        outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"baseThemeId");
+        break;
+    case Common::Settings::ThemeDefinitionIoError::InvalidBaseThemeId:
         outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_BASE_NOT_BUILTIN);
-        return false;
-    }
-
-    yyjson_val* colors = yyjson_obj_get(root, "colors");
-    if (! colors || ! yyjson_is_obj(colors))
-    {
+        break;
+    case Common::Settings::ThemeDefinitionIoError::ColorsMissingOrNotObject:
         outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLORS_MISSING_OR_NOT_OBJECT);
-        return false;
+        break;
+    case Common::Settings::ThemeDefinitionIoError::InvalidColorKey:
+    case Common::Settings::ThemeDefinitionIoError::InvalidColorValue:
+        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_INVALID_COLOR_VALUE);
+        break;
+    case Common::Settings::ThemeDefinitionIoError::ColorValueNotString:
+        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLOR_VALUES_MUST_BE_STRINGS);
+        break;
+    case Common::Settings::ThemeDefinitionIoError::OutOfMemory:
+        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_OOM_PARSE);
+        break;
+    case Common::Settings::ThemeDefinitionIoError::None:
+    default:
+        outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage;
+        break;
     }
 
-    yyjson_obj_iter iter = yyjson_obj_iter_with(colors);
-    yyjson_val* keyVal   = nullptr;
-    while ((keyVal = yyjson_obj_iter_next(&iter)) != nullptr)
-    {
-        const char* keyText = yyjson_get_str(keyVal);
-        if (! keyText || keyText[0] == '\0')
-        {
-            continue;
-        }
-
-        const std::wstring keyWide = Utf16FromUtf8(keyText);
-        if (! IsValidThemeColorKey(keyWide))
-        {
-            continue;
-        }
-
-        yyjson_val* valueVal = yyjson_obj_iter_get_val(keyVal);
-        if (! valueVal || ! yyjson_is_str(valueVal))
-        {
-            outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLOR_VALUES_MUST_BE_STRINGS);
-            return false;
-        }
-
-        const char* valueText        = yyjson_get_str(valueVal);
-        const std::wstring valueWide = (valueText && valueText[0] != '\0') ? Utf16FromUtf8(valueText) : std::wstring{};
-        uint32_t argb                = 0;
-        if (valueWide.empty() || ! Common::Settings::TryParseColor(valueWide, argb))
-        {
-            outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_INVALID_COLOR_VALUE);
-            return false;
-        }
-
-        outTheme.colors[keyWide] = argb;
-    }
-
-    return true;
+    return false;
 }
 
 [[nodiscard]] bool BuildThemeDefinitionExportJson(const Common::Settings::ThemeDefinition& theme, std::string& outJson) noexcept
 {
-    outJson.clear();
-
-    wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc_free), yyjson_mut_doc_free> doc(yyjson_mut_doc_new(nullptr));
-    if (! doc)
-    {
-        return false;
-    }
-
-    const std::string idUtf8   = Utf8FromUtf16(theme.id);
-    const std::string nameUtf8 = Utf8FromUtf16(theme.name);
-    const std::string baseUtf8 = Utf8FromUtf16(theme.baseThemeId);
-    if (idUtf8.empty() || nameUtf8.empty() || baseUtf8.empty())
-    {
-        return false;
-    }
-
-    yyjson_mut_val* root = yyjson_mut_obj(doc.get());
-    if (! root)
-    {
-        return false;
-    }
-    yyjson_mut_doc_set_root(doc.get(), root);
-
-    yyjson_mut_val* idVal = yyjson_mut_strncpy(doc.get(), idUtf8.data(), idUtf8.size());
-    if (! idVal || ! yyjson_mut_obj_add_val(doc.get(), root, "id", idVal))
-    {
-        return false;
-    }
-
-    yyjson_mut_val* nameVal = yyjson_mut_strncpy(doc.get(), nameUtf8.data(), nameUtf8.size());
-    if (! nameVal || ! yyjson_mut_obj_add_val(doc.get(), root, "name", nameVal))
-    {
-        return false;
-    }
-
-    yyjson_mut_val* baseVal = yyjson_mut_strncpy(doc.get(), baseUtf8.data(), baseUtf8.size());
-    if (! baseVal || ! yyjson_mut_obj_add_val(doc.get(), root, "baseThemeId", baseVal))
-    {
-        return false;
-    }
-
-    yyjson_mut_val* colors = yyjson_mut_obj(doc.get());
-    if (! colors || ! yyjson_mut_obj_add_val(doc.get(), root, "colors", colors))
-    {
-        return false;
-    }
-
-    std::vector<std::wstring_view> keys;
-    keys.reserve(theme.colors.size());
-    for (const auto& [key, _] : theme.colors)
-    {
-        keys.emplace_back(key);
-    }
-    std::sort(keys.begin(), keys.end());
-
-    for (const std::wstring_view key : keys)
-    {
-        const auto it = theme.colors.find(std::wstring(key));
-        if (it == theme.colors.end())
-        {
-            continue;
-        }
-
-        const std::string keyUtf8 = Utf8FromUtf16(key);
-        if (keyUtf8.empty())
-        {
-            continue;
-        }
-
-        const std::wstring colorText = Common::Settings::FormatColor(it->second);
-        const std::string colorUtf8  = Utf8FromUtf16(colorText);
-        if (colorUtf8.empty())
-        {
-            continue;
-        }
-
-        yyjson_mut_val* keyVal   = yyjson_mut_strncpy(doc.get(), keyUtf8.data(), keyUtf8.size());
-        yyjson_mut_val* valueVal = yyjson_mut_strncpy(doc.get(), colorUtf8.data(), colorUtf8.size());
-        if (! keyVal || ! valueVal)
-        {
-            return false;
-        }
-
-        if (! yyjson_mut_obj_add(colors, keyVal, valueVal))
-        {
-            return false;
-        }
-    }
-
-    size_t len = 0;
-    yyjson_write_err err{};
-    wil::unique_any<char*, decltype(&::free), ::free> jsonText(yyjson_mut_write_opts(doc.get(), YYJSON_WRITE_PRETTY, nullptr, &len, &err));
-    if (! jsonText || len == 0)
-    {
-        return false;
-    }
-
-    outJson.assign(jsonText.get(), len);
-    return ! outJson.empty();
+    return SUCCEEDED(Common::Settings::BuildThemeDefinitionJson5(theme, outJson));
 }
 
 void EnsureThemeFileThemesLoaded(PreferencesDialogState& state) noexcept
@@ -3846,8 +3585,6 @@ bool ThemesPane::DebugScrollListByWheelDetents(const int detents) noexcept
     {
         return false;
     }
-
-    _pageHostDx->SetFocusControl(_dxState->page.colorsListControl);
 
     const int direction = detents < 0 ? -1 : 1;
     const int steps     = std::abs(detents);

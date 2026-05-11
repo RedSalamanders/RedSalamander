@@ -87,6 +87,7 @@ Selftest enforces this requirement via `ConnectionProfile.initialPath` (configur
 - SCP: `FileOpsSelfTest SCP`
 - IMAP: `FileOpsSelfTest IMAP`
 - S3: `FileOpsSelfTest S3`
+- S3 alternate target: `FileOpsSelfTest S3 Alt`
 - OneDrive Personal: `FileOpsSelfTest OneDrive Personal`
 - OneDrive Business: `FileOpsSelfTest OneDrive Business`
 - SharePoint: `FileOpsSelfTest SharePoint`
@@ -98,6 +99,11 @@ Selftest enforces this requirement via `ConnectionProfile.initialPath` (configur
 - `REDSALAMANDER_SELFTEST_CONN_SCP`
 - `REDSALAMANDER_SELFTEST_CONN_IMAP`
 - `REDSALAMANDER_SELFTEST_CONN_S3`
+- `REDSALAMANDER_SELFTEST_CONN_S3_ALT`
 - `REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL`
 - `REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS`
 - `REDSALAMANDER_SELFTEST_CONN_SHAREPOINT`
+
+`REDSALAMANDER_SELFTEST_CONN_S3_ALT` is used by FileOperations phases that need
+a second S3 profile to verify connection override and cross-profile behavior.
+It follows the same sandbox-root rules as the primary S3 profile.

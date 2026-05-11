@@ -175,6 +175,14 @@ void TestAttachedTextInputBridgeForwardsSingleLineEditingKeys()
         static_cast<void>(SendMessageW(bridgeEdit, WM_KEYUP, static_cast<WPARAM>(virtualKey), 0));
         static_cast<void>(SendMessageW(bridgeEdit, WM_KEYUP, VK_CONTROL, 0));
     };
+    const auto sendCtrlBackspaceWithTranslatedChar = [bridgeEdit]()
+    {
+        static_cast<void>(SendMessageW(bridgeEdit, WM_KEYDOWN, VK_CONTROL, 0));
+        static_cast<void>(SendMessageW(bridgeEdit, WM_KEYDOWN, VK_BACK, 0));
+        static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, 0x7Fu, 0));
+        static_cast<void>(SendMessageW(bridgeEdit, WM_KEYUP, VK_BACK, 0));
+        static_cast<void>(SendMessageW(bridgeEdit, WM_KEYUP, VK_CONTROL, 0));
+    };
 
     const wil::unique_hwnd clipboardOwner = CreateClipboardOwnerWindowForTest();
     Require(SetClipboardUnicodeTextForTest(clipboardOwner.get(), L"OMEGA"), "clipboard text prepared for single-line ctrl+v bridge test");
@@ -199,6 +207,19 @@ void TestAttachedTextInputBridgeForwardsSingleLineEditingKeys()
     sendCtrlKey(VK_BACK);
     Require(field->GetText() == L"alpha gamma", "ctrl+backspace on the single-line bridge deletes the previous word segment");
     requireCollapsedCaret(6u, "ctrl+backspace on the single-line bridge syncs the hidden caret after deletion");
+
+    const std::wstring pathText = L"C:\\repo\\.build\\x64\\Debug";
+    static_cast<void>(SendMessageW(bridgeEdit, EM_SETSEL, 0, -1));
+    static_cast<void>(SendMessageW(bridgeEdit, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(pathText.c_str())));
+    Require(field->GetText() == pathText, "single-line bridge prepares path text for repeated ctrl+backspace regression");
+    sendCtrlBackspaceWithTranslatedChar();
+    sendCtrlBackspaceWithTranslatedChar();
+    Require(field->GetText() == L"C:\\repo\\.build\\",
+            "repeated ctrl+backspace on a path keeps deleting meaningful path segments instead of stopping on separators");
+    Require(field->GetText().find(L'\x7F') == std::wstring_view::npos,
+            "ctrl+backspace translated delete character is ignored by the text bridge");
+    static_cast<void>(SendMessageW(bridgeEdit, EM_SETSEL, 0, -1));
+    static_cast<void>(SendMessageW(bridgeEdit, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L"alpha gamma")));
 
     const bool copied = RetryClipboardSensitiveBridgeAction([&]()
     {

@@ -1,3 +1,6 @@
+namespace
+{
+
 [[nodiscard]] bool TestPreferencesDialogPluginsSearchActionUpdatesDxSurface(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -59,15 +62,9 @@
     };
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Plugins deferred-search test.");
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                  L"Failed to select the Preferences Plugins category for Plugins deferred-search test.");
     PumpPendingMessages();
-    for (int i = 0; i < 7; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
 
     PreferencesDebugSnapshot snapshot{};
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -91,6 +88,8 @@
                   L"Preferences Plugins deferred search action did not settle to the filtered DxUi state.");
     return state.failure.empty();
 }
+
+} // namespace
 
 [[nodiscard]] bool TestPreferencesDialogPluginsLiveSearchDxInteraction(HWND mainWindow, CaseState& state) noexcept
 {
@@ -506,15 +505,9 @@
         }
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Plugins tab-traversal validation.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                      L"Failed to select the Preferences Plugins category for Plugins tab-traversal validation.");
         PumpPendingMessages();
-        for (int i = 0; i < 7; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -726,16 +719,10 @@
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                   L"Failed to focus the Preferences category host for Plugins empty custom-paths placeholder test.");
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                  L"Failed to select the Preferences Plugins category for Plugins empty custom-paths placeholder test.");
     PumpPendingMessages();
     SelfTest::AppendSelfTestTrace(L"Plugins empty placeholder: category tree focused.");
-    for (int i = 0; i < 7; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
     SelfTest::AppendSelfTestTrace(L"Plugins empty placeholder: category tree navigated to Plugins.");
 
     PreferencesDebugSnapshot snapshot{};
@@ -886,15 +873,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Plugins custom-paths remove interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                      L"Failed to select the Preferences Plugins category for Plugins custom-paths remove interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 7; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -1147,15 +1128,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Plugins custom-paths add interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                      L"Failed to select the Preferences Plugins category for Plugins custom-paths add interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 7; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -1391,15 +1366,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Plugins Configure interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                      L"Failed to select the Preferences Plugins category for Plugins Configure interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 7; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -1690,15 +1659,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Plugins Test interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                      L"Failed to select the Preferences Plugins category for Plugins Test interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 7; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -1946,15 +1909,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Plugins Test All interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
+                      L"Failed to select the Preferences Plugins category for Plugins Test All interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 7; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -2160,15 +2117,9 @@
     };
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes deferred-search test.");
-    SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-    SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                  L"Failed to select the Preferences Themes category for Themes deferred-search test.");
     PumpPendingMessages();
-    for (int i = 0; i < 6; ++i)
-    {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
 
     PreferencesDebugSnapshot snapshot{};
     state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
@@ -2297,15 +2248,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host while navigating to the Themes page.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category while navigating to the Themes page.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         return waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
             return value.currentCategory == kPrefCategoryThemes && value.themesListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
@@ -2849,15 +2794,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes duplicate interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes duplicate interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [&](const PreferencesDebugSnapshot& value) noexcept
@@ -3124,15 +3063,9 @@
         }
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes clear interaction test.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes clear interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [&](const PreferencesDebugSnapshot& value) noexcept
@@ -3416,15 +3349,9 @@
         }
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes set interaction test.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes set interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [&](const PreferencesDebugSnapshot& value) noexcept
@@ -3696,15 +3623,9 @@
 
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes apply-temporarily interaction test.");
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes apply-temporarily interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [&](const PreferencesDebugSnapshot& value) noexcept
@@ -3961,15 +3882,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes save interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes save interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [&](const PreferencesDebugSnapshot& value) noexcept
@@ -4251,15 +4166,9 @@
 
         state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
                       L"Failed to focus the Preferences category host for Themes load interaction test.");
-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
+                      L"Failed to select the Preferences Themes category for Themes load interaction test.");
         PumpPendingMessages();
-        for (int i = 0; i < 6; ++i)
-        {
-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-            PumpPendingMessages();
-        }
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
@@ -5095,8 +5004,57 @@
         return false;
     }
 
+    const auto advancedFocusTargetName = [](const PreferencesAdvancedDebugFocusTarget target) noexcept -> std::wstring_view
+    {
+        switch (target)
+        {
+        case PreferencesAdvancedDebugFocusTarget::None:
+            return L"None";
+        case PreferencesAdvancedDebugFocusTarget::BypassHelloToggle:
+            return L"BypassHelloToggle";
+        case PreferencesAdvancedDebugFocusTarget::AllowInsecureTlsAutomationToggle:
+            return L"AllowInsecureTlsAutomationToggle";
+        case PreferencesAdvancedDebugFocusTarget::HelloTimeoutEdit:
+            return L"HelloTimeoutEdit";
+        case PreferencesAdvancedDebugFocusTarget::ToolbarToggle:
+            return L"ToolbarToggle";
+        case PreferencesAdvancedDebugFocusTarget::LineNumbersToggle:
+            return L"LineNumbersToggle";
+        case PreferencesAdvancedDebugFocusTarget::AlwaysOnTopToggle:
+            return L"AlwaysOnTopToggle";
+        case PreferencesAdvancedDebugFocusTarget::ShowIdsToggle:
+            return L"ShowIdsToggle";
+        case PreferencesAdvancedDebugFocusTarget::AutoScrollToggle:
+            return L"AutoScrollToggle";
+        case PreferencesAdvancedDebugFocusTarget::FilterPresetCombo:
+            return L"FilterPresetCombo";
+        case PreferencesAdvancedDebugFocusTarget::FilterMaskEdit:
+            return L"FilterMaskEdit";
+        case PreferencesAdvancedDebugFocusTarget::FilterTextToggle:
+            return L"FilterTextToggle";
+        case PreferencesAdvancedDebugFocusTarget::DiagnosticsDebugToggle:
+            return L"DiagnosticsDebugToggle";
+        }
+
+        return L"Unknown";
+    };
+
     const auto sendTab = [&](const bool reverse, const PreferencesAdvancedDebugFocusTarget expectedTarget, std::wstring_view label) noexcept
     {
+        const HWND nativeFocusBefore = GetFocus();
+        const HWND activePageBefore  = DebugGetPreferencesActivePageHandle();
+        const HWND activeDxBefore    = DebugGetPreferencesActivePageDxHostHandle();
+        SelfTest::AppendSelfTestTrace(std::format(L"Preferences Advanced tab traversal: step='{}' reverse={} expectedFocus={} nativeFocus=0x{:X} "
+                                                  L"cachedPage=0x{:X} activePageBefore=0x{:X} activeDxHostBefore=0x{:X} beforeRetainedFocus={}",
+                                                  label,
+                                                  reverse ? 1 : 0,
+                                                  advancedFocusTargetName(expectedTarget),
+                                                  reinterpret_cast<uintptr_t>(nativeFocusBefore),
+                                                  reinterpret_cast<uintptr_t>(activePage),
+                                                  reinterpret_cast<uintptr_t>(activePageBefore),
+                                                  reinterpret_cast<uintptr_t>(activeDxBefore),
+                                                  advancedFocusTargetName(snapshot.advancedFocusTarget)));
+
         if (reverse)
         {
             SendMessageW(activePage, WM_KEYDOWN, VK_SHIFT, 0);
@@ -5108,15 +5066,50 @@
             SendMessageW(activePage, WM_KEYUP, VK_SHIFT, 0);
         }
 
-        state.Require(waitForSnapshot(
-                          [&](const PreferencesDebugSnapshot& value) noexcept
+        const bool reachedExpectedFocus = waitForSnapshot(
+            [&](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryAdvanced && value.advancedFocusTarget == expectedTarget && value.createdPaneWindowCount == 0u &&
                    value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
-                      std::format(L"Preferences Advanced {} focus target not reached during tab traversal.", label));
+            snapshot);
+        const HWND nativeFocusAfter = GetFocus();
+        const HWND activePageAfter  = DebugGetPreferencesActivePageHandle();
+        const HWND activeDxAfter    = DebugGetPreferencesActivePageDxHostHandle();
+        SelfTest::AppendSelfTestTrace(std::format(L"Preferences Advanced tab traversal: step='{}' reached={} observedFocus={} category={} "
+                                                  L"visibleChildren={} renderedDxHosts={} paneWindows={} createdPaneWindows={} resizeFailures={} "
+                                                  L"nativeFocusAfter=0x{:X} activePageAfter=0x{:X} activeDxHostAfter=0x{:X}",
+                                                  label,
+                                                  reachedExpectedFocus ? 1 : 0,
+                                                  advancedFocusTargetName(snapshot.advancedFocusTarget),
+                                                  static_cast<int>(snapshot.currentCategory),
+                                                  snapshot.visibleCurrentPageChildWindowCount,
+                                                  snapshot.currentPageRenderedDxHostCount,
+                                                  snapshot.visiblePaneWindowCount,
+                                                  snapshot.createdPaneWindowCount,
+                                                  snapshot.currentPageDxHostResizeFailureCount,
+                                                  reinterpret_cast<uintptr_t>(nativeFocusAfter),
+                                                  reinterpret_cast<uintptr_t>(activePageAfter),
+                                                  reinterpret_cast<uintptr_t>(activeDxAfter)));
+        state.Require(reachedExpectedFocus,
+                      std::format(L"Preferences Advanced {} focus target not reached during tab traversal; expected {}, saw {}; category={}, "
+                                  L"native focus before=0x{:X}, after=0x{:X}, cached page=0x{:X}, active page before=0x{:X}, after=0x{:X}, "
+                                  L"active DX host before=0x{:X}, after=0x{:X}, page children={}, rendered DX hosts={}, resize failures={}.",
+                                  label,
+                                  advancedFocusTargetName(expectedTarget),
+                                  advancedFocusTargetName(snapshot.advancedFocusTarget),
+                                  static_cast<int>(snapshot.currentCategory),
+                                  reinterpret_cast<uintptr_t>(nativeFocusBefore),
+                                  reinterpret_cast<uintptr_t>(nativeFocusAfter),
+                                  reinterpret_cast<uintptr_t>(activePage),
+                                  reinterpret_cast<uintptr_t>(activePageBefore),
+                                  reinterpret_cast<uintptr_t>(activePageAfter),
+                                  reinterpret_cast<uintptr_t>(activeDxBefore),
+                                  reinterpret_cast<uintptr_t>(activeDxAfter),
+                                  snapshot.visibleCurrentPageChildWindowCount,
+                                  snapshot.currentPageRenderedDxHostCount,
+                                  snapshot.currentPageDxHostResizeFailureCount));
     };
 
     sendTab(false, PreferencesAdvancedDebugFocusTarget::AllowInsecureTlsAutomationToggle, L"Allow insecure TLS automation toggle");
@@ -5391,16 +5384,35 @@
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Editors/Mouse navigation.");
     PumpPendingMessages();
 
-    for (int i = 0; i < 3; ++i)
+    const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            outSnapshot = {};
+            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        }
+
+        outSnapshot = {};
+        return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
+    };
 
     PreferencesDebugSnapshot snapshot{};
-    state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot for Editors page DX statics test.");
-    state.Require(snapshot.currentCategory == kPrefCategoryEditors, L"Preferences navigation did not move to the Editors category.");
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryEditors), L"Failed to select the Preferences Editors category for DX statics test.");
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.currentCategory == kPrefCategoryEditors && value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_EDITORS) &&
+               value.currentPageDxHostResizeFailureCount == 0u;
+    },
+                      snapshot),
+                  L"Preferences navigation did not move to the Editors category.");
     state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_EDITORS), L"Preferences page title did not switch to Editors.");
     state.Require(snapshot.visiblePaneWindowCount == 0u,
                   std::format(L"Preferences Editors page should not keep a dedicated visible pane host after direct-host migration; saw {}.",
@@ -5417,15 +5429,15 @@
     state.Require(snapshot.currentPageDxHostResizeFailureCount == 0u, L"Preferences Editors page should not report DxUi resize failures after navigation.");
     state.Require(snapshot.shellDxHostResizeFailureCount == 0u, L"Preferences shell should stay resize-failure free after Editors navigation.");
 
-    for (int i = 0; i < 2; ++i)
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryMouse), L"Failed to select the Preferences Mouse category for DX statics test.");
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
     {
-        SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
-        SendMessageW(categoryTreeHost, WM_KEYUP, VK_DOWN, 0);
-        PumpPendingMessages();
-    }
-
-    state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot for Mouse page DX statics test.");
-    state.Require(snapshot.currentCategory == kPrefCategoryMouse, L"Preferences navigation did not move to the Mouse category.");
+        return value.currentCategory == kPrefCategoryMouse && value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_MOUSE) &&
+               value.currentPageDxHostResizeFailureCount == 0u;
+    },
+                      snapshot),
+                  L"Preferences navigation did not move to the Mouse category.");
     state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_MOUSE), L"Preferences page title did not switch to Mouse.");
     state.Require(snapshot.visiblePaneWindowCount == 0u,
                   std::format(L"Preferences Mouse page should not keep a dedicated visible pane host after direct-host migration; saw {}.",
@@ -5495,12 +5507,13 @@
             return false;
         }
 
-        const auto navigateFromHomeByDownCount = [&](int downCount) noexcept
+        const auto navigateFromHomeToCategory = [&](const PrefCategory category) noexcept
         {
             SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
             SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
             PumpPendingMessages();
 
+            const int downCount = PreferencesRootRowForCategory(category);
             for (int i = 0; i < downCount; ++i)
             {
                 SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
@@ -5510,9 +5523,9 @@
         };
 
         const auto verifyNoteRoundTrip =
-            [&](const PrefCategory expectedCategory, const int downCount, const UINT titleId, const UINT descriptionId, std::wstring_view pageLabel) noexcept
+            [&](const PrefCategory expectedCategory, const UINT titleId, const UINT descriptionId, std::wstring_view pageLabel) noexcept
         {
-            navigateFromHomeByDownCount(downCount);
+            navigateFromHomeToCategory(expectedCategory);
 
             PreferencesDebugSnapshot snapshot{};
             state.Require(
@@ -5578,7 +5591,7 @@
                                       context,
                                       snapshot.createdPaneWindowCount));
 
-            navigateFromHomeByDownCount(downCount);
+            navigateFromHomeToCategory(expectedCategory);
 
             snapshot = {};
             state.Require(
@@ -5616,13 +5629,13 @@
         state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, std::format(L"Failed to focus the Preferences category host during {}.", context));
         PumpPendingMessages();
 
-        verifyNoteRoundTrip(kPrefCategoryEditors, 3, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC, L"Editors");
+        verifyNoteRoundTrip(kPrefCategoryEditors, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC, L"Editors");
         if (! state.failure.empty())
         {
             return false;
         }
 
-        verifyNoteRoundTrip(kPrefCategoryMouse, 5, IDS_PREFS_CAT_MOUSE, IDS_PREFS_CAT_MOUSE_DESC, L"Mouse");
+        verifyNoteRoundTrip(kPrefCategoryMouse, IDS_PREFS_CAT_MOUSE, IDS_PREFS_CAT_MOUSE_DESC, L"Mouse");
 
         return state.failure.empty();
     };

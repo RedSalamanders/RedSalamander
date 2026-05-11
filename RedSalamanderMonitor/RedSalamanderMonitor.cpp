@@ -23,14 +23,12 @@
 #include <Windows.h>
 
 #include <bcrypt.h>
-#include <commctrl.h>
 #include <commdlg.h>
 #include <d2d1.h>
 #include <d2d1helper.h>
 #include <shellapi.h>
 #include <shellscalingapi.h>
 #pragma comment(lib, "Bcrypt.lib")
-#pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Shcore.lib")
 
@@ -2451,6 +2449,43 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
                                     g_statusStrip ? g_statusStrip->GetSectionCount() : 0u,
                                     g_filterMask,
                                     S_OK);
+
+        constexpr size_t kSelfTestEtwBurstCount = 260u;
+        const size_t linesBeforeBurst           = g_colorView.GetTotalLineCount();
+        const auto etwBurstStarted              = std::chrono::steady_clock::now();
+        for (size_t i = 0; i < kSelfTestEtwBurstCount; ++i)
+        {
+            Debug::InfoParam info{};
+            info.processID = ::GetCurrentProcessId();
+            info.threadID  = ::GetCurrentThreadId();
+            info.type      = (i % 2u) == 0u ? Debug::InfoParam::Type::Warning : Debug::InfoParam::Type::Error;
+            g_colorView.QueueEtwEvent(info, std::format(L"Monitor selftest ETW batch event {}", i));
+        }
+
+        MSG msg{};
+        for (int pump = 0; pump < 64 && g_colorView.GetTotalLineCount() < linesBeforeBurst + kSelfTestEtwBurstCount; ++pump)
+        {
+            while (::PeekMessageW(&msg, g_hColorView.get(), 0, 0, PM_REMOVE))
+            {
+                ::TranslateMessage(&msg);
+                ::DispatchMessageW(&msg);
+            }
+            if (g_colorView.GetTotalLineCount() >= linesBeforeBurst + kSelfTestEtwBurstCount)
+                break;
+            ::Sleep(1);
+        }
+
+        UpdateStatusBar();
+        const size_t linesAfterBurst = g_colorView.GetTotalLineCount();
+        const bool burstDrained      = linesAfterBurst >= linesBeforeBurst + kSelfTestEtwBurstCount;
+        passed &= require(L"etw batch queue drained",
+                          burstDrained,
+                          std::format(L"before={} after={} expectedDelta={}", linesBeforeBurst, linesAfterBurst, kSelfTestEtwBurstCount));
+        Debug::Perf::EmitDurationUs(L"monitor.etw.selftest_burst_drain_us",
+                                    Debug::Perf::ElapsedUs(etwBurstStarted),
+                                    static_cast<uint64_t>(kSelfTestEtwBurstCount),
+                                    static_cast<uint64_t>(linesAfterBurst - linesBeforeBurst),
+                                    burstDrained ? S_OK : E_FAIL);
     }
 
     Debug::Perf::EmitValue(L"monitor.ui.toolbar_render_count", g_toolbarDxHost.DebugGetRenderCount(), S_OK);
@@ -2900,12 +2935,6 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
     g_hInstance = hInstance; // Store instance handle in our global variable
 
-    // Initialize common controls (for toolbar)
-    INITCOMMONCONTROLSEX icc{};
-    icc.dwSize = sizeof(icc);
-    icc.dwICC  = ICC_BAR_CLASSES;
-    InitCommonControlsEx(&icc);
-
     WNDCLASSEXW wcex{};
     wcex.cbSize        = sizeof(WNDCLASSEX);
     wcex.style         = CS_HREDRAW | CS_VREDRAW;
@@ -3319,15 +3348,14 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_VIEW_TOOLBAR:
         {
-            HMENU hMenu                 = GetMenu(hWnd);
-            const UINT state            = GetMenuState(hMenu, IDM_VIEW_TOOLBAR, MF_BYCOMMAND);
-            const bool currentlyChecked = (state & MF_CHECKED) != 0;
+            HMENU hMenu             = GetMenu(hWnd);
+            const bool nextVisible  = ! g_toolbarVisible;
             if (g_hToolbar)
             {
-                ShowWindow(g_hToolbar.get(), currentlyChecked ? SW_HIDE : SW_SHOW);
+                ShowWindow(g_hToolbar.get(), nextVisible ? SW_SHOW : SW_HIDE);
             }
-            g_toolbarVisible = ! currentlyChecked;
-            CheckMenuItem(hMenu, IDM_VIEW_TOOLBAR, static_cast<UINT>(MF_BYCOMMAND | (currentlyChecked ? MF_UNCHECKED : MF_CHECKED)));
+            g_toolbarVisible = nextVisible;
+            CheckMenuItem(hMenu, IDM_VIEW_TOOLBAR, static_cast<UINT>(MF_BYCOMMAND | (nextVisible ? MF_CHECKED : MF_UNCHECKED)));
             AdjustLayout(hWnd);
             break;
         }

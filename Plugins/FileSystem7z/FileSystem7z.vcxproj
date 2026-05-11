@@ -146,6 +146,14 @@
     <ClInclude Include="FileSystem7zResources.h" />
     <ResourceCompile Include="FileSystem7zResources.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Lang\ja-JP\FileSystem7z-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{e579a255-552d-55ad-ba6d-68c73d079552}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

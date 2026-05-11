@@ -85,6 +85,31 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     return EqualsNoCase(pluginShortId, L"file");
 }
 
+[[nodiscard]] bool OpenClipboardWithRetries(HWND ownerWindow) noexcept
+{
+    constexpr int kClipboardOpenRetryCount = 20;
+    constexpr DWORD kClipboardRetryDelayMs = 10;
+
+    for (int attempt = 0; attempt < kClipboardOpenRetryCount; ++attempt)
+    {
+        if (OpenClipboard(ownerWindow) != 0)
+        {
+            return true;
+        }
+
+        if ((attempt + 1) < kClipboardOpenRetryCount)
+        {
+            if (GetOpenClipboardWindow() == nullptr)
+            {
+                static_cast<void>(CloseClipboard());
+            }
+            Sleep(kClipboardRetryDelayMs);
+        }
+    }
+
+    return false;
+}
+
 [[nodiscard]] bool SetClipboardUnicodeText(HWND ownerWindow, std::wstring_view text) noexcept
 {
     if (! ownerWindow)
@@ -117,7 +142,7 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     out[text.size()] = L'\0';
     GlobalUnlock(memory.get());
 
-    if (OpenClipboard(ownerWindow) == 0)
+    if (! OpenClipboardWithRetries(ownerWindow))
     {
         return false;
     }

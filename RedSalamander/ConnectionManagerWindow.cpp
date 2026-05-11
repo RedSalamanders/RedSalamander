@@ -90,14 +90,15 @@ constexpr float kListGridRowHeight    = 28.0f;
 constexpr float kFooterButtonHeight   = 32.0f;
 constexpr float kFooterButtonWidth    = 96.0f;
 constexpr float kFooterButtonGap      = 8.0f;
-constexpr float kFormLabelWidthDip    = 140.0f;
-constexpr float kFormLabelGapDip      = 8.0f;
-constexpr float kFormRowHeightDip     = 28.0f;
-constexpr float kFormRowGapDip        = 4.0f;
-constexpr float kFormSectionGapDip    = 8.0f;
-constexpr float kFormControlHeightDip = 24.0f;
-constexpr float kListButtonHeightDip  = 26.0f;
-constexpr float kListButtonGapDip     = 6.0f;
+constexpr float kFormLabelWidthDip          = 140.0f;
+constexpr float kFormLabelGapDip            = 8.0f;
+constexpr float kFormRowHeightDip           = 32.0f;
+constexpr float kFormRowGapDip              = 4.0f;
+constexpr float kFormSectionGapDip          = 8.0f;
+constexpr float kFormControlHeightDip       = 28.0f;
+constexpr float kEditorRightContentInsetDip = 20.0f;
+constexpr float kListButtonHeightDip        = 26.0f;
+constexpr float kListButtonGapDip           = 6.0f;
 
 class WindowImpl;
 std::atomic<HWND> g_singleInstance{nullptr};
@@ -823,6 +824,7 @@ public:
     [[nodiscard]] bool DebugSetProtocolPluginId(std::wstring_view pluginId) noexcept;
     [[nodiscard]] bool DebugGetAlternateProtocolPluginId(std::wstring_view baselinePluginId, std::wstring& outPluginId) const noexcept;
     [[nodiscard]] bool DebugGetControlClientRect(const Control* control, RECT& outRect) const noexcept;
+    [[nodiscard]] bool DebugScrollEditorControlIntoView(const Control* control) noexcept;
     [[nodiscard]] bool DebugFocusTextField(TextField* edit) noexcept;
     [[nodiscard]] bool DebugSetTextFieldText(TextField* edit, std::wstring_view text) noexcept;
     [[nodiscard]] bool DebugGetTextFieldText(const TextField* edit, std::wstring& outText) const noexcept;
@@ -854,6 +856,10 @@ public:
     [[nodiscard]] Toggle* DebugGetS3UseHttpsToggle() noexcept
     {
         return _toggleS3UseHttps;
+    }
+    [[nodiscard]] bool DebugScrollS3UseHttpsToggleIntoView() noexcept
+    {
+        return DebugScrollEditorControlIntoView(_toggleS3UseHttps);
     }
     [[nodiscard]] HWND DebugGetHwnd() const noexcept
     {
@@ -1375,11 +1381,11 @@ void WindowImpl::Layout() noexcept
     const float listLeft     = clientDip.left + pad;
     const float listTop      = clientDip.top + pad;
     const float listRight    = listLeft + kListPaneWidthDip;
-    const float listBottom   = footerTop;
+    const float listBottom   = (std::max)(listTop, clientDip.bottom - pad);
     const float editorLeft   = listRight + pad;
     const float editorTop    = listTop;
     const float editorRight  = clientDip.right - pad;
-    const float editorBottom = listBottom;
+    const float editorBottom = (std::max)(editorTop, footerTop - pad);
 
     if (_listPane)
     {
@@ -1391,7 +1397,7 @@ void WindowImpl::Layout() noexcept
     }
     if (_footerPane)
     {
-        _footerPane->SetBounds(D2D1::RectF(clientDip.left + pad, footerTop, clientDip.right - pad, clientDip.bottom - pad));
+        _footerPane->SetBounds(D2D1::RectF(editorLeft, footerTop, clientDip.right - pad, clientDip.bottom - pad));
     }
 
     // List pane internal layout: the grid (with its own column header carrying
@@ -1467,24 +1473,27 @@ void WindowImpl::LayoutEditorForm(D2D1_RECT_F editorRect) noexcept
     constexpr float kCardPaddingY      = 8.0f;
     constexpr float kCardOuterPaddingY = 4.0f;
 
-    const float left      = editorRect.left + kCardPaddingX;
-    const float right     = editorRect.right - kCardPaddingX;
     const float cardLeft  = editorRect.left;
-    const float cardRight = editorRect.right;
+    const float cardRight = (std::max)(cardLeft, editorRect.right - kEditorRightContentInsetDip);
+    const float left      = cardLeft + kCardPaddingX;
+    const float right     = (std::max)(left, cardRight - kCardPaddingX);
     const float labelLeft = left;
     const float ctrlLeft  = labelLeft + kFormLabelWidthDip + kFormLabelGapDip;
-    const float ctrlRight = right;
+    const float ctrlRight = (std::max)(ctrlLeft, right);
 
     float y = editorRect.top + kCardOuterPaddingY;
 
     // Track the top of each card and finalise its bounds when the section ends.
     CardPanel* currentCard = nullptr;
     float currentCardTop   = y;
+    bool pendingCardGap    = false;
     auto finishCurrentCard = [&]() noexcept
     {
         if (currentCard)
         {
-            currentCard->SetBounds(D2D1::RectF(cardLeft, currentCardTop, cardRight, y + kCardPaddingY));
+            y += kCardPaddingY;
+            currentCard->SetBounds(D2D1::RectF(cardLeft, currentCardTop, cardRight, y));
+            pendingCardGap = true;
         }
         currentCard = nullptr;
     };
@@ -1495,14 +1504,19 @@ void WindowImpl::LayoutEditorForm(D2D1_RECT_F editorRect) noexcept
         {
             return;
         }
-        currentCard    = card;
-        currentCardTop = y;
-        y += kCardPaddingY;
+        if (pendingCardGap)
+        {
+            y += kFormSectionGapDip;
+            pendingCardGap = false;
+        }
         if (sectionLabel)
         {
             sectionLabel->SetBounds(D2D1::RectF(left, y, right, y + kFormRowHeightDip));
             y += kFormRowHeightDip + kFormRowGapDip;
         }
+        currentCard    = card;
+        currentCardTop = y;
+        y += kCardPaddingY;
     };
 
     auto layoutSection = [&](Label* section, CardPanel* card)
@@ -1516,11 +1530,6 @@ void WindowImpl::LayoutEditorForm(D2D1_RECT_F editorRect) noexcept
                 // the next visible section.
                 finishCurrentCard();
                 return;
-            }
-            // Add a bit of breathing room between cards.
-            if (currentCard)
-            {
-                y += kFormSectionGapDip;
             }
             beginCard(card, section);
             return;
@@ -1614,6 +1623,7 @@ void WindowImpl::LayoutEditorForm(D2D1_RECT_F editorRect) noexcept
     layoutRow(_labelIgnoreSslTrust, _toggleIgnoreSslTrust);
 
     layoutSection(_sectionS3, _s3Card);
+    layoutRow(_labelS3EndpointOverride, _editS3EndpointOverride);
     layoutRow(_labelS3UseVirtualAddressing, _toggleS3UseVirtualAddressing);
     layoutRow(_labelS3UseHttps, _toggleS3UseHttps);
     layoutRow(_labelS3VerifyTls, _toggleS3VerifyTls);
@@ -1621,12 +1631,6 @@ void WindowImpl::LayoutEditorForm(D2D1_RECT_F editorRect) noexcept
     layoutSection(_sectionSsh, _sshCard);
     layoutRowWithAction(_labelSshPrivateKey, _editSshPrivateKey, _btnSshPrivateKeyBrowse);
     layoutRowWithAction(_labelSshKnownHosts, _editSshKnownHosts, _btnSshKnownHostsBrowse);
-
-    // S3 endpoint override sits in its own card at the very end so that the
-    // legacy tab-order quirk (`S3EndpointOverride` after the SSH browse
-    // buttons) is preserved while still being visually grouped.
-    layoutSection(nullptr, _s3EndpointCard);
-    layoutRow(_labelS3EndpointOverride, _editS3EndpointOverride);
 
     // Close the trailing card.
     finishCurrentCard();
@@ -1793,7 +1797,7 @@ void WindowImpl::ApplyEditorVisibility(const EditorVisibility& v) noexcept
     setVisible(_authCard, v.hasSelection);
     setVisible(_s3Card, v.showS3Section);
     setVisible(_sshCard, v.showSshSection);
-    setVisible(_s3EndpointCard, v.showS3Section);
+    setVisible(_s3EndpointCard, false);
 
     // Connection group
     setVisible(_sectionConnection, v.hasSelection);
@@ -3456,6 +3460,12 @@ namespace
 {
     return (control && control->IsVisible()) ? 1u : 0u;
 }
+
+[[nodiscard]] bool HasUsableRect(const D2D1_RECT_F& rect) noexcept
+{
+    return rect.right > rect.left && rect.bottom > rect.top;
+}
+
 } // namespace
 
 void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const noexcept
@@ -3515,6 +3525,108 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     out.dxListRenderCount        = _dxHost.DebugGetRenderCount();
     out.dxListResizeCount        = _dxHost.DebugGetResizeCount();
     out.dxListResizeFailureCount = _dxHost.DebugGetResizeFailureCount();
+    out.dxModifierState          = _dxHost.DebugGetModifierState();
+
+    const D2D1_RECT_F clientDip = _dxHost.GetClientBoundsDip();
+    if (_listPane && _newButton)
+    {
+        const D2D1_RECT_F listPaneBounds = _listPane->GetBounds();
+        const D2D1_RECT_F newButtonBounds = _newButton->GetBounds();
+        out.listTopGapDip                = listPaneBounds.top - clientDip.top;
+        out.listButtonBottomGapDip       = clientDip.bottom - newButtonBounds.bottom;
+        const float gapDelta             = out.listButtonBottomGapDip > out.listTopGapDip ? out.listButtonBottomGapDip - out.listTopGapDip
+                                                                                           : out.listTopGapDip - out.listButtonBottomGapDip;
+        out.layoutListButtonsMirrorTopGap = gapDelta <= 1.0f;
+    }
+
+    struct DebugCardGeometry
+    {
+        D2D1_RECT_F card{};
+        const Label* title = nullptr;
+    };
+    std::vector<DebugCardGeometry> visibleCards;
+    auto addCardGeometry = [&](const CardPanel* card, const Label* title) noexcept
+    {
+        if (card && card->IsVisible() && HasUsableRect(card->GetBounds()))
+        {
+            visibleCards.push_back(DebugCardGeometry{.card = card->GetBounds(), .title = title});
+        }
+    };
+    addCardGeometry(_connectionCard, _sectionConnection);
+    addCardGeometry(_authCard, _sectionAuth);
+    addCardGeometry(_s3Card, _sectionS3);
+    addCardGeometry(_sshCard, _sectionSsh);
+    addCardGeometry(_s3EndpointCard, nullptr);
+    std::sort(visibleCards.begin(),
+              visibleCards.end(),
+              [](const DebugCardGeometry& lhs, const DebugCardGeometry& rhs) noexcept { return lhs.card.top < rhs.card.top; });
+    out.layoutCardsDoNotOverlap = true;
+    out.minVisibleCardGapDip    = visibleCards.size() > 1u ? std::numeric_limits<float>::max() : 0.0f;
+    for (size_t i = 1u; i < visibleCards.size(); ++i)
+    {
+        const float gap = visibleCards[i].card.top - visibleCards[i - 1u].card.bottom;
+        out.minVisibleCardGapDip = (std::min)(out.minVisibleCardGapDip, gap);
+        if (gap < -0.5f)
+        {
+            out.layoutCardsDoNotOverlap = false;
+        }
+    }
+    bool sawTitledCard = false;
+    out.layoutSectionTitlesOutsideCards = true;
+    for (const DebugCardGeometry& entry : visibleCards)
+    {
+        if (! entry.title || ! entry.title->IsVisible())
+        {
+            continue;
+        }
+        sawTitledCard = true;
+        const D2D1_RECT_F titleBounds = entry.title->GetBounds();
+        constexpr float kToleranceDip = 0.5f;
+        if (! HasUsableRect(titleBounds) || titleBounds.bottom > entry.card.top - kToleranceDip || titleBounds.left < entry.card.left - kToleranceDip ||
+            titleBounds.right > entry.card.right + kToleranceDip)
+        {
+            out.layoutSectionTitlesOutsideCards = false;
+        }
+    }
+    out.layoutSectionTitlesOutsideCards = out.layoutSectionTitlesOutsideCards && sawTitledCard;
+
+    if (_editorPane && _connectionCard && _connectionCard->IsVisible())
+    {
+        const D2D1_RECT_F editorBounds = _editorPane->GetBounds();
+        const D2D1_RECT_F cardBounds   = _connectionCard->GetBounds();
+        const float viewportRight      = _editorPane->NeedsScrollbar() ? editorBounds.right - _editorPane->GetScrollbarThickness() : editorBounds.right;
+        out.editorRightGapDip          = editorBounds.right - cardBounds.right;
+        out.editorScrollbarGapDip      = viewportRight - cardBounds.right;
+        out.layoutEditorKeepsRightGap  = out.editorScrollbarGapDip >= 6.0f;
+    }
+
+    auto observeTextFieldHeight = [&](const TextField* edit) noexcept
+    {
+        if (! edit || ! edit->IsVisible())
+        {
+            return;
+        }
+        const D2D1_RECT_F bounds = edit->GetBounds();
+        if (! HasUsableRect(bounds))
+        {
+            return;
+        }
+        const float height = bounds.bottom - bounds.top;
+        out.minVisibleTextFieldHeightDip =
+            out.minVisibleTextFieldHeightDip <= 0.0f ? height : (std::min)(out.minVisibleTextFieldHeightDip, height);
+    };
+    observeTextFieldHeight(_editName);
+    observeTextFieldHeight(_editHost);
+    observeTextFieldHeight(_editPort);
+    observeTextFieldHeight(_editInitialPath);
+    observeTextFieldHeight(_editCopyMoveMaxConcurrency);
+    observeTextFieldHeight(_editDeleteMaxConcurrency);
+    observeTextFieldHeight(_editUser);
+    observeTextFieldHeight(_editSecret);
+    observeTextFieldHeight(_editS3EndpointOverride);
+    observeTextFieldHeight(_editSshPrivateKey);
+    observeTextFieldHeight(_editSshKnownHosts);
+    out.layoutTextFieldsAvoidClipping = out.minVisibleTextFieldHeightDip >= 28.0f;
 
     // Selected list state
     if (const auto modelIndex = GetSelectedModelIndex(); modelIndex && *modelIndex < _connections.size())
@@ -3573,10 +3685,30 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     // it back to a kind for the test surface.
     out.focusKind = ConnectionManagerDebugFocusKind::None;
     out.focusLabel.clear();
+    const HWND nativeFocus  = GetFocus();
+    const HWND hostHwnd     = _hwnd.get();
+    const HWND textEditHwnd = _dxHost.GetTextInputBridgeHwnd();
+    out.nativeFocusIsHost   = nativeFocus && hostHwnd && nativeFocus == hostHwnd;
+    out.nativeFocusIsTextEdit = nativeFocus && textEditHwnd && nativeFocus == textEditHwnd;
+    out.nativeFocusInDialog =
+        nativeFocus && hostHwnd && (nativeFocus == hostHwnd || IsChild(hostHwnd, nativeFocus) != FALSE);
+    out.newButtonVisible      = _newButton && _newButton->IsVisible();
+    out.newButtonEnabled      = _newButton && _newButton->IsEnabled();
+    out.newButtonFocusable    = _newButton && _newButton->IsFocusable();
+    out.renameButtonVisible   = _renameButton && _renameButton->IsVisible();
+    out.renameButtonEnabled   = _renameButton && _renameButton->IsEnabled();
+    out.renameButtonFocusable = _renameButton && _renameButton->IsFocusable();
+    out.removeButtonVisible   = _removeButton && _removeButton->IsVisible();
+    out.removeButtonEnabled   = _removeButton && _removeButton->IsEnabled();
+    out.removeButtonFocusable = _removeButton && _removeButton->IsFocusable();
     const auto buttonText   = [](const Button* button) -> std::wstring { return button ? std::wstring(button->GetText()) : std::wstring{}; };
     const auto resourceText = [](UINT stringId) -> std::wstring { return LoadStringResource(nullptr, stringId); };
     if (const Control* focused = _dxHost.GetFocusControl())
     {
+        out.focusControlPresent   = true;
+        out.focusControlVisible   = focused->IsVisible();
+        out.focusControlEnabled   = focused->IsEnabled();
+        out.focusControlFocusable = focused->IsFocusable();
         if (focused == _list)
         {
             out.focusKind = ConnectionManagerDebugFocusKind::List;
@@ -3889,12 +4021,88 @@ bool WindowImpl::DebugGetControlClientRect(const Control* control, RECT& outRect
         outRect = {};
         return false;
     }
+    const auto isEditorChild = [this, control]() noexcept
+    {
+        if (! _editorPane)
+        {
+            return false;
+        }
+
+        for (const auto& child : _editorPane->GetChildren())
+        {
+            if (child.get() == control)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
     const D2D1_RECT_F bounds = control->GetBounds();
     const float scale        = _dxHost.DipsToPixels(1.0f);
+    const float yOffsetDip   = isEditorChild() ? _editorPane->GetScrollOffset() : 0.0f;
     outRect.left             = static_cast<LONG>(std::floor(bounds.left * scale));
-    outRect.top              = static_cast<LONG>(std::floor(bounds.top * scale));
+    outRect.top              = static_cast<LONG>(std::floor((bounds.top - yOffsetDip) * scale));
     outRect.right            = static_cast<LONG>(std::ceil(bounds.right * scale));
-    outRect.bottom           = static_cast<LONG>(std::ceil(bounds.bottom * scale));
+    outRect.bottom           = static_cast<LONG>(std::ceil((bounds.bottom - yOffsetDip) * scale));
+    return true;
+}
+
+bool WindowImpl::DebugScrollEditorControlIntoView(const Control* control) noexcept
+{
+    if (! control || ! _editorPane || ! control->IsVisible())
+    {
+        return false;
+    }
+
+    bool editorChild = false;
+    for (const auto& child : _editorPane->GetChildren())
+    {
+        if (child.get() == control)
+        {
+            editorChild = true;
+            break;
+        }
+    }
+    if (! editorChild)
+    {
+        return false;
+    }
+
+    D2D1_RECT_F viewport = _editorPane->GetBounds();
+    if (_editorPane->NeedsScrollbar())
+    {
+        if (_editorPane->IsRightToLeft())
+        {
+            viewport.left += _editorPane->GetScrollbarThickness();
+        }
+        else
+        {
+            viewport.right -= _editorPane->GetScrollbarThickness();
+        }
+    }
+    if (viewport.bottom <= viewport.top)
+    {
+        return false;
+    }
+
+    constexpr float kPaddingDip = 8.0f;
+    const D2D1_RECT_F bounds    = control->GetBounds();
+    const float currentOffset   = _editorPane->GetScrollOffset();
+    const float visibleTop      = viewport.top + currentOffset;
+    const float visibleBottom   = viewport.bottom + currentOffset;
+    float nextOffset            = currentOffset;
+    if (bounds.top < visibleTop + kPaddingDip)
+    {
+        nextOffset = bounds.top - viewport.top - kPaddingDip;
+    }
+    else if (bounds.bottom > visibleBottom - kPaddingDip)
+    {
+        nextOffset = bounds.bottom - viewport.bottom + kPaddingDip;
+    }
+
+    _editorPane->SetScrollOffset(nextOffset);
+    _dxHost.Invalidate();
     return true;
 }
 
@@ -4177,6 +4385,17 @@ bool DebugAcknowledgeS3InsecureTlsPrompt() noexcept
     return true;
 }
 
+bool DebugScrollS3UseHttpsToggleIntoView() noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugScrollS3UseHttpsToggleIntoView();
+}
+
 bool DebugGetSavePasswordToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept
 {
     outHost         = nullptr;
@@ -4429,6 +4648,11 @@ bool DebugGetConnectionManagerNameHostHandle(HWND& outHost) noexcept
 bool DebugAcknowledgeConnectionManagerS3InsecureTlsPrompt() noexcept
 {
     return RedSalamander::ConnectionManager::SingleCanvas::DebugAcknowledgeS3InsecureTlsPrompt();
+}
+
+bool DebugScrollConnectionManagerS3UseHttpsToggleIntoView() noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugScrollS3UseHttpsToggleIntoView();
 }
 
 bool DebugGetConnectionManagerSavePasswordToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept

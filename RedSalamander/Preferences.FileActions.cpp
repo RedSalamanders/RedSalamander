@@ -18,6 +18,7 @@
 #include "FileActionResolver.h"
 #include "Helpers.h"
 #include "UiMetrics.h"
+#include "ViewerPluginManager.h"
 #include "resource.h"
 
 using RedSalamander::DxUi::Button;
@@ -36,6 +37,7 @@ using RedSalamander::DxUi::GridVisibleWorkMetrics;
 using RedSalamander::DxUi::IDxGridModel;
 using RedSalamander::DxUi::Label;
 using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::SortDirection;
 using RedSalamander::DxUi::TabControl;
 using RedSalamander::DxUi::TextField;
 
@@ -74,6 +76,29 @@ constexpr std::wstring_view kComboActionViewer   = L"viewerPlugin";
         }
     }
     return true;
+}
+
+[[nodiscard]] int CompareNoCase(std::wstring_view lhs, std::wstring_view rhs) noexcept
+{
+    const size_t commonSize = std::min(lhs.size(), rhs.size());
+    for (size_t index = 0u; index < commonSize; ++index)
+    {
+        const wchar_t lhsCh = ToLower(lhs[index]);
+        const wchar_t rhsCh = ToLower(rhs[index]);
+        if (lhsCh < rhsCh)
+        {
+            return -1;
+        }
+        if (lhsCh > rhsCh)
+        {
+            return 1;
+        }
+    }
+    if (lhs.size() == rhs.size())
+    {
+        return 0;
+    }
+    return lhs.size() < rhs.size() ? -1 : 1;
 }
 
 [[nodiscard]] std::wstring ToLowerString(std::wstring text)
@@ -179,6 +204,11 @@ constexpr std::wstring_view kComboActionViewer   = L"viewerPlugin";
 [[nodiscard]] std::wstring FileActionDisplayName(const Settings::FileActionDefinition& action)
 {
     return action.displayName.empty() ? action.id : action.displayName;
+}
+
+[[nodiscard]] std::wstring ViewerPluginDisplayName(const ViewerPluginManager::PluginEntry& plugin)
+{
+    return plugin.name.empty() ? plugin.id : plugin.name;
 }
 
 [[nodiscard]] std::wstring MatchKindValue(const Settings::FileActionMatchKind kind)
@@ -430,6 +460,52 @@ public:
         _rows = std::move(rows);
     }
 
+    void SortRows(const GridSortSpec& sortSpec)
+    {
+        if (_rows.empty())
+        {
+            return;
+        }
+
+        const bool sortBySourceOrder =
+            sortSpec.direction == SortDirection::None || sortSpec.columnIndex >= _columns.size() || ! _columns[sortSpec.columnIndex].sortable;
+        if (sortBySourceOrder)
+        {
+            std::stable_sort(_rows.begin(), _rows.end(), [](const FileActionGridRow& lhs, const FileActionGridRow& rhs) noexcept
+            {
+                if (lhs.sourceIndex != rhs.sourceIndex)
+                {
+                    return lhs.sourceIndex < rhs.sourceIndex;
+                }
+                return lhs.stableId < rhs.stableId;
+            });
+            return;
+        }
+
+        const auto cellText = [&](const FileActionGridRow& row, const size_t columnIndex) noexcept -> std::wstring_view
+        {
+            return columnIndex < row.cells.size() ? std::wstring_view(row.cells[columnIndex]) : std::wstring_view{};
+        };
+
+        std::stable_sort(_rows.begin(), _rows.end(), [&](const FileActionGridRow& lhs, const FileActionGridRow& rhs) noexcept
+        {
+            int comparison = CompareNoCase(cellText(lhs, sortSpec.columnIndex), cellText(rhs, sortSpec.columnIndex));
+            if (comparison == 0 && sortSpec.columnIndex != 0u)
+            {
+                comparison = CompareNoCase(cellText(lhs, 0u), cellText(rhs, 0u));
+            }
+            if (comparison == 0 && lhs.sourceIndex != rhs.sourceIndex)
+            {
+                comparison = lhs.sourceIndex < rhs.sourceIndex ? -1 : 1;
+            }
+            if (comparison == 0)
+            {
+                return lhs.stableId < rhs.stableId;
+            }
+            return sortSpec.direction == SortDirection::Ascending ? comparison < 0 : comparison > 0;
+        });
+    }
+
     [[nodiscard]] const FileActionGridRow* GetRow(const size_t rowIndex) const noexcept
     {
         return rowIndex < _rows.size() ? &_rows[rowIndex] : nullptr;
@@ -539,34 +615,34 @@ namespace
 [[nodiscard]] std::vector<GridColumnDesc> ViewerAssociationColumns()
 {
     return {
-        GridColumnDesc{.id = L"match", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_MATCH), .widthDip = 96.0f, .minWidthDip = 64.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"computer", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_COMPUTER), .widthDip = 110.0f, .minWidthDip = 80.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"view", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_VIEW), .widthDip = 180.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"alternateView", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_ALTERNATE_VIEW), .widthDip = 210.0f, .minWidthDip = 130.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"status", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_STATUS), .widthDip = 120.0f, .minWidthDip = 90.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
+        GridColumnDesc{.id = L"match", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_MATCH), .widthDip = 96.0f, .minWidthDip = 64.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"computer", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_COMPUTER), .widthDip = 110.0f, .minWidthDip = 80.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"view", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_VIEW), .widthDip = 180.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"alternateView", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_ALTERNATE_VIEW), .widthDip = 210.0f, .minWidthDip = 130.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"status", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_STATUS), .widthDip = 120.0f, .minWidthDip = 90.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
     };
 }
 
 [[nodiscard]] std::vector<GridColumnDesc> EditorAssociationColumns()
 {
     return {
-        GridColumnDesc{.id = L"match", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_MATCH), .widthDip = 88.0f, .minWidthDip = 64.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"computer", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_COMPUTER), .widthDip = 96.0f, .minWidthDip = 80.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"edit", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_EDIT), .widthDip = 140.0f, .minWidthDip = 100.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"alternateEdit", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_ALTERNATE_EDIT), .widthDip = 210.0f, .minWidthDip = 130.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"editNew", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_EDIT_NEW), .widthDip = 170.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"status", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_STATUS), .widthDip = 120.0f, .minWidthDip = 90.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
+        GridColumnDesc{.id = L"match", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_MATCH), .widthDip = 88.0f, .minWidthDip = 64.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"computer", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_COMPUTER), .widthDip = 96.0f, .minWidthDip = 80.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"edit", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_EDIT), .widthDip = 140.0f, .minWidthDip = 100.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"alternateEdit", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_ALTERNATE_EDIT), .widthDip = 210.0f, .minWidthDip = 130.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"editNew", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_EDIT_NEW), .widthDip = 170.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"status", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_STATUS), .widthDip = 120.0f, .minWidthDip = 90.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
     };
 }
 
 [[nodiscard]] std::vector<GridColumnDesc> ActionColumns()
 {
     return {
-        GridColumnDesc{.id = L"name", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_NAME), .widthDip = 180.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"type", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_TYPE), .widthDip = 140.0f, .minWidthDip = 100.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"appliesTo", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_APPLIES_TO), .widthDip = 180.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"computer", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_COMPUTER), .widthDip = 150.0f, .minWidthDip = 100.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
-        GridColumnDesc{.id = L"status", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_STATUS), .widthDip = 110.0f, .minWidthDip = 80.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false},
+        GridColumnDesc{.id = L"name", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_NAME), .widthDip = 180.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"type", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_TYPE), .widthDip = 140.0f, .minWidthDip = 100.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"appliesTo", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_APPLIES_TO), .widthDip = 180.0f, .minWidthDip = 120.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"computer", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_COMPUTER), .widthDip = 150.0f, .minWidthDip = 100.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
+        GridColumnDesc{.id = L"status", .title = LoadRes(IDS_PREFS_FILE_ACTION_COL_STATUS), .widthDip = 110.0f, .minWidthDip = 80.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false},
     };
 }
 
@@ -751,6 +827,52 @@ void SelectComboValue(ComboBox* combo, std::wstring_view value) noexcept
     combo->SetSelectedIndex(FindComboItem(combo->GetItems(), value).value_or(0u));
 }
 
+void RebuildViewerPluginOptions(PreferencesDialogState& state)
+{
+    state.viewersPluginOptions.clear();
+
+    const auto& plugins = ViewerPluginManager::GetInstance().GetPlugins();
+    state.viewersPluginOptions.reserve(plugins.size());
+    for (const ViewerPluginManager::PluginEntry& plugin : plugins)
+    {
+        if (! plugin.id.empty())
+        {
+            state.viewersPluginOptions.push_back(ViewerPluginOption{.id = plugin.id, .displayName = ViewerPluginDisplayName(plugin)});
+        }
+    }
+}
+
+[[nodiscard]] std::vector<ComboBox::Item> BuildViewerPluginComboItems(
+    PreferencesDialogState& state, const std::vector<Settings::FileActionDefinition>& actions)
+{
+    RebuildViewerPluginOptions(state);
+
+    std::vector<ComboBox::Item> items;
+    items.reserve(state.viewersPluginOptions.size() + actions.size() + 1u);
+    items.push_back(MakeComboItem({}, LoadRes(IDS_PREFS_FILE_ACTION_NONE)));
+
+    for (const ViewerPluginOption& option : state.viewersPluginOptions)
+    {
+        if (! option.id.empty())
+        {
+            items.push_back(MakeComboItem(option.id, option.displayName.empty() ? option.id : option.displayName));
+        }
+    }
+
+    for (const Settings::FileActionDefinition& action : actions)
+    {
+        if (action.kind != Settings::FileActionKind::ViewerPlugin || action.pluginId.empty() ||
+            FindComboItem(items, action.pluginId).has_value())
+        {
+            continue;
+        }
+
+        items.push_back(MakeComboItem(action.pluginId, FormatStringResource(nullptr, IDS_PREFS_FILE_ACTION_MISSING_FMT, action.pluginId)));
+    }
+
+    return items;
+}
+
 void SetTextNoNotify(TextField* field, std::wstring text) noexcept
 {
     if (field)
@@ -776,6 +898,7 @@ void SetControlBounds(TControl* control, const float left, const float top, cons
     }
 }
 
+#ifdef ENABLE_TESTS
 [[nodiscard]] RECT DipRectToPx(const RedSalamander::DxUi::WindowHost& host, const D2D1_RECT_F& rect) noexcept
 {
     RECT out{};
@@ -785,6 +908,7 @@ void SetControlBounds(TControl* control, const float left, const float top, cons
     out.bottom = static_cast<LONG>(std::lround(host.DipsToPixels(rect.bottom)));
     return out;
 }
+#endif
 } // namespace
 
 FileActionPreferencesPage::FileActionPreferencesPage(const FileActionPreferencesFamily family) noexcept : _family(family)
@@ -869,7 +993,7 @@ void FileActionPreferencesPage::ResetControlPointers() noexcept
     _actionKindCombo = nullptr;
     _actionEnabledCheckbox = nullptr;
     _pluginIdLabel = nullptr;
-    _pluginIdField = nullptr;
+    _pluginIdCombo = nullptr;
     _executableLabel = nullptr;
     _executableField = nullptr;
     _argumentsLabel = nullptr;
@@ -909,7 +1033,7 @@ void FileActionPreferencesPage::DetachDxPageHost() noexcept
     _pageContentRoot = nullptr;
     _state = nullptr;
     _hostWindow = nullptr;
-    _activeGrid = ActiveGrid::Associations;
+    _activeGrid = ActiveGrid::Actions;
     _previewActionId.clear();
     _previewReason.clear();
     _usesDxUiTypographyContext = false;
@@ -958,14 +1082,21 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
     ResetControlPointers();
 
     _tabs             = _pageContentRoot->AddChild<TabControl>();
-    _associationsPage = _tabs->AddTab<Panel>(LoadRes(IDS_PREFS_FILE_ACTION_TAB_ASSOCIATIONS));
     _actionsPage      = _tabs->AddTab<Panel>(LoadRes(IDS_PREFS_FILE_ACTION_TAB_ACTIONS));
-    _tabs->SetOnSelectionChanged([this](const size_t) noexcept
+    _associationsPage = _tabs->AddTab<Panel>(LoadRes(IDS_PREFS_FILE_ACTION_TAB_ASSOCIATIONS));
+    _activeGrid       = ActiveGrid::Actions;
+    _tabs->SetOnSelectionChanged([this](const size_t index) noexcept
     {
-        if (_pageHost)
-        {
-            _pageHost->Invalidate();
-        }
+        Debug::Perf::Scope callbackPerf(L"preferences.ui.fileactions.tab_switch_callback_us");
+        Debug::Perf::Emit(L"preferences.ui.fileactions.tab_switch",
+                          MetricFamilyText(),
+                          0u,
+                          static_cast<uint64_t>(index),
+                          _tabs && _tabs->GetSelectedPage() == _actionsPage ? 1u : 0u,
+                          S_OK);
+        _activeGrid = (_tabs && _tabs->GetSelectedPage() == _actionsPage) ? ActiveGrid::Actions : ActiveGrid::Associations;
+        callbackPerf.SetValue0(static_cast<uint64_t>(index));
+        callbackPerf.SetValue1(_activeGrid == ActiveGrid::Actions ? 1u : 0u);
     });
 
     _searchLabel = _associationsPage->AddChild<Label>();
@@ -1001,8 +1132,11 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
     _actionKindLabel = _actionsPage->AddChild<Label>();
     _actionKindCombo = _actionsPage->AddChild<ComboBox>();
     _actionEnabledCheckbox = _actionsPage->AddChild<Checkbox>(LoadRes(IDS_PREFS_FILE_ACTION_CHECK_ENABLED));
-    _pluginIdLabel = _actionsPage->AddChild<Label>();
-    _pluginIdField = _actionsPage->AddChild<TextField>();
+    if (IsViewerFamily())
+    {
+        _pluginIdLabel = _actionsPage->AddChild<Label>();
+        _pluginIdCombo = _actionsPage->AddChild<ComboBox>();
+    }
     _executableLabel = _actionsPage->AddChild<Label>();
     _executableField = _actionsPage->AddChild<TextField>();
     _argumentsLabel = _actionsPage->AddChild<Label>();
@@ -1041,6 +1175,10 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
         _editNewActionCombo->SetVariant(ComboBoxVariant::Window);
     }
     _actionKindCombo->SetVariant(ComboBoxVariant::Window);
+    if (_pluginIdCombo)
+    {
+        _pluginIdCombo->SetVariant(ComboBoxVariant::Window);
+    }
     _previewLabel->SetMultiline(true);
     _previewLabel->SetFontRole(RedSalamander::DxUi::FontRole::Small);
 
@@ -1058,6 +1196,10 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
         {
             UpdatePreview(*_state);
         }
+    });
+    _actionKindCombo->SetOnSelectionChanged([this](const size_t) noexcept
+    {
+        SyncActionFieldAvailability();
     });
     _associationSaveButton->SetPrimary(true);
     _associationSaveButton->SetOnClick([this]() noexcept
@@ -1164,7 +1306,7 @@ void FileActionPreferencesPage::SyncStaticText() noexcept
     if (_pluginIdLabel)
     {
         _pluginIdLabel->SetText(LoadRes(IDS_PREFS_FILE_ACTION_LABEL_PLUGIN_ID));
-        _pluginIdLabel->SetMnemonicTarget(_pluginIdField);
+        _pluginIdLabel->SetMnemonicTarget(_pluginIdCombo);
     }
     if (_executableLabel)
     {
@@ -1244,6 +1386,40 @@ void FileActionPreferencesPage::SyncActionCombos(PreferencesDialogState& state) 
     setActionItems(_primaryActionCombo);
     setActionItems(_alternateActionCombo);
     setActionItems(_editNewActionCombo);
+
+    if (_pluginIdCombo)
+    {
+        _pluginIdCombo->SetItems(BuildViewerPluginComboItems(state, actions));
+        _pluginIdCombo->SetSelectedIndex(0u);
+    }
+}
+
+void FileActionPreferencesPage::SyncActionFieldAvailability() noexcept
+{
+    const Settings::FileActionKind actionKind =
+        ActionKindFromValue(_actionKindCombo ? _actionKindCombo->GetSelectedValue() : std::wstring_view{});
+    const bool viewerPluginAction = IsViewerFamily() && actionKind == Settings::FileActionKind::ViewerPlugin;
+    const bool externalAction     = ! viewerPluginAction;
+
+    if (_pluginIdLabel)
+    {
+        _pluginIdLabel->SetVisible(IsViewerFamily());
+        _pluginIdLabel->SetEnabled(viewerPluginAction);
+    }
+    if (_pluginIdCombo)
+    {
+        _pluginIdCombo->SetVisible(IsViewerFamily());
+        _pluginIdCombo->SetEnabled(viewerPluginAction);
+    }
+
+    if (_executableLabel)
+    {
+        _executableLabel->SetEnabled(externalAction);
+    }
+    if (_executableField)
+    {
+        _executableField->SetEnabled(externalAction);
+    }
 }
 
 void FileActionPreferencesPage::RebuildModels(PreferencesDialogState& state) noexcept
@@ -1254,6 +1430,8 @@ void FileActionPreferencesPage::RebuildModels(PreferencesDialogState& state) noe
     }
 
     const std::wstring_view filter = IsViewerFamily() ? std::wstring_view(state.viewersSearchText) : std::wstring_view(_editorSearchText);
+    const GridSortSpec associationSortSpec = _associationsGrid ? _associationsGrid->GetSortSpec() : GridSortSpec{};
+    const GridSortSpec actionSortSpec      = _actionsGrid ? _actionsGrid->GetSortSpec() : GridSortSpec{};
     if (IsViewerFamily())
     {
         _associationsModel->SetColumns(ViewerAssociationColumns());
@@ -1267,6 +1445,8 @@ void FileActionPreferencesPage::RebuildModels(PreferencesDialogState& state) noe
         _actionsModel->SetRows(BuildActionRows(state.workingSettings.fileActions.editors.actions, filter, L"editors"));
     }
     _actionsModel->SetColumns(ActionColumns());
+    _associationsModel->SortRows(associationSortSpec);
+    _actionsModel->SortRows(actionSortSpec);
 
     if (_associationsGrid)
     {
@@ -1323,6 +1503,15 @@ void FileActionPreferencesPage::SyncAssociationFormFromSelection(PreferencesDial
             editNewActionId = rule.editNewActionId;
         }
     }
+    if (IsViewerFamily())
+    {
+        state.viewersSelectedExtensionText = MatchInputDisplay(match);
+    }
+
+    if (IsViewerFamily())
+    {
+        state.viewersSelectedExtensionText = selectedRow ? MatchInputDisplay(match) : std::wstring{};
+    }
 
     _syncing = true;
     SelectComboValue(_matchKindCombo, MatchKindValue(match.kind));
@@ -1365,12 +1554,13 @@ void FileActionPreferencesPage::SyncActionFormFromSelection(PreferencesDialogSta
     {
         _actionEnabledCheckbox->SetChecked(action.enabled);
     }
-    SetTextNoNotify(_pluginIdField, action.pluginId);
+    SelectComboValue(_pluginIdCombo, action.pluginId);
     SetTextNoNotify(_executableField, action.executablePath);
     SetTextNoNotify(_argumentsField, action.arguments);
     SetTextNoNotify(_workingDirectoryField, action.workingDirectory);
     SetTextNoNotify(_appliesToField, FormatMatches(action.appliesTo.matches));
     SetTextNoNotify(_computersField, JoinStrings(action.appliesTo.computerNames));
+    SyncActionFieldAvailability();
     _syncing = false;
 }
 
@@ -1504,20 +1694,34 @@ void FileActionPreferencesPage::LayoutPage(HWND host,
 
     const int tabHeader = UiMetrics::ScaleDip(dpi, 36);
     const int rowHeight = UiMetrics::ScaleDip(dpi, 28);
-    const int gridHeight = UiMetrics::ScaleDip(dpi, 220);
-    const int labelWidth = std::min(width / 3, UiMetrics::ScaleDip(dpi, 118));
+    RECT hostClient{};
+    static_cast<void>(GetClientRect(host, &hostClient));
+    const int hostHeight = std::max(0l, hostClient.bottom - hostClient.top);
+    const int minGridHeight = UiMetrics::ScaleDip(dpi, 220);
+    const int contentInsetX = UiMetrics::ScaleDip(dpi, 16);
+    const int contentInsetY = UiMetrics::ScaleDip(dpi, 12);
+    const int contentX = x + contentInsetX;
+    const int contentWidth = std::max(0, width - (contentInsetX * 2));
+    const int labelWidth = std::min(contentWidth / 3, UiMetrics::ScaleDip(dpi, 160));
     const int gapX = UiMetrics::ScaleDip(dpi, 8);
-    const int halfWidth = std::max(labelWidth + UiMetrics::ScaleDip(dpi, 120), (width - gapX) / 2);
+    const int halfWidth = std::max(labelWidth + UiMetrics::ScaleDip(dpi, 120), (contentWidth - gapX) / 2);
     const int fieldWidth = std::max(UiMetrics::ScaleDip(dpi, 110), halfWidth - labelWidth - gapX);
-    const int leftX = x;
-    const int rightX = x + halfWidth + gapX;
-    const int fullFieldWidth = std::max(0, width - labelWidth - gapX);
+    const int leftX = contentX;
+    const int rightX = contentX + halfWidth + gapX;
+    const int fullFieldWidth = std::max(0, contentWidth - labelWidth - gapX);
 
     const int associationRows = IsViewerFamily() ? 6 : 7;
-    const int actionRows = 8;
-    const int associationPageHeight = tabHeader + gapY + rowHeight + gapY + gridHeight + gapY + (associationRows * (rowHeight + gapY)) +
-                                      UiMetrics::ScaleDip(dpi, 58);
-    const int actionPageHeight = tabHeader + gapY + gridHeight + gapY + (actionRows * (rowHeight + gapY)) + margin;
+    const int actionRows = IsViewerFamily() ? 8 : 7;
+    const int associationAboveGridHeight = tabHeader + contentInsetY + rowHeight + gapY;
+    const int associationBelowGridHeight = gapY + (associationRows * (rowHeight + gapY)) + UiMetrics::ScaleDip(dpi, 58) + contentInsetY;
+    const int actionAboveGridHeight = tabHeader + contentInsetY;
+    const int actionBelowGridHeight = gapY + (actionRows * (rowHeight + gapY)) + margin + contentInsetY;
+    const int fixedPageHeightWithoutGrid =
+        std::max(associationAboveGridHeight + associationBelowGridHeight, actionAboveGridHeight + actionBelowGridHeight);
+    const int availablePageHeight = std::max(0, hostHeight - y - margin);
+    const int gridHeight = std::max(minGridHeight, availablePageHeight - fixedPageHeightWithoutGrid);
+    const int associationPageHeight = associationAboveGridHeight + gridHeight + associationBelowGridHeight;
+    const int actionPageHeight = actionAboveGridHeight + gridHeight + actionBelowGridHeight;
     const int pageHeight = std::max(associationPageHeight, actionPageHeight);
 
     if (_tabs)
@@ -1525,11 +1729,11 @@ void FileActionPreferencesPage::LayoutPage(HWND host,
         _tabs->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + pageHeight)));
     }
 
-    int rowY = y + tabHeader + gapY;
+    int rowY = y + tabHeader + contentInsetY;
     SetLabelBounds(_searchLabel, pxToDip(leftX), pxToDip(rowY), pxToDip(leftX + labelWidth), pxToDip(rowY + rowHeight));
-    SetControlBounds(_searchField, pxToDip(leftX + labelWidth + gapX), pxToDip(rowY), pxToDip(leftX + width), pxToDip(rowY + rowHeight));
+    SetControlBounds(_searchField, pxToDip(leftX + labelWidth + gapX), pxToDip(rowY), pxToDip(leftX + contentWidth), pxToDip(rowY + rowHeight));
     rowY += rowHeight + gapY;
-    SetControlBounds(_associationsGrid, pxToDip(leftX), pxToDip(rowY), pxToDip(leftX + width), pxToDip(rowY + gridHeight));
+    SetControlBounds(_associationsGrid, pxToDip(leftX), pxToDip(rowY), pxToDip(leftX + contentWidth), pxToDip(rowY + gridHeight));
     rowY += gridHeight + gapY;
 
     const auto layoutPair = [&](Label* label, auto* control, const int baseX, const int baseY, const int baseFieldWidth) noexcept
@@ -1543,15 +1747,15 @@ void FileActionPreferencesPage::LayoutPage(HWND host,
     };
 
     layoutPair(_matchKindLabel, _matchKindCombo, leftX, rowY, fieldWidth);
-    layoutPair(_matchValueLabel, _matchValueField, rightX, rowY, std::max(0, width - (rightX - x) - labelWidth - gapX));
+    layoutPair(_matchValueLabel, _matchValueField, rightX, rowY, std::max(0, contentWidth - (rightX - contentX) - labelWidth - gapX));
     rowY += rowHeight + gapY;
     layoutPair(_computerLabel, _computerField, leftX, rowY, fieldWidth);
-    layoutPair(_primaryActionLabel, _primaryActionCombo, rightX, rowY, std::max(0, width - (rightX - x) - labelWidth - gapX));
+    layoutPair(_primaryActionLabel, _primaryActionCombo, rightX, rowY, std::max(0, contentWidth - (rightX - contentX) - labelWidth - gapX));
     rowY += rowHeight + gapY;
     layoutPair(_alternateActionLabel, _alternateActionCombo, leftX, rowY, fieldWidth);
     if (IsEditorsFamily())
     {
-        layoutPair(_editNewActionLabel, _editNewActionCombo, rightX, rowY, std::max(0, width - (rightX - x) - labelWidth - gapX));
+        layoutPair(_editNewActionLabel, _editNewActionCombo, rightX, rowY, std::max(0, contentWidth - (rightX - contentX) - labelWidth - gapX));
         rowY += rowHeight + gapY;
     }
     else
@@ -1572,19 +1776,22 @@ void FileActionPreferencesPage::LayoutPage(HWND host,
                      pxToDip(leftX + UiMetrics::ScaleDip(dpi, 430)),
                      pxToDip(rowY + rowHeight));
     rowY += rowHeight + gapY;
-    SetControlBounds(_previewLabel, pxToDip(leftX), pxToDip(rowY), pxToDip(leftX + width), pxToDip(rowY + UiMetrics::ScaleDip(dpi, 52)));
+    SetControlBounds(_previewLabel, pxToDip(leftX), pxToDip(rowY), pxToDip(leftX + contentWidth), pxToDip(rowY + UiMetrics::ScaleDip(dpi, 52)));
 
-    int actionY = y + tabHeader + gapY;
-    SetControlBounds(_actionsGrid, pxToDip(leftX), pxToDip(actionY), pxToDip(leftX + width), pxToDip(actionY + gridHeight));
+    int actionY = y + tabHeader + contentInsetY;
+    SetControlBounds(_actionsGrid, pxToDip(leftX), pxToDip(actionY), pxToDip(leftX + contentWidth), pxToDip(actionY + gridHeight));
     actionY += gridHeight + gapY;
     layoutPair(_actionIdLabel, _actionIdField, leftX, actionY, fieldWidth);
-    layoutPair(_actionNameLabel, _actionNameField, rightX, actionY, std::max(0, width - (rightX - x) - labelWidth - gapX));
+    layoutPair(_actionNameLabel, _actionNameField, rightX, actionY, std::max(0, contentWidth - (rightX - contentX) - labelWidth - gapX));
     actionY += rowHeight + gapY;
     layoutPair(_actionKindLabel, _actionKindCombo, leftX, actionY, fieldWidth);
     SetControlBounds(_actionEnabledCheckbox, pxToDip(rightX), pxToDip(actionY), pxToDip(rightX + UiMetrics::ScaleDip(dpi, 160)), pxToDip(actionY + rowHeight));
     actionY += rowHeight + gapY;
-    layoutPair(_pluginIdLabel, _pluginIdField, leftX, actionY, fullFieldWidth);
-    actionY += rowHeight + gapY;
+    if (IsViewerFamily())
+    {
+        layoutPair(_pluginIdLabel, _pluginIdCombo, leftX, actionY, fullFieldWidth);
+        actionY += rowHeight + gapY;
+    }
     layoutPair(_executableLabel, _executableField, leftX, actionY, fullFieldWidth);
     actionY += rowHeight + gapY;
     layoutPair(_argumentsLabel, _argumentsField, leftX, actionY, fullFieldWidth);
@@ -1641,13 +1848,45 @@ bool FileActionPreferencesPage::HandleDeferredAction(HWND host, PreferencesDialo
 
 void FileActionPreferencesPage::OnGridSortRequested(const GridSortSpec& sortSpec)
 {
-    if (_activeGrid == ActiveGrid::Associations && _associationsGrid)
+    const RedSalamander::DxUi::Control* focus = _pageHost ? _pageHost->GetFocusControl() : nullptr;
+    const bool associationsFocused            = focus == _associationsGrid;
+    const bool actionsFocused                 = focus == _actionsGrid;
+    if (_associationsGrid && (associationsFocused || (! actionsFocused && _activeGrid == ActiveGrid::Associations)))
     {
+        _activeGrid = ActiveGrid::Associations;
+        if (_associationsModel)
+        {
+            _associationsModel->SortRows(sortSpec);
+        }
         _associationsGrid->SetSortSpec(sortSpec);
+        _associationsGrid->NotifyDataChanged();
+        if (_state)
+        {
+            SyncAssociationFormFromSelection(*_state);
+        }
     }
     else if (_actionsGrid)
     {
+        _activeGrid = ActiveGrid::Actions;
+        if (_actionsModel)
+        {
+            _actionsModel->SortRows(sortSpec);
+        }
         _actionsGrid->SetSortSpec(sortSpec);
+        _actionsGrid->NotifyDataChanged();
+        if (_state)
+        {
+            SyncActionFormFromSelection(*_state);
+        }
+    }
+
+    if (_state)
+    {
+        UpdatePreview(*_state);
+    }
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
     }
 }
 
@@ -1710,6 +1949,20 @@ void FileActionPreferencesPage::OnActionSelectionChanged() noexcept
     }
 }
 
+void FileActionPreferencesPage::ClearAssociationSelectionAfterMutation(PreferencesDialogState& state) noexcept
+{
+    if (_associationsGrid)
+    {
+        _associationsGrid->GetSelectionModel().Clear();
+    }
+    SyncAssociationFormFromSelection(state);
+    UpdatePreview(state);
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+}
+
 void FileActionPreferencesPage::MarkDirty(PreferencesDialogState& state) noexcept
 {
     if (_hostWindow && IsWindow(_hostWindow) != FALSE)
@@ -1739,6 +1992,27 @@ void FileActionPreferencesPage::SaveAssociation(PreferencesDialogState& state) n
     const std::wstring primaryId = _primaryActionCombo ? std::wstring(_primaryActionCombo->GetSelectedValue()) : std::wstring{};
     const std::wstring alternateId = _alternateActionCombo ? std::wstring(_alternateActionCombo->GetSelectedValue()) : std::wstring{};
     const std::wstring editNewId = _editNewActionCombo ? std::wstring(_editNewActionCombo->GetSelectedValue()) : std::wstring{};
+    const auto selectedAssociationSourceIndex = [&]() noexcept -> std::optional<size_t>
+    {
+        if (! _associationsGrid || ! _associationsModel)
+        {
+            return std::nullopt;
+        }
+
+        const std::optional<size_t> rowIndex = _associationsGrid->GetPrimarySelectedRow();
+        if (! rowIndex.has_value())
+        {
+            return std::nullopt;
+        }
+
+        const FileActionGridRow* row = _associationsModel->GetRow(rowIndex.value());
+        if (! row)
+        {
+            return std::nullopt;
+        }
+
+        return row->sourceIndex;
+    }();
 
     if (IsViewerFamily())
     {
@@ -1749,7 +2023,12 @@ void FileActionPreferencesPage::SaveAssociation(PreferencesDialogState& state) n
         rule.viewActionId = primaryId;
         rule.alternateViewActionId = alternateId;
         const std::optional<size_t> existing = FindAssociationByKey(settings.associations, rule.match, rule.computerName);
-        if (existing.has_value())
+        if (selectedAssociationSourceIndex.has_value() && selectedAssociationSourceIndex.value() < settings.associations.size() &&
+            (! existing.has_value() || existing.value() == selectedAssociationSourceIndex.value()))
+        {
+            settings.associations[selectedAssociationSourceIndex.value()] = std::move(rule);
+        }
+        else if (existing.has_value())
         {
             settings.associations[existing.value()] = std::move(rule);
         }
@@ -1768,7 +2047,12 @@ void FileActionPreferencesPage::SaveAssociation(PreferencesDialogState& state) n
         rule.alternateEditActionId = alternateId;
         rule.editNewActionId = editNewId;
         const std::optional<size_t> existing = FindAssociationByKey(settings.associations, rule.match, rule.computerName);
-        if (existing.has_value())
+        if (selectedAssociationSourceIndex.has_value() && selectedAssociationSourceIndex.value() < settings.associations.size() &&
+            (! existing.has_value() || existing.value() == selectedAssociationSourceIndex.value()))
+        {
+            settings.associations[selectedAssociationSourceIndex.value()] = std::move(rule);
+        }
+        else if (existing.has_value())
         {
             settings.associations[existing.value()] = std::move(rule);
         }
@@ -1820,6 +2104,7 @@ void FileActionPreferencesPage::RemoveSelectedAssociation(PreferencesDialogState
 
     MarkDirty(state);
     SyncFromState(state);
+    ClearAssociationSelectionAfterMutation(state);
 }
 
 void FileActionPreferencesPage::ResetAssociationsAndActions(PreferencesDialogState& state) noexcept
@@ -1835,6 +2120,7 @@ void FileActionPreferencesPage::ResetAssociationsAndActions(PreferencesDialogSta
 
     MarkDirty(state);
     SyncFromState(state);
+    ClearAssociationSelectionAfterMutation(state);
 }
 
 void FileActionPreferencesPage::SaveAction(PreferencesDialogState& state) noexcept
@@ -1857,8 +2143,22 @@ void FileActionPreferencesPage::SaveAction(PreferencesDialogState& state) noexce
     {
         action.kind = Settings::FileActionKind::ExternalProgram;
     }
-    action.pluginId = _pluginIdField ? Trim(_pluginIdField->GetText()) : std::wstring{};
-    action.executablePath = _executableField ? Trim(_executableField->GetText()) : std::wstring{};
+    if (action.kind == Settings::FileActionKind::ViewerPlugin)
+    {
+        action.pluginId = _pluginIdCombo ? std::wstring(_pluginIdCombo->GetSelectedValue()) : std::wstring{};
+        if (action.pluginId.empty())
+        {
+            if (_previewLabel)
+            {
+                _previewLabel->SetText(LoadRes(IDS_PREFS_FILE_ACTION_VALIDATION_PLUGIN_REQUIRED));
+            }
+            return;
+        }
+    }
+    else
+    {
+        action.executablePath = _executableField ? Trim(_executableField->GetText()) : std::wstring{};
+    }
     action.arguments = _argumentsField ? std::wstring(_argumentsField->GetText()) : std::wstring{};
     action.workingDirectory = _workingDirectoryField ? Trim(_workingDirectoryField->GetText()) : std::wstring{};
     action.appliesTo.matches = ParseMatchesField(_appliesToField ? _appliesToField->GetText() : std::wstring_view{});
@@ -2018,6 +2318,15 @@ PreferencesViewersDebugFocusTarget FileActionPreferencesPage::DebugGetViewersFoc
     }
 
     const RedSalamander::DxUi::Control* focus = _pageHost->GetFocusControl();
+    if (! focus)
+    {
+        return PreferencesViewersDebugFocusTarget::None;
+    }
+
+    if (focus == _tabs)
+    {
+        return PreferencesViewersDebugFocusTarget::Tabs;
+    }
     if (focus == _searchField)
     {
         return PreferencesViewersDebugFocusTarget::SearchField;
@@ -2026,25 +2335,85 @@ PreferencesViewersDebugFocusTarget FileActionPreferencesPage::DebugGetViewersFoc
     {
         return PreferencesViewersDebugFocusTarget::MappingsGrid;
     }
+    if (focus == _matchKindCombo)
+    {
+        return PreferencesViewersDebugFocusTarget::MatchKindCombo;
+    }
     if (focus == _actionsGrid)
     {
         return PreferencesViewersDebugFocusTarget::ActionsGrid;
     }
+    if (focus == _matchKindCombo)
+    {
+        return PreferencesViewersDebugFocusTarget::MatchKindCombo;
+    }
     if (focus == _matchValueField)
     {
-        return PreferencesViewersDebugFocusTarget::ExtensionField;
+        return PreferencesViewersDebugFocusTarget::MatchValueField;
+    }
+    if (focus == _computerField)
+    {
+        return PreferencesViewersDebugFocusTarget::ComputerField;
+    }
+    if (focus == _computerField)
+    {
+        return PreferencesViewersDebugFocusTarget::ComputerField;
     }
     if (focus == _actionIdField)
     {
         return PreferencesViewersDebugFocusTarget::ActionIdField;
     }
+    if (focus == _actionNameField)
+    {
+        return PreferencesViewersDebugFocusTarget::ActionNameField;
+    }
+    if (focus == _actionKindCombo)
+    {
+        return PreferencesViewersDebugFocusTarget::ActionKindCombo;
+    }
+    if (focus == _actionEnabledCheckbox)
+    {
+        return PreferencesViewersDebugFocusTarget::ActionEnabledCheckbox;
+    }
+    if (focus == _pluginIdCombo)
+    {
+        return PreferencesViewersDebugFocusTarget::PluginIdField;
+    }
+    if (focus == _executableField)
+    {
+        return PreferencesViewersDebugFocusTarget::ExecutableField;
+    }
+    if (focus == _argumentsField)
+    {
+        return PreferencesViewersDebugFocusTarget::ArgumentsField;
+    }
+    if (focus == _workingDirectoryField)
+    {
+        return PreferencesViewersDebugFocusTarget::WorkingDirectoryField;
+    }
+    if (focus == _appliesToField)
+    {
+        return PreferencesViewersDebugFocusTarget::AppliesToField;
+    }
+    if (focus == _computersField)
+    {
+        return PreferencesViewersDebugFocusTarget::ComputersField;
+    }
     if (focus == _testFileField)
     {
         return PreferencesViewersDebugFocusTarget::TestFileField;
     }
-    if (focus == _primaryActionCombo || focus == _alternateActionCombo || focus == _editNewActionCombo)
+    if (focus == _primaryActionCombo)
     {
-        return PreferencesViewersDebugFocusTarget::ViewerCombo;
+        return PreferencesViewersDebugFocusTarget::PrimaryActionCombo;
+    }
+    if (focus == _alternateActionCombo)
+    {
+        return PreferencesViewersDebugFocusTarget::AlternateActionCombo;
+    }
+    if (_editNewActionCombo && focus == _editNewActionCombo)
+    {
+        return PreferencesViewersDebugFocusTarget::EditNewActionCombo;
     }
     if (focus == _associationSaveButton)
     {
@@ -2057,6 +2426,14 @@ PreferencesViewersDebugFocusTarget FileActionPreferencesPage::DebugGetViewersFoc
     if (focus == _associationResetButton)
     {
         return PreferencesViewersDebugFocusTarget::ResetButton;
+    }
+    if (focus == _actionSaveButton)
+    {
+        return PreferencesViewersDebugFocusTarget::ActionSaveButton;
+    }
+    if (focus == _actionRemoveButton)
+    {
+        return PreferencesViewersDebugFocusTarget::ActionRemoveButton;
     }
     return PreferencesViewersDebugFocusTarget::None;
 }
@@ -2071,8 +2448,27 @@ bool FileActionPreferencesPage::DebugUsesDxUiTypographyMetrics() const noexcept
     return _usesDxUiTypographyMetrics;
 }
 
-bool FileActionPreferencesPage::DebugGetAssociationRowClientRect(const size_t rowIndex, RECT& outRect) const noexcept
+void FileActionPreferencesPage::DebugShowAssociationsTab() noexcept
 {
+    if (! _tabs || ! _associationsPage)
+    {
+        return;
+    }
+
+    if (_tabs->GetSelectedPage() != _associationsPage)
+    {
+        _tabs->SetSelectedIndex(1u);
+        _activeGrid = ActiveGrid::Associations;
+        if (_pageHost)
+        {
+            _pageHost->Invalidate();
+        }
+    }
+}
+
+bool FileActionPreferencesPage::DebugGetAssociationRowClientRect(const size_t rowIndex, RECT& outRect) noexcept
+{
+    DebugShowAssociationsTab();
     if (! _associationsGrid || ! _pageHost)
     {
         return false;
@@ -2088,8 +2484,9 @@ bool FileActionPreferencesPage::DebugGetAssociationRowClientRect(const size_t ro
     return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
-bool FileActionPreferencesPage::DebugGetAssociationHeaderClientRect(const size_t columnIndex, RECT& outRect) const noexcept
+bool FileActionPreferencesPage::DebugGetAssociationHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
 {
+    DebugShowAssociationsTab();
     if (! _associationsGrid || ! _associationsModel || ! _pageHost || columnIndex >= _associationsModel->GetColumnCount())
     {
         return false;
@@ -2105,13 +2502,99 @@ bool FileActionPreferencesPage::DebugGetAssociationHeaderClientRect(const size_t
     return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
+bool FileActionPreferencesPage::DebugHitTestAssociationClientPoint(
+    const POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) const noexcept
+{
+    outZone         = 0u;
+    outColumnIndex  = 0u;
+    outHeaderResize = false;
+    outHostHitsList = false;
+    if (! _associationsGrid || ! _pageHost)
+    {
+        return false;
+    }
+
+    const D2D1_POINT_2F pointDip =
+        D2D1::Point2F(_pageHost->PixelsToDip(static_cast<float>(clientPoint.x)), _pageHost->PixelsToDip(static_cast<float>(clientPoint.y)));
+    outHostHitsList = _pageHost->DebugHitTestControl(pointDip) == _associationsGrid;
+    Grid::GridDebugHitInfo hit{};
+    if (! _associationsGrid->DebugHitTestPoint(RedSalamander::DxUi::MakePointDip(pointDip), hit))
+    {
+        return false;
+    }
+
+    outZone         = hit.zone;
+    outColumnIndex  = hit.columnIndex;
+    outHeaderResize = hit.isHeaderResize;
+    return true;
+}
+
+bool FileActionPreferencesPage::DebugGetAssociationPointerState(PreferencesGridPointerDebugState& outState) const noexcept
+{
+    outState = {};
+    if (! _associationsGrid)
+    {
+        return false;
+    }
+
+    const Grid::GridDebugPointerState gridState = _associationsGrid->DebugGetPointerState();
+    outState.headerResizeDownCount              = gridState.headerResizeDownCount;
+    outState.resizeMoveCount                    = gridState.resizeMoveCount;
+    outState.resizeActive                       = gridState.resizeActive;
+    outState.lastResizeDeltaDip                 = gridState.lastResizeDeltaDip;
+    outState.lastResizeWidthDip                 = gridState.lastResizeWidthDip;
+    outState.pressedHeaderActive                = gridState.pressedHeaderActive;
+    outState.pressedHeaderColumn                = gridState.pressedHeaderColumn;
+    outState.reorderActive                      = gridState.reorderActive;
+    outState.reorderColumn                      = gridState.reorderColumn;
+    outState.reorderTargetDisplayIndex          = gridState.reorderTargetDisplayIndex;
+    outState.headerReorderStartCount            = gridState.headerReorderStartCount;
+    outState.headerReorderCommitCount           = gridState.headerReorderCommitCount;
+    outState.headerReorderNoOpCount             = gridState.headerReorderNoOpCount;
+    outState.lastHeaderReorderColumn            = gridState.lastHeaderReorderColumn;
+    outState.lastHeaderReorderFromDisplayIndex  = gridState.lastHeaderReorderFromDisplayIndex;
+    outState.lastHeaderReorderRawTargetDisplayIndex = gridState.lastHeaderReorderRawTargetDisplayIndex;
+    outState.lastHeaderReorderNormalizedTargetDisplayIndex = gridState.lastHeaderReorderNormalizedTargetDisplayIndex;
+    return true;
+}
+
+bool FileActionPreferencesPage::DebugGetTabClientRect(const size_t tabIndex, RECT& outRect) const noexcept
+{
+    if (! _tabs || ! _pageHost || tabIndex >= _tabs->GetTabCount())
+    {
+        return false;
+    }
+
+    outRect = DipRectToPx(*_pageHost, _tabs->DebugGetTabRect(tabIndex));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+bool FileActionPreferencesPage::DebugGetSelectedTabIndex(size_t& outIndex) const noexcept
+{
+    if (! _tabs)
+    {
+        return false;
+    }
+
+    const std::optional<size_t> selectedIndex = _tabs->GetSelectedIndex();
+    if (! selectedIndex.has_value())
+    {
+        return false;
+    }
+
+    outIndex = selectedIndex.value();
+    return true;
+}
+
 bool FileActionPreferencesPage::DebugSelectAssociationRow(const size_t rowIndex) noexcept
 {
+    DebugShowAssociationsTab();
     return _associationsGrid && _associationsGrid->RequestSelectRow(rowIndex, 0u);
 }
 
 bool FileActionPreferencesPage::DebugSetSearchText(std::wstring_view text) noexcept
 {
+    DebugShowAssociationsTab();
     if (! _state)
     {
         return false;
@@ -2140,6 +2623,7 @@ bool FileActionPreferencesPage::DebugSelectDefaultEditNewAction(std::wstring_vie
 
 bool FileActionPreferencesPage::DebugFocusSearchField() noexcept
 {
+    DebugShowAssociationsTab();
     if (! _pageHost || ! _searchField)
     {
         return false;
@@ -2150,13 +2634,19 @@ bool FileActionPreferencesPage::DebugFocusSearchField() noexcept
 
 bool FileActionPreferencesPage::DebugScrollAssociationByWheelDetents(const int detents) noexcept
 {
-    if (! _associationsGrid)
+    DebugShowAssociationsTab();
+    if (detents == 0 || ! _associationsGrid || ! _pageHost)
     {
         return false;
     }
-    const GridVisibleWorkMetrics metrics = _associationsGrid->GetVisibleWorkMetrics();
-    const float current = metrics.verticalScrollDip;
-    _associationsGrid->DebugSetScrollOffsets(std::max(0.0f, current + (static_cast<float>(detents) * 90.0f)), 0.0f);
+
+    const float wheelDelta = detents >= 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
+    const int steps        = std::abs(detents);
+    for (int index = 0; index < steps; ++index)
+    {
+        static_cast<void>(_associationsGrid->OnMouseWheel(*_pageHost, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u));
+    }
+
     return true;
 }
 

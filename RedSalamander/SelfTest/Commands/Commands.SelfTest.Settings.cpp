@@ -86,6 +86,8 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
 
 void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*, const wchar_t*>> rows)
 {
+    auto defaultViewers = Common::Settings::DefaultViewerFileActionsSettings();
+    g_settings.fileActions.viewers.actions = std::move(defaultViewers.actions);
     g_settings.fileActions.viewers.associations.clear();
     g_settings.fileActions.viewers.associations.reserve(rows.size());
     for (const auto& [extension, actionId] : rows)
@@ -110,9 +112,7 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
 
 [[nodiscard]] size_t TestVisibleViewerAssociationRowCount(const Common::Settings::ViewerFileActionsSettings& settings) noexcept
 {
-    return static_cast<size_t>(std::count_if(settings.associations.begin(), settings.associations.end(), [](const auto& rule) noexcept {
-        return rule.match.kind == Common::Settings::FileActionMatchKind::Extension && rule.computerName.empty() && ! rule.viewActionId.empty();
-    }));
+    return settings.associations.size();
 }
 
 [[nodiscard]] const Common::Settings::EditorAssociationRule* TestFindDefaultEditorAssociationForRead(
@@ -1816,7 +1816,7 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
     Common::Settings::FileActionDefinition action{};
     action.kind             = Common::Settings::FileActionKind::ExternalProgram;
     action.executablePath   = ResolveCommandProcessorPath();
-    action.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo selected-paths>\"{Path}\\selected-paths-marker.txt\"";
+    action.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo selected-paths>selected-paths-marker.txt";
     action.workingDirectory = L"{Path}";
 
     FileActionLauncher::MacroContext context{};
@@ -4550,6 +4550,79 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     {
         SetFocus(view);
     }
+}
+
+[[nodiscard]] bool WaitForFolderViewPaneFocus(FolderWindow::Pane pane, HWND expectedFolderView, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! expectedFolderView || IsWindow(expectedFolderView) == FALSE)
+    {
+        return false;
+    }
+
+    FocusFolderViewPane(pane);
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    size_t stableSamples = 0u;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView && g_folderWindow.GetFocusedPane() == pane)
+        {
+            ++stableSamples;
+            if (stableSamples >= 3u)
+            {
+                return true;
+            }
+        }
+        else
+        {
+            stableSamples = 0u;
+            FocusFolderViewPane(pane);
+        }
+
+        std::this_thread::sleep_for(10ms);
+    }
+
+    PumpPendingMessages();
+    return g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView && g_folderWindow.GetFocusedPane() == pane;
+}
+
+[[nodiscard]] bool WaitForTextFileFirstLine(std::filesystem::path const& path,
+                                            std::string_view expected,
+                                            std::chrono::milliseconds timeout,
+                                            std::string& outText) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    std::error_code ec;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        outText.clear();
+        if (std::filesystem::exists(path, ec))
+        {
+            std::ifstream input(path);
+            std::getline(input, outText);
+            if (outText == expected)
+            {
+                return true;
+            }
+        }
+        ec.clear();
+
+        PumpPendingMessages();
+        std::this_thread::sleep_for(20ms);
+    }
+
+    outText.clear();
+    if (std::filesystem::exists(path, ec))
+    {
+        std::ifstream input(path);
+        std::getline(input, outText);
+    }
+    return outText == expected;
 }
 
 template <typename Predicate>
@@ -7948,6 +8021,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return MAKELPARAM(rect.left + ((rect.right - rect.left) / 2), rect.top + ((rect.bottom - rect.top) / 2));
     };
     const auto clickPreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept {
+        POINT screenPoint{GET_X_LPARAM(point), GET_Y_LPARAM(point)};
+        ClientToScreen(hwnd, &screenPoint);
+        SetCursorPos(screenPoint.x, screenPoint.y);
         SendMessageW(hwnd, WM_MOUSEMOVE, 0, point);
         SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, point);
         SendMessageW(hwnd, WM_LBUTTONUP, 0, point);
@@ -8767,7 +8843,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     externalViewer.enabled          = true;
     externalViewer.kind             = Common::Settings::FileActionKind::ExternalProgram;
     externalViewer.executablePath   = ResolveCommandProcessorPath();
-    externalViewer.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo alternate-external>\"{Path}\\alternate-external-marker.txt\"";
+    externalViewer.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo alternate-external>alternate-external-marker.txt";
     externalViewer.workingDirectory = L"{Path}";
     TestSetActionExtensions(externalViewer, {L".altexternal"});
     g_settings.fileActions.viewers.actions.push_back(std::move(externalViewer));
@@ -8792,23 +8868,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateView"),
                   L"cmd/pane/alternateView should dispatch for a configured external viewer action.");
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
+    std::string markerText;
+    state.Require(WaitForTextFileFirstLine(markerPath, "alternate-external", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"Alternate external viewer action should receive expanded macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount,
                   L"External Alternate View should not create an internal viewer instance.");
-    state.Require(std::filesystem::exists(markerPath, ec), L"Alternate View should launch the configured external viewer action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
-    std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "alternate-external", L"Alternate external viewer action should receive expanded macros.");
 
     return state.failure.empty();
 }
@@ -8865,7 +8930,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     primaryViewer.enabled          = true;
     primaryViewer.kind             = Common::Settings::FileActionKind::ExternalProgram;
     primaryViewer.executablePath   = ResolveCommandProcessorPath();
-    primaryViewer.arguments        = L"/C echo primary-view>\"{Path}\\primary-view-marker.txt\"";
+    primaryViewer.arguments        = L"/C if exist {FullPath} echo primary-view>primary-view-marker.txt";
     primaryViewer.workingDirectory = L"{Path}";
     TestSetActionExtensions(primaryViewer, {L".primaryview"});
     g_settings.fileActions.viewers.actions.push_back(std::move(primaryViewer));
@@ -8889,23 +8954,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     const size_t baselineViewerCount = g_folderWindow.DebugGetViewerInstanceCount();
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/view"), L"cmd/pane/view should dispatch through the shortcut path.");
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
+    std::string markerText;
+    state.Require(WaitForTextFileFirstLine(markerPath, "primary-view", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"Primary viewer action should receive expanded path macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount,
                   L"External primary View action should not create an internal viewer instance.");
-    state.Require(std::filesystem::exists(markerPath, ec), L"cmd/pane/view should launch the configured primary viewer action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
-    std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "primary-view", L"Primary viewer action should receive expanded path macros.");
 
     return state.failure.empty();
 }
@@ -9468,7 +9522,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     menuViewer.enabled          = true;
     menuViewer.kind             = Common::Settings::FileActionKind::ExternalProgram;
     menuViewer.executablePath   = ResolveCommandProcessorPath();
-    menuViewer.arguments        = L"/C echo view-with-menu>\"{Path}\\view-with-menu-marker.txt\"";
+    menuViewer.arguments        = L"/C if exist {FullPath} echo view-with-menu>view-with-menu-marker.txt";
     menuViewer.workingDirectory = L"{Path}";
     TestSetActionExtensions(menuViewer, {L".menuext"});
     g_settings.fileActions.viewers.actions.push_back(std::move(menuViewer));
@@ -9479,7 +9533,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     filteredViewer.enabled          = true;
     filteredViewer.kind             = Common::Settings::FileActionKind::ExternalProgram;
     filteredViewer.executablePath   = ResolveCommandProcessorPath();
-    filteredViewer.arguments        = L"/C echo filtered>\"{Path}\\filtered-marker.txt\"";
+    filteredViewer.arguments        = L"/C echo filtered>filtered-marker.txt";
     filteredViewer.workingDirectory = L"{Path}";
     TestSetActionExtensions(filteredViewer, {L".otherext"});
     g_settings.fileActions.viewers.actions.push_back(std::move(filteredViewer));
@@ -9527,21 +9581,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
-    state.Require(std::filesystem::exists(markerPath, ec), L"Selecting a View With menu action should launch the configured viewer action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
     std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "view-with-menu", L"View With menu action should receive expanded path macros.");
+    state.Require(WaitForTextFileFirstLine(markerPath, "view-with-menu", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"View With menu action should receive expanded path macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -9685,7 +9728,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     externalViewer.enabled        = true;
     externalViewer.kind           = Common::Settings::FileActionKind::ExternalProgram;
     externalViewer.executablePath = ResolveCommandProcessorPath();
-    externalViewer.arguments      = L"/C echo external-viewer>\"{Path}\\external-viewer-marker.txt\"";
+    externalViewer.arguments      = L"/C if exist {FullPath} echo external-viewer>external-viewer-marker.txt";
     externalViewer.workingDirectory = L"{Path}";
     TestSetActionExtensions(externalViewer, {L".viewext"});
     g_settings.fileActions.viewers.actions.push_back(std::move(externalViewer));
@@ -9709,24 +9752,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewWith/external-marker"),
                   L"cmd/pane/viewWith/<viewerId> should dispatch for a named external viewer action.");
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount,
                   L"External cmd/pane/viewWith/<viewerId> should not create an internal viewer instance.");
-    state.Require(std::filesystem::exists(markerPath, ec),
-                  L"External cmd/pane/viewWith/<viewerId> should launch the configured external action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
     std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "external-viewer", L"External viewer action should receive expanded path macros.");
+    state.Require(WaitForTextFileFirstLine(markerPath, "external-viewer", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"External viewer action should receive expanded path macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -9779,7 +9810,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     externalEditor.enabled          = true;
     externalEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
     externalEditor.executablePath   = ResolveCommandProcessorPath();
-    externalEditor.arguments        = L"/C echo external-editor>\"{Path}\\external-editor-marker.txt\"";
+    externalEditor.arguments        = L"/C if exist {FullPath} echo external-editor>external-editor-marker.txt";
     externalEditor.workingDirectory = L"{Path}";
     TestSetActionExtensions(externalEditor, {L".editext"});
     g_settings.fileActions.editors.actions.push_back(std::move(externalEditor));
@@ -9802,22 +9833,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/editWith/external-editor"),
                   L"cmd/pane/editWith/<editorId> should dispatch for a named external editor action.");
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
-    state.Require(std::filesystem::exists(markerPath, ec),
-                  L"External cmd/pane/editWith/<editorId> should launch the configured external editor action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
     std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "external-editor", L"External editor action should receive expanded path macros.");
+    state.Require(WaitForTextFileFirstLine(markerPath, "external-editor", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"External editor action should receive expanded path macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -9871,7 +9890,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     primaryEditor.enabled          = true;
     primaryEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
     primaryEditor.executablePath   = ResolveCommandProcessorPath();
-    primaryEditor.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo {Filename}>\"{Path}\\primary-edit-marker.txt\"";
+    primaryEditor.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo {Filename}>primary-edit-marker.txt";
     primaryEditor.workingDirectory = L"{Path}";
     TestSetActionExtensions(primaryEditor, {L".editcmd"});
     g_settings.fileActions.editors.actions.push_back(std::move(primaryEditor));
@@ -9897,24 +9916,19 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const HWND leftFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(1000ms)),
+                  L"Failed to focus the left folder view before primary edit action dispatch.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/edit"), L"cmd/pane/edit should dispatch through the shortcut path.");
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
-    state.Require(std::filesystem::exists(markerPath, ec), L"Primary Edit should launch the configured editor action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
     std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "focused.editcmd", L"Primary Edit should edit the focused file, not the first selected file.");
+    state.Require(WaitForTextFileFirstLine(markerPath, "\"focused.editcmd\"", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"Primary Edit should expand {{Filename}} from the focused file while preserving argument quoting; actual marker='{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -9967,7 +9981,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     alternateEditor.enabled          = true;
     alternateEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
     alternateEditor.executablePath   = ResolveCommandProcessorPath();
-    alternateEditor.arguments        = L"/C echo alternate-edit>\"{Path}\\alternate-edit-marker.txt\"";
+    alternateEditor.arguments        = L"/C if exist {FullPath} echo alternate-edit>alternate-edit-marker.txt";
     alternateEditor.workingDirectory = L"{Path}";
     TestSetActionExtensions(alternateEditor, {L".altedit"});
     g_settings.fileActions.editors.actions.push_back(std::move(alternateEditor));
@@ -9986,25 +10000,20 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const HWND leftFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftFolderView, SelfTest::Scale(1000ms)),
+                  L"Failed to focus the left folder view before alternate edit action dispatch.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateEdit"),
                   L"cmd/pane/alternateEdit should dispatch through the shortcut path.");
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
-    state.Require(std::filesystem::exists(markerPath, ec), L"Alternate Edit should launch the configured editor action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
     std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "alternate-edit", L"Alternate Edit should receive expanded macros.");
+    state.Require(WaitForTextFileFirstLine(markerPath, "alternate-edit", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"Alternate Edit should receive expanded macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -10058,7 +10067,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     menuEditor.enabled          = true;
     menuEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
     menuEditor.executablePath   = ResolveCommandProcessorPath();
-    menuEditor.arguments        = L"/C echo edit-with-menu>\"{Path}\\edit-with-menu-marker.txt\"";
+    menuEditor.arguments        = L"/C if exist {FullPath} echo edit-with-menu>edit-with-menu-marker.txt";
     menuEditor.workingDirectory = L"{Path}";
     TestSetActionExtensions(menuEditor, {L".menuedit"});
     g_settings.fileActions.editors.actions.push_back(std::move(menuEditor));
@@ -10069,7 +10078,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     filteredEditor.enabled          = true;
     filteredEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
     filteredEditor.executablePath   = ResolveCommandProcessorPath();
-    filteredEditor.arguments        = L"/C echo filtered>\"{Path}\\filtered-editor.txt\"";
+    filteredEditor.arguments        = L"/C echo filtered>filtered-editor.txt";
     filteredEditor.workingDirectory = L"{Path}";
     TestSetActionExtensions(filteredEditor, {L".otheredit"});
     g_settings.fileActions.editors.actions.push_back(std::move(filteredEditor));
@@ -10117,21 +10126,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
-    state.Require(std::filesystem::exists(markerPath, ec), L"Selecting an Edit With menu action should launch the configured editor action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
     std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "edit-with-menu", L"Edit With menu action should receive expanded path macros.");
+    state.Require(WaitForTextFileFirstLine(markerPath, "edit-with-menu", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"Edit With menu action should receive expanded path macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -10187,7 +10185,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     markerAction.enabled          = true;
     markerAction.kind             = Common::Settings::FileActionKind::ExternalProgram;
     markerAction.executablePath   = ResolveCommandProcessorPath();
-    markerAction.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo user-menu>\"{Path}\\user-menu-marker.txt\"";
+    markerAction.arguments        = L"/C if exist \"{SelectedPathsFile}\" echo user-menu>user-menu-marker.txt";
     markerAction.workingDirectory = L"{Path}";
     TestSetActionExtensions(markerAction, {L".usermenu"});
     g_settings.userMenu.actions.push_back(std::move(markerAction));
@@ -10284,21 +10282,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(launchCommandId, 0), 0);
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (std::chrono::steady_clock::now() < deadline && ! std::filesystem::exists(markerPath, ec))
-    {
-        ec.clear();
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-
-    state.Require(std::filesystem::exists(markerPath, ec), L"Selecting a User Menu action should launch the configured external action.");
-    ec.clear();
-
-    std::ifstream input(markerPath);
     std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "user-menu", L"User Menu action should receive selected-paths and path macros.");
+    state.Require(WaitForTextFileFirstLine(markerPath, "user-menu", SelfTest::Scale(5000ms), markerText),
+                  std::format(L"User Menu action should receive selected-paths and path macros; marker first line was '{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -10544,8 +10531,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(snapshot.userMenuActionCount == 1u, L"Reread Associations should load User Menu actions.");
     state.Require(snapshot.viewerExtensionMappingCount == 1u, L"Reread Associations should load viewer extension mappings.");
     state.Require(snapshot.fileSystemExtensionMappingCount == 1u, L"Reread Associations should load file-system extension mappings.");
-    state.Require(snapshot.associationIconCacheSizeBefore >= associationCacheBefore, L"Reread Associations should observe the seeded icon association cache.");
-    state.Require(snapshot.associationIconCacheSizeAfterClear == 0u, L"Reread Associations should clear the icon association cache.");
+    state.Require(snapshot.associationIconCacheSizeBefore >= associationCacheBefore,
+                  std::format(L"Reread Associations should observe the seeded icon association cache (seeded={}, observedBefore={}).",
+                              associationCacheBefore,
+                              snapshot.associationIconCacheSizeBefore));
+    state.Require(snapshot.associationIconCacheSizeAfterClear == 0u,
+                  std::format(L"Reread Associations should clear the icon association cache before pane refresh can repopulate it (before={}, afterClear={}).",
+                              snapshot.associationIconCacheSizeBefore,
+                              snapshot.associationIconCacheSizeAfterClear));
     state.Require(snapshot.leftRefreshCountBefore == leftRefreshBefore && snapshot.leftRefreshCountAfter > leftRefreshBefore,
                   L"Reread Associations should refresh the left pane.");
     state.Require(snapshot.rightRefreshCountBefore == rightRefreshBefore && snapshot.rightRefreshCountAfter > rightRefreshBefore,
@@ -10599,12 +10592,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         L"  \"scenario\": \"cmd/app/rereadAssociations\",\n"
         L"  \"rereadAssociations.total_us\": {},\n"
         L"  \"associationIconCacheSizeBefore\": {},\n"
+        L"  \"associationIconCacheSizeAfterClear\": {},\n"
         L"  \"viewerActionCount\": {},\n"
         L"  \"editorActionCount\": {},\n"
         L"  \"userMenuActionCount\": {}\n"
         L"}}\n",
         totalUs.count(),
         snapshot.associationIconCacheSizeBefore,
+        snapshot.associationIconCacheSizeAfterClear,
         snapshot.viewerActionCount,
         snapshot.editorActionCount,
         snapshot.userMenuActionCount);

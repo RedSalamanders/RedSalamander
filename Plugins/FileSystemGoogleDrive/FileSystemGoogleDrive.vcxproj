@@ -193,6 +193,14 @@
     <ClInclude Include="FileSystemGoogleDriveResources.h" />
     <ResourceCompile Include="FileSystemGoogleDriveResources.rc" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="Lang\ja-JP\FileSystemGoogleDrive-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{607687c7-6c70-57f8-8c3c-991f0cbaf264}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

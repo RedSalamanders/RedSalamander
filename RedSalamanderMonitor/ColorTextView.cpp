@@ -1,4 +1,5 @@
 #include "ColorTextView.h"
+#include "ColorTextScrollBars.h"
 #include "resource.h"
 
 #include "WindowMessages.h"
@@ -6,10 +7,11 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cwctype>
 #include <fstream>
-#include <iterator>
+#include <limits>
 #include <memory>
 #include <thread>
 #include <utility>
@@ -113,6 +115,48 @@ static float GetHorzScrollbarDip([[maybe_unused]] HWND hwnd, float dpi)
     UINT udpi    = static_cast<UINT>(dpi > 0 ? dpi : 96.0f);
     const int cy = GetSystemMetricsForDpi(SM_CYHSCROLL, udpi);
     return static_cast<float>(cy) * 96.f / static_cast<float>(udpi);
+}
+
+static float GetVertScrollbarDip(float dpi)
+{
+    const UINT udpi = static_cast<UINT>(dpi > 0 ? dpi : 96.0f);
+    const int cx    = GetSystemMetricsForDpi(SM_CXVSCROLL, udpi);
+    return static_cast<float>(cx) * 96.f / static_cast<float>(udpi);
+}
+
+static int ScrollIntFromDip(float value) noexcept
+{
+    if (! (value > 0.0f))
+        return 0;
+    const auto capped = std::min<double>(std::ceil(static_cast<double>(value)), static_cast<double>((std::numeric_limits<int>::max)()));
+    return static_cast<int>(capped);
+}
+
+static UINT ScrollPageFromDip(float value) noexcept
+{
+    if (! (value > 0.0f))
+        return 0;
+    const auto capped = std::min<double>(std::floor(static_cast<double>(value)), static_cast<double>((std::numeric_limits<UINT>::max)()));
+    return static_cast<UINT>(capped);
+}
+
+static bool ScrollInfoMatches(HWND hwnd, int bar, const SCROLLINFO& desired) noexcept
+{
+    SCROLLINFO current{};
+    current.cbSize = sizeof(current);
+    current.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    if (! GetScrollInfo(hwnd, bar, &current))
+        return false;
+
+    return current.nMin == desired.nMin && current.nMax == desired.nMax && current.nPage == desired.nPage && current.nPos == desired.nPos;
+}
+
+static void SetScrollInfoIfChanged(HWND hwnd, int bar, SCROLLINFO& desired) noexcept
+{
+    if (! ScrollInfoMatches(hwnd, bar, desired))
+    {
+        SetScrollInfo(hwnd, bar, &desired, TRUE);
+    }
 }
 
 // ===== Public =====
@@ -289,15 +333,13 @@ void ColorTextView::EnableShowIds(bool enable)
 void ColorTextView::SetFilterMask(uint32_t mask)
 {
     // Try to preserve viewport context: find currently visible line before filter changes
-    size_t anchorLine      = 0;
+    std::optional<size_t> anchorLine;
     const float lineHeight = GetLineHeight();
-    if (_document.TotalLineCount() > 0 && lineHeight > 0.f)
+    if (lineHeight > 0.f)
     {
         const float viewTop        = std::max(0.f, _scrollY - _padding);
         const UINT32 topDisplayRow = static_cast<UINT32>(std::floor(viewTop / lineHeight));
-        const size_t topVisIdx     = _document.VisibleIndexFromDisplayRow(topDisplayRow);
-        if (topVisIdx < _document.VisibleLines().size())
-            anchorLine = _document.VisibleLines()[topVisIdx].sourceIndex;
+        anchorLine                 = _document.SourceLineForDisplayRow(topDisplayRow);
     }
 
     _document.SetFilterMask(mask);
@@ -307,46 +349,13 @@ void ColorTextView::SetFilterMask(uint32_t mask)
     _contentHeight           = (float)displayRows * GetLineHeight() + _padding * 2.f;
 
     // Adjust scroll position to keep anchor line in view if it's still visible
-    if (_document.TotalLineCount() > 0 && anchorLine < _document.TotalLineCount())
+    if (anchorLine.has_value() && lineHeight > 0.f)
     {
-        if (_document.IsLineVisible(anchorLine))
+        const auto visibleAnchor = _document.ClosestVisibleSourceLine(anchorLine.value());
+        if (visibleAnchor.has_value())
         {
-            // Anchor line still visible - scroll to keep it at same position
-            const UINT32 newDisplayRow = _document.DisplayRowForSource(anchorLine);
-            _scrollY                   = static_cast<float>(newDisplayRow) * lineHeight + _padding;
-        }
-        else
-        {
-            // Anchor line filtered out - find closest visible line
-            size_t closestVisible = anchorLine;
-
-            // Search forward first
-            bool foundForward = false;
-            for (size_t i = anchorLine; i < _document.TotalLineCount(); ++i)
-            {
-                if (_document.IsLineVisible(i))
-                {
-                    closestVisible = i;
-                    foundForward   = true;
-                    break;
-                }
-            }
-
-            // If not found forward, search backward
-            if (! foundForward && anchorLine > 0)
-            {
-                for (size_t i = anchorLine; i > 0; --i)
-                {
-                    if (_document.IsLineVisible(i - 1))
-                    {
-                        closestVisible = i - 1;
-                        break;
-                    }
-                }
-            }
-
-            // Scroll to closest visible line
-            const UINT32 newDisplayRow = _document.DisplayRowForSource(closestVisible);
+            // Keep the old top source line when it remains visible; otherwise use the next visible line, or the last visible line.
+            const UINT32 newDisplayRow = _document.DisplayRowForSource(visibleAnchor.value());
             _scrollY                   = static_cast<float>(newDisplayRow) * lineHeight + _padding;
         }
     }
@@ -356,7 +365,7 @@ void ColorTextView::SetFilterMask(uint32_t mask)
                            mask,
                            displayRows,
                            _contentHeight,
-                           anchorLine,
+                           anchorLine.value_or(0u),
                            _scrollY);
     OutputDebugStringA(msg.c_str());
 #endif
@@ -521,7 +530,7 @@ void ColorTextView::AppendText(const std::wstring& more)
         RequestScrollToBottom();
 }
 
-void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, const std::wstring& message)
+void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, std::wstring message)
 {
     // Use atomic HWND for thread-safe cross-thread access (called from ETW worker thread)
     const HWND hwnd = _hWndAtomic.load(std::memory_order_acquire);
@@ -532,7 +541,7 @@ void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, const std::wstri
     {
         auto lock           = _etwQueueCS.lock();
         const bool wasEmpty = _etwEventQueue.empty();
-        _etwEventQueue.push_back({info, message});
+        _etwEventQueue.push_back({info, std::move(message)});
         // Only post message if queue was empty (prevents flooding)
         shouldPost = wasEmpty;
     }
@@ -853,46 +862,79 @@ void ColorTextView::UpdateScrollBars()
     if (! _hWnd)
         return;
 
-    RECT clientRect;
+    // Standard scrollbar changes can synchronously send WM_SIZE; coalesce that re-entry into a bounded follow-up pass.
+    if (_updatingScrollBars)
+    {
+        _scrollBarUpdatePending = true;
+        return;
+    }
+
+    _updatingScrollBars = true;
+    auto resetUpdating  = wil::scope_exit([&]
+    {
+        _updatingScrollBars     = false;
+        _scrollBarUpdatePending = false;
+    });
+
+    constexpr int kMaxScrollbarUpdatePasses = 4;
+    for (int pass = 0; pass < kMaxScrollbarUpdatePasses; ++pass)
+    {
+        _scrollBarUpdatePending = false;
+        UpdateScrollBarsCore();
+        if (! _scrollBarUpdatePending)
+            break;
+    }
+}
+
+void ColorTextView::UpdateScrollBarsCore()
+{
+    RECT clientRect{};
     GetClientRect(_hWnd, &clientRect);
-    float clientWidth  = static_cast<float>(clientRect.right - clientRect.left) * 96.f / static_cast<float>(_dpi);
-    float clientHeight = static_cast<float>(clientRect.bottom - clientRect.top) * 96.f / static_cast<float>(_dpi);
+    const float clientWidth  = static_cast<float>(clientRect.right - clientRect.left) * 96.f / static_cast<float>(_dpi);
+    const float clientHeight = static_cast<float>(clientRect.bottom - clientRect.top) * 96.f / static_cast<float>(_dpi);
 
-    // Decide vertical scrollbar visibility first (page excludes horizontal scrollbar if visible)
-    SCROLLINFO si{};
-    si.cbSize         = sizeof(SCROLLINFO);
-    si.fMask          = SIF_RANGE | SIF_PAGE | SIF_POS;
-    si.nMin           = 0;
-    si.nMax           = (int)(_contentHeight);
-    float vertPageDip = clientHeight; // provisional, may subtract H-scroll later
-    // We'll refine after deciding horizontal visibility below
-    si.nPage = (UINT)std::max(0.f, vertPageDip);
-    si.nPos  = (int)_scrollY;
-    SetScrollInfo(_hWnd, SB_VERT, &si, TRUE);
+    const float textChromeWidth = _padding * 2.f + (_displayLineNumbers ? _gutterDipW : 0.f);
+    const auto state = RedSalamanderMonitor::ComputeColorTextViewScrollBars(RedSalamanderMonitor::ColorTextScrollBarInputs{
+        .clientWidthDip               = clientWidth,
+        .clientHeightDip              = clientHeight,
+        .contentWidthDip              = std::max(0.f, _approxContentWidth),
+        .contentHeightDip             = std::max(0.f, _contentHeight),
+        .textChromeWidthDip           = textChromeWidth,
+        .verticalScrollbarWidthDip    = GetVertScrollbarDip(_dpi),
+        .horizontalScrollbarHeightDip = GetHorzScrollbarDip(_hWnd, _dpi),
+        .currentVerticalVisible       = _vertScrollbarVisible,
+        .currentHorizontalVisible     = _horzScrollbarVisible,
+    });
 
-    // Decide horizontal scrollbar visibility based on content width
-    float availableWidth = clientWidth - (_padding * 2.f + (_displayLineNumbers ? _gutterDipW : 0.f));
-    // If vertical scrollbar will be visible, it consumes width
-    const bool vertVisible = _contentHeight > vertPageDip + 0.5f;
-    if (vertVisible)
-        availableWidth -= static_cast<float>(GetSystemMetricsForDpi(SM_CXVSCROLL, static_cast<UINT>(_dpi)) * 96.0 / _dpi);
-    float contentWidth    = std::max(0.f, _approxContentWidth);
-    const bool wantHorz   = contentWidth > availableWidth;
-    _horzScrollbarVisible = wantHorz;
+    SCROLLINFO vertical{};
+    vertical.cbSize = sizeof(vertical);
+    vertical.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    vertical.nMin   = 0;
+    vertical.nMax   = ScrollIntFromDip(_contentHeight);
+    vertical.nPage  = ScrollPageFromDip(state.verticalPageDip);
+    vertical.nPos   = ScrollIntFromDip(_scrollY);
+    SetScrollInfoIfChanged(_hWnd, SB_VERT, vertical);
 
-    // Now finalize vertical page after knowing horizontal visibility
-    vertPageDip = clientHeight - (_horzScrollbarVisible ? GetHorzScrollbarDip(_hWnd, _dpi) : 0.f);
-    si.nPage    = (UINT)std::max(0.f, vertPageDip);
-    si.fMask    = SIF_PAGE | SIF_POS | SIF_RANGE;
-    SetScrollInfo(_hWnd, SB_VERT, &si, TRUE);
-    ShowScrollBar(_hWnd, SB_VERT, _contentHeight > vertPageDip + 0.5f);
+    SCROLLINFO horizontal{};
+    horizontal.cbSize = sizeof(horizontal);
+    horizontal.fMask  = SIF_RANGE | SIF_PAGE | SIF_POS;
+    horizontal.nMin   = 0;
+    horizontal.nMax   = ScrollIntFromDip(std::max(0.f, _approxContentWidth));
+    horizontal.nPage  = ScrollPageFromDip(state.horizontalPageDip);
+    horizontal.nPos   = ScrollIntFromDip(_scrollX);
+    SetScrollInfoIfChanged(_hWnd, SB_HORZ, horizontal);
 
-    // Update horizontal scrollbar
-    si.nMax  = (int)contentWidth;
-    si.nPage = (UINT)availableWidth;
-    si.nPos  = (int)_scrollX;
-    SetScrollInfo(_hWnd, SB_HORZ, &si, TRUE);
-    ShowScrollBar(_hWnd, SB_HORZ, _horzScrollbarVisible);
+    if (_vertScrollbarVisible != state.verticalVisible)
+    {
+        _vertScrollbarVisible = state.verticalVisible;
+        ShowScrollBar(_hWnd, SB_VERT, _vertScrollbarVisible);
+    }
+
+    if (_horzScrollbarVisible != state.horizontalVisible)
+    {
+        _horzScrollbarVisible = state.horizontalVisible;
+        ShowScrollBar(_hWnd, SB_HORZ, _horzScrollbarVisible);
+    }
 }
 
 void ColorTextView::OnVScroll(UINT code, [[maybe_unused]] UINT pos)
@@ -1146,6 +1188,7 @@ LRESULT CALLBACK ColorTextView::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPA
         {
             self->_hWnd = hwnd;
             self->_hWndAtomic.store(hwnd, std::memory_order_release);
+            InitPostedPayloadWindow(hwnd);
         }
     }
     else
@@ -1890,9 +1933,8 @@ void ColorTextView::OnSize([[maybe_unused]] UINT width, [[maybe_unused]] UINT he
     _fallbackFilteredRuns.clear();
     InvalidateSliceBitmap();
 
-    ClampHorizontalScroll();
-    UpdateScrollBars();
     ClampScroll();
+    ClampHorizontalScroll();
     UpdateScrollBars();
 
     if (_renderMode == RenderMode::AUTO_SCROLL)
@@ -3313,7 +3355,8 @@ void ColorTextView::StartLayoutWorker(float layoutWidth, UINT32 seq)
             pkt->sliceFirstDisplayRow = _layoutCache.back().firstDisplayRow;
             pkt->sliceIsFiltered      = _layoutCache.back().isFiltered;
             pkt->filteredRuns         = _layoutCache.back().filteredRuns;
-            PostMessage(_hWnd, WndMsg::kColorTextViewLayoutReady, reinterpret_cast<WPARAM>(pkt.release()), 0);
+            std::unique_ptr<LayoutPacket> payload(pkt.release());
+            static_cast<void>(PostMessagePayload(_hWnd, WndMsg::kColorTextViewLayoutReady, 0, std::move(payload)));
             return;
         }
     }
@@ -3457,7 +3500,8 @@ void ColorTextView::StartLayoutWorker(float layoutWidth, UINT32 seq)
             pkt->sliceFirstDisplayRow = ctx->sliceFirstDisplayRow;
             pkt->sliceIsFiltered      = ctx->sliceIsFiltered;
             pkt->filteredRuns         = std::move(ctx->filteredRuns);
-            PostMessage(self->_hWnd, WndMsg::kColorTextViewLayoutReady, reinterpret_cast<WPARAM>(pkt.release()), 0);
+            std::unique_ptr<LayoutPacket> payload(pkt.release());
+            static_cast<void>(PostMessagePayload(self->_hWnd, WndMsg::kColorTextViewLayoutReady, 0, std::move(payload)));
             return;
         }
 
@@ -3472,7 +3516,8 @@ void ColorTextView::StartLayoutWorker(float layoutWidth, UINT32 seq)
         pkt->sliceIsFiltered      = false;
         pkt->filteredRuns.clear();
         pkt->layout = nullptr;
-        PostMessage(self->_hWnd, WndMsg::kColorTextViewLayoutReady, reinterpret_cast<WPARAM>(pkt.release()), 0);
+        std::unique_ptr<LayoutPacket> payload(pkt.release());
+        static_cast<void>(PostMessagePayload(self->_hWnd, WndMsg::kColorTextViewLayoutReady, 0, std::move(payload)));
     };
 
     if (! TrySubmitThreadpoolCallback(worker, rawCtx, nullptr))
@@ -4336,7 +4381,7 @@ void ColorTextView::EnsureWidthAsync()
             }
         }
 
-        PostMessage(self->_hWnd, WndMsg::kColorTextViewWidthReady, reinterpret_cast<WPARAM>(pkt.release()), 0);
+        static_cast<void>(PostMessagePayload(self->_hWnd, WndMsg::kColorTextViewWidthReady, 0, std::move(pkt)));
     };
 
     if (! TrySubmitThreadpoolCallback(worker, rawCtx, nullptr))
@@ -5048,9 +5093,23 @@ LRESULT ColorTextView::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam
         case WM_KILLFOCUS: OnKillFocus(); return 0;
         case WM_KEYDOWN: OnKeyDown(wParam); return 0;
         case WM_CHAR: OnChar(wParam); return 0;
-        case WndMsg::kColorTextViewLayoutReady: return OnAppLayoutReady(reinterpret_cast<LayoutPacket*>(wParam));
+        case WndMsg::kColorTextViewLayoutReady:
+        {
+            auto pkt = TakeMessagePayload<LayoutPacket>(lParam);
+            return OnAppLayoutReady(pkt.release());
+        }
         case WndMsg::kColorTextViewEtwBatch: return OnAppEtwBatch();
-        case WndMsg::kColorTextViewWidthReady: return OnAppWidthReady(reinterpret_cast<WidthPacket*>(wParam));
+        case WndMsg::kColorTextViewWidthReady:
+        {
+            auto pkt = TakeMessagePayload<WidthPacket>(lParam);
+            return OnAppWidthReady(pkt.release());
+        }
+        case WM_NCDESTROY:
+            _hWndAtomic.store(nullptr, std::memory_order_release);
+            static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
+            SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
+            _hWnd = nullptr;
+            return DefWindowProc(hwnd, msg, wParam, lParam);
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
@@ -5192,33 +5251,42 @@ LRESULT ColorTextView::OnAppLayoutReady(LayoutPacket* pkt)
 
 LRESULT ColorTextView::OnAppEtwBatch()
 {
-    std::vector<ColorTextView::EtwEventEntry> batch;
-    {
-        auto lock = _etwQueueCS.lock();
-        batch     = std::move(_etwEventQueue);
-        _etwEventQueue.clear();
-    }
-
     // Cap batch size to avoid blocking the UI thread for too long on mega-bursts.
-    // Remaining events go back to the queue and we re-post to process them next pump cycle.
+    // The queue keeps overflow in place so producers do not contend with a front insert under the lock.
     constexpr size_t kMaxBatchSize = 200;
-    if (batch.size() > kMaxBatchSize)
+    std::vector<Document::InfoLineInput> batch;
+    size_t remainingAfterDrain = 0;
     {
         auto lock = _etwQueueCS.lock();
-        // Prepend remaining events back to the front of the queue
-        _etwEventQueue.insert(_etwEventQueue.begin(), std::make_move_iterator(batch.begin() + kMaxBatchSize), std::make_move_iterator(batch.end()));
-        batch.resize(kMaxBatchSize);
-        // Re-post to process remainder on next message pump cycle
-        PostMessage(_hWnd, WndMsg::kColorTextViewEtwBatch, 0, 0);
+        const size_t drainCount = std::min(kMaxBatchSize, _etwEventQueue.size());
+        batch.reserve(drainCount);
+
+        for (size_t i = 0; i < drainCount; ++i)
+        {
+            auto& entry = _etwEventQueue.front();
+            batch.push_back(Document::InfoLineInput{.info = entry.info, .text = std::move(entry.message)});
+            _etwEventQueue.pop_front();
+        }
+
+        remainingAfterDrain = _etwEventQueue.size();
     }
 
-    for (const auto& entry : batch)
+    if (remainingAfterDrain > 0 && _hWnd)
     {
-        AppendInfoLine(entry.info, entry.message, true);
+        PostMessage(_hWnd, WndMsg::kColorTextViewEtwBatch, 0, 0);
     }
 
     if (! batch.empty())
     {
+        const size_t drainedCount = batch.size();
+        const auto appendStarted  = std::chrono::steady_clock::now();
+        _document.AppendInfoLines(std::move(batch));
+        Debug::Perf::EmitDurationUs(L"monitor.etw.document_append_batch_us",
+                                    Debug::Perf::ElapsedUs(appendStarted),
+                                    static_cast<uint64_t>(drainedCount),
+                                    static_cast<uint64_t>(remainingAfterDrain),
+                                    S_OK);
+
         // Query document state once after the entire batch (instead of per-event).
         // This eliminates 3*N lock acquisitions for TotalLineCount, LongestLineChars, TotalDisplayRows.
         const size_t newLineCount = _document.TotalLineCount();
@@ -5386,9 +5454,8 @@ void ColorTextView::OnDpiChanged(UINT newDpi, const RECT* suggested)
     _fallbackFilteredRuns.clear();
     InvalidateSliceBitmap();
 
-    ClampHorizontalScroll();
-    UpdateScrollBars();
     ClampScroll();
+    ClampHorizontalScroll();
     UpdateScrollBars();
 
     if (_renderMode == RenderMode::AUTO_SCROLL)

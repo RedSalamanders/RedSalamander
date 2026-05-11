@@ -140,7 +140,7 @@ function Merge-RSVcpkgTripletSafe {
     $dirsCreated  = 0
     $errors       = New-Object System.Collections.Generic.List[string]
 
-    $sourceFiles = Get-ChildItem -LiteralPath $sourceFull -File -Recurse -Force
+    $sourceFiles = @(Get-ChildItem -LiteralPath $sourceFull -File -Recurse -Force)
     $totalFiles  = $sourceFiles.Count
     Write-Host "  Analyzing $totalFiles file(s)..." -ForegroundColor Gray
 

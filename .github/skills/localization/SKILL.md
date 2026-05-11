@@ -14,8 +14,10 @@ metadata:
 2. **All static menus** → `.rc` MENU resources
 3. **Never hardcode UI text** in C++
 4. **Always use positional formatting** for variable resource strings to help localization. `.rc` format strings must use `{0}`, `{1:08X}`, etc.; bare `{}` and unindexed specs like `{:08X}` are forbidden.
-5. **Never treat a resource string as a printf-format string** (`%s`, `%d`, etc.). Use `FormatStringResource(...)` with `std::format`-style positional placeholders and avoid C4774 suppressions.
-6. **Run `resource_format_placeholders_are_positional`** when adding or editing resource strings with braces.
+5. **Keep source placeholders in argument order.** Embedded/source strings introduce placeholders as `{0}`, then `{1}`, then `{2}` with no skipped indexes; pass `FormatStringResource(...)` arguments in that same order.
+6. **Keep translations placeholder-equivalent.** Satellite strings may reorder placeholders for grammar, but must not add, drop, duplicate, renumber, or change format specs compared with the source string.
+7. **Never treat a resource string as a printf-format string** (`%s`, `%d`, etc.). Use `FormatStringResource(...)` with `std::format`-style positional placeholders and avoid C4774 suppressions.
+8. **Run `ResourceLocalizationContracts.Tests.ps1`** when adding or editing resource strings with braces.
 
 ## Resource Helpers (Common/Helpers.h)
 
@@ -61,6 +63,25 @@ IDS_SAVE_FAILED "Failed to save {0}: 0x{:08X}"
 // ✅ Correct (every argument is indexed):
 IDS_SAVE_FAILED "Failed to save {0}: 0x{1:08X}"
 ```
+
+## Keep source argument order obvious
+
+```rc
+// ❌ Wrong (source string uses argument 1 before argument 0):
+IDS_ARCHIVE_DONE "Extracted {1} entries from {0}."
+
+// ✅ Correct (code passes entry count first, archive path second):
+IDS_ARCHIVE_DONE "Extracted {0} entries from {1}."
+```
+
+```cpp
+auto msg = FormatStringResource(nullptr, IDS_ARCHIVE_DONE, entryCount, archivePath);
+```
+
+Translations may reorder placeholders, but must preserve the exact source
+placeholder tokens. For example, a translation of `{0:L} file{1:s}: {2}
+selected` can move `{2}`, but it cannot invent `{3}` or change `{2}` to
+`{2:s}` unless the source also has that exact token.
 
 ## Menu Resources in .rc
 

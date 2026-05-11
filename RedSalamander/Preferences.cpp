@@ -69,6 +69,11 @@ bool DebugScrollPreferencesCategoryTreeByWheelDetents(const int detents) noexcep
     return PreferencesDialog::DebugScrollCategoryTreeByWheelDetents(detents);
 }
 
+bool DebugDragPreferencesPageHostDxScrollbarThumb(const int distancePx, const int moveCount) noexcept
+{
+    return PreferencesDialog::DebugDragPageHostDxScrollbarThumb(distancePx, moveCount);
+}
+
 bool DebugSelectPreferencesPluginsMainListRow(const size_t rowIndex) noexcept
 {
     return PreferencesDialog::DebugSelectPluginsMainListRow(rowIndex);
@@ -183,6 +188,27 @@ bool DebugGetPreferencesViewersListRowClientRect(const size_t rowIndex, RECT& ou
 bool DebugGetPreferencesViewersListHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
 {
     return PreferencesDialog::DebugGetViewersListHeaderClientRect(columnIndex, outRect);
+}
+
+bool DebugHitTestPreferencesViewersListClientPoint(
+    const POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) noexcept
+{
+    return PreferencesDialog::DebugHitTestViewersListClientPoint(clientPoint, outZone, outColumnIndex, outHeaderResize, outHostHitsList);
+}
+
+bool DebugGetPreferencesViewersListPointerState(PreferencesGridPointerDebugState& outState) noexcept
+{
+    return PreferencesDialog::DebugGetViewersListPointerState(outState);
+}
+
+bool DebugGetPreferencesViewersTabClientRect(const size_t tabIndex, RECT& outRect) noexcept
+{
+    return PreferencesDialog::DebugGetViewersTabClientRect(tabIndex, outRect);
+}
+
+bool DebugGetPreferencesViewersSelectedTabIndex(size_t& outIndex) noexcept
+{
+    return PreferencesDialog::DebugGetViewersSelectedTabIndex(outIndex);
 }
 
 bool DebugSelectPreferencesThemesListRow(const size_t rowIndex) noexcept

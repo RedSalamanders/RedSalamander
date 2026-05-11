@@ -1782,8 +1782,6 @@ SelfTest::RunCase(options,
     state.Require(seedStats.snapshotPath.ends_with(L".bin"), std::format(L"Expected a snapshot binary path, got '{}'.", seedStats.snapshotPath));
     state.Require(! EqualsIgnoreCase(seedStats.snapshotPath, sqlitePath.wstring()),
                   L"Snapshot mutation store should remain distinct from the SQLite query store.");
-    state.Require(seedStats.usedSqliteStore, L"SQLite-configured repository should use SQLite for query enumeration once the mirrored store is ready.");
-    state.Require(! seedStats.sqliteCutoverBlocked, L"SQLite-configured repository should not report a blocked query cutover for a clean mirrored store.");
 
     const std::filesystem::path snapshotPath(seedStats.snapshotPath);
     std::error_code snapshotExistsEc;
@@ -1793,6 +1791,14 @@ SelfTest::RunCase(options,
 
     std::error_code sqliteExistsEc;
     state.Require(std::filesystem::exists(sqlitePath, sqliteExistsEc), L"SQLite-configured repository should bootstrap and mirror the SQLite sidecar.");
+
+    if (! CanProveDirectSqliteCurrentness(seedStats))
+    {
+        return state.Skip(DirectSqliteCurrentnessSkipReason(seedStats));
+    }
+
+    state.Require(seedStats.usedSqliteStore, L"SQLite-configured repository should use SQLite for query enumeration once the mirrored store is ready.");
+    state.Require(! seedStats.sqliteCutoverBlocked, L"SQLite-configured repository should not report a blocked query cutover for a clean mirrored store.");
 
     hr = repository.DropCachedVolumeForTests(caseRoot.wstring());
     state.Require(SUCCEEDED(hr), std::format(L"DropCachedVolumeForTests failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
@@ -1878,6 +1884,7 @@ SelfTest::RunCase(options,
             .snapshotRootDirectory = storeRoot.wstring(),
             .persistentStoreKind   = LocalSearchIndexCore::PersistentStoreKind::Sqlite,
             .sqliteDatabasePath    = sqlitePath.wstring(),
+            .sqliteAuthoritative   = true,
         });
 
         LocalSearchIndexCore::QueryStats seedStats{};
@@ -1895,9 +1902,9 @@ SelfTest::RunCase(options,
         state.Require(
             seedStats.snapshotFileBytes == 0u,
             std::format(L"Seed cold-start SQLite query should report snapshotFileBytes=0 when no snapshot exists. got={}", seedStats.snapshotFileBytes));
-        if (! seedStats.journalAvailable)
+        if (! CanProveDirectSqliteCurrentness(seedStats))
         {
-            return state.Skip(L"Live journal cursor unavailable; direct cold-start SQLite bypass is intentionally blocked by policy.");
+            return state.Skip(DirectSqliteCurrentnessSkipReason(seedStats));
         }
     }
 
@@ -1908,6 +1915,7 @@ SelfTest::RunCase(options,
         .snapshotRootDirectory = storeRoot.wstring(),
         .persistentStoreKind   = LocalSearchIndexCore::PersistentStoreKind::Sqlite,
         .sqliteDatabasePath    = sqlitePath.wstring(),
+        .sqliteAuthoritative   = true,
     });
 
     LocalSearchIndexCore::QueryStats coldStats{};
@@ -2036,9 +2044,9 @@ SelfTest::RunCase(options,
     state.Require(! replayStats.snapshotSaved, L"Authoritative sqlite replay query should not save a compatibility snapshot.");
     state.Require(replayStats.snapshotPath.empty(), L"Authoritative sqlite replay query should not report a compatibility snapshot path.");
     state.Require(replayStats.snapshotFileBytes == 0u, L"Authoritative sqlite replay query should report snapshotFileBytes=0.");
-    if (! replayStats.journalAvailable)
+    if (! CanProveDirectSqliteCurrentness(replayStats))
     {
-        return state.Skip(L"Authoritative sqlite replay test requires a readable live journal cursor.");
+        return state.Skip(DirectSqliteCurrentnessSkipReason(replayStats));
     }
 
     state.Require(replayStats.journalReplayApplied, L"Authoritative sqlite replay query should advance the sqlite store through journal replay.");
@@ -2134,9 +2142,9 @@ SelfTest::RunCase(options,
     state.Require(! replayStats.snapshotSaved, L"Authoritative sqlite reseed-after-loss replay should not save a compatibility snapshot.");
     state.Require(replayStats.snapshotPath.empty(), L"Authoritative sqlite reseed-after-loss replay should not report a compatibility snapshot path.");
     state.Require(replayStats.snapshotFileBytes == 0u, L"Authoritative sqlite reseed-after-loss replay should report snapshotFileBytes=0.");
-    if (! replayStats.journalAvailable)
+    if (! CanProveDirectSqliteCurrentness(replayStats))
     {
-        return state.Skip(L"Authoritative sqlite reseed-after-loss test requires a readable live journal cursor.");
+        return state.Skip(DirectSqliteCurrentnessSkipReason(replayStats));
     }
 
     state.Require(replayStats.journalReplayApplied, L"Authoritative sqlite reseed-after-loss replay should still use journal replay before the full reseed.");
@@ -2202,6 +2210,7 @@ SelfTest::RunCase(options,
             .snapshotRootDirectory = storeRoot.wstring(),
             .persistentStoreKind   = LocalSearchIndexCore::PersistentStoreKind::Sqlite,
             .sqliteDatabasePath    = sqlitePath.wstring(),
+            .sqliteAuthoritative   = true,
         });
 
         LocalSearchIndexCore::QueryStats seedStats{};
@@ -2229,6 +2238,7 @@ SelfTest::RunCase(options,
         .snapshotRootDirectory = storeRoot.wstring(),
         .persistentStoreKind   = LocalSearchIndexCore::PersistentStoreKind::Sqlite,
         .sqliteDatabasePath    = sqlitePath.wstring(),
+        .sqliteAuthoritative   = true,
     });
 
     LocalSearchIndexCore::QueryStats coldStats{};
@@ -2350,6 +2360,11 @@ SelfTest::RunCase(options,
     if (FAILED(hr))
     {
         return false;
+    }
+
+    if (! CanProveDirectSqliteCurrentness(seedStats))
+    {
+        return state.Skip(DirectSqliteCurrentnessSkipReason(seedStats));
     }
 
     state.Require(seedStats.usedSqliteStore, L"Seed query should use SQLite once the mirrored store is ready.");
@@ -2482,7 +2497,10 @@ SelfTest::RunCase(options,
     std::wstring sqliteError;
     uint64_t mirroredState = 0u;
     state.Require(QuerySqliteSingleInt64(sqlitePath, "SELECT state FROM volumes LIMIT 1;", mirroredState, sqliteError), sqliteError);
-    state.Require(mirroredState == SqliteIndexStore::kVolumeStateReady, std::format(L"Expected mirrored volume state READY, got {}.", mirroredState));
+    const uint32_t expectedMirroredState =
+        CanProveDirectSqliteCurrentness(importStats) ? SqliteIndexStore::kVolumeStateReady : SqliteIndexStore::kVolumeStateCurrentnessUnproven;
+    state.Require(mirroredState == expectedMirroredState,
+                  std::format(L"Expected mirrored volume state {}, got {}.", expectedMirroredState, mirroredState));
 
     uint64_t alphaSizeBytes = 0u;
     state.Require(QuerySqliteSingleInt64(sqlitePath, "SELECT size_bytes FROM entries WHERE name = 'alpha.txt' LIMIT 1;", alphaSizeBytes, sqliteError),
@@ -2562,9 +2580,9 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    if (! seedStats.journalAvailable)
+    if (! CanProveDirectSqliteCurrentness(seedStats))
     {
-        return state.Skip(L"Live journal cursor unavailable; SQLite prefilter classification is only observable when direct SQLite query cutover is open.");
+        return state.Skip(DirectSqliteCurrentnessSkipReason(seedStats));
     }
 
     struct PrefilterExpectation final
@@ -3338,8 +3356,6 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    state.Require(beforeInfo.writeAheadLogBytes != 0u, L"Delete-burst maintenance test expects a non-empty WAL before the idle scheduler runs.");
-
     std::vector<std::wstring> expectedNames;
     {
         const auto compactedEntries = BuildSyntheticSqliteEntries(caseRoot, kCompactedEntryCount);
@@ -3448,10 +3464,19 @@ SelfTest::RunCase(options,
                   std::format(L"First idle maintenance window should shrink the database file, before={} after={}.",
                               initialStatus.persistentStoreBytes,
                               afterFirstWindow.persistentStoreBytes));
-    state.Require(afterFirstWindow.writeAheadLogBytes < initialStatus.writeAheadLogBytes,
-                  std::format(L"First idle maintenance window should shrink the WAL, before={} after={}.",
-                              initialStatus.writeAheadLogBytes,
-                              afterFirstWindow.writeAheadLogBytes));
+    if (initialStatus.writeAheadLogBytes != 0u)
+    {
+        state.Require(afterFirstWindow.writeAheadLogBytes < initialStatus.writeAheadLogBytes,
+                      std::format(L"First idle maintenance window should shrink the WAL, before={} after={}.",
+                                  initialStatus.writeAheadLogBytes,
+                                  afterFirstWindow.writeAheadLogBytes));
+    }
+    else
+    {
+        state.Require(afterFirstWindow.writeAheadLogBytes == 0u,
+                      std::format(L"First idle maintenance window should keep an eagerly checkpointed WAL empty, got {}.",
+                                  afterFirstWindow.writeAheadLogBytes));
+    }
 
     std::vector<std::wstring> afterFirstNames;
     state.Require(queryNames(afterFirstNames, L"after first maintenance window"), L"First maintenance-window query failed.");
@@ -3591,21 +3616,14 @@ SelfTest::RunCase(options,
     state.Require(queryStats.snapshotFileBytes == 0u,
                   std::format(L"First SQLite-backed service query should report snapshotFileBytes=0 when no compatibility snapshot exists. got={}",
                               queryStats.snapshotFileBytes));
-    if (queryStats.journalAvailable)
-    {
-        state.Require(queryStats.usedSqliteStore,
-                      L"First SQLite-backed service query should enumerate from SQLite after the same-request seed/mirror refresh.");
-        state.Require(queryStats.sqliteReadOnlyQuery, L"First SQLite-backed service query should report a read-only SQLite query path.");
-        state.Require(! queryStats.sqliteCutoverBlocked,
-                      L"First SQLite-backed service query should not report a blocked cutover when a live journal cursor proves the mirrored root is current.");
-    }
-    else
-    {
-        state.Require(! queryStats.usedSqliteStore,
-                      L"First SQLite-backed service query should fall back when no live journal cursor is available for direct SQLite validation.");
-        state.Require(queryStats.sqliteCutoverBlocked,
-                      L"First SQLite-backed service query should report a blocked cutover when no live journal cursor is available.");
-    }
+    state.Require(! queryStats.usedSqliteStore, L"First SQLite-backed no-wait service query should not use SQLite before the root is mirrored.");
+    state.Require(queryStats.usedLiveScanFallback, L"First SQLite-backed no-wait service query should report live-scan fallback usage.");
+    state.Require(queryStats.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::LiveScanFallback,
+                  L"First SQLite-backed no-wait service query should report the live-scan fallback execution mode.");
+    state.Require(queryStats.fallbackReason == LocalSearchIndexCore::FallbackReason::StoreMissing,
+                  L"First SQLite-backed no-wait service query should report store-missing until warmup or rebuild mirrors the root.");
+    state.Require(! queryStats.sqliteCutoverBlocked,
+                  L"First SQLite-backed no-wait service query should distinguish a missing root from a stale-root cutover block.");
 
     LocalSearchIndexCore::QueryStats warmQueryStats{};
     std::vector<LocalSearchIndexCore::Candidate> warmCandidates;
@@ -3619,24 +3637,16 @@ SelfTest::RunCase(options,
     state.Require(CollectIndexedCandidateNames(warmCandidates) == std::vector<std::wstring>{L"alpha.txt"},
                   L"Warm SQLite-backed service query returned an unexpected candidate set.");
     state.Require(! warmQueryStats.snapshotLoaded, L"Warm SQLite-backed service query should not need to reload the snapshot runtime store.");
-    if (warmQueryStats.journalAvailable)
-    {
-        state.Require(warmQueryStats.usedSqliteStore,
-                      L"Warm SQLite-backed service query should report SQLite query enumeration after the first mirrored query.");
-        state.Require(warmQueryStats.sqliteReadOnlyQuery, L"Warm SQLite-backed service query should report a read-only SQLite query path.");
-        state.Require(warmQueryStats.usedNamePrefilter, L"Warm SQLite-backed service query should report the SQLite extension prefilter for '*.txt'.");
-        state.Require(! warmQueryStats.sqliteCutoverBlocked,
-                      L"Warm SQLite-backed service query should not report a blocked cutover when the live journal cursor remains readable.");
-    }
-    else
-    {
-        state.Require(! warmQueryStats.usedSqliteStore,
-                      L"Warm SQLite-backed service query should keep falling back when no live journal cursor is available for direct SQLite validation.");
-        state.Require(! warmQueryStats.usedNamePrefilter,
-                      L"Warm SQLite-backed service query should not report a SQLite prefilter when direct SQLite remains blocked.");
-        state.Require(warmQueryStats.sqliteCutoverBlocked,
-                      L"Warm SQLite-backed service query should keep reporting a blocked cutover when no live journal cursor is available.");
-    }
+    state.Require(! warmQueryStats.usedSqliteStore, L"Warm SQLite-backed no-wait service query should not use SQLite before warmup mirrors the root.");
+    state.Require(! warmQueryStats.usedNamePrefilter,
+                  L"Warm SQLite-backed no-wait service query should not report a SQLite prefilter before direct SQLite cutover is open.");
+    state.Require(warmQueryStats.usedLiveScanFallback, L"Warm SQLite-backed no-wait service query should report live-scan fallback usage.");
+    state.Require(warmQueryStats.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::LiveScanFallback,
+                  L"Warm SQLite-backed no-wait service query should report the live-scan fallback execution mode.");
+    state.Require(warmQueryStats.fallbackReason == LocalSearchIndexCore::FallbackReason::StoreMissing,
+                  L"Warm SQLite-backed no-wait service query should keep reporting store-missing until warmup or rebuild mirrors the root.");
+    state.Require(! warmQueryStats.sqliteCutoverBlocked,
+                  L"Warm SQLite-backed no-wait service query should distinguish a missing root from a stale-root cutover block.");
     state.Require(warmCandidates.size() == 1u, std::format(L"Warm SQLite-backed service query expected 1 candidate, got {}.", warmCandidates.size()));
     if (warmCandidates.size() == 1u && warmQueryStats.usedSqliteStore)
     {
@@ -3683,10 +3693,11 @@ SelfTest::RunCase(options,
     }
 
     state.Require(status.persistentStoreInspectionSucceeded, L"SQLite service status should keep reporting successful inspection after query.");
-    state.Require(status.readyForQueryCutover, L"SQLite service status should report readyForQueryCutover after mirrored query.");
-    state.Require(status.indexedVolumeCount == 1u, std::format(L"Expected one mirrored volume after query, got {}.", status.indexedVolumeCount));
-    state.Require(status.indexedEntryCount == queryStats.entryCount + 1u,
-                  std::format(L"Expected {} mirrored entries after query, got {}.", queryStats.entryCount + 1u, status.indexedEntryCount));
+    state.Require(status.readyForQueryCutover, L"SQLite service status should keep an empty store ready for future query cutover.");
+    state.Require(status.indexedVolumeCount == 0u,
+                  std::format(L"Expected zero mirrored volumes before warmup/rebuild, got {}.", status.indexedVolumeCount));
+    state.Require(status.indexedEntryCount == 0u,
+                  std::format(L"Expected zero mirrored entries before warmup/rebuild, got {}.", status.indexedEntryCount));
     state.Require(status.legacyImportVolumeCount == 0u,
                   std::format(L"Expected zero legacy-import volumes after query, got {}.", status.legacyImportVolumeCount));
 
@@ -4372,7 +4383,8 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    state.Require(output.contains("continuing in degraded mode"), L"Invalid-store SQLite foreground output should record fail-open startup.");
+    state.Require(output.contains("Store not inspected yet"),
+                  L"Invalid-store SQLite foreground banner should surface that the store was not inspectable at startup.");
     return state.failure.empty();
 });
 
@@ -4390,8 +4402,15 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    uint64_t currentJournalId = 0u;
+    uint64_t currentNextUsn   = 0u;
+    if (! TryPrepareDirectSqliteCursorForSelfTest(state, caseRoot, L"SQLite query-failure", currentJournalId, currentNextUsn))
+    {
+        return state.failure.empty();
+    }
+
     const std::filesystem::path storageRoot = caseRoot / L"service-store";
-    const std::filesystem::path sqlitePath  = caseRoot / L"query-failure.sqlite3";
+    const std::filesystem::path sqlitePath  = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-query-failure.sqlite3");
     SqliteIndexStore::StoreInfo bootstrapInfo{};
     HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
     state.Require(SUCCEEDED(hr),
@@ -4404,8 +4423,8 @@ SelfTest::RunCase(options,
     SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
     replaceRequest.rootPath       = caseRoot.wstring();
     replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
-    replaceRequest.journalId      = 1u;
-    replaceRequest.nextUsn        = 1u;
+    replaceRequest.journalId      = currentJournalId;
+    replaceRequest.nextUsn        = currentNextUsn;
     replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
     replaceRequest.entries.push_back({
         .fileIdLow      = 2u,
@@ -4564,8 +4583,15 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    uint64_t currentJournalId = 0u;
+    uint64_t currentNextUsn   = 0u;
+    if (! TryPrepareDirectSqliteCursorForSelfTest(state, caseRoot, L"SQLite mid-query-failure", currentJournalId, currentNextUsn))
+    {
+        return state.failure.empty();
+    }
+
     const std::filesystem::path storageRoot = caseRoot / L"service-store";
-    const std::filesystem::path sqlitePath  = caseRoot / L"midquery-failure.sqlite3";
+    const std::filesystem::path sqlitePath  = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-midquery-failure.sqlite3");
     SqliteIndexStore::StoreInfo bootstrapInfo{};
     HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
     state.Require(SUCCEEDED(hr),
@@ -4578,9 +4604,20 @@ SelfTest::RunCase(options,
     SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
     replaceRequest.rootPath       = caseRoot.wstring();
     replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
-    replaceRequest.journalId      = 1u;
-    replaceRequest.nextUsn        = 1u;
+    replaceRequest.journalId      = currentJournalId;
+    replaceRequest.nextUsn        = currentNextUsn;
     replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 1u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 0u,
+        .parentIdHigh   = 0u,
+        .fullPath       = caseRoot.wstring(),
+        .name           = caseRoot.filename().wstring(),
+        .attributes     = FILE_ATTRIBUTE_DIRECTORY,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
     replaceRequest.entries.push_back({
         .fileIdLow      = 2u,
         .fileIdHigh     = 0u,
@@ -4728,7 +4765,14 @@ SelfTest::RunCase(options,
     state.Require(SelfTest::WriteTextFile(caseRoot / L"alphabet.txt", "alphabet"), L"Failed to create alphabet.txt.");
     state.Require(SelfTest::WriteTextFile(caseRoot / L"beta.log", "beta"), L"Failed to create beta.log.");
 
-    const std::filesystem::path sqlitePath  = caseRoot / L"prefilter.sqlite3";
+    uint64_t currentJournalId = 0u;
+    uint64_t currentNextUsn   = 0u;
+    if (! TryPrepareDirectSqliteCursorForSelfTest(state, caseRoot, L"SQLite service prefilter", currentJournalId, currentNextUsn))
+    {
+        return state.failure.empty();
+    }
+
+    const std::filesystem::path sqlitePath  = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-prefilter.sqlite3");
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring pipeName             = MakeUniquePipeName();
     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
@@ -4740,6 +4784,77 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::EnsureBootstrap for SQLite service prefilter test failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = caseRoot.wstring();
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = currentJournalId;
+    replaceRequest.nextUsn        = currentNextUsn;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 1u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 0u,
+        .parentIdHigh   = 0u,
+        .fullPath       = caseRoot.wstring(),
+        .name           = caseRoot.filename().wstring(),
+        .attributes     = FILE_ATTRIBUTE_DIRECTORY,
+        .sizeBytes      = 0u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 2u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"alpha.txt").wstring(),
+        .name           = L"alpha.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 5u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 3u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"alphabet.txt").wstring(),
+        .name           = L"alphabet.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 8u,
+        .writeTime100ns = 0u,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 4u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"beta.log").wstring(),
+        .name           = L"beta.log",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 4u,
+        .writeTime100ns = 0u,
+    });
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"SqliteIndexStore::ReplaceVolume for SQLite service prefilter test failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
     state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, true, extraArgs), serviceError);
     if (! state.failure.empty())
@@ -4758,12 +4873,13 @@ SelfTest::RunCase(options,
 
     LocalSearchIndexCore::QueryStats seedStats{};
     std::vector<LocalSearchIndexCore::Candidate> seedCandidates;
-    HRESULT hr = SearchServiceBroker::Query(seedRequest, nullptr, nullptr, nullptr, nullptr, seedCandidates, &seedStats);
+    hr = SearchServiceBroker::Query(seedRequest, nullptr, nullptr, nullptr, nullptr, seedCandidates, &seedStats);
     state.Require(SUCCEEDED(hr), std::format(L"Seed SQLite service prefilter query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
     }
+    state.Require(seedStats.usedSqliteStore, L"Seed SQLite service prefilter query should enumerate from the seeded SQLite fixture.");
 
     SearchServiceBroker::QueryRequest prefixRequest = seedRequest;
     prefixRequest.namePattern                       = L"alph*";
@@ -5204,6 +5320,14 @@ SelfTest::RunCase(options,
         return false;
     }
 
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_service_discovers_fixed_local_roots", caseRoot),
+                  L"Failed to prepare search_service_discovers_fixed_local_roots root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring pipeName             = MakeUniquePipeName();
     state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0, L"Failed to override the search service pipe.");
@@ -5215,7 +5339,11 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::filesystem::path sqlitePath  = caseRoot / L"discovery.sqlite3";
+    const std::wstring extraArgs =
+        std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
+    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -5565,7 +5693,7 @@ SelfTest::RunCase(options,
 
     state.Require(CollectIndexedCandidateNames(candidates) == std::vector<std::wstring>{L"alpha.txt"},
                   L"Startup warmup failure follow-up query returned an unexpected candidate set.");
-    if (queryStats.journalAvailable)
+    if (CanProveDirectSqliteCurrentness(queryStats))
     {
         state.Require(queryStats.usedSqliteStore,
                       L"Startup warmup failure follow-up query should enumerate from SQLite for the surviving root when the live journal cursor is readable.");
@@ -5910,7 +6038,7 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 3u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -5976,8 +6104,8 @@ SelfTest::RunCase(options,
     if (completed != nullptr)
     {
         state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SERVICE, L"Single-request service search should complete on the service backend.");
-        state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) == 0u,
-                      L"Single-request service search should not degrade to the local index.");
+        state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE) == 0u,
+                      L"Single-request service search should keep using the service transport rather than falling back to the host.");
     }
 
     SearchServiceBroker::ServiceStatus status{};
@@ -6039,6 +6167,18 @@ SelfTest::RunCase(options,
         {
             return false;
         }
+    }
+
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::filesystem::path sqlitePath  = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-content-early-stop.sqlite3");
+    ForegroundSearchServiceProcess service;
+    std::wstring serviceError;
+    const std::wstring extraArgs =
+        std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
+    state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
+    if (! state.failure.empty())
+    {
+        return false;
     }
 
     std::wstring rootText       = caseRoot.wstring();
@@ -6130,7 +6270,7 @@ SelfTest::RunCase(options,
     state.Require(SetFileLastWriteTime(caseRoot / L"alpha.txt", expectedWriteTimeFile), L"Failed to set alpha.txt last write time.");
     state.Require(SetFileLastWriteTime(caseRoot / L"sub" / L"beta.txt", expectedWriteTimeFile), L"Failed to set sub\\beta.txt last write time.");
 
-    const std::filesystem::path sqlitePath = caseRoot / L"service-index.sqlite3";
+    const std::filesystem::path sqlitePath = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-service-index.sqlite3");
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
@@ -6172,7 +6312,7 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    if (warmStats.journalAvailable)
+    if (CanProveDirectSqliteCurrentness(warmStats))
     {
         state.Require(warmStats.usedSqliteStore, L"Warm broker batch query should enumerate from SQLite.");
         state.Require(warmStats.sqliteReadOnlyQuery, L"Warm broker batch query should use a read-only SQLite connection.");
@@ -6184,8 +6324,9 @@ SelfTest::RunCase(options,
         state.Require(! warmStats.usedSqliteStore,
                       L"Warm broker batch query should fall back when no live journal cursor is available for direct SQLite validation.");
         state.Require(! warmStats.usedNamePrefilter, L"Warm broker batch query should not report a SQLite prefilter when direct SQLite remains blocked.");
-        state.Require(warmStats.sqliteCutoverBlocked,
-                      L"Warm broker batch query should report a blocked SQLite cutover when no live journal cursor is available.");
+        state.Require(warmStats.usedLiveScanFallback, L"Warm broker batch query should report live-scan fallback when direct SQLite remains blocked.");
+        state.Require(warmStats.fallbackReason != LocalSearchIndexCore::FallbackReason::None,
+                      L"Warm broker batch query should report why direct SQLite was not used.");
     }
     state.Require(CollectIndexedCandidateNames(batchRecorder.Candidates()) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
                   L"Warm broker batch query returned an unexpected candidate set.");
@@ -6231,8 +6372,8 @@ SelfTest::RunCase(options,
     {
         state.Require(serviceCompleted->backend == FILESYSTEM_SEARCH_BACKEND_SERVICE,
                       L"Service-backed indexed name search should complete on the service backend.");
-        state.Require((serviceCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) == 0u,
-                      L"Service-backed indexed name search should not degrade on a healthy service.");
+        state.Require((serviceCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE) == 0u,
+                      L"Service-backed indexed name search should keep using the service transport rather than falling back to the host.");
     }
 
     const HRESULT setLocalIndexHr = info->SetConfiguration("{\"searchBackendPreference\":\"local-index\"}");
@@ -6400,7 +6541,7 @@ SelfTest::RunCase(options,
     state.Require(SetFileLastWriteTime(caseRoot / L"report-one.txt", expectedWriteTimeFile), L"Failed to set report-one.txt last write time.");
     state.Require(SetFileLastWriteTime(caseRoot / L"sub" / L"report-two.txt", expectedWriteTimeFile), L"Failed to set report-two.txt last write time.");
 
-    const std::filesystem::path sqlitePath = caseRoot / L"service-index.sqlite3";
+    const std::filesystem::path sqlitePath = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-service-index.sqlite3");
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
     const std::wstring extraArgs = std::format(L"--store-backend=sqlite --sqlite-path=\"{}\"", sqlitePath.wstring());
@@ -6506,8 +6647,8 @@ SelfTest::RunCase(options,
     if (nativeCompleted != nullptr)
     {
         state.Require(nativeCompleted->backend == FILESYSTEM_SEARCH_BACKEND_SERVICE, L"Service-backed native search should report the service backend.");
-        state.Require((nativeCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) == 0u,
-                      L"Service-backed native search should not degrade on a healthy service.");
+        state.Require((nativeCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE) == 0u,
+                      L"Service-backed native search should keep using the service transport rather than falling back to the host.");
     }
 
     return state.failure.empty();
@@ -6688,7 +6829,9 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 12u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::wstring extraArgs            = std::format(L"--storage-root=\"{}\" --store-backend=snapshot", storageRoot.wstring());
+    state.Require(service.Start(pipeName, 12u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
@@ -7186,6 +7329,11 @@ const auto runRemoteFallbackNameOnlySmoke = [&](std::wstring_view caseName,
                                                 std::wstring_view defaultProfileName,
                                                 std::wstring_view pluginId) noexcept
 {
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");

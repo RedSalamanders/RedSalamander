@@ -1194,6 +1194,12 @@ bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(RedSalamander::
         return false;
     }
 
+    const HWND bodyHwnd            = _optionsDxUi->body.hostHwnd.get();
+    const HWND focusedBeforeLayout = GetFocus();
+    const bool restoreBodyFocus =
+        _optionsDxUi->body.host.GetFocusControl() == control &&
+        (focusedBeforeLayout == bodyHwnd || IsChild(bodyHwnd, focusedBeforeLayout) != FALSE);
+
     RECT hostClient{};
     if (! GetClientRect(_optionsUi.host, &hostClient))
     {
@@ -1226,6 +1232,18 @@ bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(RedSalamander::
 
     _optionsScrollOffset = newOffset;
     LayoutOptionsControls();
+    if (restoreBodyFocus && _optionsDxUi && _optionsDxUi->body.hostHwnd && IsWindow(_optionsDxUi->body.hostHwnd.get()) != FALSE)
+    {
+        const HWND currentFocus = GetFocus();
+        if (currentFocus != _optionsDxUi->body.hostHwnd.get() && IsChild(_optionsDxUi->body.hostHwnd.get(), currentFocus) == FALSE)
+        {
+            ::SetFocus(_optionsDxUi->body.hostHwnd.get());
+        }
+        if (_optionsDxUi->body.host.GetFocusControl() != control)
+        {
+            _optionsDxUi->body.host.SetFocusControl(control);
+        }
+    }
     return true;
 }
 
@@ -3368,9 +3386,10 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
     if (_optionsDxUi && focused)
     {
         const auto* bodyFocused     = _optionsDxUi->body.host.GetFocusControl();
+        const bool bodyOwnsFocus    = _optionsDxUi->body.hostHwnd && WindowOwnsFocus(_optionsDxUi->body.hostHwnd.get(), focused);
         const auto assignBodyTarget = [&](const auto& slot, const CompareDirectoriesOptionsDebugFocusTarget target) noexcept
         {
-            if (bodyFocused == slot || (_optionsDxUi->body.hostHwnd && WindowOwnsFocus(_optionsDxUi->body.hostHwnd.get(), focused) && slot == bodyFocused))
+            if (bodyOwnsFocus && slot == bodyFocused)
             {
                 out.focusTarget = target;
                 return true;
@@ -3396,15 +3415,15 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
             return true;
         }
 
-        if (_optionsDxUi->okButton.button &&
-            (WindowOwnsFocus(_optionsDxUi->okButton.hostHwnd.get(), focused) || _optionsDxUi->okButton.host.GetFocusControl() == _optionsDxUi->okButton.button))
+        if (_optionsDxUi->okButton.button && WindowOwnsFocus(_optionsDxUi->okButton.hostHwnd.get(), focused) &&
+            _optionsDxUi->okButton.host.GetFocusControl() == _optionsDxUi->okButton.button)
         {
             out.focusTarget = CompareDirectoriesOptionsDebugFocusTarget::OkButton;
             return true;
         }
 
-        if (_optionsDxUi->cancelButton.button && (WindowOwnsFocus(_optionsDxUi->cancelButton.hostHwnd.get(), focused) ||
-                                                  _optionsDxUi->cancelButton.host.GetFocusControl() == _optionsDxUi->cancelButton.button))
+        if (_optionsDxUi->cancelButton.button && WindowOwnsFocus(_optionsDxUi->cancelButton.hostHwnd.get(), focused) &&
+            _optionsDxUi->cancelButton.host.GetFocusControl() == _optionsDxUi->cancelButton.button)
         {
             out.focusTarget = CompareDirectoriesOptionsDebugFocusTarget::CancelButton;
             return true;

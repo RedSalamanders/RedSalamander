@@ -628,6 +628,8 @@ struct FocusAdvanceResult
 {
     Control* control = nullptr;
     bool wrapped     = false;
+    size_t currentIndex = std::numeric_limits<size_t>::max();
+    size_t nextIndex    = std::numeric_limits<size_t>::max();
 };
 
 [[nodiscard]] FocusAdvanceResult FindAdjacentFocusable(Control* root, Control* current, bool reverse)
@@ -641,24 +643,33 @@ struct FocusAdvanceResult
 
     if (! current)
     {
-        return FocusAdvanceResult{.control = reverse ? focusableControls.back() : focusableControls.front()};
+        return FocusAdvanceResult{.control = reverse ? focusableControls.back() : focusableControls.front(),
+                                  .nextIndex = reverse ? focusableControls.size() - 1u : 0u};
     }
 
     const auto it = std::ranges::find(focusableControls, current);
     if (it == focusableControls.end())
     {
-        return FocusAdvanceResult{.control = reverse ? focusableControls.back() : focusableControls.front()};
+        return FocusAdvanceResult{.control = reverse ? focusableControls.back() : focusableControls.front(),
+                                  .nextIndex = reverse ? focusableControls.size() - 1u : 0u};
     }
 
+    const size_t currentIndex = static_cast<size_t>(std::distance(focusableControls.begin(), it));
     if (reverse)
     {
-        return FocusAdvanceResult{.control = (it == focusableControls.begin()) ? focusableControls.back() : *(it - 1),
-                                  .wrapped = it == focusableControls.begin()};
+        const bool wrapped = it == focusableControls.begin();
+        return FocusAdvanceResult{.control = wrapped ? focusableControls.back() : *(it - 1),
+                                  .wrapped = wrapped,
+                                  .currentIndex = currentIndex,
+                                  .nextIndex = wrapped ? focusableControls.size() - 1u : currentIndex - 1u};
     }
 
     const auto nextIt = it + 1;
-    return FocusAdvanceResult{.control = (nextIt == focusableControls.end()) ? focusableControls.front() : *nextIt,
-                              .wrapped = nextIt == focusableControls.end()};
+    const bool wrapped = nextIt == focusableControls.end();
+    return FocusAdvanceResult{.control = wrapped ? focusableControls.front() : *nextIt,
+                              .wrapped = wrapped,
+                              .currentIndex = currentIndex,
+                              .nextIndex = wrapped ? 0u : currentIndex + 1u};
 }
 
 [[nodiscard]] Control* FindMnemonicControl(Control* control, wchar_t mnemonic) noexcept
@@ -1165,9 +1176,19 @@ void WindowHost::SetFocusControl(Control* control) noexcept
     }
     if (_focusedControl == control)
     {
+        bool restoredFocus = false;
+        if (_focusedControl && ! _focusedControl->HasFocus())
+        {
+            _focusedControl->OnFocusChanged(*this, true);
+            restoredFocus = true;
+        }
         if (_focusedControl && _focusedControl->SupportsTextInputBridge())
         {
             ActivateTextInputBridge(_focusedControl);
+        }
+        if (restoredFocus)
+        {
+            Invalidate();
         }
         return;
     }
@@ -1188,7 +1209,7 @@ void WindowHost::SetFocusControl(Control* control) noexcept
     {
         ActivateTextInputBridge(_focusedControl);
     }
-    else if (_hwnd && _textInputBridgeEdit && GetFocus() == _textInputBridgeEdit.get())
+    else if (_hwnd && _focusedControl && GetFocus() != _hwnd)
     {
         SetFocus(_hwnd);
     }
@@ -1255,6 +1276,12 @@ bool WindowHost::HandleTabNavigation(bool reverse) noexcept
     }
 
     const FocusAdvanceResult next = FindAdjacentFocusable(_root.get(), _focusedControl, reverse);
+    Debug::Perf::Emit(L"dxui.focus.tab_navigation",
+                      L"",
+                      reverse ? 1u : 0u,
+                      next.currentIndex == std::numeric_limits<size_t>::max() ? UINT64_MAX : static_cast<uint64_t>(next.currentIndex),
+                      next.nextIndex == std::numeric_limits<size_t>::max() ? UINT64_MAX : static_cast<uint64_t>(next.nextIndex),
+                      S_OK);
     if (next.wrapped && _focusedControl && _onTabBoundary && _onTabBoundary(reverse))
     {
         return true;
@@ -1271,7 +1298,9 @@ void WindowHost::CaptureMouse(Control* control) noexcept
         return;
     }
     _capturedControl = control;
-    if (_hwnd)
+    // Some controls capture during their own mouse-down handling; avoid a
+    // redundant SetCapture that can immediately re-enter capture-lost cleanup.
+    if (_hwnd && GetCapture() != _hwnd)
     {
         SetCapture(_hwnd);
     }
@@ -1588,6 +1617,11 @@ uint64_t WindowHost::DebugGetInvalidateCount() const noexcept
     return _debugInvalidateCount;
 }
 
+UINT WindowHost::DebugGetModifierState() const noexcept
+{
+    return _modifierState;
+}
+
 void DebugClearClipboardFallbackText() noexcept
 {
     const std::lock_guard lock(GetClipboardFallbackMutex());
@@ -1804,7 +1838,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             {
                 return 0;
             }
-            OnKillFocus();
+            OnKillFocus(false);
             return 0;
         case WM_MOUSEACTIVATE: handled = true; return MA_ACTIVATE;
         case WM_COMMAND:
@@ -1879,7 +1913,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             {
                 return 0;
             }
-            OnKillFocus();
+            OnKillFocus(true);
             return 0;
         case WM_MOUSEMOVE:
         {
@@ -2943,9 +2977,22 @@ void WindowHost::OnSetFocus() noexcept
                     static_cast<const void*>(_capturedControl),
                     HasActiveTextInputBridge() ? L"true" : L"false");
     }
-    if (_focusedControl && _focusedControl->SupportsTextInputBridge())
+    if (_focusedControl)
     {
-        ActivateTextInputBridge(_focusedControl);
+        bool restoredFocus = false;
+        if (! _focusedControl->HasFocus())
+        {
+            _focusedControl->OnFocusChanged(*this, true);
+            restoredFocus = true;
+        }
+        if (_focusedControl->SupportsTextInputBridge())
+        {
+            ActivateTextInputBridge(_focusedControl);
+        }
+        if (restoredFocus)
+        {
+            Invalidate();
+        }
         return;
     }
 
@@ -2955,19 +3002,27 @@ void WindowHost::OnSetFocus() noexcept
     }
 }
 
-void WindowHost::OnKillFocus() noexcept
+void WindowHost::OnKillFocus(bool clearRetainedFocus) noexcept
 {
     DeactivateTextInputBridge(false);
     PruneStaleInteractionState();
+    _modifierState = 0u;
     if (_focusedControl && ControlBelongsToTree(_root.get(), _focusedControl))
     {
-        _focusedControl->OnFocusChanged(*this, false);
+        if (_focusedControl->HasFocus())
+        {
+            _focusedControl->OnFocusChanged(*this, false);
+        }
     }
-    _focusedControl = nullptr;
+    if (clearRetainedFocus)
+    {
+        _focusedControl = nullptr;
+    }
     if (IsInteractionDiagnosticsEnabled(_hwnd))
     {
-        Debug::Info(L"DxUi::WindowHost: on-kill-focus hwnd={:#x} hovered={} captured={} bridge={}",
+        Debug::Info(L"DxUi::WindowHost: on-kill-focus hwnd={:#x} focus={} hovered={} captured={} bridge={}",
                     reinterpret_cast<uintptr_t>(_hwnd),
+                    static_cast<const void*>(_focusedControl),
                     static_cast<const void*>(_hoveredControl),
                     static_cast<const void*>(_capturedControl),
                     HasActiveTextInputBridge() ? L"true" : L"false");
@@ -3058,6 +3113,7 @@ void WindowHost::ResetRootInteractionState() noexcept
     ReleaseMouseCapture();
     DeactivateTextInputBridge(true);
     DestroyTextInputBridge();
+    _modifierState = 0u;
     if (_hoveredControl && ControlBelongsToTree(_root.get(), _hoveredControl))
     {
         _hoveredControl->OnHoverChanged(*this, false);
@@ -3074,23 +3130,16 @@ void WindowHost::ResetRootInteractionState() noexcept
 
 Control* WindowHost::HitTestControl(D2D1_POINT_2F pointDip) noexcept
 {
-    Debug::Perf::Scope hitTestPerf(L"DxUI::HitTest");
-    hitTestPerf.SetValue0(static_cast<uint64_t>((std::max)(0.0f, pointDip.x) * 100.0f));
-    hitTestPerf.SetValue1(static_cast<uint64_t>((std::max)(0.0f, pointDip.y) * 100.0f));
-
     if (! _root)
     {
-        hitTestPerf.SetHr(S_FALSE);
         return nullptr;
     }
 
     if (Control* overlayTarget = _root->HitTestOverlay(pointDip))
     {
-        hitTestPerf.SetDetail(L"overlay");
         return overlayTarget;
     }
 
-    hitTestPerf.SetDetail(L"content");
     return _root->HitTest(pointDip);
 }
 

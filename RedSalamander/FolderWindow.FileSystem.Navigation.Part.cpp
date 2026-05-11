@@ -138,6 +138,7 @@ void ShowCommandLineLaunchFailureOverlay(FolderWindow& window, FolderWindow::Pan
 void FolderWindow::CommandChangeDirectory(Pane pane)
 {
     SetActivePane(pane);
+    SetNavigationBarVisible(pane, true);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.navigationView.OpenChangeDirectoryFromCommand();
 }
@@ -155,6 +156,7 @@ bool FolderWindow::TryHandleNavigationEditClipboardCommand(UINT commandId) noexc
 void FolderWindow::CommandFocusAddressBar(Pane pane)
 {
     SetActivePane(pane);
+    SetNavigationBarVisible(pane, true);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.navigationView.FocusAddressBar();
 }
@@ -162,6 +164,7 @@ void FolderWindow::CommandFocusAddressBar(Pane pane)
 void FolderWindow::CommandOpenDriveMenu(Pane pane)
 {
     SetActivePane(pane);
+    SetNavigationBarVisible(pane, true);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.navigationView.OpenDriveMenuFromCommand();
 }
@@ -169,6 +172,7 @@ void FolderWindow::CommandOpenDriveMenu(Pane pane)
 void FolderWindow::CommandShowFolderHistory(Pane pane)
 {
     SetActivePane(pane);
+    SetNavigationBarVisible(pane, true);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.navigationView.OpenHistoryDropdownFromKeyboard();
 }

@@ -1,0 +1,46 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+IDR_VIEWERPE_MENU MENU
+BEGIN
+    POPUP "ファイル(&F)"
+    BEGIN
+        MENUITEM "テキストとしてエクスポート(&T)...\tCtrl+S", IDM_VIEWERPE_FILE_EXPORT_TEXT
+        MENUITEM "マークダウンとしてエクスポート(&M)...\tCtrl+Shift+S", IDM_VIEWERPE_FILE_EXPORT_MARKDOWN
+        MENUITEM "更新(&R)\tF5", IDM_VIEWERPE_FILE_REFRESH
+        POPUP "その他のファイル(&F)"
+        BEGIN
+            MENUITEM "次へ(&N)\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
+            MENUITEM "前へ(&P)\tBackspace, Ctrl+Up", IDM_VIEWERPE_OTHER_PREVIOUS
+            MENUITEM "最初(&F)\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
+            MENUITEM "最後(&L)\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "終了(&X)\tEsc", IDM_VIEWERPE_FILE_EXIT
+    END
+    POPUP "表示(&V)"
+    BEGIN
+        MENUITEM "先頭へ移動(&T)\tHome", IDM_VIEWERPE_VIEW_GOTO_TOP
+        MENUITEM "末尾へ移動(&B)\tEnd", IDM_VIEWERPE_VIEW_GOTO_BOTTOM
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERPE_NAME "PE ビューアー"
+    IDS_VIEWERPE_DESCRIPTION "Portable Executable (PE) のヘッダーとセクションを表示します。"
+    IDS_VIEWERPE_STATUS_LOADING "読み込み中..."
+    IDS_VIEWERPE_ERROR_NO_FILEIO "このファイル システムは、このビューアーでのファイルの読み取りをサポートしていません。"
+    IDS_VIEWERPE_ERROR_OPEN_FAILED "ファイルを開けませんでした。"
+    IDS_VIEWERPE_ERROR_TOO_LARGE "ファイルが大きすぎるため、PE ファイルとして解析できません。"
+    IDS_VIEWERPE_ERROR_READ_FAILED "ファイルの読み込みに失敗しました。"
+    IDS_VIEWERPE_ERROR_PARSE_FAILED "PE ファイルの解析に失敗しました。"
+    IDS_VIEWERPE_EXPORT_DIALOG_TITLE "PE レポートのエクスポート"
+    IDS_VIEWERPE_EXPORT_FILTER_TEXT "テキスト ファイル (*.txt)"
+    IDS_VIEWERPE_EXPORT_FILTER_MARKDOWN "マークダウン ファイル (*.md)"
+    IDS_VIEWERPE_EXPORT_ERROR_NO_REPORT "エクスポートできるレポートはまだありません。"
+    IDS_VIEWERPE_EXPORT_ERROR_FAILED "レポートのエクスポートに失敗しました。"
+END

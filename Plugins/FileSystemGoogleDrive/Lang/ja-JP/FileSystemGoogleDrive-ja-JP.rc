@@ -1,0 +1,13 @@
+#pragma code_page(65001)
+#include "../../FileSystemGoogleDriveResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMGOOGLEDRIVE_NAME "Google Drive"
+    IDS_FILESYSTEMGOOGLEDRIVE_DESCRIPTION "Google Drive 仮想ファイル システム。"
+    IDS_FILESYSTEMGOOGLEDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "サインインを開始できません"
+    IDS_FILESYSTEMGOOGLEDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT "{0} は、保存済み接続を開くには Google OAuth クライアント ID が必要です。\r\n\r\n［プラグイン］>［プラグイン マネージャー］を開き、「{0}」を選択して、既定の OAuth クライアント ID を設定してください。"
+END

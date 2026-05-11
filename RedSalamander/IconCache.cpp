@@ -32,6 +32,8 @@ namespace
 constexpr std::wstring_view kDirectoryExtensionKey = L"<directory>";
 constexpr std::wstring_view kWslLocalhostPrefix    = L"\\\\wsl.localhost\\";
 constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
+constexpr uint64_t kSlowIconCacheLockWaitUs        = 250u;
+constexpr uint64_t kSlowIconCacheLockHoldUs        = 250u;
 
 struct AssociationQueryKey
 {
@@ -165,6 +167,32 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
     Debug::Perf::Emit(name, L"", durationUs, value0, value1, hr);
 }
 
+void PerfEmitDurationWithDetail(std::wstring_view name,
+                                std::wstring_view detail,
+                                uint64_t durationUs,
+                                uint64_t value0 = 0,
+                                uint64_t value1 = 0,
+                                HRESULT hr      = S_OK) noexcept
+{
+    Debug::Perf::Emit(name, detail, durationUs, value0, value1, hr);
+}
+
+void PerfEmitSlowIconCacheLockWait(std::wstring_view detail, uint64_t durationUs) noexcept
+{
+    if (durationUs >= kSlowIconCacheLockWaitUs)
+    {
+        Debug::Perf::Emit(L"iconcache.lock_wait_slow_us", detail, durationUs, kSlowIconCacheLockWaitUs, 0u, S_OK);
+    }
+}
+
+void PerfEmitSlowIconCacheLockHold(std::wstring_view detail, uint64_t durationUs) noexcept
+{
+    if (durationUs >= kSlowIconCacheLockHoldUs)
+    {
+        Debug::Perf::Emit(L"iconcache.lock_hold_slow_us", detail, durationUs, kSlowIconCacheLockHoldUs, 0u, S_OK);
+    }
+}
+
 void EvictAssociationQueryBatch()
 {
     if (g_associationToIconIndex.size() < kAssociationCacheSize)
@@ -258,9 +286,9 @@ void EvictAssociationQueryBatch()
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(g_associationCacheMutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"association_lookup", PerfElapsedUs(lockWaitStart));
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"association_lookup", PerfElapsedUs(lockHoldStart)); });
         AssociationQueryKey cacheKey{extensionKey, fileAttributes};
         const auto cached = g_associationToIconIndex.find(cacheKey);
         if (cached != g_associationToIconIndex.end())
@@ -272,9 +300,15 @@ void EvictAssociationQueryBatch()
 
     SHFILEINFOW sfi{};
     const std::wstring queryPath = BuildAssociationQueryPath(normalizedExtension);
+    constexpr UINT flags         = SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES;
     const auto shellStart        = std::chrono::steady_clock::now();
-    const DWORD_PTR result       = SHGetFileInfoW(queryPath.c_str(), fileAttributes, &sfi, sizeof(sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES);
-    PerfEmitDuration(L"iconcache.shgetfileinfo_us", PerfElapsedUs(shellStart), 0, 0, result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
+    const DWORD_PTR result       = SHGetFileInfoW(queryPath.c_str(), fileAttributes, &sfi, sizeof(sfi), flags);
+    PerfEmitDurationWithDetail(L"iconcache.shgetfileinfo_us",
+                               L"association",
+                               PerfElapsedUs(shellStart),
+                               static_cast<uint64_t>(fileAttributes),
+                               static_cast<uint64_t>(flags),
+                               result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
     if (result == 0 || sfi.iIcon < 0)
     {
         return std::nullopt;
@@ -283,9 +317,9 @@ void EvictAssociationQueryBatch()
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(g_associationCacheMutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"association_store", PerfElapsedUs(lockWaitStart));
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"association_store", PerfElapsedUs(lockHoldStart)); });
         AssociationQueryKey cacheKey{extensionKey, fileAttributes};
         EvictAssociationQueryBatch();
 
@@ -519,9 +553,9 @@ void IconCache::Initialize(ID2D1DeviceContext* d2dContext, float dpi)
 
     const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
-    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    PerfEmitSlowIconCacheLockWait(L"initialize", PerfElapsedUs(lockWaitStart));
     const auto lockHoldStart = std::chrono::steady_clock::now();
-    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+    auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"initialize", PerfElapsedUs(lockHoldStart)); });
     _dpi.store(dpi, std::memory_order_relaxed);
 
     // Initialize WIC factory for high-quality icon conversion
@@ -645,9 +679,9 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"bitmap_lookup", PerfElapsedUs(lockWaitStart));
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"bitmap_lookup", PerfElapsedUs(lockHoldStart)); });
         auto deviceIt            = _deviceCaches.find(device.get());
         if (deviceIt != _deviceCaches.end())
         {
@@ -686,9 +720,9 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
         // Store in cache with LRU tracking
         const auto storeStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(storeStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"bitmap_store", PerfElapsedUs(storeStart));
         const auto storeHoldStart = std::chrono::steady_clock::now();
-        auto storeHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(storeHoldStart), 0, 0, S_OK); });
+        auto storeHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"bitmap_store", PerfElapsedUs(storeHoldStart)); });
         auto& cache               = _deviceCaches[device.get()];
         if (! cache.device)
         {
@@ -715,9 +749,9 @@ bool IconCache::HasCachedIcon(int iconIndex, ID2D1Device* device) const
 
     const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
-    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    PerfEmitSlowIconCacheLockWait(L"has_cached_icon", PerfElapsedUs(lockWaitStart));
     const auto lockHoldStart = std::chrono::steady_clock::now();
-    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+    auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"has_cached_icon", PerfElapsedUs(lockHoldStart)); });
     const auto deviceIt      = _deviceCaches.find(device);
     if (deviceIt == _deviceCaches.end())
     {
@@ -743,9 +777,9 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetCachedBitmap(int iconIndex, ID2D1Device
 
     const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
-    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    PerfEmitSlowIconCacheLockWait(L"cached_bitmap_lookup", PerfElapsedUs(lockWaitStart));
     const auto lockHoldStart = std::chrono::steady_clock::now();
-    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+    auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"cached_bitmap_lookup", PerfElapsedUs(lockHoldStart)); });
     const auto deviceIt      = _deviceCaches.find(device.get());
     if (deviceIt == _deviceCaches.end())
     {
@@ -1050,9 +1084,9 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"path_lookup", PerfElapsedUs(lockWaitStart));
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"path_lookup", PerfElapsedUs(lockHoldStart)); });
         const auto it            = _pathToIconIndex.find(cacheKey);
         if (it != _pathToIconIndex.end())
         {
@@ -1073,7 +1107,12 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
     SHFILEINFOW sfi{};
     const auto shellStart  = std::chrono::steady_clock::now();
     const DWORD_PTR result = SHGetFileInfoW(path, fileAttributes, &sfi, sizeof(sfi), flags);
-    PerfEmitDuration(L"iconcache.shgetfileinfo_us", PerfElapsedUs(shellStart), 0, 0, result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
+    PerfEmitDurationWithDetail(L"iconcache.shgetfileinfo_us",
+                               useFileAttributes ? L"path_attributes" : L"path_live",
+                               PerfElapsedUs(shellStart),
+                               static_cast<uint64_t>(fileAttributes),
+                               static_cast<uint64_t>(flags),
+                               result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
     if (result == 0 || sfi.iIcon < 0)
     {
         // Don't cache failures — they may be transient (network drives, shell extensions loading).
@@ -1083,9 +1122,9 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
     bool duplicateRace       = false;
     const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
-    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    PerfEmitSlowIconCacheLockWait(L"path_store", PerfElapsedUs(lockWaitStart));
     const auto lockHoldStart = std::chrono::steady_clock::now();
-    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+    auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"path_store", PerfElapsedUs(lockHoldStart)); });
     EvictPathQueryBatch();
     auto [it, inserted] = _pathToIconIndex.emplace(std::move(cacheKey), PathIconCacheEntry{sfi.iIcon, ++_pathQueryAccessCounter});
     if (! inserted)
@@ -1206,9 +1245,9 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"ui_convert_lookup", PerfElapsedUs(lockWaitStart));
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"ui_convert_lookup", PerfElapsedUs(lockHoldStart)); });
         const auto deviceIt      = _deviceCaches.find(device.get());
         if (deviceIt != _deviceCaches.end())
         {
@@ -1232,9 +1271,9 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
         // Store in cache with LRU tracking
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"ui_convert_store", PerfElapsedUs(lockWaitStart));
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"ui_convert_store", PerfElapsedUs(lockHoldStart)); });
         auto& cache              = _deviceCaches[device.get()];
         if (! cache.device)
         {
@@ -1397,9 +1436,9 @@ size_t IconCache::PrewarmBitmaps(ID2D1DeviceContext* d2dContext)
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        PerfEmitSlowIconCacheLockWait(L"prewarm_snapshot", PerfElapsedUs(lockWaitStart));
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"prewarm_snapshot", PerfElapsedUs(lockHoldStart)); });
         std::unordered_set<int> uniqueIndices;
         for (const auto& [ext, iconIndex] : _extensionToIconIndex)
         {

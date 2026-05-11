@@ -205,7 +205,7 @@ Invalid external file behavior:
 Manual association reload:
 - `cmd/app/rereadAssociations` uses the same non-destructive `TryLoadSettingsNoRecovery(...)` path so manual reloads never rename or back up an invalid settings file.
 - A successful manual reload applies persisted viewer/editor/User Menu action settings, extension associations, plugin settings, shortcuts, and other disk-authored sections while preserving already-open window placement and current pane navigation state.
-- After applying the merged settings, the app rebuilds dynamic View With, Edit With, User Menu, ShellNew, and file-system-plugin menus; clears normal and association icon caches; refreshes both panes; preserves the active pane; updates the applied settings stamp when available; and notifies settings-reload participants.
+- After applying the merged settings, the app rebuilds dynamic View With, Edit With, User Menu, ShellNew, and file-system-plugin menus; clears normal and association icon caches before pane refresh can repopulate them; refreshes both panes; preserves the active pane; updates the applied settings stamp when available; and notifies settings-reload participants.
 - A failed manual reload keeps the previous runtime settings and reports through the same localized invalid-reload alert used by the external watcher.
 
 ## Settings Data Model (v16)
@@ -346,8 +346,9 @@ Launch macro strings are interpreted by the command layer, not by the settings s
 Omitting `fileActions` uses the built-in viewer/editor defaults. Explicit empty `fileActions.viewers` or `fileActions.editors` sections mean the user cleared that action family and must round-trip as empty instead of being repopulated from defaults.
 
 Preferences contract:
-- `Preferences -> Viewers` uses `Associations` and `Actions` tabs. The Associations table columns are Match, Computer, F3 View, Alt+F3 Alternate View, and Status.
-- `Preferences -> Editors` uses `Associations` and `Actions` tabs. The Associations table columns are Match, Computer, F4 Edit, Ctrl+Shift+F4 Alternate Edit, Shift+F4 Edit New, and Status.
+- `Preferences -> Viewers` uses `Actions` first, then `Associations`. The Associations table columns are Match, Computer, F3 View, Alt+F3 Alternate View, and Status.
+- `Preferences -> Editors` uses `Actions` first, then `Associations`. The Associations table columns are Match, Computer, F4 Edit, Ctrl+Shift+F4 Alternate Edit, Shift+F4 Edit New, and Status.
+- Viewer-plugin actions choose `pluginId` through a non-editable viewer-plugin combo that displays plugin names while storing the stable ID; Editors actions do not expose plugin-ID entry.
 - Both pages show a resolved-action preview for a test file path using the same resolver priority as the command layer.
 - `Preferences -> User Menu` lists configured user-menu external commands and persists ordering, command fields, enabled state, match filters, and computer-name filters.
 - These pages MUST mark the dialog dirty when editable action settings change, and `Apply` / `OK` MUST persist the updated `fileActions` or `userMenu` section without dropping unrelated settings.
@@ -524,12 +525,15 @@ In addition to `theme.themes[]` stored in the settings file, `RedSalamander` may
 - Format: a single `ThemeDefinition` JSON5 object (same shape as items in `theme.themes[]`)
 - Persistence: these themes are **not** written into the settings file on save; only `theme.currentThemeId` is persisted when the user selects one
 - Precedence: if a theme ID exists both in settings and on disk, the settings version wins
+- The disk-theme loader must use the same `ThemeDefinition` JSON5 parser and validation rules as settings-file themes so duplicate IDs, invalid IDs, malformed colors, and schema errors cannot diverge between the two load paths.
 
 ### Color representation
 
 Color values are hex strings:
 - `#RRGGBB` (opaque)
 - `#AARRGGBB` (alpha + RGB)
+
+RedConfigure may offer authoring-time color expressions such as `ref(app.accent)`, `darken(app.accent,20%)`, or `blend(menu.background,app.accent,16%)`. Until the runtime schema explicitly supports a durable `colorExpressions` object, exported `.theme.json5` files must flatten those expressions into direct `colors` values so existing RedSalamander builds can consume them.
 
 ### Color keys (recommended set)
 

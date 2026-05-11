@@ -122,6 +122,7 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\RedSalamanderMonitor\Document.cpp" />
     <ClCompile Include="MonitorTest.cpp" />
   </ItemGroup>
   <ItemGroup>

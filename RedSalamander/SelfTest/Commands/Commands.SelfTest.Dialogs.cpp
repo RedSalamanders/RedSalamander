@@ -14,6 +14,55 @@ template <typename WorkerFunc> void RunAboutDialogModalCycle(HWND mainWindow, Wo
     worker.join();
 }
 
+template <typename Task> [[nodiscard]] auto RunDialogUiaTaskWithMessagePump(std::wstring_view label, Task&& task) noexcept -> decltype(task())
+{
+    using Result = decltype(task());
+    static_assert(std::is_default_constructible_v<Result>,
+                  "RunDialogUiaTaskWithMessagePump requires a default-constructible result so timeout fallback can return a safe sentinel.");
+
+    using namespace std::chrono_literals;
+
+    using TaskType = std::decay_t<Task>;
+    struct SharedState final
+    {
+        SharedState()                              = default;
+        SharedState(const SharedState&)            = delete;
+        SharedState& operator=(const SharedState&) = delete;
+        SharedState(SharedState&&)                 = delete;
+        SharedState& operator=(SharedState&&)      = delete;
+
+        std::optional<Result> result;
+        std::atomic<bool> done = false;
+    };
+
+    auto sharedState = std::make_shared<SharedState>();
+    auto sharedTask  = std::make_shared<TaskType>(std::forward<Task>(task));
+
+    std::jthread worker([sharedState, sharedTask](std::stop_token) noexcept
+    {
+        sharedState->result = (*sharedTask)();
+        sharedState->done.store(true, std::memory_order_release);
+    });
+
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    while (! sharedState->done.load(std::memory_order_acquire))
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            Trace(std::format(L"Dialog UIA task timed out during '{}'; returning default result and detaching worker.", label));
+            worker.request_stop();
+            worker.detach();
+            return Result{};
+        }
+
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+
+    worker.join();
+    return std::move(sharedState->result).value_or(Result{});
+}
+
 template <typename WorkerFunc> void RunRenamePromptModalCycle(HWND mainWindow, WorkerFunc&& workerFunc) noexcept
 {
     std::jthread worker([&](std::stop_token) noexcept
@@ -2121,17 +2170,6 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         return false;
     }
 
-    const HWND existing = SplashScreen::GetHwnd();
-    SplashScreen::CloseIfExist();
-    if (existing && IsWindow(existing) != FALSE)
-    {
-        state.Require(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)), L"Existing splash window did not close before DXUI validation.");
-    }
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
     const auto openSplash = [&](std::wstring_view text) noexcept -> HWND
     {
         SplashScreen::SetOwner(mainWindow);
@@ -2141,18 +2179,47 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
     };
     const auto closeSplashWindow = [&](HWND splash, std::wstring_view label) noexcept -> bool
     {
-        if (! splash || IsWindow(splash) == FALSE)
+        Trace(std::format(L"splash_surface: requesting close during '{}'", label));
+        SplashScreen::RequestCloseIfExist();
+
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+        while (std::chrono::steady_clock::now() < deadline)
         {
-            SplashScreen::CloseIfExist();
-            return true;
+            PumpPendingMessages();
+            const bool targetClosed = ! splash || IsWindow(splash) == FALSE;
+            const SplashScreen::DebugSnapshot debugSnapshot = SplashScreen::DebugGetSnapshot();
+            if (targetClosed && ! debugSnapshot.threadStarted && ! debugSnapshot.hasHwnd)
+            {
+                Trace(std::format(L"splash_surface: close completed during '{}' stage={} lastError={} comHr=0x{:08X}",
+                                  label,
+                                  debugSnapshot.stage,
+                                  debugSnapshot.lastError,
+                                  static_cast<unsigned long>(debugSnapshot.comHr)));
+                return true;
+            }
+
+            std::this_thread::sleep_for(10ms);
         }
 
-        SplashScreen::CloseIfExist();
-        state.Require(WaitForWindowClosed(splash, SelfTest::Scale(5000ms)), std::format(L"Splash window did not close cleanly during {}.", label));
-        return state.failure.empty();
+        const SplashScreen::DebugSnapshot debugSnapshot = SplashScreen::DebugGetSnapshot();
+        state.Require(false,
+                      std::format(L"Splash window did not close cleanly during {}; stage={} lastError={} comHr=0x{:08X} threadStarted={} hasHwnd={}.",
+                                  label,
+                                  debugSnapshot.stage,
+                                  debugSnapshot.lastError,
+                                  static_cast<unsigned long>(debugSnapshot.comHr),
+                                  debugSnapshot.threadStarted ? L"yes" : L"no",
+                                  debugSnapshot.hasHwnd ? L"yes" : L"no"));
+        return false;
     };
     HWND splash            = nullptr;
     const auto closeSplash = wil::scope_exit([&]() noexcept { static_cast<void>(closeSplashWindow(splash, L"cleanup")); });
+
+    const HWND existing = SplashScreen::GetHwnd();
+    if (! closeSplashWindow(existing, L"initial cleanup before DXUI validation") || ! state.failure.empty())
+    {
+        return false;
+    }
 
     const auto validateSplashSurface = [&](std::wstring_view label) noexcept -> bool
     {
@@ -2175,17 +2242,23 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         state.Require(CountVisibleChildWindows(splash) == 0u, L"Splash window should not expose visible child-control fallback.");
         state.Require(WindowExposesUiaProvider(splash), L"Splash window should answer WM_GETOBJECT with a UI Automation provider.");
 
-        const auto uiaPatternStats = CollectVisibleUiaDescendantPatternStats(splash);
+        Trace(std::format(L"splash_surface: collecting UIA pattern stats during '{}'", label));
+        const auto uiaPatternStats =
+            RunDialogUiaTaskWithMessagePump(label, [splash]() noexcept { return CollectVisibleUiaDescendantPatternStats(splash); });
+        Trace(std::format(L"splash_surface: collected UIA pattern stats during '{}' hasValue={}", label, uiaPatternStats.has_value() ? 1 : 0));
         state.Require(uiaPatternStats.has_value(),
                       std::format(L"Failed to collect live UI Automation pattern statistics for the splash window during {}.", label));
         if (uiaPatternStats.has_value())
         {
             state.Require(uiaPatternStats->visibleElementCount > 0u, L"Splash window should expose visible UI Automation descendants.");
             state.Require(uiaPatternStats->textControlCount > 0u,
-                          std::format(L"Splash window should expose a visible UI Automation text descendant during {}.", label));
+                           std::format(L"Splash window should expose a visible UI Automation text descendant during {}.", label));
         }
 
-        const auto splashTextState = CollectVisibleSplashTextState(splash, L"Splash DXUI self-test");
+        Trace(std::format(L"splash_surface: collecting UIA text state during '{}'", label));
+        const auto splashTextState =
+            RunDialogUiaTaskWithMessagePump(label, [splash]() noexcept { return CollectVisibleSplashTextState(splash, L"Splash DXUI self-test"); });
+        Trace(std::format(L"splash_surface: collected UIA text state during '{}' hasValue={}", label, splashTextState.has_value() ? 1 : 0));
         state.Require(splashTextState.has_value(), std::format(L"Splash window should expose a visible UI Automation text descendant during {}.", label));
         if (splashTextState.has_value())
         {
@@ -4337,16 +4410,31 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
     state.Require(SelfTest::EnsureDirectory(nonEmptyChild), L"Failed to create non-empty child folder.");
     state.Require(SelfTest::WriteTextFile(nonEmptyChild / L"a.txt", "a"), L"Failed to create a.txt.");
 
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePath                                = wil::scope_exit([&]
     {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftBefore.has_value())
         {
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
         }
     });
 
-    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    const auto clearLeftPaneOverlayState = []() noexcept
+    {
+        g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+        g_folderWindow.SetPaneEmptyStateMessage(FolderWindow::Pane::Left, {});
+        g_folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Left, {}, false);
+    };
+
+    clearLeftPaneOverlayState();
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for filter-watermark empty-state test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     std::atomic<uint32_t> enumEmpty{0};
     std::atomic<uint32_t> enumNonEmpty{0};
@@ -4364,16 +4452,77 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
     });
     const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
 
+    const auto describeLeftPaneState = []() noexcept
+    {
+        const std::optional<std::filesystem::path> path = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+        const FolderView::NameFilterState filterState   = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+        FolderView::AlertOverlayDebugSnapshot alert{};
+        const bool alertSnapshot = g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert);
+        return std::format(L"path='{}', itemCount={}, filterActive={}, filterEnabled={}, filterText='{}', emptyActive={}, watermark={}, "
+                           L"alertSnapshot={}, alertVisible={}, alertKind={}, alertSeverity={}, alertClosable={}, alertBlocksInput={}, "
+                           L"alertHr=0x{:08X}, alertTitle='{}', alertMessage='{}'",
+                           path.has_value() ? path->wstring() : std::wstring{L"<none>"},
+                           g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                           g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left) ? 1 : 0,
+                           filterState.enabled ? 1 : 0,
+                           filterState.text,
+                           g_folderWindow.DebugIsEmptyFolderStateActive(FolderWindow::Pane::Left) ? 1 : 0,
+                           static_cast<int>(g_folderWindow.DebugGetFilterWatermarkVisualMode(FolderWindow::Pane::Left)),
+                           alertSnapshot ? 1 : 0,
+                           alert.visible ? 1 : 0,
+                           static_cast<int>(alert.kind),
+                           static_cast<int>(alert.severity),
+                           alert.closable ? 1 : 0,
+                           alert.blocksInput ? 1 : 0,
+                           static_cast<unsigned long>(alert.hr),
+                           alert.title,
+                           alert.message);
+    };
+    const auto waitForLeftPaneState = [&](auto&& predicate, std::chrono::milliseconds timeout) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (predicate())
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        PumpPendingMessages();
+        return predicate();
+    };
+
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, emptyChild);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, emptyChild, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set left pane path for filter-watermark test.");
     state.Require(WaitForAtomicAtLeast(enumEmpty, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Enumeration did not complete for empty folder in filter-watermark test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
-    state.Require(g_folderWindow.DebugIsEmptyFolderStateActive(FolderWindow::Pane::Left), L"Expected empty-folder state active for empty folder.");
-    state.Require(! g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left), L"Expected filter inactive before applying pane filter.");
-    state.Require(g_folderWindow.DebugGetFilterWatermarkVisualMode(FolderWindow::Pane::Left) == FolderView::FilterWatermarkVisualMode::None,
-                  L"Expected no filter watermark before applying pane filter.");
+    const uint32_t enumBeforeReset = enumEmpty.load(std::memory_order_acquire);
+    clearLeftPaneOverlayState();
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(WaitForAtomicAtLeast(enumEmpty, enumBeforeReset + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Enumeration did not refresh for empty folder after clearing inherited pane visibility state.");
+    state.Require(waitForLeftPaneState([]() noexcept
+    {
+        return ! g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left) &&
+               g_folderWindow.DebugIsEmptyFolderStateActive(FolderWindow::Pane::Left) &&
+               g_folderWindow.DebugGetFilterWatermarkVisualMode(FolderWindow::Pane::Left) == FolderView::FilterWatermarkVisualMode::None;
+    },
+                                       SelfTest::Scale(3000ms)),
+                  std::format(L"Expected unfiltered empty-folder state before applying pane filter; {}.", describeLeftPaneState()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     {
         PaneFilterDialogAutomationState dlg{};
@@ -6563,13 +6712,23 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
+    std::string markerText;
+    bool markerReady    = false;
     const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
         ec.clear();
-        if (std::filesystem::exists(newFile, ec) && std::filesystem::exists(markerPath, ec) &&
-            g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"alpha.editnew"))
+        markerReady = false;
+        markerText.clear();
+        if (std::filesystem::exists(markerPath, ec))
+        {
+            std::ifstream input(markerPath);
+            std::getline(input, markerText);
+            markerReady = markerText == "\"alpha.editnew\"";
+        }
+        ec.clear();
+        if (std::filesystem::exists(newFile, ec) && markerReady && g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"alpha.editnew"))
         {
             break;
         }
@@ -6584,11 +6743,9 @@ void AutomateChangeCasePrompt(
                   L"Edit New should refresh the pane so the new file is visible.");
     state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"alpha.editnew",
                   L"Edit New should focus the new file after refresh.");
-
-    std::ifstream input(markerPath);
-    std::string markerText;
-    std::getline(input, markerText);
-    state.Require(markerText == "alpha.editnew", L"Edit New selected editor should receive expanded file macros.");
+    state.Require(markerReady,
+                  std::format(L"Edit New selected editor should receive the quoted {{Filename}} macro; actual marker='{}'.",
+                              std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }

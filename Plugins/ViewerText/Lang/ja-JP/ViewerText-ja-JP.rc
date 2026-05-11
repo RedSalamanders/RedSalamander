@@ -1,0 +1,383 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+IDR_VIEWERTEXT_MENU MENU
+BEGIN
+    POPUP "ファイル(&F)"
+    BEGIN
+        MENUITEM "開く(&O)...\tCtrl+O", IDM_VIEWER_FILE_OPEN
+        MENUITEM "名前を付けて保存(&A)...\tCtrl+S", IDM_VIEWER_FILE_SAVE_AS
+        MENUITEM "更新(&R)\tF5", IDM_VIEWER_FILE_REFRESH
+        POPUP "その他のファイル(&F)"
+        BEGIN
+            MENUITEM "次へ(&N)\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
+            MENUITEM "前へ(&P)\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
+            MENUITEM "最初(&F)\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
+            MENUITEM "最後(&L)\tCtrl+End", IDM_VIEWER_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "終了(&X)\tEsc", IDM_VIEWER_FILE_EXIT
+    END
+    POPUP "検索(&S)"
+    BEGIN
+        MENUITEM "探す(&F)...\tCtrl+F", IDM_VIEWER_SEARCH_FIND
+        MENUITEM "次を探す(&N)\tF3", IDM_VIEWER_SEARCH_FIND_NEXT
+        MENUITEM "前を検索(&P)\tShift+F3", IDM_VIEWER_SEARCH_FIND_PREVIOUS
+    END
+    POPUP "表示(&V)"
+    BEGIN
+        MENUITEM "テキスト(&T)", IDM_VIEWER_VIEW_TEXT
+        MENUITEM "差分 / 並べて表示(&S)", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
+        MENUITEM "差分/インライン(&I)", IDM_VIEWER_VIEW_DIFF_INLINE
+        MENUITEM "差分 / 変更されていないテキストを表示(&U)", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
+        MENUITEM "差分/次のハンク(&N)\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
+        MENUITEM "差分/前のハンク(&P)\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
+        MENUITEM "16進数(&H)", IDM_VIEWER_VIEW_HEX
+        POPUP "16 進数のバイト色(&C)"
+        BEGIN
+            MENUITEM "先頭ニブル (00/FF 強調)(&L)", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LEADING_NIBBLE
+            MENUITEM "オフ(&O)", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "先頭へ移動(&T)\tHome", IDM_VIEWER_VIEW_GOTO_TOP
+        MENUITEM "末尾へ移動(&B)\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
+        MENUITEM "オフセットに移動(&G)...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
+        MENUITEM "行番号(&L)", IDM_VIEWER_VIEW_LINE_NUMBERS
+        MENUITEM "ラップ(&W)", IDM_VIEWER_VIEW_WRAP
+    END
+    POPUP "エンコーディング(&E)"
+    BEGIN
+        MENUITEM "次のエンコーディング(&N)\tF8", IDM_VIEWER_ENCODING_NEXT
+        MENUITEM "以前のエンコーディング(&P)\tShift+F8", IDM_VIEWER_ENCODING_PREVIOUS
+        MENUITEM SEPARATOR
+        MENUITEM "ANSI(&A)", IDM_VIEWER_ENCODING_DISPLAY_ANSI
+        MENUITEM "UTF-7(&7)", IDM_VIEWER_ENCODING_DISPLAY_UTF7
+        MENUITEM "UTF-8(&8)", IDM_VIEWER_ENCODING_DISPLAY_UTF8
+        MENUITEM "UTF-8 BOM(&B)", IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM
+        MENUITEM "UTF-16 BE BOM(&B)", IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM
+        MENUITEM "UTF-16 LE BOM(&L)", IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM
+        MENUITEM "UTF-32 BE BOM(&B)", IDM_VIEWER_ENCODING_DISPLAY_UTF32BE_BOM
+        MENUITEM "UTF-32 LE BOM(&L)", IDM_VIEWER_ENCODING_DISPLAY_UTF32LE_BOM
+        MENUITEM SEPARATOR
+        POPUP "文字セット(&S)"
+        BEGIN
+            POPUP "アラビア語(&A)"
+            BEGIN
+                MENUITEM "iso-8859-6: ISO 8859-6 アラビア語", 28596
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1256: アラビア語 (Windows)", 1256
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-arabic: アラビア語 (Mac)", 10004
+                MENUITEM SEPARATOR
+                MENUITEM "ASMO-708: アラビア語 (ASMO 708)", 708
+                MENUITEM "アラビア語 (ASMO-449+、BCON V4)", 709
+                MENUITEM "アラビア語 - 透明アラビア語", 710
+                MENUITEM "DOS-720: アラビア語 (DOS)", 720
+                MENUITEM "IBM864: アラビア語 (864)", 864
+                MENUITEM SEPARATOR
+                MENUITEM "IBM420: EBCDIC アラビア語", 20420
+            END
+            POPUP "バルト言語(&B)"
+            BEGIN
+                MENUITEM "iso-8859-4: ISO 8859-4 バルト言語", 28594
+                MENUITEM "iso-8859-13: ISO 8859-13 エストニア語", 28603
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1257: バルト言語 (Windows)", 1257
+                MENUITEM SEPARATOR
+                MENUITEM "ibm775: バルト言語 (DOS)", 775
+            END
+            POPUP "中央ヨーロッパ(&C)"
+            BEGIN
+                MENUITEM "iso-8859-2: 中央ヨーロッパ (ISO)", 28592
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1250: 中央ヨーロッパ (Windows)", 1250
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-ce: 中央ヨーロッパ (Mac)", 10029
+                MENUITEM "x-mac-croatian: クロアチア語 (Mac)", 10082
+                MENUITEM "x-mac-romanian: ルーマニア語 (Mac)", 10010
+                MENUITEM SEPARATOR
+                MENUITEM "ibm852: 中央ヨーロッパ (DOS)", 852
+                MENUITEM SEPARATOR
+                MENUITEM "IBM870: EBCDIC 多言語ラテン語 2", 870
+            END
+            POPUP "中国語(&C)"
+            BEGIN
+                MENUITEM "x-cp50227: 簡体字中国語 (ISO 2022)", 50227
+                MENUITEM "ISO 2022 繁体字中国語", 50229
+                MENUITEM SEPARATOR
+                MENUITEM "gb2312: 簡体字中国語 (GB2312)", 936
+                MENUITEM "big5: 繁体字中国語 (Big5)", 950
+                MENUITEM "x-cp20936: 簡体字中国語 (GB2312-80)", 20936
+                MENUITEM "EUC-CN: 簡体字中国語 (EUC)", 51936
+                MENUITEM "EUC繁体字中国語", 51950
+                MENUITEM "hz-gb-2312: 簡体字中国語 (HZ)", 52936
+                MENUITEM "GB18030: 簡体字中国語 (GB18030)", 54936
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-chinesesimp: 簡体字中国語 (Mac)", 10008
+                MENUITEM "x-mac-chinesetrad: 繁体字中国語 (Mac)", 10002
+                MENUITEM SEPARATOR
+                MENUITEM "x- Chinese_CNS: 繁体字中国語 (CNS)", 20000
+                MENUITEM "x-cp20001: TCA 台湾", 20001
+                MENUITEM "x_ Chinese-Eten: 繁体字中国語 (イーテン)", 20002
+                MENUITEM "x-cp20003: IBM5550 台湾", 20003
+                MENUITEM "x-cp20004: 台湾テレテキスト", 20004
+                MENUITEM "x-cp20005: 王台湾", 20005
+                MENUITEM SEPARATOR
+                MENUITEM "EBCDIC 簡体字中国語 拡張語および簡体字中国語", 50935
+                MENUITEM "EBCDIC 簡体字中国語", 50936
+                MENUITEM "EBCDIC 米国-カナダおよび繁体字中国語", 50937
+            END
+            POPUP "キリル文字(&C)"
+            BEGIN
+                MENUITEM "iso-8859-5: ISO 8859-5 キリル文字", 28595
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1251: キリル文字 (Windows)", 1251
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-cyrillic: キリル文字 (Mac)", 10007
+                MENUITEM "x-mac-ukrainian: ウクライナ語 (Mac)", 10017
+                MENUITEM SEPARATOR
+                MENUITEM "koi8-r: キリル文字 (KOI8-R)", 20866
+                MENUITEM "koi8-u: キリル文字 (KOI8-U)", 21866
+                MENUITEM "IBM855: OEM キリル文字 (主にロシア語)", 855
+                MENUITEM "cp866: キリル文字 (DOS)", 866
+                MENUITEM SEPARATOR
+                MENUITEM "IBM880: EBCDIC キリルロシア語", 20880
+                MENUITEM "cp1025: IBM EBCDIC キリル文字セルビア・ブルガリア語", 21025
+            END
+            POPUP "ギリシャ語(&G)"
+            BEGIN
+                MENUITEM "iso-8859-7: ISO 8859-7 ギリシャ語", 28597
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1253: ギリシャ語 (Windows)", 1253
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-greek: ギリシャ語 (Mac)", 10006
+                MENUITEM SEPARATOR
+                MENUITEM "ibm737: ギリシャ語 (DOS)", 737
+                MENUITEM "ibm869: ギリシャ語、現代語 (DOS)", 869
+                MENUITEM SEPARATOR
+                MENUITEM "cp875: IBM EBCDIC ギリシャ語モダン", 875
+                MENUITEM "IBM423: EBCDIC ギリシャ語", 20423
+            END
+            POPUP "ヘブライ語(&H)"
+            BEGIN
+                MENUITEM "iso-8859-8: ヘブライ語 (ISO-ビジュアル)", 28598
+                MENUITEM "iso-8859-8-i: ヘブライ語 (ISO 論理)", 38598
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1255: ヘブライ語 (Windows)", 1255
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-hebrew: ヘブライ語 (Mac)", 10005
+                MENUITEM SEPARATOR
+                MENUITEM "DOS-862: ヘブライ語 (DOS)", 862
+                MENUITEM SEPARATOR
+                MENUITEM "IBM424: EBCDIC ヘブライ語", 20424
+            END
+            POPUP "インド料理 / ISCII(&I)"
+            BEGIN
+                MENUITEM "x-iscii-de: ISCII デヴァナーガリー", 57002
+                MENUITEM "x-iscii-be: ISCII バングラ語", 57003
+                MENUITEM "x-iscii-ta: ISCII タミル語", 57004
+                MENUITEM "x-iscii-te: ISCII テルグ語", 57005
+                MENUITEM "x-iscii-as: ISCII アッサム語", 57006
+                MENUITEM "x-iscii-or: ISCII Odia", 57007
+                MENUITEM "x-iscii-ka: ISCII カンナダ語", 57008
+                MENUITEM "x-iscii-ma: ISCII マラヤーラム語", 57009
+                MENUITEM "x-iscii-gu: ISCII グジャラート語", 57010
+                MENUITEM "x-iscii-pa: ISCII パンジャブ語", 57011
+            END
+            POPUP "日本語(&J)"
+            BEGIN
+                MENUITEM "iso-2022-jp: 日本語(JIS)", 50220
+                MENUITEM "csISO2022JP: 日本語（JIS-1バイトカナ可）", 50221
+                MENUITEM "iso-2022-jp: 日本語 (JIS-1バイトカナ可 - SO/SI)", 50222
+                MENUITEM SEPARATOR
+                MENUITEM "shift_jis: 日本語(Shift-JIS)", 932
+                MENUITEM "EUC-JP: 日本語 (JIS 0208-1990 および 0212-1990)", 20932
+                MENUITEM "euc-jp: EUC 日本語", 51932
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-japanese: 日本語 (Mac)", 10001
+                MENUITEM SEPARATOR
+                MENUITEM "IBM290: EBCDIC 日本語カタカナ拡張", 20290
+                MENUITEM "EBCDIC 日本語（カタカナ）拡張", 50930
+                MENUITEM "EBCDIC 米国-カナダおよび日本語", 50931
+                MENUITEM "EBCDIC 日本語 (ラテン語) 拡張および日本語", 50939
+            END
+            POPUP "韓国人(&K)"
+            BEGIN
+                MENUITEM "iso-2022-kr: ISO 2022 韓国語", 50225
+                MENUITEM SEPARATOR
+                MENUITEM "ks_c_5601-1987: ANSI/OEM 韓国語 (統一ハングルコード)", 949
+                MENUITEM "ヨハブ: 韓国語(ヨハブ)", 1361
+                MENUITEM "euc-kr: EUC 韓国語", 51949
+                MENUITEM "x-cp20949: 韓国のワンソン", 20949
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-korean: 韓国語 (Mac)", 10003
+                MENUITEM SEPARATOR
+                MENUITEM "x-EBCDIC-KoreanExtended: IBM EBCDIC 韓国語拡張", 20833
+                MENUITEM "EBCDIC 韓国語拡張および韓国語", 50933
+            END
+            POPUP "タイ語(&T)"
+            BEGIN
+                MENUITEM "windows-874: タイ語 (Windows)", 874
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-thai: タイ語 (Mac)", 10021
+                MENUITEM SEPARATOR
+                MENUITEM "IBM-タイ語: EBCDIC タイ語", 20838
+            END
+            POPUP "トルコ語(&T)"
+            BEGIN
+                MENUITEM "iso-8859-9: ISO 8859-9 トルコ語", 28599
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1254: トルコ語 (Windows)", 1254
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-turkish: トルコ語 (Mac)", 10081
+                MENUITEM SEPARATOR
+                MENUITEM "ibm857: トルコ語 (DOS)", 857
+                MENUITEM SEPARATOR
+                MENUITEM "IBM1026: EBCDIC トルコ語 (ラテン 5)", 1026
+                MENUITEM "IBM905: EBCDIC トルコ語", 20905
+            END
+            POPUP "ベトナム語(&V)"
+            BEGIN
+                MENUITEM "windows-1258: ベトナム語 (Windows)", 1258
+            END
+            POPUP "西ヨーロッパ人(&W)"
+            BEGIN
+                MENUITEM "us-ascii: US-ASCII (7 ビット)", 20127
+                MENUITEM "iso-8859-1: 西ヨーロッパ (ISO)", 28591
+                MENUITEM "iso-8859-3: ISO 8859-3 ラテン語 3", 28593
+                MENUITEM "iso-8859-15: ISO 8859-15 ラテン 9", 28605
+                MENUITEM "x-cp20269: ISO 6937 非スペーシング アクセント", 20269
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1252: 西ヨーロッパ (Windows)", 1252
+                MENUITEM SEPARATOR
+                MENUITEM "Macintosh: 西ヨーロッパ言語 (Mac)", 10000
+                MENUITEM "x-mac-icelandic: アイスランド語 (Mac)", 10079
+                MENUITEM SEPARATOR
+                MENUITEM "IBM437: OEM 米国", 437
+                MENUITEM "ibm850: 西ヨーロッパ言語 (DOS)", 850
+                MENUITEM "IBM00858: OEM 多言語ラテン語 1 + ユーロ記号", 858
+                MENUITEM "IBM860: ポルトガル語 (DOS)", 860
+                MENUITEM "ibm861: アイスランド語 (DOS)", 861
+                MENUITEM "IBM863: フランス語系カナダ人 (DOS)", 863
+                MENUITEM "IBM865: ノルディック (DOS)", 865
+                MENUITEM "x-IA5: 西ヨーロッパ (IA5)", 20105
+                MENUITEM "x-IA5-ドイツ語: IA5 ドイツ語 (7 ビット)", 20106
+                MENUITEM "x-IA5-ノルウェー語: IA5 ノルウェー語 (7 ビット)", 20108
+                MENUITEM "x-IA5-スウェーデン語: IA5 スウェーデン語 (7 ビット)", 20107
+                MENUITEM "x-cp20261: T.61", 20261
+                MENUITEM "x-ヨーロッパ: エウロパ 3", 29001
+                MENUITEM SEPARATOR
+                POPUP "EBCDIC(&E)"
+                BEGIN
+                    MENUITEM "IBM037: EBCDIC 米国-カナダ", 37
+                    MENUITEM "IBM500: EBCDICインターナショナル", 500
+                    MENUITEM "IBM01047: EBCDIC Latin 1/オープンシステム", 1047
+                    MENUITEM "IBM01140: EBCDIC (米国-カナダ-ユーロ)", 1140
+                    MENUITEM "IBM01141: EBCDIC (ドイツ-ユーロ)", 1141
+                    MENUITEM "IBM01142: EBCDIC (デンマーク-ノルウェー-ユーロ)", 1142
+                    MENUITEM "IBM01143: EBCDIC (フィンランド-スウェーデン-ユーロ)", 1143
+                    MENUITEM "IBM01144: EBCDIC (イタリア-ユーロ)", 1144
+                    MENUITEM "IBM01145: EBCDIC (スペイン-ユーロ)", 1145
+                    MENUITEM "IBM01146: EBCDIC (英国-ユーロ)", 1146
+                    MENUITEM "IBM01147: EBCDIC (フランス-ユーロ)", 1147
+                    MENUITEM "IBM01148: EBCDIC (国際-ユーロ)", 1148
+                    MENUITEM "IBM01149: EBCDIC (アイスランド語-ユーロ)", 1149
+                    MENUITEM "IBM273: EBCDIC ドイツ", 20273
+                    MENUITEM "IBM277: EBCDIC デンマーク-ノルウェー", 20277
+                    MENUITEM "IBM278: EBCDIC フィンランド - スウェーデン", 20278
+                    MENUITEM "IBM280: EBCDIC イタリア", 20280
+                    MENUITEM "IBM284: EBCDIC ラテンアメリカ-スペイン", 20284
+                    MENUITEM "IBM285: EBCDIC 英国", 20285
+                    MENUITEM "IBM297: EBCDIC フランス", 20297
+                    MENUITEM "IBM871: EBCDIC アイスランド語", 20871
+                    MENUITEM "IBM00924: EBCDIC Latin 1/オープン システム (1047 + ユーロ記号)", 20924
+                END
+            END
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "元のエンコーディングを維持する(&K)", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
+        MENUITEM "UTF-8 BOM の保存時に変換(&B)", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
+        MENUITEM "保存時に変換 UTF-8(&8)", IDM_VIEWER_ENCODING_SAVE_UTF8
+        MENUITEM "保存時に変換 ANSI(&A)", IDM_VIEWER_ENCODING_SAVE_ANSI
+        MENUITEM "保存時に変換 UTF-16 BE BOM(&B)", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
+        MENUITEM "保存時に変換 UTF-16 LE BOM(&L)", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERTEXT_NAME "テキストビューアー"
+    IDS_VIEWERTEXT_DESCRIPTION "テキスト ファイル用の内蔵ビューアー (16 進モード)。"
+    IDS_VIEWERTEXT_TITLE_FORMAT "{0} - ビューアー"
+    IDS_VIEWERTEXT_STATUS_FORMAT "エンコーディング: {0} サイズ: {1}"
+    IDS_VIEWERTEXT_STATUS_TEXT_FORMAT "FS: {0} 検出: {1} アクティブ: {2} サイズ: {3} 行: {4:L} ～ {5:L}/{6}"
+    IDS_VIEWERTEXT_STATUS_HEX_FORMAT "FS: {0} 検出: {1} アクティブ: {2} サイズ: {3} オフセット: {4}-{5}"
+    IDS_VIEWERTEXT_STATUS_WITH_MESSAGE_FORMAT "{0} {1}"
+    IDS_VIEWERTEXT_UNKNOWN "不明"
+
+    IDS_VIEWERTEXT_CAPTION_ERROR "ビューアー"
+    IDS_VIEWERTEXT_ERR_OPEN_FAILED "ファイルを開けませんでした。"
+    IDS_VIEWERTEXT_ERR_SAVE_FAILED "ファイルの保存に失敗しました。"
+
+    IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "ファイルを開く"
+    IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "ファイルに名前を付けて保存"
+    IDS_VIEWERTEXT_DIALOG_FILTER_ALL_FILES "すべてのファイル (*.*)"
+    IDS_VIEWERTEXT_SAVEAS_ENCODING_LABEL "エンコーディング:"
+    IDS_VIEWERTEXT_FIND_CAPTION "検索"
+    IDS_VIEWERTEXT_FIND_LABEL "検索する文字列:"
+    IDS_VIEWERTEXT_GOTO_CAPTION "オフセットに移動"
+    IDS_VIEWERTEXT_GOTO_LABEL "オフセット (10 進数または 0x...):"
+    IDS_VIEWERTEXT_BTN_OK "OK"
+    IDS_VIEWERTEXT_BTN_CANCEL "キャンセル"
+
+    IDS_VIEWERTEXT_COL_OFFSET "オフセット"
+    IDS_VIEWERTEXT_COL_HEX "データ"
+    IDS_VIEWERTEXT_COL_TEXT "テキスト"
+    IDS_VIEWERTEXT_COL_UNICODE "ユニコード"
+    IDS_VIEWERTEXT_COL_HEX_WORD "データ（ワード）"
+    IDS_VIEWERTEXT_COL_HEX_DWORD "データ (DWORD)"
+    IDS_VIEWERTEXT_COL_HEX_QWORD "データ(QWORD)"
+
+    IDS_VIEWERTEXT_COL_OFFSET_HEX "オフセット(HEX)"
+    IDS_VIEWERTEXT_COL_OFFSET_DEC "オフセット (DEC)"
+    IDS_VIEWERTEXT_COL_TEXT_ANSI "テキスト (ANSI)"
+IDS_VIEWERTEXT_COL_TEXT_UTF8 "テキスト(UTF-8)"
+IDS_VIEWERTEXT_COL_TEXT_UTF16 "テキスト(UTF-16)"
+
+IDS_VIEWERTEXT_MODE_TEXT "テキスト"
+IDS_VIEWERTEXT_MODE_HEX "16進数"
+IDS_VIEWERTEXT_MODE_DIFF "差分"
+IDS_VIEWERTEXT_MODE_RAW "RAW"
+
+    IDS_VIEWERTEXT_ENCODING_UTF8 "UTF-8"
+    IDS_VIEWERTEXT_ENCODING_UTF16LE "UTF-16LE"
+    IDS_VIEWERTEXT_ENCODING_UTF16BE "UTF-16 BE"
+    IDS_VIEWERTEXT_ENCODING_UTF32LE "UTF-32LE"
+    IDS_VIEWERTEXT_ENCODING_UTF32BE "UTF-32BE"
+    IDS_VIEWERTEXT_ENCODING_UNKNOWN "不明"
+
+    IDS_VIEWERTEXT_CODEPAGE_FORMAT "CP{0}"
+    IDS_VIEWERTEXT_DETECTED_SUFFIX_BOM "(BOM)"
+    IDS_VIEWERTEXT_DETECTED_SUFFIX_GUESS "(推測)"
+
+    IDS_VIEWERTEXT_OFFSET_COL_FORMAT_32 "{0:08X}"
+    IDS_VIEWERTEXT_OFFSET_COL_FORMAT_64 "{0:016X}"
+    IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_32 "0x{0:08X} ({1:L})"
+    IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_64 "0x{0:016X} ({1:L})"
+    IDS_VIEWERTEXT_OFFSET_COL_DEC_FORMAT "{0:L}"
+IDS_VIEWERTEXT_EMPTY_WATERMARK "空のファイル"
+IDS_VIEWERTEXT_MSG_SEARCH_WRAPPED "ラップされた検索。"
+IDS_VIEWERTEXT_MSG_SEARCH_HEX_INVALID "16 進検索では、0x43 や 0x435678 のような 16 進値が必要です。"
+IDS_VIEWERTEXT_MSG_LOADING "読み込み中..."
+IDS_VIEWERTEXT_MSG_STREAM_TRUNCATED "ストリーミング ビュー (スクロールしてさらに読み込む)。"
+IDS_VIEWERTEXT_MSG_DIFF_SHOWING_RAW_TEXT "生の差分テキストを表示します。"
+IDS_VIEWERTEXT_MSG_DIFF_PARSE_UNAVAILABLE "解析された差分は利用できません。生のテキストを表示します。"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE "[変更されていない行は非表示: 参照されたファイルはこのファイル システムでは使用できません]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE "[左側のファイルがありません: パッチによりこのファイルが追加されます]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE "[右側のファイルがありません: パッチによりこのファイルが削除されます]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[変更されていない行は非表示になっています: 参照ファイルが大きすぎて展開できません]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[変更されていない行は非表示: 参照ファイルはバイナリです]"
+END

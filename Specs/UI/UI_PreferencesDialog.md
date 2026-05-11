@@ -1,6 +1,6 @@
 # Preferences Dialog Specification
 
-Last updated: 2026-04-01
+Last updated: 2026-05-11
 
 ## Purpose
 
@@ -46,12 +46,11 @@ Related specs:
 - Preferences MUST be single-instance within the app process; re-opening the command reuses and activates the existing window.
 - The visible shell consists of:
   - a left navigation tree,
-  - a right scrollable page host,
-  - shell title plus description,
+  - a right scrollable page host that owns the page title, page description, and page body,
   - `OK`, `Cancel`, and `Apply` command buttons.
 - `Apply` MUST remain disabled when there are no pending changes.
 - `OK` MUST validate, persist, and apply the current working settings, then close.
-- `Cancel` MUST discard unapplied edits and close.
+- `Cancel`, window close, and `Esc` MUST close directly when there are no pending changes. When pending changes exist, they MUST first prompt to save before closing: `Yes` saves and closes, `No` discards and closes, and `Cancel` keeps editing.
 - `Apply` MUST persist and apply the current working settings while leaving the dialog open.
 
 ## Navigation Contract
@@ -77,8 +76,14 @@ Additional navigation rules:
 - `Plugins` is the only root node with children.
 - Selecting `Plugins` shows the plugin list page.
 - Selecting a plugin child node shows the schema-driven subpage for that plugin.
+- The visible root row order is the navigation contract. It MUST NOT be inferred from `PrefCategory` enum values because the enum order may differ from the displayed tree order.
 - Category switches MUST atomically keep the tree selection, shell title, shell description, and visible page body synchronized.
 - Returning to a previously visited page MUST restore that page's retained UI state that is part of the user contract, including persisted search/filter and selection state where defined for the page.
+- Page-host scroll position is retained per root/plugin page, not globally. Switching away from a scrolled page MUST NOT leak that page's scroll offset or scroll extent into the next page; the destination page enters at its own retained offset, clamped to its own measured content range, and shows a vertical scrollbar only when that destination page's current content overflows the page host.
+- Routed page-host mouse-wheel scrolling is screen-hit-tested. Wheel input outside the dialog MUST be ignored; wheel input over the page host scrolls the page host when the hit target is the host or when the hit DxUi child does not handle the wheel itself. Nested scrollable controls that handle the wheel consume it before the page-host fallback runs.
+- The page-host `DxUi::ScrollPanel` is the single interactive owner for right-pane page scroll. It MUST span the same top-to-bottom content band as the category tree, own the page title, description, and body, and keep `OK`, `Cancel`, and `Apply` fixed outside the scroll viewport. The page host MUST NOT show or track a competing native `WS_VSCROLL` thumb.
+- Programmatic page-scroll commands such as retained-position restore, focus-into-view, and debug/test `WM_VSCROLL` reset MAY update the logical page offset, but they MUST immediately synchronize the visible `DxUi::ScrollPanel` offset so page state, thumb position, and painted content cannot diverge.
+- On note-style pages with no page-local focusable controls, such as `Mouse`, baseline Tab traversal from the focused category tree MUST enter the shell commands in visible enabled order (`Reset All`, `OK`, `Cancel`) and then wrap native focus back to the category tree; reverse Tab traversal MUST mirror that order. When native focus wraps back to the category tree, the shell DxUi host retains the last logical shell command target according to the shared DxUi focus-retention contract.
 
 ## Current Live Page Contract
 
@@ -103,6 +108,7 @@ Per-page rules:
 - `Mouse` is a note-style page.
 - `Viewers`, `Editors`, `Keyboard`, `Themes`, and `Plugins` are list/search/detail style pages and MUST preserve their page-local retained state across category round-trips.
 - `Viewers` and `Editors` share the file-actions page implementation but remain separate visible categories because their command columns differ.
+- Rapid category-switch validation MUST assert the active page's current contract: `Editors` is a file-actions page and legitimately exposes editable ValuePattern descendants, while `Mouse` is a note-style page and MUST NOT expose stale edit/combo/value/toggle descendants from previously active pages.
 - `Plugins` root page MUST expose plugin enablement, custom-path management, and navigation into schema-driven child pages.
 - The plugin child page MUST embed the schema-driven configuration editor and MAY still offer the dedicated advanced configuration dialog entry point.
 - The File Operations page edits host-owned global defaults only: pre-calculation enable/workers, default copy/move speed limit, and cross-file-system bridge buffer size.
@@ -119,24 +125,39 @@ The `Viewers` and `Editors` pages MUST expose the same mental model:
 
 The `Viewers` page:
 
-- MUST show `Associations` and `Actions` tabs.
+- MUST show `Actions` first, then `Associations`.
 - The Associations table columns are `Match`, `Computer`, `F3 View`, `Alt+F3 Alternate View`, and `Status`.
 - The Actions table columns are `Name`, `Type`, `Applies To`, `Computer`, and `Status`.
+- Viewer-plugin actions MUST choose the stored `pluginId` through a non-editable combo that displays viewer plugin names; users MUST NOT type plugin IDs by hand. Persisted IDs that no longer match a discovered viewer plugin may be shown as a missing entry so the setting can still be inspected.
 - `F3 View` and `Alt+F3 Alternate View` action selectors MUST list configured viewer actions plus `(none)` where clearing is valid.
 
 The `Editors` page:
 
-- MUST show `Associations` and `Actions` tabs.
+- MUST show `Actions` first, then `Associations`.
 - The Associations table columns are `Match`, `Computer`, `F4 Edit`, `Ctrl+Shift+F4 Alternate Edit`, `Shift+F4 Edit New`, and `Status`.
 - The Actions table columns are `Name`, `Type`, `Applies To`, `Computer`, and `Status`.
+- Editor actions are external-program actions and MUST NOT expose a plugin-ID input.
 - `F4 Edit`, `Ctrl+Shift+F4 Alternate Edit`, and `Shift+F4 Edit New` action selectors MUST list configured editor actions plus `(none)` where clearing is valid.
 
 Both pages:
 
+- MUST keep padded content margins inside the tab content area so grids and form controls are not flush to the tab edge.
+- MUST give the Associations and Actions grids a stable minimum height, then grow those grids to consume spare page-host height before adding page-level overflow, so the fixed edit form remains visible while tall dialogs show more rows instead of leaving unused space below the tab surface.
+- MUST render visible side and bottom borders around the active tab content area plus one tab-strip separator line that is interrupted under the active tab, so no line runs directly below the active tab rectangle.
 - MUST edit `workingSettings.fileActions` only; they MUST NOT expose the removed root `viewers`/`editors` shape or `extensions.openWithViewerByExtension`.
 - MUST use the shared file-action resolver for the visible preview row so the page explains the same priority the command layer uses: computer-specific extension/pattern, global extension/pattern, computer default, global default.
 - MUST show the selected test file path, command, resolved action name, and reason in the preview.
 - MUST mark Preferences dirty when an association or action changes, and `Apply` / `OK` MUST persist the changed `fileActions` graph without dropping unrelated settings.
+- MUST expose the shared association form with `Match kind`, `Match value`, optional `Computer`, command-specific action selectors, and a `Save Association` command. The live UIA names for editing the match text and saving the association are the shared form labels, not older Viewers-only column/button captions.
+- Association-table command columns MUST resolve action IDs through the page's configured actions: configured actions show their display names, and missing actions show the localized `Missing: {id}` text. Tests that validate configured action display names MUST seed both the action definitions and the association rows.
+- Association-table header reorder/resize and `Ctrl+C` copy MUST follow the current visible column order. For Viewers, moving `F3 View` before `Match` makes copied row text begin with the `F3 View` cell; moving `Computer` before `Match` makes it begin with the computer override cell.
+- Association-table header resize MUST be a real pointer resize: the target column visibly widens, the adjacent visible column shifts, and test diagnostics' grid resize-move counter advances for that drag. Search and sort round-trips MUST preserve the resized layout without reporting page-host resize failures.
+- Header sort clicks on the Associations and Actions tables MUST cycle ascending, descending, and no-sort order for the clicked model column. Sorting compares the visible cell text case-insensitively, uses the `Match`/name cell as a tie-breaker for non-primary columns, and restores source order when the sort returns to none. Search/filter rebuilds MUST preserve the active sort spec until the user cycles it back to none.
+- On the Associations tab, page-local Tab traversal MUST cover the shared form controls in visible order: `Search`, associations grid, `Match kind`, `Match value`, `Computer`, command-specific action selectors, `Test file`, `Save Association`, `Remove`, `Reset Defaults`, the tab header, then wrap to `Search`. For Viewers the command selectors are `F3 View` then `Alt+F3 Alternate View`; for Editors they are `F4 Edit`, `Ctrl+Shift+F4 Alternate Edit`, then `Shift+F4 Edit New`. Reverse Tab traversal MUST mirror the same order.
+- MUST show every association row that participates in resolution, including the Default mapping row. Resetting to defaults restores the full default association set including that Default row.
+- MUST replace the selected association row when `Save Association` edits that row to a non-duplicate key. If the edited key already exists elsewhere, saving MUST update by key rather than creating duplicate `(match, computer)` rows. With no selected row and no existing key, saving appends a new association.
+- MUST keep the debug selected-extension/action state synchronized with the current grid selection. Fresh page creation may select a valid first row; destructive association mutations such as Remove and Reset Defaults MUST clear the association selection after rebinding so stale row details do not survive the mutation.
+- MUST route test/debug association-list scrolling through the same DxUi grid wheel path used by the live surface. Negative wheel detents scroll down from the top, update the vertical scroll offset, and participate in the normal grid invalidation/render-count path used by sustained-scroll validation.
 - MUST remain DxUi-owned, theme-aware, and accessible through the shared page-host and grid patterns.
 
 ### General Page Contract
@@ -166,10 +187,11 @@ Normative behavior:
 - `Compact mode` is a live previewed app-wide density preference. Toggling it inside Preferences MUST immediately restyle the visible Preferences page host, then become the persisted default only on `Apply` or `OK`.
 - `Animations` MUST expose `System`, `On`, and `Off`. `System` follows the OS preference, `On` forces full DxUI motion, and `Off` forces reduced motion while still editing `ui.reducedMotion`.
 - `Window backdrop` MUST expose `Default`, `None`, `Mica`, `Mica Alt`, and `Acrylic`.
-- Changing `Language` inside Preferences MUST update only `workingSettings` until `Apply` or `OK`; `Cancel` MUST discard the unapplied language edit.
+- Changing `Language` inside Preferences MUST update only `workingSettings` until `Apply` or `OK`; choosing `No` from the dirty-close prompt MUST discard the unapplied language edit.
 - Changing `Window backdrop` inside Preferences MUST immediately preview the selected backdrop policy on the Preferences window itself and on DxUI popup/menu materials owned by the dialog.
-- `Cancel` MUST discard any unapplied `Compact mode`, `Animations`, or `Window backdrop` preview changes and restore the previously persisted runtime state.
+- Choosing `No` from the dirty-close prompt MUST discard any unapplied `Compact mode`, `Animations`, or `Window backdrop` preview changes and restore the previously persisted runtime state.
 - `Apply` / `OK` MUST persist the new `ui.*` settings, re-apply the current localization preference through the shared settings pipeline, refresh supported top-level windows and app-owned captioned utility/dialog windows through the shared settings/backdrop pipeline, and keep the General page controls synchronized with the committed state.
+- Page-local Tab traversal MUST visit focusable General controls in visible order: `Menu bar`, `Function bar`, `Language`, `Compact mode`, `Animations`, `Window backdrop`, `Splash screen`, then wrap to `Menu bar`. Reverse Tab traversal MUST mirror that same order.
 - Main folder window backdrop behavior is not part of the Preferences dialog acceptance contract; Preferences owns the setting UI and the supported tool/dialog refresh pipeline.
 
 ## Settings And Schema Contract
@@ -187,17 +209,19 @@ Normative behavior:
 - The Preferences visible shell and current live page set MUST use the shared `DxUi` path and obey `Specs/UI/UI_DxUiSharedGrid.md`.
 - Shared `DxUi` rules such as zero accepted visible native fallback, page-host ownership, redraw batching, retained-state rules, `WM_GETOBJECT`, UI Automation exposure, and direct-host validation are normative through that shared spec and are not duplicated here.
 - The active page surface, not the outer dialog HWND, is the page-local accessibility target for page-specific validation.
+- Preferences debug snapshots expose native category-tree focus separately from retained DxUi host focus targets. Tests MUST NOT interpret a retained shell focus target as active native shell focus when `categoryTreeFocused` is true.
 - General, Panes, Viewers, and Editors page layout MUST use the Preferences-owned typography context and DirectWrite measurement for visible toggle/combo/card/hint text, not pane-local `HFONT` or GDI text measurement. Tests MUST keep `generalUsesDxUiTypographyContext`, `generalUsesDxUiTypographyMetrics`, `panesUsesDxUiTypographyContext`, `panesUsesDxUiTypographyMetrics`, `viewersUsesDxUiTypographyContext`, and `viewersUsesDxUiTypographyMetrics` true for the matching page snapshots.
 
 ## Verification Requirements
 
 Before changing Preferences behavior, the affected work MUST keep these contracts green:
 
-- category navigation stays synchronized with shell title, description, and active page content,
+- category navigation stays synchronized with page title, page description, and active page content,
 - page scrolling works with mouse wheel, scrollbar thumb drag, and track clicks,
+- the right page host begins at the category-tree top edge and scrolls title, description, and body together while keeping footer buttons fixed,
 - `OK`, `Cancel`, and `Apply` keep their expected persistence semantics,
 - the current live page set preserves page-local retained state expected by the product contract,
-- the File Operations page keeps live UI Automation access to its visible combo/edit controls and `Cancel` discards unapplied File Operations page edits,
+- the File Operations page keeps live UI Automation access to its visible combo/edit controls and the dirty-close `No` path discards unapplied File Operations page edits,
 - the active page surface exposes the required UI Automation patterns for its visible controls,
 - the live DX path does not regress to accepted visible native fallback.
 

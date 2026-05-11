@@ -7,22 +7,24 @@ Platform:
 MinimumOSVersion: 10.0.19041.0
 InstallerType: zip
 NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: RedSalamander.exe
+    PortableCommandAlias: RedSalamander
 UpgradeBehavior: install
 Commands:
   - RedSalamander
+InstallationMetadata:
+  Files:
+    - RelativeFilePath: RedSalamander.exe
+      FileType: launch
+      DisplayName: RedSalamander
 ReleaseDate: { RELEASE_DATE }
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/RedSalamanders/RedSalamander/releases/download/v{VERSION}/RedSalamander-{VERSION}-x64-Portable.zip
     InstallerSha256: { ZIP_SHA256 }
-    NestedInstallerFiles:
-      - RelativeFilePath: RedSalamander.exe
-        PortableCommandAlias: RedSalamander
   - Architecture: arm64
     InstallerUrl: https://github.com/RedSalamanders/RedSalamander/releases/download/v{VERSION}/RedSalamander-{VERSION}-ARM64-Portable.zip
     InstallerSha256: { ARM64_ZIP_SHA256 }
-    NestedInstallerFiles:
-      - RelativeFilePath: RedSalamander.exe
-        PortableCommandAlias: RedSalamander
 ManifestType: installer
 ManifestVersion: 1.12.0

@@ -45,7 +45,7 @@ Test projects may carry broader project-local suppressions only when they intent
 **Do not suppress C4774** to keep using `swprintf_s` with a runtime format string (especially from resources).
 
 Preferred fixes:
-- Localized/user-facing: change the `.rc` string to `std::format`-style positional placeholders (`{0}`, `{1:08X}`, ...) and use `FormatStringResource(...)`.
+- Localized/user-facing: change the `.rc` string to `std::format`-style positional placeholders (`{0}`, `{1:08X}`, ...), keep source placeholder order aligned with the `FormatStringResource(...)` argument order, and use `FormatStringResource(...)`.
 - Diagnostics: use `std::format` / `std::format_to_n` instead of `*printf_s`.
 
 ## Pragma Patterns

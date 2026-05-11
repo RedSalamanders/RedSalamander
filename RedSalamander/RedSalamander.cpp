@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <cwchar>
@@ -121,6 +123,9 @@ constexpr wchar_t kRightPaneSlot[]                   = L"right";
 #ifdef ENABLE_TESTS
 constexpr UINT kFatalErrorDialogDebugGetSnapshotMessage   = WM_APP + 0x71;
 constexpr UINT kFatalErrorDialogDebugScrollByWheelMessage = WM_APP + 0x72;
+constexpr double kSelfTestTimeoutMultiplierDefault        = 1.0;
+constexpr double kSelfTestTimeoutMultiplierMin            = 0.1;
+constexpr double kSelfTestTimeoutMultiplierMax            = 100.0;
 std::mutex g_debugConnectionManagerConnectMutex;
 bool g_debugConnectionManagerConnectSeen    = false;
 uint8_t g_debugConnectionManagerConnectPane = 0u;
@@ -157,6 +162,156 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
 }
 
 #ifdef ENABLE_TESTS
+struct SelfTestTimeoutMultiplierParseResult final
+{
+    bool valid   = false;
+    double value = kSelfTestTimeoutMultiplierDefault;
+};
+
+[[nodiscard]] SelfTestTimeoutMultiplierParseResult ParseSelfTestTimeoutMultiplier(std::wstring_view value) noexcept
+{
+    std::wstring valueCopy(value);
+    wchar_t* end        = nullptr;
+    errno               = 0;
+    const double parsed = wcstod(valueCopy.c_str(), &end);
+    if (valueCopy.empty() || end == valueCopy.c_str() || (end && *end != L'\0') || errno != 0 || ! std::isfinite(parsed))
+    {
+        Debug::Error(L"Invalid --selftest-timeout-multiplier value '{}'. Expected a finite number in [{}, {}].",
+                     valueCopy,
+                     kSelfTestTimeoutMultiplierMin,
+                     kSelfTestTimeoutMultiplierMax);
+        return {};
+    }
+
+    const double clamped = std::clamp(parsed, kSelfTestTimeoutMultiplierMin, kSelfTestTimeoutMultiplierMax);
+    if (clamped != parsed)
+    {
+        Debug::Warning(L"Clamped --selftest-timeout-multiplier from {} to {}. Supported range is [{}, {}].",
+                       parsed,
+                       clamped,
+                       kSelfTestTimeoutMultiplierMin,
+                       kSelfTestTimeoutMultiplierMax);
+    }
+
+    return {.valid = true, .value = clamped};
+}
+
+[[nodiscard]] std::wstring EscapeJsonString(std::wstring_view value)
+{
+    std::wstring escaped;
+    escaped.reserve(value.size() + 2u);
+    for (const wchar_t ch : value)
+    {
+        switch (ch)
+        {
+            case L'"': escaped.append(L"\\\""); break;
+            case L'\\': escaped.append(L"\\\\"); break;
+            case L'\b': escaped.append(L"\\b"); break;
+            case L'\f': escaped.append(L"\\f"); break;
+            case L'\n': escaped.append(L"\\n"); break;
+            case L'\r': escaped.append(L"\\r"); break;
+            case L'\t': escaped.append(L"\\t"); break;
+            default:
+                if (ch < 0x20)
+                {
+                    escaped.append(std::format(L"\\u{:04X}", static_cast<unsigned int>(ch)));
+                }
+                else
+                {
+                    escaped.push_back(ch);
+                }
+                break;
+        }
+    }
+    return escaped;
+}
+
+void AppendJsonStringProperty(std::wstring& json, std::wstring_view name, std::wstring_view value)
+{
+    json.append(L"\"");
+    json.append(name);
+    json.append(L"\":\"");
+    json.append(EscapeJsonString(value));
+    json.append(L"\"");
+}
+
+void AppendSelfTestCaseListSuiteJson(std::wstring& json, std::wstring_view suiteName, const std::vector<std::wstring>& names)
+{
+    json.append(L"{");
+    AppendJsonStringProperty(json, L"suite", suiteName);
+    json.append(std::format(L",\"count\":{},\"cases\":[", names.size()));
+
+    bool first = true;
+    for (const std::wstring& name : names)
+    {
+        if (! first)
+        {
+            json.append(L",");
+        }
+        first = false;
+
+        json.append(L"{");
+        AppendJsonStringProperty(json, L"name", name);
+        json.append(L"}");
+    }
+
+    json.append(L"]}");
+}
+
+[[nodiscard]] std::wstring BuildSelfTestCaseListJson(const SelfTest::SelfTestOptions& options, bool includeCompare, bool includeCommands, bool includeFileOps)
+{
+    struct SuiteCases final
+    {
+        std::wstring_view name;
+        std::vector<std::wstring> cases;
+    };
+
+    std::vector<SuiteCases> suites;
+    suites.reserve(3u);
+    if (includeCompare)
+    {
+        suites.push_back({L"CompareDirectories", CompareDirectoriesSelfTest::ListCases(options)});
+    }
+    if (includeCommands)
+    {
+        suites.push_back({L"Commands", CommandsSelfTest::ListCases(options)});
+    }
+    if (includeFileOps)
+    {
+        suites.push_back({L"FileOperations", FileOperationsSelfTest::BuildExpectedCaseNames(options)});
+    }
+
+    size_t total = 0u;
+    for (const SuiteCases& suite : suites)
+    {
+        total += suite.cases.size();
+    }
+
+    std::wstring json;
+    json.reserve(8192u + (total * 96u));
+    json.append(L"{\"version\":1");
+    if (! options.caseFilter.empty())
+    {
+        json.append(L",");
+        AppendJsonStringProperty(json, L"case_filter", options.caseFilter);
+    }
+    json.append(std::format(L",\"total\":{},\"suites\":[", total));
+
+    bool first = true;
+    for (const SuiteCases& suite : suites)
+    {
+        if (! first)
+        {
+            json.append(L",");
+        }
+        first = false;
+        AppendSelfTestCaseListSuiteJson(json, suite.name, suite.cases);
+    }
+
+    json.append(L"]}\r\n");
+    return json;
+}
+
 BOOL CALLBACK CountVisibleOwnedDialogChildWindowsProc(HWND hwnd, LPARAM lParam) noexcept
 {
     auto* count = reinterpret_cast<size_t*>(lParam);
@@ -6092,7 +6247,8 @@ constexpr wchar_t kRedSalamanderHelpText[] =
     L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
     L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
     L"  --selftest-case=NAME            Run the exact matching self-test case, or a case-prefix family when NAME ends in '_'.\r\n"
-    L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by N (default 1.0).\r\n"
+    L"  --selftest-list-cases           Emit self-test case inventory JSON and exit; combine with suite flags or --selftest-case.\r\n"
+    L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by finite N, clamped to [0.1, 100.0] (default 1.0).\r\n"
 #endif
     L"\r\n";
 
@@ -6352,7 +6508,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 #ifndef ENABLE_TESTS
     std::wstring unsupportedSelfTestArg;
     if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest") ||
-        hasArg(L"--selftest-fail-fast") || getArgValue(L"--selftest-case=", unsupportedSelfTestArg) ||
+        hasArg(L"--selftest-fail-fast") || hasArg(L"--selftest-list-cases") || getArgValue(L"--selftest-case=", unsupportedSelfTestArg) ||
         getArgValue(L"--selftest-timeout-multiplier=", unsupportedSelfTestArg))
     {
         Debug::Error(L"Self-test command-line arguments require ENABLE_TESTS.");
@@ -6363,26 +6519,44 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 #ifdef ENABLE_TESTS
     g_selfTestOptions                  = SelfTest::GetSelfTestOptions();
     g_selfTestOptions.failFast         = hasArg(L"--selftest-fail-fast");
-    g_selfTestOptions.timeoutScale     = 1.0;
+    g_selfTestOptions.timeoutScale     = kSelfTestTimeoutMultiplierDefault;
     g_selfTestOptions.writeJsonSummary = true;
     g_selfTestOptions.caseFilter.clear();
 
     std::wstring multiplierArg;
     if (getArgValue(L"--selftest-timeout-multiplier=", multiplierArg))
     {
-        wchar_t* end        = nullptr;
-        errno               = 0;
-        const double parsed = wcstod(multiplierArg.c_str(), &end);
-        if (end != multiplierArg.c_str() && errno == 0 && parsed > 0.0)
+        const SelfTestTimeoutMultiplierParseResult parsed = ParseSelfTestTimeoutMultiplier(multiplierArg);
+        if (! parsed.valid)
         {
-            g_selfTestOptions.timeoutScale = parsed;
+            return 2;
         }
+
+        g_selfTestOptions.timeoutScale = parsed.value;
     }
 
     std::wstring caseFilterArg;
     if (getArgValue(L"--selftest-case=", caseFilterArg))
     {
         g_selfTestOptions.caseFilter = std::move(caseFilterArg);
+    }
+
+    if (hasArg(L"--selftest-list-cases"))
+    {
+        const bool selfTestArgSelected  = hasArg(L"--selftest");
+        const bool compareArgSelected   = hasArg(L"--compare-selftest");
+        const bool commandsArgSelected  = hasArg(L"--commands-selftest");
+        const bool fileOpsArgSelected   = hasArg(L"--fileops-selftest");
+        const bool explicitSuiteRequest = selfTestArgSelected || compareArgSelected || commandsArgSelected || fileOpsArgSelected;
+
+        const bool includeCompare  = selfTestArgSelected || compareArgSelected || ! explicitSuiteRequest;
+        const bool includeCommands = selfTestArgSelected || commandsArgSelected || ! explicitSuiteRequest;
+        const bool includeFileOps  = selfTestArgSelected || fileOpsArgSelected || ! explicitSuiteRequest;
+
+        g_selfTestOptions.writeJsonSummary = false;
+        g_selfTestOptions.listCasesOnly    = true;
+        writeHelpText(BuildSelfTestCaseListJson(g_selfTestOptions, includeCompare, includeCommands, includeFileOps));
+        return 0;
     }
 
     if (hasArg(L"--selftest"))
@@ -7593,6 +7767,9 @@ void RereadAssociations(HWND hWnd) noexcept
 
     IconCache::GetInstance().Clear();
     IconCache::GetInstance().ClearAssociationCache();
+#ifdef ENABLE_TESTS
+    snapshot.associationIconCacheSizeAfterClear = DebugGetAssociationIconCacheSize();
+#endif
 
     EnsureMenuHandles(hWnd);
     bool viewWithMenuRebuilt = false;
@@ -7637,7 +7814,6 @@ void RereadAssociations(HWND hWnd) noexcept
     snapshot.userMenuActionCount             = g_settings.userMenu.actions.size();
     snapshot.viewerExtensionMappingCount     = g_settings.fileActions.viewers.associations.size();
     snapshot.fileSystemExtensionMappingCount = g_settings.extensions.openWithFileSystemByExtension.size();
-    snapshot.associationIconCacheSizeAfterClear = DebugGetAssociationIconCacheSize();
     snapshot.leftRefreshCountAfter              = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     snapshot.rightRefreshCountAfter             = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Right);
     snapshot.dynamicFileActionMenusRebuilt      = viewWithMenuRebuilt && editWithMenuRebuilt;
@@ -8912,8 +9088,17 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_PANE_CLIPBOARD_PASTE_SHORTCUT:
         {
+#ifdef ENABLE_TESTS
+            SelfTest::AppendSelfTestTrace(std::format(L"WM_COMMAND PasteShortcut enter focus=0x{:X} focusedPane={} focusedView=0x{:X}",
+                                                      reinterpret_cast<uintptr_t>(GetFocus()),
+                                                      static_cast<int>(g_folderWindow.GetFocusedPane()),
+                                                      reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd())));
+#endif
             if (g_folderWindow.TryHandleNavigationEditClipboardCommand(id))
             {
+#ifdef ENABLE_TESTS
+                SelfTest::AppendSelfTestTrace(L"WM_COMMAND PasteShortcut handled by navigation edit");
+#endif
                 break;
             }
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -8921,6 +9106,12 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             if (HWND folderView = g_folderWindow.GetFolderViewHwnd(pane))
             {
                 auto* view = reinterpret_cast<FolderView*>(GetWindowLongPtrW(folderView, GWLP_USERDATA));
+#ifdef ENABLE_TESTS
+                SelfTest::AppendSelfTestTrace(std::format(L"WM_COMMAND PasteShortcut folderView=0x{:X} view={} pane={}",
+                                                          reinterpret_cast<uintptr_t>(folderView),
+                                                          view ? 1 : 0,
+                                                          static_cast<int>(pane)));
+#endif
                 if (view)
                 {
                     static_cast<void>(view->PasteShortcutFromClipboard());
@@ -10114,6 +10305,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WndMsg::kConnectionManagerConnect: return OnMainWindowConnectionManagerConnect(hWnd, wParam, lParam);
         case WndMsg::kSettingsFileChanged: return OnMainWindowSettingsFileChanged(hWnd, lParam);
         case WndMsg::kPreferencesRequestSettingsSnapshot: CaptureRuntimeSettings(hWnd); return 0;
+        case WndMsg::kPaneRestoreFolderFocus:
+        {
+            if (IsIconic(hWnd) != FALSE)
+            {
+                ShowWindow(hWnd, SW_RESTORE);
+            }
+            static_cast<void>(SetActiveWindow(hWnd));
+            static_cast<void>(SetForegroundWindow(hWnd));
+            RestoreMainWindowFolderFocus(hWnd);
+            if (g_folderWindow.GetFocusedFolderViewHwnd() == nullptr)
+            {
+                static_cast<void>(g_folderWindow.TryRestoreActivePaneFolderViewFocus());
+            }
+            return g_folderWindow.GetFocusedFolderViewHwnd() != nullptr ? 1 : 0;
+        }
         case WM_TIMER: return OnMainWindowTimer(hWnd, static_cast<UINT_PTR>(wParam));
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hWnd)); return DefWindowProcW(hWnd, message, wParam, lParam);
         case WM_NCACTIVATE:

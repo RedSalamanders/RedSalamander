@@ -10,6 +10,8 @@
 - Graphics resources: NavigationView instances **share** the process-wide D2D/DWrite/D3D device objects; swap chains and device contexts remain per-window.
 - Uses Win32 for the window procedure and a visible `NavigationDxTextHost` child window in edit mode; text input behavior is delegated to DxUi rather than a visible native `EDIT` surface.
 - Uses DxUi-owned popup windows for the Drive/Menu, History, and Disk Info dropdown surfaces; the older NavigationView `WM_MEASUREITEM` / `WM_DRAWITEM` popup forwarding has been retired, and simple GDI painting remains only for fallback background/border work during pre-D2D startup.
+- Pane-level commands that focus or open NavigationView-owned UI (`cmd/pane/focusAddressBar`, change-directory, drive menu, and folder-history commands) MUST reveal the target pane's navigation bar before invoking the NavigationView action. Hidden navigation bars must not leave an active edit/dropdown state attached to an invisible child host.
+- Clicking the current/last breadcrumb segment MUST focus the owning pane without dispatching a redundant same-path navigation. Double-clicking that segment, or whitespace in the path section, MUST enter address-bar edit mode with the current path selected; the leading click of that double-click must not queue a refresh that can close the edit host.
 
 ## Typography Contract
 
@@ -1914,6 +1916,11 @@ NavigationView must implement internal focus navigation because most interactive
   - **Path** → enter edit mode (select all)
   - **History** → open history dropdown
   - **Disk Info** → open disk info dropdown
+- Dropdowns opened by **Enter / Space** from a focused **Menu**,
+  **History**, or **Disk Info** region must open in keyboard mode with an
+  initial navigable item selected. Pointer-opened dropdowns remain
+  mouse-neutral and must not draw an initial keyboard selection until keyboard
+  navigation occurs.
 - When the edit host has focus, **Tab / Shift+Tab** must first exit edit mode, then move focus to the next/previous region
 - Explicit child HWNDs spawned by NavigationView (address edit, dropdown combo) take keyboard priority while active; once they close, focus returns to the pane `FolderView` unless another pane child is intentionally focused
 

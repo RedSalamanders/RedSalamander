@@ -2588,6 +2588,11 @@ void HostSetTestPromptResultOverride(HostPromptResult result) noexcept
     g_testPromptResultOverride.store(static_cast<int>(result), std::memory_order_release);
 }
 
+HostPromptResult HostGetTestPromptResultOverride() noexcept
+{
+    return static_cast<HostPromptResult>(g_testPromptResultOverride.load(std::memory_order_acquire));
+}
+
 void HostClearTestPromptResultOverride() noexcept
 {
     g_testPromptResultOverride.store(static_cast<int>(HOST_PROMPT_RESULT_NONE), std::memory_order_release);

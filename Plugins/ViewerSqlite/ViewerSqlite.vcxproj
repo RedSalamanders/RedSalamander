@@ -145,6 +145,12 @@
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
+    <ProjectReference Include="Lang\ja-JP\ViewerSqlite-ja-JP.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{e595712e-89e4-53e5-8690-849dcc0d46a7}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

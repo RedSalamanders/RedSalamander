@@ -9,6 +9,7 @@
 #include <bit>
 #include <cassert>
 #include <cstdint>
+#include <deque>
 
 #include <d2d1_1.h>
 #include <d3d11.h>
@@ -117,7 +118,7 @@ public:
     void AppendText(const std::wstring& more);
 
     // ETW event batching - thread-safe queue for worker thread
-    void QueueEtwEvent(const Debug::InfoParam& info, const std::wstring& message);
+    void QueueEtwEvent(const Debug::InfoParam& info, std::wstring message);
 
     // Content
     void SetText(const std::wstring& text);
@@ -179,6 +180,7 @@ private:
     void ScrollToBottom();
     // Manage scrollers
     void UpdateScrollBars();
+    void UpdateScrollBarsCore();
     float GetLineHeight() const;
     float GetAverageCharWidth() const;
     void ClampHorizontalScroll();
@@ -349,7 +351,10 @@ private:
     float _gutterDipW         = 50.f;
     UINT32 _gutterDigits      = 2; // cached digit count for gutter width
     // Scrollbar visibility/state
-    bool _horzScrollbarVisible = false; // updated in UpdateScrollBars
+    bool _vertScrollbarVisible      = true; // initial window style includes WS_VSCROLL
+    bool _horzScrollbarVisible      = true; // initial window style includes WS_HSCROLL
+    bool _updatingScrollBars        = false;
+    bool _scrollBarUpdatePending    = false;
 
     // Selection/caret
     UINT32 _selStart                         = 0;
@@ -481,8 +486,8 @@ private:
         std::wstring message;
     };
 
-    // ETW event queue with wil::critical_section for efficient batching (prevents message loop flooding)
-    std::vector<EtwEventEntry> _etwEventQueue;
+    // ETW event queue with wil::critical_section for efficient bounded draining (prevents message loop flooding)
+    std::deque<EtwEventEntry> _etwEventQueue;
     wil::critical_section _etwQueueCS;
 
     // Find bar UI

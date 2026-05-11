@@ -51,8 +51,13 @@ public:
     [[nodiscard]] PreferencesViewersDebugFocusTarget DebugGetViewersFocusTarget() const noexcept;
     [[nodiscard]] bool DebugUsesDxUiTypographyContext() const noexcept;
     [[nodiscard]] bool DebugUsesDxUiTypographyMetrics() const noexcept;
-    [[nodiscard]] bool DebugGetAssociationRowClientRect(size_t rowIndex, RECT& outRect) const noexcept;
-    [[nodiscard]] bool DebugGetAssociationHeaderClientRect(size_t columnIndex, RECT& outRect) const noexcept;
+    [[nodiscard]] bool DebugGetAssociationRowClientRect(size_t rowIndex, RECT& outRect) noexcept;
+    [[nodiscard]] bool DebugGetAssociationHeaderClientRect(size_t columnIndex, RECT& outRect) noexcept;
+    [[nodiscard]] bool DebugHitTestAssociationClientPoint(
+        POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) const noexcept;
+    [[nodiscard]] bool DebugGetAssociationPointerState(PreferencesGridPointerDebugState& outState) const noexcept;
+    [[nodiscard]] bool DebugGetTabClientRect(size_t tabIndex, RECT& outRect) const noexcept;
+    [[nodiscard]] bool DebugGetSelectedTabIndex(size_t& outIndex) const noexcept;
     [[nodiscard]] bool DebugSelectAssociationRow(size_t rowIndex) noexcept;
     [[nodiscard]] bool DebugSetSearchText(std::wstring_view text) noexcept;
     [[nodiscard]] bool DebugSelectDefaultAction(bool alternate, std::wstring_view actionId) noexcept;
@@ -79,9 +84,11 @@ private:
     void SyncAssociationFormFromSelection(PreferencesDialogState& state) noexcept;
     void SyncActionFormFromSelection(PreferencesDialogState& state) noexcept;
     void SyncActionCombos(PreferencesDialogState& state) noexcept;
+    void SyncActionFieldAvailability() noexcept;
     void RebuildModels(PreferencesDialogState& state) noexcept;
     void UpdatePreview(PreferencesDialogState& state) noexcept;
     void MarkDirty(PreferencesDialogState& state) noexcept;
+    void ClearAssociationSelectionAfterMutation(PreferencesDialogState& state) noexcept;
 
     void OnSearchChanged(PreferencesDialogState& state, std::wstring_view text) noexcept;
     void OnAssociationSelectionChanged() noexcept;
@@ -94,6 +101,10 @@ private:
 
     [[nodiscard]] bool SelectDefaultAction(PreferencesDialogState& state, bool alternate, std::wstring_view actionId) noexcept;
     [[nodiscard]] bool SelectDefaultEditNewAction(PreferencesDialogState& state, std::wstring_view actionId) noexcept;
+
+#ifdef ENABLE_TESTS
+    void DebugShowAssociationsTab() noexcept;
+#endif
 
     [[nodiscard]] bool IsViewerFamily() const noexcept;
     [[nodiscard]] bool IsEditorsFamily() const noexcept;
@@ -138,7 +149,7 @@ private:
     RedSalamander::DxUi::ComboBox* _actionKindCombo = nullptr;
     RedSalamander::DxUi::Checkbox* _actionEnabledCheckbox = nullptr;
     RedSalamander::DxUi::Label* _pluginIdLabel = nullptr;
-    RedSalamander::DxUi::TextField* _pluginIdField = nullptr;
+    RedSalamander::DxUi::ComboBox* _pluginIdCombo = nullptr;
     RedSalamander::DxUi::Label* _executableLabel = nullptr;
     RedSalamander::DxUi::TextField* _executableField = nullptr;
     RedSalamander::DxUi::Label* _argumentsLabel = nullptr;
@@ -156,7 +167,7 @@ private:
     std::unique_ptr<FileActionGridModel> _actionsModel;
     PreferencesDialogState* _state = nullptr;
     HWND _hostWindow = nullptr;
-    ActiveGrid _activeGrid = ActiveGrid::Associations;
+    ActiveGrid _activeGrid = ActiveGrid::Actions;
     std::wstring _editorSearchText;
     std::wstring _previewActionId;
     std::wstring _previewReason;

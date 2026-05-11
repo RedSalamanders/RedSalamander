@@ -125,6 +125,44 @@ namespace RedSalamander::DxUi
 
                 eraseFrom = currentIndex;
             }
+
+            if (eraseFrom == 2u && text.size() >= 2u && text[1u] == L':')
+            {
+                return eraseFrom;
+            }
+
+            if (eraseFrom > 0u)
+            {
+                const size_t currentIndex = StepToPreviousCodePoint(text, eraseFrom);
+                const wchar_t current     = text[currentIndex];
+                if (IsWordCharacter(current))
+                {
+                    while (eraseFrom > 0u)
+                    {
+                        const size_t wordIndex = StepToPreviousCodePoint(text, eraseFrom);
+                        if (! IsWordCharacter(text[wordIndex]))
+                        {
+                            break;
+                        }
+
+                        eraseFrom = wordIndex;
+                    }
+                }
+                else if (! IsWhitespaceCharacter(current) && ! IsPathSeparator(current))
+                {
+                    while (eraseFrom > 0u)
+                    {
+                        const size_t punctuationIndex = StepToPreviousCodePoint(text, eraseFrom);
+                        const wchar_t punctuation     = text[punctuationIndex];
+                        if (IsWhitespaceCharacter(punctuation) || IsPathSeparator(punctuation) || IsWordCharacter(punctuation))
+                        {
+                            break;
+                        }
+
+                        eraseFrom = punctuationIndex;
+                    }
+                }
+            }
         }
         else if (IsWordCharacter(previous))
         {

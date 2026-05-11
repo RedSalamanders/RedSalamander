@@ -218,6 +218,63 @@ private:
     TrackingControlState* _state = nullptr;
 };
 
+struct SelfCapturingControlState
+{
+    size_t mouseDownCount          = 0u;
+    size_t mouseMoveWhileDownCount = 0u;
+    size_t captureLostCount        = 0u;
+    bool dragging                  = false;
+};
+
+class SelfCapturingControl final : public RedSalamander::DxUi::Control
+{
+public:
+    explicit SelfCapturingControl(SelfCapturingControlState& state) : _state(&state)
+    {
+    }
+
+    void Paint(RedSalamander::DxUi::WindowHost& /*host*/) const override
+    {
+    }
+
+    bool OnMouseDown(RedSalamander::DxUi::WindowHost& host, D2D1_POINT_2F /*point*/, bool rightButton, UINT /*modifiers*/) override
+    {
+        if (rightButton)
+        {
+            return false;
+        }
+
+        ++_state->mouseDownCount;
+        _state->dragging = true;
+        host.CaptureMouse(this);
+        return true;
+    }
+
+    bool OnMouseMove(RedSalamander::DxUi::WindowHost& /*host*/, D2D1_POINT_2F /*point*/, UINT /*modifiers*/) override
+    {
+        if (_state->dragging)
+        {
+            ++_state->mouseMoveWhileDownCount;
+        }
+        return true;
+    }
+
+    bool OnMouseUp(RedSalamander::DxUi::WindowHost& /*host*/, D2D1_POINT_2F /*point*/, bool /*rightButton*/, UINT /*modifiers*/) override
+    {
+        _state->dragging = false;
+        return true;
+    }
+
+    void OnCaptureLost(RedSalamander::DxUi::WindowHost& /*host*/) override
+    {
+        ++_state->captureLostCount;
+        _state->dragging = false;
+    }
+
+private:
+    SelfCapturingControlState* _state = nullptr;
+};
+
 class DetachOrderProbeControl final : public RedSalamander::DxUi::Control
 {
 public:
@@ -438,6 +495,51 @@ void TestWindowHostShiftTabTraversal()
 
     handled = false;
     static_cast<void>(host.HandleMessage(nullptr, WM_KEYUP, VK_SHIFT, 0, handled));
+}
+
+void TestWindowHostNativeFocusLossRetainsLogicalFocusForTraversal()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* first  = root->AddChild<Button>(L"First");
+    auto* second = root->AddChild<Button>(L"Second");
+    auto* third  = root->AddChild<Button>(L"Third");
+    first->SetBounds(D2D1::RectF(0.0f, 0.0f, 80.0f, 24.0f));
+    second->SetBounds(D2D1::RectF(0.0f, 28.0f, 80.0f, 52.0f));
+    third->SetBounds(D2D1::RectF(0.0f, 56.0f, 80.0f, 80.0f));
+
+    host.SetRoot(std::move(root));
+    host.SetFocusControl(second);
+    Require(host.GetFocusControl() == second, "native focus loss test starts from the second control");
+    Require(second->HasFocus(), "native focus loss test starts with active focus visuals");
+
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_KILLFOCUS, 0, 0, handled));
+    Require(handled, "native focus loss is handled");
+    Require(host.GetFocusControl() == second, "native focus loss keeps the retained logical focus target");
+    Require(! second->HasFocus(), "native focus loss clears active control focus visuals");
+
+    handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_SETFOCUS, 0, 0, handled));
+    Require(handled, "native focus regain is handled");
+    Require(host.GetFocusControl() == second, "native focus regain keeps the retained logical focus target");
+    Require(second->HasFocus(), "native focus regain restores active control focus visuals");
+
+    handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_KEYDOWN, VK_SHIFT, 0, handled));
+    Require(handled, "shift key down is tracked before native focus loss");
+
+    handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_KILLFOCUS, 0, 0, handled));
+    Require(handled, "second native focus loss is handled");
+    Require(host.GetFocusControl() == second, "second native focus loss still keeps the retained logical focus target");
+
+    handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_KEYDOWN, VK_TAB, 0, handled));
+    Require(handled, "tab traversal after native focus loss is handled");
+    Require(host.GetFocusControl() == third, "tab traversal after native focus loss continues from the retained control");
 }
 
 void TestWindowHostReturnInvokesDefaultButtonWhenFocusedControlDoesNotOwnEnter()
@@ -869,7 +971,7 @@ void TestWindowHostSpaceAndReturnToggleFocusedToggleWithoutDefaultButtonFallback
     Require(host.GetFocusControl() == toggle, "return keeps focus on the toggle");
 }
 
-void TestWindowHostSpaceAndReturnToggleFocusedCheckboxWithoutDefaultButtonFallback()
+void TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton()
 {
     using namespace RedSalamander::DxUi;
 
@@ -901,10 +1003,10 @@ void TestWindowHostSpaceAndReturnToggleFocusedCheckboxWithoutDefaultButtonFallba
 
     handled = false;
     static_cast<void>(host.HandleMessage(nullptr, WM_KEYDOWN, VK_RETURN, 0, handled));
-    Require(handled, "return handled by focused checkbox");
-    Require(! checkbox->IsChecked(), "return toggles the focused checkbox off");
-    Require(toggleCount == 2u, "return fires the checkbox callback once");
-    Require(defaultClickCount == 0u, "return does not fall through to the default button for the checkbox");
+    Require(handled, "return handled by focused checkbox through the host default button");
+    Require(checkbox->IsChecked(), "return does not toggle the focused checkbox off");
+    Require(toggleCount == 1u, "return does not fire the checkbox callback");
+    Require(defaultClickCount == 1u, "return falls through to the default button for the checkbox");
     Require(host.GetFocusControl() == checkbox, "return keeps focus on the checkbox");
 }
 
@@ -979,6 +1081,13 @@ void TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls()
     Require(defaultClickCount == 1u, "checkbox space does not leak to the default button in mixed dialog flow");
 
     handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_KEYDOWN, VK_RETURN, 0, handled));
+    Require(handled, "return handled from focused checkbox in mixed dialog flow");
+    Require(checkbox->IsChecked(), "focused checkbox return does not toggle in mixed dialog flow");
+    Require(checkboxToggleCount == 1u, "checkbox return does not fire the checkbox callback in mixed dialog flow");
+    Require(defaultClickCount == 2u, "focused checkbox return invokes the default button in mixed dialog flow");
+
+    handled = false;
     static_cast<void>(host.HandleMessage(nullptr, WM_KEYDOWN, VK_TAB, 0, handled));
     Require(handled, "tab from checkbox handled in mixed dialog flow");
     Require(host.GetFocusControl() == toggle, "tab advances focus from checkbox to toggle");
@@ -988,7 +1097,7 @@ void TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls()
     Require(handled, "return handled by focused toggle in mixed dialog flow");
     Require(toggle->IsChecked(), "focused toggle switches on in mixed dialog flow");
     Require(toggleCount == 1u, "toggle callback fires once in mixed dialog flow");
-    Require(defaultClickCount == 1u, "toggle return does not leak to the default button in mixed dialog flow");
+    Require(defaultClickCount == 2u, "toggle return does not leak to the default button in mixed dialog flow");
 
     handled = false;
     static_cast<void>(host.HandleMessage(nullptr, WM_KEYDOWN, VK_TAB, 0, handled));
@@ -999,7 +1108,7 @@ void TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls()
     static_cast<void>(host.HandleMessage(nullptr, WM_KEYDOWN, VK_RETURN, 0, handled));
     Require(handled, "return handled by focused command button in mixed dialog flow");
     Require(applyClickCount == 1u, "focused command button invokes itself in mixed dialog flow");
-    Require(defaultClickCount == 1u, "focused command button return does not leak to the default button in mixed dialog flow");
+    Require(defaultClickCount == 2u, "focused command button return does not leak to the default button in mixed dialog flow");
     Require(host.GetInputModality() == InputModality::Keyboard, "mixed dialog flow stays in keyboard modality");
     Require(host.IsKeyboardFocusVisible(), "mixed dialog flow preserves keyboard focus visuals");
     Require(host.GetFocusControl() == applyButton, "focused command button keeps focus after invocation in mixed dialog flow");
@@ -1449,6 +1558,35 @@ void TestWindowHostCaptureLossClearsPressedButtonState()
     static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_CAPTURECHANGED, 0, 0, handled));
     Require(handled, "capture-loss button test handles capture change");
     Require(! button->IsPressed(), "capture-loss button test clears pressed state when capture is lost");
+}
+
+void TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    SelfCapturingControlState state;
+    auto root     = std::make_unique<Panel>();
+    auto* control = root->AddChild<SelfCapturingControl>(state);
+    control->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 80.0f));
+    window.Host().SetRoot(std::move(root));
+
+    bool handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(24, 16), handled));
+    Require(handled, "self-capturing control mouse-down is handled");
+    Require(state.mouseDownCount == 1u, "self-capturing control receives one mouse-down");
+    Require(state.captureLostCount == 0u, "self-capturing control keeps capture after WindowHost post-handler capture");
+    Require(state.dragging, "self-capturing control remains in dragging state after mouse-down");
+
+    handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(24, 56), handled));
+    Require(handled, "self-capturing control captured mouse-move is handled");
+    Require(state.mouseMoveWhileDownCount == 1u, "self-capturing control receives captured mouse-move while dragging");
+
+    handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(24, 56), handled));
+    Require(handled, "self-capturing control mouse-up is handled");
+    Require(! state.dragging, "self-capturing control clears dragging state on mouse-up");
 }
 
 void TestWindowHostRenderSurvivesForcedNullSolidBrushes()
@@ -1996,6 +2134,7 @@ void RunWindowHostTests()
     runTest("TestWindowHostMouseMoveUpdatesHoverTarget", TestWindowHostMouseMoveUpdatesHoverTarget);
     runTest("TestWindowHostTabTraversal", TestWindowHostTabTraversal);
     runTest("TestWindowHostShiftTabTraversal", TestWindowHostShiftTabTraversal);
+    runTest("TestWindowHostNativeFocusLossRetainsLogicalFocusForTraversal", TestWindowHostNativeFocusLossRetainsLogicalFocusForTraversal);
     runTest("TestWindowHostReturnInvokesDefaultButtonWhenFocusedControlDoesNotOwnEnter",
             TestWindowHostReturnInvokesDefaultButtonWhenFocusedControlDoesNotOwnEnter);
     runTest("TestWindowHostReturnInvokesDefaultButtonWhenNoControlIsFocused", TestWindowHostReturnInvokesDefaultButtonWhenNoControlIsFocused);
@@ -2015,8 +2154,8 @@ void RunWindowHostTests()
     runTest("TestWindowHostMenuKeyInvokesFocusedCheckboxContextMenu", TestWindowHostMenuKeyInvokesFocusedCheckboxContextMenu);
     runTest("TestWindowHostSpaceAndReturnToggleFocusedToggleWithoutDefaultButtonFallback",
             TestWindowHostSpaceAndReturnToggleFocusedToggleWithoutDefaultButtonFallback);
-    runTest("TestWindowHostSpaceAndReturnToggleFocusedCheckboxWithoutDefaultButtonFallback",
-            TestWindowHostSpaceAndReturnToggleFocusedCheckboxWithoutDefaultButtonFallback);
+    runTest("TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton",
+            TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton);
     runTest("TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls", TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls);
     runTest("TestWindowHostMixedDialogMouseFlowKeepsCommandsOnHitControls", TestWindowHostMixedDialogMouseFlowKeepsCommandsOnHitControls);
     runTest("TestWindowHostMenuKeyInvokesFocusedTreeContextMenu", TestWindowHostMenuKeyInvokesFocusedTreeContextMenu);
@@ -2030,6 +2169,7 @@ void RunWindowHostTests()
     runTest("TestWindowHostIgnoresObserverButtonsOutsideInstalledRoot", TestWindowHostIgnoresObserverButtonsOutsideInstalledRoot);
     runTest("TestWindowHostIgnoresFocusAndCaptureOutsideInstalledRoot", TestWindowHostIgnoresFocusAndCaptureOutsideInstalledRoot);
     runTest("TestWindowHostCaptureLossClearsPressedButtonState", TestWindowHostCaptureLossClearsPressedButtonState);
+    runTest("TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture", TestWindowHostRedundantCaptureDoesNotCancelMouseDownCapture);
     runTest("TestWindowHostRenderSurvivesForcedNullSolidBrushes", TestWindowHostRenderSurvivesForcedNullSolidBrushes);
     runTest("TestWindowHostSmokeOverlayRendersBelowRootOverlay", TestWindowHostSmokeOverlayRendersBelowRootOverlay);
     runTest("TestWindowHostOverlayHitTestingPrecedesContentHitTesting", TestWindowHostOverlayHitTestingPrecedesContentHitTesting);

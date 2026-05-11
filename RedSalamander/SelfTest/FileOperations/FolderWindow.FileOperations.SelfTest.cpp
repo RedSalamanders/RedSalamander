@@ -738,6 +738,7 @@ struct RunSelection
 };
 
 [[nodiscard]] bool EqualsIgnoreCase(std::wstring_view a, std::wstring_view b) noexcept;
+[[nodiscard]] bool StartsWithIgnoreCase(std::wstring_view text, std::wstring_view prefix) noexcept;
 
 [[nodiscard]] bool IsPhaseSelected(const SelfTestState& state, SelfTestState::Step step) noexcept
 {
@@ -775,6 +776,30 @@ struct RunSelection
     return std::nullopt;
 }
 
+[[nodiscard]] std::vector<SelfTestState::Step> FindPhasesByPrefix(std::wstring_view prefix)
+{
+    std::vector<SelfTestState::Step> matches;
+    if (prefix.empty())
+    {
+        return matches;
+    }
+
+    for (const SelfTestState::Step step : kFileOpsPhaseOrder)
+    {
+        if (step == SelfTestState::Step::Setup || step == SelfTestState::Step::Cleanup_RestorePluginConfig)
+        {
+            continue;
+        }
+
+        if (StartsWithIgnoreCase(StepToString(step), prefix))
+        {
+            matches.push_back(step);
+        }
+    }
+
+    return matches;
+}
+
 [[nodiscard]] RunSelection ResolveRunSelection(std::wstring_view filter)
 {
     RunSelection selection{};
@@ -809,6 +834,16 @@ struct RunSelection
         return selection;
     }
 
+    std::vector<SelfTestState::Step> prefixMatches = FindPhasesByPrefix(filter);
+    if (! prefixMatches.empty())
+    {
+        selection.reportedPhases.push_back(SelfTestState::Step::Setup);
+        selection.activePhases = prefixMatches;
+        selection.reportedPhases.insert(selection.reportedPhases.end(), prefixMatches.begin(), prefixMatches.end());
+        selection.reportedPhases.push_back(SelfTestState::Step::Cleanup_RestorePluginConfig);
+        return selection;
+    }
+
     selection.recognized = false;
     return selection;
 }
@@ -826,7 +861,7 @@ struct RunSelection
         return filters;
     }
 
-    if (FindFamilyByName(filter) || FindPhaseByName(filter).has_value())
+    if (ResolveRunSelection(filter).recognized)
     {
         filters.emplace_back(filter);
     }
@@ -1438,6 +1473,24 @@ bool EnsureDummyFolderExists(IFileSystem* fs, std::wstring_view destinationFolde
     for (size_t i = 0; i < a.size(); ++i)
     {
         if (std::towlower(a[i]) != std::towlower(b[i]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool StartsWithIgnoreCase(std::wstring_view text, std::wstring_view prefix) noexcept
+{
+    if (prefix.size() > text.size())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < prefix.size(); ++i)
+    {
+        if (std::towlower(text[i]) != std::towlower(prefix[i]))
         {
             return false;
         }
@@ -4410,26 +4463,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 state.phaseResults.begin(), state.phaseResults.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expected; });
             if (it != state.phaseResults.end())
             {
-                result.cases.push_back(*it);
+                SelfTest::AppendCaseResult(result, *it);
                 continue;
             }
 
-            SelfTest::SelfTestCaseResult skipped{};
-            skipped.name       = std::wstring(expected);
-            skipped.status     = SelfTest::SelfTestCaseResult::Status::skipped;
-            skipped.durationMs = 0;
-            skipped.reason     = state.failed.load(std::memory_order_acquire) ? L"not reached (aborted due to failure)" : L"not reached";
-            result.cases.push_back(std::move(skipped));
-        }
-
-        for (const auto& item : result.cases)
-        {
-            switch (item.status)
-            {
-                case SelfTest::SelfTestCaseResult::Status::passed: ++result.passed; break;
-                case SelfTest::SelfTestCaseResult::Status::failed: ++result.failed; break;
-                case SelfTest::SelfTestCaseResult::Status::skipped: ++result.skipped; break;
-            }
+            const std::wstring_view reason = state.failed.load(std::memory_order_acquire) ? L"not reached (aborted due to failure)" : L"not reached";
+            SelfTest::AppendCaseResult(result, expected, SelfTest::SelfTestCaseResult::Status::skipped, reason, 0);
         }
 
         return result;

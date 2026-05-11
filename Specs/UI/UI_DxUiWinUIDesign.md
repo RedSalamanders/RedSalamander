@@ -957,6 +957,17 @@ All overlay surfaces (context menus, flyouts, tooltips, combo dropdowns, teachin
 - `WindowHost::HandleTabNavigation()` traverses controls via `FindAdjacentFocusable()`.
 - Tab order follows the visual tree (depth-first, top-to-bottom). A future `TabIndex` property may override this.
 - `Shift+Tab` reverses direction.
+- If a focus-change callback scrolls or lays out a retained DxUi host, the
+  intended focused control must remain the host's retained focus target when
+  the host owned keyboard focus before the layout.
+- Native `WM_KILLFOCUS` that leaves a `WindowHost` must clear active focus
+  visuals and transient modifier state, but it must retain the logical focused
+  control while that control still belongs to the active retained tree. This
+  preserves the user's Tab position across focus-steal, Alt+Tab, prompt, and
+  test-driver transitions.
+- Native `WM_SETFOCUS` must reactivate the retained logical focus target's
+  focus visuals and text-input bridge. Replacing or resetting the retained tree
+  may still clear the logical focus target through the normal prune/reset path.
 
 **Focus scopes:**
 - A focus scope is a container that manages internal focus independently. Examples: `RadioButtons` group, dialog button area, menu.
@@ -1029,7 +1040,7 @@ Several controls define both default and compact heights (Button: 32/24, Menu it
 - **Menu popup latency:** Context menu must appear within **100ms** of right-click. Measure from `WM_CONTEXTMENU` to first `Paint()` of the menu surface.
 - **Animation smoothness:** No frame drops during standard animations (hover transitions, tree expand). Monitor via `AnimationDispatcher` tick timing — flag any tick > 20ms.
 - **Text layout caching:** `IDWriteTextLayout` objects must be cached and reused. Re-creation only on text change, font change, or DPI change. Verify via a layout-creation counter in debug builds.
-- **Add ETW TraceLogging events** for: `DxUI::Paint` (per-frame), `DxUI::Layout` (per-measure), `DxUI::HitTest` (per-pointer-move), `DxUI::PopupShow`, `DxUI::FocusChange`.
+- **Add ETW TraceLogging events** for: `DxUI::Paint` (per-frame), component/window layout scopes, `DxUI::PopupShow`, and `DxUI::FocusChange`. Per-control `SetBounds` instrumentation and per-hit-test/per-pointer-move instrumentation are intentionally forbidden on hot paths because they can flood ETW/JSONL during first-layout, hover, and scroll interactions without explaining user-visible latency. Prefer scenario-level latency/counter metrics such as `preferences.page_host.*`, popup-open latency, paint duration, queue drain/coalescing counts, or explicitly thresholded slow-path diagnostics.
 
 ### Functional Verification
 

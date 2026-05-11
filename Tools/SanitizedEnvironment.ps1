@@ -111,17 +111,17 @@ function Get-RSProcessEnvironmentDictionary {
         [System.Diagnostics.ProcessStartInfo]$ProcessStartInfo
     )
 
-    $environmentVariablesProperty = $ProcessStartInfo.PSObject.Properties['EnvironmentVariables']
-    if ($environmentVariablesProperty -and $null -ne $ProcessStartInfo.EnvironmentVariables) {
-        return $ProcessStartInfo.EnvironmentVariables
-    }
-
     $environmentProperty = $ProcessStartInfo.PSObject.Properties['Environment']
     if ($environmentProperty -and $null -ne $ProcessStartInfo.Environment) {
-        return $ProcessStartInfo.Environment
+        return ,$ProcessStartInfo.Environment
     }
 
-    return $ProcessStartInfo.EnvironmentVariables
+    $environmentVariablesProperty = $ProcessStartInfo.PSObject.Properties['EnvironmentVariables']
+    if ($environmentVariablesProperty -and $null -ne $ProcessStartInfo.EnvironmentVariables) {
+        return ,$ProcessStartInfo.EnvironmentVariables
+    }
+
+    return ,$ProcessStartInfo.EnvironmentVariables
 }
 
 function Set-RSProcessEnvironmentValue {
@@ -136,9 +136,13 @@ function Set-RSProcessEnvironmentValue {
         [string]$Value
     )
 
-    [void]$EnvironmentDictionary.Remove($Name)
     if ($null -ne $Value) {
-        [void]$EnvironmentDictionary.Add($Name, $Value)
+        $EnvironmentDictionary[$Name] = $Value
+        return
+    }
+
+    if ($EnvironmentDictionary.Contains($Name)) {
+        [void]$EnvironmentDictionary.Remove($Name)
     }
 }
 

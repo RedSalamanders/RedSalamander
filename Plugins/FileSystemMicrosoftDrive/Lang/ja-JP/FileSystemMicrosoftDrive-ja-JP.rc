@@ -1,0 +1,48 @@
+#pragma code_page(65001)
+#include "../../FileSystemMicrosoftDriveResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME "OneDrive Personal"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION "Microsoft Graph 上の Microsoft OneDrive 個人用ストレージ。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME "OneDrive for Business"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION "Microsoft Graph 上の Microsoft OneDrive for Business ストレージ。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME "SharePoint"
+    IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION "Microsoft Graph 上の Microsoft SharePoint ドキュメント ライブラリ。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_NAME "Microsoft Drive"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "サインインを開始できません"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT "{0} はブラウザーでのサインインを開始するには Microsoft Graph クライアント ID が必要です。\r\n\r\n設定 JSON を編集し、「{0}」の詳細設定にある「clientId」の値を復元してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE "RedSalamander"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS "接続完了"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS "sparkles|接続が完了しました。ファイルを参照できます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE "接続が中断されました"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE "warning|サインインを完了できませんでした。RedSalamander に戻ってもう一度お試しください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT "このタブを閉じて、RedSalamander に戻ることができます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_2 "party|Microsoft アカウントへの接続が完了しました。RedSalamander に戻って続行してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_3 "rocket|サインインが正常に完了しました。アプリに戻って作業を続けてください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_4 "compass|接続先が設定されました。RedSalamander で続行できます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_5 "cloud|クラウドへの接続が使用可能になりました。アプリに戻ってください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_6 "glowstar|接続の準備が整いました。RedSalamander に戻って続行してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_7 "check|接続が確立されました。RedSalamander で参照を続行できます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_8 "fire|サインインが完了しました。RedSalamander に戻って続行してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_9 "rainbow|Microsoft 側の認証が完了しました。RedSalamander に戻ってください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_10 "wave|ブラウザーーでの手順が完了しました。RedSalamander に戻ってください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_2 "rain|接続を完了できませんでした。RedSalamander からもう一度開始できます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_3 "repair|認証を完了できませんでした。接続をもう一度お試しください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_4 "detour|ブラウザーーでの認証が完了しませんでした。RedSalamander に戻って再試行してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_5 "anchor|コールバックを完了できませんでした。RedSalamander から再試行できます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_6 "flash|最後の手順が中断されました。もう一度お試しください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_7 "umbrella|アプリに戻ってサインインを再試行してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_8 "map|Microsoft からの戻り処理が完了しませんでした。もう一度開始してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_9 "tools|この接続には再試行が必要です。RedSalamander に戻ってください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_10 "retry|もう一度お試しください。RedSalamander に戻って再実行できます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_STATUS_SUCCESS "Microsoft サインインが完了しました"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_STATUS_FAILURE "Microsoft サインインが中断されました"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_SUCCESS "Microsoft アカウントがリンクされています。 RedSalamander に戻って閲覧を続けます。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_FAILURE "Microsoft サインインはこのブラウザーー タブでは完了しませんでした。 RedSalamander に戻って再試行してください。"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FUN_LABEL "接続状態"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BRAND_KICKER "Microsoft Drive 接続"
+END

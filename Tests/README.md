@@ -2,16 +2,18 @@
 
 ## Overview
 
-RedSalamander has **1,162 test cases** across 8 test suites covering UI automation, plugin
-integration, file operations, DirectX rendering, performance baselines, and ETW diagnostics.
+RedSalamander has multiple test surfaces covering UI automation, plugin
+integration, file operations, DirectX rendering, performance baselines, tooling
+scripts, and ETW diagnostics. Counts below are current as of 2026-05-10.
 
 | Category | Suites | Tests | Framework |
 |----------|--------|-------|-----------|
-| Self-Tests (in-process) | 3 | 567 | Custom `SelfTest::RunCase` |
+| Self-Tests (in-process) | 3 | 599 Commands listed cases, 149 Compare listed cases, 75 FileOps listed phases | Custom harnesses |
 | DxUi Component Tests | 1 | 571 | Standalone harness |
-| Performance Tests | 1 | 4 | CppUnitTest DLL |
+| Performance Tests | 1 | 7 | CppUnitTest DLL |
 | Viewer Plugin Tests | 2 | 17 | Standalone harness |
-| Monitor/ETW Tests | 1 | 3 | Standalone harness |
+| Monitor/ETW Tests | 1 | 3 burst scenarios + 3 fast guards | Standalone harness |
+| Tooling Script Tests | 1 folder + vcpkg scripts | 65 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
 
 Related specifications:
 - `Specs/Testing/Testing_SelfTests.md` — result contract
@@ -22,39 +24,50 @@ Related specifications:
 
 ```powershell
 .\Tools\Run-AllTests.ps1                      # Build Debug + run ALL self-tests
+.\Tools\Run-AllTests.ps1 -Suite Full           # Build Debug + run self-tests, native tests, PerformanceTests2, and local script tests
 .\Tools\Run-AllTests.ps1 -Suite Commands       # Single suite
 .\Tools\Run-AllTests.ps1 -SkipBuild -FailFast  # Fast iteration
 .\Tools\Run-AllTests.ps1 -TimeoutMultiplier 3  # Slow machines
+.\Tools\Get-TestInventory.ps1 -Format Json     # Source-derived inventory manifest
+.\.build\x64\Debug\RedSalamander.exe --selftest-list-cases  # Runner-native self-test case inventory
 ```
 
 ---
 
-## 1. Commands Self-Test Suite — 346 cases
+## 1. Commands Self-Test Suite — 599 runner-listed cases
 
 **Flag:** `--commands-selftest`
-**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` + 11 `.cpp` family files
+**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` + 12 `.cpp` family files
+**Inventory:** `RedSalamander.exe --selftest-list-cases --commands-selftest`
+lists 599 cases. The source fallback scan still reports 570 static
+`SelfTest::RunCase` call sites because some helper call sites generate multiple
+declared cases.
 
 Tests UI automation, dialog interactions, preferences, shortcuts, themes, navigation,
 and command dispatch inside the live application window.
 
 | Family | File | Tests | Coverage |
 |--------|------|-------|----------|
-| Settings | `SelfTest\Commands\Commands.SelfTest.Settings.cpp` | 11 | Hot-reload, registry store, shortcut defaults |
-| PluginConfig | `SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp` | 10 | Plugin configuration, file-system plugin |
-| Connections | `SelfTest\Commands\Commands.SelfTest.Connections.cpp` | 17 | Connection manager, credential prompts |
-| Preferences | `SelfTest\Commands\Commands.SelfTest.Preferences.cpp` | 129 | Preferences dialog — all categories, DxUi surfaces |
-| CompareOptions | `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` | 8 | Compare directories options, progress |
-| Search | `SelfTest\Commands\Commands.SelfTest.Search.cpp` | 52 | Find dialog, local search index, quick search/filter |
-| Shortcuts | `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` | 24 | Shortcuts window, key binding |
-| ViewCommands | `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` | 27 | View commands, selection, sort, pane, tabs |
+| Settings | `SelfTest\Commands\Commands.SelfTest.Settings.cpp` | 72 | Hot-reload, registry store, shortcut defaults |
+| PluginConfig | `SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp` | 17 | Plugin configuration, file-system plugin |
+| Connections | `SelfTest\Commands\Commands.SelfTest.Connections.cpp` | 37 | Connection manager, credential prompts |
+| Preferences Dispatch | `SelfTest\Commands\Commands.SelfTest.Preferences.Dispatch.cpp` | 169 | Preferences dialog — all categories, DxUi surfaces |
+| CompareOptions | `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` | 11 | Compare directories options, progress |
+| Search | `SelfTest\Commands\Commands.SelfTest.Search.cpp` | 60 | Find dialog, local search index, quick search/filter |
+| Shortcuts | `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` | 1 | Shortcuts window grouped runner |
+| ViewCommands | `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` | 58 | View commands, selection, sort, pane, tabs |
 | FileOps | `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` | 19 | File operations issues pane, speed limit |
-| Navigation | `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` | 2 | Navigation location, GoTo |
-| Dialogs | `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` | 47 | About, fatal error, splash, change case, rename, filter, mask |
+| Navigation | `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` | 46 | Navigation location, GoTo |
+| Dialogs | `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` | 60 | About, fatal error, splash, change case, rename, filter, mask |
+| ShellCommands | `SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp` | 17 | Shell-integrated pane commands |
 
-## 2. Compare Directories Self-Test Suite — 145 cases
+## 2. Compare Directories Self-Test Suite — 149 runner-listed cases
 
 **Flag:** `--compare-selftest`
 **Source:** `RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp` + 3 included case files
+**Inventory:** `RedSalamander.exe --selftest-list-cases --compare-selftest`
+lists 149 cases. The source fallback scan still reports 141 static
+`SelfTest::RunCase` call sites plus explicit setup/precondition result paths.
 
 Tests the compare-directories engine including local/remote search, indexing, and session logic.
 
@@ -73,10 +86,12 @@ Tests the compare-directories engine including local/remote search, indexing, an
 | Search text helpers | 2 | Text matching, decoding |
 | Misc (concurrency, caching, UI) | ~32 | Crash quarantine, setCompareEnabled, uiVersion, etc. |
 
-## 3. File Operations Self-Test Suite — 76 phases
+## 3. File Operations Self-Test Suite — 75 runner-listed phases
 
 **Flag:** `--fileops-selftest`
 **Source:** `RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp` + 4 included phase files
+**Inventory:** `RedSalamander.exe --selftest-list-cases --fileops-selftest`
+lists 75 phases: setup, 73 active ordered phases, and cleanup.
 
 Async tick-driven state machine testing file copy/move/delete operations end-to-end.
 Organised into 12 families spanning phases 5–16.
@@ -84,8 +99,8 @@ Organised into 12 families spanning phases 5–16.
 | Family | Phases | Coverage |
 |--------|--------|----------|
 | Phase 05 — PreCalc | 7 | Pre-calculation settings, cancel, latency, mode switching |
-| Phase 06 — PopupAndDelete | 4 | Popup, bandwidth throttle, delete operations |
-| Phase 07 — WatchAndParallelism | 14 | Watchers, cache, parallelism, concurrency |
+| Phase 06 — PopupAndDelete | 5 | Popup, rate smoothing, bandwidth throttle, delete operations |
+| Phase 07 — WatchAndParallelism | 17 | Watchers, cache, parallelism, concurrency |
 | Phase 08 — Validation | 5 | Defaults, destinations, size bytes |
 | Phase 09 — ConflictPrompt | 7 | Overwrite, apply-to-all, skip, retry |
 | Phase 10 — DeleteValidation | 1 | Permanent delete |
@@ -121,7 +136,7 @@ Tests the DirectX UI framework: controls, text input, rendering, theming, and ac
 | Accessibility | `DxUiTests.Accessibility.cpp` | 10 |
 | Tooltip | `DxUiTests.Tooltip.cpp` | 9 |
 
-## 5. Performance Tests — 4 tests
+## 5. Performance Tests — 7 tests
 
 **Project:** `Tests\PerformanceTests2\`  •  **Run:** `vstest.console.exe .\.build\x64\Debug\PerformanceTests2.dll`
 
@@ -129,10 +144,13 @@ CppUnitTest DLL for performance baselines.
 
 | Test | Coverage |
 |------|----------|
-| FolderIconEnumerationPerfTest | Icon cache enumeration throughput |
-| FolderIconEnumerationDuplicatePathPerfTest | Duplicate path icon edge cases |
-| FolderViewRefreshDuplicatePathPerfTest | Folder view refresh optimisation |
-| PerformanceTests2 (main) | FolderView enumeration access |
+| LargeFolderIconEnumeration_DuplicatePaths | Duplicate path icon edge cases |
+| LargeFolderIconEnumeration_MixedItems | Icon cache enumeration throughput |
+| FolderViewRefresh_PluginDuplicatePaths | Folder view refresh optimisation |
+| FolderViewCompactMode_SetAppThemeCollapsesRowGapAndUpdatesHitTest | Compact mode hit-test/theme behavior |
+| SplashScreenCloseGuardTriggersWhenCloseEventWasSignaled | Splash close guard |
+| FileSystemPluginManagerInitializeFailsWhenNoPluginsAreDiscovered | File-system plugin manager empty discovery |
+| ViewerPluginManagerInitializeFailsWhenNoPluginsAreDiscovered | Viewer plugin manager empty discovery |
 
 ## 6. Viewer Plugin Tests — 17 tests
 
@@ -143,11 +161,48 @@ CppUnitTest DLL for performance baselines.
 | ViewerPETests | 7 | PE, Web, ImgRaw, Text, Space, VLC viewers — DxUi combo host, long-run stability |
 | ViewerSqliteTests | 10 | List tables, paged reads, sorting, DxUi host, scrolling, paging, theme, tab traversal |
 
-## 7. Monitor / ETW Tests — 3 scenarios
+`ViewerPETests` runs most fresh-process viewer cases with the default
+120-second child timeout. Its nested six-cycle shell-combo churn case uses a
+dedicated 600-second parent timeout so valid long-run coverage is not killed
+before the per-child viewer checks can finish and report their own results.
+
+## 7. Monitor / ETW Tests — 3 burst scenarios plus fast guards
 
 **Project:** `Tests\MonitorTest\`  •  **Run:** `.\.build\x64\Debug\MonitorTest.exe`
 
 Generates 150,000+ ETW trace messages across 3 burst scenarios to validate TraceLogging transport.
+Fast targeted guards include `--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and `--document-model-selftest`.
+
+## 8. Tooling Script Tests
+
+**Run locally/full:** `Invoke-Pester .\Tools\Tests`
+
+**Run in artifact-only CI jobs:** `Invoke-Pester .\Tools\Tests -ExcludeTag RequiresBuildToolchain`
+
+| File | Cases | Coverage |
+|------|-------|----------|
+| `BuildProjectSelection.Tests.ps1` | 4 | Project selection and direct vcxproj builds |
+| `MSBuildInvocation.Tests.ps1` | 8 | MSBuild invocation planning and diagnostic parsing |
+| `ProcessStreaming.Tests.ps1` | 2 | Process output streaming and logging |
+| `RedSalamanderPluginDeployment.Tests.ps1` | 1 | Targeted RedSalamander build repopulates sibling binaries/plugins and plugin language resources; tagged `RequiresBuildToolchain`, bounded, and logged |
+| `ResourceLocalizationContracts.Tests.ps1` | 1 | Resource placeholder positional-order and satellite placeholder-equivalence contract |
+| `RunAllTestsPlan.Tests.ps1` | 8 | Full runner test-plan enumeration, aggregate artifact, and result-coverage validation |
+| `SanitizedEnvironment.Tests.ps1` | 2 | Child process environment normalization |
+| `TestHarnessSourceContracts.Tests.ps1` | 14 | Source guards for test harness CLI/error handling, case-listing, result-emission, duplicate-name contracts, CompareDirectories listed-case coverage, async file-operations self-test prompts, and FileOperations prefix filters |
+| `TestInventory.Tests.ps1` | 5 | Source-derived test inventory manifest, FileOperations phase-order drift guard, and doc-count lint |
+| `VcpkgInstallSafety.Tests.ps1` | 5 | vcpkg path/triplet safety |
+| `Versioning.Tests.ps1` | 4 | Local build-number reuse/allocation |
+| `WingetValidation.Tests.ps1` | 11 | Winget validation warning suppression, failure propagation, portable manifest metadata, and VC runtime ZIP helper coverage |
+
+Fast vcpkg merge coverage:
+
+- `.\Tests\vcpkg-merge-synthetic-test.ps1` — 5 synthetic lock/merge tests.
+
+Manual-only intrusive validation:
+
+- `.\Tests\vcpkg-merge-lock-validation.ps1` — 3 vcpkg install/lock validation
+  scenarios; this is intentionally not part of `Run-AllTests.ps1 -Suite Full`
+  or PR CI because it runs vcpkg install flows and mutates `.build`.
 
 ---
 
@@ -187,7 +242,7 @@ Tests remain declared even when prerequisites are absent. Missing preconditions 
 | `--fileops-selftest` | File Operations suite only |
 | `--selftest-fail-fast` | Abort after first failure |
 | `--selftest-case=NAME` | Run a specific case (prefix match with trailing `_`) |
-| `--selftest-timeout-multiplier=N` | Scale timeouts (>1.0 for slow machines) |
+| `--selftest-timeout-multiplier=N` | Scale timeouts by a finite value clamped to `[0.1, 100.0]`; invalid values fail fast |
 
 ### Artifacts
 

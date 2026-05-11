@@ -147,12 +147,12 @@ void UpdateScrollbarAnimation(WindowHost& host, ScrollbarAnimationState& animati
     return animation.active || changedThisTick;
 }
 
-[[nodiscard]] D2D1_RECT_F ComputeScrollbarThumbRect(const D2D1_RECT_F& trackRect,
-                                                    ScrollbarOrientation orientation,
-                                                    float viewportDip,
-                                                    float totalContentDip,
-                                                    float scrollOffsetDip,
-                                                    float scrollExtentDip) noexcept
+[[nodiscard]] D2D1_RECT_F ComputeScrollbarThumbSlotRect(const D2D1_RECT_F& trackRect,
+                                                        ScrollbarOrientation orientation,
+                                                        float viewportDip,
+                                                        float totalContentDip,
+                                                        float scrollOffsetDip,
+                                                        float scrollExtentDip) noexcept
 {
     const float viewport     = (std::isfinite(viewportDip) && viewportDip > 0.0f) ? viewportDip : 0.0f;
     const float totalContent = (std::isfinite(totalContentDip) && totalContentDip > 0.0f) ? totalContentDip : 0.0f;
@@ -194,12 +194,42 @@ void UpdateScrollbarAnimation(WindowHost& host, ScrollbarAnimationState& animati
         return D2D1::RectF();
     }
 
-    constexpr float inset = kScrollbarThumbInsetDip;
     if (vertical)
     {
-        return D2D1::RectF(trackRect.left + inset, thumbStart + inset, trackRect.right - inset, thumbStart + thumbLength - inset);
+        return D2D1::RectF(trackRect.left, thumbStart, trackRect.right, thumbStart + thumbLength);
     }
-    return D2D1::RectF(thumbStart + inset, trackRect.top + inset, thumbStart + thumbLength - inset, trackRect.bottom - inset);
+    return D2D1::RectF(thumbStart, trackRect.top, thumbStart + thumbLength, trackRect.bottom);
+}
+
+[[nodiscard]] D2D1_RECT_F ComputeScrollbarThumbRect(const D2D1_RECT_F& trackRect,
+                                                    ScrollbarOrientation orientation,
+                                                    float viewportDip,
+                                                    float totalContentDip,
+                                                    float scrollOffsetDip,
+                                                    float scrollExtentDip) noexcept
+{
+    const D2D1_RECT_F slotRect = ComputeScrollbarThumbSlotRect(trackRect, orientation, viewportDip, totalContentDip, scrollOffsetDip, scrollExtentDip);
+    if (slotRect.right <= slotRect.left || slotRect.bottom <= slotRect.top)
+    {
+        return D2D1::RectF();
+    }
+
+    constexpr float inset = kScrollbarThumbInsetDip;
+    if (orientation == ScrollbarOrientation::Vertical)
+    {
+        return D2D1::RectF(slotRect.left + inset, slotRect.top + inset, slotRect.right - inset, slotRect.bottom - inset);
+    }
+    return D2D1::RectF(slotRect.left + inset, slotRect.top + inset, slotRect.right - inset, slotRect.bottom - inset);
+}
+
+[[nodiscard]] D2D1_RECT_F ComputeScrollbarThumbHitRect(const D2D1_RECT_F& trackRect,
+                                                       ScrollbarOrientation orientation,
+                                                       float viewportDip,
+                                                       float totalContentDip,
+                                                       float scrollOffsetDip,
+                                                       float scrollExtentDip) noexcept
+{
+    return ComputeScrollbarThumbSlotRect(trackRect, orientation, viewportDip, totalContentDip, scrollOffsetDip, scrollExtentDip);
 }
 
 void PaintScrollbar(WindowHost& host, const D2D1_RECT_F& trackRect, const D2D1_RECT_F& thumbRect, const ResolvedScrollbarVisuals& visuals) noexcept

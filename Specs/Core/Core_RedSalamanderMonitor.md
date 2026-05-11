@@ -130,8 +130,8 @@ When filtering is active, the VisibleLine architecture provides:
 - Windows monitor that receives log lines over **ETW (Event Tracing for Windows)** (see `Common/Helpers.h`): structured `Debug::InfoParam` records (time, process id, thread id, type Text/Error/Warning/Info/Debug).
 - **ETW message intake**:
   - **`WM_APP_ETW_BATCH`**: ETW events queued and processed in batches from the EtwListener worker thread
-  - Batch processing defers invalidation by calling `AppendInfoLine(..., deferInvalidation=true)` for each entry, then performing a single mode-specific update at the end of the batch.
-  - Note: `BeginBatchAppend()`/`EndBatchAppend()` exists but the current `WM_APP_ETW_BATCH` path does not call them directly.
+  - The cross-thread ETW queue is a `std::deque` drained in bounded chunks on the UI thread; overflow stays queued in order and a follow-up message is posted instead of moving overflow back into a vector under the queue lock.
+  - Batch processing moves the drained chunk into `Document::AppendInfoLines(...)`, taking the document write lock once and performing a single mode-specific update at the end of the batch.
 - Single main window with menu and toolbar: New/Open/Save As, Copy, toggle toolbar, toggle line numbers, show/hide IDs, auto-scroll, always-on-top; debug builds can start a random message generator.
 - Display surface is `ColorTextView` rendered with Direct2D/DirectWrite on a D3D11/DXGI swap chain; per-monitor DPI aware; supports line numbers, colored metadata prefixes, keyword colorization for Error/Warning/Debug, and optional auto-scroll.
 - Input pipeline normalizes CR/LF, appends text to the document, caches prefixes per line, and updates gutter width; selection and clipboard copy are supported (Ctrl+C, Ctrl+A); find bar via Ctrl+F with F3 navigation; mouse wheel scroll with Shift for horizontal.
@@ -140,7 +140,7 @@ When filtering is active, the VisibleLine architecture provides:
 ## Existing performance/architecture traits
 - **Two-mode rendering system**: AUTO-SCROLL mode uses dynamic tail layout (viewport-sized, min 100 lines) with direct rendering for <0.5ms append latency; SCROLL-BACK mode uses full virtualization with slice-based rendering (`kSliceBlockLines=256`) for historical review.
 - **Display row mapping**: All Y position calculations use display-row offsets (`Document::DisplayRowForVisible()` / `Document::DisplayRowForSource()`) to correctly handle multi-line content with embedded newlines.
-- **Batched message intake**: ETW events are processed in batches via `WM_APP_ETW_BATCH` to avoid per-message overhead at high throughput.
+- **Batched message intake**: ETW events are processed in bounded batches via `WM_APP_ETW_BATCH` to avoid per-message overhead at high throughput while preventing a single mega-burst from monopolizing the UI thread.
 - **D3D11 texture limits**: Validates slice bitmap dimensions against 16384px limit, falls back to direct rendering when exceeded.
 - Layout and width measurements in SCROLL-BACK mode run on a thread pool with slice prefetch; layouts are cached to skip reflow when the same slice is requested.
 - AUTO-SCROLL mode uses synchronous layout updates and direct-to-backbuffer rendering; SCROLL-BACK mode uses offscreen slice bitmap when possible (within texture limits), otherwise direct rendering.
@@ -594,7 +594,7 @@ static constexpr UINT32 kMaxD3D11TextureDimension = 16384;  // D3D11 texture lim
 - `displayRowForVisible(visIdx)`: Maps visible index to display row (O(1) access)
 - `displayRowForSource(srcIdx)`: Maps source index to display row (O(log n) binary search)
 - `visibleIndexFromDisplayRow(row)`: Maps display row to visible index (O(log n) binary search)
-- `BeginBatchAppend()`/`EndBatchAppend()`: Optional batch API for callers; current ETW batch path uses `AppendInfoLine(..., deferInvalidation=true)` and a single update at end of batch.
+- `BeginBatchAppend()`/`EndBatchAppend()`: Optional legacy batch API for callers; current ETW batch path uses `Document::AppendInfoLines(...)` and a single update at end of batch.
 - `GetTotalLineCount()`: Efficient O(1) line count (lines.size())
 - `GetVisibleLineCount()`: Efficient O(1) visible line count (visibleLines.size())
 
@@ -613,9 +613,12 @@ static constexpr UINT32 kMaxD3D11TextureDimension = 16384;  // D3D11 texture lim
 - `totalLineCount() const`: Returns total line count (O(1) - lines.size())
 - `getVisibleLine(size_t visibleIndex) const`: Access line by visible index
 - `getSourceLine(size_t sourceIndex) const`: Access line by source index
+- `appendInfoLines(std::vector<InfoLineInput>)`: Append structured monitor log entries under a single write lock
 - `displayRowForVisible(size_t visibleIndex) const`: Get display row by visible index (O(1))
 - `displayRowForSource(size_t sourceIndex) const`: Get display row by source index (O(log n))
 - `visibleIndexFromDisplayRow(UINT32 displayRow) const`: Binary search display row → visible index
+- `sourceLineForDisplayRow(UINT32 displayRow) const`: Binary search display row → source line without exposing the visible index vector
+- `closestVisibleSourceLine(size_t sourceIndex) const`: Use the rebuilt visible index to preserve a filter anchor by exact/next visible source line, or the last visible line when the anchor is beyond the filtered tail
 - `totalDisplayRows() const`: Returns total display rows for visible lines only
 
 **Main Window**:

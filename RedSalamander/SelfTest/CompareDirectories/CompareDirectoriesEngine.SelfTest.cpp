@@ -21,6 +21,7 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <iterator>
 #include <limits>
 #include <mutex>
 #include <new>
@@ -106,6 +107,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_index_core_sqlite_option_keeps_snapshot_runtime_store",
     L"local_index_core_sqlite_cold_start_bypasses_snapshot_runtime_store",
     L"local_index_core_sqlite_authoritative_replays_without_snapshot_runtime_store",
+    L"local_index_core_sqlite_authoritative_reseeds_after_store_loss_during_replay",
     L"local_index_core_sqlite_cold_start_stale_root_refreshes_before_query",
     L"local_index_core_sqlite_direct_query_freshness_policy",
     L"local_index_core_sqlite_cutover_blocked_by_pending_legacy_import",
@@ -129,6 +131,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"search_service_sqlite_midquery_failure_restarts_live_scan_without_duplicates",
     L"search_service_sqlite_prefilter_roundtrip",
     L"search_service_sqlite_status_reports_pending_legacy_import",
+    L"search_service_sqlite_startup_warmup_failure_status_roundtrip",
     L"search_service_binary_uses_console_subsystem",
     L"search_service_default_identity_matches_build",
     L"search_service_sqlite_default_store_uses_build_specific_programdata_root",
@@ -138,6 +141,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"search_service_foreground_rejects_second_instance",
     L"search_service_foreground_logs_request_status",
     L"search_service_status_and_query_roundtrip",
+    L"search_service_query_reports_live_progress",
     L"local_search_service_indexed_name_latency_and_parity",
     L"local_search_service_matches_host_fallback",
     L"local_search_service_single_request_uses_query",
@@ -158,6 +162,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"oauth_refresh_token_storage",
     L"oauth_authmode_roundtrip",
     L"google_drive_plugin_contract",
+    L"google_drive_navigation_menu_callback_clear_drains",
     L"google_drive_cleared_client_id_requires_configuration",
     L"google_drive_connection_requires_refresh_token",
     L"onedrive_personal_cleared_client_id_requires_configuration",
@@ -202,7 +207,7 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"try_make_relative_outside_root",
     L"baseInterfaces",
     L"contentCacheHit",
-    L"empty_directories",
+    L"root_decision_empty_directories",
     L"zeroByteContent",
     L"setSettingsInvalidates",
     L"dircache_not_polluted_by_compare_scan",
@@ -258,27 +263,7 @@ void AppendCaseResult(SelfTest::SelfTestSuiteResult& suite,
     caseLine.append(name);
     Trace(caseLine);
 
-    SelfTest::SelfTestCaseResult result{};
-    result.name       = std::wstring(name);
-    result.status     = status;
-    result.durationMs = 0;
-    result.reason     = std::wstring(reason);
-
-    suite.cases.push_back(std::move(result));
-    switch (status)
-    {
-        case SelfTest::SelfTestCaseResult::Status::passed: ++suite.passed; break;
-        case SelfTest::SelfTestCaseResult::Status::failed:
-        {
-            ++suite.failed;
-            if (suite.failureMessage.empty())
-            {
-                suite.failureMessage = suite.cases.back().reason;
-            }
-            break;
-        }
-        case SelfTest::SelfTestCaseResult::Status::skipped: ++suite.skipped; break;
-    }
+    SelfTest::AppendCaseResult(suite, name, status, reason, 0);
 }
 
 [[nodiscard]] bool EqualsIgnoreCase(std::wstring_view a, std::wstring_view b) noexcept
@@ -3990,6 +3975,25 @@ private:
     return files;
 }
 
+[[nodiscard]] bool CanProveDirectSqliteCurrentness(const LocalSearchIndexCore::QueryStats& stats) noexcept
+{
+    return stats.journalAvailable && ! stats.usedTraversalSeed;
+}
+
+[[nodiscard]] std::wstring_view DirectSqliteCurrentnessSkipReason(const LocalSearchIndexCore::QueryStats& stats) noexcept
+{
+    if (! stats.journalAvailable)
+    {
+        return L"Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.";
+    }
+    if (stats.usedTraversalSeed)
+    {
+        return L"NTFS MFT enumeration unavailable; traversal-seeded SQLite roots remain currentness-unproven until a later journal-backed run.";
+    }
+
+    return {};
+}
+
 [[nodiscard]] HRESULT RunIndexedNameQuery(LocalSearchIndexCore::Repository& repository,
                                           std::wstring_view rootPath,
                                           std::wstring_view namePattern,
@@ -4017,6 +4021,54 @@ private:
                                           std::vector<LocalSearchIndexCore::Candidate>& outCandidates) noexcept
 {
     return RunIndexedNameQuery(repository, rootPath, namePattern, FILESYSTEM_SEARCH_NAME_WILDCARD, outStats, outCandidates);
+}
+
+[[nodiscard]] bool TryPrepareDirectSqliteCursorForSelfTest(SelfTest::CaseState& state,
+                                                           const std::filesystem::path& caseRoot,
+                                                           std::wstring_view label,
+                                                           uint64_t& outJournalId,
+                                                           uint64_t& outNextUsn) noexcept
+{
+    outJournalId = 0u;
+    outNextUsn   = 0u;
+
+    try
+    {
+        const std::filesystem::path cursorStoreRoot = caseRoot.parent_path() / (caseRoot.filename().wstring() + L"-cursor-probe-store");
+        LocalSearchIndexCore::Repository cursorRepository({
+            .snapshotRootDirectory = cursorStoreRoot.wstring(),
+        });
+
+        LocalSearchIndexCore::QueryStats cursorStats{};
+        std::vector<LocalSearchIndexCore::Candidate> cursorCandidates;
+        const HRESULT cursorHr = RunIndexedNameQuery(cursorRepository, caseRoot.wstring(), L"*", cursorStats, cursorCandidates);
+        state.Require(SUCCEEDED(cursorHr),
+                      std::format(L"{} cursor probe query failed. hr=0x{:08X}", label, static_cast<unsigned long>(cursorHr)));
+        if (FAILED(cursorHr))
+        {
+            return false;
+        }
+
+        if (! CanProveDirectSqliteCurrentness(cursorStats))
+        {
+            state.Skip(DirectSqliteCurrentnessSkipReason(cursorStats));
+            return false;
+        }
+
+        outJournalId = cursorStats.journalId;
+        outNextUsn   = cursorStats.nextUsn;
+        return true;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"CompareSelfTest: direct SQLite cursor probe failed with an unexpected std::exception.");
+        state.Require(false, std::format(L"{} cursor probe failed with an unexpected std::exception.", label));
+        return false;
+    }
 }
 
 [[nodiscard]] bool ExecuteSqliteScript(const std::filesystem::path& databasePath, std::string_view script, std::wstring& outError) noexcept
@@ -4271,7 +4323,24 @@ private:
 
 [[nodiscard]] std::filesystem::path GetWorkspaceRootFromSourcePath() noexcept
 {
-    return std::filesystem::path(__FILE__).parent_path().parent_path();
+    std::filesystem::path candidate = std::filesystem::path(__FILE__).parent_path();
+    for (int i = 0; i < 10 && ! candidate.empty(); ++i)
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(candidate / L"RedSalamander.sln", ec) && ! ec &&
+            std::filesystem::exists(candidate / L"Plugins" / L"FileSystem7z" / L"Tests" / L"Tests.zip", ec) && ! ec)
+        {
+            return candidate;
+        }
+
+        if (! candidate.has_parent_path() || candidate.parent_path() == candidate)
+        {
+            break;
+        }
+        candidate = candidate.parent_path();
+    }
+
+    return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path();
 }
 
 [[nodiscard]] std::optional<std::wstring> FindFirstRegularEntryPath(const wil::com_ptr<IFileSystem>& fs, std::wstring_view rootPath) noexcept
@@ -4922,6 +4991,20 @@ void InvokeGetRootDecision(void* rawContext) noexcept
 }
 } // namespace
 
+std::vector<std::wstring> CompareDirectoriesSelfTest::ListCases(const SelfTest::SelfTestOptions& options) noexcept
+{
+    std::vector<std::wstring> names;
+    names.reserve(std::size(kCompareCaseNames));
+    for (const std::wstring_view name : kCompareCaseNames)
+    {
+        if (SelfTest::CaseFilterMatches(options.caseFilter, name))
+        {
+            names.emplace_back(name);
+        }
+    }
+    return names;
+}
+
 bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult* outResult) noexcept
 {
     const auto startedAt = std::chrono::steady_clock::now();
@@ -4954,14 +5037,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
     if (! fatalSetupFailure.empty())
     {
         AppendCompareSelfTestTraceLine(L"Run: aborting due to setup failure");
-        SelfTest::SelfTestCaseResult setup{};
-        setup.name       = L"setup";
-        setup.status     = SelfTest::SelfTestCaseResult::Status::failed;
-        setup.durationMs = 0;
-        setup.reason     = fatalSetupFailure;
-        suite.cases.push_back(std::move(setup));
-        ++suite.failed;
-        suite.failureMessage = fatalSetupFailure;
+        AppendCaseResult(suite, L"setup", SelfTest::SelfTestCaseResult::Status::failed, fatalSetupFailure);
         AppendSkippedCompareCasesForSetupFailure(options, suite, std::format(L"not executed due to suite setup failure: {}", fatalSetupFailure));
     }
     else
@@ -5016,17 +5092,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
         if (! setupFailure.empty())
         {
-            SelfTest::SelfTestCaseResult setup{};
-            setup.name       = L"setup";
-            setup.status     = SelfTest::SelfTestCaseResult::Status::failed;
-            setup.durationMs = 0;
-            setup.reason     = setupFailure;
-            suite.cases.push_back(std::move(setup));
-            ++suite.failed;
-            if (suite.failureMessage.empty())
-            {
-                suite.failureMessage = setupFailure;
-            }
+            AppendCaseResult(suite, L"setup", SelfTest::SelfTestCaseResult::Status::failed, setupFailure);
         }
     }
 

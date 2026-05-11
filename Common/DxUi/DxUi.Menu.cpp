@@ -1979,6 +1979,7 @@ void ApplyMenuPopupWindowRegion(HWND hwnd, const MenuPopupShadowMargins& shadowM
 // ---------------------------------------------------------------------------
 
 static constexpr UINT_PTR kSubmenuHoverTimerId = 1;
+static constexpr UINT kRootPointerPollTimerMs  = 30u;
 
 bool CreateMenuPopupWindow(MenuController& controller,
                            const MenuFlyoutItem* items,
@@ -2397,11 +2398,55 @@ void RunMenuModalLoop(MenuController& controller)
     bool ignoreInitialLeftButtonUp  = controller.sessionCallbacks.ignoreInitialLeftButtonUp || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
     bool ignoreInitialRightButtonUp = controller.sessionCallbacks.ignoreInitialRightButtonUp || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
     POINT lastMouseScreenPoint{};
-    bool hasLastMouseScreenPoint = GetCursorPos(&lastMouseScreenPoint) != FALSE;
+    bool hasLastMouseScreenPoint = false;
+    POINT lastPointerPollScreenPoint{};
+    bool hasLastPointerPollScreenPoint = false;
+
+    const auto pollRootPointerFromCursor = [&]() noexcept
+    {
+        POINT screenPt{};
+        if (controller.sessionCallbacks.focusFirstNavigableItem || ! controller.sessionCallbacks.switchRootFromPointer || GetCursorPos(&screenPt) == FALSE)
+        {
+            return;
+        }
+
+        const bool mouseMoved = ! hasLastPointerPollScreenPoint || screenPt.x != lastPointerPollScreenPoint.x ||
+                                screenPt.y != lastPointerPollScreenPoint.y;
+        lastPointerPollScreenPoint    = screenPt;
+        hasLastPointerPollScreenPoint = true;
+        if (! mouseMoved)
+        {
+            return;
+        }
+
+        if (auto request = controller.sessionCallbacks.switchRootFromPointer(screenPt); request.has_value())
+        {
+            static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-pointer-poll", false));
+        }
+    };
 
     MSG msg;
-    while (controller.running && GetMessageW(&msg, nullptr, 0, 0))
+    while (controller.running)
     {
+        if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) == FALSE)
+        {
+            pollRootPointerFromCursor();
+            static_cast<void>(MsgWaitForMultipleObjectsEx(0, nullptr, kRootPointerPollTimerMs, QS_ALLINPUT, MWMO_INPUTAVAILABLE));
+            continue;
+        }
+
+        if (msg.message == WM_QUIT)
+        {
+            PostQuitMessage(static_cast<int>(msg.wParam));
+            break;
+        }
+
+        const HWND originalMessageHwnd = msg.hwnd;
+        if (originalMessageHwnd && IsWindow(originalMessageHwnd) == FALSE)
+        {
+            continue;
+        }
+
         const bool ownerOrPopupMessage = msg.hwnd == controller.ownerHwnd || controller.FindPopupForHwnd(msg.hwnd) != nullptr;
         if (ownerOrPopupMessage)
         {

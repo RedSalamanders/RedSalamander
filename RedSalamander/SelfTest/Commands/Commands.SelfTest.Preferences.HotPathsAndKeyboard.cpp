@@ -1,3 +1,6 @@
+namespace
+{
+
 [[nodiscard]] static bool WaitForPreferencesKeyboardSelectedChordText(std::wstring_view expectedText, PreferencesKeyboardDebugSnapshot& outState) noexcept
 {
     const auto normalizeChordText = [](std::wstring_view text) noexcept
@@ -76,6 +79,22 @@
     outChordText.clear();
     return DebugGetPreferencesKeyboardVisibleRowChordByCommandId(commandId, outChordText) &&
            normalizeChordText(outChordText).find(normalizedExpected) != std::wstring::npos;
+}
+
+[[nodiscard]] static std::wstring_view HotPathsFocusTargetName(const PreferencesHotPathsDebugFocusTarget target) noexcept
+{
+    switch (target)
+    {
+        case PreferencesHotPathsDebugFocusTarget::None: return L"None";
+        case PreferencesHotPathsDebugFocusTarget::FirstPathField: return L"FirstPathField";
+        case PreferencesHotPathsDebugFocusTarget::FirstBrowseButton: return L"FirstBrowseButton";
+        case PreferencesHotPathsDebugFocusTarget::FirstLabelField: return L"FirstLabelField";
+        case PreferencesHotPathsDebugFocusTarget::FirstShowInMenuToggle: return L"FirstShowInMenuToggle";
+        case PreferencesHotPathsDebugFocusTarget::SecondPathField: return L"SecondPathField";
+        case PreferencesHotPathsDebugFocusTarget::OpenPrefsToggle: return L"OpenPrefsToggle";
+    }
+
+    return L"Unknown";
 }
 
 [[nodiscard]] static bool WaitForPreferencesKeyboardSelectedCommandId(std::wstring_view expectedCommandId, PreferencesKeyboardDebugSnapshot& outState) noexcept
@@ -258,6 +277,8 @@
 
     return state.failure.empty();
 }
+
+} // namespace
 
 [[nodiscard]] bool TestPreferencesDialogHotPathsLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
 {
@@ -1135,12 +1156,24 @@
     const auto sendTab = [&](const bool reverse, const PreferencesHotPathsDebugFocusTarget expectedTarget, std::wstring_view label) noexcept
     {
         const HWND currentActivePage = DebugGetPreferencesActivePageHandle();
+        const HWND currentDxHost     = DebugGetPreferencesActivePageDxHostHandle();
+        const HWND nativeFocusBefore = GetFocus();
         state.Require(currentActivePage != nullptr && IsWindow(currentActivePage) != FALSE,
                       std::format(L"Failed to resolve the active Preferences Hot Paths page surface before {} traversal.", label));
         if (! currentActivePage || IsWindow(currentActivePage) == FALSE || ! state.failure.empty())
         {
             return;
         }
+
+        SelfTest::AppendSelfTestTrace(std::format(L"Preferences Hot Paths tab traversal: step='{}' reverse={} expectedFocus={} nativeFocus=0x{:X} "
+                                                  L"activePage=0x{:X} activeDxHost=0x{:X} beforeRetainedFocus={}",
+                                                  label,
+                                                  reverse ? 1 : 0,
+                                                  HotPathsFocusTargetName(expectedTarget),
+                                                  reinterpret_cast<uintptr_t>(nativeFocusBefore),
+                                                  reinterpret_cast<uintptr_t>(currentActivePage),
+                                                  reinterpret_cast<uintptr_t>(currentDxHost),
+                                                  HotPathsFocusTargetName(snapshot.hotPathsFocusTarget)));
 
         if (reverse)
         {
@@ -1153,15 +1186,51 @@
             SendMessageW(currentActivePage, WM_KEYUP, VK_SHIFT, 0);
         }
 
-        state.Require(waitForSnapshot(
-                          [&](const PreferencesDebugSnapshot& value) noexcept
+        const bool reachedExpectedFocus = waitForSnapshot(
+            [&](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryHotPaths && value.hotPathsFocusTarget == expectedTarget && value.createdPaneWindowCount == 0u &&
                    value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
-                      std::format(L"Preferences Hot Paths {} focus target not reached during tab traversal.", label));
+            snapshot);
+        const HWND nativeFocusAfter = GetFocus();
+        const HWND activePageAfter  = DebugGetPreferencesActivePageHandle();
+        const HWND activeDxAfter    = DebugGetPreferencesActivePageDxHostHandle();
+
+        SelfTest::AppendSelfTestTrace(std::format(L"Preferences Hot Paths tab traversal: step='{}' reached={} observedFocus={} category={} "
+                                                  L"visibleChildren={} renderedDxHosts={} paneWindows={} createdPaneWindows={} resizeFailures={} "
+                                                  L"nativeFocusAfter=0x{:X} activePageAfter=0x{:X} activeDxHostAfter=0x{:X}",
+                                                  label,
+                                                  reachedExpectedFocus ? 1 : 0,
+                                                  HotPathsFocusTargetName(snapshot.hotPathsFocusTarget),
+                                                  static_cast<int>(snapshot.currentCategory),
+                                                  snapshot.visibleCurrentPageChildWindowCount,
+                                                  snapshot.currentPageRenderedDxHostCount,
+                                                  snapshot.visiblePaneWindowCount,
+                                                  snapshot.createdPaneWindowCount,
+                                                  snapshot.currentPageDxHostResizeFailureCount,
+                                                  reinterpret_cast<uintptr_t>(nativeFocusAfter),
+                                                  reinterpret_cast<uintptr_t>(activePageAfter),
+                                                  reinterpret_cast<uintptr_t>(activeDxAfter)));
+
+        state.Require(reachedExpectedFocus,
+                      std::format(L"Preferences Hot Paths {} focus target not reached during tab traversal; expected {}, saw {}; category={}, "
+                                  L"native focus before=0x{:X}, after=0x{:X}, active page before=0x{:X}, after=0x{:X}, "
+                                  L"active DX host before=0x{:X}, after=0x{:X}, page children={}, rendered DX hosts={}, resize failures={}.",
+                                  label,
+                                  HotPathsFocusTargetName(expectedTarget),
+                                  HotPathsFocusTargetName(snapshot.hotPathsFocusTarget),
+                                   static_cast<int>(snapshot.currentCategory),
+                                  reinterpret_cast<uintptr_t>(nativeFocusBefore),
+                                  reinterpret_cast<uintptr_t>(nativeFocusAfter),
+                                  reinterpret_cast<uintptr_t>(currentActivePage),
+                                  reinterpret_cast<uintptr_t>(activePageAfter),
+                                  reinterpret_cast<uintptr_t>(currentDxHost),
+                                  reinterpret_cast<uintptr_t>(activeDxAfter),
+                                  snapshot.visibleCurrentPageChildWindowCount,
+                                  snapshot.currentPageRenderedDxHostCount,
+                                  snapshot.currentPageDxHostResizeFailureCount));
     };
 
     sendTab(false, PreferencesHotPathsDebugFocusTarget::FirstBrowseButton, L"first Browse button");
@@ -2818,6 +2887,70 @@
         return valueState.has_value() && valueState->value == expectedValue;
     };
 
+    const auto describeKeyboardLiveSearchState = [&](std::wstring_view expectedName) noexcept
+    {
+        PreferencesDebugSnapshot debugSnapshot{};
+        const bool hasSnapshot = DebugGetPreferencesDialogSnapshot(debugSnapshot);
+        const HWND activePage  = DebugGetPreferencesActivePageHandle();
+
+        const auto valueState = (activePage && IsWindow(activePage) != FALSE)
+                                    ? CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName)
+                                    : std::nullopt;
+        const auto allEditStates =
+            (activePage && IsWindow(activePage) != FALSE) ? CollectVisibleDescendantControlValueStates(activePage, UIA_EditControlTypeId)
+                                                          : std::vector<UiaControlValueState>{};
+        std::wstring editSummary;
+        const size_t summaryCount = std::min<size_t>(allEditStates.size(), 4u);
+        for (size_t i = 0; i < summaryCount; ++i)
+        {
+            if (! editSummary.empty())
+            {
+                editSummary += L"; ";
+            }
+            editSummary +=
+                std::format(L"#{} name='{}' value='{}' readOnly={} hasValuePattern={} hasValueProperty={}",
+                            i,
+                            allEditStates[i].name,
+                            allEditStates[i].value,
+                            allEditStates[i].isReadOnly,
+                            allEditStates[i].hasValuePattern,
+                            allEditStates[i].hasValueProperty);
+        }
+
+        if (allEditStates.size() > summaryCount)
+        {
+            editSummary += std::format(L"; +{} more", allEditStates.size() - summaryCount);
+        }
+
+        if (editSummary.empty())
+        {
+            editSummary = L"<none>";
+        }
+
+        return std::format(L" activePage=0x{:X} activeIsWindow={} snapshot={} category={} pageTitle='{}' keyboardSearch='{}' rows={} "
+                           L"visibleRows={} capture={} focusTarget={} panes(created={}, visible={}) childWindows={} resizeFailures={} "
+                           L"matchedValuePresent={} matchedName='{}' matchedValue='{}' matchedReadOnly={} editStates=[{}]",
+                           reinterpret_cast<UINT_PTR>(activePage),
+                           activePage && IsWindow(activePage) != FALSE,
+                           hasSnapshot,
+                           hasSnapshot ? static_cast<int>(debugSnapshot.currentCategory) : -1,
+                           hasSnapshot ? debugSnapshot.pageTitle : std::wstring{},
+                           hasSnapshot ? debugSnapshot.keyboardSearchText : std::wstring{},
+                           hasSnapshot ? debugSnapshot.keyboardListRowCount : 0u,
+                           hasSnapshot ? debugSnapshot.keyboardListVisibleRowCount : 0u,
+                           hasSnapshot ? debugSnapshot.keyboardCaptureActive : false,
+                           hasSnapshot ? static_cast<int>(debugSnapshot.keyboardFocusTarget) : -1,
+                           hasSnapshot ? debugSnapshot.createdPaneWindowCount : 0u,
+                           hasSnapshot ? debugSnapshot.visiblePaneWindowCount : 0u,
+                           hasSnapshot ? debugSnapshot.visibleCurrentPageChildWindowCount : 0u,
+                           hasSnapshot ? debugSnapshot.currentPageDxHostResizeFailureCount : 0u,
+                           valueState.has_value(),
+                           valueState.has_value() ? valueState->name : std::wstring{},
+                           valueState.has_value() ? valueState->value : std::wstring{},
+                           valueState.has_value() ? valueState->isReadOnly : false,
+                           editSummary);
+    };
+
     const auto getShellHost = [&]() noexcept -> HWND
     {
         const HWND shellHost = DebugGetPreferencesShellHostHandle();
@@ -2836,14 +2969,27 @@
             return false;
         }
 
-        state.Require(SetFocus(targetCategoryTreeHost) == targetCategoryTreeHost,
+        state.Require(FocusWindowAndWait(targetCategoryTreeHost, SelfTest::Scale(1000ms)),
                       L"Failed to focus the Preferences category host while navigating to the Keyboard page.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard), L"Failed to select the Preferences Keyboard category for live search validation.");
         PumpPendingMessages();
 
-        return waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+        const bool settled = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
             return value.currentCategory == kPrefCategoryKeyboard && value.keyboardListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
         }, outSnapshot);
+        state.Require(settled,
+                      std::format(L"Preferences Keyboard page did not settle before live search validation; category={}, rows={}, visibleRows={}, "
+                                  L"search='{}', focusTarget={}, childWindows={}, renderedDxHosts={}, resizeFailures={}, pageTitle='{}'.",
+                                  static_cast<int>(outSnapshot.currentCategory),
+                                  outSnapshot.keyboardListRowCount,
+                                  outSnapshot.keyboardListVisibleRowCount,
+                                  outSnapshot.keyboardSearchText,
+                                  static_cast<int>(outSnapshot.keyboardFocusTarget),
+                                  outSnapshot.visibleCurrentPageChildWindowCount,
+                                  outSnapshot.currentPageRenderedDxHostCount,
+                                  outSnapshot.currentPageDxHostResizeFailureCount,
+                                  outSnapshot.pageTitle));
+        return state.failure.empty();
     };
 
     PreferencesDebugSnapshot snapshot{};
@@ -2903,7 +3049,8 @@
     state.Require(SetVisibleDescendantValueByName(activePage, UIA_EditControlTypeId, editName, kSearchText),
                   L"Preferences Keyboard page visible DX search edit did not accept live UIA ValuePattern mutation during shell Cancel discard validation.");
     state.Require(waitForEditValue(editName, kSearchText),
-                  L"Preferences Keyboard page visible DX search edit did not settle to the edited value during shell Cancel discard validation.");
+                  std::format(L"Preferences Keyboard page visible DX search edit did not settle to the edited value during shell Cancel discard validation.{}",
+                              describeKeyboardLiveSearchState(editName)));
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -2939,7 +3086,9 @@
     }
 
     state.Require(waitForEditValue(editName, initialEditValue),
-                  L"Preferences Keyboard page visible DX search edit did not discard the pending search value after shell Cancel reopened the page.");
+                  std::format(
+                      L"Preferences Keyboard page visible DX search edit did not discard the pending search value after shell Cancel reopened the page.{}",
+                      describeKeyboardLiveSearchState(editName)));
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -2965,7 +3114,8 @@
     state.Require(SetVisibleDescendantValueByName(reopenedActivePage, UIA_EditControlTypeId, editName, kSearchText),
                   L"Preferences Keyboard page visible DX search edit did not accept live UIA ValuePattern mutation after shell Cancel reopen.");
     state.Require(waitForEditValue(editName, kSearchText),
-                  L"Preferences Keyboard page visible DX search edit did not settle to the edited value after shell Cancel reopen.");
+                  std::format(L"Preferences Keyboard page visible DX search edit did not settle to the edited value after shell Cancel reopen.{}",
+                              describeKeyboardLiveSearchState(editName)));
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
     {
@@ -2982,7 +3132,8 @@
     state.Require(SetVisibleDescendantValueByName(DebugGetPreferencesActivePageHandle(), UIA_EditControlTypeId, editName, initialEditValue),
                   L"Preferences Keyboard page visible DX search edit did not accept restoration through live UIA ValuePattern.");
     state.Require(waitForEditValue(editName, initialEditValue),
-                  L"Preferences Keyboard page visible DX search edit did not restore its original value after live UIA mutation.");
+                  std::format(L"Preferences Keyboard page visible DX search edit did not restore its original value after live UIA mutation.{}",
+                              describeKeyboardLiveSearchState(editName)));
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {

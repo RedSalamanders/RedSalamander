@@ -6,6 +6,8 @@
     This script:
       1. Optionally builds the Debug configuration of RedSalamander.
       2. Runs each self-test suite (Compare, Commands, FileOps) or a selected subset.
+         Suite Full also runs standalone native tests, CppUnitTest DLLs, and
+         PowerShell test scripts.
       3. Parses the results.json artifacts from each suite.
       4. Displays a color-coded summary with pass/fail/skip counts, timing, and failure details.
       5. Returns exit code 0 on full success, 1 on any failure.
@@ -15,10 +17,11 @@
 
 .PARAMETER Suite
     Which suite(s) to run:
-      All       - Run all three suites (default)
+      All       - Run all three self-test suites (default)
       Compare   - Run only --compare-selftest
       Commands  - Run only --commands-selftest
       FileOps   - Run only --fileops-selftest
+      Full      - Run all self-tests plus standalone/native and script tests
 
 .PARAMETER SkipBuild
     When set, skips the build step and uses the existing Debug binary.
@@ -56,7 +59,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Compare', 'Commands', 'FileOps')]
+    [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'Full')]
     [string]$Suite = 'All',
 
     [switch]$SkipBuild,
@@ -79,6 +82,25 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # --- Helpers ---
+
+$repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+if (-not $repoRoot) { $repoRoot = $PSScriptRoot | Split-Path -Parent }
+
+$testRunPlanScript = Join-Path $repoRoot 'Tools\TestRunPlan.ps1'
+if (-not (Test-Path $testRunPlanScript)) {
+    Write-Host "ERROR: test run plan helper not found at $testRunPlanScript" -ForegroundColor Red
+    exit 1
+}
+
+. $testRunPlanScript
+
+$processStreamingScript = Join-Path $repoRoot 'Tools\ProcessStreaming.ps1'
+if (-not (Test-Path $processStreamingScript)) {
+    Write-Host "ERROR: process streaming helper not found at $processStreamingScript" -ForegroundColor Red
+    exit 1
+}
+
+. $processStreamingScript
 
 function Write-Header([string]$text) {
     $line = '=' * 70
@@ -121,10 +143,224 @@ function Get-JsonValue($object, [string[]]$names, $defaultValue = $null) {
     return $defaultValue
 }
 
-# --- Resolve paths ---
+function Resolve-VSTestConsole {
+    $command = Get-Command 'vstest.console.exe' -ErrorAction SilentlyContinue
+    if ($command -and $command.Source) {
+        return $command.Source
+    }
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-if (-not $repoRoot) { $repoRoot = $PSScriptRoot | Split-Path -Parent }
+    $vswhereCandidates = @(
+        "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
+        "${env:ProgramFiles}\Microsoft Visual Studio\Installer\vswhere.exe"
+    )
+
+    $vswhere = $vswhereCandidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+    if (-not $vswhere) {
+        return $null
+    }
+
+    $installations = @()
+    try {
+        $json = & $vswhere -all -products '*' -prerelease -format json 2>$null
+        if ($LASTEXITCODE -eq 0 -and $json) {
+            $installations = @($json | ConvertFrom-Json)
+        }
+    } catch {
+        return $null
+    }
+
+    foreach ($installation in @($installations | Sort-Object { try { [version]$_.installationVersion } catch { [version]'0.0' } } -Descending)) {
+        if (-not $installation.installationPath) {
+            continue
+        }
+
+        $candidate = Join-Path $installation.installationPath 'Common7\IDE\Extensions\TestPlatform\vstest.console.exe'
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $null
+}
+
+function Invoke-RSTestPlanEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Entry,
+
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+
+        [string]$ArtifactRoot = ''
+    )
+
+    $start = Get-Date
+    $exitCode = 0
+    $failureReason = ''
+    $outputLogPath = ''
+    if (-not [string]::IsNullOrWhiteSpace($ArtifactRoot) -and $Entry.Kind -in @('Executable', 'CppUnitTest')) {
+        $safeName = ([string]$Entry.Name) -replace '[^A-Za-z0-9_.-]', '_'
+        $outputLogPath = Join-Path $ArtifactRoot "$safeName.output.log"
+    }
+
+    try {
+        switch ($Entry.Kind) {
+            'Executable' {
+                if (-not (Test-Path $Entry.Path)) {
+                    throw "Executable not found: $($Entry.Path)"
+                }
+                $exitCode = Invoke-RSStreamingProcess -FilePath $Entry.Path -Arguments @($Entry.Arguments) -WorkingDirectory $Entry.WorkingDirectory -LogPath $outputLogPath
+            }
+            'CppUnitTest' {
+                if (-not (Test-Path $Entry.Path)) {
+                    throw "CppUnitTest DLL not found: $($Entry.Path)"
+                }
+
+                $vstest = Resolve-VSTestConsole
+                if (-not $vstest) {
+                    throw 'vstest.console.exe was not found. Install Visual Studio Test Platform or run from a Developer PowerShell.'
+                }
+
+                $arguments = @($Entry.Path)
+                $exitCode = Invoke-RSStreamingProcess -FilePath $vstest -Arguments $arguments -WorkingDirectory $Entry.WorkingDirectory -LogPath $outputLogPath
+            }
+            'Pester' {
+                if (-not (Test-Path $Entry.Path)) {
+                    throw "Pester test path not found: $($Entry.Path)"
+                }
+
+                $pesterResult = Invoke-Pester -Path $Entry.Path -PassThru
+                $failedCount = Get-JsonValue $pesterResult @('FailedCount', 'Failed') 0
+                $exitCode = if ($failedCount -gt 0) { 1 } else { 0 }
+            }
+            'PowerShellScript' {
+                if (-not (Test-Path $Entry.Path)) {
+                    throw "PowerShell test script not found: $($Entry.Path)"
+                }
+
+                Push-Location $Entry.WorkingDirectory
+                try {
+                    $scriptArguments = @($Entry.Arguments)
+                    & $Entry.Path @scriptArguments
+                    $exitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+                } finally {
+                    Pop-Location
+                }
+            }
+            default {
+                throw "Unsupported test plan entry kind: $($Entry.Kind)"
+            }
+        }
+    } catch {
+        $exitCode = 1
+        $failureReason = $_.Exception.Message
+    }
+
+    $end = Get-Date
+    $wallMs = [uint64](($end - $start).TotalMilliseconds)
+
+    $failures = @()
+    if ($exitCode -ne 0) {
+        if ([string]::IsNullOrWhiteSpace($failureReason)) {
+            $failureReason = "Process exited with code $exitCode."
+        }
+
+        $failures += [pscustomobject]@{
+            name = $Entry.Name
+            status = 'failed'
+            reason = $failureReason
+            durationMs = $wallMs
+        }
+    }
+
+    return @{
+        Name       = $Entry.Name
+        Kind       = $Entry.Kind
+        ExitCode   = $exitCode
+        WallMs     = $wallMs
+        Parsed     = $null
+        Cases      = @()
+        Passed     = if ($exitCode -eq 0) { 1 } else { 0 }
+        Failed     = if ($exitCode -eq 0) { 0 } else { 1 }
+        Skipped    = 0
+        DurationMs = $wallMs
+        Failures   = $failures
+        OutputLogPath = $outputLogPath
+    }
+}
+
+function Invoke-RSSelfTestCaseList {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Entry
+    )
+
+    $arguments = @(Get-RSSelfTestListArguments -SelfTestArguments @($Entry.Arguments))
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Entry.Path
+    $startInfo.WorkingDirectory = $Entry.WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+    if ($startInfo.PSObject.Properties['ArgumentList'] -and $null -ne $startInfo.ArgumentList) {
+        foreach ($argument in $arguments) {
+            [void]$startInfo.ArgumentList.Add($argument)
+        }
+    } else {
+        $startInfo.Arguments = (($arguments | ForEach-Object { ConvertTo-RSStreamingQuotedArgument $_ }) -join ' ')
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+
+    if ($process.ExitCode -ne 0) {
+        throw "Case listing failed with exit code $($process.ExitCode): $stderr"
+    }
+
+    if ([string]::IsNullOrWhiteSpace($stdout)) {
+        throw 'Case listing produced no JSON output.'
+    }
+
+    return ($stdout | ConvertFrom-Json)
+}
+
+function Format-RSCoverageReason {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Coverage
+    )
+
+    $parts = @()
+    if (($Coverage.PSObject.Properties['NoExpectedCases']) -and [bool]$Coverage.NoExpectedCases) {
+        $parts += 'no expected cases matched the requested filter'
+    }
+    if (@($Coverage.DuplicateExpected).Count -gt 0) {
+        $parts += "duplicate expected: $(@($Coverage.DuplicateExpected) -join ', ')"
+    }
+    if (@($Coverage.DuplicateActual).Count -gt 0) {
+        $parts += "duplicate actual: $(@($Coverage.DuplicateActual) -join ', ')"
+    }
+    if (@($Coverage.Missing).Count -gt 0) {
+        $parts += "missing: $(@($Coverage.Missing) -join ', ')"
+    }
+    if (@($Coverage.Extra).Count -gt 0) {
+        $parts += "extra: $(@($Coverage.Extra) -join ', ')"
+    }
+
+    if (@($parts).Count -eq 0) {
+        return 'result coverage mismatch'
+    }
+
+    return ($parts -join '; ')
+}
+
+# --- Resolve paths ---
 
 if ($ExePath) {
     $exeFullPath = $ExePath
@@ -132,7 +368,7 @@ if ($ExePath) {
     $exeFullPath = Join-Path $repoRoot ".build\$Platform\$Configuration\RedSalamander.exe"
 }
 
-$artifactRoot = Join-Path $env:LOCALAPPDATA 'RedSalamander\SelfTest\last_run'
+$artifactRoot = Get-RSSelfTestArtifactRoot
 
 # --- Build step ---
 
@@ -144,7 +380,8 @@ if (-not $SkipBuild) {
         exit 1
     }
 
-    & $buildScript -Configuration $Configuration -ProjectName RedSalamander
+    $buildArgs = Get-RSBuildScriptArguments -Suite $Suite -Configuration $Configuration -Platform $Platform
+    & $buildScript @buildArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host "BUILD FAILED (exit code $LASTEXITCODE)" -ForegroundColor Red
         exit 1
@@ -160,26 +397,20 @@ if (-not (Test-Path $exeFullPath)) {
     exit 1
 }
 
-# --- Determine suites to run ---
+# --- Determine test plan ---
 
-$suiteConfigs = @()
+$testPlan = @(Get-RSTestRunPlan `
+        -Suite $Suite `
+        -RepoRoot $repoRoot `
+        -Platform $Platform `
+        -Configuration $Configuration `
+        -RedSalamanderExePath $exeFullPath `
+        -TimeoutMultiplier $TimeoutMultiplier `
+        -FailFast:$FailFast `
+        -CaseFilter $CaseFilter)
 
-switch ($Suite) {
-    'All' {
-        $suiteConfigs += @{ Name = 'CompareDirectories'; Flag = '--compare-selftest';  JsonName = 'compare' }
-        $suiteConfigs += @{ Name = 'Commands';           Flag = '--commands-selftest';  JsonName = 'commands' }
-        $suiteConfigs += @{ Name = 'FileOperations';     Flag = '--fileops-selftest';   JsonName = 'fileops' }
-    }
-    'Compare' {
-        $suiteConfigs += @{ Name = 'CompareDirectories'; Flag = '--compare-selftest'; JsonName = 'compare' }
-    }
-    'Commands' {
-        $suiteConfigs += @{ Name = 'Commands';           Flag = '--commands-selftest'; JsonName = 'commands' }
-    }
-    'FileOps' {
-        $suiteConfigs += @{ Name = 'FileOperations';     Flag = '--fileops-selftest'; JsonName = 'fileops' }
-    }
-}
+$suiteConfigs = @($testPlan | Where-Object { $_.Kind -eq 'SelfTest' })
+$standaloneConfigs = @($testPlan | Where-Object { $_.Kind -ne 'SelfTest' })
 
 # --- Run suites ---
 
@@ -190,13 +421,10 @@ $overallExitCode = 0
 foreach ($sc in $suiteConfigs) {
     Write-Header "Running: $($sc.Name)"
 
-    $args = @($sc.Flag)
-    if ($FailFast) { $args += '--selftest-fail-fast' }
-    if ($TimeoutMultiplier -ne 1.0) { $args += "--selftest-timeout-multiplier=$TimeoutMultiplier" }
-    if ($CaseFilter) { $args += "--selftest-case=$CaseFilter" }
+    $args = @($sc.Arguments)
 
     $suiteStart = Get-Date
-    Write-Host "  Exe:  $exeFullPath" -ForegroundColor DarkGray
+    Write-Host "  Exe:  $($sc.Path)" -ForegroundColor DarkGray
     Write-Host "  Args: $($args -join ' ')" -ForegroundColor DarkGray
     Write-Host ""
 
@@ -211,7 +439,7 @@ foreach ($sc in $suiteConfigs) {
         }
     }
 
-    $process = Start-Process -FilePath $exeFullPath -ArgumentList $args -WorkingDirectory $repoRoot -Wait -PassThru
+    $process = Start-Process -FilePath $sc.Path -ArgumentList $args -WorkingDirectory $sc.WorkingDirectory -Wait -PassThru
     $suiteExitCode = if ($null -ne $process.ExitCode) { $process.ExitCode } else { 0 }
     $suiteEnd = Get-Date
     $suiteWallMs = [uint64](($suiteEnd - $suiteStart).TotalMilliseconds)
@@ -236,6 +464,7 @@ foreach ($sc in $suiteConfigs) {
 
     $suiteResult = @{
         Name       = $sc.Name
+        Kind       = $sc.Kind
         ExitCode   = $suiteExitCode
         WallMs     = $suiteWallMs
         Parsed     = $resultsParsed
@@ -250,9 +479,11 @@ foreach ($sc in $suiteConfigs) {
     if ($resultsParsed) {
         # Handle both direct suite results and aggregated run results
         $casesArray = $null
-        $directCases = Get-JsonValue $resultsParsed @('cases') $null
-        if ($null -ne $directCases) {
-            $casesArray = $directCases
+        $hasCasesArray = $false
+        $directCasesProperty = $resultsParsed.PSObject.Properties['cases']
+        if ($null -ne $directCasesProperty) {
+            $casesArray = @($directCasesProperty.Value)
+            $hasCasesArray = $true
             $suiteResult.Passed     = Get-JsonValue $resultsParsed @('passed') 0
             $suiteResult.Failed     = Get-JsonValue $resultsParsed @('failed') 0
             $suiteResult.Skipped    = Get-JsonValue $resultsParsed @('skipped') 0
@@ -262,9 +493,10 @@ foreach ($sc in $suiteConfigs) {
             $parsedSuites = Get-JsonValue $resultsParsed @('suites') $null
             foreach ($s in @($parsedSuites)) {
                 $suiteName  = Get-JsonValue $s @('suite') ''
-                $suiteCases = Get-JsonValue $s @('cases') $null
-                if ($suiteName -eq $sc.Name -or $null -ne $suiteCases) {
-                    $casesArray = $suiteCases
+                $suiteCasesProperty = $s.PSObject.Properties['cases']
+                if ($suiteName -eq $sc.Name -or $null -ne $suiteCasesProperty) {
+                    $casesArray = if ($null -ne $suiteCasesProperty) { @($suiteCasesProperty.Value) } else { @() }
+                    $hasCasesArray = $true
                     $suiteResult.Passed     = Get-JsonValue $s @('passed') 0
                     $suiteResult.Failed     = Get-JsonValue $s @('failed') 0
                     $suiteResult.Skipped    = Get-JsonValue $s @('skipped') 0
@@ -274,12 +506,65 @@ foreach ($sc in $suiteConfigs) {
             }
         }
 
-        if ($null -ne $casesArray) {
+        if ($hasCasesArray) {
             $suiteResult.Cases = @($casesArray)
             $suiteResult.Failures = @($suiteResult.Cases | Where-Object { (Get-JsonValue $_ @('status') '') -eq 'failed' })
+
+            try {
+                $caseList = Invoke-RSSelfTestCaseList -Entry $sc
+                $expectedSuite = @($caseList.suites | Where-Object { $_.suite -eq $sc.Name } | Select-Object -First 1)
+                if (@($expectedSuite).Count -eq 0) {
+                    throw "Case listing did not include suite '$($sc.Name)'."
+                }
+
+                $expectedNames = @($expectedSuite[0].cases | ForEach-Object { [string]$_.name })
+                $allowedExtraNames = if ($sc.Name -eq 'CompareDirectories') { @('setup') } else { @() }
+                $coverage = Test-RSSelfTestResultCoverage `
+                    -ExpectedCaseNames $expectedNames `
+                    -ActualCases $suiteResult.Cases `
+                    -AllowedExtraCaseNames $allowedExtraNames `
+                    -RequireExpectedCases:(-not [string]::IsNullOrWhiteSpace($CaseFilter))
+                if (-not $coverage.IsValid) {
+                    $suiteResult.Failures += [pscustomobject]@{
+                        name = 'selftest_result_coverage'
+                        status = 'failed'
+                        reason = Format-RSCoverageReason -Coverage $coverage
+                        durationMs = 0
+                    }
+                    ++$suiteResult.Failed
+                    $overallExitCode = 1
+                }
+            } catch {
+                $suiteResult.Failures += [pscustomobject]@{
+                    name = 'selftest_result_coverage'
+                    status = 'failed'
+                    reason = $_.Exception.Message
+                    durationMs = 0
+                }
+                ++$suiteResult.Failed
+                $overallExitCode = 1
+            }
         }
     }
     if ($suiteResult.Failed -gt 0 -or @($suiteResult.Failures).Count -gt 0) {
+        $suiteResult.ExitCode = 1
+        $overallExitCode = 1
+    }
+
+    $allResults += $suiteResult
+}
+
+foreach ($entry in $standaloneConfigs) {
+    Write-Header "Running: $($entry.Name)"
+    Write-Host "  Kind: $($entry.Kind)" -ForegroundColor DarkGray
+    Write-Host "  Path: $($entry.Path)" -ForegroundColor DarkGray
+    if (@($entry.Arguments).Count -gt 0) {
+        Write-Host "  Args: $(@($entry.Arguments) -join ' ')" -ForegroundColor DarkGray
+    }
+    Write-Host ""
+
+    $suiteResult = Invoke-RSTestPlanEntry -Entry $entry -RepoRoot $repoRoot -ArtifactRoot $artifactRoot
+    if ($suiteResult.ExitCode -ne 0) {
         $overallExitCode = 1
     }
 
@@ -288,6 +573,26 @@ foreach ($sc in $suiteConfigs) {
 
 $overallEndTime = Get-Date
 $overallWallMs = [uint64](($overallEndTime - $overallStartTime).TotalMilliseconds)
+
+# Preserve a runner-owned aggregate artifact before any suite can overwrite the
+# native root results.json on a multi-suite run.
+$runSummaryPath = Join-Path $artifactRoot 'run-all-tests-results.json'
+New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+$runSummary = New-RSTestRunSummary `
+    -Suite $Suite `
+    -Platform $Platform `
+    -Configuration $Configuration `
+    -ExePath $exeFullPath `
+    -ArtifactRoot $artifactRoot `
+    -RunStartedUtc $($overallStartTime.ToUniversalTime()) `
+    -RunEndedUtc $($overallEndTime.ToUniversalTime()) `
+    -DurationMs $overallWallMs `
+    -ExitCode $overallExitCode `
+    -TimeoutMultiplier $TimeoutMultiplier `
+    -FailFast:$FailFast `
+    -CaseFilter $CaseFilter `
+    -Results $allResults
+$runSummary | ConvertTo-Json -Depth 32 | Set-Content -LiteralPath $runSummaryPath -Encoding UTF8
 
 # --- Display comprehensive summary ---
 
@@ -318,6 +623,10 @@ foreach ($r in $allResults) {
         Write-Host "  Skipped: $($r.Skipped)" -ForegroundColor $(if ($r.Skipped -gt 0) { 'DarkYellow' } else { 'Green' })
     } else {
         Write-Host "         (results.json not found - exit code: $($r.ExitCode))" -ForegroundColor Yellow
+    }
+    $outputLogPath = Get-JsonValue $r @('OutputLogPath', 'output_log_path') ''
+    if (-not [string]::IsNullOrWhiteSpace($outputLogPath)) {
+        Write-Host "         Output: $outputLogPath" -ForegroundColor DarkGray
     }
 }
 

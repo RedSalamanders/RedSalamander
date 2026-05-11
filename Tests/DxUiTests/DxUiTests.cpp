@@ -33,8 +33,13 @@ int wmain(int argc, wchar_t** argv)
         const std::wstring_view arg                  = argv[argIndex] ? std::wstring_view(argv[argIndex]) : std::wstring_view{};
         constexpr std::wstring_view kSuitePrefix     = L"--suite=";
         constexpr std::wstring_view kPerfJsonlPrefix = L"--perf-jsonl=";
-        if (arg.rfind(kSuitePrefix, 0) == 0 && arg.size() > kSuitePrefix.size())
+        if (arg.rfind(kSuitePrefix, 0) == 0)
         {
+            if (arg.size() == kSuitePrefix.size())
+            {
+                std::wcerr << L"Missing suite name for --suite.\n";
+                return 2;
+            }
             suiteFilter = std::wstring(arg.substr(kSuitePrefix.size()));
             continue;
         }
@@ -43,12 +48,22 @@ int wmain(int argc, wchar_t** argv)
             writeBaselines = true;
             continue;
         }
-        if (arg.rfind(kPerfJsonlPrefix, 0) == 0 && arg.size() > kPerfJsonlPrefix.size())
+        if (arg.rfind(kPerfJsonlPrefix, 0) == 0)
         {
+            if (arg.size() == kPerfJsonlPrefix.size())
+            {
+                std::wcerr << L"Missing perf JSONL path for --perf-jsonl.\n";
+                return 2;
+            }
             perfJsonlPath = std::filesystem::path(arg.substr(kPerfJsonlPrefix.size()));
             continue;
         }
-        if (! arg.empty() && arg[0] != L'-')
+        if (! arg.empty() && arg[0] == L'-')
+        {
+            std::wcerr << L"Unknown argument: " << arg << L'\n';
+            return 2;
+        }
+        if (! arg.empty())
         {
             suiteFilter = std::wstring(arg);
             continue;

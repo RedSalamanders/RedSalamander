@@ -111,6 +111,37 @@ constexpr PrefCategory kPrefCategoryCompareDirectories = static_cast<PrefCategor
 constexpr PrefCategory kPrefCategoryHotPaths           = static_cast<PrefCategory>(10);
 constexpr PrefCategory kPrefCategoryAdvanced           = static_cast<PrefCategory>(8);
 
+[[nodiscard]] constexpr int PreferencesRootRowForCategory(const PrefCategory category) noexcept
+{
+    if (category == kPrefCategoryGeneral)
+        return 0;
+    if (category == kPrefCategoryPanes)
+        return 1;
+    if (category == kPrefCategoryViewers)
+        return 2;
+    if (category == kPrefCategoryEditors)
+        return 3;
+    if (category == kPrefCategoryUserMenu)
+        return 4;
+    if (category == kPrefCategoryKeyboard)
+        return 5;
+    if (category == kPrefCategoryMouse)
+        return 6;
+    if (category == kPrefCategoryThemes)
+        return 7;
+    if (category == kPrefCategoryPlugins)
+        return 8;
+    if (category == kPrefCategoryFileOperations)
+        return 9;
+    if (category == kPrefCategoryCompareDirectories)
+        return 10;
+    if (category == kPrefCategoryHotPaths)
+        return 11;
+    if (category == kPrefCategoryAdvanced)
+        return 12;
+    return -1;
+}
+
 void Trace(std::wstring_view message) noexcept
 {
     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, message);
@@ -119,8 +150,10 @@ void Trace(std::wstring_view message) noexcept
 
 void PumpPendingMessages() noexcept
 {
+    constexpr int kMaxMessagesPerPump = 512;
+
     MSG msg{};
-    while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) != 0)
+    for (int messageCount = 0; messageCount < kMaxMessagesPerPump && PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) != 0; ++messageCount)
     {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
@@ -428,6 +461,25 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 #include "Commands.SelfTest.ViewCommands.cpp"
 
 } // namespace
+
+std::vector<std::wstring> CommandsSelfTest::ListCases(const SelfTest::SelfTestOptions& options) noexcept
+{
+    SelfTest::SelfTestOptions listOptions = options;
+    listOptions.failFast                  = false;
+    listOptions.writeJsonSummary          = false;
+    listOptions.listCasesOnly             = true;
+
+    SelfTest::SelfTestSuiteResult suite{};
+    static_cast<void>(Run(nullptr, listOptions, &suite));
+
+    std::vector<std::wstring> names;
+    names.reserve(suite.cases.size());
+    for (const SelfTest::SelfTestCaseResult& result : suite.cases)
+    {
+        names.push_back(result.name);
+    }
+    return names;
+}
 
 bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult* outResult) noexcept
 {

@@ -241,6 +241,12 @@ void UpdateScrollbarAnimation(WindowHost& host, ScrollbarAnimationState& animati
                                                     float totalContentDip,
                                                     float scrollOffsetDip,
                                                     float scrollExtentDip) noexcept;
+[[nodiscard]] D2D1_RECT_F ComputeScrollbarThumbHitRect(const D2D1_RECT_F& trackRect,
+                                                       ScrollbarOrientation orientation,
+                                                       float viewportDip,
+                                                       float totalContentDip,
+                                                       float scrollOffsetDip,
+                                                       float scrollExtentDip) noexcept;
 
 void PaintScrollbar(WindowHost& host, const D2D1_RECT_F& trackRect, const D2D1_RECT_F& thumbRect, const ResolvedScrollbarVisuals& visuals) noexcept;
 

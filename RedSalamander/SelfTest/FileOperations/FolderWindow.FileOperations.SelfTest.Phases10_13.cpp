@@ -2582,6 +2582,14 @@ case SelfTestState::Step::Phase12_ReparsePointPolicy:
             return true;
         }
 
+        FileSystemBasicInformation seededSourceDirBasic{};
+        seededSourceDirBasic.sizeBytes = sizeof(FileSystemBasicInformation);
+        if (FAILED(localIo->GetFileBasicInformation(metadataSrcRoot.c_str(), &seededSourceDirBasic)))
+        {
+            Fail(L"Directory metadata test: failed to re-query seeded source directory basic information.");
+            return true;
+        }
+
         const std::filesystem::path metadataCopyPath = metadataDstRoot / metadataSrcRoot.filename();
         const HRESULT metadataCopyHr                 = state.fsLocal->CopyItem(
             metadataSrcRoot.c_str(), metadataCopyPath.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
@@ -2600,9 +2608,15 @@ case SelfTestState::Step::Phase12_ReparsePointPolicy:
             return true;
         }
 
-        if (copiedDirBasic.creationTime != sourceDirBasic.creationTime || copiedDirBasic.lastWriteTime != sourceDirBasic.lastWriteTime)
+        if (copiedDirBasic.creationTime != seededSourceDirBasic.creationTime || copiedDirBasic.lastWriteTime != seededSourceDirBasic.lastWriteTime)
         {
-            Fail(L"Directory metadata test: copied directory timestamps did not match source.");
+            Fail(std::format(L"Directory metadata test: copied directory timestamps did not match source (srcCreation={} dstCreation={} srcWrite={} dstWrite={} srcAttr=0x{:08X} dstAttr=0x{:08X}).",
+                             seededSourceDirBasic.creationTime,
+                             copiedDirBasic.creationTime,
+                             seededSourceDirBasic.lastWriteTime,
+                             copiedDirBasic.lastWriteTime,
+                             static_cast<unsigned long>(seededSourceDirBasic.attributes),
+                             static_cast<unsigned long>(copiedDirBasic.attributes)));
             return true;
         }
 
@@ -2612,8 +2626,8 @@ case SelfTestState::Step::Phase12_ReparsePointPolicy:
             return true;
         }
 
-        sourceDirBasic.attributes &= ~FILE_ATTRIBUTE_READONLY;
-        static_cast<void>(localIo->SetFileBasicInformation(metadataSrcRoot.c_str(), &sourceDirBasic));
+        seededSourceDirBasic.attributes &= ~FILE_ATTRIBUTE_READONLY;
+        static_cast<void>(localIo->SetFileBasicInformation(metadataSrcRoot.c_str(), &seededSourceDirBasic));
         copiedDirBasic.attributes &= ~FILE_ATTRIBUTE_READONLY;
         static_cast<void>(localIo->SetFileBasicInformation(metadataCopiedDir.c_str(), &copiedDirBasic));
 
@@ -2912,35 +2926,67 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
 
     if (state.stepState == 0)
     {
-        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
-        state.fileOps->CollectCompletedTasks(summaries);
-        if (summaries.empty())
+        const std::filesystem::path diagnosticSrc = state.tempRoot / L"phase13-diagnostics-src";
+        const std::filesystem::path diagnosticDst = state.tempRoot / L"phase13-diagnostics-dst";
+        if (! RecreateEmptyDirectory(diagnosticSrc) || ! RecreateEmptyDirectory(diagnosticDst))
+        {
+            Fail(L"Phase13_PostMortemDiagnostics could not create diagnostic seed folders.");
+            return true;
+        }
+
+        if (! WriteTestFile(diagnosticSrc / L"ok.bin", 64))
+        {
+            Fail(L"Phase13_PostMortemDiagnostics could not create diagnostic seed source file.");
+            return true;
+        }
+
+        const FileSystemFlags diagnosticFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+        state.taskA                          = StartFileOperationAndGetId(state.fileOps,
+                                                 FILESYSTEM_COPY,
+                                                 FolderWindow::Pane::Left,
+                                                 FolderWindow::Pane::Right,
+                                                 state.fsLocal,
+                                                 {diagnosticSrc / L"ok.bin", diagnosticSrc / L"missing.bin"},
+                                                 diagnosticDst,
+                                                 diagnosticFlags,
+                                                 false);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Phase13_PostMortemDiagnostics could not start diagnostic seed copy.");
+            return true;
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (state.stepState == 1)
+    {
+        const auto itDiagnostic = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+        if (itDiagnostic == state.completedTasks.end())
         {
             return false;
         }
 
-        bool foundDiagnosticSummary = false;
-        std::optional<uint64_t> diagnosticTaskId;
-        for (const auto& summary : summaries)
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
+        state.fileOps->CollectCompletedTasks(summaries);
+        const auto summaryIt = std::find_if(summaries.begin(), summaries.end(), [&](const auto& summary) noexcept {
+            return state.taskA.has_value() && summary.taskId == state.taskA.value();
+        });
+        if (summaryIt == summaries.end())
         {
-            const bool hasDiagnostics = summary.warningCount > 0 || summary.errorCount > 0;
-            if (FAILED(summary.resultHr) && ! hasDiagnostics)
-            {
-                Fail(std::format(L"Phase13_PostMortemDiagnostics task {} failed without warning/error diagnostics.", summary.taskId));
-                return true;
-            }
-
-            if (hasDiagnostics)
-            {
-                foundDiagnosticSummary = true;
-                if (! diagnosticTaskId.has_value())
-                {
-                    diagnosticTaskId = summary.taskId;
-                }
-            }
+            Fail(L"Phase13_PostMortemDiagnostics could not find the diagnostic seed task summary.");
+            return true;
         }
 
-        if (! foundDiagnosticSummary)
+        const bool hasDiagnostics = summaryIt->warningCount > 0 || summaryIt->errorCount > 0;
+        if (FAILED(summaryIt->resultHr) && ! hasDiagnostics)
+        {
+            Fail(std::format(L"Phase13_PostMortemDiagnostics task {} failed without warning/error diagnostics.", summaryIt->taskId));
+            return true;
+        }
+
+        if (! hasDiagnostics)
         {
             Fail(L"Phase13_PostMortemDiagnostics expected at least one completed summary with diagnostics.");
             return true;
@@ -2985,14 +3031,8 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
             return true;
         }
 
-        if (! diagnosticTaskId.has_value())
-        {
-            Fail(L"Phase13_PostMortemDiagnostics missing diagnostic task id for export validation.");
-            return true;
-        }
-
         std::filesystem::path issuesReportPath;
-        if (! state.fileOps->ExportTaskIssuesReport(diagnosticTaskId.value(), &issuesReportPath, false))
+        if (! state.fileOps->ExportTaskIssuesReport(summaryIt->taskId, &issuesReportPath, false))
         {
             Fail(L"Phase13_PostMortemDiagnostics could not export task issues report.");
             return true;
@@ -3050,11 +3090,11 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
             return true;
         }
 
-        state.stepState = 1;
+        state.stepState = 2;
         return false;
     }
 
-    if (state.stepState == 1)
+    if (state.stepState == 2)
     {
         const auto itAutoDismissOn = state.taskC.has_value() ? state.completedTasks.find(state.taskC.value()) : state.completedTasks.end();
         if (itAutoDismissOn == state.completedTasks.end())
@@ -3106,11 +3146,11 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
             return true;
         }
 
-        state.stepState = 2;
+        state.stepState = 3;
         return false;
     }
 
-    if (state.stepState == 2)
+    if (state.stepState == 3)
     {
         const auto itAutoDismissOff = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
         if (itAutoDismissOff == state.completedTasks.end())
@@ -3186,11 +3226,11 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
             return true;
         }
 
-        state.stepState = 3;
+        state.stepState = 4;
         return false;
     }
 
-    if (state.stepState == 3)
+    if (state.stepState == 4)
     {
         FolderWindow::FileOperationState::Task* taskB = state.fileOps->FindTask(state.taskB.value());
         if (! taskB)
@@ -3201,12 +3241,12 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
         if (taskB->_preCalcInProgress.load(std::memory_order_acquire) || taskB->HasEnteredOperation() || taskB->HasStarted())
         {
             taskB->RequestCancel();
-            state.stepState = 4;
+            state.stepState = 5;
         }
         return false;
     }
 
-    if (state.stepState == 4)
+    if (state.stepState == 5)
     {
         const auto itCancel = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
         if (itCancel == state.completedTasks.end())

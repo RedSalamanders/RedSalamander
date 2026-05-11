@@ -571,11 +571,11 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
-                  L"empty_directories",
+                  L"root_decision_empty_directories",
                   [&](SelfTest::CaseState& state) noexcept
 {
     // Case: Empty directory roots produce an empty decision.
-    if (const auto foldersOpt = CreateCaseFolders(root, L"empty_directories"))
+    if (const auto foldersOpt = CreateCaseFolders(root, L"root_decision_empty_directories"))
     {
         const auto& folders = foldersOpt.value();
 
@@ -588,7 +588,7 @@ SelfTest::RunCase(options,
     }
     else
     {
-        state.Require(false, L"Failed to create case folders: empty_directories.");
+        state.Require(false, L"Failed to create case folders: root_decision_empty_directories.");
     }
 
     return state.failure.empty();
@@ -1356,6 +1356,11 @@ const auto runRemoteFileCompare = [&](std::wstring_view caseName,
                                       std::wstring_view defaultProfileName,
                                       std::wstring_view pluginId) noexcept
 {
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
@@ -1458,6 +1463,11 @@ const auto runRemoteDirectorySizeCallbackContract = [&](std::wstring_view caseNa
                                                         std::wstring_view defaultProfileName,
                                                         std::wstring_view pluginId) noexcept
 {
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
@@ -1577,6 +1587,11 @@ const auto runRemoteDirectorySizeCallbackContract = [&](std::wstring_view caseNa
 
 const auto runRemoteS3Pagination = [&](std::wstring_view caseName) noexcept
 {
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
@@ -1746,6 +1761,11 @@ const auto runRemoteS3Pagination = [&](std::wstring_view caseName) noexcept
 
 const auto runRemoteFtpPartialContinue = [&](std::wstring_view caseName) noexcept
 {
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
@@ -2016,6 +2036,11 @@ const auto runRemoteFtpPartialContinue = [&](std::wstring_view caseName) noexcep
 
 const auto runRemoteS3MetadataSmoke = [&](std::wstring_view caseName) noexcept
 {
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
@@ -2183,6 +2208,11 @@ const auto runRemoteS3MetadataSmoke = [&](std::wstring_view caseName) noexcept
 
 const auto runRemoteS3DeleteMissing = [&](std::wstring_view caseName) noexcept
 {
+    if (! SelfTest::CaseFilterMatches(options.caseFilter, caseName))
+    {
+        return;
+    }
+
     if (options.failFast && suite.failed != 0)
     {
         AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");

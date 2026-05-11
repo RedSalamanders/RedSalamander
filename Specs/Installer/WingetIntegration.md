@@ -39,24 +39,30 @@ The installer manifest uses schema `1.12.0` and models the portable archive as:
 ```yaml
 InstallerType: zip
 NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: RedSalamander.exe
+    PortableCommandAlias: RedSalamander
+InstallationMetadata:
+  Files:
+    - RelativeFilePath: RedSalamander.exe
+      FileType: launch
+      DisplayName: RedSalamander
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/RedSalamanders/RedSalamander/releases/download/v{VERSION}/RedSalamander-{VERSION}-x64-Portable.zip
     InstallerSha256: {ZIP_SHA256}
-    NestedInstallerFiles:
-      - RelativeFilePath: RedSalamander.exe
-        PortableCommandAlias: RedSalamander
   - Architecture: arm64
     InstallerUrl: https://github.com/RedSalamanders/RedSalamander/releases/download/v{VERSION}/RedSalamander-{VERSION}-ARM64-Portable.zip
     InstallerSha256: {ARM64_ZIP_SHA256}
-    NestedInstallerFiles:
-      - RelativeFilePath: RedSalamander.exe
-        PortableCommandAlias: RedSalamander
 ```
 
 Do not use `InstallerType: portable` for a ZIP archive. ZIP archives require `InstallerType: zip` plus `NestedInstallerType: portable`.
 
+Declare `NestedInstallerFiles` at the manifest root because the executable path is identical in x64 and ARM64 ZIPs. Keep `InstallationMetadata.Files` with `FileType: launch` so Winget's repository validation has an explicit primary executable to locate after installation.
+
 Use Winget's `Architecture` field for CPU selection: `x64` is the Intel/AMD 64-bit build, and `arm64` is the native Windows on ARM build. By default Winget chooses from the installers compatible with the current machine; users can override that choice with `winget install --architecture x64` or `winget install --architecture arm64`.
+
+The portable ZIP bundles app-local Microsoft Visual C++ runtime DLLs from the latest installed Visual Studio Build Tools redistributable directory for the target architecture. Do not rely only on Winget `PackageDependencies` for the VC runtime: Winget repository validation launches the installed executable in a clean validation environment and may not install dependencies before that launch check.
 
 Winget's terminal install experience does not render bitmap images from manifests. Console-visible branding is limited to text, so RedSalamander uses `InstallationNotes` for a short post-install message.
 
@@ -88,9 +94,11 @@ winget install --manifest .build\AppPackages\winget-manifest
 winget uninstall RedSalamanders.RedSalamander
 ```
 
+`Installer\winget\WingetValidation.ps1` is the supported local helper for validating a generated manifest with the same legacy `winget.exe v1.11.x` schema-header warning policy used by the release workflow. The workflow intentionally keeps an inline copy of that policy because it checks out the release tag before manifest generation, and older release tags may not contain helper scripts added later.
+
 ## GitHub Actions Flow
 
-`.github/workflows/winget-release.yml` runs on `release.published` and manual dispatch.
+`.github/workflows/winget-release.yml` runs on `release.published` and manual dispatch. Manual runs validate and install-test by default; set the `submit` input to `true` only when the run should open a `microsoft/winget-pkgs` pull request.
 
 The workflow:
 
@@ -100,7 +108,8 @@ The workflow:
 4. Fails with the available asset names if either `RedSalamander-<version>-x64-Portable.zip` or `RedSalamander-<version>-ARM64-Portable.zip` is missing.
 5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
 6. Runs a self-contained `winget validate --manifest` wrapper in the workflow. It is intentionally inline because the workflow checks out the release tag before generating the manifest, and older release tags may not contain helper scripts added later. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
-7. Submits the generated manifest directory with `wingetcreate submit`.
+7. Runs `winget install --manifest winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`.
+8. Submits the generated manifest directory with `wingetcreate submit` only for `release.published` runs or manual runs where `submit=true`.
 
 `WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs`.
 

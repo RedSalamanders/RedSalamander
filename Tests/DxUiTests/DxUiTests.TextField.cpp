@@ -355,6 +355,26 @@ void TestEditableComboBoxPopupFiltersByPrefix()
     Require(combo.GetText() == L"beta", "filtered popup selection syncs editable combo text");
 }
 
+void TestEditableComboBoxCanAutoOpenSuggestionsOnTyping()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    ComboBox combo;
+    combo.SetEditable(true);
+    combo.SetAutoOpenOnTextInput(true);
+    combo.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+    combo.SetItems(
+        {ComboBox::Item{L"alpha", L"Alpha"}, ComboBox::Item{L"beta", L"Beta"}, ComboBox::Item{L"binary", L"Binary"}, ComboBox::Item{L"charlie", L"Charlie"}});
+
+    Require(combo.OnMouseDown(host, D2D1::Point2F(10.0f, 10.0f), false, 0), "editable combo accepts focus click before auto-suggest typing");
+    Require(combo.OnChar(host, L'b', 0), "editable combo accepts auto-suggest prefix character");
+    Require(combo.DebugIsPopupOpen(), "editable combo can auto-open suggestions while typing");
+
+    const D2D1_RECT_F firstFilteredItemRect = combo.DebugGetPopupItemRect(0u, &host);
+    RequireRectHasArea(firstFilteredItemRect, "auto-opened editable combo exposes the first filtered suggestion");
+}
+
 void TestEditableComboBoxKeyboardNavigationUsesFilteredPopupOrder()
 {
     using namespace RedSalamander::DxUi;
@@ -1114,6 +1134,7 @@ void RunTextFieldTests()
     runTest("TestTextFieldThirdClickAfterWordSelectionSelectsAll", TestTextFieldThirdClickAfterWordSelectionSelectsAll);
     runTest("TestEditableComboBoxDropDownSelectionSyncsText", TestEditableComboBoxDropDownSelectionSyncsText);
     runTest("TestEditableComboBoxPopupFiltersByPrefix", TestEditableComboBoxPopupFiltersByPrefix);
+    runTest("TestEditableComboBoxCanAutoOpenSuggestionsOnTyping", TestEditableComboBoxCanAutoOpenSuggestionsOnTyping);
     runTest("TestEditableComboBoxKeyboardNavigationUsesFilteredPopupOrder", TestEditableComboBoxKeyboardNavigationUsesFilteredPopupOrder);
     runTest("TestEditableComboBoxNoMatchPopupKeepsTypedText", TestEditableComboBoxNoMatchPopupKeepsTypedText);
     runTest("TestTextFieldCopyWithoutSelectionLeavesClipboardUnchanged", TestTextFieldCopyWithoutSelectionLeavesClipboardUnchanged);
