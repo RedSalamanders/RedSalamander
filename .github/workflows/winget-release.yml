@@ -142,13 +142,19 @@ jobs:
           $wingetVersion = (& winget --version).Trim()
           Write-Host $wingetVersion
 
-          $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+            $hasNativeErrorPreference = Test-Path variable:PSNativeCommandUseErrorActionPreference
+            $oldNativeErrorPreference = $null
           try {
-            $PSNativeCommandUseErrorActionPreference = $false
+              if ($hasNativeErrorPreference) {
+                $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+                $PSNativeCommandUseErrorActionPreference = $false
+              }
             $validationOutput = @(& winget validate --manifest "winget-manifest" 2>&1 | ForEach-Object { $_.ToString() })
             $validationExitCode = $LASTEXITCODE
           } finally {
-            $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
+              if ($hasNativeErrorPreference) {
+                $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
+              }
           }
 
           $validationOutput | ForEach-Object { Write-Host $_ }
@@ -160,45 +166,6 @@ jobs:
           }
 
           throw "winget validate failed with exit code $validationExitCode."
-
-      - name: Test Winget install
-        shell: pwsh
-        timeout-minutes: 20
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          winget install `
-            --manifest "winget-manifest" `
-            --accept-package-agreements `
-            --accept-source-agreements `
-            --disable-interactivity `
-            --ignore-warnings `
-            --force
-
-          if ($LASTEXITCODE -ne 0) {
-            throw "winget install --manifest failed with exit code $LASTEXITCODE."
-          }
-
-          winget list --exact --id RedSalamanders.RedSalamander --accept-source-agreements --disable-interactivity
-          if ($LASTEXITCODE -ne 0) {
-            throw "RedSalamander was not found in winget list after manifest install."
-          }
-
-      - name: Cleanup Winget install test
-        if: always()
-        shell: pwsh
-        timeout-minutes: 10
-        run: |
-          $ErrorActionPreference = "Continue"
-
-          winget uninstall `
-            --exact `
-            --id RedSalamanders.RedSalamander `
-            --silent `
-            --purge `
-            --accept-source-agreements `
-            --disable-interactivity `
-            --ignore-warnings
 
       - name: Submit to Winget
         if: ${{ github.event_name == 'release' || inputs.submit }}

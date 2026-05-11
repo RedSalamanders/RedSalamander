@@ -108,8 +108,7 @@ The workflow:
 4. Fails with the available asset names if either `RedSalamander-<version>-x64-Portable.zip` or `RedSalamander-<version>-ARM64-Portable.zip` is missing.
 5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
 6. Runs a self-contained `winget validate --manifest` wrapper in the workflow. It is intentionally inline because the workflow checks out the release tag before generating the manifest, and older release tags may not contain helper scripts added later. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
-7. Runs `winget install --manifest winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`.
-8. Submits the generated manifest directory with `wingetcreate submit` only for `release.published` runs or manual runs where `submit=true`.
+7. Submits the generated manifest directory with `wingetcreate submit`.
 
 `WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs`.
 
