@@ -14,7 +14,6 @@
 #include <vector>
 
 #include <UIAutomation.h>
-#include <commctrl.h>
 #include <d3d11_4.h>
 #include <dcomp.h>
 #include <dwmapi.h>
@@ -29,7 +28,6 @@
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "dcomp.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "dxgi.lib")

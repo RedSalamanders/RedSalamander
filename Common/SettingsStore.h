@@ -25,6 +25,8 @@
 #include <Windows.h>
 #pragma warning(pop)
 
+#include "SettingsThumbnail.h"
+
 #ifndef COMMON_API
 #ifdef COMMON_EXPORTS
 #define COMMON_API __declspec(dllexport)
@@ -100,6 +102,7 @@ struct FolderViewSettings
     FolderSortBy sortBy               = FolderSortBy::Name;
     FolderSortDirection sortDirection = FolderSortDirection::Ascending;
     bool fileExtensionsVisible        = true;
+    uint32_t thumbnailSizeDip         = Thumbnail::kDefaultSizeDip;
     bool thumbnailsVisible            = false;
     bool navigationBarVisible         = true;
     bool filterBarVisible             = false;
@@ -177,7 +180,7 @@ enum class WindowBackdropMode : uint8_t
 
 struct UiSettings
 {
-    bool compactMode                  = false;
+    bool compactMode                  = true;
     ReducedMotionMode reducedMotion   = ReducedMotionMode::System;
     WindowBackdropMode windowBackdrop = WindowBackdropMode::Default;
     std::wstring language             = L"system";

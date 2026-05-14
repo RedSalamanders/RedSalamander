@@ -184,7 +184,7 @@ The `DxUI` group currently contains:
 
 Normative behavior:
 
-- `Compact mode` is a live previewed app-wide density preference. Toggling it inside Preferences MUST immediately restyle the visible Preferences page host, then become the persisted default only on `Apply` or `OK`.
+- `Compact mode` is a live previewed app-wide density preference. Missing `ui.compactMode` settings default to enabled; an explicit `false` value opts the app back into standard density. Toggling it inside Preferences MUST immediately restyle the visible Preferences page host, then become the persisted value only on `Apply` or `OK`.
 - `Animations` MUST expose `System`, `On`, and `Off`. `System` follows the OS preference, `On` forces full DxUI motion, and `Off` forces reduced motion while still editing `ui.reducedMotion`.
 - `Window backdrop` MUST expose `Default`, `None`, `Mica`, `Mica Alt`, and `Acrylic`.
 - Changing `Language` inside Preferences MUST update only `workingSettings` until `Apply` or `OK`; choosing `No` from the dirty-close prompt MUST discard the unapplied language edit.

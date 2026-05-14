@@ -49,7 +49,9 @@
 
 #include "AppTheme.h"
 #include "DirectoryInfoCache.h"
+#include "FolderViewColumnLayout.h"
 #include "Helpers.h"
+#include "SettingsThumbnail.h"
 
 struct IWICImagingFactory;
 struct IFileSystem;
@@ -246,6 +248,47 @@ public:
     [[nodiscard]] bool DebugWarmRenderingForSelfTest() noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive() const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage() const noexcept;
+
+    struct DebugColumnLayoutEntry
+    {
+        size_t startIndex = 0;
+        size_t itemCount  = 0;
+        float leftDip     = 0.0f;
+        float widthDip    = 0.0f;
+        float rightDip    = 0.0f;
+        std::wstring widestDisplayName;
+        float widestObservedWidthDip = 0.0f;
+    };
+
+    struct DebugVisibleItemEntry
+    {
+        size_t index = 0;
+        std::wstring displayName;
+        D2D1_RECT_F bounds{};
+        int column = 0;
+        int row    = 0;
+    };
+
+    struct DebugColumnLayoutSnapshot
+    {
+        uint8_t displayMode = 0;
+        int rowsPerColumn      = 0;
+        float horizontalOffsetDip    = 0.0f;
+        float maxHorizontalOffsetDip = 0.0f;
+        float contentWidthDip        = 0.0f;
+        float clientWidthDip         = 0.0f;
+        float clientHeightDip        = 0.0f;
+        float tileWidthDip           = 0.0f;
+        float tileHeightDip          = 0.0f;
+        size_t firstVisibleIndex     = 0;
+        size_t lastVisibleIndex      = 0;
+        uint32_t hitTestSpacingFalsePositiveCount = 0;
+        std::vector<DebugColumnLayoutEntry> columns;
+        std::vector<DebugVisibleItemEntry> visibleItems;
+    };
+
+    [[nodiscard]] bool DebugGetColumnLayoutSnapshot(DebugColumnLayoutSnapshot& out) const;
+
     struct DebugEmptyFolderItemMetrics
     {
         bool active           = false;
@@ -311,6 +354,8 @@ public:
         Shell,
         ForceFallback,
         ForceSyntheticSuccess,
+        ForceShellFailureAllowWic,
+        ForceSyntheticWideSuccess,
     };
 
     struct AlertOverlayDebugSnapshot
@@ -335,6 +380,26 @@ public:
         uint64_t staleDropCount      = 0;
         uint64_t pendingCount        = 0;
         uint64_t cacheHitCount       = 0;
+        uint64_t shellSuccessCount   = 0;
+        uint64_t wicSuccessCount     = 0;
+        uint64_t decodeFailureCount  = 0;
+        uint64_t visibleApplyCount   = 0;
+        uint64_t visibleItemCount     = 0;
+        uint64_t visibleThumbnailCount = 0;
+        uint64_t totalThumbnailCount  = 0;
+        uint64_t cacheBytes          = 0;
+        uint64_t cacheEvictedCount   = 0;
+        uint64_t cancelCount         = 0;
+        bool lastDrawSawThumbnail    = false;
+        uint32_t lastDrawSourceWidthPx = 0;
+        uint32_t lastDrawSourceHeightPx = 0;
+        D2D1_RECT_F lastDrawSlotRectDip = D2D1::RectF();
+        D2D1_RECT_F lastDrawRectDip     = D2D1::RectF();
+        bool lastIconDrawSawIcon = false;
+        uint32_t lastIconDrawSourceWidthPx = 0;
+        uint32_t lastIconDrawSourceHeightPx = 0;
+        D2D1_RECT_F lastIconDrawSlotRectDip = D2D1::RectF();
+        D2D1_RECT_F lastIconDrawRectDip     = D2D1::RectF();
     };
 
     [[nodiscard]] bool DebugGetAlertOverlaySnapshot(AlertOverlayDebugSnapshot& out) const noexcept;
@@ -358,6 +423,12 @@ public:
     [[nodiscard]] bool GetThumbnailsVisible() const noexcept
     {
         return _thumbnailsVisible;
+    }
+
+    void SetThumbnailSizeDip(uint32_t sizeDip);
+    [[nodiscard]] uint32_t GetThumbnailSizeDip() const noexcept
+    {
+        return _thumbnailSizeDip;
     }
 
     void SetSort(SortBy sortBy, SortDirection direction);
@@ -611,6 +682,7 @@ private:
         uint64_t iconLoadBatchId       = 0;
         uint64_t enumerationGeneration = 0;
         int iconIndex                  = -1;
+        float targetDipSize            = 16.0f;
         std::chrono::steady_clock::time_point postedAt{};
         std::vector<size_t> itemIndices;
         wil::unique_hicon hIcon = nullptr;
@@ -618,13 +690,36 @@ private:
 
     struct ThumbnailBitmapRequest
     {
+        struct PixelBuffer
+        {
+            uint32_t widthPx = 0;
+            uint32_t heightPx = 0;
+            uint32_t strideBytes = 0;
+            std::vector<uint8_t> bgra;
+
+            [[nodiscard]] bool IsValid() const noexcept
+            {
+                return widthPx > 0u && heightPx > 0u && strideBytes >= widthPx * 4u && ! bgra.empty();
+            }
+        };
+
+        enum class SourceKind : uint8_t
+        {
+            Shell,
+            Wic,
+            Synthetic,
+            Fallback,
+        };
+
         uint64_t thumbnailLoadBatchId  = 0;
         uint64_t enumerationGeneration = 0;
         size_t itemIndex               = static_cast<size_t>(-1);
         std::chrono::steady_clock::time_point postedAt{};
         wil::unique_hbitmap hBitmap = nullptr;
+        PixelBuffer pixels;
         HRESULT hr                  = S_OK;
         bool usedFallback           = false;
+        SourceKind sourceKind       = SourceKind::Fallback;
     };
 
     struct FolderItem
@@ -684,6 +779,7 @@ private:
     struct IncrementalSearchState
     {
         bool active = false;
+        bool suppressNextSpaceChar = false;
         std::wstring query;
         size_t highlightedIndex = static_cast<size_t>(-1);
         DWRITE_TEXT_RANGE highlightedRange{};
@@ -772,6 +868,7 @@ private:
     size_t _anchorIndex  = static_cast<size_t>(-1);
     int _columns         = 1;
     int _rowsPerColumn   = 0;
+    std::vector<FolderViewColumnLayout::Column> _columnLayout;
     std::vector<int> _columnCounts;
     std::vector<size_t> _columnPrefixSums; // Prefix sums for O(1) hit testing: _columnPrefixSums[c] = sum of _columnCounts[0..c-1]
     float _scrollOffset     = 0.0f;
@@ -987,6 +1084,7 @@ private:
     float _tileWidthDip          = 220.0f;
     float _tileHeightDip         = 32.0f;
     float _iconSizeDip           = 16.0f; // Match Windows Explorer list mode (SHIL_SMALL)
+    uint32_t _thumbnailSizeDip   = Common::Settings::Thumbnail::kDefaultSizeDip;
     float _tileSpacingDip        = 16.0f;
     float _labelHeightDip        = 20.0f;
     float _detailsLineHeightDip  = 0.0f;
@@ -1049,10 +1147,10 @@ private:
     void OnLButtonUp(POINT pt);
     void OnMouseMove(POINT pt, WPARAM keys);
     void OnMouseLeave();
-    void OnKeyDown(WPARAM key, bool ctrl, bool shift);
-    void OnKeyDownMessage(WPARAM key);
+    void OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpaceCharMayFollow);
+    void OnKeyDownMessage(WPARAM key, LPARAM keyInfo);
     void OnCharMessage(wchar_t character);
-    bool OnSysKeyDownMessage(WPARAM key);
+    bool OnSysKeyDownMessage(WPARAM key, LPARAM keyInfo);
     LRESULT OnSetFocusMessage() noexcept;
     LRESULT OnKillFocusMessage() noexcept;
     void OnContextMenuMessage(HWND hwnd, LPARAM lParam);
@@ -1136,8 +1234,9 @@ private:
     void MoveSelectedItems();
     void EnsureDropTarget();
     void BeginDragDrop();
-    void UpdateItemTextLayouts(float labelWidth);
+    void UpdateItemTextLayouts();
     void EnsureItemTextLayout(FolderItem& item, float labelWidth);
+    [[nodiscard]] float GetItemTextLayoutWidth(const FolderItem& item) const noexcept;
     [[nodiscard]] std::wstring_view GetVisualDisplayName(const FolderItem& item) const noexcept;
     std::pair<size_t, size_t> GetVisibleItemRange() const;
     void ReleaseDistantRenderingState(); // Release layouts/icons for items far from visible range
@@ -1153,6 +1252,8 @@ private:
     bool CheckHR(HRESULT hr, const wchar_t* context) const;
     void QueueIconLoading();
     void ProcessIconLoadQueue();
+    [[nodiscard]] bool HasMissingVisibleThumbnails() const;
+    void QueueMissingVisibleThumbnails();
     void QueueThumbnailLoading();
     void CancelThumbnailLoading() noexcept;
     void ProcessThumbnailLoadQueue();
@@ -1225,6 +1326,7 @@ private:
     {
         uint64_t enumerationGeneration = 0;
         int iconIndex                  = -1;
+        float targetDipSize            = 16.0f;
         bool hasVisibleItems           = false;
         size_t firstVisibleItemIndex   = static_cast<size_t>(-1);
         unsigned int retryCount        = 0;
@@ -1285,6 +1387,13 @@ private:
         std::atomic<uint64_t> staleDrops{0};
         std::atomic<uint64_t> pendingBitmapCreates{0};
         std::atomic<uint64_t> cacheHits{0};
+        std::atomic<uint64_t> shellSuccess{0};
+        std::atomic<uint64_t> wicSuccess{0};
+        std::atomic<uint64_t> decodeFailures{0};
+        std::atomic<uint64_t> visibleApply{0};
+        std::atomic<uint64_t> cacheBytes{0};
+        std::atomic<uint64_t> cacheEvicted{0};
+        std::atomic<uint64_t> cancelCount{0};
         std::atomic<uint64_t> batchId{0};
         std::atomic<uint64_t> targetDipX100{1600};
 
@@ -1297,6 +1406,16 @@ private:
     ThumbnailLoadStats _thumbnailLoadStats;
 #ifdef ENABLE_TESTS
     std::atomic<DebugThumbnailProviderMode> _debugThumbnailProviderMode{DebugThumbnailProviderMode::Shell};
+    bool _debugLastThumbnailDrawSawThumbnail = false;
+    uint32_t _debugLastThumbnailSourceWidthPx = 0;
+    uint32_t _debugLastThumbnailSourceHeightPx = 0;
+    D2D1_RECT_F _debugLastThumbnailSlotRectDip = D2D1::RectF();
+    D2D1_RECT_F _debugLastThumbnailDrawRectDip = D2D1::RectF();
+    bool _debugLastIconDrawSawIcon = false;
+    uint32_t _debugLastIconDrawSourceWidthPx = 0;
+    uint32_t _debugLastIconDrawSourceHeightPx = 0;
+    D2D1_RECT_F _debugLastIconDrawSlotRectDip = D2D1::RectF();
+    D2D1_RECT_F _debugLastIconDrawRectDip = D2D1::RectF();
 #endif
     std::jthread _enumerationThread;
 

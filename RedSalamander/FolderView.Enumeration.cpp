@@ -948,6 +948,7 @@ void FolderView::EnumerateFolder()
     }
 
     _items.clear();
+    _columnLayout.clear();
     _columnCounts.clear();
     _columnPrefixSums.clear();
     _scrollOffset      = 0.0f;

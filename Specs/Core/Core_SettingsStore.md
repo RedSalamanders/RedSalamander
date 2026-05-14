@@ -690,6 +690,7 @@ Folder state is stored as an array to support multiple panes (e.g., Left/Right) 
   - `slot`: pane identifier / position (string, recommended: `"left"` / `"right"`).
   - `current`: current location as a string (either a Windows path or a plugin-qualified path: `<pluginShortId>:<pluginPath>`).
   - `view.display`: `"brief" | "detailed" | "extraDetailed" | "thumbnails"` (default: `"brief"`). Thumbnails is an exclusive display mode, not a flag layered on top of another display mode.
+  - `view.thumbnailSizeDip`: thumbnail visual size in device-independent pixels for that pane. Allowed values are `48`, `64`, `96`, and `128`; missing or invalid values load as `64`, and writers omit the value when it is `64`.
   - `view.sortBy`: `"none" | "name" | "extension" | "time" | "size" | "attributes"` (default: `"name"`).
   - `view.sortDirection`: `"ascending" | "descending"` (default: `"ascending"`; Time/Size typically select `"descending"`).
   - `view.fileExtensionsVisible`: whether file extensions are shown in that pane's display labels (bool, default: `true`).
@@ -701,7 +702,7 @@ Folder state is stored as an array to support multiple panes (e.g., Left/Right) 
 ### UI behavior (v1)
 
 - FolderWindow stores the splitter position in `folders.layout.splitRatio` while dragging; the splitter can be moved all the way to either edge (no minimum pane width); double-clicking the splitter resets it to `0.5`.
-- Per-pane `view.*` values reflect the pane’s **Sort by** / **Display as** selections and pane view options for file-extension labels, thumbnails, navigation bars, filter bars, and status bars.
+- Per-pane `view.*` values reflect the pane’s **Sort by** / **Display as** selections and pane view options for file-extension labels, thumbnail size, thumbnails display mode, navigation bars, filter bars, and status bars.
 
 **History rules (normative):**
 - Folder history is global (shared across panes) and stored in `folders.history`.
@@ -833,7 +834,7 @@ History for selection-mask dialogs lives under:
 Keys:
 - `selectHistory` (array, max 10): most-recent-first history for `cmd/pane/selection/selectDialog`
 - `unselectHistory` (array, max 10): most-recent-first history for `cmd/pane/selection/unselectDialog`
-- `filterHistory` (array, max 10): most-recent-first history for `cmd/pane/filter`
+- `filterHistory` (array, max 10): most-recent-first history shared by the `cmd/pane/filter` dialog and the inline pane filter bar
 
 ## RedSalamanderMonitor UI State
 

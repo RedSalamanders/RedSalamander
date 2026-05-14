@@ -116,10 +116,13 @@ inline constexpr UINT kDxUiTextInputBridgeSpecialKey        = WM_APP + 0x534;
 inline constexpr UINT kDxUiTextInputBridgeBlur              = WM_APP + 0x535;
 inline constexpr UINT kPluginConfigurationDialogApplyTheme  = WM_APP + 0x536;
 inline constexpr UINT kConnectionCredentialPromptApplyTheme = WM_APP + 0x537;
+inline constexpr UINT kDxUiContextMenuRootHoverChanged      = WM_APP + 0x539;
 
 // Item Properties
 inline constexpr UINT kItemPropertiesLoadComplete = WM_APP + 0x540;
 inline constexpr UINT kItemPropertiesRemoveStream = WM_APP + 0x541;
+inline constexpr UINT kFolderWindowCloseOpenedFilesDialog = WM_APP + 0x542;
+inline constexpr UINT kFolderWindowCloseSharedDirectoriesDialog = WM_APP + 0x543;
 
 // Splash screen
 inline constexpr UINT kSplashScreenSetText  = WM_APP + 0x6F0;
@@ -341,6 +344,13 @@ struct ViewerVlcDebugSnapshot
     wchar_t snapshotIconGlyph = L'\0';
     bool volumeIconUsesIconFont = false;
     wchar_t volumeIconGlyph = L'\0';
+    bool loadingSpinnerUsesRainbow = false;
+    int loadingSpinnerDotCount = 0;
+    LONG loadingSpinnerOrbitPx = 0;
+    LONG loadingSpinnerDotRadiusPx = 0;
+    LONG loadingSpinnerActiveDotRadiusPx = 0;
+    uint32_t loadingSpinnerFirstDotArgb = 0;
+    uint32_t loadingSpinnerSecondDotArgb = 0;
 };
 
 struct ViewerVlcDebugPlaybackState
@@ -370,6 +380,22 @@ inline constexpr UINT kViewerVlcDebugWheel               = WM_APP + 0x617;
 inline constexpr UINT kViewerVlcDebugToggleMute          = WM_APP + 0x618;
 inline constexpr UINT kViewerVlcDebugWheelVideoChild     = WM_APP + 0x619;
 inline constexpr UINT kViewerVlcDebugSetStopDelay        = WM_APP + 0x61A;
+
+struct ViewerSpaceTooltipDebugSnapshot
+{
+    uint32_t tooltipNodeId = 0;
+    size_t tooltipTextLength = 0u;
+    float tooltipAnchorXDip = 0.0f;
+    float tooltipAnchorYDip = 0.0f;
+    float tooltipMaxWidthDip = 0.0f;
+    float tooltipMaxHeightDip = 0.0f;
+    uint64_t tooltipPaintCount = 0u;
+    bool hasRenderTarget = false;
+    bool hasTooltipFormat = false;
+};
+
+inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot = WM_APP + 0x61B;
+inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay  = WM_APP + 0x61C;
 #endif
 
 // RedSalamanderMonitor / ColorTextView

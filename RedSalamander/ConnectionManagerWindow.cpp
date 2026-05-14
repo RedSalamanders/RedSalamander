@@ -37,6 +37,7 @@
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 #include "WindowSizing.h"
+#include "WindowsHello.h"
 #include "resource.h"
 
 // Single-canvas DxUi Connection Manager window.
@@ -84,6 +85,7 @@ constexpr wchar_t kWindowClassName[]  = L"RedSalamander.ConnectionManagerWindow"
 constexpr wchar_t kWindowSettingsId[] = L"ConnectionManagerWindow";
 
 constexpr float kListPaneWidthDip     = 200.0f;
+constexpr float kListGridColumnWidthDip = 188.0f;
 constexpr float kFooterHeightDip      = 44.0f;
 constexpr float kPanePaddingDip       = 8.0f;
 constexpr float kListGridRowHeight    = 28.0f;
@@ -153,8 +155,8 @@ public:
         {
             col.title = L"Connections";
         }
-        col.widthDip    = 220.0f;
-        col.minWidthDip = 120.0f;
+        col.widthDip    = kListGridColumnWidthDip;
+        col.minWidthDip = 80.0f;
         col.kind        = GridColumnKind::Text;
         col.sortable    = true;
         col.multiline   = false;
@@ -552,6 +554,27 @@ void ExtraSetUInt32(Common::Settings::JsonValue& extra, std::string_view key, ui
     return RedSalamander::Connections::IsQuickConnectConnectionId(profile.id);
 }
 
+[[nodiscard]] RedSalamander::Connections::SecretKind EditableSecretKindForProfile(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    return profile.authMode == Common::Settings::ConnectionAuthMode::SshKey ? RedSalamander::Connections::SecretKind::SshKeyPassphrase
+                                                                            : RedSalamander::Connections::SecretKind::Password;
+}
+
+[[nodiscard]] size_t SavedSecretPlaceholderLength(std::wstring_view connectionId) noexcept
+{
+    constexpr uint64_t kFNVOffset = 1469598103934665603ull;
+    constexpr uint64_t kFNVPrime  = 1099511628211ull;
+
+    uint64_t value = kFNVOffset ^ GetTickCount64();
+    for (const wchar_t ch : connectionId)
+    {
+        value ^= static_cast<uint64_t>(std::towlower(static_cast<wint_t>(ch)));
+        value *= kFNVPrime;
+    }
+
+    return 8u + static_cast<size_t>(value % 7u);
+}
+
 enum class ConnectionProfileValidationError : uint8_t
 {
     None,
@@ -902,6 +925,14 @@ private:
     void RequestCloseWindow() noexcept;
     void RefreshBaselineConnectionIds() noexcept;
     void StageSecretForProfile(const Common::Settings::ConnectionProfile& profile, std::wstring_view secret);
+    [[nodiscard]] bool TryGetStagedSecretForProfile(const Common::Settings::ConnectionProfile& profile, std::wstring& outSecret) const;
+    [[nodiscard]] HRESULT LoadStoredSecretForProfile(const Common::Settings::ConnectionProfile& profile, std::wstring& outSecret) const noexcept;
+    [[nodiscard]] bool ShouldShowSecretPlaceholderForProfile(const Common::Settings::ConnectionProfile& profile) const noexcept;
+    [[nodiscard]] HRESULT VerifySecretRevealForProfile(const Common::Settings::ConnectionProfile& profile) noexcept;
+    void ClearSecretPlaceholder() noexcept;
+    void ApplySecretPlaceholderForProfile(const Common::Settings::ConnectionProfile& profile);
+    void SetSecretMaskedAndUpdateButton(bool masked) noexcept;
+    void OnShowSecretClicked() noexcept;
     void DeleteSecretsForRemovedConnections() noexcept;
     void CommitQuickConnectSecretsAndProfile(const Common::Settings::ConnectionProfile& profile) noexcept;
     [[nodiscard]] HRESULT CommitSecretsForProfile(const Common::Settings::ConnectionProfile& profile) noexcept;
@@ -1029,6 +1060,9 @@ private:
     bool _dirtySinceLastSettingsLoad  = false;
     bool _staleExternalSettings       = false;
     bool _loadingFromSettings         = false;
+    bool _secretStoredPlaceholderVisible = false;
+    size_t _secretStoredPlaceholderLength = 0u;
+    std::wstring _secretStoredPlaceholderProfileId;
     bool _isModalFacade               = false;
     ModalFacadeResult* _modalResult   = nullptr;
     size_t _dispatchDepth             = 0u;
@@ -1275,15 +1309,7 @@ void WindowImpl::BuildEditorForm()
     addEdit(_editSecret);
     _editSecret->SetMasked(true);
     addActionButton(_btnShowSecret, LoadStringResource(nullptr, IDS_CONNECTIONS_BTN_SHOW_SECRET));
-    _btnShowSecret->SetOnClick([this]
-    {
-        if (_editSecret)
-        {
-            const bool nowMasked = ! _editSecret->IsMasked();
-            _editSecret->SetMasked(nowMasked);
-            _btnShowSecret->SetText(LoadStringResource(nullptr, nowMasked ? IDS_CONNECTIONS_BTN_SHOW_SECRET : IDS_CONNECTIONS_BTN_HIDE_SECRET));
-        }
-    });
+    _btnShowSecret->SetOnClick([this] { OnShowSecretClicked(); });
 
     addLabel(_labelSavePassword, IDS_CONNECTIONS_LABEL_SAVE_PASSWORD);
     addToggle(_toggleSavePassword);
@@ -1921,7 +1947,12 @@ void WindowImpl::OnEditorFieldChanged() noexcept
     }
     if (_editSecret)
     {
-        StageSecretForProfile(profile, _editSecret->GetText());
+        const std::wstring secretText(_editSecret->GetText());
+        if (_secretStoredPlaceholderVisible && ! secretText.empty())
+        {
+            ClearSecretPlaceholder();
+        }
+        StageSecretForProfile(profile, secretText);
     }
 
     // Extra-JSON fields.
@@ -2080,6 +2111,192 @@ void WindowImpl::StageSecretForProfile(const Common::Settings::ConnectionProfile
         _stagedPasswordById[profile.id] = std::wstring(secret);
         _stagedPassphraseById.erase(profile.id);
     }
+}
+
+bool WindowImpl::TryGetStagedSecretForProfile(const Common::Settings::ConnectionProfile& profile, std::wstring& outSecret) const
+{
+    outSecret.clear();
+    if (profile.id.empty())
+    {
+        return false;
+    }
+
+    const auto& stagedMap = profile.authMode == Common::Settings::ConnectionAuthMode::SshKey ? _stagedPassphraseById : _stagedPasswordById;
+    const auto it         = stagedMap.find(profile.id);
+    if (it == stagedMap.end() || it->second.empty())
+    {
+        return false;
+    }
+
+    outSecret = it->second;
+    return true;
+}
+
+HRESULT WindowImpl::LoadStoredSecretForProfile(const Common::Settings::ConnectionProfile& profile, std::wstring& outSecret) const noexcept
+{
+    outSecret.clear();
+    if (profile.id.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    const RedSalamander::Connections::SecretKind secretKind = EditableSecretKindForProfile(profile);
+    if (IsQuickConnectProfile(profile))
+    {
+        return RedSalamander::Connections::LoadQuickConnectSecret(secretKind, outSecret);
+    }
+
+    const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile.id, secretKind);
+    if (targetName.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::wstring userName;
+    return RedSalamander::Connections::LoadGenericCredential(targetName, userName, outSecret);
+}
+
+bool WindowImpl::ShouldShowSecretPlaceholderForProfile(const Common::Settings::ConnectionProfile& profile) const noexcept
+{
+    return ! profile.id.empty() && profile.savePassword && profile.authMode != Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+}
+
+HRESULT WindowImpl::VerifySecretRevealForProfile(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    if (! profile.requireWindowsHello)
+    {
+        return S_OK;
+    }
+
+    bool bypassWindowsHello = false;
+    uint32_t reauthTimeoutMinute = 10u;
+    if (_settings && _settings->connections)
+    {
+        bypassWindowsHello   = _settings->connections->bypassWindowsHello;
+        reauthTimeoutMinute  = _settings->connections->windowsHelloReauthTimeoutMinute;
+    }
+    if (bypassWindowsHello)
+    {
+        return S_OK;
+    }
+
+    const uint64_t reauthTimeoutMs = static_cast<uint64_t>(reauthTimeoutMinute) * 60'000ull;
+    if (reauthTimeoutMs != 0u)
+    {
+        if (RedSalamander::Connections::IsSecretAccessAuthorized(profile.id, reauthTimeoutMs) ||
+            RedSalamander::Connections::HasSecretAccessAuthorization(profile.id))
+        {
+            return S_OK;
+        }
+    }
+
+    std::wstring message = LoadStringResource(nullptr, IDS_CONNECTIONS_HELLO_PROMPT_CREDENTIAL);
+    if (message.empty())
+    {
+        message = L"Verify with Windows Hello to access the stored credential.";
+    }
+
+    const HRESULT helloHr = RedSalamander::Security::VerifyWindowsHelloForWindow(_hwnd.get(), message);
+    if (SUCCEEDED(helloHr) && reauthTimeoutMs != 0u && ! profile.id.empty())
+    {
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
+    }
+    return helloHr;
+}
+
+void WindowImpl::ClearSecretPlaceholder() noexcept
+{
+    _secretStoredPlaceholderVisible = false;
+    _secretStoredPlaceholderLength  = 0u;
+    _secretStoredPlaceholderProfileId.clear();
+    if (_editSecret)
+    {
+        _editSecret->SetPlaceholder(std::wstring{});
+    }
+}
+
+void WindowImpl::ApplySecretPlaceholderForProfile(const Common::Settings::ConnectionProfile& profile)
+{
+    ClearSecretPlaceholder();
+    if (! _editSecret || ! ShouldShowSecretPlaceholderForProfile(profile))
+    {
+        return;
+    }
+
+    _secretStoredPlaceholderLength = SavedSecretPlaceholderLength(profile.id);
+    _secretStoredPlaceholderVisible = true;
+    _secretStoredPlaceholderProfileId = profile.id;
+    _editSecret->SetPlaceholder(std::wstring(_secretStoredPlaceholderLength, L'\u2022'));
+}
+
+void WindowImpl::SetSecretMaskedAndUpdateButton(bool masked) noexcept
+{
+    if (_editSecret)
+    {
+        _editSecret->SetMasked(masked);
+    }
+    if (_btnShowSecret)
+    {
+        _btnShowSecret->SetText(LoadStringResource(nullptr, masked ? IDS_CONNECTIONS_BTN_SHOW_SECRET : IDS_CONNECTIONS_BTN_HIDE_SECRET));
+    }
+}
+
+void WindowImpl::OnShowSecretClicked() noexcept
+{
+    if (! _editSecret)
+    {
+        return;
+    }
+
+    if (_secretStoredPlaceholderVisible && _editSecret->IsMasked())
+    {
+        const auto modelIndex = GetSelectedModelIndex();
+        if (! modelIndex || *modelIndex >= _connections.size())
+        {
+            return;
+        }
+
+        const Common::Settings::ConnectionProfile& profile = _connections[*modelIndex];
+        if (profile.id != _secretStoredPlaceholderProfileId)
+        {
+            return;
+        }
+
+        const HRESULT helloHr = VerifySecretRevealForProfile(profile);
+        if (FAILED(helloHr))
+        {
+            Debug::Warning(L"ConnectionManagerWindow: Windows Hello rejected saved secret reveal connection='{}' id='{}' hr=0x{:08X}",
+                           profile.name,
+                           profile.id,
+                           static_cast<unsigned long>(helloHr));
+            return;
+        }
+
+        std::wstring secret;
+        const HRESULT loadHr = LoadStoredSecretForProfile(profile, secret);
+        if (FAILED(loadHr) || secret.empty())
+        {
+            Debug::Warning(L"ConnectionManagerWindow: saved secret reveal failed connection='{}' id='{}' hr=0x{:08X}",
+                           profile.name,
+                           profile.id,
+                           static_cast<unsigned long>(loadHr));
+            return;
+        }
+
+        ClearSecretPlaceholder();
+        _editSecret->SetText(std::move(secret));
+        _editSecret->SetSelectionRange(_editSecret->GetText().size(), _editSecret->GetText().size());
+        SetSecretMaskedAndUpdateButton(false);
+        if (_dxHost.GetFocusControl() == _editSecret)
+        {
+            _dxHost.SyncTextInputBridge(_editSecret);
+        }
+        _dxHost.Invalidate();
+        return;
+    }
+
+    SetSecretMaskedAndUpdateButton(! _editSecret->IsMasked());
+    _dxHost.Invalidate();
 }
 
 void WindowImpl::DeleteSecretsForRemovedConnections() noexcept
@@ -2925,7 +3142,17 @@ void WindowImpl::LoadEditorFromProfile(const Common::Settings::ConnectionProfile
     }
     if (_editSecret)
     {
-        _editSecret->SetText(std::wstring{});
+        std::wstring stagedSecret;
+        if (TryGetStagedSecretForProfile(profile, stagedSecret))
+        {
+            ClearSecretPlaceholder();
+            _editSecret->SetText(std::move(stagedSecret));
+        }
+        else
+        {
+            _editSecret->SetText(std::wstring{});
+            ApplySecretPlaceholderForProfile(profile);
+        }
         _editSecret->SetMasked(true);
     }
     if (_btnShowSecret)
@@ -3015,6 +3242,8 @@ void WindowImpl::ClearEditor() noexcept
     clearEdit(_editDeleteMaxConcurrency);
     clearEdit(_editUser);
     clearEdit(_editSecret);
+    ClearSecretPlaceholder();
+    SetSecretMaskedAndUpdateButton(true);
     clearEdit(_editS3EndpointOverride);
     clearEdit(_editSshPrivateKey);
     clearEdit(_editSshKnownHosts);
@@ -3513,6 +3742,7 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
         out.visibleListColumnCount           = metrics.visibleColumnCount;
         out.visibleListCellCount             = static_cast<size_t>(metrics.visibleCellCount);
         out.listHasVerticalScrollbar         = metrics.hasVerticalScrollbar;
+        out.listHasHorizontalScrollbar       = metrics.hasHorizontalScrollbar;
     }
 
     // Theme flags
@@ -3642,6 +3872,11 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
         out.currentNameText.clear();
         out.currentPluginId.clear();
     }
+    out.secretMasked = _editSecret && _editSecret->IsMasked();
+    out.secretStoredPlaceholderVisible = _secretStoredPlaceholderVisible;
+    out.secretStoredPlaceholderLength = _secretStoredPlaceholderLength;
+    out.showSecretButtonVisible = _btnShowSecret && _btnShowSecret->IsVisible();
+    out.showSecretButtonEnabled = _btnShowSecret && _btnShowSecret->IsEnabled();
     if (_list)
     {
         if (const auto primary = _list->GetPrimarySelectedRow())
@@ -4443,6 +4678,22 @@ bool DebugGetSavePasswordToggleState(bool& outChecked, std::wstring& outLabel) n
     return true;
 }
 
+bool DebugScrollCommandButtonIntoView(UINT commandId) noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! impl)
+    {
+        return false;
+    }
+    Button* button = impl->DebugGetCommandButton(commandId);
+    return button && impl->DebugScrollEditorControlIntoView(button);
+}
+
 bool DebugGetCommandButtonHostAndClientRect(UINT commandId, HWND& outHost, RECT& outRect, std::wstring& outLabel) noexcept
 {
     outHost = nullptr;
@@ -4663,6 +4914,11 @@ bool DebugGetConnectionManagerSavePasswordToggleHostAndClientRect(HWND& outHost,
 bool DebugGetConnectionManagerSavePasswordToggleState(bool& outChecked, std::wstring& outLabel) noexcept
 {
     return RedSalamander::ConnectionManager::SingleCanvas::DebugGetSavePasswordToggleState(outChecked, outLabel);
+}
+
+bool DebugScrollConnectionManagerCommandButtonIntoView(UINT commandId) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugScrollCommandButtonIntoView(commandId);
 }
 
 bool DebugGetConnectionManagerCommandButtonHostAndClientRect(UINT commandId, HWND& outHost, RECT& outRect, std::wstring& outLabel) noexcept

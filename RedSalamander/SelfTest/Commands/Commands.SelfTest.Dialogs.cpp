@@ -3878,7 +3878,7 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
 
             cycle.ownedByMainWindow      = IsOwnedBy(prompt, mainWindow);
             cycle.capturedSnapshot       = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.snapshot);
-            cycle.valueState             = CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId);
+            cycle.valueState             = CollectVisibleDescendantValuePatternState(prompt, UIA_ComboBoxControlTypeId);
             cycle.toggleState            = CollectVisibleDescendantTogglePatternState(prompt);
             cycle.uiaPatternStats        = CollectVisibleUiaDescendantPatternStats(prompt);
             cycle.buttonState            = CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
@@ -3887,7 +3887,7 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
             cycle.setEnabled             = DebugSetFolderViewPaneFilterPromptEnabled(enabled);
             cycle.setText                = DebugSetFolderViewPaneFilterPromptTextAndNotify(requestedText);
             cycle.capturedEditedSnapshot = DebugGetFolderViewPaneFilterPromptSnapshot(cycle.editedSnapshot);
-            cycle.editedValueState       = CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId);
+            cycle.editedValueState       = CollectVisibleDescendantValuePatternState(prompt, UIA_ComboBoxControlTypeId);
             cycle.editedToggleState      = CollectVisibleDescendantTogglePatternState(prompt);
             cycle.actionIssued           = accept ? DebugConfirmFolderViewPaneFilterPrompt() : DebugCancelFolderViewPaneFilterPrompt();
             if (cycle.actionIssued)
@@ -3909,6 +3909,12 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
                       std::format(L"Pane Filter prompt should not expose more than one visible child window during {}; saw {}.",
                                   failureContext,
                                   cycle.snapshot.visibleChildWindowCount));
+        state.Require(cycle.snapshot.historyComboVisible,
+                      std::format(L"Pane Filter prompt should use an editable history combo during {}.", failureContext));
+        state.Require(! cycle.snapshot.historyButtonVisible,
+                      std::format(L"Pane Filter prompt should not expose a separate History button during {}.", failureContext));
+        state.Require(cycle.snapshot.historyItemCount > 0u,
+                      std::format(L"Pane Filter prompt should load filter history into the combo during {}.", failureContext));
 
         state.Require(cycle.valueState.has_value(), std::format(L"Pane Filter prompt should expose a visible editable DX field during {}.", failureContext));
         if (cycle.valueState.has_value())
@@ -3933,8 +3939,8 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
                       std::format(L"Failed to collect live UI Automation stats for pane-filter prompt during {}.", failureContext));
         if (cycle.uiaPatternStats.has_value())
         {
-            state.Require(cycle.uiaPatternStats->editControlCount + cycle.uiaPatternStats->comboBoxControlCount > 0u,
-                          std::format(L"Pane Filter prompt should expose a visible UI Automation editable field during {}.", failureContext));
+            state.Require(cycle.uiaPatternStats->comboBoxControlCount > 0u,
+                          std::format(L"Pane Filter prompt should expose a visible UI Automation history combo during {}.", failureContext));
             state.Require(cycle.uiaPatternStats->valuePatternCount > 0u,
                           std::format(L"Pane Filter prompt should expose ValuePattern for the filter field during {}.", failureContext));
             state.Require(cycle.uiaPatternStats->togglePatternCount > 0u,
@@ -4276,7 +4282,7 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
             workerResult.ownedByMainWindow = IsOwnedBy(workerResult.prompt, mainWindow);
             workerResult.capturedSnapshot  = DebugGetFolderViewPaneFilterPromptSnapshot(workerResult.snapshot);
             workerResult.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(workerResult.prompt);
-            workerResult.valueState        = CollectVisibleDescendantValuePatternState(workerResult.prompt, UIA_EditControlTypeId);
+            workerResult.valueState        = CollectVisibleDescendantValuePatternState(workerResult.prompt, UIA_ComboBoxControlTypeId);
             workerResult.toggleState       = CollectVisibleDescendantTogglePatternState(workerResult.prompt);
             if (const auto buttonState = CollectVisibleDescendantNamedElementState(workerResult.prompt, UIA_ButtonControlTypeId); buttonState.has_value())
             {
@@ -4538,10 +4544,10 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
     state.Require(WaitForAtomicAtLeast(enumEmpty, 2u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Enumeration did not refresh for empty folder after applying pane filter.");
     state.Require(g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left), L"Expected filter active after applying pane filter on empty folder.");
-    state.Require(g_folderWindow.DebugIsEmptyFolderStateActive(FolderWindow::Pane::Left),
-                  L"Expected empty-folder state still active after filtering empty folder.");
-    state.Require(g_folderWindow.DebugGetFilterWatermarkVisualMode(FolderWindow::Pane::Left) == FolderView::FilterWatermarkVisualMode::Badge,
-                  L"Expected badge watermark (not background) for empty-state UI while filter is active.");
+    state.Require(! g_folderWindow.DebugIsEmptyFolderStateActive(FolderWindow::Pane::Left),
+                  L"Filter-empty state should suppress the generic empty-folder placeholder.");
+    state.Require(g_folderWindow.DebugGetFilterWatermarkVisualMode(FolderWindow::Pane::Left) == FolderView::FilterWatermarkVisualMode::Background,
+                  L"Expected full-pane funnel placeholder when filter is active and no rows are visible.");
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, nonEmptyChild);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, nonEmptyChild, SelfTest::Scale(std::chrono::milliseconds{3000})),

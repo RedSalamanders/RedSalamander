@@ -3,7 +3,6 @@
 #include "DxUi/DxUi.Typography.h"
 #include <windowsx.h>
 
-#include <commctrl.h>
 #include <shellapi.h>
 
 #include "DirectoryInfoCache.h"

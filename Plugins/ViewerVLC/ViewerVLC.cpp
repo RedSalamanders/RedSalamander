@@ -52,6 +52,14 @@ constexpr UINT kHudAnimIntervalMs      = 16;
 constexpr UINT_PTR kLoadingTimerId     = 3;
 constexpr UINT kLoadingTimerIntervalMs = 100;
 constexpr ULONGLONG kLoadingOverlayDelayMs = 800;
+constexpr int kLoadingSpinnerDotCount = 12;
+constexpr int kLoadingSpinnerOrbitDip = 19;
+constexpr int kLoadingSpinnerDotRadiusDip = 3;
+constexpr int kLoadingSpinnerActiveDotRadiusDip = 5;
+constexpr int kLoadingSpinnerHaloRadiusDip = 25;
+constexpr int kLoadingSpinnerRightInsetDip = 48;
+constexpr int kLoadingSpinnerTopInsetDip = 28;
+constexpr int kLoadingSpinnerTextReserveDip = 112;
 constexpr float kHudDimOpacity         = 0.18f;
 constexpr ULONGLONG kHudIdleDimDelayMs = 20'000;
 constexpr wchar_t kWheelForwardOriginalWndProcProp[] = L"RS.ViewerVLC.WheelForwardOriginalWndProc";
@@ -212,6 +220,14 @@ template <typename T> [[nodiscard]] bool TryLoadProc(HMODULE module, const char*
     return RGB(r, g, b);
 }
 
+#ifdef ENABLE_TESTS
+[[nodiscard]] uint32_t OpaqueArgbFromColorRef(COLORREF color) noexcept
+{
+    return 0xFF000000u | (static_cast<uint32_t>(GetRValue(color)) << 16u) | (static_cast<uint32_t>(GetGValue(color)) << 8u) |
+           static_cast<uint32_t>(GetBValue(color));
+}
+#endif
+
 [[nodiscard]] COLORREF BlendColor(COLORREF under, COLORREF over, uint8_t alpha) noexcept
 {
     const uint32_t inv = static_cast<uint32_t>(255u - alpha);
@@ -338,6 +354,67 @@ template <typename T> [[nodiscard]] bool TryLoadProc(HMODULE module, const char*
 [[nodiscard]] D2D1_RECT_F RectFFromRect(const RECT& rc) noexcept
 {
     return D2D1::RectF(static_cast<float>(rc.left), static_cast<float>(rc.top), static_cast<float>(rc.right), static_cast<float>(rc.bottom));
+}
+
+struct LoadingSpinnerVisualSpec
+{
+    int dotCount = kLoadingSpinnerDotCount;
+    float orbitPx = 0.0f;
+    float dotRadiusPx = 0.0f;
+    float activeDotRadiusPx = 0.0f;
+    float haloRadiusPx = 0.0f;
+    float rightInsetPx = 0.0f;
+    float topInsetPx = 0.0f;
+    COLORREF accent = RGB(0, 120, 212);
+    bool rainbowMode = false;
+    float rainbowHue = 0.0f;
+    float rainbowSaturation = 0.70f;
+    float rainbowValue = 0.95f;
+};
+
+[[nodiscard]] LoadingSpinnerVisualSpec MakeLoadingSpinnerVisualSpec(const ViewerTheme* theme,
+                                                                    bool themed,
+                                                                    UINT dpi,
+                                                                    COLORREF accent,
+                                                                    std::wstring_view seed) noexcept
+{
+    const auto px = [&](int dip) noexcept
+    {
+        return std::max(1.0f, static_cast<float>(MulDiv(dip, static_cast<int>(dpi), 96)));
+    };
+
+    LoadingSpinnerVisualSpec spec{};
+    spec.orbitPx = px(kLoadingSpinnerOrbitDip);
+    spec.dotRadiusPx = px(kLoadingSpinnerDotRadiusDip);
+    spec.activeDotRadiusPx = px(kLoadingSpinnerActiveDotRadiusDip);
+    spec.haloRadiusPx = px(kLoadingSpinnerHaloRadiusDip);
+    spec.rightInsetPx = px(kLoadingSpinnerRightInsetDip);
+    spec.topInsetPx = px(kLoadingSpinnerTopInsetDip);
+    spec.accent = accent;
+    spec.rainbowMode = themed && theme && theme->rainbowMode != FALSE && theme->highContrast == FALSE;
+    if (spec.rainbowMode)
+    {
+        spec.rainbowHue = static_cast<float>(StableHash32(seed) % 360u);
+        spec.rainbowSaturation = (theme && theme->darkBase != FALSE) ? 0.78f : 0.66f;
+        spec.rainbowValue = (theme && theme->darkBase != FALSE) ? 1.0f : 0.90f;
+    }
+    return spec;
+}
+
+[[nodiscard]] COLORREF ResolveLoadingSpinnerDotColor(const LoadingSpinnerVisualSpec& spec, int dotIndex) noexcept
+{
+    if (! spec.rainbowMode || spec.dotCount <= 0)
+    {
+        return spec.accent;
+    }
+
+    const float step = 360.0f / static_cast<float>(spec.dotCount);
+    float hue = spec.rainbowHue + (static_cast<float>(dotIndex) * step);
+    while (hue >= 360.0f)
+    {
+        hue -= 360.0f;
+    }
+    return ColorFromHSV(hue, spec.rainbowSaturation, spec.rainbowValue);
 }
 
 struct HudLayout
@@ -854,6 +931,7 @@ struct VlcState
     void(__cdecl* libvlc_retain)(libvlc_instance_t*)                                                            = nullptr;
     void(__cdecl* libvlc_release)(libvlc_instance_t*)                                                           = nullptr;
     libvlc_media_t*(__cdecl* libvlc_media_new_path)(libvlc_instance_t*, const char*)                            = nullptr;
+    void(__cdecl* libvlc_media_add_option)(libvlc_media_t*, const char*)                                        = nullptr;
     void(__cdecl* libvlc_media_release)(libvlc_media_t*)                                                        = nullptr;
     libvlc_media_player_t*(__cdecl* libvlc_media_player_new_from_media)(libvlc_media_t*)                        = nullptr;
     void(__cdecl* libvlc_media_player_set_media)(libvlc_media_player_t*, libvlc_media_t*)                       = nullptr;
@@ -1888,6 +1966,22 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->snapshotIconGlyph              = kHudGlyphSnapshot;
             snapshot->volumeIconUsesIconFont         = _hudIconFormat != nullptr;
             snapshot->volumeIconGlyph                = GetHudVolumeGlyph();
+
+            if (_loadingUiActive || _loadingUiVisible)
+            {
+                const UINT dpi = _hMissingOverlay ? GetDpiForWindow(_hMissingOverlay.get()) : (_hWnd ? GetDpiForWindow(_hWnd.get()) : 96u);
+                const bool themed = _hasTheme && ! _theme.highContrast;
+                const std::wstring_view seed = _currentPath.empty() ? std::wstring_view(L"ViewerVLC") : std::wstring_view(_currentPath.native());
+                const COLORREF accent = themed ? ResolveAccentColor(_theme, seed) : GetSysColor(COLOR_HIGHLIGHT);
+                const LoadingSpinnerVisualSpec spinner = MakeLoadingSpinnerVisualSpec(_hasTheme ? &_theme : nullptr, themed, dpi, accent, seed);
+                snapshot->loadingSpinnerUsesRainbow = spinner.rainbowMode;
+                snapshot->loadingSpinnerDotCount = spinner.dotCount;
+                snapshot->loadingSpinnerOrbitPx = static_cast<LONG>(std::lround(spinner.orbitPx));
+                snapshot->loadingSpinnerDotRadiusPx = static_cast<LONG>(std::lround(spinner.dotRadiusPx));
+                snapshot->loadingSpinnerActiveDotRadiusPx = static_cast<LONG>(std::lround(spinner.activeDotRadiusPx));
+                snapshot->loadingSpinnerFirstDotArgb = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 0));
+                snapshot->loadingSpinnerSecondDotArgb = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 1));
+            }
 
             const SIZE snapshotSize = ComputeSnapshotSize();
             snapshot->snapshotWidth  = snapshotSize.cx;
@@ -4586,19 +4680,30 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
         return;
     }
 
+    RECT textContentRc = contentRc;
+    if (_loadingUiVisible)
+    {
+        const int spinnerReserve = px(kLoadingSpinnerTextReserveDip);
+        const int minTextWidth = px(220);
+        if ((textContentRc.right - spinnerReserve) >= (textContentRc.left + minTextWidth))
+        {
+            textContentRc.right -= spinnerReserve;
+        }
+    }
+
     const std::wstring title     = GetOverlayTitleText();
     const std::wstring body      = GetOverlayBodyText();
     const std::wstring linkLabel = GetOverlayLinkLabelText();
 
-    RECT titleRc   = contentRc;
+    RECT titleRc   = textContentRc;
     titleRc.bottom = titleRc.top;
-    int y          = contentRc.top;
+    int y          = textContentRc.top;
 
     if (! title.empty() && _hudDWriteFactory && _overlayTitleFormat)
     {
         wil::com_ptr<IDWriteTextLayout> titleLayout;
-        const float layoutW = static_cast<float>(contentRc.right - contentRc.left);
-        const float layoutH = static_cast<float>(contentRc.bottom - contentRc.top);
+        const float layoutW = static_cast<float>(textContentRc.right - textContentRc.left);
+        const float layoutH = static_cast<float>(textContentRc.bottom - textContentRc.top);
         if (SUCCEEDED(_hudDWriteFactory->CreateTextLayout(
                 title.c_str(), static_cast<UINT32>(title.size()), _overlayTitleFormat.get(), layoutW, layoutH, titleLayout.put())))
         {
@@ -4606,8 +4711,8 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
             if (SUCCEEDED(titleLayout->GetMetrics(&metrics)))
             {
                 const int titleH = std::max(0, static_cast<int>(std::ceil(metrics.height)));
-                titleRc.bottom   = std::min(contentRc.bottom, titleRc.top + titleH);
-                y                = std::min(contentRc.bottom, titleRc.bottom + gap);
+                titleRc.bottom   = std::min(textContentRc.bottom, titleRc.top + titleH);
+                y                = std::min(textContentRc.bottom, titleRc.bottom + gap);
             }
         }
     }
@@ -4618,8 +4723,8 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
 
     if (! linkLabel.empty() && _hudDWriteFactory && _overlayLinkFormat)
     {
-        const float layoutW = static_cast<float>(contentRc.right - contentRc.left);
-        const float layoutH = static_cast<float>(contentRc.bottom - contentRc.top);
+        const float layoutW = static_cast<float>(textContentRc.right - textContentRc.left);
+        const float layoutH = static_cast<float>(textContentRc.bottom - textContentRc.top);
         if (SUCCEEDED(_hudDWriteFactory->CreateTextLayout(
                 linkLabel.c_str(), static_cast<UINT32>(linkLabel.size()), _overlayLinkFormat.get(), layoutW, layoutH, linkLayout.put())))
         {
@@ -4629,9 +4734,9 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
                 const int linkW = std::max(0, static_cast<int>(std::ceil(metrics.widthIncludingTrailingWhitespace)));
                 const int linkH = std::max(0, static_cast<int>(std::ceil(metrics.height)));
 
-                linkRc.left   = contentRc.left;
-                linkRc.right  = std::min(contentRc.right, contentRc.left + linkW);
-                linkRc.bottom = contentRc.bottom;
+                linkRc.left   = textContentRc.left;
+                linkRc.right  = std::min(textContentRc.right, textContentRc.left + linkW);
+                linkRc.bottom = textContentRc.bottom;
                 linkRc.top    = std::max(y, static_cast<int>(linkRc.bottom) - linkH);
 
                 if (! IsRectEmpty(&linkRc))
@@ -4645,7 +4750,7 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
         }
     }
 
-    RECT bodyRc = contentRc;
+    RECT bodyRc = textContentRc;
     bodyRc.top  = y;
     if (! IsRectEmpty(&linkRc))
     {
@@ -4674,21 +4779,33 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
     if (_loadingUiVisible)
     {
         const ULONGLONG elapsed = (_loadingStartedTick != 0) ? (GetTickCount64() - _loadingStartedTick) : 0;
-        const int activeIndex = static_cast<int>((elapsed / 120) % 8);
-        const float centerX = static_cast<float>(contentRc.right - px(28));
-        const float centerY = static_cast<float>(contentRc.top + px(18));
-        const float orbit = static_cast<float>(px(11));
-        const float dotR = std::max(1.5f, static_cast<float>(px(2)));
-        for (int i = 0; i < 8; ++i)
+        const LoadingSpinnerVisualSpec spinner = MakeLoadingSpinnerVisualSpec(_hasTheme ? &_theme : nullptr, themed, dpi, accent, seed);
+        const int activeIndex = static_cast<int>((elapsed / 90) % static_cast<ULONGLONG>(spinner.dotCount));
+        const float centerX = static_cast<float>(contentRc.right) - spinner.rightInsetPx;
+        const float centerY = static_cast<float>(contentRc.top) + spinner.topInsetPx;
+
+        wil::com_ptr<ID2D1SolidColorBrush> brushHalo;
+        _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, accent, 44u)), brushHalo.put());
+        if (brushHalo)
         {
-            const double angle = (static_cast<double>(i) / 8.0) * 6.28318530717958647692;
-            const uint8_t alpha = static_cast<uint8_t>(std::clamp(72 + ((8 + i - activeIndex) % 8) * 20, 72, 212));
+            const D2D1_ELLIPSE halo{D2D1::Point2F(centerX, centerY), spinner.haloRadiusPx, spinner.haloRadiusPx};
+            _overlayRenderTarget->DrawEllipse(halo, brushHalo.get(), std::max(1.0f, stroke));
+        }
+
+        for (int i = 0; i < spinner.dotCount; ++i)
+        {
+            const double angle = (-1.57079632679489661923) + ((static_cast<double>(i) / static_cast<double>(spinner.dotCount)) * 6.28318530717958647692);
+            const int distance = (spinner.dotCount + i - activeIndex) % spinner.dotCount;
+            const float freshness = 1.0f - (static_cast<float>(distance) / static_cast<float>(spinner.dotCount));
+            const uint8_t alpha = static_cast<uint8_t>(std::clamp(82.0f + (freshness * 173.0f), 82.0f, 255.0f));
+            const float dotR = spinner.dotRadiusPx + ((spinner.activeDotRadiusPx - spinner.dotRadiusPx) * freshness);
+            const COLORREF dotBase = ResolveLoadingSpinnerDotColor(spinner, i);
             wil::com_ptr<ID2D1SolidColorBrush> brushDot;
-            _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, accent, alpha)), brushDot.put());
+            _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, dotBase, alpha)), brushDot.put());
             if (brushDot)
             {
-                const D2D1_ELLIPSE dot{D2D1::Point2F(centerX + static_cast<float>(std::cos(angle)) * orbit,
-                                                     centerY + static_cast<float>(std::sin(angle)) * orbit),
+                const D2D1_ELLIPSE dot{D2D1::Point2F(centerX + static_cast<float>(std::cos(angle)) * spinner.orbitPx,
+                                                     centerY + static_cast<float>(std::sin(angle)) * spinner.orbitPx),
                                        dotR,
                                        dotR};
                 _overlayRenderTarget->FillEllipse(dot, brushDot.get());
@@ -4828,7 +4945,7 @@ std::wstring ViewerVLC::GetOverlayLinkUrl() const
     return L"https://www.videolan.org/vlc/";
 }
 
-bool ViewerVLC::BuildVlcLoadSpec(bool enableAudioVisualization, VlcLoadSpec& spec, std::wstring& outError) const noexcept
+bool ViewerVLC::BuildVlcLoadSpec(VlcLoadSpec& spec, std::wstring& outError) const noexcept
 {
     outError.clear();
     spec = {};
@@ -4905,11 +5022,6 @@ bool ViewerVLC::BuildVlcLoadSpec(bool enableAudioVisualization, VlcLoadSpec& spe
         spec.argStorage.push_back(std::format("--aout={}", _config.audioOutput));
     }
 
-    if (enableAudioVisualization && ! _config.audioVisualization.empty() && _config.audioVisualization != "off")
-    {
-        spec.argStorage.push_back(std::format("--audio-visual={}", _config.audioVisualization));
-    }
-
     if (! _config.extraArgs.empty())
     {
         const auto extra = SplitVlcArgs(_config.extraArgs);
@@ -4968,6 +5080,7 @@ std::unique_ptr<VlcState> ViewerVLC::LoadVlcState(const VlcLoadSpec& spec, std::
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_new", state->libvlc_new);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_release", state->libvlc_release);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_new_path", state->libvlc_media_new_path);
+    ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_add_option", state->libvlc_media_add_option);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_release", state->libvlc_media_release);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_player_new_from_media", state->libvlc_media_player_new_from_media);
     ok      = ok && TryLoadProc(state->module.get(), "libvlc_media_player_set_media", state->libvlc_media_player_set_media);
@@ -5112,11 +5225,10 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
     _hudRate = std::clamp(static_cast<float>(_config.defaultPlaybackRatePercent) / 100.0f, 0.25f, 4.0f);
 
     std::wstring error;
-    _isAudioFile                        = IsAudioExtension(path.extension().wstring());
-    const bool enableAudioVisualization = _isAudioFile && ! _config.audioVisualization.empty() && _config.audioVisualization != "off";
+    _isAudioFile = IsAudioExtension(path.extension().wstring());
 
     VlcLoadSpec spec{};
-    if (! BuildVlcLoadSpec(enableAudioVisualization, spec, error))
+    if (! BuildVlcLoadSpec(spec, error))
     {
         RetireCurrentPlayerAsync(true);
         SetMissingUiVisible(true, error);
@@ -5173,6 +5285,12 @@ bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) no
     {
         SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED));
         return false;
+    }
+    std::string audioVisualizationOption;
+    if (_isAudioFile && ! _config.audioVisualization.empty() && _config.audioVisualization != "off")
+    {
+        audioVisualizationOption = std::format(":audio-visual={}", _config.audioVisualization);
+        _vlc->libvlc_media_add_option(media.get(), audioVisualizationOption.c_str());
     }
 
     if (_vlc->player)

@@ -1,12 +1,14 @@
 # Visible Comctl Report-Surface Audit
 
-Last updated: 2026-04-26
+Last updated: 2026-05-13
 
 ## Scope
 
-This document tracks the remaining `SysListView32` / `WC_LISTVIEWW` report-surface references in the repo.
+This document tracks visible Win32 common-control report/list and tooltip surfaces across `Common`, `Plugins`, `RedSalamander`,
+`RedSalamanderMonitor`, and `RedConfigure`.
 
-It is intentionally narrower than the broader visible-native cleanup backlog: this audit closes the report-surface inventory item, not the full native-surface retirement plan.
+It is intentionally narrower than the broader visible-native cleanup backlog: this audit closes visible comctl32 listview/tooltip
+surface inventory, not every standard USER32 child control or non-visible shell interop dependency.
 
 Validation helper:
 
@@ -17,14 +19,24 @@ Validation helper:
 
 | File | Surface | Bucket | Current path | Notes |
 | --- | --- | --- | --- | --- |
-| (none) | (Connection Manager fully migrated to single-canvas DxUi `ConnectionManagerWindow.{h,cpp}`; the legacy `IDD_CONNECTION_MANAGER` template was deleted in Phase 12 of `Specs/Plans/Done/UI_ConnectionManagerSingleCanvasPlan.md`) | `done` | n/a | No `SysListView32` or other comctl class is created by the Connection Manager path; the live list is a `DxUi::Grid` inside the single canvas. |
+| (none) | Visible comctl32 listview/report/tooltip surfaces | `done` | n/a | No `SysListView32`, `WC_LISTVIEWW`, `ListView_*`, `LVS_*`, `LVN_*`, `TOOLTIPS_CLASSW`, `TOOLINFOW`, `TTM_*`, `TTN_*`, `TTS_*`, or `TTF_*` references remain in the audited product surface. |
 
-Connection Manager has no live `IDD_CONNECTION_MANAGER` dialog template path and no visible legacy comctl owner-draw controls. The single DxUi window host is responsible for UIA, keyboard traversal, pointer interaction, and theme repaint behavior.
+Shared Directories now uses a `DxUi::Grid` hosted by `RedSalamander.SharedDirectoriesWindow`; the localized `IDD_SHARED_DIRECTORIES`
+resource templates were removed. ViewerSpace now paints hover details as a Direct2D overlay instead of creating a `TOOLTIPS_CLASSW`
+tracking tooltip.
+
+Non-visible shell icon extraction remains deliberately out of this visible-control audit. `RedSalamander/IconCache` still uses
+`SHGetImageList` / `IImageList` for shell icon interop; treat that as a separate full-comctl32-dependency decision.
+`FolderWindowInternal.h` no longer pulls `<commctrl.h>` for status-bar click plumbing; any remaining `NMHDR`-shaped plugin
+notification handlers are not visible comctl32 listview/tooltip surfaces and belong to a later full dependency cleanup if desired.
 
 ## Current Conclusion
 
-- There is no remaining audited `SysListView32` / `WC_LISTVIEWW` surface that is a required visible native exception on the validated live DX paths.
-- The only remaining reference is legacy dialog-resource fallback scaffolding, not accepted visible end-state UI.
-- The former Preferences `Keyboard`, `Plugins`, `Themes`, and `Viewers` listview fallback tokens are gone from source; their live paths are DX-owned and no longer appear in this report-surface inventory.
-- The broader visible-native cleanup is closed by `Specs/Plans/Done/UI_RemainingWin32UiDependencyRetirementPlan.md`; its first automated baseline is archived at `Specs/TestRuns/4cb089111a23/Audit/2026-04-25_182415_remaining_win32_ui_baseline/`.
-- The latest same-machine report-surface audit is archived with the broad and narrow native audits at `Specs/TestRuns/ac3bbb87f7dd/Audit/2026-04-26_220000_dxui_remaining_native_audit_closeout/`.
+- There is no remaining audited visible `SysListView32` / `WC_LISTVIEWW` / tooltip common-control surface in `Common`, `Plugins`,
+  `RedSalamander`, `RedSalamanderMonitor`, or `RedConfigure`.
+- `Tools/Audit-ComctlReportSurfaces.ps1` is the narrow guard for visible listview/tooltip comctl regressions.
+- `Tools/Audit-RemainingWin32UiDependencies.ps1` remains the broader backlog guard for HDC/HFONT/font-message/native-child-control
+  cleanup and is expected to report categories outside this visible comctl scope.
+- Standard USER32 controls such as `Static`, `Edit`, `Button`, and `ComboBox` are tracked outside this comctl audit.
+- Closeout audit output is archived at
+  `Specs/TestRuns/SINON/Audit/2026-05-13_win32_common_controls_audit_closeout/`.

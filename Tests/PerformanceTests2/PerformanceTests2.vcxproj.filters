@@ -36,6 +36,9 @@
     <ClCompile Include="FolderIconEnumerationDuplicatePathPerfTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="FolderViewColumnLayoutTests.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\RedSalamander\FolderView.Enumeration.cpp">
       <Filter>External</Filter>
     </ClCompile>

@@ -249,6 +249,7 @@ Layout (using RedSalamander theming):
 - Left pane: connection list
   - `<Quick Connect>` is always the first row.
   - All other visible connections are sorted alphabetically by display name (case-insensitive).
+  - The single-column profile list must not expose a horizontal scrollbar.
   - `New…`, `Rename…`, `Remove…`
   - The list and command-button row consume the full left pane height; the gap below the buttons should visually match the top window/list gap.
 - Right pane: connection editor
@@ -258,6 +259,7 @@ Layout (using RedSalamander theming):
   - Copy/Move max concurrency (0 = default), Delete max concurrency (0 = default)
   - User name, Password/Passphrase (masked, with Show/Hide control)
     - If a secret is already stored, the field shows a random-length masked placeholder to indicate “a password is saved” without leaking the real length.
+    - Revealing a stored placeholder loads the secret only after the user clicks Show; when `Require Windows Hello` is enabled and not bypassed, the reveal must pass Windows Hello before the real secret is placed in the editable field.
   - `Save password`
     - When unchecked, the connection is still usable: the host prompts for the password/passphrase at connect time and keeps it in memory only for the current app run.
     - For OAuth 2.0 PKCE profiles, the label means `Remember sign-in` and controls whether the refresh token is persisted.

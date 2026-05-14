@@ -26,7 +26,6 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <dwmapi.h>
 #include <propvarutil.h>

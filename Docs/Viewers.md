@@ -12,7 +12,7 @@ The examples below use generated documentation samples, not personal files.
 
 ![Preview pane showing an embedded Image/RAW viewer](res/preview-pane-image.png)
 
-The Preview Pane hosts the viewer for the focused file in the opposite pane, using the same viewer associations where an embedded viewer is available. The source Folder view keeps keyboard focus, and compatible preview viewers are reused by closing the previous preview content before opening the next file.
+The Preview Pane hosts the viewer for the focused file in the opposite pane, using the same viewer associations where an embedded viewer is available. When no specific embedded preview is available, it shows the focused file or folder Properties as compact cards with wrapping text and an on-demand scrollbar. Rainbow theme adds subtle rainbow section accents. The source Folder view keeps keyboard focus, and compatible preview viewers are reused by closing the previous preview content before opening the next file.
 
 ## Default Viewer Associations
 

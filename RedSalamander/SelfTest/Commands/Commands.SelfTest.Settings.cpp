@@ -59,6 +59,76 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
     return output.good();
 }
 
+[[nodiscard]] HRESULT WriteAlternateStreamForPreviewPropertiesTest(const std::filesystem::path& path,
+                                                                   std::wstring_view streamName,
+                                                                   std::string_view payload) noexcept
+{
+    if (path.empty() || streamName.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::wstring streamPath = path.wstring();
+    streamPath.push_back(L':');
+    streamPath.append(streamName);
+
+    wil::unique_handle stream(CreateFileW(streamPath.c_str(),
+                                          GENERIC_WRITE,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                          nullptr,
+                                          CREATE_ALWAYS,
+                                          FILE_ATTRIBUTE_NORMAL,
+                                          nullptr));
+    if (! stream)
+    {
+        const DWORD lastError = GetLastError();
+        return HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_GEN_FAILURE);
+    }
+
+    if (payload.empty())
+    {
+        return S_OK;
+    }
+    if (payload.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    DWORD written = 0u;
+    const DWORD bytesToWrite = static_cast<DWORD>(payload.size());
+    if (WriteFile(stream.get(), payload.data(), bytesToWrite, &written, nullptr) == 0 || written != bytesToWrite)
+    {
+        const DWORD lastError = GetLastError();
+        return HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_WRITE_FAULT);
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] bool WaitForPreviewPaneText(std::wstring_view expected,
+                                          std::wstring_view forbidden,
+                                          FolderWindow::PreviewPaneDebugSnapshot& outSnapshot,
+                                          std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(outSnapshot) &&
+            outSnapshot.previewText.find(expected) != std::wstring::npos &&
+            (forbidden.empty() || outSnapshot.previewText.find(forbidden) == std::wstring::npos))
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(10ms);
+    }
+
+    return false;
+}
+
 [[nodiscard]] Common::Settings::EditorAssociationRule TestEditorAssociation(std::wstring extension,
                                                                             std::wstring editActionId,
                                                                             std::wstring alternateEditActionId = {},
@@ -1055,6 +1125,139 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
     }
 }
 
+void ScanEmbeddedViewerContextMenuContracts(const std::filesystem::path& repoRoot, std::vector<LocalizedWindowTitleFinding>& findings)
+{
+    struct Target
+    {
+        std::wstring_view relativePath;
+        std::string_view className;
+        std::string_view menuResourceId;
+        const std::string_view* previewExcludedCommands;
+        size_t previewExcludedCommandCount;
+    };
+
+    static constexpr std::array<std::string_view, 8> kViewerTextExcluded{{
+        "IDM_VIEWER_FILE_OPEN",
+        "IDM_VIEWER_FILE_EXIT",
+        "IDM_VIEWER_OTHER_NEXT",
+        "IDM_VIEWER_OTHER_PREVIOUS",
+        "IDM_VIEWER_OTHER_FIRST",
+        "IDM_VIEWER_OTHER_LAST",
+        "IDM_VIEWER_ENCODING_NEXT",
+        "IDM_VIEWER_ENCODING_PREVIOUS",
+    }};
+    static constexpr std::array<std::string_view, 5> kViewerRawExcluded{{
+        "IDM_VIEWERRAW_FILE_EXIT",
+        "IDM_VIEWERRAW_OTHER_NEXT",
+        "IDM_VIEWERRAW_OTHER_PREVIOUS",
+        "IDM_VIEWERRAW_OTHER_FIRST",
+        "IDM_VIEWERRAW_OTHER_LAST",
+    }};
+    static constexpr std::array<std::string_view, 5> kViewerWebExcluded{{
+        "IDM_VIEWERWEB_FILE_EXIT",
+        "IDM_VIEWERWEB_OTHER_NEXT",
+        "IDM_VIEWERWEB_OTHER_PREVIOUS",
+        "IDM_VIEWERWEB_OTHER_FIRST",
+        "IDM_VIEWERWEB_OTHER_LAST",
+    }};
+    static constexpr std::array<std::string_view, 5> kViewerPeExcluded{{
+        "IDM_VIEWERPE_FILE_EXIT",
+        "IDM_VIEWERPE_OTHER_NEXT",
+        "IDM_VIEWERPE_OTHER_PREVIOUS",
+        "IDM_VIEWERPE_OTHER_FIRST",
+        "IDM_VIEWERPE_OTHER_LAST",
+    }};
+    static constexpr std::array<std::string_view, 1> kViewerSpaceExcluded{{
+        "IDM_VIEWERSPACE_FILE_EXIT",
+    }};
+
+    static constexpr std::array<Target, 5> kTargets{{
+        {L"Plugins/ViewerText/ViewerText.cpp", "ViewerText", "IDR_VIEWERTEXT_MENU", kViewerTextExcluded.data(), kViewerTextExcluded.size()},
+        {L"Plugins/ViewerImgRaw/ViewerImgRaw.cpp", "ViewerImgRaw", "IDR_VIEWERRAW_MENU", kViewerRawExcluded.data(), kViewerRawExcluded.size()},
+        {L"Plugins/ViewerWeb/ViewerWeb.cpp", "ViewerWeb", "IDR_VIEWERWEB_MENU", kViewerWebExcluded.data(), kViewerWebExcluded.size()},
+        {L"Plugins/ViewerPE/ViewerPE.cpp", "ViewerPE", "IDR_VIEWERPE_MENU", kViewerPeExcluded.data(), kViewerPeExcluded.size()},
+        {L"Plugins/ViewerSpace/ViewerSpace.cpp", "ViewerSpace", "IDR_VIEWERSPACE_MENU", kViewerSpaceExcluded.data(), kViewerSpaceExcluded.size()},
+    }};
+
+    for (const Target& target : kTargets)
+    {
+        const std::filesystem::path path = repoRoot / std::filesystem::path(std::wstring(target.relativePath));
+        const std::string compact        = CompactAsciiForAudit(ReadAuditTextFile(path));
+        if (compact.empty())
+        {
+            findings.push_back({path, 0, L"Embedded viewer context-menu audit could not read the source file."});
+            continue;
+        }
+
+        const std::string handlerSignature = std::format("void{}::OnContextMenu(HWNDhwnd,POINTscreenPt)noexcept", target.className);
+        const std::string menuLoadPattern  = std::format("Localization::LoadMenuResource(g_hInstance,{})", target.menuResourceId);
+
+        if (compact.find("caseWM_CONTEXTMENU:") == std::string::npos)
+        {
+            findings.push_back({path, 0, L"Embedded-capable viewer does not handle WM_CONTEXTMENU."});
+        }
+        if (compact.find(handlerSignature) == std::string::npos)
+        {
+            findings.push_back({path, 0, L"Embedded-capable viewer does not route context-menu work through an OnContextMenu handler."});
+        }
+        if (compact.find(menuLoadPattern) == std::string::npos)
+        {
+            findings.push_back({path, 0, std::format(L"Embedded-capable viewer does not load its localized {} menu model.", WidenAscii(target.menuResourceId))});
+        }
+        if (compact.find("ShowNativeHMenuContextMenu(hwnd,screenPt,menu,") == std::string::npos)
+        {
+            findings.push_back({path, 0, L"Embedded-capable viewer does not expose its native menu model through the DxUi context menu."});
+        }
+        if (compact.find("includeAcceleratorText=false") == std::string::npos)
+        {
+            findings.push_back({path, 0, L"Embedded Preview context menus must not advertise standalone viewer keyboard shortcuts."});
+        }
+        if (compact.find("excludedCommandIds=kPreviewContextMenuExcludedCommandIds") == std::string::npos)
+        {
+            findings.push_back({path, 0, L"Embedded Preview context menus must use the curated Preview-only exclusion list."});
+        }
+        if (compact.find("omitEmptySubmenus=true") == std::string::npos || compact.find("trimSeparators=true") == std::string::npos)
+        {
+            findings.push_back({path, 0, L"Embedded Preview context menus must trim removed standalone-only entries cleanly."});
+        }
+        for (size_t index = 0; index < target.previewExcludedCommandCount; ++index)
+        {
+            const std::string_view commandId = target.previewExcludedCommands[index];
+            if (compact.find(commandId) == std::string::npos)
+            {
+                findings.push_back({path, 0, std::format(L"Embedded Preview context menu does not exclude standalone-only command {}.", WidenAscii(commandId))});
+            }
+        }
+    }
+}
+
+void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot, std::vector<LocalizedWindowTitleFinding>& findings)
+{
+    const std::filesystem::path path = repoRoot / L"Plugins/ViewerVLC/ViewerVLC.cpp";
+    const std::string compact        = CompactAsciiForAudit(ReadAuditTextFile(path));
+    if (compact.empty())
+    {
+        findings.push_back({path, 0, L"Embedded VLC audio-preview audit could not read ViewerVLC.cpp."});
+        return;
+    }
+
+    if (compact.find("libvlc_media_add_option") == std::string::npos ||
+        compact.find("\":audio-visual={}\"") == std::string::npos ||
+        compact.find("_isAudioFile&&!_config.audioVisualization.empty()&&_config.audioVisualization!=\"off\"") == std::string::npos)
+    {
+        findings.push_back({path, 0, L"Embedded VLC audio previews must apply audio visualization as an audio-file media option so video previews do not get an extra visualizer vout."});
+    }
+    if (compact.find("\"--audio-visual={}\"") != std::string::npos ||
+        compact.find("constboolenableAudioVisualization=!_config.audioVisualization.empty()&&_config.audioVisualization!=\"off\";") != std::string::npos)
+    {
+        findings.push_back({path, 0, L"ViewerVLC must not pass audio visualization as a global VLC instance argument because that can create top-level vout windows for video preview."});
+    }
+    if (compact.find("!_embeddedMode&&_isAudioFile&&") != std::string::npos)
+    {
+        findings.push_back({path, 0, L"Embedded VLC audio previews must not suppress audio visualization to avoid top-level windows; contain playback inside Preview instead."});
+    }
+}
+
 [[nodiscard]] bool TestPopupAndDialogTitlesAreLocalized(CaseState& state) noexcept
 {
     const std::filesystem::path repoRoot = TryFindResourceAuditRepoRoot();
@@ -1099,6 +1302,56 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
         const LocalizedWindowTitleFinding& first = findings.front();
         state.Require(false,
                       std::format(L"Popup and dialog titles must be localized and non-empty. First offender: {}:{} {}",
+                                  first.path.wstring(),
+                                  first.lineNumber,
+                                  first.message));
+    }
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestEmbeddedViewerContextMenusExposeMenuActions(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = TryFindResourceAuditRepoRoot();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for embedded viewer context-menu audit.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::vector<LocalizedWindowTitleFinding> findings;
+    ScanEmbeddedViewerContextMenuContracts(repoRoot, findings);
+
+    if (! findings.empty())
+    {
+        const LocalizedWindowTitleFinding& first = findings.front();
+        state.Require(false,
+                      std::format(L"Embedded viewer context menus must expose the viewer menu actions. First offender: {}:{} {}",
+                                  first.path.wstring(),
+                                  first.lineNumber,
+                                  first.message));
+    }
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestEmbeddedVlcAudioPreviewKeepsPlaybackInsidePreview(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = TryFindResourceAuditRepoRoot();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for embedded VLC audio-preview audit.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::vector<LocalizedWindowTitleFinding> findings;
+    ScanEmbeddedVlcAudioPreviewContracts(repoRoot, findings);
+
+    if (! findings.empty())
+    {
+        const LocalizedWindowTitleFinding& first = findings.front();
+        state.Require(false,
+                      std::format(L"Embedded VLC audio preview must stay inside Preview. First offender: {}:{} {}",
                                   first.path.wstring(),
                                   first.lineNumber,
                                   first.message));
@@ -2053,7 +2306,7 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
 
     Common::Settings::Settings settings{};
     settings.ui = Common::Settings::UiSettings{
-        .compactMode    = true,
+        .compactMode    = false,
         .reducedMotion  = Common::Settings::ReducedMotionMode::Off,
         .windowBackdrop = Common::Settings::WindowBackdropMode::MicaAlt,
     };
@@ -2085,6 +2338,33 @@ void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std
     state.Require(actual.compactMode == settings.ui->compactMode, L"compactMode did not round-trip.");
     state.Require(actual.reducedMotion == settings.ui->reducedMotion, L"reducedMotion did not round-trip.");
     state.Require(actual.windowBackdrop == settings.ui->windowBackdrop, L"windowBackdrop did not round-trip.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsStoreUiDefaultsUseCompactMode(CaseState& state) noexcept
+{
+    Common::Settings::Settings missingUi{};
+    const Common::Settings::Settings preparedMissing = SettingsSave::PrepareForSave(missingUi);
+    state.Require(! preparedMissing.ui.has_value(), L"Canonical save path should keep missing UI settings omitted.");
+
+    const Common::Settings::UiSettings defaults{};
+    state.Require(defaults.compactMode, L"Missing ui.compactMode should default to compact mode.");
+
+    AppTheme missingTheme{};
+    SettingsHotReload::ApplyUiPreferencesToTheme(missingUi, missingTheme);
+    state.Require(missingTheme.compactMode, L"Runtime theme should use compact density when ui.compactMode is missing.");
+
+    Common::Settings::Settings explicitStandard{};
+    explicitStandard.ui = Common::Settings::UiSettings{.compactMode = false};
+    AppTheme standardTheme{};
+    SettingsHotReload::ApplyUiPreferencesToTheme(explicitStandard, standardTheme);
+    state.Require(! standardTheme.compactMode, L"Explicit ui.compactMode=false should opt runtime theme back into standard density.");
+
+    Common::Settings::Settings explicitDefaults{};
+    explicitDefaults.ui                                = defaults;
+    const Common::Settings::Settings preparedExplicit = SettingsSave::PrepareForSave(explicitDefaults);
+    state.Require(! preparedExplicit.ui.has_value(), L"Explicit default UI settings should be omitted by canonical save.");
+
     return state.failure.empty();
 }
 
@@ -6008,9 +6288,15 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(! manager.FindFunctionBarCommand(VK_F2, ShortcutManager::kModCtrl | ShortcutManager::kModShift).has_value(),
                   L"Ctrl+Shift+F2 should not have a default shortcut binding.");
 
-    constexpr std::array<ShortcutBindingExpectation, 18> kFolderViewBindings = {
+    constexpr std::array<ShortcutBindingExpectation, 20> kFolderViewBindings = {
         ShortcutBindingExpectation{
             static_cast<uint32_t>('U'), ShortcutManager::kModCtrl, std::wstring_view{L"cmd/app/swapPanes"}, std::wstring_view{L"Ctrl+U default shortcut"}},
+        ShortcutBindingExpectation{
+            static_cast<uint32_t>('F'), ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/find"}, std::wstring_view{L"Ctrl+F default shortcut"}},
+        ShortcutBindingExpectation{static_cast<uint32_t>('T'),
+                                   ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
+                                   std::wstring_view{L"cmd/pane/openCommandShell"},
+                                   std::wstring_view{L"Ctrl+Alt+T default shortcut"}},
         ShortcutBindingExpectation{static_cast<uint32_t>('5'),
                                    ShortcutManager::kModAlt,
                                    std::wstring_view{L"cmd/pane/viewOptions/toggleThumbnails"},
@@ -6059,7 +6345,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     for (const auto& [vk, modifiers, commandId, label] : kFolderViewBindings)
     {
         const bool permanentDeleteDuplicate = commandId == std::wstring_view{L"cmd/pane/permanentDelete"};
-        RequireFolderViewBinding(state, manager, vk, modifiers, commandId, label, ! permanentDeleteDuplicate);
+        const bool findAlternateBinding     = commandId == std::wstring_view{L"cmd/pane/find"};
+        RequireFolderViewBinding(state, manager, vk, modifiers, commandId, label, ! permanentDeleteDuplicate && ! findAlternateBinding);
     }
 
     state.Require(! manager.TryGetShortcutForCommand(L"cmd/pane/permanentDeleteWithValidation").has_value(),
@@ -6092,6 +6379,19 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                              ShortcutManager::kModShift,
                              std::wstring_view{L"cmd/pane/permanentDelete"},
                              std::wstring_view{L"legacy Shift+Del migrated shortcut"},
+                             false);
+    RequireFolderViewBinding(state,
+                             legacyManager,
+                             static_cast<uint32_t>('T'),
+                             ShortcutManager::kModCtrl | ShortcutManager::kModAlt,
+                             std::wstring_view{L"cmd/pane/openCommandShell"},
+                             std::wstring_view{L"legacy Ctrl+Alt+T added shortcut"});
+    RequireFolderViewBinding(state,
+                             legacyManager,
+                             static_cast<uint32_t>('F'),
+                             ShortcutManager::kModCtrl,
+                             std::wstring_view{L"cmd/pane/find"},
+                             std::wstring_view{L"legacy Ctrl+F added shortcut"},
                              false);
 
     const auto selectDialogChordOpt = manager.TryGetShortcutForCommand(L"cmd/pane/selection/selectDialog");
@@ -6327,6 +6627,81 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(actualRight->view.navigationBarVisible, L"Right navigationBarVisible flag did not round-trip.");
     state.Require(! actualRight->view.filterBarVisible, L"Right filterBarVisible flag did not round-trip.");
     state.Require(actualRight->view.statusBarVisible, L"Right statusBarVisible flag should still round-trip.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewThumbnailSettingsRoundTrip(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestThumbnailSettingsRoundTrip";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::FolderViewSettings defaults{};
+    state.Require(defaults.thumbnailSizeDip == Common::Settings::Thumbnail::kDefaultSizeDip,
+                  L"Missing thumbnail size settings should default to the current thumbnail size stop.");
+    state.Require(Common::Settings::Thumbnail::NormalizeSizeDip(99u) == 96u, L"99 DIP thumbnail settings should normalize to the nearest 96 DIP stop.");
+    state.Require(Common::Settings::Thumbnail::StopIndexForSizeDip(99u) == 2u, L"99 DIP should map to the 96 DIP slider stop index.");
+
+    Common::Settings::Settings settings{};
+    Common::Settings::FoldersSettings folders{};
+    folders.active = L"left";
+
+    Common::Settings::FolderPane left{};
+    left.slot                  = L"left";
+    left.current               = std::filesystem::path(L"C:\\thumb-left");
+    left.view.display          = Common::Settings::FolderDisplayMode::Thumbnails;
+    left.view.thumbnailSizeDip = Common::Settings::Thumbnail::StopsDip[0u];
+    folders.items.push_back(std::move(left));
+
+    Common::Settings::FolderPane right{};
+    right.slot                  = L"right";
+    right.current               = std::filesystem::path(L"C:\\thumb-right");
+    right.view.display          = Common::Settings::FolderDisplayMode::Thumbnails;
+    right.view.thumbnailSizeDip = 99u;
+    folders.items.push_back(std::move(right));
+
+    settings.folders = std::move(folders);
+
+    const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
+    const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
+    state.Require(SUCCEEDED(saveHr), L"Failed to save thumbnail size settings.");
+    if (FAILED(saveHr))
+    {
+        return false;
+    }
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(loadHr == S_OK, L"Failed to load thumbnail size settings.");
+    state.Require(loaded.folders.has_value(), L"Folders settings block missing after thumbnail settings round-trip.");
+    if (FAILED(loadHr) || ! loaded.folders.has_value())
+    {
+        return false;
+    }
+
+    const auto& actualFolders = loaded.folders.value();
+    const auto findPane = [&](std::wstring_view slot) noexcept -> const Common::Settings::FolderPane*
+    {
+        const auto it = std::find_if(actualFolders.items.begin(), actualFolders.items.end(), [&](const Common::Settings::FolderPane& pane) noexcept {
+            return pane.slot == slot;
+        });
+        return it == actualFolders.items.end() ? nullptr : std::addressof(*it);
+    };
+
+    const Common::Settings::FolderPane* actualLeft  = findPane(L"left");
+    const Common::Settings::FolderPane* actualRight = findPane(L"right");
+    state.Require(actualLeft != nullptr, L"Left pane missing after thumbnail settings round-trip.");
+    state.Require(actualRight != nullptr, L"Right pane missing after thumbnail settings round-trip.");
+    if (! actualLeft || ! actualRight)
+    {
+        return false;
+    }
+
+    state.Require(actualLeft->view.thumbnailSizeDip == Common::Settings::Thumbnail::StopsDip[0u],
+                  std::format(L"Left thumbnail size should round-trip independently; actual={} DIP.", actualLeft->view.thumbnailSizeDip));
+    state.Require(actualRight->view.thumbnailSizeDip == 96u,
+                  std::format(L"Right off-stop thumbnail size should quantize to 96 DIP; actual={} DIP.", actualRight->view.thumbnailSizeDip));
+
     return state.failure.empty();
 }
 
@@ -6641,6 +7016,184 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"pane_view_options_toggle_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write pane view-options toggle perf artifact.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] HWND FindPaneFilterBarHostForTest(HWND mainWindow, int controlId) noexcept
+{
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        return nullptr;
+    }
+
+    HWND found = nullptr;
+    std::pair<int, HWND*> payload{controlId, &found};
+    EnumChildWindows(mainWindow,
+                     [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto* payload = reinterpret_cast<std::pair<int, HWND*>*>(lParam);
+        if (! payload || ! payload->second)
+        {
+            return TRUE;
+        }
+
+        if (GetDlgCtrlID(child) == payload->first)
+        {
+            *payload->second = child;
+            return FALSE;
+        }
+
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(&payload));
+    return found;
+}
+
+[[nodiscard]] bool TestPaneFilterBarInlineWorkflow(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"pane_filter_bar_inline_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create pane filter-bar inline test root.");
+    state.Require(SelfTest::WriteTextFile(root / L"a.txt", "a"), L"Failed to create a.txt.");
+    state.Require(SelfTest::WriteTextFile(root / L"b.log", "b"), L"Failed to create b.log.");
+    state.Require(SelfTest::WriteTextFile(root / L"c.txt", "c"), L"Failed to create c.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FolderWindow::PaneViewOptionsDebugSnapshot originalLeft{};
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, originalLeft),
+                  L"Could not capture original left pane view-options state.");
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const FolderView::NameFilterState filterBefore        = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+    const std::optional<Common::Settings::SelectionMasksSettings> masksBefore = g_settings.selectionMasks;
+    const auto restoreState = wil::scope_exit([&]
+    {
+        g_folderWindow.SetFilterBarVisible(FolderWindow::Pane::Left, originalLeft.filterBarVisible);
+        g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, filterBefore);
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        g_settings.selectionMasks = masksBefore;
+    });
+
+    Common::Settings::SelectionMasksSettings& masks =
+        g_settings.selectionMasks.has_value() ? g_settings.selectionMasks.value() : g_settings.selectionMasks.emplace();
+    masks.filterHistory = {L"*.txt", L"*.log"};
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.SetFilterBarVisible(FolderWindow::Pane::Left, true);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for pane filter-bar inline test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for pane filter-bar inline test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready before filter-bar inline test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND filterBar = FindPaneFilterBarHostForTest(mainWindow, 1009);
+    state.Require(filterBar && IsWindow(filterBar) != FALSE && IsWindowVisible(filterBar) != FALSE,
+                  L"Left pane filter bar host should be visible for inline workflow validation.");
+    if (! filterBar || ! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring filterLabel    = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER);
+    const std::wstring useFilterLabel = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER_USE_FILTER);
+    const auto stats                  = CollectVisibleUiaDescendantPatternStats(filterBar);
+    state.Require(stats.has_value(), L"Filter bar should expose live UI Automation descendants.");
+    if (stats.has_value())
+    {
+        state.Require(stats->comboBoxControlCount > 0u, L"Filter bar should expose an editable history combo for the filter text.");
+        state.Require(stats->valuePatternCount > 0u, L"Filter bar editable filter field should expose ValuePattern.");
+        state.Require(stats->togglePatternCount > 0u, L"Filter bar should expose a right-side toggle for Use Filter.");
+    }
+
+    const auto initialValue = CollectVisibleDescendantValuePatternStateByName(filterBar, UIA_ComboBoxControlTypeId, filterLabel);
+    state.Require(initialValue.has_value(), L"Filter bar should expose the filter field as a named editable combo.");
+    if (initialValue.has_value())
+    {
+        state.Require(! initialValue->isReadOnly, L"Filter bar filter field should be editable.");
+    }
+
+    FolderWindow::PaneViewOptionsDebugSnapshot barSnapshot{};
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, barSnapshot),
+                  L"Could not capture visible filter-bar snapshot before inline edit.");
+    state.Require(barSnapshot.filterBarComboVisible, L"Filter bar should show the editable history combo.");
+    state.Require(! barSnapshot.filterBarLabelVisible,
+                  L"Filter bar should not show a redundant static Filter label when the combo already has a placeholder.");
+    state.Require(barSnapshot.filterBarToggleVisible, L"Filter bar should show the Use Filter toggle.");
+    state.Require(barSnapshot.filterBarHistoryItemCount >= 2u, L"Filter bar should load the same filter history entries as the dialog.");
+    state.Require(barSnapshot.filterBarHistoryItems == masks.filterHistory,
+                  L"Filter bar history entries should match the shared selectionMasks.filterHistory source exactly.");
+
+    state.Require(SetVisibleDescendantValueByName(filterBar, UIA_ComboBoxControlTypeId, filterLabel, L"*.log"),
+                  L"Filter bar editable combo should accept live filter text edits.");
+    const auto waitForFilterState = [&](bool enabled, std::wstring_view text) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            const FolderView::NameFilterState current = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+            if (current.enabled == enabled && current.text == text)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+        return false;
+    };
+    state.Require(waitForFilterState(true, L"*.log"), L"Typing in the filter bar should update the pane filter state.");
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, barSnapshot),
+                  L"Could not capture visible filter-bar snapshot after inline edit.");
+    state.Require(barSnapshot.filterBarFieldText == L"*.log", L"Filter bar field should mirror the typed filter text.");
+    state.Require(barSnapshot.filterBarToggleChecked, L"Filter bar toggle should be checked after typing a non-empty filter.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"b.log"}, SelfTest::Scale(3000ms)),
+                  L"Filter bar typed mask should refresh the pane and keep b.log visible.");
+    state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"),
+                  L"Filter bar typed mask should hide a.txt.");
+
+    const auto toggleOn = CollectVisibleDescendantTogglePatternStateByName(filterBar, useFilterLabel);
+    state.Require(toggleOn.has_value(), L"Filter bar should expose the Use Filter toggle by name.");
+    if (toggleOn.has_value())
+    {
+        state.Require(toggleOn->toggleState == ToggleState_On, L"Typing a non-empty filter should switch the filter-bar toggle on.");
+    }
+
+    state.Require(ToggleVisibleDescendantByName(filterBar, useFilterLabel), L"Filter bar Use Filter toggle should be clickable through UIA.");
+    state.Require(waitForFilterState(false, L"*.log"), L"Turning the filter-bar toggle off should keep the mask text but disable filtering.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(3000ms)),
+                  L"Turning the filter-bar toggle off should restore unfiltered pane items.");
+
+    state.Require(ToggleVisibleDescendantByName(filterBar, useFilterLabel), L"Filter bar Use Filter toggle should turn filtering back on.");
+    state.Require(waitForFilterState(true, L"*.log"), L"Turning the filter-bar toggle on should reapply the filter text.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"b.log"}, SelfTest::Scale(3000ms)),
+                  L"Turning the filter-bar toggle back on should re-filter the pane.");
 
     return state.failure.empty();
 }
@@ -7246,6 +7799,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Focusing an opened file should navigate back to its folder.");
     state.Require(OrdinalString::EqualsNoCase(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left), L"editor.opened"),
                   L"Focusing an opened file should select the matching pane item.");
+    PumpPendingMessages();
+    FolderWindow::OpenedFilesDebugSnapshot closedSnapshot{};
+    state.Require(! g_folderWindow.DebugGetOpenedFilesDialogSnapshot(closedSnapshot),
+                  L"List Opened Files should close after Focus Item without leaving a stale dialog state.");
 
     const std::wstring perfArtifactText =
         std::format(L"{{\n"
@@ -7341,6 +7898,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     FolderWindow::SharedDirectoriesDebugSnapshot snapshot{};
     state.Require(g_folderWindow.DebugGetSharedDirectoriesDialogSnapshot(snapshot), L"Shared Directories dialog snapshot should be available.");
     state.Require(snapshot.visible, L"Shared Directories should show a dialog.");
+    state.Require(snapshot.usesDxUiHost, L"Shared Directories should use the DxUi host instead of a native common-control list.");
+    state.Require(snapshot.visibleNativeChildControlCount == 0u,
+                  std::format(L"Shared Directories should not expose visible native child controls; got {}.",
+                              snapshot.visibleNativeChildControlCount));
+    state.Require(! OrdinalString::EqualsNoCase(snapshot.dialogClassName, L"#32770"),
+                  L"Shared Directories should not use a native dialog-template window class.");
     state.Require(! snapshot.emptyStateVisible, L"Shared Directories populated dialog should hide the empty state.");
     state.Require(SUCCEEDED(snapshot.lastError), L"Shared Directories populated snapshot should not report an error.");
     state.Require(snapshot.rows.size() == 2u, std::format(L"Shared Directories should show two synthetic rows; got {}.", snapshot.rows.size()));
@@ -7357,6 +7920,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(g_folderWindow.DebugInvokeSharedDirectoriesDialogOpenPath(), L"Failed to invoke Shared Directories open action.");
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, sharePath, SelfTest::Scale(3000ms)),
                   L"Opening a shared directory should navigate the focused pane to the local shared path.");
+    PumpPendingMessages();
+    FolderWindow::SharedDirectoriesDebugSnapshot closedSnapshot{};
+    state.Require(! g_folderWindow.DebugGetSharedDirectoriesDialogSnapshot(closedSnapshot),
+                  L"Shared Directories should close after Open Path without leaving a stale dialog state.");
 
     FolderWindow::SharedDirectoriesDebugProviderResult accessDenied{};
     accessDenied.hr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
@@ -7975,6 +8542,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(afterOpen.hostPane == FolderWindow::Pane::Right, L"Preview host should be the opposite right pane.");
     state.Require(afterOpen.tabsVisible, L"Preview host pane should show Folder/Preview tabs.");
     state.Require(afterOpen.tabsUseDxUiHost, L"Preview Folder/Preview tabs should use the themed DxUi tab host.");
+    state.Require(afterOpen.previewTabsHasHeaderDivider, L"Preview Folder/Preview tabs should expose a horizontal divider under the tab strip.");
     state.Require(afterOpen.previewTabSelected, L"Opening preview should select the Preview tab.");
     state.Require(afterOpen.previewContentVisible, L"Preview content window should be visible on the Preview tab.");
     state.Require(afterOpen.previewContentUsesDxUiHost, L"Preview content background should use the themed DxUi host.");
@@ -8156,6 +8724,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to create configured media preview fixture.");
     state.Require(SelfTest::WriteTextFile(leftRoot / L"media-preview-next.mp4", "dummy media preview next body"),
                   L"Failed to create second configured media preview fixture.");
+    state.Require(SelfTest::WriteTextFile(leftRoot / L"audio-preview.m4a", "dummy audio preview body"),
+                  L"Failed to create configured audio preview fixture.");
     state.Require(SelfTest::WriteTextFile(rightRoot / L"host.txt", "host"), L"Failed to create configured preview host fixture.");
     if (! state.failure.empty())
     {
@@ -8209,9 +8779,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     mediaViewer.enabled     = true;
     mediaViewer.kind        = Common::Settings::FileActionKind::ViewerPlugin;
     mediaViewer.pluginId    = L"builtin/viewer-vlc";
-    TestSetActionExtensions(mediaViewer, {L".mp4"});
+    TestSetActionExtensions(mediaViewer, {L".mp4", L".m4a"});
     g_settings.fileActions.viewers.actions.push_back(std::move(mediaViewer));
     g_settings.fileActions.viewers.associations.push_back(TestViewerAssociation(L".mp4", L"preview-media-viewer"));
+    g_settings.fileActions.viewers.associations.push_back(TestViewerAssociation(L".m4a", L"preview-media-viewer"));
 
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for configured preview source pane.");
@@ -8224,7 +8795,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set right pane path for configured preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
-                                   {L"image-preview.bmp", L"image-preview-next.bmp", L"media-preview.mp4", L"media-preview-next.mp4"},
+                                   {L"image-preview.bmp",
+                                    L"image-preview-next.bmp",
+                                    L"media-preview.mp4",
+                                    L"media-preview-next.mp4",
+                                    L"audio-preview.m4a"},
                                    SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for configured preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"host.txt"}, SelfTest::Scale(3000ms)),
@@ -8404,7 +8979,53 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                       L"Switching to the next video should keep the VLC video surface parented to the embedded viewer window.");
 
         state.Require(SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugSetStopDelay, 0, reinterpret_cast<LPARAM>(&slowVlcStop)) == TRUE,
-                      L"Failed to keep slow VLC stop simulation enabled for cross-plugin preview coverage.");
+                      L"Failed to keep slow VLC stop simulation enabled for audio preview coverage.");
+    }
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"audio-preview.m4a"),
+                  L"Failed to focus configured audio preview item.");
+
+    const auto audioSwitchStarted = std::chrono::steady_clock::now();
+    snapshot = {};
+    const auto audioDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < audioDeadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
+            snapshot.previewedPath.filename() == L"audio-preview.m4a" &&
+            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+
+    state.Require(snapshot.active, L"Configured audio preview should remain active.");
+    state.Require(snapshot.previewUsesEmbeddedViewer, L"Configured audio preview should use an embedded viewer instance.");
+    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc",
+                  L"Audio preview should keep using the configured VLC preview plugin.");
+    state.Require(snapshot.previewedPath.filename() == L"audio-preview.m4a", L"Audio preview should load the newly focused audio file.");
+    state.Require(snapshot.previewViewerInstanceId == firstVlcPreviewInstanceId,
+                  L"Switching from video to audio that resolves to VLC should reuse the embedded VLC preview instance.");
+    state.Require(snapshot.previewEmbeddedViewerHwnd == firstVlcPreviewHwnd,
+                  L"Switching from video to audio that resolves to VLC should keep the embedded VLC preview HWND hot.");
+    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
+                  L"Refreshing VLC preview for an audio file should keep keyboard focus in the source pane.");
+    state.Require(std::chrono::steady_clock::now() - audioSwitchStarted < SelfTest::Scale(900ms),
+                  L"Refreshing VLC preview from video to audio should not block on slow media-player teardown.");
+
+    vlcWindow = FindDescendantWindowByClass(snapshot.previewContentHwnd, L"RedSalamander.ViewerVLC");
+    state.Require(vlcWindow != nullptr, L"Audio preview should still host a VLC viewer window.");
+    if (vlcWindow)
+    {
+        WndMsg::ViewerVlcDebugSnapshot audioVlcSnapshot{};
+        state.Require(SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&audioVlcSnapshot)) == TRUE,
+                      L"Failed to read audio VLC preview snapshot.");
+        state.Require(audioVlcSnapshot.hasVideoChild, L"Audio VLC preview should keep the embedded video child available.");
+        state.Require(audioVlcSnapshot.videoChildIsChildWindow, L"Audio VLC preview video surface should stay a child window.");
+        state.Require(audioVlcSnapshot.videoChildParentIsViewer,
+                      L"Audio-only VLC preview must keep media output parented to the embedded viewer window.");
 
         WndMsg::ViewerVlcDebugPlaybackState volumeState{};
         volumeState.timeMs   = 5'000;
@@ -8624,6 +9245,278 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(snapshot.previewedPath.filename() == L"builtin-image-preview.bmp", L"Built-in preview should load the focused file.");
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
                   L"Built-in embedded preview should not take keyboard focus from the source pane.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneViewOptionsPreviewFallsBackToItemPropertiesWhenNoEmbeddedPreviewMatches(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path leftRoot  = suiteRoot / L"work" / (L"pane_preview_properties_left_" + NewGuidText());
+    const std::filesystem::path rightRoot = suiteRoot / L"work" / (L"pane_preview_properties_right_" + NewGuidText());
+    const std::filesystem::path noPreviewFile = leftRoot / L"mystery.no-preview-props";
+    const std::filesystem::path noPreviewFolder = leftRoot / L"folder-no-preview-props";
+    std::error_code ec;
+    std::filesystem::remove_all(leftRoot, ec);
+    ec.clear();
+    std::filesystem::remove_all(rightRoot, ec);
+    state.Require(SelfTest::EnsureDirectory(leftRoot), L"Failed to create properties-preview source folder.");
+    state.Require(SelfTest::EnsureDirectory(rightRoot), L"Failed to create properties-preview host folder.");
+    state.Require(SelfTest::WriteTextFile(noPreviewFile, "content that should not be the fallback preview"),
+                  L"Failed to create no-preview file fixture.");
+    state.Require(SelfTest::EnsureDirectory(noPreviewFolder), L"Failed to create no-preview folder fixture.");
+    state.Require(SelfTest::WriteTextFile(rightRoot / L"host.txt", "host"), L"Failed to create properties-preview host fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
+    const auto pluginConfigurationsBefore = g_settings.plugins.configurationByPluginId;
+    const auto restoreState = wil::scope_exit([&]
+    {
+        FolderWindow::PreviewPaneDebugSnapshot preview{};
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && preview.active)
+        {
+            g_folderWindow.SetActivePane(preview.sourcePane);
+            static_cast<void>(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"));
+            PumpPendingMessages();
+        }
+
+        g_folderWindow.CloseAllViewers();
+        g_settings.fileActions.viewers = viewersBefore;
+        g_settings.plugins.configurationByPluginId = pluginConfigurationsBefore;
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+    });
+
+    g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for properties-preview source pane.");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for properties-preview host pane.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for properties-preview test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set right pane path for properties-preview test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"folder-no-preview-props", L"mystery.no-preview-props"}, SelfTest::Scale(3000ms)),
+                  L"Left pane contents not ready for properties-preview test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"host.txt"}, SelfTest::Scale(3000ms)),
+                  L"Right pane contents not ready for properties-preview test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"mystery.no-preview-props"),
+                  L"Failed to focus no-preview file item.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const HWND expectedFocus = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"),
+                  L"Preview pane toggle should dispatch for properties fallback test.");
+
+    FolderWindow::PreviewPaneDebugSnapshot fileSnapshot{};
+    state.Require(WaitForPreviewPaneText(L"Name: mystery.no-preview-props", L"content that should not be the fallback preview", fileSnapshot, SelfTest::Scale(5000ms)),
+                  L"No-preview file should fall back to item properties text.");
+    state.Require(fileSnapshot.active, L"Properties fallback preview should be active for the no-preview file.");
+    state.Require(! fileSnapshot.previewUsesEmbeddedViewer, L"No-preview file properties fallback should not host an embedded viewer.");
+    state.Require(fileSnapshot.previewViewerPluginId.empty(), L"No-preview file properties fallback should not retain an embedded viewer plugin id.");
+    state.Require(fileSnapshot.previewedPath == noPreviewFile, L"Properties fallback preview should track the focused no-preview file.");
+    state.Require(fileSnapshot.previewText.find(L"Type: File") != std::wstring::npos,
+                  L"No-preview file properties fallback should include file type metadata.");
+    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
+                  L"No-preview file properties fallback should not take keyboard focus from the source pane.");
+
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"folder-no-preview-props"),
+                  L"Failed to focus no-preview folder item.");
+
+    FolderWindow::PreviewPaneDebugSnapshot folderSnapshot{};
+    state.Require(WaitForPreviewPaneText(L"Name: folder-no-preview-props", L"Folder: folder-no-preview-props", folderSnapshot, SelfTest::Scale(5000ms)),
+                  L"No-preview folder should fall back to item properties text.");
+    state.Require(folderSnapshot.active, L"Properties fallback preview should be active for the no-preview folder.");
+    state.Require(! folderSnapshot.previewUsesEmbeddedViewer, L"No-preview folder properties fallback should not host an embedded viewer.");
+    state.Require(folderSnapshot.previewViewerPluginId.empty(), L"No-preview folder properties fallback should not retain an embedded viewer plugin id.");
+    state.Require(folderSnapshot.previewedPath == noPreviewFolder, L"Properties fallback preview should track the focused no-preview folder.");
+    state.Require(folderSnapshot.previewText.find(L"Type: Directory") != std::wstring::npos,
+                  L"No-preview folder properties fallback should include directory type metadata.");
+    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
+                  L"No-preview folder properties fallback should not take keyboard focus from the source pane.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneViewOptionsPreviewPropertiesCardScrollsAndUsesRainbowTheme(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path leftRoot  = suiteRoot / L"work" / (L"pane_preview_properties_cards_left_" + NewGuidText());
+    const std::filesystem::path rightRoot = suiteRoot / L"work" / (L"pane_preview_properties_cards_right_" + NewGuidText());
+    const std::filesystem::path noPreviewFile = leftRoot / L"rainbow-properties.no-preview-cards";
+    std::error_code ec;
+    std::filesystem::remove_all(leftRoot, ec);
+    ec.clear();
+    std::filesystem::remove_all(rightRoot, ec);
+    state.Require(SelfTest::EnsureDirectory(leftRoot), L"Failed to create properties-card preview source folder.");
+    state.Require(SelfTest::EnsureDirectory(rightRoot), L"Failed to create properties-card preview host folder.");
+    state.Require(SelfTest::WriteTextFile(noPreviewFile, "preview card fallback should render properties, not file text"),
+                  L"Failed to create properties-card preview fixture.");
+    state.Require(SelfTest::WriteTextFile(rightRoot / L"host.txt", "host"), L"Failed to create properties-card preview host fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    constexpr size_t kStreamCount = 28u;
+    constexpr std::string_view kStreamPayload = "stream payload for preview properties card scroll validation";
+    for (size_t index = 0u; index < kStreamCount; ++index)
+    {
+        const std::wstring streamName = std::format(L"preview-stream-{0:02}", index);
+        const HRESULT hr = WriteAlternateStreamForPreviewPropertiesTest(noPreviewFile, streamName, kStreamPayload);
+        if (index == 0u && HRESULT_CODE(hr) == ERROR_INVALID_NAME)
+        {
+            return state.Skip(L"Alternate data streams are not supported by the temporary filesystem.");
+        }
+        state.Require(SUCCEEDED(hr),
+                      std::format(L"Failed to create alternate stream '{0}' for preview properties card validation. hr=0x{1:08X}",
+                                  streamName,
+                                  static_cast<unsigned long>(hr)));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const AppTheme themeBefore = g_folderWindow.GetTheme();
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
+    const auto pluginConfigurationsBefore = g_settings.plugins.configurationByPluginId;
+    const auto restoreState = wil::scope_exit([&]
+    {
+        FolderWindow::PreviewPaneDebugSnapshot preview{};
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && preview.active)
+        {
+            g_folderWindow.SetActivePane(preview.sourcePane);
+            static_cast<void>(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"));
+            PumpPendingMessages();
+        }
+
+        g_folderWindow.CloseAllViewers();
+        g_folderWindow.ApplyTheme(themeBefore);
+        g_settings.fileActions.viewers = viewersBefore;
+        g_settings.plugins.configurationByPluginId = pluginConfigurationsBefore;
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+    });
+
+    g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
+    g_folderWindow.ApplyTheme(ResolveAppTheme(ThemeMode::Rainbow, L"preview-properties-card-selftest-rainbow"));
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for preview properties-card source pane.");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for preview properties-card host pane.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for preview properties-card test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set right pane path for preview properties-card test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"rainbow-properties.no-preview-cards"}, SelfTest::Scale(3000ms)),
+                  L"Left pane contents not ready for preview properties-card test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"host.txt"}, SelfTest::Scale(3000ms)),
+                  L"Right pane contents not ready for preview properties-card test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"rainbow-properties.no-preview-cards"),
+                  L"Failed to focus preview properties-card item.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const HWND expectedFocus = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"),
+                  L"Preview pane toggle should dispatch for preview properties-card test.");
+
+    FolderWindow::PreviewPaneDebugSnapshot snapshot{};
+    state.Require(WaitForPreviewPaneText(L"Name: rainbow-properties.no-preview-cards", L"preview card fallback should render", snapshot, SelfTest::Scale(5000ms)),
+                  L"Preview properties-card content did not load.");
+    state.Require(snapshot.previewPropertiesCardMode, L"Default properties preview should use card mode instead of the plain fallback label.");
+    state.Require(snapshot.previewPropertiesUsesScrollPanel, L"Default properties preview should use the DxUi ScrollPanel.");
+    state.Require(snapshot.previewPropertiesCanScroll, L"Long default properties preview should expose a vertical scrollbar.");
+    state.Require(snapshot.previewPropertiesSectionCount >= 2u,
+                  std::format(L"Default properties preview should expose properties sections; saw {}.", snapshot.previewPropertiesSectionCount));
+    state.Require(snapshot.previewPropertiesFieldCount >= kStreamCount,
+                  std::format(L"Default properties preview should expose stream/property rows; saw {}.", snapshot.previewPropertiesFieldCount));
+    state.Require(snapshot.previewPropertiesUsesRainbow, L"Rainbow theme should add rainbow treatment to default properties preview cards.");
+    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
+                  L"Default properties preview card layout should not take keyboard focus from the source pane.");
+
+    const int beforeScroll = snapshot.previewPropertiesScrollOffsetPx;
+    state.Require(g_folderWindow.DebugScrollPreviewPropertiesByWheelDetents(snapshot.hostPane, -4),
+                  L"Preview properties card surface should accept wheel scrolling.");
+    FolderWindow::PreviewPaneDebugSnapshot scrolled{};
+    state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(scrolled), L"Could not capture scrolled preview properties-card snapshot.");
+    state.Require(scrolled.previewPropertiesScrollOffsetPx > beforeScroll,
+                  std::format(L"Preview properties card surface should move after wheel scrolling; before={}, after={}.",
+                              beforeScroll,
+                              scrolled.previewPropertiesScrollOffsetPx));
+    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
+                  L"Scrolling default properties preview should keep keyboard focus in the source pane.");
 
     return state.failure.empty();
 }
@@ -10644,6 +11537,12 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"popup_dialog_titles_are_localized", [](CaseState& state) noexcept {
         return TestPopupAndDialogTitlesAreLocalized(state);
     });
+    SelfTest::RunCase(options, suite, L"embedded_viewer_context_menus_expose_menu_actions", [](CaseState& state) noexcept {
+        return TestEmbeddedViewerContextMenusExposeMenuActions(state);
+    });
+    SelfTest::RunCase(options, suite, L"embedded_vlc_audio_preview_stays_inside_preview", [](CaseState& state) noexcept {
+        return TestEmbeddedVlcAudioPreviewKeepsPlaybackInsidePreview(state);
+    });
     SelfTest::RunCase(options, suite, L"settings_store_file_actions_v16_rejects_malformed_definitions", [](CaseState& state) noexcept {
         return TestSettingsStoreFileActionsV16RejectsMalformedDefinitions(state);
     });
@@ -10681,6 +11580,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     });
     SelfTest::RunCase(
         options, suite, L"settings_ui_customization_roundtrip", [](CaseState& state) noexcept { return TestSettingsStoreUiCustomizationRoundTrip(state); });
+    SelfTest::RunCase(
+        options, suite, L"settings_ui_compact_mode_defaults_true", [](CaseState& state) noexcept { return TestSettingsStoreUiDefaultsUseCompactMode(state); });
     SelfTest::RunCase(options, suite, L"settings_shortcuts_invalid_section_rejected", [](CaseState& state) noexcept {
         return TestSettingsStoreRejectsMalformedShortcutSection(state);
     });
@@ -10723,6 +11624,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"settings_store_pane_view_options_roundtrip", [](CaseState& state) noexcept {
         return TestSettingsStorePaneViewOptionsRoundTrip(state);
     });
+    SelfTest::RunCase(options, suite, L"folderView_thumbnail_settings_roundtrip", [](CaseState& state) noexcept {
+        return TestFolderViewThumbnailSettingsRoundTrip(state);
+    });
     SelfTest::RunCase(options, suite, L"settings_store_make_file_list_roundtrip", [](CaseState& state) noexcept {
         return TestSettingsStoreMakeFileListRoundTrip(state);
     });
@@ -10744,6 +11648,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"pane_view_options_toggle_file_extensions_navigation_filter_bar", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsToggleFileExtensionsNavigationAndFilterBar(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"pane_filter_bar_inline_workflow", [=](CaseState& state) noexcept {
+        return TestPaneFilterBarInlineWorkflow(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"pane_view_options_toggle_thumbnails", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsToggleThumbnailsSchedulesBoundedAsyncWork(mainWindow, state);
     });
@@ -10755,6 +11662,12 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     });
     SelfTest::RunCase(options, suite, L"pane_view_options_preview_uses_builtin_embedded_viewer_with_empty_associations", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsPreviewUsesBuiltInEmbeddedViewerWhenAssociationsAreEmpty(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"pane_view_options_preview_falls_back_to_item_properties_when_no_embedded_preview_matches", [=](CaseState& state) noexcept {
+        return TestPaneViewOptionsPreviewFallsBackToItemPropertiesWhenNoEmbeddedPreviewMatches(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"pane_view_options_preview_properties_card_scrolls_and_uses_rainbow_theme", [=](CaseState& state) noexcept {
+        return TestPaneViewOptionsPreviewPropertiesCardScrollsAndUsesRainbowTheme(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"pane_view_options_preview_pane_extends_without_function_bar", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsPreviewPaneExtendsWhenFunctionBarHidden(mainWindow, state);

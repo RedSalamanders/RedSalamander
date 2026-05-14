@@ -43,6 +43,45 @@ struct ComboBoxPopupMaterialStyle
     float backdropDetailOpacity = 0.0f;
 };
 
+[[nodiscard]] const ScrollPanel* FindContainingScrollPanelRecursive(const Control* control, const Control* target, const ScrollPanel* activeScroll) noexcept
+{
+    if (! control || ! target)
+    {
+        return nullptr;
+    }
+
+    if (const auto* scroll = dynamic_cast<const ScrollPanel*>(control))
+    {
+        activeScroll = scroll;
+    }
+
+    if (control == target)
+    {
+        return activeScroll;
+    }
+
+    const auto* panel = dynamic_cast<const Panel*>(control);
+    if (! panel)
+    {
+        return nullptr;
+    }
+
+    for (const auto& child : panel->GetChildren())
+    {
+        if (const ScrollPanel* result = FindContainingScrollPanelRecursive(child.get(), target, activeScroll))
+        {
+            return result;
+        }
+    }
+
+    return nullptr;
+}
+
+[[nodiscard]] const ScrollPanel* FindContainingScrollPanel(const WindowHost* host, const Control& target) noexcept
+{
+    return host ? FindContainingScrollPanelRecursive(host->GetRoot(), &target, nullptr) : nullptr;
+}
+
 [[nodiscard]] bool ModifiersContainCtrl(UINT modifiers) noexcept
 {
     return (modifiers & MK_CONTROL) != 0u;
@@ -688,6 +727,11 @@ void ComboBox::SetOnSubmitted(std::function<void()> onSubmitted)
     _onSubmitted = std::move(onSubmitted);
 }
 
+void ComboBox::SetOnPopupRequested(std::function<bool()> onPopupRequested)
+{
+    _onPopupRequested = std::move(onPopupRequested);
+}
+
 void ComboBox::Paint(WindowHost& host) const
 {
     const ThemePalette& theme = host.GetTheme();
@@ -955,7 +999,7 @@ bool ComboBox::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButt
         }
         else if (! _items.empty())
         {
-            OpenPopup(host);
+            static_cast<void>(RequestPopup(host));
         }
     }
 
@@ -1374,7 +1418,7 @@ bool ComboBox::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         }
         else
         {
-            OpenPopup(host);
+            static_cast<void>(RequestPopup(host));
         }
         Invalidate(host);
         return true;
@@ -1383,7 +1427,7 @@ bool ComboBox::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
     {
         if (! _open)
         {
-            OpenPopup(host);
+            static_cast<void>(RequestPopup(host));
             Invalidate(host);
         }
         return true;
@@ -1439,11 +1483,7 @@ bool ComboBox::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
 
         if (_editable && ! _open)
         {
-            RebuildPopupItems(&host);
-            _open             = true;
-            _activePopupIndex = GetPopupItemIndexAt(0u);
-            _hoveredPopupIndex.reset();
-            EnsurePopupSelectionVisible(&host);
+            static_cast<void>(RequestPopup(host));
             Invalidate(host);
             return true;
         }
@@ -1467,11 +1507,7 @@ bool ComboBox::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
 
         if (_editable && ! _open)
         {
-            RebuildPopupItems(&host);
-            _open             = true;
-            _activePopupIndex = GetPopupItemIndexAt(0u);
-            _hoveredPopupIndex.reset();
-            EnsurePopupSelectionVisible(&host);
+            static_cast<void>(RequestPopup(host));
             Invalidate(host);
             return true;
         }
@@ -1920,6 +1956,17 @@ void ComboBox::OpenPopup(WindowHost& host) noexcept
     CapturePopupBackdrop(host);
 }
 
+bool ComboBox::RequestPopup(WindowHost& host)
+{
+    if (_onPopupRequested && _onPopupRequested())
+    {
+        return true;
+    }
+
+    OpenPopup(host);
+    return _open;
+}
+
 void ComboBox::ClosePopup() noexcept
 {
     _open = false;
@@ -1953,7 +2000,13 @@ void ComboBox::CapturePopupBackdrop(WindowHost& host) noexcept
     }
 
     UpdatePopupLayout(&host);
-    const D2D1_RECT_F popup = SnapRectToPixel(host, GetPopupBounds());
+    D2D1_RECT_F popup = SnapRectToPixel(host, GetPopupBounds());
+    if (const auto* scrollParent = FindContainingScrollPanel(&host, *this))
+    {
+        const float scrollOffset = scrollParent->GetScrollOffset();
+        popup.top -= scrollOffset;
+        popup.bottom -= scrollOffset;
+    }
     if (popup.right <= popup.left || popup.bottom <= popup.top)
     {
         return;
@@ -1990,7 +2043,18 @@ void ComboBox::UpdatePopupLayout(const WindowHost* host) const noexcept
         return;
     }
 
-    const D2D1_RECT_F clientBounds = host->GetClientBoundsDip();
+    D2D1_RECT_F clientBounds = host->GetClientBoundsDip();
+    if (const auto* scrollParent = FindContainingScrollPanel(host, *this))
+    {
+        const D2D1_RECT_F scrollBounds = scrollParent->GetBounds();
+        const D2D1_RECT_F visibleBounds =
+            D2D1::RectF((std::max)(clientBounds.left, scrollBounds.left),
+                        (std::max)(clientBounds.top, scrollBounds.top),
+                        (std::min)(clientBounds.right, scrollBounds.right),
+                        (std::min)(clientBounds.bottom, scrollBounds.bottom));
+        const float scrollOffset = scrollParent->GetScrollOffset();
+        clientBounds             = D2D1::RectF(visibleBounds.left, visibleBounds.top + scrollOffset, visibleBounds.right, visibleBounds.bottom + scrollOffset);
+    }
     if (clientBounds.right <= clientBounds.left || clientBounds.bottom <= clientBounds.top)
     {
         return;

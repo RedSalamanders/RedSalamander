@@ -5,13 +5,13 @@
 This document provides a comprehensive inventory of every declared test case across all
 RedSalamander test suites. It serves as the authoritative reference for test coverage.
 
-Current runner-native inventory as of 2026-05-10:
+Current runner-native inventory as of 2026-05-14:
 
-- Commands: 599 listed cases.
+- Commands: 617 listed cases.
 - CompareDirectories: 149 listed cases.
 - FileOperations: 75 listed phases: 73 active ordered phases, plus setup and
   cleanup.
-- PerformanceTests2: 7 CppUnitTest `TEST_METHOD`s.
+- PerformanceTests2: 11 CppUnitTest `TEST_METHOD`s.
 - MonitorTest: 3 ETW burst scenarios plus 3 fast guards
   (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
   `--document-model-selftest`).
@@ -26,7 +26,7 @@ equivalent to runner-listed cases.
 
 Current source-derived fallback counts:
 
-- Commands: 570 static `SelfTest::RunCase` call-site registrations.
+- Commands: 587 static `SelfTest::RunCase` call-site registrations.
 - CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
 - FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
 
@@ -373,19 +373,19 @@ Recent UI-retirement evidence:
 
 ## 1. Commands Suite (`--commands-selftest`)
 
-**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (599 runner-listed cases; 569 static `SelfTest::RunCase` call sites)
+**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (615 runner-listed cases; 585 static `SelfTest::RunCase` call sites)
 
 The Commands suite is split into logical `.cpp` family files included from the main orchestrator:
 - `SelfTest\Commands\Commands.SelfTest.Settings.cpp` — Settings hot-reload, store, registry, preview/file-action guards, shortcut defaults (13+ cases)
 - `SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp` — Plugin configuration and file-system plugin (13 cases)
-- `SelfTest\Commands\Commands.SelfTest.Connections.cpp` — Connection manager and credentials (36 cases)
+- `SelfTest\Commands\Commands.SelfTest.Connections.cpp` — Connection manager and credentials (39 cases)
 - `SelfTest\Commands\Commands.SelfTest.Preferences.cpp` coordinator + 7 included chunk files — Preferences dialog automation (129 cases)
 - `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` — Compare directories options, chrome, and progress (11 cases)
 - `SelfTest\Commands\Commands.SelfTest.Search.cpp` — Find dialog, local search index, quick search/filter (52 cases)
 - `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` — Shortcuts window (31 cases)
 - `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` — View commands, selection, sort, pane, tabs (29+ cases)
 - `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` — File operations issues pane, speed limit prompt (21 cases)
-- `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` — Navigation location, GoTo, navigation/drive menu shell stability, Escape focus reclaim to the active FolderView, navigation-menu `Go to >` placement before drive rows, nonstandard file-system `Common Folders` submenu coverage, and directory-impact selection preservation
+- `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` — Navigation location, GoTo, navigation/drive menu shell stability, Command Shell Windows Terminal launch planning, Escape focus reclaim to the active FolderView, navigation-menu `Go to >` placement before drive rows, nonstandard file-system `Common Folders` submenu coverage, and directory-impact selection preservation
 - `SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp` — Shell-integrated pane commands including Change Attributes attributes/date-time/stream reports and recursive progress
 - `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` — About, fatal error, splash, change case, filter, rename, including long initial rename-selection clipping, etc. (48 cases)
 
@@ -393,7 +393,7 @@ The suitetests UI automation, dialog interactions, preferences, shortcuts,
 themes, navigation, and command dispatch. All cases run inside the live application
 window using UIAutomation and direct Win32 message simulation.
 
-### 1.1 Application-Level Commands (18 cases)
+### 1.1 Application-Level Commands (19 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
@@ -411,7 +411,11 @@ window using UIAutomation and direct Win32 message simulation.
 | `cmd_app_fatal_error_uses_dxui_surface` | Fatal error DxUi surface |
 | `cmd_app_fullScreen` | Full-screen toggle |
 | `cmd_app_menuBar_mouse_open_keeps_popup_selection_clear` | Mouse-opened menu popups keep item selection empty until pointer movement or keyboard navigation |
+| `cmd_app_menuBar_mouse_opened_popup_processes_keyboard_before_mouse_move` | Mouse-opened menu popups process and repaint keyboard navigation before any later mouse movement |
 | `cmd_app_menuBar_persistent_direct_hover_switches_top_level_popup` | Persistent menu-bar mouse-opened popup switches directly to a neighboring top-level menu without requiring popup-item hover first |
+| `cmd_app_menuBar_top_level_highlight_follows_keyboard_opened_root` | Menu bar highlight follows the active keyboard-opened root popup and does not fall back to a stale top-level hover while the popup owns focus |
+| `cmd_app_menuBar_persistent_view_to_files_hover_highlight_follows_pointer` | Persistent main menu moves the top-level highlight immediately when hovering from View to Files while the View popup is open |
+| `cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup` | Persistent main menu switches directly from View to Plugins on top-level hover without requiring popup-item hover first |
 | `cmd_app_menuBar_submenu_placement_matches_spec` | Menu submenu placement and parent-hover retention |
 | `cmd_app_swapPanes` | Pane swap command |
 | `cmd_app_toggleUiChrome` | UI chrome visibility toggle, function bar layout, painted themed pixels, DirectWrite text metrics, and splitter arrow affordances |
@@ -529,7 +533,7 @@ Connection Manager closeout requires:
 | `cmd_pane_copy_text` | Copy text to clipboard |
 | `cmd_pane_focusAddressBar_tab_traversal` | Address bar tab traversal |
 | `cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation` | Pack/Unpack ZIP round trip, sorted entries, empty-directory preservation, overwrite validation, invalid destination handling, unsupported-provider feedback, and archive perf artifact output |
-| `cmd_pane_listOpenedFiles_shows_sources_prunes_closed_editors_and_focuses_items` | List Opened Files dialog empty state, viewer/editor/preview source rows, closed external-editor pruning, focus navigation, and perf artifact output |
+| `cmd_pane_listOpenedFiles_shows_sources_prunes_closed_editors_and_focuses_items` | List Opened Files dialog empty state, viewer/editor/preview source rows, closed external-editor pruning, focus navigation, deferred close after Focus Item, and perf artifact output |
 | `cmd_pane_navigationView_full_path_popup_edit_route` | Navigation full path editing |
 | `cmd_pane_navigationView_history_dropdown_keyboard_navigation` | History dropdown navigation |
 | `cmd_pane_navigationView_path_doubleClick_enters_edit_mode` | Path double-click edit |
@@ -545,7 +549,7 @@ Connection Manager closeout requires:
 | `cmd_pane_selection_goto_selected_name` | Go to selected name |
 | `cmd_pane_selection_hide_names` | Hide selected names |
 | `cmd_pane_selection_invert` | Invert selection |
-| `cmd_pane_shares_shows_synthetic_rows_opens_paths_and_reports_access_denied` | Shared Directories sorted synthetic rows, open-path navigation, access-denied empty/error state, shortcut dispatch, and perf artifact output |
+| `cmd_pane_shares_shows_synthetic_rows_opens_paths_and_reports_access_denied` | Shared Directories sorted synthetic rows, open-path navigation, deferred close after Open Path, access-denied empty/error state, shortcut dispatch, and perf artifact output |
 
 ### 1.7 Find Files Dialog (46 cases)
 
@@ -675,12 +679,24 @@ Key coverage patterns per page:
 | `cmd_compare_directories_options_uses_dxui_labels_without_visible_legacy_statics` | DxUi labels, zero visible native body/footer controls, and DirectWrite options typography metrics |
 | `cmd_compare_directories_progress_perf` | Compare progress correctness/stability; future perf-gate use requires a self-test-local metric |
 
-### 1.12 Settings and Infrastructure (26+ cases)
+### 1.12 Settings and Infrastructure (28+ cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
 | `folderView_empty_folder_state` | Empty folder centered state plus row-sized focused `Go to parent` placeholder item |
 | `folderView_filter_watermark_empty_state` | Filter watermark display |
+| `folderView_column_widths_audit` | FolderView variable-column display and scroll audit across adversarial folder shapes, writing archived before/after metrics |
+| `folderView_visible_column_widths` | Real FolderView pane verifies each column width is computed from items assigned to that visible column across Brief, Detailed, ExtraDetailed, and Thumbnails modes |
+| `folderView_thumbnail_settings_roundtrip` | Per-pane thumbnail size persistence, independent left/right values, and missing-setting default of `64 DIP` |
+| `folderView_thumbnail_valid_images_shell_fail` | Valid image files still display thumbnails when shell thumbnail extraction fails and WIC fallback is required |
+| `folderView_thumbnail_aspect_ratio` | Non-square thumbnails preserve source aspect ratio inside the thumbnail slot |
+| `folderView_thumbnail_bad_files_fallback` | Bad image-looking files complete as icon fallback, report decode failures, and leave no pending thumbnail work |
+| `folderView_thumbnail_scroll_stress` | Mixed 640-item thumbnail folder keeps visible work bounded and writes scroll-stress perf evidence |
+| `folderView_thumbnail_scroll_requeues_visible` | Horizontal scrolling requeues thumbnail work for newly visible columns instead of leaving valid images on icon fallback |
+| `folderView_thumbnail_resize_requeues_visible` | Resizing a thumbnail pane requeues work for newly visible columns instead of leaving valid images on icon fallback |
+| `folderView_thumbnail_size_change_while_pending` | Thumbnail size changes cancel stale visible work, requeue at the selected size, and settle |
+| `folderView_thumbnail_return_to_normal_icon_size` | Returning from thumbnail mode to normal view uses the normal shell image-list size instead of reusing thumbnail-mode jumbo icon bitmaps |
+| `folderView_thumbnail_sort_popup_slider` | Pane bottom-right sort popup exposes the thumbnail size slider row |
 | `folderView_perf_large_folder_baseline` | Large folder performance baseline |
 | `file_action_resolution_v16_action_ids_are_case_insensitive` | File-action resolver matches action IDs case-insensitively, preserves action-definition casing, and collapses case-only references |
 | `help_menu_links_external_documentation` | Help menu external documentation command placement and registry binding |
@@ -702,8 +718,13 @@ Key coverage patterns per page:
 | `settings_shortcuts_*` | (2 cases) Shortcut settings roundtrip |
 | `settings_store_search_roundtrip` | Search settings roundtrip |
 | `pane_view_options_toggle_preview_pane_tabs_and_selection` | Preview pane tab-strip pointer clicks switch Folder/Preview, selected/hovered Preview close-glyph visibility, delayed Folder tab path tooltip, Preview close glyph closes preview mode, old embedded text content is cleared before rendering the next focused item, and source-pane focus is preserved |
-| `pane_view_options_preview_uses_configured_embedded_viewer_and_preserves_focus` | Preview uses configured embedded viewers, keeps the same embedded instance and HWND across same-plugin image/media focus changes, keeps media-to-media and media-to-image switches responsive while VLC stop/release is slow, verifies VLC video child parenting after video-to-video preview navigation, forwards wheel seek from VLC child surfaces, preserves source-pane focus, and persists VLC preview volume/mute state |
-| `pane_view_options_preview_uses_builtin_embedded_viewer_with_empty_associations` | Preview consults built-in embedded viewer defaults when saved viewer associations are empty before falling back to ViewerText |
+| `pane_view_options_preview_uses_configured_embedded_viewer_and_preserves_focus` | Preview uses configured embedded viewers, keeps the same embedded instance and HWND across same-plugin image/media focus changes including `.mp4` to `.m4a`, keeps media-to-media and media-to-image switches responsive while VLC stop/release is slow, verifies VLC child-window parenting after video-to-video and video-to-audio preview navigation, forwards wheel seek from VLC child surfaces, preserves source-pane focus, and persists VLC preview volume/mute state |
+| `pane_view_options_preview_uses_builtin_embedded_viewer_with_empty_associations` | Preview consults built-in embedded viewer defaults when saved viewer associations are empty before falling back to Properties text |
+| `pane_view_options_preview_falls_back_to_item_properties_when_no_embedded_preview_matches` | Preview shows normalized file/folder Properties text when no specific embedded preview viewer matches, without retaining an embedded viewer instance or stealing source-pane focus |
+| `pane_view_options_preview_properties_card_scrolls_and_uses_rainbow_theme` | Default no-embedded preview renders focused item Properties as DxUi cards, exposes a ScrollPanel for long metadata, accepts wheel scrolling with an increased preview scroll offset without stealing source-pane focus, and applies Rainbow theme section accents |
+| `pane_filter_bar_inline_workflow` | Pane filter bar exposes an editable history combo without a redundant static Filter label, exposes the Use Filter toggle, matches the shared `selectionMasks.filterHistory` entries exactly, applies typed masks live without opening the dropdown, preserves text when toggled off, and re-applies the stored mask when toggled back on |
+| `embedded_viewer_context_menus_expose_menu_actions` | Embedded menu-bearing viewers load localized menu resources for Preview right-click context menus, route selected commands through existing handlers, omit standalone-only actions and shortcut labels, trim empty groups, and do not rely on a visible embedded menubar |
+| `embedded_vlc_audio_preview_stays_inside_preview` | Embedded ViewerVLC audio previews apply audio visualization as an audio-file media option, not a global VLC instance argument, so video previews do not get an extra visualizer vout and video-to-audio Preview transitions keep stable embedded playback |
 | `shortcut_defaults_mapping` | Default shortcut mappings |
 | `shortcut_functionbar_dispatch_refresh` | Function bar dispatch and refresh using command short labels |
 
@@ -994,6 +1015,7 @@ These cases skip when connection profiles or secrets are absent.
 |-------------------|-------|---------------|
 | `FolderIconEnumerationPerfTest` | 1 | Icon enumeration caching under load |
 | `FolderIconEnumerationDuplicatePathPerfTest` | 1 | Duplicate path icon edge cases |
+| `FolderViewColumnLayoutTests` | 4 | Pure variable-column width calculation, detailed/metadata line locality, and first-column scroll-stop semantics |
 | `FolderViewRefreshDuplicatePathPerfTest` | 2 | FolderView refresh with duplicate paths and compact-mode hit testing |
 | `PerformanceTests2.cpp` | 3 | Splash close guard and empty plugin-manager discovery failures |
 
@@ -1021,7 +1043,7 @@ kill valid nested churn before the per-child checks can report their result.
 |---------|-------|---------------|
 | **DxUiTests** | ~50+ | DxUi color parsing, theme rendering, control creation, HSL/RGB conversion, submenu cascade hover timing, single-line text selection clipping, selected TextField emoji color-font rendering, text-input bridge keyboard forwarding, FolderView incremental-search helper behavior, inactive-pane visual-state helpers, and empty-folder placeholder layout metrics |
 | **LocalizationTests** | ~5 | Resource owner registration, satellite string/menu/dialog lookup, localized dialog templates with executable-owned custom child classes, fallback to embedded resources, and persisted `ui.language` roundtrips |
-| **ViewerPETests** | ~20+ | PE viewer plugin, image viewer, text viewer including AppTheme-driven parsed diff semantic colors with runtime theme switching, explicit rainbow-mode coverage, and high-contrast coverage, base-background unchanged rows plus dim diff-marker metadata, clickable hidden-context banners in hunks-only diff mode, non-anchor parsed hunk presentation, pane-local side-by-side visual-layout metadata and visible split-row counters for parsed diff viewports, split-row top-visible text snapshot coverage after hunk navigation, parsed hunk count and active-hunk snapshot metadata, next/previous hunk navigation, diff presentation, lazy referenced-file expansion, parsed-document reuse across diff variants, active-section-only unchanged-text hydration with on-demand section jumps, viewport-windowed unchanged-row rehydration on scroll, range-bounded referenced-file reads for viewport-nearby unchanged context, cached reuse when revisiting already hydrated viewport ranges, referenced-file content reuse across expanded layouts, hatched placeholder-gap metadata for unresolved rows, diff section navigation, horizontal scrolling in both parsed diff layouts after wrap is disabled including side-by-side to inline presentation switches, shared viewer combo-host popup expansion/collapse and clean close behavior across `ViewerPE`, `ViewerWeb`, `ViewerImgRaw`, and `ViewerText`, larger fully buffered diff parsing including promotion beyond the normal text buffer size for both extension-recognized and header-sniffed diffs, raw streamed multi-file section indexing/navigation beyond the fully buffered parse cap, and parser-fallback coverage, space viewer, VLC viewer |
+| **ViewerPETests** | ~20+ | PE viewer plugin, image viewer, text viewer including AppTheme-driven parsed diff semantic colors with runtime theme switching, explicit rainbow-mode coverage, and high-contrast coverage, base-background unchanged rows plus dim diff-marker metadata, clickable hidden-context banners in hunks-only diff mode, non-anchor parsed hunk presentation, pane-local side-by-side visual-layout metadata and visible split-row counters for parsed diff viewports, split-row top-visible text snapshot coverage after hunk navigation, parsed hunk count and active-hunk snapshot metadata, next/previous hunk navigation, diff presentation, lazy referenced-file expansion, parsed-document reuse across diff variants, active-section-only unchanged-text hydration with on-demand section jumps, viewport-windowed unchanged-row rehydration on scroll, range-bounded referenced-file reads for viewport-nearby unchanged context, cached reuse when revisiting already hydrated viewport ranges, referenced-file content reuse across expanded layouts, hatched placeholder-gap metadata for unresolved rows, diff section navigation, horizontal scrolling in both parsed diff layouts after wrap is disabled including side-by-side to inline presentation switches, shared viewer combo-host popup expansion/collapse and clean close behavior across `ViewerPE`, `ViewerWeb`, `ViewerImgRaw`, and `ViewerText`, larger fully buffered diff parsing including promotion beyond the normal text buffer size for both extension-recognized and header-sniffed diffs, raw streamed multi-file section indexing/navigation beyond the fully buffered parse cap, parser-fallback coverage, ViewerSpace window/menu hosting plus Direct2D tooltip overlay width/native-tooltip regression coverage, and VLC viewer |
 | **ViewerSqliteTests** | ~15+ | SQLite engine, query execution, schema inspection, UI rendering |
 | **MonitorTest** | ~6 | ETW TraceLogging provider emit/receive validation plus compile-time/runtime guards that invalid rectangle visualization remains opt-in, normal Debug and Release monitor self diagnostics suppress Info/Perf output unless the runtime ETW flag is enabled, normal monitor display rejects self-originated ETW events, and ColorTextView scrollbar visibility reaches a stable minimal state |
 

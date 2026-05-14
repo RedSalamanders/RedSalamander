@@ -39,6 +39,29 @@ private:
     LONG _stripeWidthPx = 12;
 };
 
+class OverlayPaintProbeControl final : public RedSalamander::DxUi::Control
+{
+public:
+    void Paint(RedSalamander::DxUi::WindowHost&) const override
+    {
+    }
+
+    void PaintOverlay(RedSalamander::DxUi::WindowHost& host) const override
+    {
+        auto* const dc = host.GetDeviceContext();
+        if (! dc)
+        {
+            return;
+        }
+
+        auto* const brush = host.GetSolidBrush(D2D1::ColorF(1.0f, 0.0f, 0.0f, 1.0f));
+        if (brush)
+        {
+            dc->FillRectangle(GetBounds(), brush);
+        }
+    }
+};
+
 WindowHostBitmapCapture CaptureAttachedHostWindowBitmapForComboSuite(AttachedHostWindow& window, const char* context)
 {
     ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
@@ -210,6 +233,95 @@ void TestComboBoxPopupOverlayBlocksUnderlyingClick()
     Require(underlyingState.mouseDownCount == 0u, "underlying control does not receive mouse down through the popup");
     Require(underlyingState.mouseUpCount == 0u, "underlying control does not receive mouse up through the popup");
     Require(underlyingState.focusGainCount == 0u, "underlying control does not steal focus through the popup");
+}
+
+void TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    bool handled = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_SIZE, 0, MAKELPARAM(420, 220), handled));
+    Require(handled, "host size update handled for scrolled combo popup test");
+
+    auto root       = std::make_unique<Panel>();
+    auto* scroll    = root->AddChild<ScrollPanel>();
+    auto* wrapper   = scroll->AddChild<Panel>();
+    auto* combo     = wrapper->AddChild<ComboBox>();
+    const float scrollOffset = 220.0f;
+    scroll->SetBounds(D2D1::RectF(0.0f, 0.0f, 420.0f, 220.0f));
+    scroll->SetContentHeight(720.0f);
+    scroll->SetScrollOffset(scrollOffset);
+    wrapper->SetBounds(D2D1::RectF(0.0f, 0.0f, 420.0f, 720.0f));
+    combo->SetBounds(D2D1::RectF(260.0f, 300.0f, 404.0f, 328.0f));
+    combo->SetItems({
+        ComboBox::Item{L"custom", L"Custom"},
+        ComboBox::Item{L"errors", L"Errors only"},
+        ComboBox::Item{L"warnings", L"Errors and warnings"},
+        ComboBox::Item{L"all", L"All types"},
+    });
+    combo->SetSelectedIndex(0u);
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 420.0f, 220.0f));
+
+    const D2D1_RECT_F comboBounds = combo->GetBounds();
+    const LONG openX              = static_cast<LONG>(comboBounds.right - 10.0f);
+    const LONG openY              = static_cast<LONG>(((comboBounds.top + comboBounds.bottom) * 0.5f) - scroll->GetScrollOffset());
+    handled                       = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, 0, MAKELPARAM(openX, openY), handled));
+    Require(handled, "combo field click inside scrolled panel is handled");
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(openX, openY), handled));
+    Require(combo->DebugIsPopupOpen(), "combo popup opens from a scrolled panel field");
+
+    const D2D1_RECT_F popupBounds     = combo->DebugGetPopupBounds();
+    const float comboBottomInViewport = comboBounds.bottom - scroll->GetScrollOffset();
+    const float popupTopInViewport    = popupBounds.top - scroll->GetScrollOffset();
+    Require(popupTopInViewport >= comboBottomInViewport && popupTopInViewport <= (comboBottomInViewport + 8.0f),
+            "scrolled combo popup placement uses viewport space and opens adjacent to the visible field when there is room below");
+
+    const D2D1_RECT_F secondPopupItemRect = combo->DebugGetPopupItemRect(1u, &host);
+    RequireRectHasArea(secondPopupItemRect, "scrolled combo popup exposes second-row geometry");
+    const LONG popupX = static_cast<LONG>((secondPopupItemRect.left + secondPopupItemRect.right) * 0.5f);
+    const LONG popupY = static_cast<LONG>(((secondPopupItemRect.top + secondPopupItemRect.bottom) * 0.5f) - scroll->GetScrollOffset());
+    handled           = false;
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONDOWN, 0, MAKELPARAM(popupX, popupY), handled));
+    Require(handled, "combo popup row click inside a scrolled panel is handled at the visual position");
+    static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(popupX, popupY), handled));
+
+    Require(combo->GetSelectedIndex().has_value() && combo->GetSelectedIndex().value() == 1u,
+            "scrolled combo popup selects the row clicked at the visual popup position");
+}
+
+void TestScrollPanelPaintsOverlaysInScrolledViewportCoordinates()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* scroll = root->AddChild<ScrollPanel>();
+    auto* probe  = scroll->AddChild<OverlayPaintProbeControl>();
+    scroll->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 180.0f));
+    scroll->SetContentHeight(480.0f);
+    scroll->SetScrollOffset(120.0f);
+    probe->SetBounds(D2D1::RectF(40.0f, 150.0f, 160.0f, 176.0f));
+
+    window.Host().SetRoot(std::move(root));
+    static_cast<Panel*>(window.Host().GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 180.0f));
+
+    const WindowHostBitmapCapture capture =
+        CaptureAttachedHostWindowBitmapForComboSuite(window, "scroll panel overlay paint transform capture succeeds");
+    const uint32_t visualPixel = GetCapturePixelBgra(capture, 60u, 42u);
+    const uint32_t rawPixel    = GetCapturePixelBgra(capture, 60u, 162u);
+    const auto isRedPixel      = [](uint32_t bgra) noexcept {
+        const uint8_t blue  = static_cast<uint8_t>((bgra >> 0u) & 0xFFu);
+        const uint8_t green = static_cast<uint8_t>((bgra >> 8u) & 0xFFu);
+        const uint8_t red   = static_cast<uint8_t>((bgra >> 16u) & 0xFFu);
+        return red > 180u && green < 80u && blue < 80u;
+    };
+
+    Require(isRedPixel(visualPixel), "scroll panel paints child overlays at the scrolled visual position");
+    Require(! isRedPixel(rawPixel), "scroll panel does not paint child overlays at the unscrolled content position");
 }
 
 void TestAttachedComboBoxPopupMouseLeaveRestoresKeyboardHighlightedItem()
@@ -760,6 +872,8 @@ void RunComboBoxTests()
     runTest("TestComboBoxSecondClickTogglesPopupClosed", TestComboBoxSecondClickTogglesPopupClosed);
     runTest("TestComboBoxPopupOverlayBlocksUnderlyingHover", TestComboBoxPopupOverlayBlocksUnderlyingHover);
     runTest("TestComboBoxPopupOverlayBlocksUnderlyingClick", TestComboBoxPopupOverlayBlocksUnderlyingClick);
+    runTest("TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates", TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates);
+    runTest("TestScrollPanelPaintsOverlaysInScrolledViewportCoordinates", TestScrollPanelPaintsOverlaysInScrolledViewportCoordinates);
     runTest("TestAttachedComboBoxPopupMouseLeaveRestoresKeyboardHighlightedItem", TestAttachedComboBoxPopupMouseLeaveRestoresKeyboardHighlightedItem);
     runTest("TestComboBoxPopupFlipsAboveWhenBelowSpaceIsInsufficient", TestComboBoxPopupFlipsAboveWhenBelowSpaceIsInsufficient);
     runTest("TestAttachedComboBoxFlippedPopupItemRectsStayInsidePopupBounds", TestAttachedComboBoxFlippedPopupItemRectsStayInsidePopupBounds);

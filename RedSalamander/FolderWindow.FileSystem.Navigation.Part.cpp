@@ -91,6 +91,83 @@ namespace
     return path.size() >= 7u && wil::compare_string_ordinal(path.substr(path.size() - 7u), L"cmd.exe", true) == wistd::weak_ordering::equivalent;
 }
 
+struct CommandShellLaunchPlan final
+{
+    std::wstring executable;
+    std::wstring parameters;
+    std::wstring directory;
+    std::wstring workingDirectory;
+    bool usesWindowsTerminal = false;
+};
+
+[[nodiscard]] std::optional<std::wstring> FindExecutableOnPath(std::wstring_view executableName)
+{
+    if (executableName.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::wstring executable(executableName);
+    std::wstring resolved(32768u, L'\0');
+    const DWORD copied = SearchPathW(nullptr, executable.c_str(), nullptr, static_cast<DWORD>(resolved.size()), resolved.data(), nullptr);
+    if (copied == 0u || copied >= resolved.size())
+    {
+        return std::nullopt;
+    }
+
+    resolved.resize(static_cast<size_t>(copied));
+    return resolved;
+}
+
+[[nodiscard]] std::optional<std::wstring> FindWindowsTerminalExecutable()
+{
+    if (std::optional<std::wstring> wt = FindExecutableOnPath(L"wt.exe"); wt.has_value())
+    {
+        return wt;
+    }
+    return FindExecutableOnPath(L"Terminal.exe");
+}
+
+[[nodiscard]] CommandShellLaunchPlan BuildWindowsTerminalCommandShellLaunchPlan(std::wstring terminalExecutable, std::wstring_view workingDirText)
+{
+    CommandShellLaunchPlan plan{};
+    plan.executable          = std::move(terminalExecutable);
+    plan.parameters          = std::wstring(L"-d ") + QuoteCommandLineArgument(workingDirText);
+    plan.workingDirectory    = std::wstring(workingDirText);
+    plan.usesWindowsTerminal = true;
+    return plan;
+}
+
+[[nodiscard]] CommandShellLaunchPlan BuildCmdCommandShellLaunchPlan(std::wstring_view workingDirText)
+{
+    CommandShellLaunchPlan plan{};
+    plan.executable       = GetCommandProcessorPath();
+    plan.workingDirectory = std::wstring(workingDirText);
+
+    if (LooksLikeUncPath(workingDirText) && IsCmdExecutable(plan.executable))
+    {
+        plan.directory  = GetDefaultFileSystemRoot().wstring();
+        plan.parameters = std::wstring(L"/K pushd ") + QuoteCommandLineArgument(workingDirText);
+    }
+    else
+    {
+        plan.directory = std::wstring(workingDirText);
+    }
+
+    return plan;
+}
+
+[[nodiscard]] HRESULT ExecuteCommandShellLaunchPlan(HWND ownerWindow, const CommandShellLaunchPlan& plan) noexcept
+{
+    const HINSTANCE result = ShellExecuteW(ownerWindow,
+                                           L"open",
+                                           plan.executable.c_str(),
+                                           plan.parameters.empty() ? nullptr : plan.parameters.c_str(),
+                                           plan.directory.empty() ? nullptr : plan.directory.c_str(),
+                                           SW_SHOWNORMAL);
+    return reinterpret_cast<INT_PTR>(result) > 32 ? S_OK : E_FAIL;
+}
+
 void ShowCommandLineFeedbackOverlay(FolderWindow& window, FolderWindow::Pane pane, UINT titleStringId, UINT messageStringId, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Scope perf(L"commandline.feedback_us");
@@ -662,6 +739,16 @@ void FolderWindow::DebugSetCommandLineLaunchCallback(CommandLineLaunchCallback c
 {
     _debugCommandLineLaunchCallback = std::move(callback);
 }
+
+void FolderWindow::DebugSetCommandShellLaunchCallback(CommandShellLaunchCallback callback)
+{
+    _debugCommandShellLaunchCallback = std::move(callback);
+}
+
+void FolderWindow::DebugSetCommandShellTerminalOverrideForTest(std::optional<std::wstring> executable)
+{
+    _debugCommandShellTerminalOverride = std::move(executable);
+}
 #endif
 
 void FolderWindow::CommandFilter(Pane pane)
@@ -703,32 +790,63 @@ void FolderWindow::CommandFilter(Pane pane)
     SelfTest::AppendSelfTestTrace(std::format(L"CommandFilter: prompt accepted enabled={} text='{}'", result.enabled ? 1 : 0, result.text));
 #endif
 
-    if (_settings && ! result.text.empty())
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"CommandFilter: before SetNameFilterState");
+#endif
+    static_cast<void>(ApplyPaneFilterState(pane, result, true, true));
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"CommandFilter: after SetNameFilterState");
+#endif
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"CommandFilter: end");
+#endif
+}
+
+bool FolderWindow::ApplyPaneFilterState(Pane pane, const FolderView::NameFilterState& state, bool addToHistory, bool beepOnInvalid)
+{
+    PaneState& paneState       = pane == Pane::Left ? _leftPane : _rightPane;
+    const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(state.text);
+    FolderView::NameFilterState normalized{.enabled = state.enabled && ! trimmed.empty(), .text = trimmed};
+
+    if (state.enabled && trimmed.empty())
+    {
+        normalized.enabled = false;
+    }
+
+    if (normalized.enabled)
+    {
+        const MaskSyntax::WildcardMask mask = MaskSyntax::ParseWildcardMask(normalized.text);
+        const bool hasMask                  = ! mask.includePatterns.empty() || ! mask.excludePatterns.empty();
+        if (! hasMask)
+        {
+            if (beepOnInvalid)
+            {
+                MessageBeep(MB_ICONWARNING);
+            }
+            UpdatePaneFilterBar(pane);
+            return false;
+        }
+    }
+
+    if (_settings && addToHistory && ! normalized.text.empty())
     {
         Common::Settings::SelectionMasksSettings& masks =
             _settings->selectionMasks.has_value() ? _settings->selectionMasks.value() : _settings->selectionMasks.emplace();
 
-        MaskSyntax::AddToWildcardMaskHistory(masks.filterHistory, MaskSyntax::kWildcardMaskHistoryMaxItems, result.text);
+        MaskSyntax::AddToWildcardMaskHistory(masks.filterHistory, MaskSyntax::kWildcardMaskHistoryMaxItems, normalized.text);
         MaskSyntax::NormalizeWildcardMaskHistory(masks.filterHistory, MaskSyntax::kWildcardMaskHistoryMaxItems);
     }
 
-#ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(L"CommandFilter: before SetNameFilterState");
-#endif
-    SetNameFilterState(pane, result);
-#ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(L"CommandFilter: after SetNameFilterState");
-#endif
+    SetNameFilterState(pane, normalized);
 
-    if (_settings && state.currentPath.has_value() && ! state.currentPath.value().empty())
+    if (_settings && paneState.currentPath.has_value() && ! paneState.currentPath.value().empty())
     {
         Common::Settings::FoldersSettings& folders = _settings->folders.has_value() ? _settings->folders.value() : _settings->folders.emplace();
-        SetFolderHistoryFilterState(folders, state.currentPath.value(), result);
+        SetFolderHistoryFilterState(folders, paneState.currentPath.value(), normalized);
         PruneFolderHistoryFilters(folders, _folderHistory, static_cast<size_t>(_folderHistoryMax));
     }
-#ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(L"CommandFilter: end");
-#endif
+
+    return true;
 }
 
 #ifdef ENABLE_TESTS
@@ -1378,61 +1496,56 @@ void FolderWindow::CommandOpenCommandShell(Pane pane)
         workingDir = GetDefaultFileSystemRoot();
     }
 
-    std::wstring workingDirText = workingDir.wstring();
-    if (workingDirText.rfind(L"\\\\?\\UNC\\", 0) == 0 && workingDirText.size() > 8u)
-    {
-        workingDirText = std::wstring(L"\\\\") + workingDirText.substr(8u);
-    }
-    else if (workingDirText.rfind(L"\\\\?\\", 0) == 0 && workingDirText.size() > 4u)
-    {
-        workingDirText = workingDirText.substr(4u);
-    }
+    const std::wstring workingDirText = NormalizeShellDirectoryText(workingDir);
 
-    std::wstring comSpec;
-    const DWORD comSpecLen = GetEnvironmentVariableW(L"ComSpec", nullptr, 0);
-    if (comSpecLen > 0)
+    std::optional<std::wstring> terminalExecutable;
+#ifdef ENABLE_TESTS
+    if (_debugCommandShellTerminalOverride.has_value())
     {
-        comSpec.resize(static_cast<size_t>(comSpecLen));
-        const DWORD copied = GetEnvironmentVariableW(L"ComSpec", comSpec.data(), comSpecLen);
-        if (copied > 0)
+        if (! _debugCommandShellTerminalOverride.value().empty())
         {
-            comSpec.resize(static_cast<size_t>(copied));
+            terminalExecutable = _debugCommandShellTerminalOverride.value();
         }
-        else
-        {
-            comSpec.clear();
-        }
-    }
-
-    if (comSpec.empty())
-    {
-        comSpec = L"cmd.exe";
-    }
-
-    std::wstring parameters;
-    std::wstring directory;
-
-    const bool isUncPath = LooksLikeUncPath(workingDirText);
-    const bool isCmd =
-        (comSpec.size() >= 7u && wil::compare_string_ordinal(comSpec.substr(comSpec.size() - 7u), L"cmd.exe", true) == wistd::weak_ordering::equivalent);
-
-    if (isUncPath && isCmd)
-    {
-        directory  = GetDefaultFileSystemRoot().wstring();
-        parameters = std::format(L"/K pushd \"{}\"", workingDirText);
     }
     else
+#endif
     {
-        directory = std::move(workingDirText);
+        terminalExecutable = FindWindowsTerminalExecutable();
     }
 
+    CommandShellLaunchPlan launchPlan = terminalExecutable.has_value()
+                                            ? BuildWindowsTerminalCommandShellLaunchPlan(terminalExecutable.value(), workingDirText)
+                                            : BuildCmdCommandShellLaunchPlan(workingDirText);
+
     HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
-    static_cast<void>(ShellExecuteW(ownerWindow,
-                                    L"open",
-                                    comSpec.c_str(),
-                                    parameters.empty() ? nullptr : parameters.c_str(),
-                                    directory.empty() ? nullptr : directory.c_str(),
-                                    SW_SHOWNORMAL));
+    auto launchCommandShell = [&](const CommandShellLaunchPlan& plan) -> HRESULT
+    {
+#ifdef ENABLE_TESTS
+        if (_debugCommandShellLaunchCallback)
+        {
+            CommandShellLaunchDebugPlan debugPlan{};
+            debugPlan.executable          = plan.executable;
+            debugPlan.parameters          = plan.parameters;
+            debugPlan.directory           = plan.directory;
+            debugPlan.workingDirectory    = plan.workingDirectory;
+            debugPlan.usesWindowsTerminal = plan.usesWindowsTerminal;
+            return _debugCommandShellLaunchCallback(debugPlan);
+        }
+#endif
+        return ExecuteCommandShellLaunchPlan(ownerWindow, plan);
+    };
+
+    HRESULT launchHr = launchCommandShell(launchPlan);
+    if (FAILED(launchHr) && launchPlan.usesWindowsTerminal)
+    {
+        launchPlan = BuildCmdCommandShellLaunchPlan(workingDirText);
+        launchHr   = launchCommandShell(launchPlan);
+    }
+
+    if (FAILED(launchHr))
+    {
+        ShowCommandLineLaunchFailureOverlay(*this, pane, launchHr);
+    }
 }
 
 void FolderWindow::SwapPanes()

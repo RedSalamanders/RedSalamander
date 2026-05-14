@@ -187,6 +187,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('5'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/toggleThumbnails");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('6'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/togglePreviewPane");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('F'), ShortcutManager::kModCtrl, L"cmd/pane/find");
     AddBinding(shortcuts.folderView, VK_ESCAPE, 0, L"cmd/pane/selection/unselectAll");
     AddBinding(shortcuts.folderView, DefaultSelectDialogVk(), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
     AddBinding(shortcuts.folderView, DefaultUnselectDialogVk(), ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
@@ -204,6 +205,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_UP, ShortcutManager::kModAlt, L"cmd/pane/selection/goToPreviousSelectedName");
     AddBinding(shortcuts.folderView, VK_LEFT, ShortcutManager::kModAlt, L"cmd/pane/historyBack");
     AddBinding(shortcuts.folderView, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/historyForward");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/openCommandShell");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt, L"cmd/app/about");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/app/about");
 
@@ -356,6 +358,11 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
         AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
     }
 
+    if (! findFolderViewBinding(static_cast<uint32_t>('F'), ShortcutManager::kModCtrl))
+    {
+        AddBinding(shortcuts.folderView, static_cast<uint32_t>('F'), ShortcutManager::kModCtrl, L"cmd/pane/find");
+    }
+
     if (! findFolderViewBinding(VK_ESCAPE, 0u))
     {
         AddBinding(shortcuts.folderView, VK_ESCAPE, 0u, L"cmd/pane/selection/unselectAll");
@@ -436,6 +443,11 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     if (! findFolderViewBinding(VK_RIGHT, ShortcutManager::kModAlt))
     {
         AddBinding(shortcuts.folderView, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/historyForward");
+    }
+
+    if (! findFolderViewBinding(static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt))
+    {
+        AddBinding(shortcuts.folderView, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/openCommandShell");
     }
 
     if (! findFolderViewBinding(VK_OEM_2, ShortcutManager::kModAlt))

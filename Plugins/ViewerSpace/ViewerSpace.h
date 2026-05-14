@@ -182,7 +182,6 @@ private:
     void OnLButtonDown(int x, int y) noexcept;
     void OnLButtonDblClk(int x, int y) noexcept;
     void OnContextMenu(HWND hwnd, POINT screenPt) noexcept;
-    LRESULT OnNotify(WPARAM wp, LPARAM lp) noexcept;
     void OnNcActivate(HWND hwnd, bool windowActive) noexcept;
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
     void OnTimer(UINT_PTR timerId) noexcept;
@@ -193,10 +192,9 @@ private:
     void ApplyTitleBarTheme(HWND hwnd, bool windowActive) noexcept;
     void UpdateWindowTitle(HWND hwnd) noexcept;
     void ApplyMenuTheme(HWND hwnd) noexcept;
-    void EnsureTooltip(HWND hwnd) noexcept;
-    void ApplyThemeToTooltip() noexcept;
     void UpdateTooltipForHit(uint32_t nodeId) noexcept;
     void UpdateTooltipPosition(int x, int y) noexcept;
+    void PaintTooltipOverlay() noexcept;
     std::wstring BuildTooltipText(uint32_t nodeId) const;
 
     void UpdateHeaderTextCache() noexcept;
@@ -291,6 +289,7 @@ private:
     wil::com_ptr<IDWriteTextFormat> _headerInfoFormatRight;
     wil::com_ptr<IDWriteTextFormat> _headerIconFormat;
     wil::com_ptr<IDWriteTextFormat> _watermarkFormat;
+    wil::com_ptr<IDWriteTextFormat> _tooltipFormat;
 
     struct ScanWorker final
     {
@@ -362,11 +361,14 @@ private:
     std::vector<DrawItem> _drawItems;
     uint32_t _hoverNodeId = 0;
 
-    wil::unique_hwnd _hTooltip;
     std::wstring _tooltipText;
     uint32_t _tooltipNodeId              = 0;
     uint32_t _tooltipCandidateNodeId     = 0;
     double _tooltipCandidateSinceSeconds = 0.0;
+    D2D1_POINT_2F _tooltipAnchorDip      = D2D1::Point2F(0.0f, 0.0f);
+#ifdef ENABLE_TESTS
+    uint64_t _tooltipPaintCount = 0u;
+#endif
 
     bool _trackingMouse       = false;
     bool _layoutDirty         = true;

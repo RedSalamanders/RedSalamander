@@ -11,6 +11,7 @@ constexpr unsigned int kMaxIconLoadRetries = 2u;
 constexpr unsigned int kMaxThumbnailLoadRetries = 1u;
 constexpr size_t kMaxThumbnailQueueItems = 256u;
 constexpr uint32_t kMaxThumbnailPixelSize = 512u;
+constexpr uint64_t kMaxThumbnailCacheBytes = 64ull * 1024ull * 1024ull;
 
 [[nodiscard]] uint64_t PerfElapsedUs(const std::chrono::steady_clock::time_point& start) noexcept
 {
@@ -29,9 +30,11 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
 }
 
 #ifdef ENABLE_TESTS
-[[nodiscard]] wil::unique_hbitmap CreateSyntheticThumbnailBitmap(uint32_t targetPx, size_t itemIndex) noexcept
+[[nodiscard]] wil::unique_hbitmap CreateSyntheticThumbnailBitmap(uint32_t targetPx, size_t itemIndex, bool wide) noexcept
 {
     const uint32_t safeSize = std::clamp(targetPx, 1u, kMaxThumbnailPixelSize);
+    const uint32_t width    = safeSize;
+    const uint32_t height   = wide ? std::max(1u, safeSize / 2u) : safeSize;
 
     wil::unique_hdc_window screenDc{GetDC(nullptr)};
     if (! screenDc)
@@ -41,8 +44,8 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
 
     BITMAPINFO bmi{};
     bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth       = static_cast<LONG>(safeSize);
-    bmi.bmiHeader.biHeight      = -static_cast<LONG>(safeSize);
+    bmi.bmiHeader.biWidth       = static_cast<LONG>(width);
+    bmi.bmiHeader.biHeight      = -static_cast<LONG>(height);
     bmi.bmiHeader.biPlanes      = 1;
     bmi.bmiHeader.biBitCount    = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
@@ -61,12 +64,12 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
     const uint32_t fill = 0xFF000000u | (static_cast<uint32_t>(red) << 16u) | (static_cast<uint32_t>(green) << 8u) | blue;
     const uint32_t accent = 0xFFFFFFFFu;
 
-    for (uint32_t y = 0; y < safeSize; ++y)
+    for (uint32_t y = 0; y < height; ++y)
     {
-        for (uint32_t x = 0; x < safeSize; ++x)
+        for (uint32_t x = 0; x < width; ++x)
         {
-            const bool border = x == 0u || y == 0u || x + 1u == safeSize || y + 1u == safeSize;
-            pixels[(static_cast<size_t>(y) * safeSize) + x] = border ? accent : fill;
+            const bool border = x == 0u || y == 0u || x + 1u == width || y + 1u == height;
+            pixels[(static_cast<size_t>(y) * width) + x] = border ? accent : fill;
         }
     }
 
@@ -96,6 +99,142 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
     hr = imageFactory->GetImage(size, flags, &rawBitmap);
     outBitmap.reset(rawBitmap);
     return hr;
+}
+
+[[nodiscard]] bool HasLikelyWicImageExtension(const std::filesystem::path& path) noexcept
+{
+    const std::wstring extension = path.extension().wstring();
+    if (extension.empty())
+    {
+        return false;
+    }
+
+    return OrdinalString::EqualsNoCase(extension, L".bmp") || OrdinalString::EqualsNoCase(extension, L".dib") ||
+           OrdinalString::EqualsNoCase(extension, L".gif") || OrdinalString::EqualsNoCase(extension, L".jpg") ||
+           OrdinalString::EqualsNoCase(extension, L".jpeg") || OrdinalString::EqualsNoCase(extension, L".jpe") ||
+           OrdinalString::EqualsNoCase(extension, L".png") || OrdinalString::EqualsNoCase(extension, L".tif") ||
+           OrdinalString::EqualsNoCase(extension, L".tiff") || OrdinalString::EqualsNoCase(extension, L".webp") ||
+           OrdinalString::EqualsNoCase(extension, L".heic") || OrdinalString::EqualsNoCase(extension, L".heif");
+}
+
+struct DecodedThumbnailPixels
+{
+    uint32_t widthPx = 0;
+    uint32_t heightPx = 0;
+    uint32_t strideBytes = 0;
+    std::vector<uint8_t> bgra;
+
+    [[nodiscard]] bool IsValid() const noexcept
+    {
+        return widthPx > 0u && heightPx > 0u && strideBytes >= widthPx * 4u && ! bgra.empty();
+    }
+};
+
+[[nodiscard]] HRESULT DecodeWicThumbnailPixels(const std::filesystem::path& fullPath,
+                                               uint32_t targetPx,
+                                               DecodedThumbnailPixels& outPixels) noexcept
+{
+    outPixels = {};
+    if (fullPath.empty() || targetPx == 0u)
+    {
+        return E_INVALIDARG;
+    }
+
+    wil::com_ptr<IWICImagingFactory> factory;
+    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put()));
+    if (FAILED(hr) || ! factory)
+    {
+        return hr;
+    }
+
+    wil::com_ptr<IWICBitmapDecoder> decoder;
+    hr = factory->CreateDecoderFromFilename(fullPath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder.put());
+    if (FAILED(hr) || ! decoder)
+    {
+        return hr;
+    }
+
+    wil::com_ptr<IWICBitmapFrameDecode> frame;
+    hr = decoder->GetFrame(0u, frame.put());
+    if (FAILED(hr) || ! frame)
+    {
+        return hr;
+    }
+
+    UINT sourceWidth = 0u;
+    UINT sourceHeight = 0u;
+    hr = frame->GetSize(&sourceWidth, &sourceHeight);
+    if (FAILED(hr) || sourceWidth == 0u || sourceHeight == 0u)
+    {
+        return FAILED(hr) ? hr : WINCODEC_ERR_BADIMAGE;
+    }
+
+    const uint32_t safeTarget = std::clamp(targetPx, 1u, kMaxThumbnailPixelSize);
+    const double scale = std::min(1.0, std::min(static_cast<double>(safeTarget) / static_cast<double>(sourceWidth),
+                                                static_cast<double>(safeTarget) / static_cast<double>(sourceHeight)));
+    const UINT targetWidth = std::max<UINT>(1u, static_cast<UINT>(std::round(static_cast<double>(sourceWidth) * scale)));
+    const UINT targetHeight = std::max<UINT>(1u, static_cast<UINT>(std::round(static_cast<double>(sourceHeight) * scale)));
+
+    wil::com_ptr<IWICBitmapSource> source;
+    if (targetWidth != sourceWidth || targetHeight != sourceHeight)
+    {
+        wil::com_ptr<IWICBitmapScaler> scaler;
+        hr = factory->CreateBitmapScaler(scaler.put());
+        if (FAILED(hr) || ! scaler)
+        {
+            return hr;
+        }
+
+        hr = scaler->Initialize(frame.get(), targetWidth, targetHeight, WICBitmapInterpolationModeFant);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        source = scaler;
+    }
+    else
+    {
+        source = frame;
+    }
+
+    wil::com_ptr<IWICFormatConverter> converter;
+    hr = factory->CreateFormatConverter(converter.put());
+    if (FAILED(hr) || ! converter)
+    {
+        return hr;
+    }
+
+    hr = converter->Initialize(source.get(),
+                               GUID_WICPixelFormat32bppPBGRA,
+                               WICBitmapDitherTypeNone,
+                               nullptr,
+                               0.0,
+                               WICBitmapPaletteTypeCustom);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    const uint32_t stride = targetWidth * 4u;
+    const uint64_t byteCount64 = static_cast<uint64_t>(stride) * static_cast<uint64_t>(targetHeight);
+    if (byteCount64 > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    std::vector<uint8_t> pixels;
+    pixels.resize(static_cast<size_t>(byteCount64));
+    hr = converter->CopyPixels(nullptr, stride, static_cast<UINT>(pixels.size()), pixels.data());
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    outPixels.widthPx = targetWidth;
+    outPixels.heightPx = targetHeight;
+    outPixels.strideBytes = stride;
+    outPixels.bgra = std::move(pixels);
+    return S_OK;
 }
 } // namespace
 
@@ -208,7 +347,7 @@ void FolderView::QueueIconLoading()
         }
 
         // If the bitmap already exists for our D2D device, apply it immediately (no background work).
-        auto cachedBitmap = IconCache::GetInstance().GetCachedBitmap(iconIndex, _d2dContext.get());
+        auto cachedBitmap = IconCache::GetInstance().GetCachedBitmap(iconIndex, _d2dContext.get(), _iconSizeDip);
         if (cachedBitmap)
         {
             for (const size_t itemIndex : group.itemIndices)
@@ -231,6 +370,7 @@ void FolderView::QueueIconLoading()
         IconLoadRequest request;
         request.enumerationGeneration = enumerationGeneration;
         request.iconIndex             = iconIndex;
+        request.targetDipSize         = _iconSizeDip;
         request.hasVisibleItems       = group.hasVisibleItems;
         request.firstVisibleItemIndex = group.firstVisibleItemIndex;
         request.enqueuedAt            = std::chrono::steady_clock::now();
@@ -325,7 +465,7 @@ void FolderView::BoostIconLoadingForVisibleRange()
             continue;
         }
 
-        if (auto cached = IconCache::GetInstance().GetCachedBitmap(item.iconIndex, _d2dContext.get()))
+        if (auto cached = IconCache::GetInstance().GetCachedBitmap(item.iconIndex, _d2dContext.get(), _iconSizeDip))
         {
             item.icon = std::move(cached);
             continue;
@@ -483,12 +623,13 @@ void FolderView::ProcessIconLoadQueue()
             std::lock_guard lock(_d2dDeviceMutex);
             d2dDeviceSnapshot = _d2dDevice;
         }
-        const bool cachedForDevice = d2dDeviceSnapshot && IconCache::GetInstance().HasCachedIcon(request.iconIndex, d2dDeviceSnapshot.get());
+        const bool cachedForDevice = d2dDeviceSnapshot && IconCache::GetInstance().HasCachedIcon(request.iconIndex, d2dDeviceSnapshot.get(), request.targetDipSize);
 
         auto bitmapRequest                   = std::make_unique<IconBitmapRequest>();
         bitmapRequest->iconLoadBatchId       = batchId;
         bitmapRequest->enumerationGeneration = request.enumerationGeneration;
         bitmapRequest->iconIndex             = request.iconIndex;
+        bitmapRequest->targetDipSize         = request.targetDipSize;
         bitmapRequest->postedAt              = std::chrono::steady_clock::now();
         bitmapRequest->itemIndices           = std::move(request.itemIndices);
 
@@ -496,7 +637,7 @@ void FolderView::ProcessIconLoadQueue()
         if (! cachedForDevice)
         {
             const auto extractStart = std::chrono::steady_clock::now();
-            wil::unique_hicon hIcon = IconCache::GetInstance().ExtractSystemIcon(request.iconIndex, _iconSizeDip);
+            wil::unique_hicon hIcon = IconCache::GetInstance().ExtractSystemIcon(request.iconIndex, request.targetDipSize);
             PerfEmitDuration(L"icons.extract_us",
                              PerfElapsedUs(extractStart),
                              static_cast<uint64_t>(request.iconIndex),
@@ -588,11 +729,60 @@ void FolderView::QueueThumbnailLoading()
     _thumbnailLoadStats.staleDrops.store(0u, std::memory_order_release);
     _thumbnailLoadStats.pendingBitmapCreates.store(0u, std::memory_order_release);
     _thumbnailLoadStats.cacheHits.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.shellSuccess.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.wicSuccess.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.decodeFailures.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.visibleApply.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.cacheBytes.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.cacheEvicted.store(0u, std::memory_order_release);
     _thumbnailLoadStats.targetDipX100.store(static_cast<uint64_t>(std::round(targetDip * 100.0f)), std::memory_order_release);
 
     const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
     const size_t visibleStart = std::min(visibleStartRaw, _items.size());
     const size_t visibleEnd = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
+
+    uint64_t cacheBytes = 0u;
+    for (const FolderItem& item : _items)
+    {
+        if (! item.thumbnail)
+        {
+            continue;
+        }
+
+        const D2D1_SIZE_U pixelSize = item.thumbnail->GetPixelSize();
+        cacheBytes += static_cast<uint64_t>(pixelSize.width) * static_cast<uint64_t>(pixelSize.height) * 4u;
+    }
+
+    uint64_t evictedCount = 0u;
+    if (cacheBytes > kMaxThumbnailCacheBytes)
+    {
+        for (size_t index = 0; index < _items.size() && cacheBytes > kMaxThumbnailCacheBytes; ++index)
+        {
+            if (index >= visibleStart && index < visibleEnd)
+            {
+                continue;
+            }
+
+            FolderItem& item = _items[index];
+            if (! item.thumbnail)
+            {
+                continue;
+            }
+
+            const D2D1_SIZE_U pixelSize = item.thumbnail->GetPixelSize();
+            const uint64_t itemBytes = static_cast<uint64_t>(pixelSize.width) * static_cast<uint64_t>(pixelSize.height) * 4u;
+            item.thumbnail.reset();
+            cacheBytes = itemBytes >= cacheBytes ? 0u : cacheBytes - itemBytes;
+            ++evictedCount;
+        }
+    }
+    _thumbnailLoadStats.cacheBytes.store(cacheBytes, std::memory_order_release);
+    if (evictedCount > 0u)
+    {
+        _thumbnailLoadStats.cacheEvicted.fetch_add(evictedCount, std::memory_order_relaxed);
+        PerfEmitCounter(L"thumbnails.cache_evicted_count", evictedCount);
+    }
+    PerfEmitCounter(L"thumbnails.cache_bytes", cacheBytes);
 
     std::deque<ThumbnailLoadRequest> newQueue;
     const size_t reserveLimit = std::min(kMaxThumbnailQueueItems, visibleEnd - visibleStart);
@@ -639,6 +829,35 @@ void FolderView::QueueThumbnailLoading()
     static_cast<void>(batchId);
 }
 
+bool FolderView::HasMissingVisibleThumbnails() const
+{
+    if (! _thumbnailsVisible || _items.empty())
+    {
+        return false;
+    }
+
+    const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
+    const size_t visibleStart = std::min(visibleStartRaw, _items.size());
+    const size_t visibleEnd   = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
+    for (size_t index = visibleStart; index < visibleEnd; ++index)
+    {
+        if (! _items[index].thumbnail)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void FolderView::QueueMissingVisibleThumbnails()
+{
+    if (_thumbnailsVisible && _d2dContext && HasMissingVisibleThumbnails())
+    {
+        QueueThumbnailLoading();
+    }
+}
+
 void FolderView::CancelThumbnailLoading() noexcept
 {
     _thumbnailLoadStats.batchId.fetch_add(1u, std::memory_order_acq_rel);
@@ -649,6 +868,7 @@ void FolderView::CancelThumbnailLoading() noexcept
 
     _thumbnailLoadingActive.store(false, std::memory_order_release);
     _thumbnailLoadStats.pendingBitmapCreates.store(0u, std::memory_order_release);
+    _thumbnailLoadStats.cancelCount.fetch_add(1u, std::memory_order_relaxed);
     _enumerationCv.notify_one();
 }
 
@@ -708,6 +928,8 @@ void FolderView::ProcessThumbnailLoadQueue()
         const auto extractStart = std::chrono::steady_clock::now();
         HRESULT hr = S_FALSE;
         bool usedFallback = false;
+        bool allowWicFallback = false;
+        bool triedWicFallback = false;
 
 #ifdef ENABLE_TESTS
         const DebugThumbnailProviderMode providerMode = _debugThumbnailProviderMode.load(std::memory_order_acquire);
@@ -718,9 +940,22 @@ void FolderView::ProcessThumbnailLoadQueue()
         }
         else if (providerMode == DebugThumbnailProviderMode::ForceSyntheticSuccess)
         {
-            bitmapRequest->hBitmap = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex);
+            bitmapRequest->hBitmap = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex, false);
             hr = bitmapRequest->hBitmap ? S_OK : S_FALSE;
             usedFallback = ! bitmapRequest->hBitmap;
+            bitmapRequest->sourceKind = bitmapRequest->hBitmap ? ThumbnailBitmapRequest::SourceKind::Synthetic : ThumbnailBitmapRequest::SourceKind::Fallback;
+        }
+        else if (providerMode == DebugThumbnailProviderMode::ForceSyntheticWideSuccess)
+        {
+            bitmapRequest->hBitmap = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex, true);
+            hr = bitmapRequest->hBitmap ? S_OK : S_FALSE;
+            usedFallback = ! bitmapRequest->hBitmap;
+            bitmapRequest->sourceKind = bitmapRequest->hBitmap ? ThumbnailBitmapRequest::SourceKind::Synthetic : ThumbnailBitmapRequest::SourceKind::Fallback;
+        }
+        else if (providerMode == DebugThumbnailProviderMode::ForceShellFailureAllowWic)
+        {
+            hr = HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+            allowWicFallback = true;
         }
         else
 #endif
@@ -730,10 +965,54 @@ void FolderView::ProcessThumbnailLoadQueue()
             if (SUCCEEDED(hr) && shellBitmap)
             {
                 bitmapRequest->hBitmap = std::move(shellBitmap);
+                bitmapRequest->sourceKind = ThumbnailBitmapRequest::SourceKind::Shell;
+                _thumbnailLoadStats.shellSuccess.fetch_add(1u, std::memory_order_relaxed);
             }
             else
             {
+                allowWicFallback = true;
+            }
+        }
+
+        if (allowWicFallback && HasLikelyWicImageExtension(request.fullPath))
+        {
+            triedWicFallback = true;
+            const auto wicStart = std::chrono::steady_clock::now();
+            DecodedThumbnailPixels pixels;
+            const HRESULT wicHr = DecodeWicThumbnailPixels(request.fullPath, request.targetPx, pixels);
+            PerfEmitDuration(L"thumbnails.wic_decode_us",
+                             PerfElapsedUs(wicStart),
+                             static_cast<uint64_t>(request.itemIndex),
+                             static_cast<uint64_t>(request.targetPx),
+                             wicHr);
+            if (SUCCEEDED(wicHr) && pixels.IsValid())
+            {
+                bitmapRequest->pixels.widthPx = pixels.widthPx;
+                bitmapRequest->pixels.heightPx = pixels.heightPx;
+                bitmapRequest->pixels.strideBytes = pixels.strideBytes;
+                bitmapRequest->pixels.bgra = std::move(pixels.bgra);
+                bitmapRequest->sourceKind = ThumbnailBitmapRequest::SourceKind::Wic;
+                _thumbnailLoadStats.wicSuccess.fetch_add(1u, std::memory_order_relaxed);
+                hr = S_OK;
+                usedFallback = false;
+            }
+            else
+            {
+                hr = FAILED(wicHr) ? wicHr : S_FALSE;
                 usedFallback = true;
+            }
+        }
+        else if (allowWicFallback)
+        {
+            usedFallback = true;
+        }
+
+        if (usedFallback)
+        {
+            bitmapRequest->sourceKind = ThumbnailBitmapRequest::SourceKind::Fallback;
+            if (triedWicFallback)
+            {
+                _thumbnailLoadStats.decodeFailures.fetch_add(1u, std::memory_order_relaxed);
             }
         }
 
@@ -745,7 +1024,7 @@ void FolderView::ProcessThumbnailLoadQueue()
                          static_cast<uint64_t>(request.targetPx),
                          hr);
 
-        if (! bitmapRequest->hBitmap && ! usedFallback && request.retryCount < kMaxThumbnailLoadRetries)
+        if (! bitmapRequest->hBitmap && ! bitmapRequest->pixels.IsValid() && ! usedFallback && request.retryCount < kMaxThumbnailLoadRetries)
         {
             ++request.retryCount;
             {
@@ -848,7 +1127,7 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
         const auto convertStart = std::chrono::steady_clock::now();
         try
         {
-            bitmap = IconCache::GetInstance().ConvertIconToBitmapOnUIThread(requestPtr->hIcon.get(), requestPtr->iconIndex, _d2dContext.get());
+            bitmap = IconCache::GetInstance().ConvertIconToBitmapOnUIThread(requestPtr->hIcon.get(), requestPtr->iconIndex, _d2dContext.get(), requestPtr->targetDipSize);
         }
         catch (const std::bad_alloc&)
         {
@@ -887,7 +1166,7 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
     else
     {
         // Already cached for our device; just retrieve it.
-        bitmap = IconCache::GetInstance().GetCachedBitmap(requestPtr->iconIndex, _d2dContext.get());
+        bitmap = IconCache::GetInstance().GetCachedBitmap(requestPtr->iconIndex, _d2dContext.get(), requestPtr->targetDipSize);
         if (! bitmap)
         {
             return;
@@ -1002,7 +1281,7 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
         PerfEmitCounter(L"thumbnails.fallback_count", 1u);
     };
 
-    if (requestPtr->usedFallback || FAILED(requestPtr->hr) || ! requestPtr->hBitmap)
+    if (requestPtr->usedFallback || FAILED(requestPtr->hr) || (! requestPtr->hBitmap && ! requestPtr->pixels.IsValid()))
     {
         completeAsFallback();
         return;
@@ -1014,29 +1293,42 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
         return;
     }
 
-    if (! _wicFactory)
-    {
-        EnsureDeviceIndependentResources();
-    }
-
-    if (! _wicFactory)
-    {
-        completeAsFallback();
-        return;
-    }
-
-    wil::com_ptr<IWICBitmap> wicBitmap;
     const auto convertStart = std::chrono::steady_clock::now();
-    HRESULT hr = _wicFactory->CreateBitmapFromHBITMAP(requestPtr->hBitmap.get(), nullptr, WICBitmapUsePremultipliedAlpha, wicBitmap.put());
     wil::com_ptr<ID2D1Bitmap1> bitmap;
-    if (SUCCEEDED(hr) && wicBitmap)
+    HRESULT hr = S_OK;
+    const D2D1_BITMAP_PROPERTIES1 bitmapProps = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
+        _dpi,
+        _dpi);
+
+    if (requestPtr->pixels.IsValid())
     {
-        const D2D1_BITMAP_PROPERTIES1 bitmapProps = D2D1::BitmapProperties1(
-            D2D1_BITMAP_OPTIONS_NONE,
-            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-            _dpi,
-            _dpi);
-        hr = _d2dContext->CreateBitmapFromWicBitmap(wicBitmap.get(), &bitmapProps, bitmap.put());
+        hr = _d2dContext->CreateBitmap(D2D1::SizeU(requestPtr->pixels.widthPx, requestPtr->pixels.heightPx),
+                                       requestPtr->pixels.bgra.data(),
+                                       requestPtr->pixels.strideBytes,
+                                       &bitmapProps,
+                                       bitmap.put());
+    }
+    else
+    {
+        if (! _wicFactory)
+        {
+            EnsureDeviceIndependentResources();
+        }
+
+        if (! _wicFactory)
+        {
+            completeAsFallback();
+            return;
+        }
+
+        wil::com_ptr<IWICBitmap> wicBitmap;
+        hr = _wicFactory->CreateBitmapFromHBITMAP(requestPtr->hBitmap.get(), nullptr, WICBitmapUsePremultipliedAlpha, wicBitmap.put());
+        if (SUCCEEDED(hr) && wicBitmap)
+        {
+            hr = _d2dContext->CreateBitmapFromWicBitmap(wicBitmap.get(), &bitmapProps, bitmap.put());
+        }
     }
 
     PerfEmitDuration(L"thumbnails.ui_convert_us",
@@ -1058,6 +1350,7 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
 
     _items[requestPtr->itemIndex].thumbnail = std::move(bitmap);
     _thumbnailLoadStats.completed.fetch_add(1u, std::memory_order_relaxed);
+    _thumbnailLoadStats.visibleApply.fetch_add(1u, std::memory_order_relaxed);
     PerfEmitCounter(L"thumbnails.ui_apply_count", 1u);
 
     if (! _hWnd)
@@ -1087,6 +1380,53 @@ FolderView::ThumbnailDebugSnapshot FolderView::DebugGetThumbnailSnapshot() const
     snapshot.staleDropCount = _thumbnailLoadStats.staleDrops.load(std::memory_order_acquire);
     snapshot.pendingCount = _thumbnailLoadStats.pendingBitmapCreates.load(std::memory_order_acquire);
     snapshot.cacheHitCount = _thumbnailLoadStats.cacheHits.load(std::memory_order_acquire);
+    snapshot.shellSuccessCount = _thumbnailLoadStats.shellSuccess.load(std::memory_order_acquire);
+    snapshot.wicSuccessCount = _thumbnailLoadStats.wicSuccess.load(std::memory_order_acquire);
+    snapshot.decodeFailureCount = _thumbnailLoadStats.decodeFailures.load(std::memory_order_acquire);
+    snapshot.visibleApplyCount = _thumbnailLoadStats.visibleApply.load(std::memory_order_acquire);
+    const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
+    const size_t visibleStart = std::min(visibleStartRaw, _items.size());
+    const size_t visibleEnd = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
+    snapshot.visibleItemCount = static_cast<uint64_t>(visibleEnd - visibleStart);
+    for (size_t index = 0; index < _items.size(); ++index)
+    {
+        if (! _items[index].thumbnail)
+        {
+            continue;
+        }
+        ++snapshot.totalThumbnailCount;
+        if (index >= visibleStart && index < visibleEnd)
+        {
+            ++snapshot.visibleThumbnailCount;
+        }
+    }
+    uint64_t cacheBytes = _thumbnailLoadStats.cacheBytes.load(std::memory_order_acquire);
+    if (cacheBytes == 0u)
+    {
+        for (const FolderItem& item : _items)
+        {
+            if (! item.thumbnail)
+            {
+                continue;
+            }
+
+            const D2D1_SIZE_U pixelSize = item.thumbnail->GetPixelSize();
+            cacheBytes += static_cast<uint64_t>(pixelSize.width) * static_cast<uint64_t>(pixelSize.height) * 4u;
+        }
+    }
+    snapshot.cacheBytes = cacheBytes;
+    snapshot.cacheEvictedCount = _thumbnailLoadStats.cacheEvicted.load(std::memory_order_acquire);
+    snapshot.cancelCount = _thumbnailLoadStats.cancelCount.load(std::memory_order_acquire);
+    snapshot.lastDrawSawThumbnail = _debugLastThumbnailDrawSawThumbnail;
+    snapshot.lastDrawSourceWidthPx = _debugLastThumbnailSourceWidthPx;
+    snapshot.lastDrawSourceHeightPx = _debugLastThumbnailSourceHeightPx;
+    snapshot.lastDrawSlotRectDip = _debugLastThumbnailSlotRectDip;
+    snapshot.lastDrawRectDip = _debugLastThumbnailDrawRectDip;
+    snapshot.lastIconDrawSawIcon = _debugLastIconDrawSawIcon;
+    snapshot.lastIconDrawSourceWidthPx = _debugLastIconDrawSourceWidthPx;
+    snapshot.lastIconDrawSourceHeightPx = _debugLastIconDrawSourceHeightPx;
+    snapshot.lastIconDrawSlotRectDip = _debugLastIconDrawSlotRectDip;
+    snapshot.lastIconDrawRectDip = _debugLastIconDrawRectDip;
     return snapshot;
 }
 
@@ -1125,7 +1465,7 @@ void FolderView::OnBatchIconUpdate()
         }
 
         // Try to get from cache
-        auto bitmap = IconCache::GetInstance().GetCachedBitmap(item.iconIndex, _d2dContext.get());
+        auto bitmap = IconCache::GetInstance().GetCachedBitmap(item.iconIndex, _d2dContext.get(), _iconSizeDip);
         if (bitmap)
         {
             item.icon = bitmap;
@@ -1211,7 +1551,7 @@ void FolderView::OnIconLoaded(size_t itemIndex)
     }
 
     // Get from cache (already converted, just retrieve)
-    auto bitmap = IconCache::GetInstance().GetCachedBitmap(item.iconIndex, _d2dContext.get());
+    auto bitmap = IconCache::GetInstance().GetCachedBitmap(item.iconIndex, _d2dContext.get(), _iconSizeDip);
     if (bitmap)
     {
         item.icon = bitmap;

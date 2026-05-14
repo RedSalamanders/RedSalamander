@@ -3,6 +3,7 @@
 #include "Localization/RcParser.h"
 #include "Localization/RcWriter.h"
 #include "ThemeDefinitionIo.h"
+#include "Helpers.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -287,8 +288,13 @@ enum class BomlessUtf16Guess : uint8_t
         textSize -= 3u;
     }
 
-    if (DecodeBytes(CP_UTF8, textBytes, textSize, outText) || DecodeBytes(CP_ACP, textBytes, textSize, outText))
+    if (DecodeBytes(CP_UTF8, textBytes, textSize, outText))
     {
+        return S_OK;
+    }
+    if (DecodeBytes(CP_ACP, textBytes, textSize, outText))
+    {
+        Debug::Warning(L"RedConfigure: '{}' is not valid UTF-8; decoded using the active Windows code page fallback.", path.wstring());
         return S_OK;
     }
 

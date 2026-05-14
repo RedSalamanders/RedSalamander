@@ -877,15 +877,12 @@ LRESULT StatusBarOnLButtonUp(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
         return 0;
     }
 
-    POINT screenPt = clientPt;
-    ClientToScreen(hwnd, &screenPt);
-
-    NMMOUSE mouse{};
+    StatusBarSortClickNotification mouse{};
     mouse.hdr.hwndFrom = hwnd;
     mouse.hdr.idFrom   = static_cast<UINT_PTR>(GetDlgCtrlID(hwnd));
-    mouse.hdr.code     = NM_CLICK;
-    mouse.dwItemSpec   = kStatusBarPartSort;
-    mouse.pt           = screenPt;
+    mouse.hdr.code     = kStatusBarSortClickNotification;
+    mouse.part         = kStatusBarPartSort;
+    mouse.clientPoint  = clientPt;
 
     if (const HWND parent = GetParent(hwnd))
     {

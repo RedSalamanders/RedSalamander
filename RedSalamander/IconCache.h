@@ -76,13 +76,13 @@ public:
     // iconIndex: System image list icon index from SHGetFileInfo
     // d2dContext: D2D device context used to create/cache the bitmap (cache is per ID2D1Device)
     // Cached or newly created D2D bitmap, or nullptr on failure</returns>
-    wil::com_ptr<ID2D1Bitmap1> GetIconBitmap(int iconIndex, ID2D1DeviceContext* d2dContext);
+    wil::com_ptr<ID2D1Bitmap1> GetIconBitmap(int iconIndex, ID2D1DeviceContext* d2dContext, float targetDipSize = 16.0f);
 
     // Check if icon is already cached for the given D2D device (thread-safe, no D2D calls).
-    bool HasCachedIcon(int iconIndex, ID2D1Device* device) const;
+    bool HasCachedIcon(int iconIndex, ID2D1Device* device, float targetDipSize = 16.0f) const;
 
     // Get cached bitmap without creating (returns nullptr if not cached).
-    wil::com_ptr<ID2D1Bitmap1> GetCachedBitmap(int iconIndex, ID2D1DeviceContext* d2dContext) const;
+    wil::com_ptr<ID2D1Bitmap1> GetCachedBitmap(int iconIndex, ID2D1DeviceContext* d2dContext, float targetDipSize = 16.0f) const;
 
     // Extract an icon from the system image list.
     // Contract:
@@ -95,7 +95,7 @@ public:
 
     // Convert HICON to D2D bitmap on UI thread and cache it.
     // Must be called on UI thread with valid D2D context.
-    wil::com_ptr<ID2D1Bitmap1> ConvertIconToBitmapOnUIThread(HICON icon, int iconIndex, ID2D1DeviceContext* d2dContext);
+    wil::com_ptr<ID2D1Bitmap1> ConvertIconToBitmapOnUIThread(HICON icon, int iconIndex, ID2D1DeviceContext* d2dContext, float targetDipSize = 16.0f);
 
     // Create GDI HBITMAP from HICON for menu icons (UI thread only).
     // Returns 32-bit premultiplied BGRA bitmap suitable for SetMenuItemBitmaps.
@@ -199,6 +199,7 @@ private:
     // targetDipSize: Target display size in DIPs (e.g., 16.0f, 48.0f)
     // Returns: SHIL_JUMBO (256×256), SHIL_EXTRALARGE (48×48), SHIL_LARGE (32×32), or SHIL_SMALL (16×16)
     int SelectOptimalImageListSize(float targetDipSize) const;
+    [[nodiscard]] int MakeBitmapCacheSizeClass(float targetDipSize) const noexcept;
 
     // Convert HICON to ID2D1Bitmap1 by drawing into a top-down 32-bit DIB.
     // Returns nullptr on conversion failures (logged via Debug::Warning).
@@ -212,10 +213,28 @@ private:
         size_t bytes          = 0; // Approximate: width × height × 4 (BGRA)
     };
 
+    struct IconBitmapCacheKey
+    {
+        int iconIndex     = -1;
+        int imageListSize = 0;
+
+        [[nodiscard]] bool operator==(const IconBitmapCacheKey& other) const noexcept = default;
+    };
+
+    struct IconBitmapCacheKeyHash
+    {
+        [[nodiscard]] size_t operator()(const IconBitmapCacheKey& key) const noexcept
+        {
+            size_t hash = std::hash<int>{}(key.iconIndex);
+            hash ^= static_cast<size_t>(key.imageListSize) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+            return hash;
+        }
+    };
+
     struct DeviceCache
     {
         wil::com_ptr<ID2D1Device> device;
-        std::unordered_map<int, CacheEntry> bitmaps;
+        std::unordered_map<IconBitmapCacheKey, CacheEntry, IconBitmapCacheKeyHash> bitmaps;
         size_t accessCounter = 0;
     };
 

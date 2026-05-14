@@ -809,6 +809,7 @@
         "sortBy": { "$ref": "#/$defs/folderSortBy", "title": "Sort By", "description": "How items are sorted." },
         "sortDirection": { "$ref": "#/$defs/folderSortDirection", "title": "Direction", "description": "Ascending or descending sort direction." },
         "fileExtensionsVisible": { "type": "boolean", "default": true, "title": "File Extensions", "description": "Whether file extensions are shown in pane item labels. This is display-only; file operations still use real names." },
+        "thumbnailSizeDip": { "type": "integer", "enum": [48, 64, 96, 128], "default": 64, "title": "Thumbnail Size", "description": "Per-pane thumbnail size in device-independent pixels." },
         "thumbnailsVisible": { "type": "boolean", "default": false, "title": "Legacy Thumbnails", "description": "Deprecated compatibility flag. Readers treat true as display=thumbnails; writers persist thumbnails through view.display instead." },
         "navigationBarVisible": { "type": "boolean", "default": true, "title": "Navigation Bar", "description": "Whether the pane navigation/address bar is visible." },
         "filterBarVisible": { "type": "boolean", "default": false, "title": "Filter Bar", "description": "Whether the persistent pane filter-state bar is visible." },
@@ -1296,7 +1297,7 @@
       "properties": {
         "compactMode": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "title": "Compact mode",
           "description": "Use compact spacing and control density on supported DxUI surfaces.",
           "x-ui-pane": "General",

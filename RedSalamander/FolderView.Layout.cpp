@@ -61,6 +61,9 @@ void FolderView::UpdateEstimatedMetrics()
 
 void FolderView::LayoutItems()
 {
+    Debug::Perf::Scope layoutPerf(L"render.layout_items_us");
+    layoutPerf.SetValue0(static_cast<uint64_t>(_items.size()));
+
     EnsureDeviceIndependentResources();
 
     // Ensure estimated metrics are computed from actual font (DPI-aware)
@@ -74,6 +77,7 @@ void FolderView::LayoutItems()
 
     _columnCounts.clear();
     _columnPrefixSums.clear();
+    _columnLayout.clear();
 
     if (_items.empty() || clientWidthDip <= 0.0f)
     {
@@ -116,6 +120,7 @@ void FolderView::LayoutItems()
         _contentHeight    = std::max(clientHeightDip, 0.0f);
         _contentWidth     = std::max(clientWidthDip, 0.0f);
         _horizontalOffset = 0.0f;
+        layoutPerf.SetValue1(0);
         return;
     }
 
@@ -250,22 +255,7 @@ void FolderView::LayoutItems()
         maxLabelHeight = 16.0f;
     }
 
-    float textWidthForLayout = maxLabelWidth;
-    if (_displayMode == DisplayMode::Detailed)
-    {
-        textWidthForLayout = std::max(maxLabelWidth, maxDetailsWidth);
-    }
-    else if (includeMetadataLine)
-    {
-        textWidthForLayout = std::max(std::max(maxLabelWidth, maxDetailsWidth), maxMetadataWidth);
-    }
-
-    const float minColumnWidth     = _iconSizeDip + kIconTextGapDip + kLabelHorizontalPaddingDip * 2.0f;
-    const float textWidthSafety    = std::max(_estimatedCharWidthDip, 8.0f);
-    const float desiredColumnWidth = _iconSizeDip + kIconTextGapDip + textWidthForLayout + kLabelHorizontalPaddingDip * 2.0f + textWidthSafety;
-    const float targetColumnWidth  = std::max(minColumnWidth, desiredColumnWidth);
-    const float maxAllowedWidth    = std::max(1.0f, clientWidthDip);
-    _tileWidthDip                  = std::min(targetColumnWidth, maxAllowedWidth);
+    const float textWidthSafety = std::max(_estimatedCharWidthDip, 8.0f);
 
     _labelHeightDip = maxLabelHeight + kLabelVerticalPaddingDip * 2.0f;
     if (includeDetailsLine)
@@ -285,29 +275,58 @@ void FolderView::LayoutItems()
     }
 
     const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
-    const float columnStride  = _tileWidthDip + kColumnSpacingDip;
-    const float rowStride     = _tileHeightDip + rowSpacingDip;
-
-    const int maxRowsPerColumn = std::max(1, static_cast<int>(std::floor((clientHeightDip + rowSpacingDip) / rowStride)));
-    _rowsPerColumn             = std::max(1, maxRowsPerColumn);
-    const int requiredColumns  = std::max(1, static_cast<int>(std::ceil(static_cast<float>(_items.size()) / static_cast<float>(_rowsPerColumn))));
-    _columns                   = requiredColumns;
-
-    _columnCounts.reserve(static_cast<size_t>(_columns));
-    size_t remaining = _items.size();
-    for (int column = 0; column < _columns && remaining > 0; ++column)
+    std::vector<FolderViewColumnLayout::ItemTextMetrics> columnTextMetrics;
+    columnTextMetrics.reserve(_items.size());
+    for (const auto& item : _items)
     {
-        const int count = static_cast<int>(std::min<size_t>(static_cast<size_t>(_rowsPerColumn), remaining));
-        _columnCounts.push_back(count);
-        remaining -= count;
+        const std::wstring_view labelText = GetVisualDisplayName(item);
+        FolderViewColumnLayout::ItemTextMetrics metrics{
+            .labelWidthDip = static_cast<float>(labelText.size()) * _estimatedCharWidthDip,
+        };
+
+        if (includeDetailsLine)
+        {
+            metrics.detailsWidthDip = static_cast<float>(item.detailsText.size()) * _estimatedCharWidthDip * 0.85f;
+        }
+        if (includeMetadataLine)
+        {
+            metrics.metadataWidthDip = static_cast<float>(item.metadataText.size()) * _estimatedCharWidthDip * 0.85f;
+        }
+
+        columnTextMetrics.push_back(metrics);
     }
-    _columns = static_cast<int>(_columnCounts.size());
+
+    FolderViewColumnLayout::Result columnLayout = FolderViewColumnLayout::Resolve(FolderViewColumnLayout::Input{
+        .clientWidthDip       = std::max(1.0f, clientWidthDip),
+        .clientHeightDip      = clientHeightDip,
+        .tileHeightDip        = _tileHeightDip,
+        .rowSpacingDip        = rowSpacingDip,
+        .iconSizeDip          = _iconSizeDip,
+        .iconTextGapDip       = kIconTextGapDip,
+        .horizontalPaddingDip = kLabelHorizontalPaddingDip * 2.0f,
+        .columnSpacingDip     = kColumnSpacingDip,
+        .textWidthSafetyDip   = textWidthSafety,
+        .includeDetailsLine   = includeDetailsLine,
+        .includeMetadataLine  = includeMetadataLine,
+        .items                = columnTextMetrics,
+    });
+
+    _columnLayout = std::move(columnLayout.columns);
+    _tileWidthDip = columnLayout.maxColumnWidthDip;
+    _rowsPerColumn = std::max(1, columnLayout.rowsPerColumn);
+    _columns       = static_cast<int>(_columnLayout.size());
     if (_columns < 1)
     {
         _columns = 1;
     }
 
-    // Build prefix sums for O(1) hit testing: _columnPrefixSums[c] = items before column c
+    _columnCounts.reserve(_columnLayout.size());
+    for (const auto& column : _columnLayout)
+    {
+        _columnCounts.push_back(static_cast<int>(column.itemCount));
+    }
+
+    // Build prefix sums for O(1) keyboard navigation: _columnPrefixSums[c] = items before column c
     _columnPrefixSums.clear();
     _columnPrefixSums.reserve(_columnCounts.size() + 1);
     size_t prefixSum = 0;
@@ -318,45 +337,36 @@ void FolderView::LayoutItems()
     }
     _columnPrefixSums.push_back(prefixSum); // Sentinel for bounds checking
 
-    size_t index    = 0;
-    float x         = kColumnSpacingDip;
     float maxBottom = 0.0f;
     float maxRight  = 0.0f;
+    const float rowStride = _tileHeightDip + rowSpacingDip;
 
-    for (int column = 0; column < static_cast<int>(_columnCounts.size()) && index < _items.size(); ++column)
+    for (int columnIndex = 0; columnIndex < static_cast<int>(_columnLayout.size()); ++columnIndex)
     {
-        const int itemsInColumn = _columnCounts[static_cast<size_t>(column)];
-        float y                 = rowSpacingDip;
-        for (int row = 0; row < itemsInColumn && index < _items.size(); ++row, ++index)
+        const auto& column = _columnLayout[static_cast<size_t>(columnIndex)];
+        float y            = rowSpacingDip;
+        for (size_t row = 0; row < column.itemCount && column.startIndex + row < _items.size(); ++row)
         {
-            auto& item  = _items[index];
-            item.column = column;
-            item.row    = row;
-            item.bounds = D2D1::RectF(x, y, x + _tileWidthDip, y + _tileHeightDip);
+            auto& item  = _items[column.startIndex + row];
+            item.column = columnIndex;
+            item.row    = static_cast<int>(row);
+            item.bounds = D2D1::RectF(column.leftDip, y, column.leftDip + column.widthDip, y + _tileHeightDip);
             y += rowStride;
             maxBottom = std::max(maxBottom, item.bounds.bottom);
             maxRight  = std::max(maxRight, item.bounds.right);
         }
-        x += columnStride;
     }
 
-    const float labelWidth = std::max(0.0f, _tileWidthDip - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
-
-    // Track width changes to avoid unnecessary layout work
-    constexpr float kWidthChangeThreshold = 1.0f; // DIPs
-    if (std::abs(labelWidth - _lastLayoutWidth) > kWidthChangeThreshold)
-    {
-        _lastLayoutWidth = labelWidth;
-    }
-
-    UpdateItemTextLayouts(labelWidth);
+    _lastLayoutWidth = _tileWidthDip;
+    UpdateItemTextLayouts();
 
     _contentHeight                  = clientHeightDip;
-    _contentWidth                   = std::max(maxRight + kColumnSpacingDip, clientWidthDip);
+    _contentWidth                   = std::max({columnLayout.contentWidthDip, maxRight + kColumnSpacingDip, clientWidthDip});
     _scrollOffset                   = 0.0f;
     const float viewWidthDip        = std::max(clientWidthDip, 0.0f);
     const float maxHorizontalOffset = std::max(0.0f, _contentWidth - viewWidthDip);
     _horizontalOffset               = std::clamp(_horizontalOffset, 0.0f, maxHorizontalOffset);
+    layoutPerf.SetValue1(static_cast<uint64_t>(_columnLayout.size()));
 }
 
 void FolderView::UpdateScrollMetrics()
@@ -382,7 +392,13 @@ void FolderView::UpdateScrollMetrics()
     ShowScrollBar(_hWnd.get(), SB_HORZ, needHorizontal ? TRUE : FALSE);
 }
 
-void FolderView::UpdateItemTextLayouts(float labelWidth)
+float FolderView::GetItemTextLayoutWidth(const FolderItem& item) const noexcept
+{
+    const float itemWidth = std::max(0.0f, item.bounds.right - item.bounds.left);
+    return std::max(0.0f, itemWidth - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
+}
+
+void FolderView::UpdateItemTextLayouts()
 {
     if (! _dwriteFactory || ! _labelFormat)
     {
@@ -399,7 +415,6 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
     const bool includeDetailsLine =
         _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
-    const float constrainedWidth          = std::max(labelWidth, 1.0f);
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
     const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
     const float constrainedMetadataHeight = std::max(_metadataLineHeightDip, 1.0f);
@@ -428,6 +443,7 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
     for (size_t i = rangeStart; i < rangeEnd; ++i)
     {
         auto& item = _items[i];
+        const float constrainedWidth = std::max(GetItemTextLayoutWidth(item), 1.0f);
 
         if (item.displayName.empty())
         {
@@ -582,7 +598,7 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
 
 std::pair<size_t, size_t> FolderView::GetVisibleItemRange() const
 {
-    if (_items.empty() || _columnCounts.empty() || _tileWidthDip <= 0.0f || _tileHeightDip <= 0.0f)
+    if (_items.empty() || _columnLayout.empty() || _tileHeightDip <= 0.0f)
     {
         return {0, _items.size()};
     }
@@ -595,55 +611,36 @@ std::pair<size_t, size_t> FolderView::GetVisibleItemRange() const
         return {0, _items.size()};
     }
 
-    const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
-    const float columnStride  = _tileWidthDip + kColumnSpacingDip;
-    const float rowStride     = _tileHeightDip + rowSpacingDip;
-
-    if (columnStride <= 0.0f || rowStride <= 0.0f)
-    {
-        return {0, _items.size()};
-    }
-
-    // Calculate visible column range
     const float layoutLeft  = _horizontalOffset;
     const float layoutRight = _horizontalOffset + viewWidthDip;
 
-    int firstVisibleColumn = static_cast<int>(std::floor((layoutLeft - kColumnSpacingDip) / columnStride));
-    int lastVisibleColumn  = static_cast<int>(std::ceil((layoutRight - kColumnSpacingDip) / columnStride));
+    size_t firstVisibleColumn = _columnLayout.size();
+    size_t lastVisibleColumn  = 0;
+    for (size_t columnIndex = 0; columnIndex < _columnLayout.size(); ++columnIndex)
+    {
+        const auto& column = _columnLayout[columnIndex];
+        if (column.RightDip() < layoutLeft)
+        {
+            continue;
+        }
+        if (column.leftDip > layoutRight)
+        {
+            break;
+        }
+        if (firstVisibleColumn == _columnLayout.size())
+        {
+            firstVisibleColumn = columnIndex;
+        }
+        lastVisibleColumn = columnIndex;
+    }
 
-    firstVisibleColumn = std::max(0, firstVisibleColumn);
-    lastVisibleColumn  = std::min(lastVisibleColumn, static_cast<int>(_columnCounts.size()) - 1);
-
-    if (firstVisibleColumn > lastVisibleColumn)
+    if (firstVisibleColumn == _columnLayout.size())
     {
         return {0, 0};
     }
 
-    // Use prefix sums for O(1) index calculation
-    const size_t firstCol = static_cast<size_t>(firstVisibleColumn);
-    const size_t lastCol  = static_cast<size_t>(lastVisibleColumn);
-
-    size_t startIndex = 0;
-    size_t endIndex   = 0;
-    if (! _columnPrefixSums.empty() && firstCol < _columnPrefixSums.size())
-    {
-        startIndex = _columnPrefixSums[firstCol];
-        endIndex   = (lastCol + 1 < _columnPrefixSums.size()) ? _columnPrefixSums[lastCol + 1] : _items.size();
-    }
-    else
-    {
-        // Fallback to loop (shouldn't happen if prefix sums are properly maintained)
-        for (int col = 0; col < firstVisibleColumn && col < static_cast<int>(_columnCounts.size()); ++col)
-        {
-            startIndex += static_cast<size_t>(_columnCounts[static_cast<size_t>(col)]);
-        }
-        endIndex = startIndex;
-        for (int col = firstVisibleColumn; col <= lastVisibleColumn && col < static_cast<int>(_columnCounts.size()); ++col)
-        {
-            endIndex += static_cast<size_t>(_columnCounts[static_cast<size_t>(col)]);
-        }
-    }
-
+    const size_t startIndex = std::min(_columnLayout[firstVisibleColumn].startIndex, _items.size());
+    const size_t endIndex   = std::min(_columnLayout[lastVisibleColumn].startIndex + _columnLayout[lastVisibleColumn].itemCount, _items.size());
     return {startIndex, std::min(endIndex, _items.size())};
 }
 
@@ -923,8 +920,6 @@ void FolderView::ProcessIdleLayoutBatch()
     const bool includeDetailsLine =
         _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
-    const float labelWidth                = std::max(0.0f, _tileWidthDip - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
-    const float constrainedWidth          = std::max(labelWidth, 1.0f);
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
     const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
     const float constrainedMetadataHeight = std::max(_metadataLineHeightDip, 1.0f);
@@ -942,6 +937,8 @@ void FolderView::ProcessIdleLayoutBatch()
         {
             continue; // Skip empty names or already processed items
         }
+
+        const float constrainedWidth = std::max(GetItemTextLayoutWidth(item), 1.0f);
 
         // Create label layout
         wil::com_ptr<IDWriteTextLayout> layout;
@@ -1064,7 +1061,7 @@ std::optional<size_t> FolderView::HitTest(POINT clientPt) const
 {
     float x = DipFromPx(clientPt.x) + _horizontalOffset;
     float y = DipFromPx(clientPt.y) + _scrollOffset;
-    if (_columnCounts.empty() || _tileWidthDip <= 0.0f || _tileHeightDip <= 0.0f)
+    if (_columnLayout.empty() || _tileHeightDip <= 0.0f)
     {
         for (size_t i = 0; i < _items.size(); ++i)
         {
@@ -1078,34 +1075,29 @@ std::optional<size_t> FolderView::HitTest(POINT clientPt) const
     }
 
     const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
-    const float columnStride  = _tileWidthDip + kColumnSpacingDip;
     const float rowStride     = _tileHeightDip + rowSpacingDip;
-    if (columnStride <= 0.0f || rowStride <= 0.0f)
+    if (rowStride <= 0.0f)
     {
         return std::nullopt;
     }
 
-    const float firstColumnLeft = kColumnSpacingDip;
-    const float firstRowTop     = rowSpacingDip;
-    if (x < firstColumnLeft || y < firstRowTop)
+    const float firstRowTop = rowSpacingDip;
+    if (y < firstRowTop)
     {
         return std::nullopt;
     }
 
-    int column = static_cast<int>(std::floor((x - firstColumnLeft) / columnStride));
-    if (column < 0 || column >= static_cast<int>(_columnCounts.size()))
+    const auto columnIt = std::find_if(_columnLayout.begin(), _columnLayout.end(), [x](const FolderViewColumnLayout::Column& column) noexcept
     {
-        return std::nullopt;
-    }
-
-    const float columnLeft = firstColumnLeft + static_cast<float>(column) * columnStride;
-    if (x > columnLeft + _tileWidthDip)
+        return x >= column.leftDip && x <= column.RightDip();
+    });
+    if (columnIt == _columnLayout.end())
     {
         return std::nullopt;
     }
 
     int row = static_cast<int>(std::floor((y - firstRowTop) / rowStride));
-    if (row < 0 || row >= _columnCounts[static_cast<size_t>(column)])
+    if (row < 0 || row >= static_cast<int>(columnIt->itemCount))
     {
         return std::nullopt;
     }
@@ -1116,13 +1108,7 @@ std::optional<size_t> FolderView::HitTest(POINT clientPt) const
         return std::nullopt;
     }
 
-    // O(1) index calculation using prefix sums
-    const size_t columnIndex = static_cast<size_t>(column);
-    if (columnIndex >= _columnPrefixSums.size())
-    {
-        return std::nullopt;
-    }
-    const size_t index = _columnPrefixSums[columnIndex] + static_cast<size_t>(row);
+    const size_t index = columnIt->startIndex + static_cast<size_t>(row);
     if (index >= _items.size())
     {
         return std::nullopt;
@@ -1145,12 +1131,16 @@ void FolderView::EnsureVisible(size_t index)
     const auto& item         = _items[index];
     const auto& bounds       = item.bounds;
     const float viewWidthDip = std::max(0.0f, DipFromPx(_clientSize.cx));
-    const float columnStride = _tileWidthDip + kColumnSpacingDip;
+    float columnLeft         = bounds.left;
+    float columnWidth        = std::max(0.0f, bounds.right - bounds.left);
+    if (item.column >= 0 && item.column < static_cast<int>(_columnLayout.size()))
+    {
+        const auto& column = _columnLayout[static_cast<size_t>(item.column)];
+        columnLeft         = column.leftDip;
+        columnWidth        = column.widthDip;
+    }
 
-    // Calculate the column's left edge (snap to column boundary)
-    const float columnLeft = kColumnSpacingDip + (static_cast<float>(item.column) * columnStride);
-
-    if (columnLeft < _horizontalOffset)
+    if (bounds.left < _horizontalOffset)
     {
         // Item is to the left - scroll to show its column aligned on left
         _horizontalOffset = columnLeft;
@@ -1161,17 +1151,15 @@ void FolderView::EnsureVisible(size_t index)
         // Try to align column on left edge if possible
         _horizontalOffset = columnLeft;
 
-        // If that would scroll too far, just ensure item is visible
-        if (_horizontalOffset > bounds.right - viewWidthDip)
+        // If the column is wider than the viewport, keep the target item's right edge visible.
+        if (columnWidth > viewWidthDip)
         {
             _horizontalOffset = bounds.right - viewWidthDip;
-            // Snap to nearest column boundary
-            const float columnIndex = std::round((_horizontalOffset - kColumnSpacingDip) / columnStride);
-            _horizontalOffset       = kColumnSpacingDip + (columnIndex * columnStride);
         }
     }
 
     _horizontalOffset = std::clamp(_horizontalOffset, 0.0f, std::max(0.0f, _contentWidth - viewWidthDip));
     UpdateScrollMetrics();
+    QueueMissingVisibleThumbnails();
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
 }

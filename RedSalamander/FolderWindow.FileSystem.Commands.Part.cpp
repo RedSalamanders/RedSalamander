@@ -759,6 +759,7 @@ void RecordChangeAttributesFailure(FolderWindow::ChangeAttributesReport& report,
 
 constexpr wchar_t kChangeAttributesOptionsPromptClassName[] = L"RedSalamander.ChangeAttributesOptionsPrompt";
 constexpr wchar_t kOpenedFilesWindowClassName[]              = L"RedSalamander.OpenedFilesWindow";
+constexpr wchar_t kSharedDirectoriesWindowClassName[]        = L"RedSalamander.SharedDirectoriesWindow";
 
 #ifdef ENABLE_TESTS
 std::atomic<HWND> g_changeAttributesOptionsPromptWindow{nullptr};
@@ -8982,126 +8983,6 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
     return name;
 }
 
-void ConfigureSharedDirectoriesListView(HWND listView) noexcept
-{
-    if (! listView)
-    {
-        return;
-    }
-
-    ListView_SetExtendedListViewStyleEx(listView,
-                                        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP,
-                                        LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP);
-
-    while (ListView_DeleteColumn(listView, 0) != FALSE)
-    {
-    }
-
-    const std::array<std::pair<UINT, int>, 4> columns{{
-        {IDS_SHARED_DIRECTORIES_COLUMN_NAME, 120},
-        {IDS_SHARED_DIRECTORIES_COLUMN_LOCAL_PATH, 220},
-        {IDS_SHARED_DIRECTORIES_COLUMN_TYPE, 70},
-        {IDS_SHARED_DIRECTORIES_COLUMN_REMARK, 160},
-    }};
-
-    for (size_t index = 0; index < columns.size(); ++index)
-    {
-        const auto& [stringId, width] = columns[index];
-        std::wstring text            = LoadStringResource(nullptr, stringId);
-        LVCOLUMNW column{};
-        column.mask     = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
-        column.cx       = width;
-        column.iSubItem = static_cast<int>(index);
-        column.pszText  = text.data();
-        ListView_InsertColumn(listView, static_cast<int>(index), &column);
-    }
-}
-
-void SetSharedDirectoriesListSubItem(HWND listView, int itemIndex, int subItemIndex, const std::wstring& text) noexcept
-{
-    LVITEMW item{};
-    item.mask     = LVIF_TEXT;
-    item.iItem    = itemIndex;
-    item.iSubItem = subItemIndex;
-    item.pszText  = const_cast<wchar_t*>(text.c_str());
-    ListView_SetItem(listView, &item);
-}
-
-void InsertSharedDirectoriesListRow(HWND listView,
-                                    int itemIndex,
-                                    const std::wstring& name,
-                                    const std::wstring& localPath,
-                                    const std::wstring& type,
-                                    const std::wstring& remark) noexcept
-{
-    LVITEMW item{};
-    item.mask     = LVIF_TEXT | LVIF_PARAM;
-    item.iItem    = itemIndex;
-    item.iSubItem = 0;
-    item.pszText  = const_cast<wchar_t*>(name.c_str());
-    item.lParam   = static_cast<LPARAM>(itemIndex);
-    ListView_InsertItem(listView, &item);
-
-    SetSharedDirectoriesListSubItem(listView, itemIndex, 1, localPath);
-    SetSharedDirectoriesListSubItem(listView, itemIndex, 2, type);
-    SetSharedDirectoriesListSubItem(listView, itemIndex, 3, remark);
-}
-
-[[nodiscard]] size_t GetSharedDirectoriesListSelectedIndex(HWND listView) noexcept
-{
-    if (! listView)
-    {
-        return kSharedDirectoriesNoSelection;
-    }
-
-    const int selected = ListView_GetNextItem(listView, -1, LVNI_SELECTED);
-    if (selected < 0)
-    {
-        return kSharedDirectoriesNoSelection;
-    }
-    return static_cast<size_t>(selected);
-}
-
-void SelectSharedDirectoriesListRow(HWND listView, size_t selectedIndex, size_t rowCount) noexcept
-{
-    if (! listView || selectedIndex == kSharedDirectoriesNoSelection || selectedIndex >= rowCount)
-    {
-        return;
-    }
-
-    ListView_SetItemState(listView, static_cast<int>(selectedIndex), LVIS_FOCUSED | LVIS_SELECTED, LVIS_FOCUSED | LVIS_SELECTED);
-    ListView_EnsureVisible(listView, static_cast<int>(selectedIndex), FALSE);
-}
-
-void UpdateSharedDirectoriesEmptyState(HWND dialog, bool empty, HRESULT hr) noexcept
-{
-    if (! dialog)
-    {
-        return;
-    }
-
-    HWND listView    = GetDlgItem(dialog, IDC_SHARED_DIRECTORIES_LIST);
-    HWND emptyText   = GetDlgItem(dialog, IDC_SHARED_DIRECTORIES_EMPTY);
-    HWND openButton  = GetDlgItem(dialog, IDC_SHARED_DIRECTORIES_OPEN);
-
-    if (emptyText)
-    {
-        const UINT stringId =
-            hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ? IDS_SHARED_DIRECTORIES_ACCESS_DENIED : IDS_SHARED_DIRECTORIES_EMPTY;
-        std::wstring text = LoadStringResource(nullptr, stringId);
-        if (text.empty())
-        {
-            text = hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ? L"Shared directories could not be listed because access was denied."
-                                                                 : L"No shared directories are available.";
-        }
-        SetWindowTextW(emptyText, text.c_str());
-    }
-
-    ShowWindow(listView, empty ? SW_HIDE : SW_SHOW);
-    ShowWindow(emptyText, empty ? SW_SHOW : SW_HIDE);
-    EnableWindow(openButton, FALSE);
-}
-
 [[nodiscard]] bool SharedDirectoryPathExists(std::wstring_view localPath) noexcept
 {
     if (localPath.empty())
@@ -9272,7 +9153,7 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
                     case IDCANCEL:
                         if (state->owner)
                         {
-                            state->owner->CloseOpenedFilesDialog();
+                            state->owner->RequestCloseOpenedFilesDialog();
                         }
                         return 0;
                 }
@@ -9282,7 +9163,7 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
             case WM_CLOSE:
                 if (state->owner)
                 {
-                    state->owner->CloseOpenedFilesDialog();
+                    state->owner->RequestCloseOpenedFilesDialog();
                     return 0;
                 }
                 break;
@@ -9439,8 +9320,8 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
             {L"openedBy", LoadStringResource(nullptr, IDS_OPENED_FILES_COLUMN_OPENED_BY), 170.0f, 120.0f, GridColumnKind::Text, false, false},
         };
 
-        rootStorage = std::make_unique<Panel>();
-        root        = rootStorage.get();
+        auto rootOwned = std::make_unique<Panel>();
+        root           = rootOwned.get();
 
         grid = root->AddChild<Grid>();
         grid->SetModel(this);
@@ -9472,7 +9353,7 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
             }
         });
 
-        dxHost.SetRoot(std::move(rootStorage));
+        dxHost.SetRoot(std::move(rootOwned));
         SetRows(std::move(rows));
     }
 
@@ -9559,11 +9440,9 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
 
     FolderWindow* owner = nullptr;
     Pane pane           = Pane::Left;
-    wil::unique_hwnd hwnd;
     AppTheme theme;
     RedSalamander::DxUi::ThemePalette palette{};
     RedSalamander::DxUi::WindowHost dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> rootStorage;
     RedSalamander::DxUi::Panel* root     = nullptr;
     RedSalamander::DxUi::Grid* grid      = nullptr;
     RedSalamander::DxUi::Label* emptyLabel = nullptr;
@@ -9573,11 +9452,436 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
     std::vector<OpenedFileRow> rows;
     size_t selectedIndex = kOpenedFilesNoSelection;
     bool destroyed       = false;
+    wil::unique_hwnd hwnd;
 };
 
 void FolderWindow::OpenedFilesDialogStateDeleter::operator()(OpenedFilesDialogState* state) const noexcept
 {
     delete state;
+}
+
+HRESULT FolderWindow::SharedDirectoriesDialogState::EnsureWindowClass() noexcept
+{
+    static ATOM atom = 0;
+    if (atom != 0)
+    {
+        return S_OK;
+    }
+
+    WNDCLASSEXW wc{};
+    wc.cbSize        = sizeof(wc);
+    wc.lpfnWndProc   = SharedDirectoriesDialogState::WndProc;
+    wc.hInstance     = GetModuleHandleW(nullptr);
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = kSharedDirectoriesWindowClassName;
+    wc.style         = CS_DBLCLKS;
+
+    atom = RegisterClassExW(&wc);
+    return atom != 0 ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+}
+
+LRESULT CALLBACK FolderWindow::SharedDirectoriesDialogState::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    if (message == WM_NCCREATE)
+    {
+        auto* cs    = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        auto* state = static_cast<SharedDirectoriesDialogState*>(cs ? cs->lpCreateParams : nullptr);
+        if (! state)
+        {
+            return FALSE;
+        }
+
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
+        if (! state->hwnd)
+        {
+            state->hwnd.reset(hwnd);
+        }
+        return TRUE;
+    }
+
+    auto* state = reinterpret_cast<SharedDirectoriesDialogState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! state)
+    {
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    bool handled     = false;
+    LRESULT dxResult = 0;
+    if (message != WM_CREATE)
+    {
+        dxResult = state->dxHost.HandleMessage(hwnd, message, wParam, lParam, handled);
+    }
+    if (handled)
+    {
+        if (message == WM_SIZE || message == WM_DPICHANGED)
+        {
+            state->Layout();
+        }
+        if (message == WM_NCDESTROY)
+        {
+            state->OnNcDestroy(hwnd);
+        }
+        return dxResult;
+    }
+
+    switch (message)
+    {
+        case WM_CREATE: return state->OnCreate(hwnd) ? 0 : -1;
+        case WM_SIZE: state->Layout(); return 0;
+        case WM_DPICHANGED:
+        {
+            const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+            if (suggested)
+            {
+                SetWindowPos(hwnd,
+                             nullptr,
+                             suggested->left,
+                             suggested->top,
+                             suggested->right - suggested->left,
+                             suggested->bottom - suggested->top,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            state->Layout();
+            return 0;
+        }
+        case WM_GETMINMAXINFO:
+        {
+            auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+            if (info)
+            {
+                const UINT dpi         = GetDpiForWindow(hwnd);
+                info->ptMinTrackSize.x = ScalePanePromptForDpi(dpi, 520);
+                info->ptMinTrackSize.y = ScalePanePromptForDpi(dpi, 300);
+            }
+            return 0;
+        }
+        case WM_COMMAND:
+            switch (LOWORD(wParam))
+            {
+                case IDOK:
+                case IDC_SHARED_DIRECTORIES_OPEN:
+                    if (state->owner)
+                    {
+                        static_cast<void>(state->owner->OpenSharedDirectoriesDialogSelection());
+                    }
+                    return 0;
+                case IDC_SHARED_DIRECTORIES_MANAGE:
+                    if (state->owner)
+                    {
+                        state->owner->OpenSharedDirectoriesManagement();
+                    }
+                    return 0;
+                case IDCANCEL:
+                    if (state->owner)
+                    {
+                        state->owner->RequestCloseSharedDirectoriesDialog();
+                    }
+                    return 0;
+            }
+            break;
+        case WM_ERASEBKGND: return 1;
+        case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, state->theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+        case WM_CLOSE:
+            if (state->owner)
+            {
+                state->owner->RequestCloseSharedDirectoriesDialog();
+                return 0;
+            }
+            break;
+        case WM_NCDESTROY:
+            state->OnNcDestroy(hwnd);
+            break;
+    }
+
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+size_t FolderWindow::SharedDirectoriesDialogState::GetRowCount() const noexcept
+{
+    return rows.size();
+}
+
+size_t FolderWindow::SharedDirectoriesDialogState::GetColumnCount() const noexcept
+{
+    return columns.size();
+}
+
+RedSalamander::DxUi::GridColumnDesc FolderWindow::SharedDirectoriesDialogState::GetColumn(size_t columnIndex) const
+{
+    return columns.at(columnIndex);
+}
+
+void FolderWindow::SharedDirectoriesDialogState::GetCellData(
+    size_t rowIndex, size_t columnIndex, RedSalamander::DxUi::GridCellData& outCell) const
+{
+    outCell = {};
+    if (rowIndex >= rows.size() || columnIndex >= columns.size())
+    {
+        return;
+    }
+
+    const SharedDirectoryRow& row = rows[rowIndex];
+    switch (columnIndex)
+    {
+        case 0u: outCell.text = row.name; break;
+        case 1u: outCell.text = row.localPath; break;
+        case 2u: outCell.text = row.type; break;
+        case 3u: outCell.text = row.remark; break;
+    }
+    outCell.tooltipText = row.localPath.empty() ? row.remark : row.localPath;
+}
+
+uint64_t FolderWindow::SharedDirectoriesDialogState::GetStableRowId(size_t rowIndex) const noexcept
+{
+    return rowIndex < rows.size() ? static_cast<uint64_t>(rowIndex + 1u) : 0u;
+}
+
+std::optional<size_t> FolderWindow::SharedDirectoriesDialogState::FindRowByStableId(uint64_t rowId) const noexcept
+{
+    if (rowId == 0u)
+    {
+        return std::nullopt;
+    }
+    const size_t rowIndex = static_cast<size_t>(rowId - 1u);
+    return rowIndex < rows.size() ? std::optional<size_t>(rowIndex) : std::nullopt;
+}
+
+void FolderWindow::SharedDirectoriesDialogState::OnGridSelectionChanged(RedSalamander::DxUi::Grid& sender)
+{
+    selectedIndex = kSharedDirectoriesNoSelection;
+    for (size_t rowIndex = 0u; rowIndex < rows.size(); ++rowIndex)
+    {
+        if (sender.GetSelectionModel().IsSelected(GetStableRowId(rowIndex)))
+        {
+            selectedIndex = rowIndex;
+            break;
+        }
+    }
+    UpdateEmptyState();
+}
+
+void FolderWindow::SharedDirectoriesDialogState::OnGridRowActivated(RedSalamander::DxUi::Grid& /*sender*/, size_t rowIndex)
+{
+    if (rowIndex < rows.size() && hwnd && IsWindow(hwnd.get()) != FALSE)
+    {
+        selectedIndex = rowIndex;
+        PostMessageW(hwnd.get(), WM_COMMAND, MAKEWPARAM(IDC_SHARED_DIRECTORIES_OPEN, BN_CLICKED), 0);
+    }
+}
+
+void FolderWindow::SharedDirectoriesDialogState::SetRows(std::vector<SharedDirectoryRow> newRows, HRESULT hr)
+{
+    rows          = std::move(newRows);
+    lastError     = hr;
+    selectedIndex = rows.empty() ? kSharedDirectoriesNoSelection : 0u;
+    if (grid)
+    {
+        grid->NotifyDataChanged();
+        if (rows.empty())
+        {
+            grid->GetSelectionModel().Clear();
+        }
+        else
+        {
+            grid->GetSelectionModel().SetSingle(GetStableRowId(selectedIndex));
+            grid->EnsureRowVisible(selectedIndex);
+        }
+    }
+    UpdateEmptyState();
+}
+
+bool FolderWindow::SharedDirectoriesDialogState::SelectRow(size_t rowIndex) noexcept
+{
+    if (! grid || rowIndex >= rows.size())
+    {
+        return false;
+    }
+    selectedIndex = rowIndex;
+    grid->GetSelectionModel().SetSingle(GetStableRowId(rowIndex));
+    grid->EnsureRowVisible(rowIndex);
+    UpdateEmptyState();
+    if (hwnd && IsWindow(hwnd.get()) != FALSE)
+    {
+        InvalidateRect(hwnd.get(), nullptr, FALSE);
+    }
+    return true;
+}
+
+bool FolderWindow::SharedDirectoriesDialogState::OnCreate(HWND createdHwnd) noexcept
+{
+    if (! dxHost.Attach(createdHwnd))
+    {
+        return false;
+    }
+    BuildUi();
+    ApplyTheme();
+    Layout();
+    if (grid && ! rows.empty())
+    {
+        dxHost.SetFocusControl(grid);
+    }
+    else if (closeButton)
+    {
+        dxHost.SetFocusControl(closeButton);
+    }
+    dxHost.SetDefaultButton(openButton);
+    dxHost.SetCancelButton(closeButton);
+    return true;
+}
+
+void FolderWindow::SharedDirectoriesDialogState::BuildUi()
+{
+    if (root)
+    {
+        return;
+    }
+
+    using namespace RedSalamander::DxUi;
+
+    columns = {
+        {L"share", LoadStringResource(nullptr, IDS_SHARED_DIRECTORIES_COLUMN_NAME), 120.0f, 96.0f, GridColumnKind::Text, false, false},
+        {L"localPath", LoadStringResource(nullptr, IDS_SHARED_DIRECTORIES_COLUMN_LOCAL_PATH), 260.0f, 160.0f, GridColumnKind::Text, false, false},
+        {L"type", LoadStringResource(nullptr, IDS_SHARED_DIRECTORIES_COLUMN_TYPE), 90.0f, 70.0f, GridColumnKind::Text, false, false},
+        {L"remark", LoadStringResource(nullptr, IDS_SHARED_DIRECTORIES_COLUMN_REMARK), 180.0f, 120.0f, GridColumnKind::Text, false, false},
+    };
+
+    auto rootOwned = std::make_unique<Panel>();
+    root           = rootOwned.get();
+
+    grid = root->AddChild<Grid>();
+    grid->SetModel(this);
+    grid->SetDelegate(this);
+    grid->SetSelectionMode(GridSelectionMode::Single);
+    grid->SetEmptyStateText(LoadStringOrFallback(IDS_SHARED_DIRECTORIES_EMPTY, L"No shared directories are available."));
+    grid->SetLineClamp(1u);
+
+    emptyLabel = root->AddChild<Label>(LoadStringOrFallback(IDS_SHARED_DIRECTORIES_EMPTY, L"No shared directories are available."));
+    emptyLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    emptyLabel->SetMultiline(true);
+
+    openButton = root->AddChild<Button>(LoadStringOrFallback(IDS_SHARED_DIRECTORIES_OPEN_PATH, L"Open Path"));
+    openButton->SetPrimary(true);
+    openButton->SetOnClick([this]
+    {
+        if (hwnd && IsWindow(hwnd.get()) != FALSE)
+        {
+            PostMessageW(hwnd.get(), WM_COMMAND, MAKEWPARAM(IDC_SHARED_DIRECTORIES_OPEN, BN_CLICKED), 0);
+        }
+    });
+
+    manageButton = root->AddChild<Button>(LoadStringOrFallback(IDS_SHARED_DIRECTORIES_MANAGE, L"Manage..."));
+    manageButton->SetOnClick([this]
+    {
+        if (hwnd && IsWindow(hwnd.get()) != FALSE)
+        {
+            PostMessageW(hwnd.get(), WM_COMMAND, MAKEWPARAM(IDC_SHARED_DIRECTORIES_MANAGE, BN_CLICKED), 0);
+        }
+    });
+
+    closeButton = root->AddChild<Button>(LoadStringOrFallback(IDS_SHARED_DIRECTORIES_CLOSE, L"Close"));
+    closeButton->SetOnClick([this]
+    {
+        if (hwnd && IsWindow(hwnd.get()) != FALSE)
+        {
+            PostMessageW(hwnd.get(), WM_COMMAND, MAKEWPARAM(IDCANCEL, BN_CLICKED), 0);
+        }
+    });
+
+    dxHost.SetRoot(std::move(rootOwned));
+    SetRows(std::move(rows), lastError);
+}
+
+void FolderWindow::SharedDirectoriesDialogState::ApplyTheme() noexcept
+{
+    palette = MakeAppThemeDxPalette(theme, theme.windowBackground);
+    dxHost.SetTheme(palette);
+    if (hwnd && IsWindow(hwnd.get()) != FALSE)
+    {
+        ApplyWindowChromeTheme(hwnd.get(), theme, WindowBackdropTarget::Tool, GetActiveWindow() == hwnd.get());
+        RedrawWindow(hwnd.get(), nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
+    }
+}
+
+void FolderWindow::SharedDirectoriesDialogState::Layout() noexcept
+{
+    if (! root)
+    {
+        return;
+    }
+
+    const D2D1_RECT_F client = dxHost.GetClientBoundsDip();
+    root->SetBounds(client);
+
+    constexpr float kMarginDip       = 20.0f;
+    constexpr float kGapDip          = 12.0f;
+    constexpr float kButtonWidthDip  = 112.0f;
+    constexpr float kButtonHeightDip = 34.0f;
+
+    const float left       = client.left + kMarginDip;
+    const float right      = std::max(left, client.right - kMarginDip);
+    const float bottom     = std::max(client.top, client.bottom - kMarginDip);
+    const float buttonTop  = std::max(client.top + kMarginDip, bottom - kButtonHeightDip);
+    const float contentBot = std::max(client.top + kMarginDip, buttonTop - kGapDip);
+
+    if (grid)
+    {
+        grid->SetBounds(D2D1::RectF(left, client.top + kMarginDip, right, contentBot));
+    }
+    if (emptyLabel)
+    {
+        emptyLabel->SetBounds(D2D1::RectF(left, client.top + kMarginDip, right, std::min(contentBot, client.top + kMarginDip + 96.0f)));
+    }
+
+    float x = right;
+    if (closeButton)
+    {
+        closeButton->SetBounds(D2D1::RectF(x - kButtonWidthDip, buttonTop, x, buttonTop + kButtonHeightDip));
+        x -= kButtonWidthDip + kGapDip;
+    }
+    if (manageButton)
+    {
+        manageButton->SetBounds(D2D1::RectF(x - kButtonWidthDip, buttonTop, x, buttonTop + kButtonHeightDip));
+        x -= kButtonWidthDip + kGapDip;
+    }
+    if (openButton)
+    {
+        openButton->SetBounds(D2D1::RectF(x - kButtonWidthDip, buttonTop, x, buttonTop + kButtonHeightDip));
+    }
+}
+
+void FolderWindow::SharedDirectoriesDialogState::UpdateEmptyState() noexcept
+{
+    const bool empty = rows.empty();
+    if (grid)
+    {
+        grid->SetVisible(! empty);
+    }
+    if (emptyLabel)
+    {
+        const UINT emptyStringId =
+            lastError == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ? IDS_SHARED_DIRECTORIES_ACCESS_DENIED : IDS_SHARED_DIRECTORIES_EMPTY;
+        emptyLabel->SetText(LoadStringOrFallback(
+            emptyStringId,
+            lastError == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ? L"Shared directories could not be listed because access was denied."
+                                                                 : L"No shared directories are available."));
+        emptyLabel->SetVisible(empty);
+    }
+    if (openButton)
+    {
+        const bool canOpen = selectedIndex != kSharedDirectoriesNoSelection && selectedIndex < rows.size() && rows[selectedIndex].openable;
+        openButton->SetEnabled(canOpen);
+    }
+}
+
+void FolderWindow::SharedDirectoriesDialogState::OnNcDestroy(HWND destroyedHwnd) noexcept
+{
+    destroyed = true;
+    dxHost.Detach();
+    if (hwnd.get() == destroyedHwnd)
+    {
+        static_cast<void>(hwnd.release());
+    }
+    SetWindowLongPtrW(destroyedHwnd, GWLP_USERDATA, 0);
 }
 
 #ifdef ENABLE_TESTS
@@ -10403,9 +10707,49 @@ bool FolderWindow::DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDeb
     out.thumbnailStaleDropCount     = thumbnails.staleDropCount;
     out.thumbnailPendingCount       = thumbnails.pendingCount;
     out.thumbnailCacheHitCount      = thumbnails.cacheHitCount;
+    out.thumbnailShellSuccessCount  = thumbnails.shellSuccessCount;
+    out.thumbnailWicSuccessCount    = thumbnails.wicSuccessCount;
+    out.thumbnailDecodeFailureCount = thumbnails.decodeFailureCount;
+    out.thumbnailVisibleApplyCount  = thumbnails.visibleApplyCount;
+    out.thumbnailVisibleItemCount = thumbnails.visibleItemCount;
+    out.thumbnailVisibleThumbnailCount = thumbnails.visibleThumbnailCount;
+    out.thumbnailTotalThumbnailCount   = thumbnails.totalThumbnailCount;
+    out.thumbnailCacheBytes         = thumbnails.cacheBytes;
+    out.thumbnailCacheEvictedCount  = thumbnails.cacheEvictedCount;
+    out.thumbnailCancelCount        = thumbnails.cancelCount;
+    out.thumbnailLastDrawSawThumbnail = thumbnails.lastDrawSawThumbnail;
+    out.thumbnailLastDrawSourceWidthPx = thumbnails.lastDrawSourceWidthPx;
+    out.thumbnailLastDrawSourceHeightPx = thumbnails.lastDrawSourceHeightPx;
+    out.thumbnailLastDrawSlotRectDip = thumbnails.lastDrawSlotRectDip;
+    out.thumbnailLastDrawRectDip    = thumbnails.lastDrawRectDip;
+    out.iconLastDrawSawIcon         = thumbnails.lastIconDrawSawIcon;
+    out.iconLastDrawSourceWidthPx   = thumbnails.lastIconDrawSourceWidthPx;
+    out.iconLastDrawSourceHeightPx  = thumbnails.lastIconDrawSourceHeightPx;
+    out.iconLastDrawSlotRectDip     = thumbnails.lastIconDrawSlotRectDip;
+    out.iconLastDrawRectDip         = thumbnails.lastIconDrawRectDip;
     out.filterText                  = filter.text;
     out.filterBarText               = state.filterBarText;
     out.filterBarUsesDxUiHost       = state.filterBarHost.GetRoot() != nullptr;
+    out.filterBarLabelVisible       = state.filterBarLabel && state.filterBarLabel->IsVisible();
+    out.filterBarComboVisible       = state.filterBarCombo && state.filterBarCombo->IsVisible();
+    out.filterBarToggleVisible      = state.filterBarToggle && state.filterBarToggle->IsVisible();
+    out.filterBarToggleChecked      = state.filterBarToggle && state.filterBarToggle->IsChecked();
+    out.filterBarFieldText          = state.filterBarCombo ? std::wstring(state.filterBarCombo->GetText()) : std::wstring{};
+    out.filterBarHistoryItems.clear();
+    if (state.filterBarCombo)
+    {
+        const auto historyItems = state.filterBarCombo->GetItems();
+        out.filterBarHistoryItemCount = historyItems.size();
+        out.filterBarHistoryItems.reserve(historyItems.size());
+        for (const RedSalamander::DxUi::ComboBox::Item& item : historyItems)
+        {
+            out.filterBarHistoryItems.push_back(item.value);
+        }
+    }
+    else
+    {
+        out.filterBarHistoryItemCount = 0u;
+    }
     out.focusedItemRealDisplayName  = std::wstring(state.folderView.DebugGetFocusedDisplayName());
     out.focusedItemVisualDisplayName = state.folderView.DebugGetFocusedVisualDisplayName();
     return true;
@@ -10438,6 +10782,21 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
     out.previewContentVisible = hostState.hPreviewContent && IsWindowVisible(hostState.hPreviewContent.get()) != FALSE;
     out.previewContentUsesDxUiHost = hostState.previewContentHost.GetRoot() != nullptr;
     out.previewUsesEmbeddedViewer  = hostState.previewViewerInstance != nullptr;
+    out.previewPropertiesCardMode = hostState.previewPropertiesCardMode;
+    out.previewPropertiesUsesScrollPanel = hostState.previewPropertiesScroll != nullptr;
+    out.previewPropertiesUsesRainbow = hostState.previewPropertiesUsesRainbow;
+    out.previewPropertiesSectionCount = hostState.previewPropertiesSections.size();
+    out.previewPropertiesFieldCount = hostState.previewPropertiesFieldCount;
+    if (hostState.previewPropertiesScroll)
+    {
+        const D2D1_RECT_F scrollBounds = hostState.previewPropertiesScroll->GetBounds();
+        const float viewportH = (std::max)(0.0f, scrollBounds.bottom - scrollBounds.top);
+        const float scrollMaxDip = (std::max)(0.0f, hostState.previewPropertiesScroll->GetContentHeight() - viewportH);
+        out.previewPropertiesCanScroll = hostState.previewPropertiesScroll->NeedsScrollbar();
+        out.previewPropertiesScrollOffsetPx =
+            static_cast<int>(std::lround(hostState.previewContentHost.DipsToPixels(hostState.previewPropertiesScroll->GetScrollOffset())));
+        out.previewPropertiesScrollMaxPx = static_cast<int>(std::lround(hostState.previewContentHost.DipsToPixels(scrollMaxDip)));
+    }
     out.folderViewVisible     = hostState.hFolderView && IsWindowVisible(hostState.hFolderView.get()) != FALSE;
     out.previewTabsHwnd       = hostState.hPreviewTabs.get();
     out.previewContentHwnd    = hostState.hPreviewContent.get();
@@ -10474,6 +10833,7 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
         out.previewTabClientRect  = toClientRect(hostState.previewTabsControl->DebugGetTabRect(1u));
         out.previewCloseClientRect = toClientRect(hostState.previewTabsControl->DebugGetCloseButtonRect(1u));
         out.previewCloseButtonVisible = hostState.previewTabsControl->DebugIsCloseButtonVisible(1u);
+        out.previewTabsHasHeaderDivider = hostState.previewTabsControl->DebugHasHeaderDivider();
     }
 #endif
     if (hostState.previewTabsHost.HasTooltip())
@@ -10504,6 +10864,33 @@ bool FolderWindow::DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexce
 
     SetPreviewPaneTab(hostPane, previewTab);
     return true;
+}
+
+bool FolderWindow::DebugScrollPreviewPropertiesByWheelDetents(Pane hostPane, int detents) noexcept
+{
+    if (detents == 0)
+    {
+        return false;
+    }
+
+    if (! _previewSourcePane.has_value() || OppositePane(_previewSourcePane.value()) != hostPane)
+    {
+        return false;
+    }
+
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! host.previewPropertiesScroll || ! host.previewPropertiesScroll->NeedsScrollbar())
+    {
+        return false;
+    }
+
+    constexpr float kWheelStepDip = 48.0f;
+    const float before = host.previewPropertiesScroll->GetScrollOffset();
+    host.previewPropertiesScroll->SetScrollOffset(before - (static_cast<float>(detents) * kWheelStepDip));
+    host.previewContentHost.Invalidate();
+
+    FocusPaneFolderView(_previewSourcePane.value());
+    return host.previewPropertiesScroll->GetScrollOffset() != before;
 }
 
 bool FolderWindow::DebugAdvancePreviewTabsTooltipDelayForTest(Pane hostPane) noexcept
@@ -10606,7 +10993,13 @@ bool FolderWindow::DebugGetSharedDirectoriesDialogSnapshot(SharedDirectoriesDebu
 
     const HWND dialog = _sharedDirectoriesDialog->hwnd.get();
     out.visible = IsWindowVisible(dialog) != FALSE;
-    out.emptyStateVisible = IsWindowVisible(GetDlgItem(dialog, IDC_SHARED_DIRECTORIES_EMPTY)) != FALSE;
+    out.usesDxUiHost = _sharedDirectoriesDialog->dxHost.GetRoot() != nullptr;
+    out.visibleChildWindowCount = CountVisibleChildWindowsLocal(dialog);
+    out.visibleNativeChildControlCount = CountVisibleNativeChildControlWindowsLocal(dialog);
+    out.dialogClassName = GetWindowClassNameLocal(dialog);
+    out.themeWindowBackground = _sharedDirectoriesDialog->theme.windowBackground;
+    out.themeText = _sharedDirectoriesDialog->theme.menu.text;
+    out.emptyStateVisible = _sharedDirectoriesDialog->emptyLabel && _sharedDirectoriesDialog->emptyLabel->IsVisible();
     out.selectedIndex = _sharedDirectoriesDialog->selectedIndex;
     out.lastError = _sharedDirectoriesDialog->lastError;
     out.rows.reserve(_sharedDirectoriesDialog->rows.size());
@@ -10630,17 +11023,7 @@ bool FolderWindow::DebugSelectSharedDirectoriesDialogRow(size_t rowIndex) noexce
         return false;
     }
 
-    _sharedDirectoriesDialog->selectedIndex = rowIndex;
-    HWND listView = GetDlgItem(_sharedDirectoriesDialog->hwnd.get(), IDC_SHARED_DIRECTORIES_LIST);
-    if (listView)
-    {
-        ListView_SetItemState(listView, -1, 0, LVIS_FOCUSED | LVIS_SELECTED);
-        SelectSharedDirectoriesListRow(listView, rowIndex, _sharedDirectoriesDialog->rows.size());
-    }
-
-    const bool canOpen = _sharedDirectoriesDialog->rows[rowIndex].openable;
-    EnableWindow(GetDlgItem(_sharedDirectoriesDialog->hwnd.get(), IDC_SHARED_DIRECTORIES_OPEN), canOpen ? TRUE : FALSE);
-    return true;
+    return _sharedDirectoriesDialog->SelectRow(rowIndex);
 }
 
 bool FolderWindow::DebugInvokeSharedDirectoriesDialogOpenPath() noexcept
@@ -10711,6 +11094,12 @@ bool FolderWindow::DebugWarmPaneRendering(Pane pane) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugWarmRenderingForSelfTest();
+}
+
+bool FolderWindow::DebugGetPaneColumnLayoutSnapshot(Pane pane, FolderView::DebugColumnLayoutSnapshot& out) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetColumnLayoutSnapshot(out);
 }
 
 bool FolderWindow::DebugIsEmptyFolderStateActive(Pane pane) const noexcept
@@ -11869,6 +12258,17 @@ void FolderWindow::ApplyOpenedFilesDialogTheme() noexcept
     _openedFilesDialog->ApplyTheme();
 }
 
+void FolderWindow::RequestCloseOpenedFilesDialog() noexcept
+{
+    if (_hWnd && IsWindow(_hWnd.get()) != FALSE &&
+        PostMessageW(_hWnd.get(), WndMsg::kFolderWindowCloseOpenedFilesDialog, 0, 0) != 0)
+    {
+        return;
+    }
+
+    CloseOpenedFilesDialog();
+}
+
 void FolderWindow::CloseOpenedFilesDialog() noexcept
 {
     if (! _openedFilesDialog)
@@ -11926,7 +12326,7 @@ bool FolderWindow::FocusOpenedFilesDialogSelection() noexcept
     const bool focused      = FocusOpenedFileRow(row);
     if (focused)
     {
-        CloseOpenedFilesDialog();
+        RequestCloseOpenedFilesDialog();
     }
     return focused;
 }
@@ -12132,28 +12532,29 @@ void FolderWindow::RefreshSharedDirectoriesDialogRows() noexcept
     }
 
     HRESULT hr = S_OK;
-    _sharedDirectoriesDialog->rows          = CollectSharedDirectoryRows(hr);
-    _sharedDirectoriesDialog->lastError     = hr;
-    _sharedDirectoriesDialog->selectedIndex = _sharedDirectoriesDialog->rows.empty() ? kSharedDirectoriesNoSelection : 0u;
+    _sharedDirectoriesDialog->SetRows(CollectSharedDirectoryRows(hr), hr);
+}
 
-    HWND listView = GetDlgItem(_sharedDirectoriesDialog->hwnd.get(), IDC_SHARED_DIRECTORIES_LIST);
-    if (listView)
+void FolderWindow::ApplySharedDirectoriesDialogTheme() noexcept
+{
+    if (! _sharedDirectoriesDialog || ! _sharedDirectoriesDialog->hwnd || IsWindow(_sharedDirectoriesDialog->hwnd.get()) == FALSE)
     {
-        ListView_DeleteAllItems(listView);
-        for (size_t index = 0; index < _sharedDirectoriesDialog->rows.size(); ++index)
-        {
-            const SharedDirectoryRow& row = _sharedDirectoriesDialog->rows[index];
-            InsertSharedDirectoriesListRow(listView, static_cast<int>(index), row.name, row.localPath, row.type, row.remark);
-        }
-        SelectSharedDirectoriesListRow(listView, _sharedDirectoriesDialog->selectedIndex, _sharedDirectoriesDialog->rows.size());
+        return;
     }
 
-    UpdateSharedDirectoriesEmptyState(_sharedDirectoriesDialog->hwnd.get(), _sharedDirectoriesDialog->rows.empty(), _sharedDirectoriesDialog->lastError);
+    _sharedDirectoriesDialog->theme = _theme;
+    _sharedDirectoriesDialog->ApplyTheme();
+}
 
-    const bool canOpen = _sharedDirectoriesDialog->selectedIndex != kSharedDirectoriesNoSelection &&
-                         _sharedDirectoriesDialog->selectedIndex < _sharedDirectoriesDialog->rows.size() &&
-                         _sharedDirectoriesDialog->rows[_sharedDirectoriesDialog->selectedIndex].openable;
-    EnableWindow(GetDlgItem(_sharedDirectoriesDialog->hwnd.get(), IDC_SHARED_DIRECTORIES_OPEN), canOpen ? TRUE : FALSE);
+void FolderWindow::RequestCloseSharedDirectoriesDialog() noexcept
+{
+    if (_hWnd && IsWindow(_hWnd.get()) != FALSE &&
+        PostMessageW(_hWnd.get(), WndMsg::kFolderWindowCloseSharedDirectoriesDialog, 0, 0) != 0)
+    {
+        return;
+    }
+
+    CloseSharedDirectoriesDialog();
 }
 
 void FolderWindow::CloseSharedDirectoriesDialog() noexcept
@@ -12214,7 +12615,7 @@ bool FolderWindow::OpenSharedDirectoriesDialogSelection() noexcept
 
     SetActivePane(pane);
     SetFolderPath(pane, std::filesystem::path(row.localPath));
-    CloseSharedDirectoriesDialog();
+    RequestCloseSharedDirectoriesDialog();
     return true;
 }
 
@@ -12240,118 +12641,6 @@ void FolderWindow::OpenSharedDirectoriesManagement() noexcept
         pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), resultHr, true, false);
 }
 
-INT_PTR CALLBACK FolderWindow::SharedDirectoriesDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
-{
-    auto* state = reinterpret_cast<SharedDirectoriesDialogState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-
-    switch (message)
-    {
-        case WM_INITDIALOG:
-        {
-            state = reinterpret_cast<SharedDirectoriesDialogState*>(lParam);
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
-            if (! state)
-            {
-                return FALSE;
-            }
-
-            HWND listView = GetDlgItem(hwnd, IDC_SHARED_DIRECTORIES_LIST);
-            ConfigureSharedDirectoriesListView(listView);
-            state->selectedIndex = state->rows.empty() ? kSharedDirectoriesNoSelection : 0u;
-            if (listView)
-            {
-                for (size_t index = 0; index < state->rows.size(); ++index)
-                {
-                    const SharedDirectoryRow& row = state->rows[index];
-                    InsertSharedDirectoriesListRow(listView, static_cast<int>(index), row.name, row.localPath, row.type, row.remark);
-                }
-                SelectSharedDirectoriesListRow(listView, state->selectedIndex, state->rows.size());
-            }
-
-            UpdateSharedDirectoriesEmptyState(hwnd, state->rows.empty(), state->lastError);
-            const bool canOpen = state->selectedIndex != kSharedDirectoriesNoSelection && state->selectedIndex < state->rows.size() &&
-                                 state->rows[state->selectedIndex].openable;
-            EnableWindow(GetDlgItem(hwnd, IDC_SHARED_DIRECTORIES_OPEN), canOpen ? TRUE : FALSE);
-            return TRUE;
-        }
-
-        case WM_COMMAND:
-            switch (LOWORD(wParam))
-            {
-                case IDC_SHARED_DIRECTORIES_OPEN:
-                case IDOK:
-                    if (state && state->owner)
-                    {
-                        static_cast<void>(state->owner->OpenSharedDirectoriesDialogSelection());
-                    }
-                    return TRUE;
-
-                case IDC_SHARED_DIRECTORIES_MANAGE:
-                    if (state && state->owner)
-                    {
-                        state->owner->OpenSharedDirectoriesManagement();
-                    }
-                    return TRUE;
-
-                case IDCANCEL:
-                    if (state && state->owner)
-                    {
-                        state->owner->CloseSharedDirectoriesDialog();
-                    }
-                    return TRUE;
-
-                default:
-                    return FALSE;
-            }
-
-        case WM_NOTIFY:
-            if (state)
-            {
-                const auto* notify = reinterpret_cast<const NMHDR*>(lParam);
-                if (notify && notify->idFrom == IDC_SHARED_DIRECTORIES_LIST)
-                {
-                    if (notify->code == LVN_ITEMCHANGED)
-                    {
-                        state->selectedIndex = GetSharedDirectoriesListSelectedIndex(GetDlgItem(hwnd, IDC_SHARED_DIRECTORIES_LIST));
-                        const bool canOpen = state->selectedIndex != kSharedDirectoriesNoSelection && state->selectedIndex < state->rows.size() &&
-                                             state->rows[state->selectedIndex].openable;
-                        EnableWindow(GetDlgItem(hwnd, IDC_SHARED_DIRECTORIES_OPEN), canOpen ? TRUE : FALSE);
-                        return TRUE;
-                    }
-                    if (notify->code == NM_DBLCLK && state->owner)
-                    {
-                        static_cast<void>(state->owner->OpenSharedDirectoriesDialogSelection());
-                        return TRUE;
-                    }
-                }
-            }
-            return FALSE;
-
-        case WM_CLOSE:
-            if (state && state->owner)
-            {
-                state->owner->CloseSharedDirectoriesDialog();
-                return TRUE;
-            }
-            return FALSE;
-
-        case WM_NCDESTROY:
-            if (state)
-            {
-                state->destroyed = true;
-                if (state->hwnd.get() == hwnd)
-                {
-                    static_cast<void>(state->hwnd.release());
-                }
-            }
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-            return FALSE;
-
-        default:
-            return FALSE;
-    }
-}
-
 void FolderWindow::CommandSharedDirectories(Pane pane)
 {
     Debug::Perf::Scope perf(L"sharedDirectories.open_us");
@@ -12360,6 +12649,8 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
     if (_sharedDirectoriesDialog && _sharedDirectoriesDialog->hwnd && IsWindow(_sharedDirectoriesDialog->hwnd.get()) != FALSE)
     {
         _sharedDirectoriesDialog->pane = pane;
+        _sharedDirectoriesDialog->theme = _theme;
+        _sharedDirectoriesDialog->ApplyTheme();
         RefreshSharedDirectoriesDialogRows();
         ShowWindow(_sharedDirectoriesDialog->hwnd.get(), SW_SHOWNORMAL);
         SetForegroundWindow(_sharedDirectoriesDialog->hwnd.get());
@@ -12371,6 +12662,7 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
     auto state   = std::make_unique<SharedDirectoriesDialogState>();
     state->owner = this;
     state->pane  = pane;
+    state->theme = _theme;
     state->rows  = CollectSharedDirectoryRows(state->lastError);
     state->selectedIndex = state->rows.empty() ? kSharedDirectoriesNoSelection : 0u;
 
@@ -12380,8 +12672,41 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
         ownerWindow = _hWnd.get();
     }
 
-    HWND dialog = RedSalamander::Win32Callback::CreateDialogParamResourceNoThrow(
-        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_SHARED_DIRECTORIES), ownerWindow, SharedDirectoriesDialogProc, reinterpret_cast<LPARAM>(state.get()));
+    const HRESULT classHr = SharedDirectoriesDialogState::EnsureWindowClass();
+    if (FAILED(classHr))
+    {
+        perf.SetHr(classHr);
+        Debug::Warning(L"FolderWindow::CommandSharedDirectories: failed to register Shared Directories window class (hr=0x{:08X}).",
+                       static_cast<unsigned long>(classHr));
+        return;
+    }
+
+    const DWORD style   = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_THICKFRAME | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+    const DWORD exStyle = WS_EX_DLGMODALFRAME;
+    const UINT dpi      = ownerWindow && IsWindow(ownerWindow) != FALSE ? GetDpiForWindow(ownerWindow) : GetDpiForSystem();
+    RECT bounds{0, 0, ScalePanePromptForDpi(dpi, 720), ScalePanePromptForDpi(dpi, 460)};
+    if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
+    {
+        const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
+        perf.SetHr(hr);
+        Debug::Warning(L"FolderWindow::CommandSharedDirectories: failed to calculate Shared Directories window bounds (hr=0x{:08X}).",
+                       static_cast<unsigned long>(hr));
+        return;
+    }
+
+    const std::wstring caption = LoadStringOrFallback(IDS_SHARED_DIRECTORIES_CAPTION, L"Shared Directories");
+    HWND dialog = CreateWindowExW(exStyle,
+                                  kSharedDirectoriesWindowClassName,
+                                  caption.c_str(),
+                                  style,
+                                  CW_USEDEFAULT,
+                                  CW_USEDEFAULT,
+                                  bounds.right - bounds.left,
+                                  bounds.bottom - bounds.top,
+                                  ownerWindow,
+                                  nullptr,
+                                  GetModuleHandleW(nullptr),
+                                  state.get());
     if (! dialog)
     {
         const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
@@ -12391,11 +12716,17 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
         return;
     }
 
-    state->hwnd = wil::unique_hwnd(dialog);
+    if (! state->hwnd)
+    {
+        state->hwnd = wil::unique_hwnd(dialog);
+    }
     perf.SetValue0(static_cast<uint64_t>(state->rows.size()));
     perf.SetHr(state->lastError);
     _sharedDirectoriesDialog = std::move(state);
+    CenterWindowOnOwner(dialog, ownerWindow);
+    static_cast<void>(_sharedDirectoriesDialog->dxHost.PrimeForShow());
     ShowWindow(dialog, SW_SHOWNORMAL);
+    UpdateWindow(dialog);
     SetForegroundWindow(dialog);
 }
 

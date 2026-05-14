@@ -21,7 +21,6 @@
 #include <utility>
 #include <vector>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <d2d1.h>
 #include <dwmapi.h>
@@ -38,7 +37,6 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
-#pragma comment(lib, "comctl32")
 #pragma comment(lib, "d2d1")
 #pragma comment(lib, "Dwmapi.lib")
 #pragma comment(lib, "dwrite")
@@ -1724,6 +1722,41 @@ void ViewerWeb::OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT code,
     }
 }
 
+void ViewerWeb::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
+{
+    if (! _menuHandle)
+    {
+        _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
+    }
+
+    HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
+    if (! menu)
+    {
+        return;
+    }
+
+    UpdateMenuState(hwnd, false);
+    static constexpr std::array<int, 5> kPreviewContextMenuExcludedCommandIds{{
+        IDM_VIEWERWEB_FILE_EXIT,
+        IDM_VIEWERWEB_OTHER_NEXT,
+        IDM_VIEWERWEB_OTHER_PREVIOUS,
+        IDM_VIEWERWEB_OTHER_FIRST,
+        IDM_VIEWERWEB_OTHER_LAST,
+    }};
+    RedSalamander::DxUi::NativeMenuFlyoutOptions previewMenuOptions{};
+    previewMenuOptions.includeAcceleratorText = false;
+    previewMenuOptions.omitEmptySubmenus      = true;
+    previewMenuOptions.trimSeparators         = true;
+    previewMenuOptions.excludedCommandIds     = kPreviewContextMenuExcludedCommandIds;
+
+    const auto result = RedSalamander::DxUi::ShowNativeHMenuContextMenu(
+        hwnd, screenPt, menu, _hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false), previewMenuOptions);
+    if (result.has_value() && result.value() > 0)
+    {
+        OnCommand(hwnd, static_cast<UINT>(result.value()), 0, nullptr);
+    }
+}
+
 void ViewerWeb::OnKeyDown(HWND hwnd, UINT vk) noexcept
 {
     if (! hwnd)
@@ -2560,6 +2593,7 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             }
             return 0;
         case WM_COMMAND: OnCommand(hwnd, static_cast<UINT>(LOWORD(wp)), static_cast<UINT>(HIWORD(wp)), reinterpret_cast<HWND>(lp)); return 0;
+        case WM_CONTEXTMENU: OnContextMenu(hwnd, RedSalamander::DxUi::ResolveNativeContextMenuScreenPoint(hwnd, lp)); return 0;
         case WM_KEYDOWN: OnKeyDown(hwnd, static_cast<UINT>(wp)); return 0;
         case WM_SYSKEYDOWN:
             if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())

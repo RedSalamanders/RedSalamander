@@ -194,6 +194,7 @@ private:
     void OnPaint();
     LRESULT OnEraseBkgnd(HWND hwnd, HDC hdc) noexcept;
     void OnCommand(HWND hwnd, UINT id, UINT code, HWND control);
+    void OnContextMenu(HWND hwnd, POINT screenPt) noexcept;
     void OnKeyDown(HWND hwnd, UINT vk) noexcept;
     LRESULT OnMouseWheel(HWND hwnd, short delta, UINT keyState, int x, int y) noexcept;
     void OnHScroll(HWND hwnd, UINT code) noexcept;

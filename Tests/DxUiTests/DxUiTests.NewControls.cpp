@@ -632,6 +632,40 @@ void TestMenuBarClickInvokesOpenCallback()
     Require(openedPoint.y >= 28, "menu bar click anchors the popup from the bottom edge of the active item");
 }
 
+void TestMenuBarMouseOpenReleasesHostCaptureBeforeCallback()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root     = std::make_unique<MenuBar>();
+    auto* menuBar = root.get();
+    menuBar->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 32.0f));
+    menuBar->SetItems({
+        MenuBarItem{.text = L"View", .mnemonic = L'V', .enabled = true},
+        MenuBarItem{.text = L"Plugins", .mnemonic = L'P', .enabled = true},
+    });
+
+    bool callbackInvoked                   = false;
+    bool callbackObservedHostStillCaptured = false;
+    menuBar->SetOnOpenItem([&](size_t, POINT, bool)
+    {
+        callbackInvoked                   = true;
+        callbackObservedHostStillCaptured = GetCapture() == window.Hwnd();
+    });
+    window.Host().SetRoot(std::move(root));
+
+    bool handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(24, 16), handled));
+    Require(handled, "menu bar mouse-open capture test handles the pointer down");
+    Require(GetCapture() == window.Hwnd(), "menu bar mouse-open capture test captures the host during pointer down");
+
+    handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(24, 16), handled));
+    Require(handled, "menu bar mouse-open capture test handles the pointer up");
+    Require(callbackInvoked, "menu bar mouse-open capture test invokes the open callback");
+    Require(! callbackObservedHostStillCaptured, "menu bar releases host capture before opening the modal popup");
+}
+
 void TestMenuBarKeyboardNavigationOpensSelectedItem()
 {
     using namespace RedSalamander::DxUi;
@@ -872,6 +906,23 @@ void TestTabControlOverflowButtonsAndWheelScroll()
     RequireRectHasArea(backRect, "tab control exposes the back overflow button geometry");
     Require(tabControl->OnMouseDown(host, RectCenter(backRect), false, 0), "tab control handles back-button press");
     Require(tabControl->DebugGetHeaderScrollOffsetDip() < offsetAfterWheel, "tab control back overflow button scrolls toward earlier tabs");
+}
+
+void TestTabControlHeaderDividerExposesPaintableGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root        = std::make_unique<Panel>();
+    auto* tabControl = root->AddChild<TabControl>();
+    tabControl->SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 180.0f));
+    tabControl->AddTab<Label>(L"Folder", L"Folder page");
+    tabControl->AddTab<Label>(L"Preview", L"Preview page");
+    host.SetRoot(std::move(root));
+
+    const D2D1_RECT_F dividerRect = tabControl->DebugGetHeaderDividerRect();
+    RequireRectHasArea(dividerRect, "tab control header divider exposes non-empty debug geometry");
+    Require(tabControl->DebugHasHeaderDivider(), "tab control header divider debug state tracks a paintable divider segment");
 }
 
 void TestTabControlKeyboardNavigationHonorsRightToLeft()
@@ -1128,6 +1179,7 @@ void RunNewControlTests()
     // MenuBar
     TestMenuBarSetItemsRoundtrips();
     TestMenuBarClickInvokesOpenCallback();
+    TestMenuBarMouseOpenReleasesHostCaptureBeforeCallback();
     TestMenuBarKeyboardNavigationOpensSelectedItem();
     TestMenuBarMnemonicOpensMatchingItem();
     TestFlowDirectionInheritanceRoundtrips();
@@ -1139,6 +1191,7 @@ void RunNewControlTests()
     TestTabControlSelectionShowsOnlyTheActivePage();
     TestTabControlCloseButtonRemovesTabsAndInvokesCallback();
     TestTabControlOverflowButtonsAndWheelScroll();
+    TestTabControlHeaderDividerExposesPaintableGeometry();
     TestTabControlKeyboardNavigationHonorsRightToLeft();
 
     // Oversized context menus

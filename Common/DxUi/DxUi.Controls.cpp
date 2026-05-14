@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cwctype>
+#include <limits>
 
 #include "Helpers.h"
 
@@ -11,6 +12,31 @@ namespace RedSalamander::DxUi
 namespace
 {
 constexpr GUID kD2DShadowEffectId = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0x69, 0x5D, 0x3E, 0x9A, 0x5B, 0x6B}};
+
+[[nodiscard]] int TraceOptionalIndex(std::optional<size_t> value) noexcept
+{
+    return value.has_value() && value.value() <= static_cast<size_t>(std::numeric_limits<int>::max()) ? static_cast<int>(value.value()) : -1;
+}
+
+void TraceMenuBarPointerEvent(std::wstring_view eventName,
+                              const WindowHost& host,
+                              D2D1_POINT_2F point,
+                              std::optional<size_t> hit,
+                              std::optional<size_t> pressed,
+                              std::optional<size_t> selected,
+                              size_t itemCount) noexcept
+{
+    Debug::Info(L"DxUi::MenuTrace MenuBar {} hwnd={:#x} capture={:#x} pointDip=({:.1f},{:.1f}) hit={} pressed={} selected={} itemCount={}",
+                eventName,
+                reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                reinterpret_cast<uintptr_t>(GetCapture()),
+                point.x,
+                point.y,
+                TraceOptionalIndex(hit),
+                TraceOptionalIndex(pressed),
+                TraceOptionalIndex(selected),
+                itemCount);
+}
 
 void DrawFallbackShadowRoundedRects(
     WindowHost& host, const D2D1_RECT_F& targetRect, float cornerRadiusDip, float yOffsetDip, float spreadDip, float outerOpacity, float innerOpacity) noexcept
@@ -3043,6 +3069,11 @@ void MenuBar::SetOnOpenItem(OpenItemCallback onOpenItem)
     _onOpenItem = std::move(onOpenItem);
 }
 
+void MenuBar::SetOnHoverChanged(HoverChangedCallback onHoverChanged)
+{
+    _onHoverChanged = std::move(onHoverChanged);
+}
+
 void MenuBar::SetSelectedIndex(std::optional<size_t> index) noexcept
 {
     if (index.has_value() && index.value() >= _items.size())
@@ -3056,9 +3087,19 @@ void MenuBar::SetSelectedIndex(std::optional<size_t> index) noexcept
     }
 }
 
+void MenuBar::SetRetainSelectedIndexOnFocusLost(bool retain) noexcept
+{
+    _retainSelectedIndexOnFocusLost = retain;
+}
+
 std::optional<size_t> MenuBar::GetSelectedIndex() const noexcept
 {
     return _selectedIndex;
+}
+
+std::optional<size_t> MenuBar::GetHoveredIndex() const noexcept
+{
+    return (_hoveredIndex.has_value() && _hoveredIndex.value() < _items.size() && _items[_hoveredIndex.value()].enabled) ? _hoveredIndex : std::nullopt;
 }
 
 size_t MenuBar::GetVisualHighlightCount() const noexcept
@@ -3080,12 +3121,32 @@ bool MenuBar::ActivateItem(WindowHost& host, size_t index, bool keyboardInvocati
 {
     if (index >= _items.size() || ! _items[index].enabled || ! _onOpenItem)
     {
+        Debug::Info(L"DxUi::MenuTrace MenuBar activate-rejected hwnd={:#x} capture={:#x} index={} itemCount={} enabled={} hasCallback={} keyboard={}",
+                    reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                    reinterpret_cast<uintptr_t>(GetCapture()),
+                    index,
+                    _items.size(),
+                    index < _items.size() && _items[index].enabled ? L"true" : L"false",
+                    _onOpenItem ? L"true" : L"false",
+                    keyboardInvocation ? L"true" : L"false");
         return false;
     }
 
     _selectedIndex             = index;
     const D2D1_RECT_F itemRect = GetItemRect(host, index);
     const POINT screenPoint    = host.DipPointToScreenPoint(D2D1::Point2F(itemRect.left, itemRect.bottom));
+    Debug::Info(L"DxUi::MenuTrace MenuBar activate hwnd={:#x} capture={:#x} index={} keyboard={} anchor=({}, {}) itemRectDip=({:.1f},{:.1f},{:.1f},{:.1f}) label='{}'",
+                reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                reinterpret_cast<uintptr_t>(GetCapture()),
+                index,
+                keyboardInvocation ? L"true" : L"false",
+                screenPoint.x,
+                screenPoint.y,
+                itemRect.left,
+                itemRect.top,
+                itemRect.right,
+                itemRect.bottom,
+                std::wstring_view{_items[index].text});
     _onOpenItem(index, screenPoint, keyboardInvocation);
     RequestInvalidate();
     return true;
@@ -3168,7 +3229,12 @@ bool MenuBar::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifier
     const std::optional<size_t> hit = HitTestItem(host, MakePointDip(point));
     if (_hoveredIndex != hit)
     {
+        TraceMenuBarPointerEvent(L"mouse-move-hover-change", host, point, hit, _pressedIndex, _selectedIndex, _items.size());
         _hoveredIndex = hit;
+        if (_onHoverChanged)
+        {
+            _onHoverChanged(GetHoveredIndex());
+        }
         InvalidateIfInteractive(host);
     }
     return true;
@@ -3179,6 +3245,10 @@ bool MenuBar::OnMouseLeave(WindowHost& host)
     if (_hoveredIndex.has_value())
     {
         _hoveredIndex.reset();
+        if (_onHoverChanged)
+        {
+            _onHoverChanged(std::nullopt);
+        }
         InvalidateIfInteractive(host);
     }
     return true;
@@ -3201,6 +3271,7 @@ bool MenuBar::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButto
     }
 
     const std::optional<size_t> hit = HitTestItem(host, MakePointDip(point));
+    TraceMenuBarPointerEvent(L"mouse-down", host, point, hit, _pressedIndex, _selectedIndex, _items.size());
     if (! hit.has_value() || ! _items[hit.value()].enabled)
     {
         return false;
@@ -3222,15 +3293,32 @@ bool MenuBar::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton,
 
     const std::optional<size_t> hit     = HitTestItem(host, MakePointDip(point));
     const std::optional<size_t> pressed = _pressedIndex;
+    TraceMenuBarPointerEvent(L"mouse-up", host, point, hit, pressed, _selectedIndex, _items.size());
     _pressedIndex                       = std::nullopt;
     InvalidateIfInteractive(host);
 
     if (! pressed.has_value() || hit != pressed)
     {
+        Debug::Info(L"DxUi::MenuTrace MenuBar mouse-up-rejected hwnd={:#x} capture={:#x} hit={} pressed={} selected={}",
+                    reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                    reinterpret_cast<uintptr_t>(GetCapture()),
+                    TraceOptionalIndex(hit),
+                    TraceOptionalIndex(pressed),
+                    TraceOptionalIndex(_selectedIndex));
         return false;
     }
 
-    return ActivateItem(host, pressed.value(), false);
+    const size_t openIndex = pressed.value();
+    Debug::Info(L"DxUi::MenuTrace MenuBar mouse-up-open hwnd={:#x} captureBeforeRelease={:#x} index={}",
+                reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                reinterpret_cast<uintptr_t>(GetCapture()),
+                openIndex);
+    host.ReleaseMouseCapture();
+    Debug::Info(L"DxUi::MenuTrace MenuBar mouse-up-after-release hwnd={:#x} capture={:#x} index={}",
+                reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                reinterpret_cast<uintptr_t>(GetCapture()),
+                openIndex);
+    return ActivateItem(host, openIndex, false);
 }
 
 bool MenuBar::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
@@ -3340,7 +3428,10 @@ void MenuBar::OnFocusChanged(WindowHost& host, bool focused)
     {
         _pressedIndex.reset();
         _hoveredIndex.reset();
-        _selectedIndex.reset();
+        if (! _retainSelectedIndexOnFocusLost)
+        {
+            _selectedIndex.reset();
+        }
     }
     else if (! _selectedIndex.has_value())
     {
@@ -3653,6 +3744,42 @@ bool TabControl::NeedsOverflowButtons() const noexcept
     const D2D1_RECT_F header = GetHeaderRect();
     const float reserved     = kTabHeaderGapDip * 2.0f;
     return GetTotalTabWidthDip() > ((header.right - header.left) - reserved);
+}
+
+D2D1_RECT_F TabControl::GetHeaderDividerRect() const noexcept
+{
+    const D2D1_RECT_F contentRect = GetContentRect();
+    if (_tabs.empty() || contentRect.right <= contentRect.left)
+    {
+        return D2D1::RectF();
+    }
+
+    return D2D1::RectF(contentRect.left, contentRect.top, contentRect.right, contentRect.top + 1.0f);
+}
+
+bool TabControl::HasHeaderDividerPaintSegment() const noexcept
+{
+    const D2D1_RECT_F dividerRect = GetHeaderDividerRect();
+    if (dividerRect.right <= dividerRect.left || dividerRect.bottom <= dividerRect.top)
+    {
+        return false;
+    }
+
+    const auto hasVisibleSegment = [&](const float fromX, const float toX) noexcept
+    {
+        const float left  = std::clamp(fromX, dividerRect.left, dividerRect.right);
+        const float right = std::clamp(toX, dividerRect.left, dividerRect.right);
+        return right - left > 0.5f;
+    };
+
+    if (_selectedIndex.has_value() && _selectedIndex.value() < _tabs.size())
+    {
+        const D2D1_RECT_F selectedTabRect = GetTabRect(_selectedIndex.value());
+        return hasVisibleSegment(dividerRect.left, selectedTabRect.left) ||
+               hasVisibleSegment(selectedTabRect.right, dividerRect.right);
+    }
+
+    return hasVisibleSegment(dividerRect.left, dividerRect.right);
 }
 
 float TabControl::GetHeaderViewportLeft() const noexcept
@@ -4008,6 +4135,38 @@ void TabControl::UpdateDragReorder(WindowHost& host, D2D1_POINT_2F point) noexce
     }
 }
 
+void TabControl::PaintHeaderDivider(WindowHost& host) const noexcept
+{
+    const D2D1_RECT_F dividerRect = GetHeaderDividerRect();
+    if (! HasHeaderDividerPaintSegment())
+    {
+        return;
+    }
+
+    const auto& theme           = host.GetTheme();
+    const D2D1_COLOR_F divider = theme.highContrast ? theme.border : theme.borderStrong;
+    const float dividerY       = SnapDipToPixel(host, dividerRect.top);
+    const auto drawSegment     = [&](const float fromX, const float toX) noexcept
+    {
+        const float left  = std::clamp(fromX, dividerRect.left, dividerRect.right);
+        const float right = std::clamp(toX, dividerRect.left, dividerRect.right);
+        if (right - left > 0.5f)
+        {
+            DrawLineWithColor(host, D2D1::Point2F(left, dividerY), D2D1::Point2F(right, dividerY), divider, 1.0f);
+        }
+    };
+
+    if (_selectedIndex.has_value() && _selectedIndex.value() < _tabs.size())
+    {
+        const D2D1_RECT_F selectedTabRect = GetTabRect(_selectedIndex.value());
+        drawSegment(dividerRect.left, selectedTabRect.left);
+        drawSegment(selectedTabRect.right, dividerRect.right);
+        return;
+    }
+
+    drawSegment(dividerRect.left, dividerRect.right);
+}
+
 void TabControl::Paint(WindowHost& host) const
 {
     Debug::Perf::Scope tabPaintPerf(L"dxui.tabcontrol.paint");
@@ -4143,6 +4302,7 @@ void TabControl::Paint(WindowHost& host) const
     }
 
     Panel::Paint(host);
+    PaintHeaderDivider(host);
 }
 
 bool TabControl::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT /*modifiers*/)
@@ -4378,6 +4538,16 @@ float TabControl::DebugGetHeaderScrollOffsetDip() const noexcept
 bool TabControl::DebugHasOverflowButtons() const noexcept
 {
     return NeedsOverflowButtons();
+}
+
+D2D1_RECT_F TabControl::DebugGetHeaderDividerRect() const noexcept
+{
+    return GetHeaderDividerRect();
+}
+
+bool TabControl::DebugHasHeaderDivider() const noexcept
+{
+    return HasHeaderDividerPaintSegment();
 }
 
 D2D1_RECT_F TabControl::DebugGetBackButtonRect() const noexcept
@@ -4981,6 +5151,38 @@ Control* ScrollPanel::FindChildAtContent(D2D1_POINT_2F contentPoint)
     return nullptr;
 }
 
+Control* ScrollPanel::FindOverlayChildAtContent(D2D1_POINT_2F contentPoint)
+{
+    const auto& children = GetChildren();
+    for (auto it = children.rbegin(); it != children.rend(); ++it)
+    {
+        if (*it && (*it)->IsVisible())
+        {
+            if (Control* hit = (*it)->HitTestOverlay(contentPoint))
+            {
+                return hit;
+            }
+        }
+    }
+    return nullptr;
+}
+
+const Control* ScrollPanel::FindOverlayChildAtContent(D2D1_POINT_2F contentPoint) const
+{
+    const auto& children = GetChildren();
+    for (auto it = children.rbegin(); it != children.rend(); ++it)
+    {
+        if (*it && (*it)->IsVisible())
+        {
+            if (const Control* hit = (*it)->HitTestOverlay(contentPoint))
+            {
+                return hit;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void ScrollPanel::UpdateInnerHover(WindowHost& host, D2D1_POINT_2F viewportPoint)
 {
     const D2D1_RECT_F viewport = GetViewportRect();
@@ -5047,6 +5249,30 @@ void ScrollPanel::Paint(WindowHost& host) const
     }
 }
 
+void ScrollPanel::PaintOverlay(WindowHost& host) const
+{
+    if (! IsVisible())
+    {
+        return;
+    }
+
+    auto* dc = host.GetDeviceContext();
+    if (! dc)
+    {
+        return;
+    }
+
+    D2D1_MATRIX_3X2_F oldTransform;
+    dc->GetTransform(&oldTransform);
+    auto scrollTransform = oldTransform;
+    scrollTransform._32 -= _scrollOffsetDip;
+    dc->SetTransform(scrollTransform);
+
+    Panel::PaintOverlay(host);
+
+    dc->SetTransform(oldTransform);
+}
+
 Control* ScrollPanel::HitTest(D2D1_POINT_2F point)
 {
     if (! IsVisible() || ! IsEnabled())
@@ -5077,10 +5303,42 @@ const Control* ScrollPanel::HitTest(D2D1_POINT_2F point) const
     return this;
 }
 
+Control* ScrollPanel::HitTestOverlay(D2D1_POINT_2F point)
+{
+    if (! IsVisible() || ! IsEnabled())
+    {
+        return nullptr;
+    }
+
+    return FindOverlayChildAtContent(ToContentSpace(point)) ? this : nullptr;
+}
+
+const Control* ScrollPanel::HitTestOverlay(D2D1_POINT_2F point) const
+{
+    if (! IsVisible() || ! IsEnabled())
+    {
+        return nullptr;
+    }
+
+    return FindOverlayChildAtContent(ToContentSpace(point)) ? this : nullptr;
+}
+
 bool ScrollPanel::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers)
 {
     if (rightButton)
     {
+        return false;
+    }
+
+    const D2D1_POINT_2F contentPoint = ToContentSpace(point);
+    if (Control* overlayChild = FindOverlayChildAtContent(contentPoint))
+    {
+        if (overlayChild->OnMouseDown(host, contentPoint, rightButton, modifiers))
+        {
+            _innerCapturedChild = overlayChild;
+            host.CaptureMouse(this);
+            return true;
+        }
         return false;
     }
 
@@ -5117,7 +5375,6 @@ bool ScrollPanel::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightB
     const D2D1_RECT_F viewport = GetViewportRect();
     if (PointInRect(viewport, point))
     {
-        const D2D1_POINT_2F contentPoint = ToContentSpace(point);
         if (Control* child = FindChildAtContent(contentPoint))
         {
             if (child->OnMouseDown(host, contentPoint, rightButton, modifiers))
@@ -5143,6 +5400,10 @@ bool ScrollPanel::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool
     if (PointInRect(viewport, point))
     {
         const D2D1_POINT_2F contentPoint = ToContentSpace(point);
+        if (Control* overlayChild = FindOverlayChildAtContent(contentPoint))
+        {
+            return overlayChild->OnMouseDoubleClick(host, contentPoint, rightButton, modifiers);
+        }
         if (Control* child = FindChildAtContent(contentPoint))
         {
             return child->OnMouseDoubleClick(host, contentPoint, rightButton, modifiers);
@@ -5178,6 +5439,22 @@ bool ScrollPanel::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifi
         return true;
     }
 
+    const D2D1_POINT_2F contentPoint = ToContentSpace(point);
+    if (Control* overlayChild = FindOverlayChildAtContent(contentPoint))
+    {
+        if (_innerHoveredChild != overlayChild)
+        {
+            if (_innerHoveredChild)
+            {
+                _innerHoveredChild->OnHoverChanged(host, false);
+            }
+            _innerHoveredChild = overlayChild;
+            _innerHoveredChild->OnHoverChanged(host, true);
+        }
+        overlayChild->OnMouseMove(host, contentPoint, modifiers);
+        return true;
+    }
+
     // Update scrollbar hover
     if (UsesInternalScrollbar())
     {
@@ -5201,7 +5478,6 @@ bool ScrollPanel::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifi
     // Dispatch move to inner hovered child
     if (_innerHoveredChild)
     {
-        const D2D1_POINT_2F contentPoint = ToContentSpace(point);
         _innerHoveredChild->OnMouseMove(host, contentPoint, modifiers);
     }
 
@@ -5239,11 +5515,16 @@ bool ScrollPanel::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightBut
         return true;
     }
 
+    const D2D1_POINT_2F contentPoint = ToContentSpace(point);
+    if (Control* overlayChild = FindOverlayChildAtContent(contentPoint))
+    {
+        return overlayChild->OnMouseUp(host, contentPoint, rightButton, modifiers);
+    }
+
     // Dispatch to child
     const D2D1_RECT_F viewport = GetViewportRect();
     if (PointInRect(viewport, point))
     {
-        const D2D1_POINT_2F contentPoint = ToContentSpace(point);
         if (Control* child = FindChildAtContent(contentPoint))
         {
             return child->OnMouseUp(host, contentPoint, rightButton, modifiers);
@@ -5255,10 +5536,18 @@ bool ScrollPanel::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightBut
 
 bool ScrollPanel::OnMouseWheel([[maybe_unused]] WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers)
 {
+    const D2D1_POINT_2F contentPoint = ToContentSpace(point);
+    if (Control* overlayChild = FindOverlayChildAtContent(contentPoint))
+    {
+        if (overlayChild->OnMouseWheel(host, contentPoint, wheelDelta, modifiers))
+        {
+            return true;
+        }
+    }
+
     const D2D1_RECT_F viewport = GetViewportRect();
     if (PointInRect(viewport, point))
     {
-        const D2D1_POINT_2F contentPoint = ToContentSpace(point);
         if (Control* child = FindChildAtContent(contentPoint))
         {
             if (child->OnMouseWheel(host, contentPoint, wheelDelta, modifiers))

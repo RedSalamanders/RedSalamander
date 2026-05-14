@@ -9128,6 +9128,127 @@ struct OwnedMenuSessionEscapeResult
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestCommandOpenCommandShellPrefersWindowsTerminal(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"command shell root " + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create command-shell test root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+        g_folderWindow.DebugSetCommandShellLaunchCallback({});
+        g_folderWindow.DebugSetCommandShellTerminalOverrideForTest({});
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for command-shell test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for command-shell test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    struct LaunchCapture final
+    {
+        uint32_t calls = 0u;
+        FolderWindow::CommandShellLaunchDebugPlan plan;
+    } launch;
+
+    const std::wstring terminalExecutable = LR"(C:\Users\SelfTest\AppData\Local\Microsoft\WindowsApps\wt.exe)";
+    g_folderWindow.DebugSetCommandShellTerminalOverrideForTest(std::optional<std::wstring>{terminalExecutable});
+    g_folderWindow.DebugSetCommandShellLaunchCallback([&](const FolderWindow::CommandShellLaunchDebugPlan& plan) -> HRESULT
+    {
+        ++launch.calls;
+        launch.plan = plan;
+        return S_OK;
+    });
+
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+
+    state.Require(launch.calls == 1u, std::format(L"Command Shell should launch once; got {} calls.", launch.calls));
+    state.Require(launch.plan.usesWindowsTerminal, L"Command Shell should prefer Windows Terminal when the terminal executable is available.");
+    state.Require(launch.plan.executable == terminalExecutable, L"Command Shell should launch the resolved Windows Terminal executable.");
+    state.Require(launch.plan.workingDirectory == root.wstring(), L"Command Shell should target the focused pane folder.");
+    const std::wstring expectedParameters = std::wstring(L"-d ") + QuoteExpectedCommandLineText(root.wstring());
+    state.Require(launch.plan.parameters == expectedParameters,
+                  std::format(L"Command Shell should pass only the starting directory to Terminal. Expected '{}', got '{}'.",
+                              expectedParameters,
+                              launch.plan.parameters));
+    state.Require(launch.plan.directory.empty(), L"Windows Terminal launch should rely on -d instead of forcing cmd.exe's working directory.");
+
+    launch = {};
+    g_folderWindow.DebugSetCommandShellTerminalOverrideForTest(std::optional<std::wstring>{std::wstring{}});
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+
+    state.Require(launch.calls == 1u, std::format(L"Command Shell fallback should launch once; got {} calls.", launch.calls));
+    state.Require(! launch.plan.usesWindowsTerminal, L"Command Shell should fall back to the command processor when Terminal is unavailable.");
+    state.Require(! launch.plan.executable.empty(), L"Command Shell fallback should have a command processor executable.");
+    state.Require(launch.plan.parameters.empty(), L"Command Shell fallback should not force cmd.exe parameters for a local folder.");
+    state.Require(launch.plan.directory == root.wstring(), L"Command Shell fallback should use the focused pane folder as the working directory.");
+    state.Require(launch.plan.workingDirectory == root.wstring(), L"Command Shell fallback should target the focused pane folder.");
+
+    launch = {};
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.DebugSetCommandShellTerminalOverrideForTest(std::optional<std::wstring>{terminalExecutable});
+    g_folderWindow.DebugSetCommandShellLaunchCallback([&](const FolderWindow::CommandShellLaunchDebugPlan& plan) -> HRESULT
+    {
+        ++launch.calls;
+        launch.plan = plan;
+        return E_FAIL;
+    });
+
+    g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+
+    state.Require(launch.calls == 2u, std::format(L"Command Shell should retry with the command processor after Terminal launch failure; got {} calls.", launch.calls));
+    state.Require(! launch.plan.usesWindowsTerminal, L"Command Shell should finish on the command-processor fallback after Terminal launch failure.");
+
+    FolderView::AlertOverlayDebugSnapshot alert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert),
+                  L"Pane alert snapshot should be available after command-shell launch failure.");
+    state.Require(alert.visible, L"Command Shell launch failure should show a pane alert.");
+    state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Command Shell launch failure should report a warning.");
+    state.Require(alert.title == LoadStringResource(nullptr, IDS_CMD_OPEN_COMMAND_SHELL),
+                  L"Command Shell launch failure should use the localized command-shell title.");
+    state.Require(alert.message.find(L"0x80004005") != std::wstring::npos,
+                  L"Command Shell launch failure should surface the HRESULT in the alert message.");
+
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -9203,6 +9324,9 @@ void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTes
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_command_line_insertion_and_execute", [=](CaseState& state) noexcept {
         return TestPaneCommandLineInsertionAndExecute(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_open_command_shell_prefers_windows_terminal", [=](CaseState& state) noexcept {
+        return TestCommandOpenCommandShellPrefersWindowsTerminal(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_switch_pane_focus_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
         return TestSwitchPaneFocusKeepsNavigationShellStable(mainWindow, state);

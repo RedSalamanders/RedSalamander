@@ -2,6 +2,7 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "FluentIcons.h"
+#include "FolderViewThumbnailGeometry.h"
 #ifdef ENABLE_TESTS
 #include "SelfTestCommon.h"
 #endif
@@ -1210,7 +1211,7 @@ void FolderView::Render(const RECT& invalidRect)
             DrawItem(item, &drawStats);
         };
 
-        if (_columnCounts.empty())
+        if (_columnLayout.empty())
         {
             for (auto& item : _items)
             {
@@ -1220,9 +1221,8 @@ void FolderView::Render(const RECT& invalidRect)
         else
         {
             const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
-            const float columnStride  = _tileWidthDip + kColumnSpacingDip;
             const float rowStride     = _tileHeightDip + rowSpacingDip;
-            if (columnStride <= 0.0f || rowStride <= 0.0f)
+            if (rowStride <= 0.0f)
             {
                 for (auto& item : _items)
                 {
@@ -1231,17 +1231,14 @@ void FolderView::Render(const RECT& invalidRect)
             }
             else
             {
-                const float firstColumnLeft = kColumnSpacingDip;
-                const float firstRowTop     = rowSpacingDip;
-                size_t columnBaseIndex      = 0;
-                for (int column = 0; column < static_cast<int>(_columnCounts.size()) && columnBaseIndex < _items.size(); ++column)
+                const float firstRowTop = rowSpacingDip;
+                for (const auto& column : _columnLayout)
                 {
-                    const int rows          = _columnCounts[static_cast<size_t>(column)];
-                    const float columnLeft  = firstColumnLeft + static_cast<float>(column) * columnStride;
-                    const float columnRight = columnLeft + _tileWidthDip;
+                    const int rows          = static_cast<int>(column.itemCount);
+                    const float columnLeft  = column.leftDip;
+                    const float columnRight = column.RightDip();
                     if (columnRight < layoutLeft || columnLeft > layoutRight)
                     {
-                        columnBaseIndex += static_cast<size_t>(rows);
                         continue;
                     }
                     if (rows <= 0)
@@ -1256,12 +1253,11 @@ void FolderView::Render(const RECT& invalidRect)
                     lastRow      = std::min(lastRow, rows - 1);
                     if (firstRow > rows - 1 || firstRow > lastRow)
                     {
-                        columnBaseIndex += static_cast<size_t>(rows);
                         continue;
                     }
 
-                    size_t startIndex = columnBaseIndex + static_cast<size_t>(firstRow);
-                    size_t endIndex   = columnBaseIndex + static_cast<size_t>(lastRow);
+                    size_t startIndex = column.startIndex + static_cast<size_t>(firstRow);
+                    size_t endIndex   = column.startIndex + static_cast<size_t>(lastRow);
                     if (startIndex >= _items.size())
                     {
                         break;
@@ -1272,8 +1268,6 @@ void FolderView::Render(const RECT& invalidRect)
                     {
                         drawIfVisible(_items[idx]);
                     }
-
-                    columnBaseIndex += static_cast<size_t>(rows);
                 }
             }
         }
@@ -2063,7 +2057,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
 #endif
 
     // Ensure text layout is created lazily before rendering
-    const float labelWidth = std::max(0.0f, _tileWidthDip - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
+    const float labelWidth = GetItemTextLayoutWidth(item);
     EnsureItemTextLayout(item, labelWidth);
 #ifdef ENABLE_TESTS
     if (IsNameFilterActive())
@@ -2238,7 +2232,8 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     {
         iconOpacity = FolderViewVisualState::ResolveNormalIconOpacity(iconOpacity, _paneFocused);
     }
-    ID2D1Bitmap1* bitmap = (_thumbnailsVisible && item.thumbnail) ? item.thumbnail.get() : item.icon.get();
+    const bool drawingThumbnail = _thumbnailsVisible && item.thumbnail;
+    ID2D1Bitmap1* bitmap = drawingThumbnail ? item.thumbnail.get() : item.icon.get();
     if (bitmap)
     {
 #ifdef ENABLE_TESTS
@@ -2247,11 +2242,31 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
             SelfTest::AppendSelfTestTrace(std::format(L"FolderView::DrawItem: before DrawBitmap name='{}'", item.displayName));
         }
 #endif
-        const D2D1_INTERPOLATION_MODE interpolationMode = ResolveFolderViewIconBitmapInterpolation(bitmap->GetPixelSize(), _iconSizeDip, _dpi);
-        _d2dContext->DrawBitmap(bitmap, iconRect, iconOpacity, interpolationMode);
+        const D2D1_SIZE_U sourcePixelSize = bitmap->GetPixelSize();
+        D2D1_RECT_F bitmapRect = drawingThumbnail ? FitBitmapRectPreserveAspect(iconRect, sourcePixelSize) : iconRect;
+#ifdef ENABLE_TESTS
+        if (drawingThumbnail)
+        {
+            _debugLastThumbnailDrawSawThumbnail = true;
+            _debugLastThumbnailSourceWidthPx = sourcePixelSize.width;
+            _debugLastThumbnailSourceHeightPx = sourcePixelSize.height;
+            _debugLastThumbnailSlotRectDip = iconRect;
+            _debugLastThumbnailDrawRectDip = bitmapRect;
+        }
+        else
+        {
+            _debugLastIconDrawSawIcon = true;
+            _debugLastIconDrawSourceWidthPx = sourcePixelSize.width;
+            _debugLastIconDrawSourceHeightPx = sourcePixelSize.height;
+            _debugLastIconDrawSlotRectDip = iconRect;
+            _debugLastIconDrawRectDip = bitmapRect;
+        }
+#endif
+        const D2D1_INTERPOLATION_MODE interpolationMode = ResolveFolderViewIconBitmapInterpolation(sourcePixelSize, _iconSizeDip, _dpi);
+        _d2dContext->DrawBitmap(bitmap, bitmapRect, iconOpacity, interpolationMode);
 
         // Render shortcut overlay if applicable
-        if (item.isShortcut && _shortcutOverlayIcon)
+        if (item.isShortcut && _shortcutOverlayIcon && ! drawingThumbnail)
         {
             // Position overlay at bottom-right corner of icon
             const float overlaySize = _iconSizeDip * 0.5f; // Half icon size for overlay

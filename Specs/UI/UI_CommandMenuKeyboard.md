@@ -42,9 +42,12 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - `Left` in the root popup of a top-level menu session MUST switch to the previous enabled top-level menu and move the keyboard highlight to that popup's first navigable item.
 - A stationary mouse pointer MUST NOT steal root switching or highlighted-item ownership from keyboard navigation; pointer-driven root switching and hover takeover require actual mouse movement.
 - Opening a root popup by mouse MUST NOT synthesize a keyboard or hover selection from the checked item; checked, radio, and toggle state MUST be shown only by the item glyph until actual pointer movement or keyboard navigation selects an item.
+- After a root popup is opened by mouse, keyboard navigation MUST be live immediately: arrow keys, mnemonics, `Enter`, and `Escape` MUST be processed and repainted without requiring any later mouse movement.
 - When a submenu is already open and the pointer moves back onto the parent item that opened that submenu, the submenu MUST remain open and any pending child-close timer MUST be canceled.
 - When a submenu is already open and the pointer settles on a different sibling item that does not keep that submenu active, the existing child submenu chain MUST close after the standard cascade hover delay unless a replacement submenu opens instead.
-- During an active top-level menu session, moving the pointer directly from one enabled root menu item to another MUST switch the open root popup without requiring the pointer to first enter an item inside the original popup.
+- During an active top-level menu session, moving the pointer directly from one enabled root menu item to another MUST immediately move the menu bar highlight to the hovered root, close the previous root popup, and open the target root popup without requiring the pointer to first enter an item inside the original popup. This applies in both directions and across non-adjacent roots, including `View` to `Files`.
+- During an active top-level menu session, the menu bar's hover-changed signal MUST also be able to request that same root switch when the popup owns focus, so top-level hover movement is not lost just because mouse capture currently belongs to the popup window.
+- During an active top-level menu session, the menu bar highlight MUST stay on the root menu whose popup is currently open, including while focus is held by the popup window. A stale hover from the cursor's pre-existing position MUST NOT leave a previous top-level item highlighted after another root popup opens.
 - Exiting a DxUi top-level menu session without transferring focus to another control MUST restore keyboard focus to the pane/control that owned focus before menu mode started.
 - Pressing `Escape` while a top-level menu bar, menu popup, or pane-owned context menu has keyboard ownership MUST dismiss that transient UI first, then restore keyboard focus to the active pane's `FolderView` unless the chosen command intentionally opens another focus-owning surface.
 
@@ -79,6 +82,10 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - Broken links, missing targets, non-local `.url` targets, unsupported reparse tags, and unsupported file-system plugins keep the pane in place and show localized pane feedback.
 - The command records `shell.go_to_shortcut_target_us` in command selftests so shortcut resolution and navigation cost stay visible.
 
+### Command Shell
+
+`cmd/pane/openCommandShell` opens a shell in the focused pane folder. If Windows Terminal is available through the `wt.exe` CLI alias or `Terminal.exe`, the command MUST launch Terminal with only a starting-directory argument (`-d <folder>`) so the user's default Terminal profile opens in that folder. If Terminal is not available, or if the Terminal launch fails, the command MUST fall back to the configured command processor (`ComSpec`, or `cmd.exe`). The `cmd.exe` fallback MUST keep the existing UNC handling by launching from the default local root and using `pushd <folder>` for UNC paths.
+
 ### Shell New Templates
 
 `cmd/pane/newFromShellTemplate` is the stable command family for entries under **Files -> New** after **Folder**. The menu is populated at popup time from the Windows ShellNew registry view for local built-in file-system folders. The dynamic menu item carries the same template id that can be used by shortcuts as `cmd/pane/newFromShellTemplate/<templateId>`.
@@ -108,7 +115,7 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 `cmd/pane/quickSearch` activates the target pane's integrated incremental search mode. It is not the persistent filter bar and it is separate from the command-line input commands.
 
 - Invoking the command focuses the target pane's `FolderView`, enters search mode, clears any previous quick-search query, and shows the transient search indicator.
-- Printable typing appends to the query. Matching is case-insensitive.
+- Printable typing appends to the query, including Space for filenames that contain spaces. Space remains text while Quick Search is active even though the same key is normally the FolderView selection/size shortcut. Matching is case-insensitive.
 - The initial focused item prefers the first item whose name starts with the query. If no prefix match exists, the first item containing the query is focused.
 - Rendering highlights the matching range for every visible item whose name contains the query.
 - `Up`/`Left` and `Down`/`Right` navigate through all matching items in folder order while search mode is active.
@@ -122,8 +129,8 @@ Pane view option commands target the focused pane, or the active pane when focus
 
 - `cmd/pane/viewOptions/toggleFileExtensions` toggles extension display in the target pane only. This is display-only: file operations, command-line insertion, clipboard actions, and plugin calls continue to use real item names and full paths.
 - `cmd/pane/viewOptions/toggleThumbnails` is a legacy command id that selects the exclusive Thumbnails display mode in the target pane. The pane switches away from Brief/Detailed/Extra Detailed, uses larger DPI-aware item visuals, schedules bounded asynchronous thumbnail work for visible items, uses shell thumbnails when available, and renders the normal file/folder icon as fallback without blocking navigation. Repeating the command leaves the pane in Thumbnails; selecting another display mode leaves thumbnail mode and cancels stale work.
-- `cmd/pane/viewOptions/togglePreviewPane` toggles preview mode for the active source pane and hosts the preview in the opposite pane. Opening preview shows compact themed DxUi Folder/Preview tabs at the top of the host pane, selects Preview, hides that pane's folder view while Preview is selected, and updates the embedded viewer preview when the source pane focus or selection changes. The tabs must behave as real pointer targets without stealing keyboard focus from the source pane. Preview tabs use attached, Visual Studio-like chrome: inactive tabs have no border, selected tabs blend into the pane below with square lower corners, the Folder tab tooltip displays the host pane path after the standard hover delay, and the Preview tab close glyph is visible when Preview is selected or hovered and closes preview mode. Preview resolves the configured viewer plugin for the focused item and uses it when the plugin supports embedded hosting; when saved viewer associations are missing or only resolve the default text viewer, preview uses the built-in embedded viewer defaults before falling back to the embedded text viewer or localized placeholder. If a focus change resolves to the same embedded viewer plugin already hosted by Preview, the host reuses that viewer instance and refreshes it with the new open context; it replaces the preview window only when resolution chooses a different plugin or refresh fails. Embedded preview viewers MUST NOT take keyboard focus from the source pane. Closing or replacing an embedded viewer persists changed plugin configuration, including ViewerVLC volume/mute state, and preview resolution/fallback choices are logged for monitor diagnostics. Switching back to Folder keeps preview mode open with the host folder view visible. Closing preview removes the tabs and restores the host pane. The preview area extends to the function bar, or to the bottom of the window when the function bar is hidden.
-- `cmd/pane/viewOptions/toggleFilterBar` toggles a persistent themed DxUi filter bar for the target pane. The bar reflects the current `cmd/pane/filter` state, follows restored per-history filters, and never replaces Quick Search.
+- `cmd/pane/viewOptions/togglePreviewPane` toggles preview mode for the active source pane and hosts the preview in the opposite pane. Opening preview shows compact themed DxUi Folder/Preview tabs at the top of the host pane, selects Preview, hides that pane's folder view while Preview is selected, and updates the embedded viewer preview when the source pane focus or selection changes. The tabs must behave as real pointer targets without stealing keyboard focus from the source pane. Preview tabs use attached, Visual Studio-like chrome: inactive tabs have no border, selected tabs blend into the pane below with square lower corners, the Folder tab tooltip displays the host pane path after the standard hover delay, and the Preview tab close glyph is visible when Preview is selected or hovered and closes preview mode. Preview resolves the configured viewer plugin for the focused item and uses it when the plugin supports embedded hosting; when saved viewer associations are missing or only resolve the default text viewer, preview uses the built-in embedded viewer defaults only when they produce a specific embedded-capable match. If no specific embedded preview is available, or if opening the selected embedded viewer fails, Preview falls back to a compact, scrollable focused file/folder Properties card view from the active file system before showing any localized unsupported fallback. The Properties card view uses DxUi cards, wraps long values, shows a vertical scrollbar only when needed, preserves the normalized Properties text for debug/copy parity, and adds restrained rainbow section-header accents in Rainbow theme while respecting high-contrast colors. If a focus change resolves to the same embedded viewer plugin already hosted by Preview, the host reuses that viewer instance and refreshes it with the new open context; it replaces the preview window only when resolution chooses a different plugin or refresh fails. Embedded preview viewers and default Properties preview scrolling MUST NOT take keyboard focus from the source pane. Embedded media preview, including audio-only ViewerVLC files and visualizer-capable player paths, MUST keep playback and media output inside the preview host and MUST NOT create unowned/top-level player or visualization windows; standalone viewer windows may keep normal visualizer behavior. Menu-bearing embedded viewers expose only Preview-appropriate actions from their right-click context menus; standalone-only commands such as Exit, Open, and internal other-file navigation are omitted, empty groups are trimmed, and viewer shortcut labels are not shown because shortcuts still belong to the source pane. Closing or replacing an embedded viewer persists changed plugin configuration, including ViewerVLC volume/mute state, and preview resolution/fallback choices are logged for monitor diagnostics. Switching back to Folder keeps preview mode open with the host folder view visible. Closing preview removes the tabs and restores the host pane. The preview area extends to the function bar, or to the bottom of the window when the function bar is hidden.
+- `cmd/pane/viewOptions/toggleFilterBar` toggles a persistent themed DxUi filter bar for the target pane. The bar is a compact inline version of the `cmd/pane/filter` workflow with an editable filter-history combo and a right-side Use Filter toggle; the combo placeholder/accessibility name supplies the Filter label, so no separate static Filter label is shown. Typing applies the filter live without automatically opening the history dropdown, Enter/history selection saves to `selectionMasks.filterHistory`, and turning the toggle off keeps the text while disabling filtering. It follows restored per-history filters and never replaces Quick Search.
 - `cmd/pane/viewOptions/toggleNavigationBar` toggles the target pane navigation/address bar. Left/right menu entries target their named pane; shortcut routing targets the active pane. Commands that focus the address bar MUST show the bar first, then focus the address edit.
 - `cmd/pane/viewOptions/toggleStatusBar` routes shortcut invocation to the active pane and shares the existing left/right `Show` menu status-bar implementation.
 - These visibility states are persisted per pane through `folders.items[].view.*` settings and MUST keep menu check marks synchronized with the current pane state.
@@ -190,6 +197,7 @@ Pane view option commands target the focused pane, or the active pane when focus
 - **Open Path** switches the target pane to the built-in local file-system provider if needed, then navigates to the selected share's local path.
 - **Manage** launches the Windows Shared Folders management console. Launch failure shows localized nonfatal pane feedback.
 - Access denied while enumerating shares keeps the dialog open, clears stale rows, and shows a localized access-denied empty/error state.
+- The dialog MUST be a modeless DxUi-hosted app window, inherit the active app theme and themed window chrome, and avoid visible native dialog-template controls in DxUi mode.
 - Command selftests MUST keep correctness and responsiveness visible with synthetic provider rows, sorted display, open-path navigation, access-denied state coverage, `sharedDirectories.open_us`, and an archived `shared_directories_metrics.json` artifact.
 
 ### Archive Pack And Unpack
@@ -359,7 +367,7 @@ This section is the single source of truth for the command ID catalog.
 
 - The default Commands self-test suite MUST prefer deterministic, local-only scenarios over environment-dependent integration.
 - Command registry coverage MUST validate canonical command IDs only; removed command IDs are not preserved as aliases.
-- Shortcut-default coverage MUST assert fixed high-value bindings directly, including the full `Insert` row for copy/paste/copy-as-text commands and the `Ctrl+F2..F6` sort bindings.
+- Shortcut-default coverage MUST assert fixed high-value bindings directly, including the full `Insert` row for copy/paste/copy-as-text commands, the `Ctrl+F2..F6` sort bindings, `Ctrl+F` for Find Files and Directories, and `Ctrl+Alt+T` for Command Shell.
 - Menu-contract coverage MUST assert the `Edit` menu copy-text group order, labels, separator boundaries, and text-only icon policy.
 - Command behavior coverage for copy-text commands MUST run in a temp local folder with clipboard assertions and MUST stay separate from selection save/restore scenarios.
 - The global dispatch smoke test remains a smoke test: it verifies that commands do not wedge the UI or leak transient windows, but it is not a substitute for behavior assertions.
@@ -426,7 +434,7 @@ Notation:
 - Swap Panes (`Ctrl+U`) *(swap Left/Right pane file system + current folder; view options stay with the pane; global history unaffected)* `[cmd/app/swapPanes]`
 - Path from Other Panel (`Ctrl+.`) `[cmd/pane/setPathFromOtherPane]`
 - Refresh (`Ctrl+F9`) *(invalidate directory cache + re-enumerate current folder)* `[cmd/pane/refresh]`
-- Filter… (`Ctrl+F12`) *(open pane filter dialog; wildcard mask syntax shared with Select/Unselect; history saved; active filter shows a subtle background watermark; filter state restored when navigating to a path from history)* `[cmd/pane/filter]`
+- Filter… (`Ctrl+F12`) *(open pane filter dialog with the same editable history combo as the inline filter bar, no separate History button, and no automatic dropdown opening while typing; wildcard mask syntax shared with Select/Unselect; history shared with the inline filter bar; active filter shows a subtle background watermark; filter state restored when navigating to a path from history)* `[cmd/pane/filter]`
 
 #### Files (targets Focused pane unless explicitly stated)
 
@@ -512,7 +520,7 @@ Notation:
 - Change Directory… (`Shift+F7`) `[cmd/pane/changeDirectory]` *(opens NavigationView address edit; mounted: `<instanceContext>|/path`)*
 - Compare Directories… (`Ctrl+F10`) `[cmd/app/compare]`
 - Calculate Occupied Space (`Alt+F10`) `[cmd/pane/viewSpace]`
-- Find Files and Directories… (`Alt+F7`) `[cmd/pane/find]`
+- Find Files and Directories… (`Alt+F7` / `Ctrl+F`) `[cmd/pane/find]`
 - Make File List… (`⊘`) `[cmd/pane/makeFileList]`
 - Go to Shortcut or Link Target (`⊘`) `[cmd/pane/goToShortcutOrLinkTarget]`
 - ---
@@ -523,7 +531,7 @@ Notation:
 - Disconnect… (`F12`) `[cmd/pane/disconnect]` *(opens the Windows dialog; before opening, cancel any pending enumeration and clear DirectoryInfoCache (stops folder watchers) for the focused pane; if focused pane is a mapped network drive, preselect it; if the focused pane drive is removed, navigate to the default file system root)*
 - Shared Directories… (`Ctrl+Shift+F9`) `[cmd/pane/shares]`
 - ---
-- Command Shell (`⊘`) `[cmd/pane/openCommandShell]` *(opens system shell at focused pane path; mounted: opens at mount backing folder)*
+- Command Shell (`Ctrl+Alt+T`) `[cmd/pane/openCommandShell]` *(opens Windows Terminal's default profile at focused pane path when available, otherwise falls back to `cmd.exe`; mounted: opens at mount backing folder)*
 - Quick Search (`Shift+Space`) `[cmd/pane/quickSearch]`
 - Bring Current Directory to Command Line (`Ctrl+Space`) `[cmd/pane/bringCurrentDirToCommandLine]`
 - Bring Filename to Command Line (`Ctrl+Enter`) `[cmd/pane/bringFilenameToCommandLine]`
@@ -893,6 +901,7 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 | C         | ⊘                                  | Clipboard Copy                   | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | V         | ⊘                                  | Clipboard Paste                  | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | L         | ⊘                                  | Focus Address Bar                | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| T         | ⊘                                  | ⊘                                | ⊘                        | ⊘                                  | ⊘                                 | Command Shell     | ⊘                     |
 | D         | ⊘                                  | ⊘                                | Focus Address Bar        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | Up        | ⊘                                  | ⊘                                | Up One Directory         | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | Down      | ⊘                                  | ⊘                                | Show Folders History     | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
@@ -945,6 +954,7 @@ Notes:
 - `Space`: select `Current item`, request folder subtree size computation (if folder), and advance to the next item
 - `Insert`: select `Current item` and advance to the next item (no folder subtree size computation)
 - `Ctrl+A`: select all
+- `Ctrl+F`: open Find Files and Directories for the focused pane
 - `Ctrl+C`: copy `Selected items` to clipboard (or `Current item` when selection is empty)
 - `Ctrl+V`: paste from clipboard
 - `Enter`: open `Current item`
@@ -1074,6 +1084,7 @@ These keys target the **focused pane** as the source (unless stated otherwise):
 
 **Keys while in mode**
 - Printable character: extend query; if the `Current item` no longer matches, jump to the next match
+- `Space`: treated as a printable character while incremental search is active, including when it arrives through the shortcut-dispatch path, and MUST NOT toggle pane selection or request occupied-size calculation
 - `Backspace`: remove last character; if query becomes empty, exit mode
 - `Esc`: exit mode and clear highlight
 - `Up` / `Left`: move to previous match (wrap allowed)

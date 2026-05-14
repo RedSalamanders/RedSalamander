@@ -12,7 +12,7 @@
 - Display modes: **Brief**, **Detailed**, **Extra Detailed**, and **Thumbnails**
 - Pane filter (wildcard mask) with persisted per-path state and a subtle watermark indicator when active
 - View options for hidden/system files (hidden items display a dim icon when shown)
-- Thumbnail display mode with asynchronous shell thumbnail loading, icon fallback, and per-pane persistence
+- Thumbnail display mode with asynchronous shell/WIC thumbnail loading, aspect-preserving draw, icon fallback, and per-pane size persistence
 - Full drag-and-drop support (COM IDataObject/IDropSource/IDropTarget)
 - Multi-selection with visual feedback
 - Keyboard navigation
@@ -23,7 +23,7 @@
 - **Startup performance**: D3D/D2D device + swap chain initialization is **deferred until after the first paint** (via `WndMsg::kFolderViewDeferredInit`) to keep `WM_CREATE` fast; first paint uses a GDI background fill until Direct2D is ready.
 - **Threading**: Background enumeration thread for non-blocking folder loading
 - **Icon Management**: Async icon loading **grouped by system icon index**; cached bitmaps are stamped immediately and missing icons are extracted once (background) + converted once (UI) then applied to all matching items. Icon bitmap conversion begins once a Direct2D device context is ready (no synchronous icon bitmap pre-warm during startup) and MUST NOT be blocked by pending swap-chain resize completion; otherwise fast startup can leave enumerated items stuck on placeholder icons.
-- **Thumbnail Management**: Thumbnails is an exclusive display mode per pane. It keeps normal icon loading as fallback, queues only bounded visible work, extracts shell thumbnails off the UI thread, converts/attaches Direct2D bitmaps on the UI thread, and drops stale work when navigation, refresh, or display-mode changes make a payload obsolete.
+- **Thumbnail Management**: Thumbnails is an exclusive display mode per pane. It keeps normal icon loading as fallback, queues only bounded visible work, extracts shell thumbnails off the UI thread, decodes likely image files through WIC when shell thumbnail extraction fails, creates Direct2D bitmaps on the UI thread from bounded pixel buffers, and drops stale work when navigation, refresh, sorting, display-mode, or thumbnail-size changes make a payload obsolete.
 - **Parent-Child**: Child window of main application, coordinates with NavigationView
 
 ## Typography Contract
@@ -133,25 +133,38 @@ FolderView work SHOULD prefer existing metric families such as `render.*`, `icon
 
 **Column Width Calculation:**
 ```text
+rowsPerColumn = floor((visiblePaneHeight + rowSpacing) / (itemHeight + rowSpacing))
+items are assigned to columns top-to-bottom after rowsPerColumn is known
+
 if (mode == Brief):
-  textWidth = max(nameWidth for each item)
+  textWidth[column] = max(nameWidth for each item assigned to that column)
 
 if (mode == Detailed):
-  // Ensure both lines fit (name + details).
-  nameWidth = max(nameWidth for each item)
-  detailsWidth = max(detailsWidth for each item)
-  textWidth = max(nameWidth, detailsWidth)
+  // Ensure both lines fit (name + details), but only for the current column.
+  nameWidth[column] = max(nameWidth for each item assigned to that column)
+  detailsWidth[column] = max(detailsWidth for each item assigned to that column)
+  textWidth[column] = max(nameWidth[column], detailsWidth[column])
 
 if (mode == ExtraDetailed or mode == Thumbnails):
-  // Ensure all three text lines fit (name + details + metadata).
-  nameWidth = max(nameWidth for each item)
-  detailsWidth = max(detailsWidth for each item)
-  metadataWidth = max(metadataWidth for each item)
-  textWidth = max(nameWidth, detailsWidth, metadataWidth)
+  // Ensure all three text lines fit (name + details + metadata), but only for the current column.
+  nameWidth[column] = max(nameWidth for each item assigned to that column)
+  detailsWidth[column] = max(detailsWidth for each item assigned to that column)
+  metadataWidth[column] = max(metadataWidth for each item assigned to that column)
+  textWidth[column] = max(nameWidth[column], detailsWidth[column], metadataWidth[column])
 
-columnWidth = max(textWidth + iconWidth + padding, minColumnWidth)
-columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
+columnWidth[column] = max(textWidth[column] + iconWidth + padding, minColumnWidth)
+columnWidth[column] = min(columnWidth[column], windowWidth)  // Don't exceed window width
 ```
+- A wide item in one visible column MUST NOT widen earlier or later columns.
+- Column left/right bounds are variable-width layout data and MUST be used by
+  rendering, visible-range lookup, hit testing, horizontal scrolling, and
+  `EnsureVisible`; these paths must not derive item positions from a single
+  global column stride.
+- Horizontal offset `0` is the canonical first-column scroll stop and preserves
+  the leading column gutter. The first right line-scroll from `0` MUST move to
+  the second column's left edge, not to the first column's left gutter; the
+  matching first left line-scroll from the second column MUST return to `0` in
+  one step.
 
 **Item Spacing:**
 - **Vertical spacing**:
@@ -189,10 +202,13 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 └──────────────────────────────┘
 ```
 
-- Thumbnail mode uses larger DPI-aware visuals for the item bitmap area.
-- For local files, the pane requests shell thumbnails asynchronously for visible items only.
-- Until a thumbnail is ready, or when the shell cannot provide one, the normal folder/file icon is rendered in the same larger visual slot.
-- Navigation, refresh, sorting, and leaving thumbnail display mode cancel or invalidate pending thumbnail work so stale payloads are not applied to the current view.
+- Thumbnail mode uses larger DPI-aware visuals for the item bitmap area. The per-pane size is one of `48`, `64`, `96`, or `128 DIP`, defaulting to `64 DIP`.
+- Thumbnail bitmaps MUST preserve their source aspect ratio inside the thumbnail slot. Landscape images are letterboxed, portrait images are pillarboxed, and the draw rect MUST NOT exceed the slot.
+- For local files, the pane requests shell thumbnails asynchronously for visible items only. If shell thumbnail extraction fails for a likely WIC-supported image extension, the worker decodes a bounded first-frame thumbnail through WIC before falling back to the normal icon.
+- Until a thumbnail is ready, or when neither shell nor WIC can provide one, the normal folder/file icon is rendered in the same larger visual slot.
+- Folder/file icon bitmap caching MUST keep separate entries for the shell image-list size class selected for the current target DIP size. Returning from thumbnail mode to Brief/Detailed/Extra Detailed MUST NOT reuse thumbnail-mode jumbo icon bitmaps in the normal `16 DIP` icon slot.
+- Navigation, refresh, sorting, horizontal scrolling, ensure-visible focus moves, pane resize, thumbnail-size changes, and leaving thumbnail display mode cancel, invalidate, or requeue pending thumbnail work so stale payloads are not applied and newly visible columns do not remain on icon fallback.
+- Thumbnail queues and caches are bounded to visible work and a memory budget; offscreen thumbnails may be evicted, but currently visible thumbnails must not be evicted during the same queue/paint pass.
 
 **Item Rendering (Detailed):**
 ```text
@@ -273,9 +289,10 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
   - `cmd/pane/selection/showHiddenNames`: clears the hidden-names set but MUST NOT change any existing pane filter.
   - The hidden-names set is pane-local and MUST be cleared on folder navigation.
 - While a pane filter is active **or** the hidden-names set is non-empty, FolderView SHOULD render a very subtle watermark glyph in the background (Sego UI Symbol `0xE71C`) so the user can tell the pane is filtered/hidden.
-- When the pane is showing a centered empty-state UI (Empty folder state or an explicit empty-state message) and a filter is active, FolderView MUST avoid rendering overlapping watermarks:
-  - The large background filter watermark MUST be suppressed.
-  - FolderView SHOULD instead render a small filter badge in a corner.
+- When the pane filter is active and no rows are visible, the filter state has priority over the generic Empty folder placeholder:
+  - FolderView MUST suppress the generic Empty folder centered UI and its parent-row placeholder so the pane does not imply that the directory itself is empty.
+  - FolderView MUST render the full-pane funnel watermark/placeholder for the filtered-empty result, unless an error/busy overlay is visible.
+  - For explicit host empty-state messages that remain visible while filtering, FolderView MUST avoid overlapping watermarks and SHOULD use a small filter badge instead.
 
 **Enumeration Contract (Plugin Only):**
 - The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate(..., pluginId, ...)`) and uses it as the only source of directory entries.

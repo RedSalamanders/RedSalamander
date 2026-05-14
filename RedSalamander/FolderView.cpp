@@ -301,6 +301,11 @@ bool FolderView::CanShowEmptyFolderState() const noexcept
         return false;
     }
 
+    if (IsNameFilterActive())
+    {
+        return false;
+    }
+
     if (! _currentFolder || ! _displayedFolder)
     {
         return false;
@@ -554,12 +559,12 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_MOUSEMOVE: OnMouseMove({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_TIMER: OnTimerMessage(static_cast<UINT_PTR>(wParam)); return 0;
-        case WM_KEYDOWN: OnKeyDownMessage(wParam); return 0;
+        case WM_KEYDOWN: OnKeyDownMessage(wParam, lParam); return 0;
         case WM_CHAR: OnCharMessage(static_cast<wchar_t>(wParam)); return 0;
         case WM_SETFOCUS: return OnSetFocusMessage();
         case WM_KILLFOCUS: return OnKillFocusMessage();
         case WM_SYSKEYDOWN:
-            if (OnSysKeyDownMessage(wParam))
+            if (OnSysKeyDownMessage(wParam, lParam))
             {
                 return 0;
             }
@@ -751,6 +756,7 @@ void FolderView::OnSize(UINT width, UINT height)
 
     LayoutItems();
     UpdateScrollMetrics();
+    QueueMissingVisibleThumbnails();
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
 }
 
@@ -947,7 +953,7 @@ void FolderView::SetDisplayMode(DisplayMode mode)
     if (thumbnailsChanged)
     {
         CancelThumbnailLoading();
-        _iconSizeDip = thumbnailsVisible ? kFolderViewThumbnailIconSizeDip : kFolderViewListIconSizeDip;
+        _iconSizeDip = thumbnailsVisible ? static_cast<float>(_thumbnailSizeDip) : kFolderViewListIconSizeDip;
         for (auto& item : _items)
         {
             item.icon.reset();
@@ -986,6 +992,54 @@ void FolderView::SetDisplayMode(DisplayMode mode)
     {
         QueueThumbnailLoading();
     }
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
+void FolderView::SetThumbnailSizeDip(uint32_t sizeDip)
+{
+    const uint32_t normalizedSizeDip = Common::Settings::Thumbnail::NormalizeSizeDip(sizeDip);
+    if (_thumbnailSizeDip == normalizedSizeDip)
+    {
+        return;
+    }
+
+    Debug::Perf::Scope perf(L"thumbnails.size_change_us");
+    perf.SetValue0(_thumbnailSizeDip);
+    perf.SetValue1(normalizedSizeDip);
+
+    _thumbnailSizeDip = normalizedSizeDip;
+    if (! _thumbnailsVisible)
+    {
+        return;
+    }
+
+    CancelThumbnailLoading();
+    _iconSizeDip = static_cast<float>(_thumbnailSizeDip);
+    _itemMetricsCached      = false;
+    _cachedMaxLabelWidth    = 0.0f;
+    _cachedMaxLabelHeight   = 0.0f;
+    _cachedMaxDetailsWidth  = 0.0f;
+    _cachedMaxMetadataWidth = 0.0f;
+    _lastLayoutWidth        = 0.0f;
+
+    for (auto& item : _items)
+    {
+        item.thumbnail.reset();
+        item.labelLayout.reset();
+        item.labelMetrics = {};
+        item.detailsLayout.reset();
+        item.detailsMetrics = {};
+        item.metadataLayout.reset();
+        item.metadataMetrics = {};
+    }
+
+    LayoutItems();
+    UpdateScrollMetrics();
+    QueueThumbnailLoading();
 
     if (_hWnd)
     {

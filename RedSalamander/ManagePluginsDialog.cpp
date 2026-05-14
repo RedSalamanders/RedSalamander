@@ -38,7 +38,6 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "DxUi/DxUi.h"
-#include <commctrl.h>
 #include <uxtheme.h>
 
 #pragma warning(push)

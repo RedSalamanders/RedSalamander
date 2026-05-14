@@ -2,7 +2,6 @@
 
 #include <windowsx.h>
 
-#include <commctrl.h>
 #include <winerror.h>
 
 #include "DirectoryInfoCache.h"

@@ -186,8 +186,10 @@
     <ClCompile Include="FileSystemCurl.CopyMove.cpp" />
     <ClCompile Include="FileSystemCurl.DirectoryOps.cpp" />
     <ClCompile Include="FileSystemCurl.Imap.cpp" />
+    <ClCompile Include="FileSystemCurl.ImapHelpers.cpp" />
     <ClCompile Include="FileSystemCurl.Shared.cpp" />
     <ClInclude Include="FileSystemCurl.h" />
+    <ClInclude Include="FileSystemCurl.ImapHelpers.h" />
     <ClInclude Include="FileSystemCurl.Internal.h" />
     <ClInclude Include="FileSystemCurlResources.h" />
     <ResourceCompile Include="FileSystemCurlResources.rc" />
@@ -198,6 +200,9 @@
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
+      <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

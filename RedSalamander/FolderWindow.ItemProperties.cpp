@@ -123,9 +123,10 @@ inline std::atomic<uint64_t> g_nextItemPropertiesWindowToken{1u};
 }
 
 [[nodiscard]] std::wstring NormalizeItemPropertiesTitle(std::wstring_view title);
+[[nodiscard]] std::wstring LoadItemPropertiesString(UINT id, std::wstring_view fallback);
 [[nodiscard]] std::wstring NormalizeItemPropertiesSectionTitle(std::wstring_view title);
 [[nodiscard]] std::wstring NormalizeItemPropertiesFieldKey(std::wstring_view key);
-[[nodiscard]] std::wstring NormalizeItemPropertiesFieldValue(std::wstring_view normalizedKey, std::wstring_view value);
+[[nodiscard]] std::wstring NormalizeItemPropertiesFieldValue(std::wstring_view rawKey, std::wstring_view value);
 void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc);
 
 [[nodiscard]] std::optional<ItemPropertiesDocument> TryParseItemPropertiesJson(std::string_view jsonUtf8) noexcept
@@ -220,9 +221,11 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc);
                     continue;
                 }
 
+                const std::wstring rawKey = Utf16FromUtf8(keyUtf8);
+
                 ItemPropertiesField field{};
-                field.key   = NormalizeItemPropertiesFieldKey(Utf16FromUtf8(keyUtf8));
-                field.value = NormalizeItemPropertiesFieldValue(field.key, Utf16FromUtf8(valueUtf8));
+                field.key   = NormalizeItemPropertiesFieldKey(rawKey);
+                field.value = NormalizeItemPropertiesFieldValue(rawKey, Utf16FromUtf8(valueUtf8));
                 if (! field.key.empty())
                 {
                     section.fields.emplace_back(std::move(field));
@@ -309,9 +312,10 @@ constexpr UINT_PTR kItemPropertiesLoadingTimerId  = 1u;
 std::atomic_uint32_t g_nextItemPropertiesLoadDelayMs{0u};
 #endif
 
-[[nodiscard]] bool IsCompactItemPropertiesSection(std::wstring_view title) noexcept
+[[nodiscard]] bool IsCompactItemPropertiesSection(std::wstring_view title)
 {
-    return title == L"Timestamps" || title == L"Attributes";
+    return title == LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_TIMESTAMPS, L"Timestamps") ||
+           title == LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_ATTRIBUTES, L"Attributes");
 }
 
 [[nodiscard]] bool TryParseUnsignedDecimal(std::wstring_view text, uint64_t& valueOut) noexcept
@@ -386,13 +390,28 @@ std::atomic_uint32_t g_nextItemPropertiesLoadDelayMs{0u};
 
 [[nodiscard]] std::wstring FormatItemPropertiesSizeValue(uint64_t sizeBytes)
 {
-    const std::wstring exactBytes = std::format(L"{} bytes", sizeBytes);
+    std::wstring exactBytes = FormatStringResource(nullptr, IDS_ITEM_PROPERTIES_SIZE_BYTES_FMT, sizeBytes);
+    if (exactBytes.empty())
+    {
+        exactBytes = std::format(L"{} bytes", sizeBytes);
+    }
     if (sizeBytes < 1024ull)
     {
         return exactBytes;
     }
 
     return std::format(L"{} ({})", FormatBytesCompact(sizeBytes), exactBytes);
+}
+
+[[nodiscard]] std::wstring LoadItemPropertiesString(UINT id, std::wstring_view fallback)
+{
+    std::wstring text = LoadStringResource(nullptr, id);
+    if (! text.empty())
+    {
+        return text;
+    }
+
+    return std::wstring(fallback);
 }
 
 [[nodiscard]] std::wstring NormalizeItemPropertiesTitle(std::wstring_view title)
@@ -407,16 +426,19 @@ std::atomic_uint32_t g_nextItemPropertiesLoadDelayMs{0u};
 
 void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
 {
-    auto generalIt = std::find_if(doc.sections.begin(), doc.sections.end(), [](const ItemPropertiesSection& section) {
-        return section.title == L"General";
+    const std::wstring generalTitle    = LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_GENERAL, L"General");
+    const std::wstring timestampsTitle = LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_TIMESTAMPS, L"Timestamps");
+
+    auto generalIt = std::find_if(doc.sections.begin(), doc.sections.end(), [&](const ItemPropertiesSection& section) {
+        return section.title == generalTitle;
     });
     if (generalIt == doc.sections.end())
     {
         return;
     }
 
-    auto timestampsIt = std::find_if(doc.sections.begin(), doc.sections.end(), [](const ItemPropertiesSection& section) {
-        return section.title == L"Timestamps";
+    auto timestampsIt = std::find_if(doc.sections.begin(), doc.sections.end(), [&](const ItemPropertiesSection& section) {
+        return section.title == timestampsTitle;
     });
     if (timestampsIt == doc.sections.end())
     {
@@ -442,43 +464,43 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
 {
     if (OrdinalString::EqualsNoCase(title, L"general"))
     {
-        return L"General";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_GENERAL, L"General");
     }
     if (OrdinalString::EqualsNoCase(title, L"timestamps"))
     {
-        return L"Timestamps";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_TIMESTAMPS, L"Timestamps");
     }
     if (OrdinalString::EqualsNoCase(title, L"attributes"))
     {
-        return L"Attributes";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_ATTRIBUTES, L"Attributes");
     }
     if (OrdinalString::EqualsNoCase(title, L"remote"))
     {
-        return L"Remote";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_REMOTE, L"Remote");
     }
     if (OrdinalString::EqualsNoCase(title, L"connection"))
     {
-        return L"Connection";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_CONNECTION, L"Connection");
     }
     if (OrdinalString::EqualsNoCase(title, L"drive"))
     {
-        return L"Drive";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_DRIVE, L"Drive");
     }
     if (OrdinalString::EqualsNoCase(title, L"imap"))
     {
-        return L"IMAP";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_IMAP, L"IMAP");
     }
     if (OrdinalString::EqualsNoCase(title, L"s3"))
     {
-        return L"S3";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_S3, L"S3");
     }
     if (OrdinalString::EqualsNoCase(title, L"s3table"))
     {
-        return L"S3 Table";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_S3_TABLE, L"S3 Table");
     }
     if (OrdinalString::EqualsNoCase(title, L"graph"))
     {
-        return L"Graph metadata";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_GRAPH_METADATA, L"Graph metadata");
     }
 
     return std::wstring(title);
@@ -488,163 +510,246 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
 {
     if (OrdinalString::EqualsNoCase(key, L"name"))
     {
-        return L"Name";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_NAME, L"Name");
     }
     if (OrdinalString::EqualsNoCase(key, L"path"))
     {
-        return L"Path";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_PATH, L"Path");
     }
     if (OrdinalString::EqualsNoCase(key, L"type"))
     {
-        return L"Type";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_TYPE, L"Type");
     }
     if (OrdinalString::EqualsNoCase(key, L"size") || OrdinalString::EqualsNoCase(key, L"sizeBytes"))
     {
-        return L"Size";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_SIZE, L"Size");
     }
     if (OrdinalString::EqualsNoCase(key, L"attributes"))
     {
-        return L"Attributes";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_ATTRIBUTES, L"Attributes");
     }
-    if (OrdinalString::EqualsNoCase(key, L"creationTime") || OrdinalString::EqualsNoCase(key, L"createdDateTime"))
+    if (OrdinalString::EqualsNoCase(key, L"created") || OrdinalString::EqualsNoCase(key, L"creationTime") ||
+        OrdinalString::EqualsNoCase(key, L"createdDateTime"))
     {
-        return L"Created";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_CREATED, L"Created");
     }
-    if (OrdinalString::EqualsNoCase(key, L"lastWriteTime") || OrdinalString::EqualsNoCase(key, L"lastModifiedDateTime"))
+    if (OrdinalString::EqualsNoCase(key, L"modified") || OrdinalString::EqualsNoCase(key, L"lastWriteTime") ||
+        OrdinalString::EqualsNoCase(key, L"lastModifiedDateTime"))
     {
-        return L"Modified";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_MODIFIED, L"Modified");
     }
-    if (OrdinalString::EqualsNoCase(key, L"lastAccessTime"))
+    if (OrdinalString::EqualsNoCase(key, L"accessed") || OrdinalString::EqualsNoCase(key, L"lastAccessTime"))
     {
-        return L"Accessed";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_ACCESSED, L"Accessed");
     }
-    if (OrdinalString::EqualsNoCase(key, L"changeTime"))
+    if (OrdinalString::EqualsNoCase(key, L"changed") || OrdinalString::EqualsNoCase(key, L"changeTime"))
     {
-        return L"Changed";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_CHANGED, L"Changed");
     }
     if (OrdinalString::EqualsNoCase(key, L"remotePath"))
     {
-        return L"Remote path";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_REMOTE_PATH, L"Remote path");
     }
     if (OrdinalString::EqualsNoCase(key, L"displayPath"))
     {
-        return L"Display path";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_DISPLAY_PATH, L"Display path");
     }
     if (OrdinalString::EqualsNoCase(key, L"basePath"))
     {
-        return L"Base path";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_BASE_PATH, L"Base path");
     }
     if (OrdinalString::EqualsNoCase(key, L"connectionName"))
     {
-        return L"Connection name";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_CONNECTION_NAME, L"Connection name");
     }
     if (OrdinalString::EqualsNoCase(key, L"connectionId"))
     {
-        return L"Connection ID";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_CONNECTION_ID, L"Connection ID");
     }
     if (OrdinalString::EqualsNoCase(key, L"connectionAuthMode"))
     {
-        return L"Authentication";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_AUTHENTICATION, L"Authentication");
     }
     if (OrdinalString::EqualsNoCase(key, L"connectionSavePassword"))
     {
-        return L"Save password";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_SAVE_PASSWORD, L"Save password");
     }
     if (OrdinalString::EqualsNoCase(key, L"connectionRequireHello"))
     {
-        return L"Require hello";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_REQUIRE_HELLO, L"Require hello");
     }
     if (OrdinalString::EqualsNoCase(key, L"connectTimeoutMs"))
     {
-        return L"Connect timeout (ms)";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_CONNECT_TIMEOUT_MS, L"Connect timeout (ms)");
     }
     if (OrdinalString::EqualsNoCase(key, L"operationTimeoutMs"))
     {
-        return L"Operation timeout (ms)";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_OPERATION_TIMEOUT_MS, L"Operation timeout (ms)");
     }
     if (OrdinalString::EqualsNoCase(key, L"ignoreSslTrust"))
     {
-        return L"Ignore TLS trust";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_IGNORE_TLS_TRUST, L"Ignore TLS trust");
     }
     if (OrdinalString::EqualsNoCase(key, L"ftpUseEpsv"))
     {
-        return L"Use EPSV";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_USE_EPSV, L"Use EPSV");
     }
     if (OrdinalString::EqualsNoCase(key, L"fromConnectionManagerProfile"))
     {
-        return L"From connection profile";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_FROM_CONNECTION_PROFILE, L"From connection profile");
     }
     if (OrdinalString::EqualsNoCase(key, L"hasPassword"))
     {
-        return L"Has password";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_HAS_PASSWORD, L"Has password");
     }
     if (OrdinalString::EqualsNoCase(key, L"hasSshPrivateKey"))
     {
-        return L"Has SSH private key";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_HAS_SSH_PRIVATE_KEY, L"Has SSH private key");
     }
     if (OrdinalString::EqualsNoCase(key, L"hasSshPublicKey"))
     {
-        return L"Has SSH public key";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_HAS_SSH_PUBLIC_KEY, L"Has SSH public key");
     }
     if (OrdinalString::EqualsNoCase(key, L"hasSshKnownHosts"))
     {
-        return L"Has SSH known hosts";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_HAS_SSH_KNOWN_HOSTS, L"Has SSH known hosts");
     }
     if (OrdinalString::EqualsNoCase(key, L"fullPath"))
     {
-        return L"Full path";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_FULL_PATH, L"Full path");
     }
     if (OrdinalString::EqualsNoCase(key, L"sentTime"))
     {
-        return L"Sent";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_SENT, L"Sent");
     }
     if (OrdinalString::EqualsNoCase(key, L"recvTime"))
     {
-        return L"Received";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_RECEIVED, L"Received");
     }
     if (OrdinalString::EqualsNoCase(key, L"uid"))
     {
-        return L"UID";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_UID, L"UID");
     }
     if (OrdinalString::EqualsNoCase(key, L"archiveItemIndex"))
     {
-        return L"Archive item index";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_ARCHIVE_ITEM_INDEX, L"Archive item index");
     }
     if (OrdinalString::EqualsNoCase(key, L"archivePath"))
     {
-        return L"Archive path";
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_ARCHIVE_PATH, L"Archive path");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"raw"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_RAW, L"Raw");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"flags"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_FLAGS, L"Flags");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"kind"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_KIND, L"Kind");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"url"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_URL, L"URL");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"target"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_TARGET, L"Target");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"item ID"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_ITEM_ID, L"Item ID");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"drive path"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_DRIVE_PATH, L"Drive path");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"web URL"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_WEB_URL, L"Web URL");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"etag"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_ETAG, L"ETag");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"ctag"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_CTAG, L"CTag");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"download URL available"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_DOWNLOAD_URL_AVAILABLE, L"Download URL available");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"drive ID"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_DRIVE_ID, L"Drive ID");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"site ID"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_SITE_ID, L"Site ID");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"drive name"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_DRIVE_NAME, L"Drive name");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"volume label"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_VOLUME_LABEL, L"Volume label");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"drive web URL"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_DRIVE_WEB_URL, L"Drive web URL");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"user"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_USER, L"User");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"authority"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_AUTHORITY, L"Authority");
+    }
+    if (OrdinalString::EqualsNoCase(key, L"protocol"))
+    {
+        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_PROTOCOL, L"Protocol");
     }
 
     return std::wstring(key);
 }
 
-[[nodiscard]] bool IsItemPropertiesTimeKey(std::wstring_view normalizedKey) noexcept
+[[nodiscard]] bool IsItemPropertiesTimeKey(std::wstring_view rawKey) noexcept
 {
-    return normalizedKey == L"Created" || normalizedKey == L"Modified" || normalizedKey == L"Accessed" || normalizedKey == L"Changed" ||
-           normalizedKey == L"Sent" || normalizedKey == L"Received";
+    return OrdinalString::EqualsNoCase(rawKey, L"created") || OrdinalString::EqualsNoCase(rawKey, L"creationTime") ||
+           OrdinalString::EqualsNoCase(rawKey, L"createdDateTime") || OrdinalString::EqualsNoCase(rawKey, L"modified") ||
+           OrdinalString::EqualsNoCase(rawKey, L"lastWriteTime") || OrdinalString::EqualsNoCase(rawKey, L"lastModifiedDateTime") ||
+           OrdinalString::EqualsNoCase(rawKey, L"accessed") || OrdinalString::EqualsNoCase(rawKey, L"lastAccessTime") ||
+           OrdinalString::EqualsNoCase(rawKey, L"changed") || OrdinalString::EqualsNoCase(rawKey, L"changeTime") ||
+           OrdinalString::EqualsNoCase(rawKey, L"sentTime") || OrdinalString::EqualsNoCase(rawKey, L"recvTime");
 }
 
-[[nodiscard]] std::wstring NormalizeItemPropertiesFieldValue(std::wstring_view normalizedKey, std::wstring_view value)
+[[nodiscard]] std::wstring NormalizeItemPropertiesFieldValue(std::wstring_view rawKey, std::wstring_view value)
 {
-    if (normalizedKey == L"Type")
+    if (OrdinalString::EqualsNoCase(rawKey, L"type"))
     {
         if (OrdinalString::EqualsNoCase(value, L"file"))
         {
-            return L"File";
+            return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_TYPE_FILE, L"File");
         }
         if (OrdinalString::EqualsNoCase(value, L"directory") || OrdinalString::EqualsNoCase(value, L"folder"))
         {
-            return L"Directory";
+            return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_TYPE_DIRECTORY, L"Directory");
         }
     }
 
     uint64_t numericValue = 0u;
-    if (normalizedKey == L"Size" && TryParseUnsignedDecimal(value, numericValue))
+    if ((OrdinalString::EqualsNoCase(rawKey, L"size") || OrdinalString::EqualsNoCase(rawKey, L"sizeBytes")) &&
+        TryParseUnsignedDecimal(value, numericValue))
     {
         return FormatItemPropertiesSizeValue(numericValue);
     }
 
-    if (IsItemPropertiesTimeKey(normalizedKey) && TryParseUnsignedDecimal(value, numericValue))
+    if (IsItemPropertiesTimeKey(rawKey) && TryParseUnsignedDecimal(value, numericValue))
     {
         if (const std::optional<std::wstring> formatted = TryFormatFileTimeLocal(numericValue); formatted.has_value())
         {
@@ -1106,20 +1211,7 @@ private:
             return 0;
         }
 
-        if (msg == WM_KEYDOWN && (wParam == VK_CONTROL || wParam == VK_LCONTROL || wParam == VK_RCONTROL))
-        {
-            _ctrlKeyDown = true;
-        }
-        else if (msg == WM_KEYUP && (wParam == VK_CONTROL || wParam == VK_LCONTROL || wParam == VK_RCONTROL))
-        {
-            _ctrlKeyDown = false;
-        }
-        else if (msg == WM_KILLFOCUS)
-        {
-            _ctrlKeyDown = false;
-        }
-
-        const bool ctrlDown = _ctrlKeyDown || (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool ctrlDown = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
         if (msg == WM_KEYDOWN && ctrlDown)
         {
             if (wParam == L'A')
@@ -2126,7 +2218,6 @@ private:
     uint64_t _loadGeneration     = 0u;
     size_t _loadingSpinnerStep   = 0u;
     bool _deletePending          = false;
-    bool _ctrlKeyDown            = false;
     bool _loading                = true;
     bool _loadFailed             = false;
     UINT _dpi                    = USER_DEFAULT_SCREEN_DPI;
@@ -2188,6 +2279,467 @@ HRESULT ShowItemPropertiesWindow(HWND owner,
     return hr;
 }
 } // namespace
+
+std::wstring FolderWindow::BuildPreviewPropertiesTextForPath(Pane sourcePane, const std::filesystem::path& path, HRESULT& outHr) noexcept
+{
+    Debug::Perf::Scope perf(L"paneviewoptions.preview.load_properties_us");
+    outHr = E_FAIL;
+    if (path.empty())
+    {
+        outHr = E_INVALIDARG;
+        perf.SetHr(outHr);
+        return {};
+    }
+
+    PaneState& state = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    if (! state.fileSystem)
+    {
+        outHr = E_POINTER;
+        perf.SetHr(outHr);
+        return {};
+    }
+
+    wil::com_ptr<IFileSystemIO> io;
+    const HRESULT hrQI = state.fileSystem->QueryInterface(IID_PPV_ARGS(io.addressof()));
+    if (FAILED(hrQI) || ! io)
+    {
+        outHr = FAILED(hrQI) ? hrQI : E_NOINTERFACE;
+        perf.SetHr(outHr);
+        return {};
+    }
+
+    const char* jsonUtf8 = nullptr;
+    const HRESULT hrProperties = io->GetItemProperties(path.c_str(), &jsonUtf8);
+    if (FAILED(hrProperties) || ! jsonUtf8)
+    {
+        outHr = FAILED(hrProperties) ? hrProperties : E_POINTER;
+        perf.SetHr(outHr);
+        return {};
+    }
+
+    const std::optional<ItemPropertiesDocument> doc = TryParseItemPropertiesJson(std::string_view(jsonUtf8));
+    if (! doc.has_value())
+    {
+        outHr = E_INVALIDARG;
+        perf.SetHr(outHr);
+        return {};
+    }
+
+    std::wstring text = BuildItemPropertiesText(doc.value());
+    if (text.empty())
+    {
+        outHr = E_FAIL;
+        perf.SetHr(outHr);
+        return {};
+    }
+
+    outHr = S_OK;
+    return text;
+}
+
+void FolderWindow::ClearPreviewProperties(Pane hostPane) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    host.previewPropertiesCardMode = false;
+    host.previewPropertiesUsesRainbow = false;
+    host.previewPropertiesFieldCount = 0u;
+    host.previewPropertiesSections.clear();
+
+    if (host.previewPropertiesScroll)
+    {
+        host.previewPropertiesScroll->ClearChildren();
+        host.previewPropertiesScroll->SetContentHeight(0.0f);
+        host.previewPropertiesScroll->ScrollToTop();
+        host.previewPropertiesScroll->SetVisible(false);
+    }
+}
+
+namespace
+{
+constexpr float kPreviewPropertiesPadX          = 12.0f;
+constexpr float kPreviewPropertiesPadTop        = 10.0f;
+constexpr float kPreviewPropertiesPadBottom     = 12.0f;
+constexpr float kPreviewPropertiesSectionTitleH = 26.0f;
+constexpr float kPreviewPropertiesTitleGap      = 6.0f;
+constexpr float kPreviewPropertiesRowH          = 28.0f;
+constexpr float kPreviewPropertiesPairGap       = 12.0f;
+constexpr float kPreviewPropertiesTwoColumnMinW = 460.0f;
+
+[[nodiscard]] std::optional<D2D1_COLOR_F> PreviewPropertiesTitleColor(const AppTheme& theme, size_t index) noexcept
+{
+    if (theme.highContrast)
+    {
+        return std::nullopt;
+    }
+
+    if (theme.menu.rainbowMode)
+    {
+        constexpr float kHueBase = 18.0f;
+        constexpr float kHueStep = 53.0f;
+        const float hue = std::fmod(kHueBase + (static_cast<float>(index) * kHueStep), 360.0f);
+        return ColorFromHSV(hue, 0.78f, theme.dark ? 0.96f : 0.62f, 1.0f);
+    }
+
+    return theme.accent;
+}
+
+[[nodiscard]] std::optional<D2D1_COLOR_F> PreviewPropertiesKeyColor(const AppTheme& theme) noexcept
+{
+    if (theme.highContrast)
+    {
+        return std::nullopt;
+    }
+
+    return ColorFromCOLORREF(theme.menu.shortcutText);
+}
+} // namespace
+
+void FolderWindow::UpdatePreviewPropertiesTheme(Pane hostPane) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    host.previewPropertiesUsesRainbow = host.previewPropertiesCardMode && _theme.menu.rainbowMode && ! _theme.highContrast;
+
+    const std::optional<D2D1_COLOR_F> keyColor = PreviewPropertiesKeyColor(_theme);
+    for (size_t index = 0u; index < host.previewPropertiesSections.size(); ++index)
+    {
+        PreviewPropertiesSectionControls& section = host.previewPropertiesSections[index];
+        if (section.title)
+        {
+            section.title->SetTextColor(PreviewPropertiesTitleColor(_theme, index));
+        }
+        for (PreviewPropertiesFieldControls& row : section.fields)
+        {
+            if (row.key)
+            {
+                row.key->SetTextColor(keyColor);
+            }
+        }
+    }
+}
+
+bool FolderWindow::ShowPreviewPropertiesForPath(Pane sourcePane, Pane hostPane, const std::filesystem::path& path, HRESULT& outHr) noexcept
+{
+    Debug::Perf::Scope perf(L"paneviewoptions.preview.load_properties_cards_us");
+    outHr = E_FAIL;
+    if (path.empty())
+    {
+        outHr = E_INVALIDARG;
+        perf.SetHr(outHr);
+        return false;
+    }
+
+    PaneState& source = sourcePane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& host   = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! source.fileSystem || ! host.previewPropertiesScroll)
+    {
+        outHr = E_POINTER;
+        perf.SetHr(outHr);
+        return false;
+    }
+
+    wil::com_ptr<IFileSystemIO> io;
+    const HRESULT hrQI = source.fileSystem->QueryInterface(IID_PPV_ARGS(io.addressof()));
+    if (FAILED(hrQI) || ! io)
+    {
+        outHr = FAILED(hrQI) ? hrQI : E_NOINTERFACE;
+        perf.SetHr(outHr);
+        return false;
+    }
+
+    const char* jsonUtf8 = nullptr;
+    const HRESULT hrProperties = io->GetItemProperties(path.c_str(), &jsonUtf8);
+    if (FAILED(hrProperties) || ! jsonUtf8)
+    {
+        outHr = FAILED(hrProperties) ? hrProperties : E_POINTER;
+        perf.SetHr(outHr);
+        return false;
+    }
+
+    std::optional<ItemPropertiesDocument> doc = TryParseItemPropertiesJson(std::string_view(jsonUtf8));
+    if (! doc.has_value())
+    {
+        outHr = E_INVALIDARG;
+        perf.SetHr(outHr);
+        return false;
+    }
+
+    std::wstring contentText = BuildItemPropertiesText(doc.value());
+    if (contentText.empty() || (doc->sections.empty() && doc->streams.empty()))
+    {
+        outHr = E_FAIL;
+        perf.SetHr(outHr);
+        return false;
+    }
+
+    ClearPreviewProperties(hostPane);
+    host.previewText = std::move(contentText);
+    host.previewPropertiesCardMode = true;
+    host.previewPropertiesScroll->SetVisible(true);
+    host.previewPropertiesScroll->ScrollToTop();
+
+    if (host.previewContentLabel)
+    {
+        host.previewContentLabel->SetText(host.previewText);
+        host.previewContentLabel->SetVisible(false);
+    }
+
+    for (const ItemPropertiesSection& sourceSection : doc->sections)
+    {
+        if (sourceSection.fields.empty())
+        {
+            continue;
+        }
+
+        PreviewPropertiesSectionControls section{};
+        section.compact = IsCompactItemPropertiesSection(sourceSection.title);
+        section.title   = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::Label>(sourceSection.title);
+        section.title->SetFontRole(RedSalamander::DxUi::FontRole::BodyLarge);
+
+        section.card = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::CardPanel>();
+        section.card->SetCornerRadius(6.0f);
+        section.fields.reserve(sourceSection.fields.size());
+
+        for (const ItemPropertiesField& field : sourceSection.fields)
+        {
+            PreviewPropertiesFieldControls row{};
+            row.key = section.card->AddChild<RedSalamander::DxUi::Label>(field.key);
+            row.key->SetFontRole(RedSalamander::DxUi::FontRole::BodyStrong);
+            row.value = section.card->AddChild<RedSalamander::DxUi::Label>(MakeItemPropertiesWrapFriendlyText(field.value));
+            row.value->SetAccessibleName(field.value);
+            row.value->SetMultiline(true);
+            section.fields.emplace_back(row);
+            ++host.previewPropertiesFieldCount;
+        }
+
+        host.previewPropertiesSections.emplace_back(std::move(section));
+    }
+
+    if (! doc->streams.empty())
+    {
+        PreviewPropertiesSectionControls streamsSection{};
+        streamsSection.title = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PROPERTIES_STREAMS_TITLE));
+        streamsSection.title->SetFontRole(RedSalamander::DxUi::FontRole::BodyLarge);
+
+        streamsSection.card = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::CardPanel>();
+        streamsSection.card->SetCornerRadius(6.0f);
+        streamsSection.fields.reserve(doc->streams.size());
+
+        for (const ItemPropertiesStream& stream : doc->streams)
+        {
+            PreviewPropertiesFieldControls row{};
+            row.key = streamsSection.card->AddChild<RedSalamander::DxUi::Label>(MakeItemPropertiesWrapFriendlyText(stream.name));
+            row.key->SetAccessibleName(stream.name);
+            row.key->SetFontRole(RedSalamander::DxUi::FontRole::BodyStrong);
+            row.key->SetMultiline(true);
+            row.value = streamsSection.card->AddChild<RedSalamander::DxUi::Label>(stream.displaySize);
+            row.value->SetAccessibleName(stream.displaySize);
+            streamsSection.fields.emplace_back(row);
+            ++host.previewPropertiesFieldCount;
+        }
+
+        host.previewPropertiesSections.emplace_back(std::move(streamsSection));
+    }
+
+    UpdatePreviewPropertiesTheme(hostPane);
+    LayoutPreviewProperties(hostPane);
+    host.previewContentHost.Invalidate();
+
+    outHr = S_OK;
+    perf.SetValue0(static_cast<uint64_t>(host.previewPropertiesFieldCount));
+    return true;
+}
+
+void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
+{
+    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    if (! host.hPreviewContent || ! host.previewPropertiesScroll)
+    {
+        return;
+    }
+
+    RECT client{};
+    GetClientRect(host.hPreviewContent.get(), &client);
+    const float widthDip  = host.previewContentHost.PixelsToDip(static_cast<float>(std::max(0L, client.right - client.left)));
+    const float heightDip = host.previewContentHost.PixelsToDip(static_cast<float>(std::max(0L, client.bottom - client.top)));
+    const float padX      = host.previewContentHost.PixelsToDip(static_cast<float>(MulDiv(10, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI)));
+    const float padY      = host.previewContentHost.PixelsToDip(static_cast<float>(MulDiv(8, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI)));
+    host.previewPropertiesScroll->SetBounds(D2D1::RectF(padX, padY, std::max(padX, widthDip - padX), std::max(padY, heightDip - padY)));
+
+    if (! host.previewPropertiesCardMode)
+    {
+        host.previewPropertiesScroll->SetContentHeight(0.0f);
+        return;
+    }
+
+    const D2D1_RECT_F bounds = host.previewPropertiesScroll->GetBounds();
+    const float viewportH = (std::max)(0.0f, bounds.bottom - bounds.top);
+
+    auto applyLayout = [&](float width) noexcept -> float
+    {
+        const float x = bounds.left;
+        float y       = bounds.top;
+        const float cardW = (std::max)(0.0f, width);
+
+        auto addInterGroupGap = [&]() noexcept
+        {
+            if (y > bounds.top)
+            {
+                y += 12.0f;
+            }
+        };
+
+        auto sectionCardHeight = [&](const PreviewPropertiesSectionControls& section, float sectionW) noexcept
+        {
+            if (section.fields.empty())
+            {
+                return kPreviewPropertiesPadTop + kPreviewPropertiesRowH + kPreviewPropertiesPadBottom;
+            }
+
+            constexpr float kFieldColumnGap = 12.0f;
+            const float innerW = (std::max)(1.0f, sectionW - (kPreviewPropertiesPadX * 2.0f));
+            const bool stacked = innerW < 260.0f;
+            const float keyW = stacked ? innerW : (section.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f)
+                                                                    : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
+            const float valueW = stacked ? innerW : (std::max)(1.0f, innerW - keyW - kFieldColumnGap);
+
+            float height = kPreviewPropertiesPadTop + kPreviewPropertiesPadBottom;
+            for (const PreviewPropertiesFieldControls& row : section.fields)
+            {
+                const float keyH = row.key ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
+                                                                                        row.key->GetText(),
+                                                                                        RedSalamander::DxUi::FontRole::BodyStrong,
+                                                                                        stacked ? innerW : keyW)
+                                           : kPreviewPropertiesRowH;
+                const float valueH = row.value ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
+                                                                                            row.value->GetText(),
+                                                                                            RedSalamander::DxUi::FontRole::Body,
+                                                                                            valueW)
+                                               : kPreviewPropertiesRowH;
+                height += stacked ? ((std::max)(kPreviewPropertiesRowH, keyH) + (std::max)(kPreviewPropertiesRowH, valueH) + 4.0f)
+                                  : (std::max)(kPreviewPropertiesRowH, (std::max)(keyH, valueH) + 4.0f);
+            }
+            return height;
+        };
+
+        auto layoutSectionFields = [&](PreviewPropertiesSectionControls& section, D2D1_RECT_F cardRect) noexcept
+        {
+            if (section.card)
+            {
+                section.card->SetBounds(cardRect);
+            }
+
+            constexpr float kFieldColumnGap = 12.0f;
+            const float innerW = (std::max)(1.0f, cardRect.right - cardRect.left - (kPreviewPropertiesPadX * 2.0f));
+            const bool stacked = innerW < 260.0f;
+            const float keyW = stacked ? innerW : (section.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f)
+                                                                    : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
+            const float valueW = stacked ? innerW : (std::max)(1.0f, innerW - keyW - kFieldColumnGap);
+
+            float rowY = cardRect.top + kPreviewPropertiesPadTop;
+            for (PreviewPropertiesFieldControls& row : section.fields)
+            {
+                const float keyH = row.key ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
+                                                                                        row.key->GetText(),
+                                                                                        RedSalamander::DxUi::FontRole::BodyStrong,
+                                                                                        stacked ? innerW : keyW)
+                                           : kPreviewPropertiesRowH;
+                const float valueH = row.value ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
+                                                                                            row.value->GetText(),
+                                                                                            RedSalamander::DxUi::FontRole::Body,
+                                                                                            valueW)
+                                               : kPreviewPropertiesRowH;
+                const float rowH = stacked ? ((std::max)(kPreviewPropertiesRowH, keyH) + (std::max)(kPreviewPropertiesRowH, valueH) + 4.0f)
+                                           : (std::max)(kPreviewPropertiesRowH, (std::max)(keyH, valueH) + 4.0f);
+                if (stacked)
+                {
+                    const float keyRowH = (std::max)(kPreviewPropertiesRowH, keyH);
+                    if (row.key)
+                    {
+                        row.key->SetBounds(
+                            D2D1::RectF(cardRect.left + kPreviewPropertiesPadX, rowY, cardRect.right - kPreviewPropertiesPadX, rowY + keyRowH));
+                    }
+                    if (row.value)
+                    {
+                        row.value->SetBounds(D2D1::RectF(
+                            cardRect.left + kPreviewPropertiesPadX, rowY + keyRowH, cardRect.right - kPreviewPropertiesPadX, rowY + rowH));
+                    }
+                }
+                else
+                {
+                    const float valueLeft = cardRect.left + kPreviewPropertiesPadX + keyW + kFieldColumnGap;
+                    if (row.key)
+                    {
+                        row.key->SetBounds(D2D1::RectF(cardRect.left + kPreviewPropertiesPadX,
+                                                       rowY,
+                                                       cardRect.left + kPreviewPropertiesPadX + keyW,
+                                                       rowY + rowH));
+                    }
+                    if (row.value)
+                    {
+                        row.value->SetBounds(D2D1::RectF(valueLeft, rowY, valueLeft + valueW, rowY + rowH));
+                    }
+                }
+                rowY += rowH;
+            }
+        };
+
+        size_t sectionIndex = 0u;
+        while (sectionIndex < host.previewPropertiesSections.size())
+        {
+            PreviewPropertiesSectionControls& section = host.previewPropertiesSections[sectionIndex];
+            const bool pairWithNext = sectionIndex + 1u < host.previewPropertiesSections.size() && section.compact &&
+                                      host.previewPropertiesSections[sectionIndex + 1u].compact && cardW >= kPreviewPropertiesTwoColumnMinW;
+
+            addInterGroupGap();
+            if (pairWithNext)
+            {
+                PreviewPropertiesSectionControls& nextSection = host.previewPropertiesSections[sectionIndex + 1u];
+                const float columnW                           = std::floor((std::max)(0.0f, cardW - kPreviewPropertiesPairGap) * 0.5f);
+                const float rightX                            = x + columnW + kPreviewPropertiesPairGap;
+                const float cardTop                           = y + kPreviewPropertiesSectionTitleH + kPreviewPropertiesTitleGap;
+                const float pairCardH                         = (std::max)(sectionCardHeight(section, columnW), sectionCardHeight(nextSection, columnW));
+
+                if (section.title)
+                {
+                    section.title->SetBounds(D2D1::RectF(x, y, x + columnW, y + kPreviewPropertiesSectionTitleH));
+                }
+                if (nextSection.title)
+                {
+                    nextSection.title->SetBounds(D2D1::RectF(rightX, y, rightX + columnW, y + kPreviewPropertiesSectionTitleH));
+                }
+                layoutSectionFields(section, D2D1::RectF(x, cardTop, x + columnW, cardTop + pairCardH));
+                layoutSectionFields(nextSection, D2D1::RectF(rightX, cardTop, rightX + columnW, cardTop + pairCardH));
+
+                y += kPreviewPropertiesSectionTitleH + kPreviewPropertiesTitleGap + pairCardH;
+                sectionIndex += 2u;
+                continue;
+            }
+
+            const float cardTop = y + kPreviewPropertiesSectionTitleH + kPreviewPropertiesTitleGap;
+            const float cardH = sectionCardHeight(section, cardW);
+            if (section.title)
+            {
+                section.title->SetBounds(D2D1::RectF(x, y, x + cardW, y + kPreviewPropertiesSectionTitleH));
+            }
+            layoutSectionFields(section, D2D1::RectF(x, cardTop, x + cardW, cardTop + cardH));
+
+            y += kPreviewPropertiesSectionTitleH + kPreviewPropertiesTitleGap + cardH;
+            ++sectionIndex;
+        }
+
+        return (std::max)(0.0f, y - bounds.top);
+    };
+
+    float availableW = (std::max)(0.0f, bounds.right - bounds.left);
+    float contentH   = applyLayout(availableW);
+    if (contentH > viewportH && availableW > host.previewPropertiesScroll->GetScrollbarThickness())
+    {
+        availableW -= host.previewPropertiesScroll->GetScrollbarThickness();
+        contentH = applyLayout(availableW);
+    }
+
+    host.previewPropertiesScroll->SetContentHeight(contentH);
+}
 
 HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesystem::path path) noexcept
 {

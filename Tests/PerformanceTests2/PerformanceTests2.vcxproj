@@ -360,6 +360,7 @@
     </ClCompile>
     <ClCompile Include="FolderIconEnumerationDuplicatePathPerfTest.cpp" />
     <ClCompile Include="FolderIconEnumerationPerfTest.cpp" />
+    <ClCompile Include="FolderViewColumnLayoutTests.cpp" />
     <ClCompile Include="FolderViewRefreshDuplicatePathPerfTest.cpp" />
     <ClCompile Include="..\..\RedSalamander\FileSystemPluginManager.cpp">
       <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>

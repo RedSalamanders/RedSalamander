@@ -87,7 +87,7 @@ While scanning:
 - Up stays available during scanning; if the current scan root has no parent in the current model, Up restarts a scan at the parent path. Up is disabled when the scan root is already at a volume/share root.
 - While scanning, click header **Cancel** (or press `Esc`) to stop the scan.
 - Double-clicking an aggregated “Other” bucket triggers a focused action to explore that part (typically drilling into the parent directory or rescanning it with a higher `topFilesPerDirectory`).
-- Hover: show a tooltip with name/path, size, and share for the tile under the cursor; scan state is shown only while in-progress (not shown for `Done`); tooltip tracks the cursor within the tile (no “stuck” tooltip position).
+- Hover: show an in-canvas Direct2D/DirectWrite tooltip overlay with name/path, size, and share for the tile under the cursor; scan state is shown only while in-progress (not shown for `Done`); tooltip tracks the cursor within the tile (no “stuck” tooltip position), wraps at about 420 DIPs, uses viewer theme/high-contrast colors, and must not create a native `TOOLTIPS_CLASS` window or send `TTM_*` messages.
 - Keyboard:
   - `Backspace` / `Alt+Up`: drill up
   - `F5`: refresh/rescan current node (forces a full rescan; bypasses cache)

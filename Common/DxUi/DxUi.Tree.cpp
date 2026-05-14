@@ -35,6 +35,12 @@ struct TreeResolvedRowVisuals final
     return extent <= 0.0f ? 0.0f : (std::clamp)(value, 0.0f, extent);
 }
 
+[[nodiscard]] float ResolveDensityScaledTreeMetricDip(float baseDip, float minimumDip, Density density) noexcept
+{
+    const float scale = density == Density::Compact ? 0.82f : 1.0f;
+    return (std::max)(minimumDip, baseDip * scale);
+}
+
 [[nodiscard]] std::wstring ResolveTreeTooltipText(const WindowHost& host, const TreeItemData& item, const TreeItemLayoutMetrics& layout) noexcept
 {
     if (! item.tooltipText.empty())
@@ -307,8 +313,8 @@ void Tree::SetDelegate(IDxTreeDelegate* delegate) noexcept
 
 void Tree::SetRowHeightDip(float rowHeightDip) noexcept
 {
-    _rowHeightDip = (std::max)(kMinimumInteractiveTextRowHeightDip, rowHeightDip);
-    ClampScrollOffset();
+    _rowHeightBaseDip = (std::max)(kMinimumInteractiveTextRowHeightDip, rowHeightDip);
+    OnDensityChanged();
 }
 
 void Tree::SetIndentDip(float indentDip) noexcept
@@ -353,6 +359,13 @@ void Tree::SetSelectedItemId(std::optional<uint64_t> itemId) noexcept
 std::optional<uint64_t> Tree::GetSelectedItemId() const noexcept
 {
     return _selectedItemId;
+}
+
+void Tree::OnDensityChanged() noexcept
+{
+    Control::OnDensityChanged();
+    _rowHeightDip = ResolveDensityScaledTreeMetricDip(_rowHeightBaseDip, kMinimumInteractiveTextRowHeightDip, GetDensity());
+    ClampScrollOffset();
 }
 
 bool Tree::RequestSelectVisibleItem(size_t visibleIndex) noexcept

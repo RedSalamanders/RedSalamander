@@ -22,7 +22,6 @@
 #include <thread>
 #include <unordered_map>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <d2d1.h>
 #include <d2d1helper.h>
@@ -39,7 +38,6 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
-#pragma comment(lib, "comctl32")
 #pragma comment(lib, "d2d1")
 #pragma comment(lib, "Dwmapi.lib")
 #pragma comment(lib, "dwrite")
@@ -4619,6 +4617,7 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             }
             return 0;
         case WM_COMMAND: OnCommand(hwnd, LOWORD(wp), HIWORD(wp), reinterpret_cast<HWND>(lp)); return 0;
+        case WM_CONTEXTMENU: OnContextMenu(hwnd, RedSalamander::DxUi::ResolveNativeContextMenuScreenPoint(hwnd, lp)); return 0;
         case WM_NOTIFY: return OnNotify(reinterpret_cast<const NMHDR*>(lp));
         case WM_SYSKEYDOWN:
             if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
@@ -6856,6 +6855,44 @@ void ViewerText::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND cont
 
         case IDM_VIEWER_ENCODING_NEXT: CommandCycleDisplayEncoding(hwnd, false); break;
         case IDM_VIEWER_ENCODING_PREVIOUS: CommandCycleDisplayEncoding(hwnd, true); break;
+    }
+}
+
+void ViewerText::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
+{
+    if (! _menuHandle)
+    {
+        _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERTEXT_MENU));
+    }
+
+    HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
+    if (! menu)
+    {
+        return;
+    }
+
+    UpdateMenuChecks(hwnd, false);
+    static constexpr std::array<int, 8> kPreviewContextMenuExcludedCommandIds{{
+        IDM_VIEWER_FILE_OPEN,
+        IDM_VIEWER_FILE_EXIT,
+        IDM_VIEWER_OTHER_NEXT,
+        IDM_VIEWER_OTHER_PREVIOUS,
+        IDM_VIEWER_OTHER_FIRST,
+        IDM_VIEWER_OTHER_LAST,
+        IDM_VIEWER_ENCODING_NEXT,
+        IDM_VIEWER_ENCODING_PREVIOUS,
+    }};
+    RedSalamander::DxUi::NativeMenuFlyoutOptions previewMenuOptions{};
+    previewMenuOptions.includeAcceleratorText = false;
+    previewMenuOptions.omitEmptySubmenus      = true;
+    previewMenuOptions.trimSeparators         = true;
+    previewMenuOptions.excludedCommandIds     = kPreviewContextMenuExcludedCommandIds;
+
+    const auto result = RedSalamander::DxUi::ShowNativeHMenuContextMenu(
+        hwnd, screenPt, menu, _hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false), previewMenuOptions);
+    if (result.has_value() && result.value() > 0)
+    {
+        OnCommand(hwnd, static_cast<UINT>(result.value()), 0, nullptr);
     }
 }
 
