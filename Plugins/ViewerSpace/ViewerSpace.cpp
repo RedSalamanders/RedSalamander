@@ -17,8 +17,6 @@
 #include <string_view>
 #include <system_error>
 
-#include <commctrl.h>
-
 #pragma warning(push)
 // (C6297) Arithmetic overflow. Results might not be an expected value.
 // (C28182) Dereferencing NULL pointer.
@@ -66,6 +64,8 @@ constexpr float kHeaderButtonWidthDip = 52.0f;
 constexpr float kPaddingDip           = 8.0f;
 constexpr float kItemGapDip           = 1.0f;
 constexpr float kMinHitAreaDip2       = 16.0f * 16.0f;
+constexpr float kTooltipMaxWidthDip   = 420.0f;
+constexpr float kTooltipMaxHeightDip  = 320.0f;
 
 constexpr double kAnimationDurationSeconds = 0.18;
 
@@ -1878,6 +1878,38 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
             return TRUE;
         }
+        case WndMsg::kViewerSpaceDebugGetTooltipSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerSpaceTooltipDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot                 = {};
+            snapshot->tooltipNodeId   = _tooltipNodeId;
+            snapshot->tooltipTextLength = _tooltipText.size();
+            snapshot->tooltipAnchorXDip = _tooltipAnchorDip.x;
+            snapshot->tooltipAnchorYDip = _tooltipAnchorDip.y;
+            snapshot->tooltipMaxWidthDip = kTooltipMaxWidthDip;
+            snapshot->tooltipMaxHeightDip = kTooltipMaxHeightDip;
+            snapshot->tooltipPaintCount = _tooltipPaintCount;
+            snapshot->hasRenderTarget = _renderTarget != nullptr;
+            snapshot->hasTooltipFormat = _tooltipFormat != nullptr;
+            return TRUE;
+        }
+        case WndMsg::kViewerSpaceDebugShowTooltipOverlay:
+        {
+            _tooltipNodeId  = 1u;
+            _tooltipText    = L"ViewerSpace debug tooltip overlay text that wraps through Direct2D.";
+            _tooltipAnchorDip = D2D1::Point2F(40.0f, GetHeaderBottomDip() + 24.0f);
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), nullptr, FALSE);
+                UpdateWindow(_hWnd.get());
+            }
+            return TRUE;
+        }
 #endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_DESTROY: OnDestroy(); return 0;
@@ -1913,7 +1945,6 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             OnKeyDown(wp, alt);
             return 0;
         }
-        case WM_NOTIFY: return OnNotify(wp, lp);
         case WM_MOUSEMOVE:
         {
             const POINTS pt = {static_cast<short>(LOWORD(lp)), static_cast<short>(HIWORD(lp))};
@@ -1974,7 +2005,6 @@ void ViewerSpace::OnCreate(HWND hwnd)
     SetTimer(hwnd, kTimerAnimationId, kAnimationIntervalMs, nullptr);
     ApplyThemeToWindow(hwnd);
     ApplyPendingViewerSpaceClassBackgroundBrush(hwnd);
-    EnsureTooltip(hwnd);
     UpdateMenuState(hwnd);
     if (! _embeddedMode)
     {
@@ -1992,7 +2022,6 @@ void ViewerSpace::OnDestroy()
     CancelScanAndWait();
     CancelScanCacheBuild();
     DiscardDirect2D();
-    _hTooltip.reset();
     _fileSystem.reset();
     _fileSystemName.clear();
     _fileSystemShortId.clear();
@@ -3319,6 +3348,8 @@ void ViewerSpace::OnPaint()
         }
     }
 
+    PaintTooltipOverlay();
+
     endDraw.reset();
 
     if (drawHr == D2DERR_RECREATE_TARGET)
@@ -3677,6 +3708,26 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
         return;
     }
 
+    if (! _menuHandle)
+    {
+        _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERSPACE_MENU));
+    }
+
+    HMENU viewerMenu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
+    if (viewerMenu)
+    {
+        UpdateMenuState(hwnd, false);
+    }
+
+    static constexpr std::array<int, 1> kPreviewContextMenuExcludedCommandIds{{
+        IDM_VIEWERSPACE_FILE_EXIT,
+    }};
+    RedSalamander::DxUi::NativeMenuFlyoutOptions previewMenuOptions{};
+    previewMenuOptions.includeAcceleratorText = false;
+    previewMenuOptions.omitEmptySubmenus      = true;
+    previewMenuOptions.trimSeparators         = true;
+    previewMenuOptions.excludedCommandIds     = kPreviewContextMenuExcludedCommandIds;
+
     POINT clientPt = screenPt;
     if (ScreenToClient(hwnd, &clientPt) == 0)
     {
@@ -3689,6 +3740,22 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     const std::optional<uint32_t> hit = HitTestTreemap(xDip, yDip);
     if (! hit.has_value())
     {
+        HMENU menu = viewerMenu;
+        if (! menu)
+        {
+            return;
+        }
+
+        const auto result = RedSalamander::DxUi::ShowNativeHMenuContextMenu(
+            hwnd,
+            screenPt,
+            menu,
+            _hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false),
+            previewMenuOptions);
+        if (result.has_value() && result.value() > 0)
+        {
+            OnCommand(hwnd, static_cast<UINT>(result.value()));
+        }
         return;
     }
 
@@ -3881,7 +3948,26 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     enableFolderCmd(kCmdFolderViewContextProperties, canExecuteLeafCmds);
     enableFolderCmd(kCmdFolderViewContextPaste, canExecutePaste);
 
-    const auto popupItems = ConvertHMenuToDxFlyoutItems(menu);
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> popupItems = ConvertHMenuToDxFlyoutItems(menu);
+    if (viewerMenu)
+    {
+        std::vector<RedSalamander::DxUi::MenuFlyoutItem> viewerItems = RedSalamander::DxUi::ConvertNativeHMenuToFlyoutItems(viewerMenu, previewMenuOptions);
+        if (! viewerItems.empty())
+        {
+            if (! popupItems.empty())
+            {
+                RedSalamander::DxUi::MenuFlyoutItem separator{};
+                separator.kind = RedSalamander::DxUi::MenuItemKind::Separator;
+                popupItems.push_back(std::move(separator));
+            }
+
+            for (auto& viewerItem : viewerItems)
+            {
+                popupItems.push_back(std::move(viewerItem));
+            }
+        }
+    }
+
     if (popupItems.empty())
     {
         return;
@@ -3933,6 +4019,16 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 
         static_cast<void>(_hostPaneExecute->ExecuteInActivePane(&request));
         return;
+    }
+
+    switch (commandId)
+    {
+        case IDM_VIEWERSPACE_FILE_REFRESH:
+        case IDM_VIEWERSPACE_NAV_UP:
+        case IDM_VIEWERSPACE_FILE_EXIT:
+            OnCommand(hwnd, commandId);
+            return;
+        default: break;
     }
 
     if (! canExecutePaste && commandId == kCmdFolderViewContextPaste)
@@ -4247,6 +4343,14 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         _watermarkFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     }
 
+    textHr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(12.0f), _tooltipFormat.put());
+    if (SUCCEEDED(textHr))
+    {
+        _tooltipFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+        _tooltipFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+        _tooltipFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+
     auto applyEllipsisTrimming = [&](IDWriteTextFormat* format) noexcept
     {
         if (format == nullptr || ! _dwriteFactory)
@@ -4291,6 +4395,7 @@ void ViewerSpace::DiscardDirect2D() noexcept
     _headerInfoFormatRight.reset();
     _headerIconFormat.reset();
     _watermarkFormat.reset();
+    _tooltipFormat.reset();
     _headerPathSourceText.clear();
     _headerPathDisplayText.clear();
     _headerPathDisplayMaxWidthDip = 0.0f;
@@ -4452,83 +4557,14 @@ void ViewerSpace::UpdateHeaderTextCache() noexcept
     }
 }
 
-void ViewerSpace::EnsureTooltip(HWND hwnd) noexcept
-{
-    if (_hTooltip)
-    {
-        return;
-    }
-
-    HWND tip = CreateWindowExW(WS_EX_TOPMOST,
-                               TOOLTIPS_CLASSW,
-                               nullptr,
-                               WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
-                               CW_USEDEFAULT,
-                               CW_USEDEFAULT,
-                               CW_USEDEFAULT,
-                               CW_USEDEFAULT,
-                               hwnd,
-                               nullptr,
-                               g_hInstance,
-                               nullptr);
-    if (! tip)
-    {
-        return;
-    }
-
-    _hTooltip.reset(tip);
-    SetWindowPos(_hTooltip.get(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    SendMessageW(_hTooltip.get(), TTM_SETMAXTIPWIDTH, 0, static_cast<LPARAM>(420));
-    SendMessageW(_hTooltip.get(), TTM_SETDELAYTIME, TTDT_INITIAL, static_cast<LPARAM>(0));
-
-    TOOLINFOW tool{};
-    tool.cbSize   = sizeof(tool);
-    tool.uFlags   = TTF_TRACK | TTF_ABSOLUTE;
-    tool.hwnd     = hwnd;
-    tool.uId      = 1;
-    tool.rect     = RECT{0, 0, 0, 0};
-    tool.lpszText = LPSTR_TEXTCALLBACKW;
-    SendMessageW(_hTooltip.get(), TTM_ADDTOOLW, 0, reinterpret_cast<LPARAM>(&tool));
-
-    ApplyThemeToTooltip();
-}
-
-void ViewerSpace::ApplyThemeToTooltip() noexcept
-{
-    if (! _hTooltip)
-    {
-        return;
-    }
-
-    auto toColorRef = [](uint32_t argb) noexcept -> COLORREF { return RGB((argb >> 16) & 0xFFu, (argb >> 8) & 0xFFu, (argb) & 0xFFu); };
-
-    COLORREF bg   = GetSysColor(COLOR_INFOBK);
-    COLORREF text = GetSysColor(COLOR_INFOTEXT);
-    if (_hasTheme)
-    {
-        bg   = toColorRef(_theme.selectionBackgroundArgb);
-        text = toColorRef(_theme.selectionTextArgb);
-    }
-
-    SendMessageW(_hTooltip.get(), TTM_SETTIPBKCOLOR, static_cast<WPARAM>(bg), 0);
-    SendMessageW(_hTooltip.get(), TTM_SETTIPTEXTCOLOR, static_cast<WPARAM>(text), 0);
-}
-
 void ViewerSpace::UpdateTooltipForHit(uint32_t nodeId) noexcept
 {
-    if (! _hTooltip || ! _hWnd)
+    if (! _hWnd)
     {
         _tooltipNodeId = 0;
+        _tooltipText.clear();
         return;
     }
-
-    TOOLINFOW tool{};
-    tool.cbSize   = sizeof(tool);
-    tool.hwnd     = _hWnd.get();
-    tool.uId      = 1;
-    tool.uFlags   = TTF_TRACK | TTF_ABSOLUTE;
-    tool.rect     = RECT{0, 0, 0, 0};
-    tool.lpszText = LPSTR_TEXTCALLBACKW;
 
     if (nodeId == 0)
     {
@@ -4536,7 +4572,7 @@ void ViewerSpace::UpdateTooltipForHit(uint32_t nodeId) noexcept
         {
             _tooltipNodeId = 0;
             _tooltipText.clear();
-            SendMessageW(_hTooltip.get(), TTM_TRACKACTIVATE, FALSE, reinterpret_cast<LPARAM>(&tool));
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
         }
         return;
     }
@@ -4544,30 +4580,119 @@ void ViewerSpace::UpdateTooltipForHit(uint32_t nodeId) noexcept
     if (nodeId != _tooltipNodeId)
     {
         _tooltipNodeId = nodeId;
-        _tooltipText.clear();
-        SendMessageW(_hTooltip.get(), TTM_UPDATETIPTEXTW, 0, reinterpret_cast<LPARAM>(&tool));
-        SendMessageW(_hTooltip.get(), TTM_TRACKACTIVATE, TRUE, reinterpret_cast<LPARAM>(&tool));
+        _tooltipText   = BuildTooltipText(nodeId);
+        if (_tooltipText.empty())
+        {
+            _tooltipNodeId = 0;
+        }
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
 }
 
 void ViewerSpace::UpdateTooltipPosition(int x, int y) noexcept
 {
-    if (! _hTooltip || ! _hWnd || _tooltipNodeId == 0)
+    if (! _hWnd || _tooltipNodeId == 0)
     {
         return;
     }
 
-    POINT pt{};
-    pt.x = x;
-    pt.y = y;
-    if (ClientToScreen(_hWnd.get(), &pt) == 0)
+    const D2D1_POINT_2F newAnchor = D2D1::Point2F(DipFromPx(x) + 14.0f, DipFromPx(y) + 18.0f);
+    if (std::abs(newAnchor.x - _tooltipAnchorDip.x) <= 0.5f && std::abs(newAnchor.y - _tooltipAnchorDip.y) <= 0.5f)
     {
         return;
     }
 
-    pt.x += PxFromDip(14.0f);
-    pt.y += PxFromDip(18.0f);
-    SendMessageW(_hTooltip.get(), TTM_TRACKPOSITION, 0, MAKELONG(pt.x, pt.y));
+    _tooltipAnchorDip = newAnchor;
+    InvalidateRect(_hWnd.get(), nullptr, FALSE);
+}
+
+void ViewerSpace::PaintTooltipOverlay() noexcept
+{
+    if (_tooltipNodeId == 0 || _tooltipText.empty() || ! _renderTarget || ! _dwriteFactory || ! _tooltipFormat || ! _brushBackground || ! _brushText)
+    {
+        return;
+    }
+
+    const float maxWidthDip  = std::max(180.0f, kTooltipMaxWidthDip);
+    const float maxHeightDip = kTooltipMaxHeightDip;
+
+    wil::com_ptr<IDWriteTextLayout> layout;
+    const HRESULT layoutHr = _dwriteFactory->CreateTextLayout(
+        _tooltipText.c_str(), static_cast<UINT32>(_tooltipText.size()), _tooltipFormat.get(), maxWidthDip, maxHeightDip, layout.put());
+    if (FAILED(layoutHr) || ! layout)
+    {
+        return;
+    }
+
+    DWRITE_TEXT_METRICS metrics{};
+    if (FAILED(layout->GetMetrics(&metrics)))
+    {
+        return;
+    }
+
+    constexpr float kPadXDip     = 10.0f;
+    constexpr float kPadYDip     = 7.0f;
+    constexpr float kScreenGapDip = 8.0f;
+    const float textWidthDip      = std::clamp(metrics.widthIncludingTrailingWhitespace, 48.0f, maxWidthDip);
+    const float textHeightDip     = std::clamp(metrics.height, 16.0f, maxHeightDip);
+    const float boxWidthDip       = textWidthDip + (kPadXDip * 2.0f);
+    const float boxHeightDip      = textHeightDip + (kPadYDip * 2.0f);
+    const float clientWidthDip    = DipFromPx(_clientSize.cx);
+    const float clientHeightDip   = DipFromPx(_clientSize.cy);
+
+    float left = _tooltipAnchorDip.x;
+    float top  = _tooltipAnchorDip.y;
+    if (left + boxWidthDip > clientWidthDip - kScreenGapDip)
+    {
+        left = _tooltipAnchorDip.x - boxWidthDip - 24.0f;
+    }
+    if (top + boxHeightDip > clientHeightDip - kScreenGapDip)
+    {
+        top = _tooltipAnchorDip.y - boxHeightDip - 24.0f;
+    }
+    left = std::clamp(left, kScreenGapDip, std::max(kScreenGapDip, clientWidthDip - boxWidthDip - kScreenGapDip));
+    top  = std::clamp(top, kScreenGapDip, std::max(kScreenGapDip, clientHeightDip - boxHeightDip - kScreenGapDip));
+
+    const D2D1_RECT_F boxRc  = D2D1::RectF(left, top, left + boxWidthDip, top + boxHeightDip);
+    const D2D1_POINT_2F text = D2D1::Point2F(boxRc.left + kPadXDip, boxRc.top + kPadYDip);
+
+    const bool highContrast = _hasTheme && _theme.highContrast != FALSE;
+    const bool darkMode     = _hasTheme && _theme.darkMode != FALSE;
+    D2D1::ColorF bg         = _hasTheme ? ColorFFromArgb(_theme.selectionBackgroundArgb)
+                                        : D2D1::ColorF(GetRValue(GetSysColor(COLOR_INFOBK)) / 255.0f,
+                                                       GetGValue(GetSysColor(COLOR_INFOBK)) / 255.0f,
+                                                       GetBValue(GetSysColor(COLOR_INFOBK)) / 255.0f,
+                                                       1.0f);
+    D2D1::ColorF fg         = _hasTheme ? ColorFFromArgb(_theme.selectionTextArgb)
+                                        : D2D1::ColorF(GetRValue(GetSysColor(COLOR_INFOTEXT)) / 255.0f,
+                                                       GetGValue(GetSysColor(COLOR_INFOTEXT)) / 255.0f,
+                                                       GetBValue(GetSysColor(COLOR_INFOTEXT)) / 255.0f,
+                                                       1.0f);
+
+    bg.a = highContrast ? 1.0f : 0.96f;
+    fg.a = 1.0f;
+
+    const D2D1_COLOR_F oldBg   = _brushBackground->GetColor();
+    const D2D1_COLOR_F oldText = _brushText->GetColor();
+    _brushBackground->SetColor(bg);
+    _renderTarget->FillRoundedRectangle(D2D1::RoundedRect(boxRc, 4.0f, 4.0f), _brushBackground.get());
+
+    if (_brushOutline)
+    {
+        const D2D1_COLOR_F oldOutline = _brushOutline->GetColor();
+        const float alpha             = highContrast ? 1.0f : (darkMode ? 0.45f : 0.30f);
+        _brushOutline->SetColor(D2D1::ColorF(fg.r, fg.g, fg.b, alpha));
+        _renderTarget->DrawRoundedRectangle(D2D1::RoundedRect(boxRc, 4.0f, 4.0f), _brushOutline.get(), 1.0f);
+        _brushOutline->SetColor(oldOutline);
+    }
+
+    _brushText->SetColor(fg);
+    _renderTarget->DrawTextLayout(text, layout.get(), _brushText.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+#ifdef ENABLE_TESTS
+    ++_tooltipPaintCount;
+#endif
+    _brushText->SetColor(oldText);
+    _brushBackground->SetColor(oldBg);
 }
 
 std::wstring ViewerSpace::BuildTooltipText(uint32_t nodeId) const
@@ -4659,27 +4784,6 @@ std::wstring ViewerSpace::BuildTooltipText(uint32_t nodeId) const
     }
 
     return FormatStringResource(g_hInstance, IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH_NO_STATE, name, sizeText, shareText);
-}
-
-LRESULT ViewerSpace::OnNotify(WPARAM wp, LPARAM lp) noexcept
-{
-    static_cast<void>(wp);
-
-    const auto* hdr = reinterpret_cast<const NMHDR*>(lp);
-    if (hdr == nullptr)
-    {
-        return 0;
-    }
-
-    if (_hTooltip && hdr->hwndFrom == _hTooltip.get() && hdr->code == TTN_GETDISPINFOW)
-    {
-        auto* info     = reinterpret_cast<NMTTDISPINFOW*>(const_cast<NMHDR*>(hdr));
-        _tooltipText   = BuildTooltipText(_tooltipNodeId);
-        info->lpszText = _tooltipText.empty() ? const_cast<LPWSTR>(L"") : const_cast<LPWSTR>(_tooltipText.c_str());
-        return 0;
-    }
-
-    return 0;
 }
 
 void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
@@ -7310,6 +7414,5 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::SetTheme(const ViewerTheme* theme) noexce
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
 
-    ApplyThemeToTooltip();
     return S_OK;
 }

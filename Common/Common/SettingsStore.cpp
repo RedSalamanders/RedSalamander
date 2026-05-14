@@ -2704,6 +2704,12 @@ void ParseFolders(yyjson_val* root, Common::Settings::Settings& out)
                 pane.view.fileExtensionsVisible = yyjson_get_bool(fileExtensionsVisible);
             }
 
+            yyjson_val* thumbnailSizeDip = yyjson_obj_get(view, "thumbnailSizeDip");
+            if (thumbnailSizeDip && yyjson_is_uint(thumbnailSizeDip))
+            {
+                pane.view.thumbnailSizeDip = Common::Settings::Thumbnail::NormalizeSizeDip(static_cast<uint32_t>(yyjson_get_uint(thumbnailSizeDip)));
+            }
+
             yyjson_val* thumbnailsVisible = yyjson_obj_get(view, "thumbnailsVisible");
             if (thumbnailsVisible && yyjson_is_bool(thumbnailsVisible))
             {
@@ -6051,6 +6057,13 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 if (pane->view.fileExtensionsVisible != viewDefaults.fileExtensionsVisible)
                 {
                     yyjson_mut_obj_add_bool(doc, view, "fileExtensionsVisible", pane->view.fileExtensionsVisible);
+                    wroteView = true;
+                }
+
+                const uint32_t thumbnailSizeDip = Common::Settings::Thumbnail::NormalizeSizeDip(pane->view.thumbnailSizeDip);
+                if (thumbnailSizeDip != viewDefaults.thumbnailSizeDip)
+                {
+                    yyjson_mut_obj_add_uint(doc, view, "thumbnailSizeDip", thumbnailSizeDip);
                     wroteView = true;
                 }
 

@@ -17,7 +17,6 @@
 #include <string>
 #include <utility>
 
-#include <commctrl.h>
 #include <dbt.h>
 
 #pragma warning(push)
@@ -72,6 +71,21 @@ constexpr wchar_t kCommandLineEditOwnerProp[]           = L"RS.FolderWindow.Comm
 constexpr int kStatusBarPartSelection = 0;
 constexpr int kStatusBarPartSecurity  = 1;
 constexpr int kStatusBarPartSort      = 2;
+constexpr UINT kStatusBarSortClickNotification = 0x7251;
+
+struct FolderWindowNotifyHeader
+{
+    HWND hwndFrom = nullptr;
+    UINT_PTR idFrom = 0;
+    UINT code = 0;
+};
+
+struct StatusBarSortClickNotification
+{
+    FolderWindowNotifyHeader hdr;
+    int part = 0;
+    POINT clientPoint{};
+};
 
 using CreateFactoryFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
 
@@ -87,9 +101,10 @@ constexpr int kStatusBarPaddingXDip         = 4;
 constexpr int kStatusBarSortPaddingXDip     = 1;
 constexpr int kStatusBarSortMinPartWidthDip = 34;
 constexpr float kStatusBarTextSizeDip       = 12.0f;
-constexpr int kFilterBarHeightDip           = 26;
+constexpr int kFilterBarHeightDip           = 30;
 constexpr int kPreviewTabHeightDip          = 32;
 constexpr int kFilterBarPaddingXDip         = 6;
+constexpr int kFilterBarGapDip              = 6;
 constexpr int kFunctionBarHeightDip         = 24;
 constexpr int kCommandLineHeightDip         = 30;
 constexpr int kCommandLinePaddingXDip       = 8;

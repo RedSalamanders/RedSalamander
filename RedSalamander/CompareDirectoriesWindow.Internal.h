@@ -25,7 +25,6 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include <commctrl.h>
 #include <uxtheme.h>
 #include <windowsx.h>
 

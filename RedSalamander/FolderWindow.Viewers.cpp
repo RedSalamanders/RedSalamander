@@ -683,21 +683,6 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
         return false;
     }
 
-    std::error_code ec;
-    if (OrdinalString::EqualsNoCase(sourceState.pluginId, L"builtin/file-system") && std::filesystem::is_directory(hostState.previewedPath, ec))
-    {
-        std::wstring name = hostState.previewedPath.filename().wstring();
-        if (name.empty())
-        {
-            name = hostState.previewedPath.wstring();
-        }
-        ClosePreviewViewer(hostPane);
-        hostState.previewViewerPluginId.clear();
-        SetPreviewPlaceholder(hostPane, FormatStringResource(nullptr, IDS_PREVIEW_FOLDER_FMT, name));
-        previewPerf.SetDetail(L"folder-placeholder");
-        return true;
-    }
-
     std::wstring pluginIdStorage;
     std::wstring openedBy;
     std::wstring resolutionSource = L"fallback";
@@ -738,35 +723,46 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
 
     const bool configuredOnlyTextDefault =
         EqualsNoCase(pluginIdStorage, kFallbackPreviewViewerId) && IsDefaultFileActionResolution(configuredReason);
+    bool builtInPreviewResolutionSelected = false;
     if (pluginIdStorage.empty() || configuredOnlyTextDefault)
     {
         const FileActionResolver::Resolution builtInResolution = resolveBuiltInPreviewViewer();
+        const bool builtInOnlyTextDefault =
+            builtInResolution.action && EqualsNoCase(builtInResolution.action->pluginId, kFallbackPreviewViewerId) &&
+            IsDefaultFileActionResolution(builtInResolution.reason);
         if (builtInResolution.action && builtInResolution.action->kind == Common::Settings::FileActionKind::ViewerPlugin &&
-            ! builtInResolution.action->pluginId.empty() && SupportsEmbeddedPreviewViewer(builtInResolution.action->pluginId))
+            ! builtInResolution.action->pluginId.empty() && SupportsEmbeddedPreviewViewer(builtInResolution.action->pluginId) &&
+            ! builtInOnlyTextDefault)
         {
-            if (! EqualsNoCase(builtInResolution.action->pluginId, kFallbackPreviewViewerId) || pluginIdStorage.empty())
-            {
-                pluginIdStorage  = builtInResolution.action->pluginId;
-                openedBy         = builtInResolution.action->displayName;
-                resolutionSource = builtInResolution.reasonText.empty() ? L"built-in viewer defaults" : L"built-in viewer defaults: " + builtInResolution.reasonText;
-            }
+            pluginIdStorage  = builtInResolution.action->pluginId;
+            openedBy         = builtInResolution.action->displayName;
+            resolutionSource = builtInResolution.reasonText.empty() ? L"built-in viewer defaults" : L"built-in viewer defaults: " + builtInResolution.reasonText;
+            builtInPreviewResolutionSelected = true;
         }
+    }
+
+    if (configuredOnlyTextDefault && ! builtInPreviewResolutionSelected)
+    {
+        pluginIdStorage.clear();
+        openedBy.clear();
+        resolutionSource = L"properties fallback: only the default text viewer matched";
     }
 
     if (pluginIdStorage.empty())
     {
-        pluginIdStorage.assign(kFallbackPreviewViewerId);
-        resolutionSource = L"ViewerText fallback: no embedded viewer association matched";
+        Debug::Info(L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview '{}' has no specific embedded viewer match; using item properties fallback.",
+                    hostState.previewedPath.wstring());
+        previewPerf.SetDetail(L"properties-fallback:no-viewer");
+        return false;
     }
     else if (! SupportsEmbeddedPreviewViewer(pluginIdStorage))
     {
         Debug::Warning(
-            L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' for '{}' does not support embedded hosting; using ViewerText fallback.",
+            L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' for '{}' does not support embedded hosting; using item properties fallback.",
             pluginIdStorage,
             hostState.previewedPath.wstring());
-        pluginIdStorage.assign(kFallbackPreviewViewerId);
-        openedBy.clear();
-        resolutionSource = L"ViewerText fallback: resolved viewer does not support embedded hosting";
+        previewPerf.SetDetail(L"properties-fallback:not-embedded");
+        return false;
     }
 
     if (! OrdinalString::EqualsNoCase(hostState.previewViewerPluginId, pluginIdStorage))
@@ -869,20 +865,9 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     }
 
     openHr = OpenViewerWithPluginInternal(pluginIdStorage, context, openedBy, sourcePane, OpenedFileSourceKind::Preview, &instance);
-    if (FAILED(openHr) && ! OrdinalString::EqualsNoCase(pluginIdStorage, kFallbackPreviewViewerId))
-    {
-        Debug::Warning(L"FolderWindow::OpenPreviewFocusedPathWithViewer: preview viewer '{}' failed for '{}' (hr=0x{:08X}); using ViewerText fallback.",
-                       pluginIdStorage,
-                       hostState.previewedPath.wstring(),
-                       static_cast<unsigned long>(openHr));
-        pluginIdStorage.assign(kFallbackPreviewViewerId);
-        openedBy.clear();
-        openHr = OpenViewerWithPluginInternal(pluginIdStorage, context, openedBy, sourcePane, OpenedFileSourceKind::Preview, &instance);
-    }
-
     if (FAILED(openHr) || ! instance)
     {
-        Debug::Warning(L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to open preview viewer '{}' for '{}' (hr=0x{:08X}).",
+        Debug::Warning(L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to open preview viewer '{}' for '{}' (hr=0x{:08X}); using item properties fallback.",
                        pluginIdStorage,
                        hostState.previewedPath.wstring(),
                        static_cast<unsigned long>(openHr));

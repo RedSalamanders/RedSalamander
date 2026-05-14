@@ -39,6 +39,9 @@
     <ClCompile Include="RedConfigureTraceProvider.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="RedConfigureUiHelpers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="Themes\ThemeCatalog.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -62,10 +65,19 @@
     <ClInclude Include="RedConfigureApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RedConfigureGridModels.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="RedConfigureRoot.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RedConfigureSession.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RedConfigureThemeExampleControl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RedConfigureUiHelpers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="resource.h">

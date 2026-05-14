@@ -376,6 +376,7 @@ private:
     LRESULT OnHexViewSetFocus(HWND hwnd) noexcept;
     LRESULT OnHexViewKillFocus(HWND hwnd) noexcept;
     void OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND control) noexcept;
+    void OnContextMenu(HWND hwnd, POINT screenPt) noexcept;
     LRESULT OnNotify(const NMHDR* header);
     LRESULT OnCtlColor(UINT msg, HDC hdc, HWND control) noexcept;
     void OnMouseMove(int x, int y) noexcept;

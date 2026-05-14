@@ -2,8 +2,6 @@
 
 #include <windowsx.h>
 
-#include <commctrl.h>
-
 #include "ConnectionSecrets.h"
 #include "DirectoryInfoCache.h"
 #include "FileSystemPluginManager.h"

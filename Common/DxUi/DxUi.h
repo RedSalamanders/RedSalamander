@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -142,6 +143,7 @@ enum class MenuItemKind : uint8_t
     Separator, // Visual divider
     Header,    // Non-interactive group label
     Info,      // Non-interactive body row with optional right-aligned detail text
+    Slider,    // Discrete slider row with command-backed stops
 };
 
 struct MenuFlyoutItem
@@ -172,6 +174,13 @@ struct MenuFlyoutItem
         mutable wil::com_ptr<ID2D1Device> cachedDevice;
     };
     std::shared_ptr<BitmapIcon> iconBitmap;
+    struct SliderStop final
+    {
+        std::wstring text;
+        int commandId = 0;
+    };
+    std::vector<SliderStop> sliderStops;
+    uint32_t sliderValue = 0u;
     bool enabled  = true;
     bool checked  = false;
     int commandId = 0;
@@ -237,6 +246,7 @@ struct ContextMenuSessionCallbacks
 {
     std::function<std::optional<ContextMenuRootSwitchRequest>(POINT screenPoint)> switchRootFromPointer;
     std::function<std::optional<ContextMenuRootSwitchRequest>(bool forward)> switchRootFromDirection;
+    std::function<std::optional<ContextMenuRootSwitchRequest>()> switchRootFromMenuBarHover;
     ContextMenuRootHorizontalAlignment rootHorizontalAlignment = ContextMenuRootHorizontalAlignment::Start;
     ContextMenuRootVerticalPlacement rootVerticalPlacement     = ContextMenuRootVerticalPlacement::Below;
     bool focusFirstNavigableItem                               = false;
@@ -278,6 +288,13 @@ struct ContextMenuPopupDebugState
     RECT windowRectPx{};
     std::optional<size_t> hoveredIndex;
     std::optional<size_t> keyboardIndex;
+    std::vector<std::wstring> itemTexts;
+    std::vector<MenuItemKind> itemKinds;
+    std::vector<uint32_t> sliderValues;
+    std::vector<uint32_t> sliderStopCounts;
+    uint64_t rootPointerSwitchCount = 0;
+    uint64_t rootSwitchImmediateRenderCount = 0;
+    uint64_t renderCount = 0;
 };
 
 struct ContextMenuPopupItemLayoutDebugState
@@ -1522,14 +1539,19 @@ class MenuBar final : public Control
 {
 public:
     using OpenItemCallback = std::function<void(size_t index, POINT screenPoint, bool keyboardInvocation)>;
+    using HoverChangedCallback = std::function<void(std::optional<size_t> hoveredIndex)>;
 
     MenuBar();
 
     void SetItems(std::vector<MenuBarItem> items);
     [[nodiscard]] std::span<const MenuBarItem> GetItems() const noexcept;
     void SetOnOpenItem(OpenItemCallback onOpenItem);
+    void SetOnHoverChanged(HoverChangedCallback onHoverChanged);
     void SetSelectedIndex(std::optional<size_t> index) noexcept;
+    void SetRetainSelectedIndexOnFocusLost(bool retain) noexcept;
     [[nodiscard]] std::optional<size_t> GetSelectedIndex() const noexcept;
+    [[nodiscard]] std::optional<size_t> GetHoveredIndex() const noexcept;
+    [[nodiscard]] std::optional<size_t> GetVisualHighlightIndex() const noexcept;
     [[nodiscard]] size_t GetVisualHighlightCount() const noexcept;
     [[nodiscard]] bool ActivateMnemonic(WindowHost& host, wchar_t mnemonic);
     [[nodiscard]] bool ActivateItem(WindowHost& host, size_t index, bool keyboardInvocation);
@@ -1550,7 +1572,6 @@ protected:
     void OnCaptureLost(WindowHost& host) override;
 
 private:
-    [[nodiscard]] std::optional<size_t> GetVisualHighlightIndex() const noexcept;
     [[nodiscard]] std::optional<size_t> HitTestItem(const WindowHost& host, PointDip pointDip) const noexcept;
     [[nodiscard]] D2D1_RECT_F GetItemRect(const WindowHost& host, size_t index) const noexcept;
     [[nodiscard]] float MeasureItemWidth(const WindowHost& host, const MenuBarItem& item) const noexcept;
@@ -1559,9 +1580,11 @@ private:
 
     std::vector<MenuBarItem> _items;
     OpenItemCallback _onOpenItem;
+    HoverChangedCallback _onHoverChanged;
     std::optional<size_t> _hoveredIndex;
     std::optional<size_t> _selectedIndex;
     std::optional<size_t> _pressedIndex;
+    bool _retainSelectedIndexOnFocusLost = false;
 };
 
 class TabControl final : public Panel
@@ -1619,6 +1642,8 @@ public:
     [[nodiscard]] bool DebugIsCloseButtonVisible(size_t index) const noexcept;
     [[nodiscard]] float DebugGetHeaderScrollOffsetDip() const noexcept;
     [[nodiscard]] bool DebugHasOverflowButtons() const noexcept;
+    [[nodiscard]] D2D1_RECT_F DebugGetHeaderDividerRect() const noexcept;
+    [[nodiscard]] bool DebugHasHeaderDivider() const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetBackButtonRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetForwardButtonRect() const noexcept;
 #endif
@@ -1649,6 +1674,8 @@ private:
     [[nodiscard]] D2D1_RECT_F GetHeaderRect() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetContentRect() const noexcept;
     [[nodiscard]] bool NeedsOverflowButtons() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetHeaderDividerRect() const noexcept;
+    [[nodiscard]] bool HasHeaderDividerPaintSegment() const noexcept;
     [[nodiscard]] float GetHeaderViewportLeft() const noexcept;
     [[nodiscard]] float GetHeaderViewportRight() const noexcept;
     [[nodiscard]] float MeasureTabWidthDip(size_t index) const noexcept;
@@ -1665,6 +1692,7 @@ private:
     void ReorderTab(size_t fromIndex, size_t toIndex) noexcept;
     void UpdateDragReorder(WindowHost& host, D2D1_POINT_2F point) noexcept;
     void UpdateVisiblePageBounds() noexcept;
+    void PaintHeaderDivider(WindowHost& host) const noexcept;
 
     std::vector<TabItem> _tabs;
     std::function<void(size_t)> _onSelectionChanged;
@@ -1852,6 +1880,7 @@ public:
     void SetOnTextChanged(std::function<void(std::wstring_view)> onTextChanged);
     void SetOnSelectionChanged(std::function<void(size_t)> onSelectionChanged);
     void SetOnSubmitted(std::function<void()> onSubmitted);
+    void SetOnPopupRequested(std::function<bool()> onPopupRequested);
     [[nodiscard]] bool DebugIsPopupOpen() const noexcept;
     [[nodiscard]] std::optional<size_t> DebugGetHoveredPopupIndex() const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetPopupBounds() const noexcept;
@@ -1901,6 +1930,7 @@ private:
     void NotifyTextChanged() const;
     void OpenPopup(WindowHost& host) noexcept;
     void ClosePopup() noexcept;
+    bool RequestPopup(WindowHost& host);
     void MaybeAutoOpenPopup(WindowHost& host) noexcept;
     void CapturePopupBackdrop(WindowHost& host) noexcept;
     void RebuildPopupItems(const WindowHost* host = nullptr) noexcept;
@@ -1935,6 +1965,7 @@ private:
     std::function<void(std::wstring_view)> _onTextChanged;
     std::function<void(size_t)> _onSelectionChanged;
     std::function<void()> _onSubmitted;
+    std::function<bool()> _onPopupRequested;
     std::wstring _typeaheadBuffer;
     std::optional<size_t> _selectedIndex;
     std::optional<size_t> _activePopupIndex;
@@ -2112,8 +2143,11 @@ public:
 
     // Control overrides
     void Paint(WindowHost& host) const override;
+    void PaintOverlay(WindowHost& host) const override;
     Control* HitTest(D2D1_POINT_2F point) override;
     const Control* HitTest(D2D1_POINT_2F point) const override;
+    Control* HitTestOverlay(D2D1_POINT_2F point) override;
+    const Control* HitTestOverlay(D2D1_POINT_2F point) const override;
     bool OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers) override;
@@ -2152,6 +2186,8 @@ private:
     void NotifyScrollChanged(float previousOffsetDip) noexcept;
     [[nodiscard]] D2D1_POINT_2F ToContentSpace(D2D1_POINT_2F viewportPoint) const noexcept;
     Control* FindChildAtContent(D2D1_POINT_2F contentPoint);
+    Control* FindOverlayChildAtContent(D2D1_POINT_2F contentPoint);
+    [[nodiscard]] const Control* FindOverlayChildAtContent(D2D1_POINT_2F contentPoint) const;
     void UpdateInnerHover(WindowHost& host, D2D1_POINT_2F viewportPoint);
 
     std::function<void(float)> _onScrollChanged;
@@ -2243,6 +2279,7 @@ public:
     bool OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers) override;
     bool OnChar(WindowHost& host, wchar_t ch, UINT modifiers) override;
     bool OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2F pointDip) override;
+    void OnDensityChanged() noexcept override;
 
 private:
     enum class HitZone : uint8_t
@@ -2301,6 +2338,7 @@ private:
     IDxTreeDelegate* _delegate = nullptr;
     std::optional<uint64_t> _selectedItemId;
     std::optional<size_t> _hoveredVisibleIndex;
+    float _rowHeightBaseDip    = 28.0f;
     float _rowHeightDip        = 28.0f;
     float _indentDip           = 16.0f;
     float _verticalScrollDip   = 0.0f;

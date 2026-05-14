@@ -443,7 +443,7 @@ Windows that still source commands from a resource `HMENU` MAY keep that `HMENU`
 - **Light dismiss:** Click outside or press Escape closes the menu.
 - **App deactivation:** Menu popup windows are transient owned flyouts, not global topmost overlays. Losing app activation dismisses the full popup chain.
 - **Keyboard:** Up/Down arrows navigate items (skip separators, headers, and non-interactive info rows). Enter/Space invokes. Home/End jump to first/last item. Keyboard-opened roots and submenus focus their first navigable item. Right arrow opens the highlighted submenu; on a highlighted leaf inside a top-level menu session it switches to the next enabled root menu and focuses that popup's first navigable item. Left arrow closes only the current submenu; once the root popup is active, Left switches to the previous enabled root menu and focuses that popup's first navigable item. Tab/Shift+Tab, Alt, and F10 exit the popup chain and return focus to the control that owned focus before menu mode started. Stationary cursor placement alone does not override keyboard root switching or highlighted-item ownership; pointer takeover requires actual mouse movement.
-- **Submenu hover timing:** Cascading submenus follow standard Windows menu behavior. Entering a child submenu cancels the parent's pending close/open hover timer so the child stays open while hovered. Leaving that child submenu starts the delayed close for that child chain even if the pointer moves back onto the parent/root menu. Settling on a sibling leaf closes the old child chain after the cascade hover delay; settling on a sibling with children replaces the old child chain after the same delay.
+- **Submenu hover timing:** Cascading submenus follow standard Windows menu behavior. Entering a child submenu cancels the parent's pending close/open hover timer so the child stays open while hovered. Leaving that child submenu starts the delayed close for that child chain even if the pointer moves back onto the parent/root menu. Settling on a sibling leaf closes the old child chain after the cascade hover delay; settling on a sibling with children replaces the old child chain after the same delay. Moving directly from an open top-level root menu item to another enabled top-level root item closes the old root popup and opens the new root popup without requiring the pointer to enter the old popup first.
 - **Mnemonics:** Underlined characters in item text, activated by pressing the character key.
 - **Submenu cascade:** On hover (400ms delay) or Right arrow key. Submenu appears to the right; if insufficient space, appears to the left.
 - **Opening click behavior:** Opening a menu from the menu bar or a migrated navigation dropdown MUST leave the popup open after the opening pointer-up. The opening click/release path must not immediately light-dismiss the popup.
@@ -1017,9 +1017,9 @@ Several controls define both default and compact heights (Button: 32/24, Menu it
 | Toolbar host (Monitor) | 42 DIP | 36 DIP | Button height shrinks 32→28 DIP |
 | Status strip host (Monitor) | 24 DIP | 20 DIP | Section widths remain host-defined |
 | Grid/list surfaces | Host-defined | Host-defined | Header/row metrics must shrink when the surface opts into compact density |
-| Tree item | 32 DIP | 24 DIP | — |
+| Tree item | Host-defined | Density-scaled with 20 DIP text-row minimum | Tree/list rows inherit compact density and shrink hit-test cadence with their visuals |
 
-**When to use:** Compact mode is appropriate for dense data forms (Preferences pages), toolbars, status bars, search/list results, and menu-heavy chrome. Standard mode is default for dialogs and content areas.
+**When to use:** Compact mode is appropriate for dense data forms (Preferences pages), toolbars, status bars, search/list results, and menu-heavy chrome. The shared DxUi control default remains `Standard` for callers that do not opt in, but the app-level `ui.compactMode` setting defaults to enabled and hosts should pass that density through to supported grids, trees, and list-like surfaces.
 
 ---
 

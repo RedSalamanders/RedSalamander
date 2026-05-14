@@ -12,8 +12,6 @@
 #include <windows.h>
 #include <windowsx.h>
 
-#include <commctrl.h>
-
 #pragma comment(lib, "uxtheme.lib")
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "d3d11.lib")
@@ -409,11 +407,6 @@ void NavigationView::OnCreate(HWND hWindow)
     // Do not scale menu icon size with DPI
     _menuIconSize = GetSystemMetrics(SM_CXSMICON);
 
-    // Create tooltip window
-    {
-        Debug::Perf::Scope perfIcc(L"NavigationView.OnCreate.InitCommonControls");
-        InitCommonControls();
-    }
 }
 
 void NavigationView::OnDeferredInit()

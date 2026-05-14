@@ -9,11 +9,18 @@
 #include <wincodec.h>
 
 #include "Helpers.h"
+#include "WindowMessages.h"
 
 #pragma comment(lib, "shcore.lib")
 
 #ifndef CLSID_WICImagingFactory2
 #define CLSID_WICImagingFactory2 CLSID_WICImagingFactory
+#endif
+
+#if defined(ENABLE_TESTS)
+#define DXUI_MENU_TRACE(...) Debug::Info(__VA_ARGS__)
+#else
+#define DXUI_MENU_TRACE(...) static_cast<void>(0)
 #endif
 
 namespace RedSalamander::DxUi
@@ -46,6 +53,13 @@ constexpr float kIconSlotLeftInsetDip     = kMenuBorderDip + kItemHoverInsetDip 
 constexpr float kIconSlotWidthDip         = kIconAreaWidthDip - kItemHoverInsetDip - 2.0f;
 constexpr float kSeparatorHeightDip       = 9.0f; // 1px line + 4 DIP margin above/below
 constexpr float kSeparatorMarginDip       = 4.0f;
+constexpr float kSliderItemHeightDip      = 56.0f;
+constexpr float kSliderTrackInsetDip      = 16.0f;
+constexpr float kSliderTrackTopDip        = 36.0f;
+constexpr float kSliderTrackHeightDip     = 4.0f;
+constexpr float kSliderStopRadiusDip      = 5.0f;
+constexpr float kSliderActiveStopRadiusDip = 6.0f;
+constexpr float kSliderMenuMinWidthDip    = 260.0f;
 constexpr float kSubmenuVerticalOffsetDip = 4.0f;
 constexpr float kCascadeHoverDelayMs      = 400;
 constexpr float kTextMeasureWidthDip      = 1024.0f;
@@ -54,6 +68,36 @@ constexpr wchar_t kChevronRightGlyph[]   = L"\uE76C";
 constexpr wchar_t kCheckMarkGlyph[]      = L"\uE73E";
 constexpr wchar_t kRadioBulletGlyph[]    = L"\uF137"; // Filled circle
 constexpr GUID kMenuGaussianBlurEffectId = {0x1feb6d69, 0x2fe6, 0x4ac9, {0x8c, 0x58, 0x1d, 0x7f, 0x93, 0xe7, 0xa6, 0xa5}};
+
+struct MenuController;
+struct MenuPopup;
+
+[[nodiscard]] const wchar_t* TraceMenuMessageName(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_MOUSEMOVE: return L"WM_MOUSEMOVE";
+        case WM_LBUTTONDOWN: return L"WM_LBUTTONDOWN";
+        case WM_LBUTTONUP: return L"WM_LBUTTONUP";
+        case WM_RBUTTONDOWN: return L"WM_RBUTTONDOWN";
+        case WM_RBUTTONUP: return L"WM_RBUTTONUP";
+        case WM_MOUSEWHEEL: return L"WM_MOUSEWHEEL";
+        case WM_MOUSEHWHEEL: return L"WM_MOUSEHWHEEL";
+        case WM_CAPTURECHANGED: return L"WM_CAPTURECHANGED";
+        case WM_CANCELMODE: return L"WM_CANCELMODE";
+        case WM_ACTIVATEAPP: return L"WM_ACTIVATEAPP";
+        case WM_ACTIVATE: return L"WM_ACTIVATE";
+        case WM_NCACTIVATE: return L"WM_NCACTIVATE";
+        case WM_DESTROY: return L"WM_DESTROY";
+        case WM_KEYDOWN: return L"WM_KEYDOWN";
+        case WM_KEYUP: return L"WM_KEYUP";
+        case WM_SYSKEYDOWN: return L"WM_SYSKEYDOWN";
+        case WM_SYSKEYUP: return L"WM_SYSKEYUP";
+        default: return L"message";
+    }
+}
+
+[[nodiscard]] int TracePopupIndex(const MenuController& controller, const MenuPopup* popup) noexcept;
 
 // ---------------------------------------------------------------------------
 // Menu item visual style
@@ -779,12 +823,64 @@ void DrawMenuBitmapIcon(WindowHost& host, const MenuFlyoutItem::BitmapIcon& icon
         case MenuItemKind::Separator:
         case MenuItemKind::Header:
         case MenuItemKind::Info: return false;
+        case MenuItemKind::Slider:
+            for (const auto& stop : item.sliderStops)
+            {
+                if (stop.commandId != 0)
+                {
+                    return true;
+                }
+            }
+            return false;
         case MenuItemKind::Standard:
         case MenuItemKind::Toggle:
         case MenuItemKind::Radio: return ! item.children.empty() || item.commandId != 0;
     }
 
     return false;
+}
+
+[[nodiscard]] uint32_t ClampSliderValue(const MenuFlyoutItem& item) noexcept
+{
+    if (item.sliderStops.empty())
+    {
+        return 0u;
+    }
+
+    const uint32_t maxStop = static_cast<uint32_t>(item.sliderStops.size() - 1u);
+    return (std::min)(item.sliderValue, maxStop);
+}
+
+[[nodiscard]] int GetSliderCommandId(const MenuFlyoutItem& item, uint32_t stopIndex) noexcept
+{
+    if (stopIndex >= item.sliderStops.size())
+    {
+        return 0;
+    }
+    return item.sliderStops[stopIndex].commandId;
+}
+
+[[nodiscard]] D2D1_RECT_F GetSliderTrackRect(const D2D1_RECT_F& itemRect) noexcept
+{
+    return D2D1::RectF(itemRect.left + kSliderTrackInsetDip,
+                       itemRect.top + kSliderTrackTopDip,
+                       itemRect.right - kSliderTrackInsetDip,
+                       itemRect.top + kSliderTrackTopDip + kSliderTrackHeightDip);
+}
+
+[[nodiscard]] uint32_t HitTestSliderStop(const MenuFlyoutItem& item, const D2D1_RECT_F& itemRect, D2D1_POINT_2F pointDip) noexcept
+{
+    const size_t stopCount = item.sliderStops.size();
+    if (stopCount <= 1u)
+    {
+        return 0u;
+    }
+
+    const D2D1_RECT_F trackRect = GetSliderTrackRect(itemRect);
+    const float trackWidth      = (std::max)(1.0f, trackRect.right - trackRect.left);
+    const float normalized      = std::clamp((pointDip.x - trackRect.left) / trackWidth, 0.0f, 1.0f);
+    const float scaled          = normalized * static_cast<float>(stopCount - 1u);
+    return static_cast<uint32_t>(std::lround(scaled));
 }
 
 struct MenuItemLayoutRects
@@ -1085,6 +1181,10 @@ struct MenuController
     ContextMenuSessionCallbacks sessionCallbacks;
     std::optional<int> result;
     bool running = true;
+#if defined(ENABLE_TESTS)
+    uint64_t rootPointerSwitchCount = 0;
+    uint64_t rootSwitchImmediateRenderCount = 0;
+#endif
 
     // Cascade stack: [0] = root menu, [1..N] = submenus
     std::vector<std::unique_ptr<MenuPopup>> popups;
@@ -1157,6 +1257,24 @@ struct MenuController
         return popups.empty() ? nullptr : popups.back().get();
     }
 };
+
+[[nodiscard]] int TracePopupIndex(const MenuController& controller, const MenuPopup* popup) noexcept
+{
+    if (! popup)
+    {
+        return -1;
+    }
+
+    for (size_t index = 0; index < controller.popups.size(); ++index)
+    {
+        if (controller.popups[index].get() == popup)
+        {
+            return index <= static_cast<size_t>(std::numeric_limits<int>::max()) ? static_cast<int>(index) : -1;
+        }
+    }
+
+    return -1;
+}
 
 [[nodiscard]] POINT ResolveMouseScreenPoint(const MSG& msg) noexcept
 {
@@ -1298,6 +1416,7 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
     float maxAccelWidth         = 0.0f;
     float totalHeight           = kMenuPaddingTopDip + kMenuPaddingBottomDip;
     bool hasSubmenu             = false;
+    bool hasSlider              = false;
 
     for (size_t i = 0; i < count; ++i)
     {
@@ -1321,6 +1440,45 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
                             if (SUCCEEDED(layout->GetMetrics(&metrics)))
                             {
                                 maxTextWidth = (std::max)(maxTextWidth, metrics.widthIncludingTrailingWhitespace);
+                            }
+                        }
+                    }
+                }
+                break;
+            case MenuItemKind::Slider:
+                totalHeight += kSliderItemHeightDip;
+                hasSlider = true;
+                if (auto* fmt = host.GetTextFormat(FontRole::Body))
+                {
+                    const DecodedMenuItemText decoded = DecodeMenuItemText(item);
+                    const ParsedMenuLabel label       = ParseMenuLabel(decoded.labelText);
+                    wil::com_ptr<IDWriteTextLayout> layout;
+                    if (auto* factory = host.GetWriteFactory())
+                    {
+                        if (SUCCEEDED(factory->CreateTextLayout(
+                                label.displayText.c_str(), static_cast<UINT32>(label.displayText.size()), fmt, kTextMeasureWidthDip, itemHeightDip, &layout)))
+                        {
+                            DWRITE_TEXT_METRICS metrics{};
+                            if (SUCCEEDED(layout->GetMetrics(&metrics)))
+                            {
+                                maxTextWidth = (std::max)(maxTextWidth, metrics.widthIncludingTrailingWhitespace);
+                            }
+                        }
+
+                        if (! decoded.acceleratorText.empty())
+                        {
+                            if (SUCCEEDED(factory->CreateTextLayout(decoded.acceleratorText.data(),
+                                                                    static_cast<UINT32>(decoded.acceleratorText.size()),
+                                                                    fmt,
+                                                                    kTextMeasureWidthDip,
+                                                                    itemHeightDip,
+                                                                    &layout)))
+                            {
+                                DWRITE_TEXT_METRICS metrics{};
+                                if (SUCCEEDED(layout->GetMetrics(&metrics)))
+                                {
+                                    maxAccelWidth = (std::max)(maxAccelWidth, metrics.widthIncludingTrailingWhitespace);
+                                }
                             }
                         }
                     }
@@ -1384,6 +1542,8 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
     if (hasSubmenu)
         width += kChevronAreaWidthDip;
     width += kMenuBorderDip * 2.0f;
+    if (hasSlider)
+        width = (std::max)(width, kSliderMenuMinWidthDip);
 
     width = std::clamp(width, kMenuMinWidthDip, kMenuMaxWidthDip);
 
@@ -1401,15 +1561,12 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
     for (size_t i = 0; i < count; ++i)
     {
         float h = itemHeightDip;
-        switch (items[i].kind)
-        {
-            case MenuItemKind::Separator: h = kSeparatorHeightDip; break;
-            case MenuItemKind::Header: h = headerHeightDip; break;
-            case MenuItemKind::Info:
-            case MenuItemKind::Standard:
-            case MenuItemKind::Toggle:
-            case MenuItemKind::Radio: h = itemHeightDip; break;
-        }
+        if (items[i].kind == MenuItemKind::Separator)
+            h = kSeparatorHeightDip;
+        else if (items[i].kind == MenuItemKind::Header)
+            h = headerHeightDip;
+        else if (items[i].kind == MenuItemKind::Slider)
+            h = kSliderItemHeightDip;
         if (i == targetIndex)
         {
             return D2D1::RectF(kMenuBorderDip, y, menuWidthDip - kMenuBorderDip, y + h);
@@ -1453,7 +1610,11 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
     const float itemHeightDip               = ResolveMenuItemHeightDip(theme);
     const float headerHeightDip             = ResolveMenuHeaderHeightDip(theme);
     const auto& item                        = popup.items[targetIndex];
-    const float rowHeightDip                = item.kind == MenuItemKind::Header ? headerHeightDip : itemHeightDip;
+    float rowHeightDip                      = itemHeightDip;
+    if (item.kind == MenuItemKind::Header)
+        rowHeightDip = headerHeightDip;
+    else if (item.kind == MenuItemKind::Slider)
+        rowHeightDip = kSliderItemHeightDip;
     const float contentWidthDip             = popup.GetContentWidthDip();
     const float surfaceLeftDip              = popup.GetSurfaceRect().left;
     const std::wstring_view acceleratorText = DecodeMenuItemText(item).acceleratorText;
@@ -1464,7 +1625,7 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
                                      surfaceLeftDip + kIconSlotLeftInsetDip + kIconSlotWidthDip,
                                      layout.itemRectDip.top + rowHeightDip);
 
-    const float reservedChevronWidthDip   = item.children.empty() ? 0.0f : kChevronAreaWidthDip;
+    const float reservedChevronWidthDip   = item.children.empty() || item.kind == MenuItemKind::Slider ? 0.0f : kChevronAreaWidthDip;
     const float acceleratorColumnWidthDip = acceleratorText.empty() ? 0.0f : popup.acceleratorColumnWidthDip;
     const float reservedAccelWidthDip     = acceleratorColumnWidthDip > 0.0f ? (acceleratorColumnWidthDip + kTextToAccelGapDip) : 0.0f;
     const float textRightDip              = surfaceLeftDip + contentWidthDip - kAccelRightPaddingDip - reservedChevronWidthDip - reservedAccelWidthDip;
@@ -1490,6 +1651,24 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
                                             layout.itemRectDip.top + rowHeightDip);
     }
 
+    if (item.kind == MenuItemKind::Slider)
+    {
+        const float sliderTextTopDip = layout.itemRectDip.top + 6.0f;
+        const float sliderTextBottomDip = sliderTextTopDip + 22.0f;
+        layout.iconRectDip = D2D1::RectF();
+        layout.textRectDip = ClampHorizontalRect(surfaceLeftDip + kAccelRightPaddingDip,
+                                                 textRightDip,
+                                                 sliderTextTopDip,
+                                                 sliderTextBottomDip,
+                                                 surfaceLeftDip + kAccelRightPaddingDip);
+        if (acceleratorColumnWidthDip > 0.0f)
+        {
+            const float accelRightDip = surfaceLeftDip + contentWidthDip - kAccelRightPaddingDip;
+            const float accelLeftDip  = accelRightDip - acceleratorColumnWidthDip;
+            layout.acceleratorRectDip = ClampHorizontalRect(accelLeftDip, accelRightDip, sliderTextTopDip, sliderTextBottomDip, layout.textRectDip.right);
+        }
+    }
+
     return layout;
 }
 
@@ -1504,15 +1683,12 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
     for (size_t i = 0; i < count; ++i)
     {
         float h = itemHeightDip;
-        switch (items[i].kind)
-        {
-            case MenuItemKind::Separator: h = kSeparatorHeightDip; break;
-            case MenuItemKind::Header: h = headerHeightDip; break;
-            case MenuItemKind::Info:
-            case MenuItemKind::Standard:
-            case MenuItemKind::Toggle:
-            case MenuItemKind::Radio: h = itemHeightDip; break;
-        }
+        if (items[i].kind == MenuItemKind::Separator)
+            h = kSeparatorHeightDip;
+        else if (items[i].kind == MenuItemKind::Header)
+            h = headerHeightDip;
+        else if (items[i].kind == MenuItemKind::Slider)
+            h = kSliderItemHeightDip;
         if (pointDip.y >= y && pointDip.y < y + h && pointDip.x >= 0.0f && pointDip.x < menuWidthDip)
         {
             if (items[i].kind != MenuItemKind::Separator && items[i].kind != MenuItemKind::Header && items[i].kind != MenuItemKind::Info)
@@ -1586,15 +1762,12 @@ public:
         {
             const auto& item = popup->items[i];
             float itemHeight = itemHeightDip;
-            switch (item.kind)
-            {
-                case MenuItemKind::Separator: itemHeight = kSeparatorHeightDip; break;
-                case MenuItemKind::Header: itemHeight = headerHeightDip; break;
-                case MenuItemKind::Info:
-                case MenuItemKind::Standard:
-                case MenuItemKind::Toggle:
-                case MenuItemKind::Radio: itemHeight = itemHeightDip; break;
-            }
+            if (item.kind == MenuItemKind::Separator)
+                itemHeight = kSeparatorHeightDip;
+            else if (item.kind == MenuItemKind::Header)
+                itemHeight = headerHeightDip;
+            else if (item.kind == MenuItemKind::Slider)
+                itemHeight = kSliderItemHeightDip;
 
             const D2D1_RECT_F itemRect        = D2D1::RectF(kMenuBorderDip, y, contentWidth - kMenuBorderDip, y + itemHeight);
             const D2D1_RECT_F visibleItemRect = D2D1::RectF(surfaceLeft + itemRect.left,
@@ -1626,6 +1799,93 @@ public:
                     D2D1::RectF(layout.textRectDip.left, layout.textRectDip.top, surfaceLeft + contentWidth - kAccelRightPaddingDip, layout.textRectDip.bottom);
                 DrawCenteredText(
                     host, label.displayText, textRect, FontRole::Small, style.headerText, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                y += itemHeight;
+                continue;
+            }
+
+            if (item.kind == MenuItemKind::Slider)
+            {
+                const MenuItemLayoutRects layout           = GetMenuItemLayoutRects(*popup, i);
+                const bool isHovered                       = (popup->hoveredIndex.has_value() && popup->hoveredIndex.value() == i) ||
+                                                             (popup->keyboardIndex.has_value() && popup->keyboardIndex.value() == i);
+                const bool isDisabled                      = ! item.enabled;
+                const DecodedMenuItemText decoded          = DecodeMenuItemText(item);
+                const ParsedMenuLabel label                = ParseMenuLabel(decoded.labelText);
+                const MenuResolvedItemPaintStyle itemPaint = ResolveMenuItemPaintStyle(theme, style, item, label.displayText, isHovered);
+                const D2D1_COLOR_F textColor =
+                    isDisabled ? D2D1::ColorF(itemPaint.text.r, itemPaint.text.g, itemPaint.text.b, 0.4f) : itemPaint.text;
+                const D2D1_COLOR_F accelColor =
+                    isDisabled ? D2D1::ColorF(itemPaint.accelText.r, itemPaint.accelText.g, itemPaint.accelText.b, 0.4f) : itemPaint.accelText;
+
+                if (itemPaint.showHighlightFill)
+                {
+                    const D2D1_RECT_F hoverRect = D2D1::RectF(
+                        visibleItemRect.left + kItemHoverInsetDip, visibleItemRect.top, visibleItemRect.right - kItemHoverInsetDip, visibleItemRect.bottom);
+                    const D2D1_COLOR_F transparent = D2D1::ColorF(0, 0, 0, 0);
+                    DrawRoundedRect(host, hoverRect, itemPaint.fill, transparent, kItemHoverRadiusDip);
+                }
+
+                DrawCenteredText(
+                    host, label.displayText, layout.textRectDip, FontRole::Body, textColor, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+
+                if (! decoded.acceleratorText.empty())
+                {
+                    DrawCenteredText(host,
+                                     decoded.acceleratorText,
+                                     layout.acceleratorRectDip,
+                                     FontRole::Body,
+                                     accelColor,
+                                     DWRITE_TEXT_ALIGNMENT_TRAILING,
+                                     DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                }
+
+                const D2D1_RECT_F trackRect = GetSliderTrackRect(layout.itemRectDip);
+                const D2D1_COLOR_F trackColor =
+                    isDisabled ? D2D1::ColorF(style.separatorColor.r, style.separatorColor.g, style.separatorColor.b, 0.45f) : style.separatorColor;
+                const D2D1_COLOR_F activeColor =
+                    isDisabled ? D2D1::ColorF(itemPaint.checkColor.r, itemPaint.checkColor.g, itemPaint.checkColor.b, 0.45f) : itemPaint.checkColor;
+                auto* trackBrush  = host.GetSolidBrush(trackColor);
+                auto* activeBrush = host.GetSolidBrush(activeColor);
+                if (trackBrush)
+                {
+                    DrawRoundedRect(host, trackRect, trackColor, D2D1::ColorF(0, 0, 0, 0), kSliderTrackHeightDip * 0.5f);
+                }
+
+                const size_t stopCount = item.sliderStops.size();
+                if (activeBrush && stopCount > 0u)
+                {
+                    const uint32_t sliderValue = ClampSliderValue(item);
+                    const float trackCenterY   = (trackRect.top + trackRect.bottom) * 0.5f;
+                    const float activeRight =
+                        stopCount <= 1u
+                            ? trackRect.left
+                            : trackRect.left + ((trackRect.right - trackRect.left) * static_cast<float>(sliderValue) / static_cast<float>(stopCount - 1u));
+                    if (activeRight > trackRect.left)
+                    {
+                        const D2D1_RECT_F activeRect = D2D1::RectF(trackRect.left, trackRect.top, activeRight, trackRect.bottom);
+                        DrawRoundedRect(host, activeRect, activeColor, D2D1::ColorF(0, 0, 0, 0), kSliderTrackHeightDip * 0.5f);
+                    }
+
+                    for (size_t stopIndex = 0u; stopIndex < stopCount; ++stopIndex)
+                    {
+                        const float t = stopCount <= 1u ? 0.0f : static_cast<float>(stopIndex) / static_cast<float>(stopCount - 1u);
+                        const float x = trackRect.left + ((trackRect.right - trackRect.left) * t);
+                        const bool activeStop = stopIndex == sliderValue;
+                        const float radius    = activeStop ? kSliderActiveStopRadiusDip : kSliderStopRadiusDip;
+                        const D2D1_ELLIPSE stopEllipse = D2D1::Ellipse(D2D1::Point2F(x, trackCenterY), radius, radius);
+                        auto* stopBrush   = host.GetSolidBrush(activeStop ? activeColor : style.background);
+                        auto* borderBrush = host.GetSolidBrush(activeColor);
+                        if (stopBrush)
+                        {
+                            dc->FillEllipse(stopEllipse, stopBrush);
+                        }
+                        if (borderBrush)
+                        {
+                            dc->DrawEllipse(stopEllipse, borderBrush, 1.0f);
+                        }
+                    }
+                }
+
                 y += itemHeight;
                 continue;
             }
@@ -1979,7 +2239,6 @@ void ApplyMenuPopupWindowRegion(HWND hwnd, const MenuPopupShadowMargins& shadowM
 // ---------------------------------------------------------------------------
 
 static constexpr UINT_PTR kSubmenuHoverTimerId = 1;
-static constexpr UINT kRootPointerPollTimerMs  = 30u;
 
 bool CreateMenuPopupWindow(MenuController& controller,
                            const MenuFlyoutItem* items,
@@ -2352,31 +2611,79 @@ void DestroyPopupChain(MenuController& controller) noexcept
     controller.popups.clear();
 }
 
+void ActivatePopupForKeyboard(MenuPopup& popup) noexcept
+{
+    if (! popup.hwnd || IsWindow(popup.hwnd) == FALSE)
+    {
+        return;
+    }
+
+    SetWindowPos(popup.hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
+    SetActiveWindow(popup.hwnd);
+    SetFocus(popup.hwnd);
+}
+
+void RepaintPopupNow(MenuPopup& popup) noexcept
+{
+    if (! popup.hwnd || IsWindow(popup.hwnd) == FALSE)
+    {
+        return;
+    }
+
+    InvalidateRect(popup.hwnd, nullptr, FALSE);
+    UpdateWindow(popup.hwnd);
+}
+
 [[nodiscard]] bool SwitchRootPopup(MenuController& controller,
                                    ContextMenuRootSwitchRequest request,
                                    std::wstring_view popupDetail,
                                    bool focusFirstNavigableItem) noexcept
 {
+    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup switch-begin owner={:#x} capture={:#x} detail='{}' oldPopupCount={} newItems={} point=({}, {}) focusFirst={}",
+                reinterpret_cast<uintptr_t>(controller.ownerHwnd),
+                reinterpret_cast<uintptr_t>(GetCapture()),
+                popupDetail,
+                controller.popups.size(),
+                request.items.size(),
+                request.screenPoint.x,
+                request.screenPoint.y,
+                focusFirstNavigableItem ? L"true" : L"false");
     DestroyPopupChain(controller);
 
     controller.rootItems = std::move(request.items);
     if (controller.rootItems.empty())
     {
+        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup switch-dismiss-empty owner={:#x}", reinterpret_cast<uintptr_t>(controller.ownerHwnd));
         controller.Dismiss();
         return false;
     }
 
     const auto startedAt = std::chrono::steady_clock::now();
+    // Root switches repaint before returning to the modal loop so fast hover/keyboard
+    // changes never expose a blank popup between the old root and new root.
     if (! CreateMenuPopupWindow(
-            controller, controller.rootItems.data(), controller.rootItems.size(), request.screenPoint, false, nullptr, nullptr, false, focusFirstNavigableItem))
+            controller, controller.rootItems.data(), controller.rootItems.size(), request.screenPoint, false, nullptr, nullptr, true, focusFirstNavigableItem))
     {
+        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup switch-create-failed owner={:#x}", reinterpret_cast<uintptr_t>(controller.ownerHwnd));
         controller.Dismiss();
         return false;
     }
 
     if (MenuPopup* root = controller.GetRootPopup(); root && root->hwnd)
     {
+#if defined(ENABLE_TESTS)
+        if (root->host.DebugGetRenderCount() > 0u)
+        {
+            ++controller.rootSwitchImmediateRenderCount;
+        }
+#endif
+        const HWND previousCapture = GetCapture();
         SetCapture(root->hwnd);
+        ActivatePopupForKeyboard(*root);
+        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup switch-capture root={:#x} previousCapture={:#x} currentCapture={:#x}",
+                    reinterpret_cast<uintptr_t>(root->hwnd),
+                    reinterpret_cast<uintptr_t>(previousCapture),
+                    reinterpret_cast<uintptr_t>(GetCapture()));
     }
     Debug::Perf::Emit(L"DxUI::PopupShow", popupDetail, Debug::Perf::ElapsedUs(startedAt), static_cast<uint64_t>(controller.rootItems.size()), 0u);
     return true;
@@ -2393,45 +2700,34 @@ void RunMenuModalLoop(MenuController& controller)
     if (! root || ! root->hwnd)
         return;
 
+    const HWND previousCapture = GetCapture();
+    const HWND previousFocus   = GetFocus();
     SetCapture(root->hwnd);
+    ActivatePopupForKeyboard(*root);
+    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-start owner={:#x} root={:#x} previousCapture={:#x} currentCapture={:#x} popupCount={} items={}",
+                reinterpret_cast<uintptr_t>(controller.ownerHwnd),
+                reinterpret_cast<uintptr_t>(root->hwnd),
+                reinterpret_cast<uintptr_t>(previousCapture),
+                reinterpret_cast<uintptr_t>(GetCapture()),
+                controller.popups.size(),
+                controller.rootItems.size());
 
     bool ignoreInitialLeftButtonUp  = controller.sessionCallbacks.ignoreInitialLeftButtonUp || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
     bool ignoreInitialRightButtonUp = controller.sessionCallbacks.ignoreInitialRightButtonUp || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-initial-up-filter left={} right={} asyncLeft={} asyncRight={}",
+                ignoreInitialLeftButtonUp ? L"true" : L"false",
+                ignoreInitialRightButtonUp ? L"true" : L"false",
+                (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 ? L"down" : L"up",
+                (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0 ? L"down" : L"up");
     POINT lastMouseScreenPoint{};
-    bool hasLastMouseScreenPoint = false;
-    POINT lastPointerPollScreenPoint{};
-    bool hasLastPointerPollScreenPoint = false;
-
-    const auto pollRootPointerFromCursor = [&]() noexcept
-    {
-        POINT screenPt{};
-        if (controller.sessionCallbacks.focusFirstNavigableItem || ! controller.sessionCallbacks.switchRootFromPointer || GetCursorPos(&screenPt) == FALSE)
-        {
-            return;
-        }
-
-        const bool mouseMoved = ! hasLastPointerPollScreenPoint || screenPt.x != lastPointerPollScreenPoint.x ||
-                                screenPt.y != lastPointerPollScreenPoint.y;
-        lastPointerPollScreenPoint    = screenPt;
-        hasLastPointerPollScreenPoint = true;
-        if (! mouseMoved)
-        {
-            return;
-        }
-
-        if (auto request = controller.sessionCallbacks.switchRootFromPointer(screenPt); request.has_value())
-        {
-            static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-pointer-poll", false));
-        }
-    };
+    bool hasLastMouseScreenPoint = GetCursorPos(&lastMouseScreenPoint) != FALSE;
 
     MSG msg;
     while (controller.running)
     {
         if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) == FALSE)
         {
-            pollRootPointerFromCursor();
-            static_cast<void>(MsgWaitForMultipleObjectsEx(0, nullptr, kRootPointerPollTimerMs, QS_ALLINPUT, MWMO_INPUTAVAILABLE));
+            static_cast<void>(MsgWaitForMultipleObjectsEx(0, nullptr, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE));
             continue;
         }
 
@@ -2447,6 +2743,55 @@ void RunMenuModalLoop(MenuController& controller)
             continue;
         }
 
+        if (msg.message == WndMsg::kDxUiContextMenuRootHoverChanged)
+        {
+            POINT liveCursor{};
+            if (GetCursorPos(&liveCursor) != FALSE)
+            {
+                bool cursorInsidePopup = false;
+                for (auto it = controller.popups.rbegin(); it != controller.popups.rend(); ++it)
+                {
+                    const RECT wr = (*it)->GetInteractiveScreenRect();
+                    if (PtInRect(&wr, liveCursor))
+                    {
+                        cursorInsidePopup = true;
+                        break;
+                    }
+                }
+                if (cursorInsidePopup)
+                {
+                    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-menu-bar-hover-skipped-popup point=({}, {})", liveCursor.x, liveCursor.y);
+                    continue;
+                }
+            }
+
+            if (controller.sessionCallbacks.switchRootFromMenuBarHover)
+            {
+                if (auto request = controller.sessionCallbacks.switchRootFromMenuBarHover(); request.has_value())
+                {
+                    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-menu-bar-hover-accepted newItems={} newPoint=({}, {})",
+                                request->items.size(),
+                                request->screenPoint.x,
+                                request->screenPoint.y);
+#if defined(ENABLE_TESTS)
+                    ++controller.rootPointerSwitchCount;
+#endif
+                    static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-menu-bar-hover", false));
+                }
+            }
+            continue;
+        }
+
+        if (msg.message == WM_CAPTURECHANGED || msg.message == WM_CANCELMODE)
+        {
+            DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup message msg={} hwnd={:#x} wParam={:#x} lParam={:#x} capture={:#x}",
+                        TraceMenuMessageName(msg.message),
+                        reinterpret_cast<uintptr_t>(msg.hwnd),
+                        static_cast<uintptr_t>(msg.wParam),
+                        static_cast<uintptr_t>(msg.lParam),
+                        reinterpret_cast<uintptr_t>(GetCapture()));
+        }
+
         const bool ownerOrPopupMessage = msg.hwnd == controller.ownerHwnd || controller.FindPopupForHwnd(msg.hwnd) != nullptr;
         if (ownerOrPopupMessage)
         {
@@ -2454,6 +2799,11 @@ void RunMenuModalLoop(MenuController& controller)
                 (msg.message == WM_ACTIVATE && LOWORD(static_cast<DWORD_PTR>(msg.wParam)) == WA_INACTIVE) ||
                 (msg.message == WM_NCACTIVATE && msg.wParam == FALSE) || (msg.message == WM_DESTROY && msg.hwnd == controller.ownerHwnd))
             {
+                DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup dismiss-activation msg={} hwnd={:#x} owner={:#x} capture={:#x}",
+                            TraceMenuMessageName(msg.message),
+                            reinterpret_cast<uintptr_t>(msg.hwnd),
+                            reinterpret_cast<uintptr_t>(controller.ownerHwnd),
+                            reinterpret_cast<uintptr_t>(GetCapture()));
                 controller.Dismiss();
                 break;
             }
@@ -2492,18 +2842,53 @@ void RunMenuModalLoop(MenuController& controller)
                 const bool mouseMoved   = ! hasLastMouseScreenPoint || screenPt.x != lastMouseScreenPoint.x || screenPt.y != lastMouseScreenPoint.y;
                 lastMouseScreenPoint    = screenPt;
                 hasLastMouseScreenPoint = true;
+                POINT liveCursor{};
+                const bool hasLiveCursor = GetCursorPos(&liveCursor) != FALSE;
+                DXUI_MENU_TRACE(
+                    L"DxUi::MenuTrace Popup mouse-move msgHwnd={:#x} capture={:#x} msgScreen=({}, {}) liveCursor=({}, {}) hasLiveCursor={} moved={} targetPopup={} popupCount={}",
+                    reinterpret_cast<uintptr_t>(msg.hwnd),
+                    reinterpret_cast<uintptr_t>(GetCapture()),
+                    screenPt.x,
+                    screenPt.y,
+                    liveCursor.x,
+                    liveCursor.y,
+                    hasLiveCursor ? L"true" : L"false",
+                    mouseMoved ? L"true" : L"false",
+                    TracePopupIndex(controller, targetPopup),
+                    controller.popups.size());
                 if (! mouseMoved)
                 {
                     continue;
                 }
 
-                if (controller.sessionCallbacks.switchRootFromPointer)
+                if (! targetPopup && controller.sessionCallbacks.switchRootFromPointer)
                 {
-                    if (auto request = controller.sessionCallbacks.switchRootFromPointer(screenPt); request.has_value())
+                    POINT rootSwitchScreenPt = screenPt;
+                    if (hasLiveCursor)
                     {
+                        rootSwitchScreenPt = liveCursor;
+                    }
+                    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-probe point=({}, {}) fromLiveCursor={} targetPopup={} activeItems={}",
+                                rootSwitchScreenPt.x,
+                                rootSwitchScreenPt.y,
+                                hasLiveCursor ? L"true" : L"false",
+                                TracePopupIndex(controller, targetPopup),
+                                controller.rootItems.size());
+                    if (auto request = controller.sessionCallbacks.switchRootFromPointer(rootSwitchScreenPt); request.has_value())
+                    {
+                        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-accepted point=({}, {}) newItems={} newPoint=({}, {})",
+                                    rootSwitchScreenPt.x,
+                                    rootSwitchScreenPt.y,
+                                    request->items.size(),
+                                    request->screenPoint.x,
+                                    request->screenPoint.y);
+#if defined(ENABLE_TESTS)
+                        ++controller.rootPointerSwitchCount;
+#endif
                         static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-pointer", false));
                         continue;
                     }
+                    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-rejected point=({}, {})", rootSwitchScreenPt.x, rootSwitchScreenPt.y);
                 }
 
                 if (targetPopup)
@@ -2668,7 +3053,24 @@ void RunMenuModalLoop(MenuController& controller)
                 {
                     const size_t idx = targetPopup->hoveredIndex.value();
                     const auto& item = targetPopup->items[idx];
-                    if (! item.children.empty() && item.enabled)
+                    if (item.kind == MenuItemKind::Slider && item.enabled)
+                    {
+                        RECT wr{};
+                        if (GetWindowRect(targetPopup->hwnd, &wr) != FALSE)
+                        {
+                            const D2D1_POINT_2F pointDip =
+                                D2D1::Point2F(targetPopup->PixelToDip(static_cast<float>(screenPt.x - wr.left)),
+                                              targetPopup->PixelToDip(static_cast<float>(screenPt.y - wr.top)));
+                            const D2D1_RECT_F itemRect = GetVisibleItemRect(*targetPopup, idx);
+                            const uint32_t stopIndex   = HitTestSliderStop(item, itemRect, pointDip);
+                            const int commandId        = GetSliderCommandId(item, stopIndex);
+                            if (commandId != 0)
+                            {
+                                controller.InvokeItem(commandId);
+                            }
+                        }
+                    }
+                    else if (! item.children.empty() && item.enabled)
                     {
                         // Click on submenu item → open submenu
                         OpenSubmenu(controller, *targetPopup, idx, false);
@@ -2712,6 +3114,51 @@ void RunMenuModalLoop(MenuController& controller)
             }
 
             const UINT vk = static_cast<UINT>(msg.wParam);
+            const auto focusedIndex = [&]() noexcept -> std::optional<size_t>
+            {
+                auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
+                if (! idx.has_value() || idx.value() >= topmost->itemCount)
+                {
+                    return std::nullopt;
+                }
+                return idx;
+            };
+            const auto invokeFocusedSliderStop = [&](uint32_t stopIndex) -> bool
+            {
+                const auto idx = focusedIndex();
+                if (! idx.has_value())
+                {
+                    return false;
+                }
+                const auto& item = topmost->items[idx.value()];
+                if (item.kind != MenuItemKind::Slider || ! item.enabled)
+                {
+                    return false;
+                }
+                const int commandId = GetSliderCommandId(item, stopIndex);
+                if (commandId == 0)
+                {
+                    return true;
+                }
+                controller.InvokeItem(commandId);
+                return true;
+            };
+            const auto invokeFocusedSliderDelta = [&](int delta) -> bool
+            {
+                const auto idx = focusedIndex();
+                if (! idx.has_value())
+                {
+                    return false;
+                }
+                const auto& item = topmost->items[idx.value()];
+                if (item.kind != MenuItemKind::Slider || ! item.enabled || item.sliderStops.empty())
+                {
+                    return false;
+                }
+                const int current = static_cast<int>(ClampSliderValue(item));
+                const int maxStop = static_cast<int>(item.sliderStops.size() - 1u);
+                return invokeFocusedSliderStop(static_cast<uint32_t>(std::clamp(current + delta, 0, maxStop)));
+            };
             switch (vk)
             {
                 case VK_UP:
@@ -2723,7 +3170,7 @@ void RunMenuModalLoop(MenuController& controller)
                         topmost->keyboardIndex = next;
                         topmost->hoveredIndex.reset();
                         topmost->EnsureItemVisible(next.value());
-                        InvalidateRect(topmost->hwnd, nullptr, FALSE);
+                        RepaintPopupNow(*topmost);
                     }
                     continue;
                 }
@@ -2736,31 +3183,45 @@ void RunMenuModalLoop(MenuController& controller)
                         topmost->keyboardIndex = next;
                         topmost->hoveredIndex.reset();
                         topmost->EnsureItemVisible(next.value());
-                        InvalidateRect(topmost->hwnd, nullptr, FALSE);
+                        RepaintPopupNow(*topmost);
                     }
                     continue;
                 }
                 case VK_HOME:
                 {
+                    if (invokeFocusedSliderStop(0u))
+                    {
+                        continue;
+                    }
                     auto first = topmost->FindFirstNavigableItem();
                     if (first.has_value())
                     {
                         topmost->keyboardIndex = first;
                         topmost->hoveredIndex.reset();
                         topmost->EnsureItemVisible(first.value());
-                        InvalidateRect(topmost->hwnd, nullptr, FALSE);
+                        RepaintPopupNow(*topmost);
                     }
                     continue;
                 }
                 case VK_END:
                 {
+                    const auto idx = focusedIndex();
+                    if (idx.has_value())
+                    {
+                        const auto& item = topmost->items[idx.value()];
+                        if (item.kind == MenuItemKind::Slider && ! item.sliderStops.empty() && item.enabled)
+                        {
+                            static_cast<void>(invokeFocusedSliderStop(static_cast<uint32_t>(item.sliderStops.size() - 1u)));
+                            continue;
+                        }
+                    }
                     auto last = topmost->FindLastNavigableItem();
                     if (last.has_value())
                     {
                         topmost->keyboardIndex = last;
                         topmost->hoveredIndex.reset();
                         topmost->EnsureItemVisible(last.value());
-                        InvalidateRect(topmost->hwnd, nullptr, FALSE);
+                        RepaintPopupNow(*topmost);
                     }
                     continue;
                 }
@@ -2771,7 +3232,11 @@ void RunMenuModalLoop(MenuController& controller)
                     if (idx.has_value() && idx.value() < topmost->itemCount)
                     {
                         const auto& item = topmost->items[idx.value()];
-                        if (! item.children.empty() && item.enabled)
+                        if (item.kind == MenuItemKind::Slider && item.enabled)
+                        {
+                            static_cast<void>(invokeFocusedSliderStop(ClampSliderValue(item)));
+                        }
+                        else if (! item.children.empty() && item.enabled)
                         {
                             OpenSubmenu(controller, *topmost, idx.value(), true);
                         }
@@ -2799,6 +3264,10 @@ void RunMenuModalLoop(MenuController& controller)
                 }
                 case VK_RIGHT:
                 {
+                    if (invokeFocusedSliderDelta(1))
+                    {
+                        continue;
+                    }
                     auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
                     if (idx.has_value() && idx.value() < topmost->itemCount && ! topmost->items[idx.value()].children.empty() &&
                         topmost->items[idx.value()].enabled)
@@ -2818,6 +3287,10 @@ void RunMenuModalLoop(MenuController& controller)
                 }
                 case VK_LEFT:
                 {
+                    if (invokeFocusedSliderDelta(-1))
+                    {
+                        continue;
+                    }
                     if (controller.popups.size() > 1)
                     {
                         controller.CloseTopmostSubmenu();
@@ -2844,7 +3317,7 @@ void RunMenuModalLoop(MenuController& controller)
                     if (! item.children.empty() && item.enabled)
                     {
                         topmost->keyboardIndex = match;
-                        InvalidateRect(topmost->hwnd, nullptr, FALSE);
+                        RepaintPopupNow(*topmost);
                         OpenSubmenu(controller, *topmost, match.value(), true);
                     }
                     else if (IsInvokableMenuItem(item))
@@ -2889,7 +3362,20 @@ void RunMenuModalLoop(MenuController& controller)
     // Release capture
     if (const HWND captured = GetCapture(); captured && controller.FindPopupForHwnd(captured))
     {
+        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-release-capture captured={:#x} owner={:#x}",
+                    reinterpret_cast<uintptr_t>(captured),
+                    reinterpret_cast<uintptr_t>(controller.ownerHwnd));
         ReleaseCapture();
+    }
+    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-end owner={:#x} result={} capture={:#x}",
+                reinterpret_cast<uintptr_t>(controller.ownerHwnd),
+                controller.result.value_or(-1),
+                reinterpret_cast<uintptr_t>(GetCapture()));
+
+    const HWND currentFocus = GetFocus();
+    if (previousFocus && IsWindow(previousFocus) != FALSE && currentFocus && controller.FindPopupForHwnd(currentFocus))
+    {
+        SetFocus(previousFocus);
     }
 }
 
@@ -2904,6 +3390,17 @@ std::optional<int> ContextMenu::Show(
 {
     if (items.empty() || ! ownerHwnd)
         return std::nullopt;
+
+    DXUI_MENU_TRACE(
+        L"DxUi::MenuTrace ContextMenu show-begin owner={:#x} point=({}, {}) items={} focusFirst={} ignoreInitialUp=({}, {}) captureBefore={:#x}",
+        reinterpret_cast<uintptr_t>(ownerHwnd),
+        screenPoint.x,
+        screenPoint.y,
+        items.size(),
+        sessionCallbacks.focusFirstNavigableItem ? L"true" : L"false",
+        sessionCallbacks.ignoreInitialLeftButtonUp ? L"true" : L"false",
+        sessionCallbacks.ignoreInitialRightButtonUp ? L"true" : L"false",
+        reinterpret_cast<uintptr_t>(GetCapture()));
 
     MenuController controller;
     controller.ownerHwnd        = ownerHwnd;
@@ -2933,6 +3430,11 @@ std::optional<int> ContextMenu::Show(
     RunMenuModalLoop(controller);
 
     DestroyPopupChain(controller);
+
+    DXUI_MENU_TRACE(L"DxUi::MenuTrace ContextMenu show-end owner={:#x} result={} captureAfter={:#x}",
+                reinterpret_cast<uintptr_t>(ownerHwnd),
+                controller.result.value_or(-1),
+                reinterpret_cast<uintptr_t>(GetCapture()));
 
     return controller.result;
 }
@@ -2968,6 +3470,33 @@ bool DebugGetContextMenuPopupState(HWND hwnd, ContextMenuPopupDebugState& outSta
     outState.windowRectPx          = popup->windowRectPx;
     outState.hoveredIndex          = popup->hoveredIndex;
     outState.keyboardIndex         = popup->keyboardIndex;
+    outState.itemTexts.reserve(popup->itemCount);
+    outState.itemKinds.reserve(popup->itemCount);
+    outState.sliderValues.reserve(popup->itemCount);
+    outState.sliderStopCounts.reserve(popup->itemCount);
+    for (size_t itemIndex = 0; itemIndex < popup->itemCount; ++itemIndex)
+    {
+        std::wstring text;
+        static_cast<void>(DebugGetContextMenuItemDisplayText(popup->items[itemIndex], text));
+        outState.itemTexts.push_back(std::move(text));
+        outState.itemKinds.push_back(popup->items[itemIndex].kind);
+        if (popup->items[itemIndex].kind == MenuItemKind::Slider)
+        {
+            outState.sliderValues.push_back(ClampSliderValue(popup->items[itemIndex]));
+            outState.sliderStopCounts.push_back(static_cast<uint32_t>(popup->items[itemIndex].sliderStops.size()));
+        }
+        else
+        {
+            outState.sliderValues.push_back(0u);
+            outState.sliderStopCounts.push_back(0u);
+        }
+    }
+    outState.renderCount           = popup->host.DebugGetRenderCount();
+    if (popup->controller)
+    {
+        outState.rootPointerSwitchCount          = popup->controller->rootPointerSwitchCount;
+        outState.rootSwitchImmediateRenderCount = popup->controller->rootSwitchImmediateRenderCount;
+    }
     return true;
 }
 

@@ -1,5 +1,6 @@
 #include "FileSystemCurl.Internal.h"
 
+#include <chrono>
 #include <span>
 #include <unordered_map>
 
@@ -679,80 +680,7 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
     return S_OK;
 }
 
-[[nodiscard]] bool TryParseImapUidFromLeafName(std::wstring_view leafName, uint64_t& outUid) noexcept
-{
-    outUid = 0;
-
-    if (leafName.size() < 5u)
-    {
-        return false;
-    }
-
-    constexpr std::wstring_view kExt = L".eml";
-    const std::wstring_view ext      = leafName.substr(leafName.size() - kExt.size());
-
-    for (size_t i = 0; i < kExt.size(); ++i)
-    {
-        wchar_t a = ext[i];
-        wchar_t b = kExt[i];
-        if (a >= L'A' && a <= L'Z')
-        {
-            a = static_cast<wchar_t>(a - L'A' + L'a');
-        }
-        if (a != b)
-        {
-            return false;
-        }
-    }
-
-    const std::wstring_view base = leafName.substr(0, leafName.size() - kExt.size());
-    if (base.empty())
-    {
-        return false;
-    }
-
-    size_t digitsEnd   = base.size();
-    size_t digitsStart = digitsEnd;
-    while (digitsStart > 0 && base[digitsStart - 1u] >= L'0' && base[digitsStart - 1u] <= L'9')
-    {
-        --digitsStart;
-    }
-
-    if (digitsStart == digitsEnd)
-    {
-        return false;
-    }
-
-    uint64_t value = 0;
-    for (size_t i = digitsStart; i < digitsEnd; ++i)
-    {
-        const wchar_t ch     = base[i];
-        const uint64_t digit = static_cast<uint64_t>(ch - L'0');
-        if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10u)
-        {
-            return false;
-        }
-        value = (value * 10u) + digit;
-    }
-
-    outUid = value;
-    return true;
-}
-
 [[nodiscard]] bool TryExtractImapLiteralSize(std::string_view data, size_t& literalStart, uint64_t& literalSize) noexcept;
-
-struct ImapMessageSummary
-{
-    uint64_t uid       = 0;
-    uint64_t sizeBytes = 0;
-    bool flagged       = false;
-    bool seen          = false;
-    bool deleted       = false;
-    __int64 sentTime   = 0;
-    __int64 recvTime   = 0;
-    std::wstring subject;
-    std::wstring from;
-};
 
 [[nodiscard]] constexpr char AsciiLower(char ch) noexcept
 {
@@ -1919,303 +1847,6 @@ struct ImapHeaderFields
     return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
 }
 
-[[nodiscard]] bool IsAsciiHexDigit(char ch) noexcept
-{
-    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
-}
-
-[[nodiscard]] uint8_t AsciiHexValue(char ch) noexcept
-{
-    if (ch >= '0' && ch <= '9')
-    {
-        return static_cast<uint8_t>(ch - '0');
-    }
-    if (ch >= 'a' && ch <= 'f')
-    {
-        return static_cast<uint8_t>(10 + (ch - 'a'));
-    }
-    if (ch >= 'A' && ch <= 'F')
-    {
-        return static_cast<uint8_t>(10 + (ch - 'A'));
-    }
-    return 0;
-}
-
-[[nodiscard]] bool TryDecodeRfc2047Q(std::string_view encodedText, std::string& outBytes) noexcept
-{
-    outBytes.clear();
-    outBytes.reserve(encodedText.size());
-
-    for (size_t i = 0; i < encodedText.size(); ++i)
-    {
-        const char ch = encodedText[i];
-        if (ch == '_')
-        {
-            outBytes.push_back(' ');
-            continue;
-        }
-
-        if (ch == '=' && i + 2u < encodedText.size() && IsAsciiHexDigit(encodedText[i + 1u]) && IsAsciiHexDigit(encodedText[i + 2u]))
-        {
-            const uint8_t value = static_cast<uint8_t>((AsciiHexValue(encodedText[i + 1u]) << 4) | AsciiHexValue(encodedText[i + 2u]));
-            outBytes.push_back(static_cast<char>(value));
-            i += 2u;
-            continue;
-        }
-
-        outBytes.push_back(ch);
-    }
-
-    return true;
-}
-
-[[nodiscard]] int Base64Value(char ch) noexcept
-{
-    if (ch >= 'A' && ch <= 'Z')
-    {
-        return ch - 'A';
-    }
-    if (ch >= 'a' && ch <= 'z')
-    {
-        return 26 + (ch - 'a');
-    }
-    if (ch >= '0' && ch <= '9')
-    {
-        return 52 + (ch - '0');
-    }
-    if (ch == '+')
-    {
-        return 62;
-    }
-    if (ch == '/')
-    {
-        return 63;
-    }
-    return -1;
-}
-
-[[nodiscard]] bool TryDecodeRfc2047B(std::string_view encodedText, std::string& outBytes) noexcept
-{
-    outBytes.clear();
-    outBytes.reserve((encodedText.size() * 3u) / 4u);
-
-    uint32_t acc = 0;
-    int bits     = 0;
-
-    for (const char ch : encodedText)
-    {
-        if (IsAsciiWhitespace(ch))
-        {
-            continue;
-        }
-
-        if (ch == '=')
-        {
-            break;
-        }
-
-        const int v = Base64Value(ch);
-        if (v < 0)
-        {
-            return false;
-        }
-
-        acc = (acc << 6) | static_cast<uint32_t>(v);
-        bits += 6;
-
-        if (bits >= 8)
-        {
-            bits -= 8;
-            const uint8_t byte = static_cast<uint8_t>((acc >> bits) & 0xFFu);
-            outBytes.push_back(static_cast<char>(byte));
-        }
-    }
-
-    return true;
-}
-
-[[nodiscard]] std::wstring Utf16FromCodePage(std::string_view text, UINT codePage) noexcept
-{
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(codePage, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring out(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(codePage, 0, text.data(), static_cast<int>(text.size()), out.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return out;
-}
-
-[[nodiscard]] bool IsAsciiNoCaseEqual(std::string_view a, std::string_view b) noexcept
-{
-    if (a.size() != b.size())
-    {
-        return false;
-    }
-
-    for (size_t i = 0; i < a.size(); ++i)
-    {
-        if (AsciiLower(a[i]) != AsciiLower(b[i]))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-[[nodiscard]] std::wstring DecodeRfc2047EncodedWordsToUtf16(std::string_view headerValue) noexcept
-{
-    if (headerValue.empty())
-    {
-        return {};
-    }
-
-    std::wstring out;
-    bool appendedAnything = false;
-
-    size_t pos = 0;
-    while (pos < headerValue.size())
-    {
-        const size_t marker = headerValue.find("=?", pos);
-        if (marker == std::string_view::npos)
-        {
-            const std::wstring tail = Utf16FromImapHeaderValue(headerValue.substr(pos));
-            if (! tail.empty() || headerValue.substr(pos).empty())
-            {
-                out.append(tail);
-                appendedAnything = appendedAnything || ! tail.empty();
-            }
-            break;
-        }
-
-        if (marker > pos)
-        {
-            const std::wstring plain = Utf16FromImapHeaderValue(headerValue.substr(pos, marker - pos));
-            if (! plain.empty())
-            {
-                out.append(plain);
-                appendedAnything = true;
-            }
-        }
-
-        const size_t end = headerValue.find("?=", marker + 2u);
-        if (end == std::string_view::npos)
-        {
-            const std::wstring rest = Utf16FromImapHeaderValue(headerValue.substr(marker));
-            out.append(rest);
-            appendedAnything = appendedAnything || ! rest.empty();
-            break;
-        }
-
-        const std::string_view token = headerValue.substr(marker, (end + 2u) - marker);
-
-        // Parse =?charset?encoding?encoded-text?=
-        const size_t q1 = token.find('?', 2u);
-        const size_t q2 = (q1 != std::string_view::npos) ? token.find('?', q1 + 1u) : std::string_view::npos;
-        const size_t q3 = (q2 != std::string_view::npos) ? token.find('?', q2 + 1u) : std::string_view::npos;
-
-        std::wstring decodedWide;
-        bool decodedOk = false;
-        if (q1 != std::string_view::npos && q2 != std::string_view::npos && q3 != std::string_view::npos && q3 + 2u == token.size())
-        {
-            const std::string_view charset     = token.substr(2u, q1 - 2u);
-            const std::string_view encodingTok = token.substr(q1 + 1u, q2 - (q1 + 1u));
-            const std::string_view encodedText = token.substr(q2 + 1u, q3 - (q2 + 1u));
-
-            if (! charset.empty() && ! encodingTok.empty())
-            {
-                std::string bytes;
-                bool bytesOk = false;
-
-                if (encodingTok.size() == 1u && (encodingTok[0] == 'Q' || encodingTok[0] == 'q'))
-                {
-                    bytesOk = TryDecodeRfc2047Q(encodedText, bytes);
-                }
-                else if (encodingTok.size() == 1u && (encodingTok[0] == 'B' || encodingTok[0] == 'b'))
-                {
-                    bytesOk = TryDecodeRfc2047B(encodedText, bytes);
-                }
-
-                if (bytesOk)
-                {
-                    // Common charsets: utf-8, us-ascii, iso-8859-1, windows-1252.
-                    if (IsAsciiNoCaseEqual(charset, "utf-8") || IsAsciiNoCaseEqual(charset, "utf8"))
-                    {
-                        decodedWide = Utf16FromUtf8(bytes);
-                        if (decodedWide.empty() && ! bytes.empty())
-                        {
-                            decodedWide = Utf16FromCodePage(bytes, 1252);
-                        }
-                    }
-                    else if (IsAsciiNoCaseEqual(charset, "us-ascii") || IsAsciiNoCaseEqual(charset, "ascii"))
-                    {
-                        decodedWide = Utf16FromCodePage(bytes, 20127);
-                    }
-                    else if (IsAsciiNoCaseEqual(charset, "iso-8859-1") || IsAsciiNoCaseEqual(charset, "latin1"))
-                    {
-                        decodedWide = Utf16FromCodePage(bytes, 28591);
-                    }
-                    else if (IsAsciiNoCaseEqual(charset, "windows-1252") || IsAsciiNoCaseEqual(charset, "cp1252"))
-                    {
-                        decodedWide = Utf16FromCodePage(bytes, 1252);
-                    }
-                    else
-                    {
-                        // Best-effort fallback.
-                        decodedWide = Utf16FromUtf8(bytes);
-                        if (decodedWide.empty() && ! bytes.empty())
-                        {
-                            decodedWide = Utf16FromCodePage(bytes, 1252);
-                        }
-                    }
-
-                    decodedOk = ! decodedWide.empty() || bytes.empty();
-                }
-            }
-        }
-
-        if (decodedOk)
-        {
-            out.append(decodedWide);
-            appendedAnything = appendedAnything || ! decodedWide.empty();
-        }
-        else
-        {
-            // Not a valid encoded-word; keep as literal best-effort.
-            const std::wstring literal = Utf16FromImapHeaderValue(token);
-            out.append(literal);
-            appendedAnything = appendedAnything || ! literal.empty();
-        }
-
-        pos = end + 2u;
-
-        // RFC2047: ignore whitespace between adjacent encoded-words.
-        size_t ws = pos;
-        while (ws < headerValue.size() && IsAsciiWhitespace(headerValue[ws]))
-        {
-            ++ws;
-        }
-        if (ws > pos && ws + 1u < headerValue.size() && headerValue.substr(ws).starts_with("=?"))
-        {
-            pos = ws;
-        }
-    }
-
-    return appendedAnything ? out : Utf16FromImapHeaderValue(headerValue);
-}
-
 [[nodiscard]] std::wstring ExtractEmailAddressFromFromHeader(std::string_view fromHeader) noexcept
 {
     // Prefer addr-spec inside "<...>".
@@ -2274,75 +1905,6 @@ struct ImapHeaderFields
     }
 
     return {};
-}
-
-[[nodiscard]] std::wstring SanitizeImapMessageNamePart(std::wstring_view text) noexcept
-{
-    std::wstring out;
-    out.reserve(text.size());
-
-    for (const wchar_t ch : text)
-    {
-        if (ch < 0x20)
-        {
-            out.push_back(L'_');
-            continue;
-        }
-
-        switch (ch)
-        {
-            case L'<':
-            case L'>':
-            case L':':
-            case L'"':
-            case L'/':
-            case L'\\':
-            case L'|':
-            case L'?':
-            case L'*': out.push_back(L'_'); break;
-            default: out.push_back(ch); break;
-        }
-    }
-
-    while (! out.empty() && (out.back() == L' ' || out.back() == L'.'))
-    {
-        out.pop_back();
-    }
-
-    return out;
-}
-
-[[nodiscard]] std::wstring TruncateForLeafName(std::wstring_view text, size_t maxChars) noexcept
-{
-    if (text.size() <= maxChars)
-    {
-        return std::wstring(text);
-    }
-
-    if (maxChars <= 1u)
-    {
-        return L"…";
-    }
-
-    std::wstring out(text.substr(0, maxChars - 1u));
-    out.append(L"…");
-    return out;
-}
-
-[[nodiscard]] std::wstring BuildImapMessageLeafName(std::wstring_view subject, std::wstring_view from, uint64_t uid) noexcept
-{
-    static constexpr std::wstring_view kSeparator = L"｜"; // Fullwidth vertical line (ASCII '|' is invalid in Windows filenames).
-
-    std::wstring safeSubject = SanitizeImapMessageNamePart(subject.empty() ? L"(no subject)" : subject);
-    std::wstring safeFrom    = SanitizeImapMessageNamePart(from.empty() ? L"(unknown sender)" : from);
-
-    safeSubject = TruncateForLeafName(safeSubject, 96u);
-    safeFrom    = TruncateForLeafName(safeFrom, 64u);
-
-    const std::wstring_view subjectPart = safeSubject.empty() ? std::wstring_view(L"message") : std::wstring_view(safeSubject);
-    const std::wstring_view fromPart    = safeFrom.empty() ? std::wstring_view(L"sender") : std::wstring_view(safeFrom);
-
-    return std::format(L"{}{}{}{}{}.eml", subjectPart, kSeparator, fromPart, kSeparator, uid);
 }
 
 [[nodiscard]] size_t FindImapUntaggedLine(std::string_view response, size_t start) noexcept
@@ -2642,17 +2204,22 @@ struct ImapHeaderFields
         requestText = std::format("UID FETCH {} (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE)", uidSetText);
 
         std::string response;
+        const auto fetchStarted = std::chrono::steady_clock::now();
         HRESULT hr = CurlPerformImapCustomRequest(conn, mailboxPath, requestText, response);
+        Debug::Perf::EmitDurationUs(
+            L"filesystem.imap.fetch_summaries_us", Debug::Perf::ElapsedUs(fetchStarted), static_cast<uint64_t>(endIndex - startIndex), static_cast<uint64_t>(uidSetText.size()), hr);
         if (FAILED(hr))
         {
             return hr;
         }
+        Debug::Perf::EmitValue(L"filesystem.imap.summary_response_bytes", static_cast<uint64_t>(response.size()), hr);
 
         size_t fetchParseFailures    = 0;
         size_t missingUidCount       = 0;
         size_t envelopeParseFailures = 0;
         size_t fetchBlocksParsed     = 0;
 
+        const auto parseStarted = std::chrono::steady_clock::now();
         size_t parsePos = 0;
         while (true)
         {
@@ -2847,6 +2414,12 @@ struct ImapHeaderFields
 
             parsePos = nextPos;
         }
+        Debug::Perf::EmitDurationUs(
+            L"filesystem.imap.summary_parse_us",
+            Debug::Perf::ElapsedUs(parseStarted),
+            static_cast<uint64_t>(fetchBlocksParsed),
+            static_cast<uint64_t>(fetchParseFailures + missingUidCount + envelopeParseFailures),
+            hr);
 
         size_t missingRequested = 0;
         std::array<uint64_t, 5> missingSamples{};
@@ -3316,6 +2889,57 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     return out;
 }
 
+[[nodiscard]] HRESULT ImapFetchMailboxStatus(const ConnectionInfo& conn,
+                                             std::wstring_view mailboxPath,
+                                             wchar_t delimiter,
+                                             ImapMailboxStatus& outStatus) noexcept
+{
+    outStatus = {};
+
+    const std::wstring normalized   = NormalizePluginPath(mailboxPath);
+    const std::wstring_view trimmed = TrimTrailingSlash(normalized);
+    if (trimmed.empty() || trimmed == L"/")
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
+    std::wstring_view mailboxName = trimmed;
+    if (! mailboxName.empty() && mailboxName.front() == L'/')
+    {
+        mailboxName.remove_prefix(1);
+    }
+
+    const std::wstring serverName = ImapMailboxNameToServerMailboxName(mailboxName, delimiter);
+    if (serverName.empty())
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    const std::string serverNameUtf8 = Utf8FromUtf16(serverName);
+    if (serverNameUtf8.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+    }
+
+    const std::string requestText = std::format("STATUS {} (MESSAGES RECENT UIDNEXT UIDVALIDITY UNSEEN)", ImapQuoteString(serverNameUtf8));
+
+    std::string response;
+    const auto started = std::chrono::steady_clock::now();
+    HRESULT hr         = CurlPerformImapCustomRequest(conn, L"/", requestText, response);
+    Debug::Perf::EmitDurationUs(L"filesystem.imap.status_mailbox_us", Debug::Perf::ElapsedUs(started), static_cast<uint64_t>(response.size()), 0u, hr);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (! TryParseImapMailboxStatus(response, outStatus))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    return S_OK;
+}
+
 [[nodiscard]] HRESULT ImapDownloadMessageToFile(const ConnectionInfo& conn, std::wstring_view pluginPath, HANDLE file) noexcept
 {
     const std::wstring fullPath = JoinPluginPathWide(conn.basePathWide, pluginPath);
@@ -3536,13 +3160,17 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
                                                std::wstring_view pluginPath,
                                                std::vector<FilesInformationCurl::Entry>& entries) noexcept
 {
+    Debug::Perf::Scope perf(L"filesystem.imap.read_directory_us");
     entries.clear();
 
     std::vector<ImapMailboxEntry> mailboxes;
     wchar_t delimiter = L'\0';
+    auto listStarted  = std::chrono::steady_clock::now();
     HRESULT hr        = ImapListMailboxes(conn, mailboxes, &delimiter);
+    Debug::Perf::EmitDurationUs(L"filesystem.imap.list_mailboxes_us", Debug::Perf::ElapsedUs(listStarted), static_cast<uint64_t>(mailboxes.size()), 0u, hr);
     if (FAILED(hr))
     {
+        perf.SetHr(hr);
         return hr;
     }
 
@@ -3622,19 +3250,24 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
 
     if (! selectableMailbox)
     {
+        perf.SetValue0(entries.size());
         return S_OK;
     }
 
     std::vector<uint64_t> uids;
+    auto listUidsStarted = std::chrono::steady_clock::now();
     hr = ImapListMessageUids(conn, mailboxName, delimiter, uids);
+    Debug::Perf::EmitDurationUs(L"filesystem.imap.list_uids_us", Debug::Perf::ElapsedUs(listUidsStarted), static_cast<uint64_t>(uids.size()), 0u, hr);
     if (FAILED(hr))
     {
+        perf.SetHr(hr);
         return hr;
     }
 
     std::sort(uids.begin(), uids.end(), std::greater<>());
     if (uids.empty())
     {
+        perf.SetValue0(entries.size());
         return S_OK;
     }
 
@@ -3656,70 +3289,121 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
 
     constexpr size_t kFetchChunkSize = 200u;
     HRESULT metaHr                   = S_OK;
+    size_t repairFetchCount          = 0;
+    size_t missingSummaryCount        = 0;
+
+    auto collectMissingSummaries = [&summaries](std::span<const uint64_t> requested) -> std::vector<uint64_t>
+    {
+        std::vector<uint64_t> missing;
+        missing.reserve(requested.size());
+        for (const uint64_t uid : requested)
+        {
+            if (summaries.find(uid) == summaries.end())
+            {
+                missing.push_back(uid);
+            }
+        }
+        return missing;
+    };
+
+    auto repairMissingSummaries = [&](std::span<const uint64_t> missingUids, HRESULT reasonHr) -> HRESULT
+    {
+        if (missingUids.empty())
+        {
+            return S_OK;
+        }
+
+        constexpr size_t kRepairBatchSize = 16u;
+        HRESULT repairResult              = S_OK;
+        const std::vector<ImapUidBatchRange> ranges = BuildImapUidBatchRanges(missingUids.size(), kRepairBatchSize);
+        for (const ImapUidBatchRange& range : ranges)
+        {
+            const std::span<const uint64_t> batch(missingUids.data() + range.offset, range.count);
+
+            ++repairFetchCount;
+            const HRESULT batchHr = ImapFetchMessageSummaries(conn, serverMailboxPath, batch, summaries);
+            if (FAILED(batchHr))
+            {
+                if (SUCCEEDED(repairResult))
+                {
+                    repairResult = batchHr;
+                }
+                Debug::Warning(L"imap message summary repair fetch failed: hr={:#x} reason={:#x} mailbox='{}' server='{}' missing={}",
+                               batchHr,
+                               reasonHr,
+                               mailboxName,
+                               Utf16FromUtf8(conn.host),
+                               batch.size());
+            }
+
+            for (const uint64_t uid : batch)
+            {
+                if (summaries.find(uid) != summaries.end())
+                {
+                    continue;
+                }
+
+                const uint64_t singleUid = uid;
+                const std::span<const uint64_t> one(&singleUid, 1);
+                ++repairFetchCount;
+                const HRESULT singleHr = ImapFetchMessageSummaries(conn, serverMailboxPath, one, summaries);
+                if (FAILED(singleHr))
+                {
+                    if (SUCCEEDED(repairResult))
+                    {
+                        repairResult = singleHr;
+                    }
+                    Debug::Warning(L"imap message summary single-uid repair fetch failed: hr={:#x} reason={:#x} mailbox='{}' server='{}' uid={}",
+                                   singleHr,
+                                   reasonHr,
+                                   mailboxName,
+                                   Utf16FromUtf8(conn.host),
+                                   uid);
+                }
+            }
+        }
+
+        return repairResult;
+    };
+
     for (size_t start = 0; start < uids.size(); start += kFetchChunkSize)
     {
         const size_t count = std::min(kFetchChunkSize, uids.size() - start);
         const std::span<const uint64_t> chunk(uids.data() + start, count);
-        metaHr = ImapFetchMessageSummaries(conn, serverMailboxPath, chunk, summaries);
-        if (FAILED(metaHr))
+        const HRESULT chunkHr = ImapFetchMessageSummaries(conn, serverMailboxPath, chunk, summaries);
+        if (FAILED(chunkHr))
         {
-            break;
+            bool chunkFailureRecorded = false;
+            if (SUCCEEDED(metaHr))
+            {
+                metaHr               = chunkHr;
+                chunkFailureRecorded = true;
+            }
+            Debug::Warning(L"imap message summary bulk fetch failed: hr={:#x} mailbox='{}' server='{}' requested={}",
+                           chunkHr,
+                           mailboxName,
+                           Utf16FromUtf8(conn.host),
+                           chunk.size());
+
+            missingSummaryCount += chunk.size();
+            const HRESULT repairHr = repairMissingSummaries(chunk, chunkHr);
+            if (SUCCEEDED(repairHr) && chunkFailureRecorded)
+            {
+                metaHr = S_OK;
+            }
+            continue;
         }
 
-        // Some servers are picky about UID sets and may return incomplete FETCH results. If we only missed a few,
-        // retry those UIDs once to avoid a directory listing full of 0B / missing metadata entries.
-        constexpr size_t kMaxRepairUids = 16u;
-        std::array<uint64_t, kMaxRepairUids> missing{};
-        size_t missingCount = 0;
-        size_t missingTotal = 0;
-        for (const uint64_t uid : chunk)
+        // Some servers are picky about multi-UID FETCH sets. Repair any missed summaries in smaller batches,
+        // then single UID requests, so pane metadata can match the targeted Properties path.
+        const std::vector<uint64_t> missing = collectMissingSummaries(chunk);
+        if (! missing.empty())
         {
-            if (summaries.find(uid) != summaries.end())
+            missingSummaryCount += missing.size();
+            const HRESULT repairHr = repairMissingSummaries(missing, chunkHr);
+            if (FAILED(repairHr) && SUCCEEDED(metaHr))
             {
-                continue;
-            }
-
-            ++missingTotal;
-            if (missingCount < missing.size())
-            {
-                missing[missingCount++] = uid;
-            }
-        }
-
-        if (missingTotal > 0 && missingTotal <= kMaxRepairUids)
-        {
-            const std::span<const uint64_t> missingSpan(missing.data(), missingCount);
-            const HRESULT repairHr = ImapFetchMessageSummaries(conn, serverMailboxPath, missingSpan, summaries);
-            if (FAILED(repairHr))
-            {
-                Debug::Warning(L"imap message summary repair fetch failed: hr={:#x} mailbox='{}' server='{}' missing={}",
-                               repairHr,
-                               mailboxName,
-                               Utf16FromUtf8(conn.host),
-                               missingTotal);
-            }
-            else
-            {
-                for (size_t i = 0; i < missingCount; ++i)
-                {
-                    const uint64_t uid = missing[i];
-                    if (summaries.find(uid) != summaries.end())
-                    {
-                        continue;
-                    }
-
-                    const uint64_t singleUid = uid;
-                    const std::span<const uint64_t> one(&singleUid, 1);
-                    const HRESULT singleHr = ImapFetchMessageSummaries(conn, serverMailboxPath, one, summaries);
-                    if (FAILED(singleHr))
-                    {
-                        Debug::Warning(L"imap message summary single-uid repair fetch failed: hr={:#x} mailbox='{}' server='{}' uid={}",
-                                       singleHr,
-                                       mailboxName,
-                                       Utf16FromUtf8(conn.host),
-                                       uid);
-                    }
-                }
+                metaHr = repairHr;
             }
         }
     }
@@ -3727,9 +3411,11 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     if (FAILED(metaHr))
     {
         Debug::Warning(L"imap message summary fetch failed: hr={:#x} mailbox='{}' server='{}'", metaHr, mailboxName, Utf16FromUtf8(conn.host));
-        summaries.clear();
     }
+    Debug::Perf::EmitValue(L"filesystem.imap.summary_missing_count", static_cast<uint64_t>(missingSummaryCount), metaHr);
+    Debug::Perf::EmitValue(L"filesystem.imap.summary_repair_count", static_cast<uint64_t>(repairFetchCount), metaHr);
 
+    auto buildStarted = std::chrono::steady_clock::now();
     for (const uint64_t uid : uids)
     {
         FilesInformationCurl::Entry entry{};
@@ -3768,8 +3454,137 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         }
         entries.push_back(std::move(entry));
     }
+    Debug::Perf::EmitDurationUs(
+        L"filesystem.imap.build_fileinfo_us", Debug::Perf::ElapsedUs(buildStarted), static_cast<uint64_t>(entries.size()), static_cast<uint64_t>(summaries.size()), metaHr);
+    perf.SetValue0(static_cast<uint64_t>(entries.size()));
+    perf.SetValue1(static_cast<uint64_t>(uids.size()));
+    perf.SetHr(metaHr);
 
     return S_OK;
+}
+
+[[nodiscard]] void FillImapMessageEntryFromSummary(FilesInformationCurl::Entry& entry, const ImapMessageSummary& meta, uint64_t uid) noexcept
+{
+    entry.attributes    = FILE_ATTRIBUTE_NORMAL;
+    entry.fileIndex     = (uid <= static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)())) ? static_cast<unsigned long>(uid) : 0u;
+    entry.sizeBytes     = meta.sizeBytes;
+    entry.creationTime  = meta.sentTime;
+    entry.changeTime    = meta.recvTime;
+    entry.lastWriteTime = meta.recvTime;
+
+    if (meta.flagged)
+    {
+        entry.attributes |= kImapFileAttributeMarked;
+    }
+    if (! meta.seen)
+    {
+        entry.attributes |= kImapFileAttributeUnread;
+    }
+    if (meta.deleted)
+    {
+        entry.attributes |= kImapFileAttributeDeleted;
+    }
+
+    entry.name = BuildImapMessageLeafName(meta.subject, meta.from, uid);
+    if (entry.name.empty())
+    {
+        entry.name = std::format(L"{}.eml", uid);
+    }
+}
+
+[[nodiscard]] HRESULT ImapGetEntryInfo(const ConnectionInfo& conn, std::wstring_view path, FilesInformationCurl::Entry& out) noexcept
+{
+    out = {};
+
+    const std::wstring fullPath     = JoinPluginPathWide(conn.basePathWide, path);
+    const std::wstring normalized   = NormalizePluginPath(fullPath);
+    const std::wstring_view trimmed = TrimTrailingSlash(normalized);
+    if (trimmed.empty() || trimmed == L"/")
+    {
+        out.attributes = FILE_ATTRIBUTE_DIRECTORY;
+        out.name       = L"/";
+        return S_OK;
+    }
+
+    const std::wstring_view leaf = LeafName(trimmed);
+    uint64_t uid                 = 0;
+    if (TryParseImapUidFromLeafName(leaf, uid))
+    {
+        std::wstring mailboxPath = ParentPath(trimmed);
+        mailboxPath              = std::wstring(TrimTrailingSlash(mailboxPath));
+        if (mailboxPath.empty() || mailboxPath == L"/")
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        }
+
+        wchar_t delimiter = L'\0';
+        HRESULT hr        = ImapGetHierarchyDelimiter(conn, delimiter);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        const std::wstring serverMailboxPath = ImapMailboxPathToServerMailboxPath(mailboxPath, delimiter);
+        if (serverMailboxPath.empty())
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        std::unordered_map<uint64_t, ImapMessageSummary> summaries;
+        const uint64_t uidArr[1]{uid};
+        hr = ImapFetchMessageSummaries(conn, serverMailboxPath, std::span<const uint64_t>(uidArr, 1), summaries);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        const auto it = summaries.find(uid);
+        if (it == summaries.end())
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+
+        FillImapMessageEntryFromSummary(out, it->second, uid);
+        return S_OK;
+    }
+
+    std::vector<ImapMailboxEntry> mailboxes;
+    wchar_t delimiter = L'\0';
+    HRESULT hr        = ImapListMailboxes(conn, mailboxes, &delimiter);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    std::wstring_view mailboxName = trimmed;
+    if (! mailboxName.empty() && mailboxName.front() == L'/')
+    {
+        mailboxName.remove_prefix(1);
+    }
+
+    std::vector<std::wstring_view> targetSegs;
+    SplitSlashPath(mailboxName, targetSegs);
+
+    std::vector<std::wstring_view> mailboxSegs;
+    for (const auto& mailbox : mailboxes)
+    {
+        if (mailbox.name == mailboxName)
+        {
+            out.attributes = FILE_ATTRIBUTE_DIRECTORY;
+            out.name       = std::wstring(LeafName(mailboxName));
+            return S_OK;
+        }
+
+        SplitSlashPath(mailbox.name, mailboxSegs);
+        if (StartsWithSegments(mailboxSegs, targetSegs) && mailboxSegs.size() > targetSegs.size())
+        {
+            out.attributes = FILE_ATTRIBUTE_DIRECTORY;
+            out.name       = std::wstring(LeafName(mailboxName));
+            return S_OK;
+        }
+    }
+
+    return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
 }
 
 [[nodiscard]] HRESULT ReadDirectoryEntries(const ConnectionInfo& conn, std::wstring_view path, std::vector<FilesInformationCurl::Entry>& entries) noexcept
@@ -3784,6 +3599,11 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
 
 [[nodiscard]] HRESULT GetEntryInfo(const ConnectionInfo& conn, std::wstring_view path, FilesInformationCurl::Entry& out) noexcept
 {
+    if (conn.protocol == Protocol::Imap)
+    {
+        return ImapGetEntryInfo(conn, path, out);
+    }
+
     const std::wstring normalized = NormalizePluginPath(path);
     if (normalized == L"/")
     {
@@ -3985,6 +3805,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
                                                                 true,
                                                                 [&](const FileSystemCurlInternal::ResolvedLocation& resolved) noexcept
     {
+        const auto propertiesStarted = std::chrono::steady_clock::now();
         FilesInformationCurl::Entry entry{};
         HRESULT hr = FileSystemCurlInternal::GetEntryInfo(resolved.connection, resolved.remotePath, entry);
         if (FAILED(hr))
@@ -4037,13 +3858,14 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
         };
 
         const std::wstring normalizedPath = FileSystemCurlInternal::NormalizePluginPath(resolved.remotePath);
+        const bool isDirectory            = (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 
         yyjson_mut_val* general = addSection("general");
         addField(general, "name", FileSystemCurlInternal::Utf8FromUtf16(entry.name));
         addField(general, "path", FileSystemCurlInternal::Utf8FromUtf16(normalizedPath));
-        addField(general, "type", (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ? std::string("directory") : std::string("file"));
+        addField(general, "type", isDirectory ? std::string("directory") : std::string("file"));
         addField(general, "attributes", std::format("0x{:08x}", entry.attributes));
-        if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        if (! isDirectory)
         {
             addField(general, "sizeBytes", std::format("{}", entry.sizeBytes));
         }
@@ -4088,7 +3910,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
             addTimestampField(timestamps, "changeTime", entry.changeTime);
         }
 
-        if (resolved.connection.protocol == FileSystemCurlInternal::Protocol::Imap && (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        if (resolved.connection.protocol == FileSystemCurlInternal::Protocol::Imap && ! isDirectory)
         {
             const std::wstring fullPath = FileSystemCurlInternal::JoinPluginPathWide(resolved.connection.basePathWide, resolved.remotePath);
 
@@ -4143,6 +3965,71 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
                 }
             }
         }
+        else if (resolved.connection.protocol == FileSystemCurlInternal::Protocol::Imap && isDirectory)
+        {
+            const std::wstring fullPath   = FileSystemCurlInternal::JoinPluginPathWide(resolved.connection.basePathWide, resolved.remotePath);
+            const std::wstring normalized = FileSystemCurlInternal::NormalizePluginPath(fullPath);
+            const std::wstring mailboxPath(FileSystemCurlInternal::TrimTrailingSlash(normalized));
+
+            yyjson_mut_val* imap = addSection("imap");
+            addField(imap, "fullPath", FileSystemCurlInternal::Utf8FromUtf16(fullPath));
+            addField(imap, "mailboxPath", FileSystemCurlInternal::Utf8FromUtf16(mailboxPath.empty() ? std::wstring(L"/") : mailboxPath));
+            addField(imap, "isRoot", (mailboxPath.empty() || mailboxPath == L"/") ? "true" : "false");
+
+            wchar_t delimiter = L'\0';
+            hr                = FileSystemCurlInternal::ImapGetHierarchyDelimiter(resolved.connection, delimiter);
+            if (SUCCEEDED(hr))
+            {
+                if (delimiter == L'\0')
+                {
+                    addField(imap, "hierarchyDelimiter", "NIL");
+                }
+                else
+                {
+                    addField(imap, "hierarchyDelimiter", FileSystemCurlInternal::Utf8FromUtf16(std::wstring(1u, delimiter)));
+                }
+
+                if (! mailboxPath.empty() && mailboxPath != L"/")
+                {
+                    const std::wstring serverMailboxPath = FileSystemCurlInternal::ImapMailboxPathToServerMailboxPath(mailboxPath, delimiter);
+                    if (! serverMailboxPath.empty())
+                    {
+                        addField(imap, "serverMailboxPath", FileSystemCurlInternal::Utf8FromUtf16(serverMailboxPath));
+
+                        FileSystemCurlInternal::ImapMailboxStatus status;
+                        const HRESULT statusHr = FileSystemCurlInternal::ImapFetchMailboxStatus(resolved.connection, mailboxPath, delimiter, status);
+                        addField(imap, "statusAvailable", SUCCEEDED(statusHr) ? "true" : "false");
+                        if (SUCCEEDED(statusHr))
+                        {
+                            if (status.messages.has_value())
+                            {
+                                addField(imap, "messages", std::format("{}", status.messages.value()));
+                            }
+                            if (status.recent.has_value())
+                            {
+                                addField(imap, "recent", std::format("{}", status.recent.value()));
+                            }
+                            if (status.uidNext.has_value())
+                            {
+                                addField(imap, "uidNext", std::format("{}", status.uidNext.value()));
+                            }
+                            if (status.uidValidity.has_value())
+                            {
+                                addField(imap, "uidValidity", std::format("{}", status.uidValidity.value()));
+                            }
+                            if (status.unseen.has_value())
+                            {
+                                addField(imap, "unseen", std::format("{}", status.unseen.value()));
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                addField(imap, "metadataErrorHr", std::format("0x{:08x}", static_cast<unsigned long>(hr)));
+            }
+        }
 
         const char* written = yyjson_mut_write(doc, YYJSON_WRITE_NOFLAG, nullptr);
         if (! written)
@@ -4155,6 +4042,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
             std::scoped_lock lock(_propertiesMutex);
             _lastPropertiesJson.assign(written);
             *jsonUtf8 = _lastPropertiesJson.c_str();
+        }
+
+        if (resolved.connection.protocol == FileSystemCurlInternal::Protocol::Imap)
+        {
+            Debug::Perf::EmitDurationUs(isDirectory ? L"filesystem.imap.properties_mailbox_us" : L"filesystem.imap.properties_message_us",
+                                        Debug::Perf::ElapsedUs(propertiesStarted),
+                                        isDirectory ? 1u : entry.sizeBytes,
+                                        0u,
+                                        S_OK);
         }
 
         return S_OK;

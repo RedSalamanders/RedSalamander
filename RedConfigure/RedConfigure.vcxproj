@@ -133,6 +133,7 @@
     <ClCompile Include="RedConfigureRoot.cpp" />
     <ClCompile Include="RedConfigureSession.cpp" />
     <ClCompile Include="RedConfigureTraceProvider.cpp" />
+    <ClCompile Include="RedConfigureUiHelpers.cpp" />
     <ClCompile Include="Themes\ThemeCatalog.cpp" />
     <ClCompile Include="Themes\ThemePreviewModel.cpp" />
     <ClCompile Include="Workspace\WorkspaceDiscovery.cpp" />
@@ -142,8 +143,11 @@
     <ClInclude Include="Localization\RcParser.h" />
     <ClInclude Include="Localization\RcWriter.h" />
     <ClInclude Include="RedConfigureApp.h" />
+    <ClInclude Include="RedConfigureGridModels.h" />
     <ClInclude Include="RedConfigureRoot.h" />
     <ClInclude Include="RedConfigureSession.h" />
+    <ClInclude Include="RedConfigureThemeExampleControl.h" />
+    <ClInclude Include="RedConfigureUiHelpers.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Themes\ThemeCatalog.h" />
     <ClInclude Include="Themes\ThemePreviewModel.h" />

@@ -2378,6 +2378,7 @@ void CaptureRuntimeSettings(Common::Settings::Settings& settings, HWND hWnd) noe
             pane.view.sortBy           = SortByToSettings(g_folderWindow.GetSortBy(paneId));
             pane.view.sortDirection    = SortDirectionToSettings(g_folderWindow.GetSortDirection(paneId));
             pane.view.fileExtensionsVisible = g_folderWindow.GetFileExtensionsVisible(paneId);
+            pane.view.thumbnailSizeDip      = g_folderWindow.GetThumbnailSizeDip(paneId);
             pane.view.thumbnailsVisible     = false;
             pane.view.navigationBarVisible  = g_folderWindow.GetNavigationBarVisible(paneId);
             pane.view.filterBarVisible      = g_folderWindow.GetFilterBarVisible(paneId);
@@ -3398,6 +3399,28 @@ void ShowSortMenuPopup(HWND hWnd, FolderWindow::Pane pane, POINT screenPoint) no
     const UINT idSize = isLeft ? IDM_LEFT_SORT_SIZE : IDM_RIGHT_SORT_SIZE;
     const UINT idAttr = isLeft ? IDM_LEFT_SORT_ATTRIBUTES : IDM_RIGHT_SORT_ATTRIBUTES;
     const UINT idNone = isLeft ? IDM_LEFT_SORT_NONE : IDM_RIGHT_SORT_NONE;
+    const UINT idThumbSmall = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_SMALL : IDM_RIGHT_THUMBNAIL_SIZE_SMALL;
+    const UINT idThumbMedium = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_MEDIUM : IDM_RIGHT_THUMBNAIL_SIZE_MEDIUM;
+    const UINT idThumbLarge = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_LARGE : IDM_RIGHT_THUMBNAIL_SIZE_LARGE;
+    const UINT idThumbExtraLarge = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_EXTRA_LARGE : IDM_RIGHT_THUMBNAIL_SIZE_EXTRA_LARGE;
+    const std::array<UINT, Common::Settings::Thumbnail::StopsDip.size()> thumbnailCommandIds{
+        idThumbSmall,
+        idThumbMedium,
+        idThumbLarge,
+        idThumbExtraLarge,
+    };
+    const std::array<UINT, Common::Settings::Thumbnail::StopsDip.size()> thumbnailLabelIds{
+        IDS_PREFS_PANES_THUMBNAIL_SIZE_SMALL,
+        IDS_PREFS_PANES_THUMBNAIL_SIZE_MEDIUM,
+        IDS_PREFS_PANES_THUMBNAIL_SIZE_LARGE,
+        IDS_PREFS_PANES_THUMBNAIL_SIZE_EXTRA_LARGE,
+    };
+    const std::array<std::wstring_view, Common::Settings::Thumbnail::StopsDip.size()> thumbnailFallbackLabels{
+        L"Small",
+        L"Medium",
+        L"Large",
+        L"Extra Large",
+    };
 
     UINT checkedId = idNone;
     switch (g_folderWindow.GetSortBy(pane))
@@ -3420,14 +3443,36 @@ void ShowSortMenuPopup(HWND hWnd, FolderWindow::Pane pane, POINT screenPoint) no
         return item;
     };
 
-    const std::array<RedSalamander::DxUi::MenuFlyoutItem, 6> items{
-        makeRadioItem(idNone, IDS_PREFS_PANES_SORT_NONE, L"None"),
-        makeRadioItem(idName, IDS_PREFS_PANES_SORT_NAME, L"Name"),
-        makeRadioItem(idExt, IDS_PREFS_PANES_SORT_EXTENSION, L"Extension"),
-        makeRadioItem(idTime, IDS_PREFS_PANES_SORT_TIME, L"Time"),
-        makeRadioItem(idSize, IDS_PREFS_PANES_SORT_SIZE, L"Size"),
-        makeRadioItem(idAttr, IDS_PREFS_PANES_SORT_ATTRIBUTES, L"Attributes"),
-    };
+    const uint32_t thumbnailSizeDip = g_folderWindow.GetThumbnailSizeDip(pane);
+
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    items.reserve(8u);
+    items.push_back(makeRadioItem(idNone, IDS_PREFS_PANES_SORT_NONE, L"None"));
+    items.push_back(makeRadioItem(idName, IDS_PREFS_PANES_SORT_NAME, L"Name"));
+    items.push_back(makeRadioItem(idExt, IDS_PREFS_PANES_SORT_EXTENSION, L"Extension"));
+    items.push_back(makeRadioItem(idTime, IDS_PREFS_PANES_SORT_TIME, L"Time"));
+    items.push_back(makeRadioItem(idSize, IDS_PREFS_PANES_SORT_SIZE, L"Size"));
+    items.push_back(makeRadioItem(idAttr, IDS_PREFS_PANES_SORT_ATTRIBUTES, L"Attributes"));
+
+    RedSalamander::DxUi::MenuFlyoutItem separator{};
+    separator.kind = RedSalamander::DxUi::MenuItemKind::Separator;
+    items.push_back(std::move(separator));
+
+    RedSalamander::DxUi::MenuFlyoutItem thumbnailSlider{};
+    thumbnailSlider.kind = RedSalamander::DxUi::MenuItemKind::Slider;
+    thumbnailSlider.text = loadLabel(IDS_PREFS_PANES_THUMBNAIL_SIZE, L"Thumbnail size");
+    thumbnailSlider.sliderStops.reserve(Common::Settings::Thumbnail::StopsDip.size());
+    for (size_t index = 0u; index < Common::Settings::Thumbnail::StopsDip.size(); ++index)
+    {
+        thumbnailSlider.sliderStops.push_back(RedSalamander::DxUi::MenuFlyoutItem::SliderStop{
+            .text      = loadLabel(thumbnailLabelIds[index], thumbnailFallbackLabels[index]),
+            .commandId = static_cast<int>(thumbnailCommandIds[index]),
+        });
+    }
+    thumbnailSlider.sliderValue = static_cast<uint32_t>(Common::Settings::Thumbnail::StopIndexForSizeDip(thumbnailSizeDip));
+    thumbnailSlider.acceleratorText =
+        thumbnailSlider.sliderValue < thumbnailSlider.sliderStops.size() ? thumbnailSlider.sliderStops[thumbnailSlider.sliderValue].text : std::wstring{};
+    items.push_back(std::move(thumbnailSlider));
 
     RedSalamander::DxUi::ContextMenuSessionCallbacks callbacks{};
     callbacks.rootHorizontalAlignment = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
@@ -4349,6 +4394,45 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
     return items;
 }
 
+[[nodiscard]] const wchar_t* MainMenuTraceMessageName(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_MOUSEMOVE: return L"WM_MOUSEMOVE";
+        case WM_LBUTTONDOWN: return L"WM_LBUTTONDOWN";
+        case WM_LBUTTONUP: return L"WM_LBUTTONUP";
+        case WM_RBUTTONDOWN: return L"WM_RBUTTONDOWN";
+        case WM_RBUTTONUP: return L"WM_RBUTTONUP";
+        case WM_CAPTURECHANGED: return L"WM_CAPTURECHANGED";
+        case WM_KILLFOCUS: return L"WM_KILLFOCUS";
+        case WM_SETFOCUS: return L"WM_SETFOCUS";
+        case WM_CANCELMODE: return L"WM_CANCELMODE";
+        default: return L"message";
+    }
+}
+
+[[nodiscard]] bool IsMainMenuTraceMessage(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_CAPTURECHANGED:
+        case WM_KILLFOCUS:
+        case WM_SETFOCUS:
+        case WM_CANCELMODE: return true;
+        default: return false;
+    }
+}
+
+[[nodiscard]] int OptionalMenuIndexForTrace(std::optional<size_t> index) noexcept
+{
+    return index.has_value() && index.value() <= static_cast<size_t>(std::numeric_limits<int>::max()) ? static_cast<int>(index.value()) : -1;
+}
+
 class MainMenuBarHost final
 {
 public:
@@ -4405,6 +4489,12 @@ public:
         _host.SetRoot(std::move(menuBar));
         _host.SetTheme(MakeAppThemeDxPalette(_theme));
         SyncMenuModel();
+        Debug::Info(L"RedSalamander::MenuTrace MainMenu host-created owner={:#x} host={:#x} visible={} menu={:#x} itemCount={}",
+                    reinterpret_cast<uintptr_t>(_ownerWindow),
+                    reinterpret_cast<uintptr_t>(_hwnd.get()),
+                    ShouldShow() ? L"true" : L"false",
+                    reinterpret_cast<uintptr_t>(g_mainMenuHandle),
+                    _menuBar ? _menuBar->GetItems().size() : 0u);
         return true;
     }
 
@@ -4437,6 +4527,7 @@ public:
         EnsureMenuHandles(_ownerWindow);
         _menuBar->SetItems(BuildDxMenuBarItems(g_mainMenuHandle));
         _menuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) { OpenPopup(index, screenPoint, keyboardInvocation); });
+        _menuBar->SetOnHoverChanged([this](std::optional<size_t>) { PostPendingMenuBarHoverRootSwitch(); });
         UpdateSelectedIndexSnapshot();
     }
 
@@ -4518,6 +4609,12 @@ public:
     {
         const int highlightCount = _visualHighlightCountSnapshot.load(std::memory_order_acquire);
         return highlightCount > 0 ? static_cast<size_t>(highlightCount) : 0u;
+    }
+
+    [[nodiscard]] std::optional<size_t> GetVisualHighlightIndex() const noexcept
+    {
+        const int highlightIndex = _visualHighlightIndexSnapshot.load(std::memory_order_acquire);
+        return highlightIndex >= 0 ? std::optional<size_t>{static_cast<size_t>(highlightIndex)} : std::nullopt;
     }
 
     [[nodiscard]] uint64_t GetRenderCount() const noexcept
@@ -4727,29 +4824,36 @@ private:
     {
         if (! _ownerWindow || ! g_mainMenuHandle || ! _menuBar)
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu build-root-switch rejected index={} owner={:#x} menu={:#x} hasMenuBar={}",
+                        index,
+                        reinterpret_cast<uintptr_t>(_ownerWindow),
+                        reinterpret_cast<uintptr_t>(g_mainMenuHandle),
+                        _menuBar ? L"true" : L"false");
             return std::nullopt;
         }
 
         const std::optional<size_t> rawIndex = ResolveRawMenuIndex(index);
         if (! rawIndex.has_value())
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu build-root-switch no-raw-index index={}", index);
             return std::nullopt;
         }
 
         const HMENU popupMenu = GetSubMenu(g_mainMenuHandle, static_cast<int>(rawIndex.value()));
         if (! popupMenu)
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu build-root-switch no-popup index={} rawIndex={}", index, rawIndex.value());
             return std::nullopt;
         }
 
         OnInitMenuPopup(_ownerWindow, popupMenu);
         SyncMenuModel();
-        _menuBar->SetSelectedIndex(index);
-        UpdateSelectedIndexSnapshot();
+        SetActiveMenuBarRoot(index, true);
 
         const std::optional<POINT> screenPoint = GetItemAnchorScreenPoint(index);
         if (! screenPoint.has_value())
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu build-root-switch no-anchor index={} rawIndex={}", index, rawIndex.value());
             return std::nullopt;
         }
 
@@ -4758,15 +4862,145 @@ private:
         request.items       = ConvertHMenuToDxFlyoutItems(popupMenu);
         if (request.items.empty())
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu build-root-switch empty-items index={} rawIndex={} point=({}, {})",
+                        index,
+                        rawIndex.value(),
+                        screenPoint->x,
+                        screenPoint->y);
             return std::nullopt;
         }
+        Debug::Info(L"RedSalamander::MenuTrace MainMenu build-root-switch accepted index={} rawIndex={} point=({}, {}) items={}",
+                    index,
+                    rawIndex.value(),
+                    screenPoint->x,
+                    screenPoint->y,
+                    request.items.size());
         return request;
+    }
+
+    [[nodiscard]] std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest> TryBuildRootSwitchFromVisualIndex(
+        size_t targetIndex, std::wstring_view source) noexcept
+    {
+        if (! _activePopupIndex.has_value())
+        {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} no-active target={}", source, targetIndex);
+            return std::nullopt;
+        }
+
+        const size_t activeIndex = _activePopupIndex.value();
+        if (targetIndex == activeIndex)
+        {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} same-index active={} capture={:#x}",
+                        source,
+                        activeIndex,
+                        reinterpret_cast<uintptr_t>(GetCapture()));
+            return std::nullopt;
+        }
+        if (! _menuBar)
+        {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} no-menu-bar target={} active={}", source, targetIndex, activeIndex);
+            return std::nullopt;
+        }
+
+        const auto items = _menuBar->GetItems();
+        if (targetIndex >= items.size() || ! items[targetIndex].enabled)
+        {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} disabled-or-out target={} active={} itemCount={} enabled={}",
+                        source,
+                        targetIndex,
+                        activeIndex,
+                        items.size(),
+                        targetIndex < items.size() && items[targetIndex].enabled ? L"true" : L"false");
+            return std::nullopt;
+        }
+
+        if (auto request = BuildRootSwitchRequest(targetIndex); request.has_value())
+        {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} accepted from={} to={} label='{}'",
+                        source,
+                        activeIndex,
+                        targetIndex,
+                        std::wstring_view{items[targetIndex].text});
+            _activePopupIndex            = targetIndex;
+            _pendingHoverRootSwitchIndex = std::nullopt;
+            return request;
+        }
+
+        Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} build-failed target={} active={}", source, targetIndex, activeIndex);
+        return std::nullopt;
+    }
+
+    void PostPendingMenuBarHoverRootSwitch() noexcept
+    {
+        if (! _popupSessionActive || ! _menuBar)
+        {
+            return;
+        }
+
+        const std::optional<size_t> hoverIndex = _menuBar->GetHoveredIndex();
+        if (! hoverIndex.has_value())
+        {
+            return;
+        }
+
+        SetActiveMenuBarRoot(hoverIndex.value(), true);
+
+        if (_activePopupIndex.has_value() && hoverIndex.value() == _activePopupIndex.value())
+        {
+            return;
+        }
+        if (_pendingHoverRootSwitchIndex == hoverIndex)
+        {
+            return;
+        }
+
+        _pendingHoverRootSwitchIndex = hoverIndex;
+        HWND target                  = GetCapture();
+        if (! target || IsWindow(target) == FALSE)
+        {
+            target = _ownerWindow;
+        }
+        if (! target || IsWindow(target) == FALSE)
+        {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu hover-switch no-target hover={} active={}",
+                        hoverIndex.value(),
+                        _activePopupIndex.value_or(static_cast<size_t>(-1)));
+            return;
+        }
+
+        if (PostMessageW(target, WndMsg::kDxUiContextMenuRootHoverChanged, static_cast<WPARAM>(hoverIndex.value()), 0) == 0)
+        {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu hover-switch post-failed target={:#x} hover={} active={}",
+                        reinterpret_cast<uintptr_t>(target),
+                        hoverIndex.value(),
+                        _activePopupIndex.value_or(static_cast<size_t>(-1)));
+            _pendingHoverRootSwitchIndex = std::nullopt;
+            return;
+        }
+
+        Debug::Info(L"RedSalamander::MenuTrace MainMenu hover-switch posted target={:#x} hover={} active={} capture={:#x}",
+                    reinterpret_cast<uintptr_t>(target),
+                    hoverIndex.value(),
+                    _activePopupIndex.value_or(static_cast<size_t>(-1)),
+                    reinterpret_cast<uintptr_t>(GetCapture()));
     }
 
     void OpenPopup(size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
     {
+        Debug::Info(L"RedSalamander::MenuTrace MainMenu open-popup begin index={} keyboard={} point=({}, {}) owner={:#x} host={:#x} capture={:#x}",
+                    index,
+                    keyboardInvocation ? L"true" : L"false",
+                    screenPoint.x,
+                    screenPoint.y,
+                    reinterpret_cast<uintptr_t>(_ownerWindow),
+                    reinterpret_cast<uintptr_t>(_hwnd.get()),
+                    reinterpret_cast<uintptr_t>(GetCapture()));
         if (! _ownerWindow || ! g_mainMenuHandle || ! _menuBar)
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu open-popup rejected-missing-state owner={:#x} menu={:#x} hasMenuBar={}",
+                        reinterpret_cast<uintptr_t>(_ownerWindow),
+                        reinterpret_cast<uintptr_t>(g_mainMenuHandle),
+                        _menuBar ? L"true" : L"false");
             return;
         }
 
@@ -4774,66 +5008,93 @@ private:
         const std::optional<size_t> rawIndex = ResolveRawMenuIndex(index);
         if (! rawIndex.has_value())
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu open-popup rejected-no-raw-index index={}", index);
             return;
         }
 
         const HMENU popupMenu = GetSubMenu(g_mainMenuHandle, static_cast<int>(rawIndex.value()));
         if (! popupMenu)
         {
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu open-popup rejected-no-popup index={} rawIndex={}", index, rawIndex.value());
             return;
         }
 
         OnInitMenuPopup(_ownerWindow, popupMenu);
         SyncMenuModel();
-        _menuBar->SetSelectedIndex(index);
-        UpdateSelectedIndexSnapshot();
+        SetActiveMenuBarRoot(index, true);
 
         const auto flyoutItems = ConvertHMenuToDxFlyoutItems(popupMenu);
         RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
         sessionCallbacks.focusFirstNavigableItem = keyboardInvocation;
 
-        size_t activeIndex                     = index;
-        sessionCallbacks.switchRootFromPointer = [this,
-                                                  &activeIndex](POINT hoverScreenPoint) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
+        _popupSessionActive         = true;
+        _activePopupIndex           = index;
+        _pendingHoverRootSwitchIndex.reset();
+        const auto popupSessionState = wil::scope_exit([this]() noexcept
+        {
+            _popupSessionActive = false;
+            _activePopupIndex.reset();
+            _pendingHoverRootSwitchIndex.reset();
+        });
+        _menuBar->SetRetainSelectedIndexOnFocusLost(true);
+        const auto selectedIndexRetention = wil::scope_exit([this]() noexcept
+        {
+            if (_menuBar)
+            {
+                _menuBar->SetRetainSelectedIndexOnFocusLost(false);
+            }
+        });
+
+        sessionCallbacks.switchRootFromPointer = [this](POINT hoverScreenPoint) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
         {
             const std::optional<size_t> hitIndex = HitTestScreenPoint(hoverScreenPoint);
-            if (! hitIndex.has_value() || hitIndex.value() == activeIndex || ! _menuBar)
+            if (! hitIndex.has_value())
             {
+                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch no-hit point=({}, {}) active={} capture={:#x}",
+                            hoverScreenPoint.x,
+                            hoverScreenPoint.y,
+                            _activePopupIndex.value_or(static_cast<size_t>(-1)),
+                            reinterpret_cast<uintptr_t>(GetCapture()));
                 return std::nullopt;
             }
 
-            const auto items = _menuBar->GetItems();
-            if (hitIndex.value() >= items.size() || ! items[hitIndex.value()].enabled)
-            {
-                return std::nullopt;
-            }
-
-            if (auto request = BuildRootSwitchRequest(hitIndex.value()); request.has_value())
-            {
-                activeIndex = hitIndex.value();
-                return request;
-            }
-
-            return std::nullopt;
+            return TryBuildRootSwitchFromVisualIndex(hitIndex.value(), L"pointer");
         };
-        sessionCallbacks.switchRootFromDirection = [this, &activeIndex](bool forward) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
+        sessionCallbacks.switchRootFromDirection = [this](bool forward) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
         {
+            if (! _activePopupIndex.has_value())
+            {
+                return std::nullopt;
+            }
+
+            const size_t activeIndex = _activePopupIndex.value();
             const std::optional<size_t> nextIndex = FindNextEnabledItem(activeIndex, forward);
             if (! nextIndex.has_value() || nextIndex.value() == activeIndex)
             {
                 return std::nullopt;
             }
 
-            if (auto request = BuildRootSwitchRequest(nextIndex.value()); request.has_value())
+            return TryBuildRootSwitchFromVisualIndex(nextIndex.value(), L"keyboard");
+        };
+        sessionCallbacks.switchRootFromMenuBarHover = [this]() -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
+        {
+            const std::optional<size_t> hoverIndex = _pendingHoverRootSwitchIndex;
+            _pendingHoverRootSwitchIndex.reset();
+            if (! hoverIndex.has_value())
             {
-                activeIndex = nextIndex.value();
-                return request;
+                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover no-pending active={}",
+                            _activePopupIndex.value_or(static_cast<size_t>(-1)));
+                return std::nullopt;
             }
 
-            return std::nullopt;
+            return TryBuildRootSwitchFromVisualIndex(hoverIndex.value(), L"menu-bar-hover");
         };
 
         const auto result = RedSalamander::DxUi::ContextMenu::Show(_ownerWindow, screenPoint, flyoutItems, MakeAppThemeDxPalette(_theme), sessionCallbacks);
+        Debug::Info(L"RedSalamander::MenuTrace MainMenu open-popup end index={} result={} capture={:#x}",
+                    index,
+                    result.value_or(-1),
+                    reinterpret_cast<uintptr_t>(GetCapture()));
 
         SyncMenuModel();
         if (g_menuBarTemporarilyShown && ! g_menuBarVisible)
@@ -4890,6 +5151,39 @@ private:
 
         if (self)
         {
+            if (IsMainMenuTraceMessage(message))
+            {
+                const bool pointerMessage = message == WM_MOUSEMOVE || message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_RBUTTONDOWN ||
+                                            message == WM_RBUTTONUP;
+                POINT clientPoint{};
+                POINT screenPoint{};
+                std::optional<size_t> hitIndex;
+                if (pointerMessage)
+                {
+                    clientPoint = POINT{static_cast<LONG>(static_cast<short>(LOWORD(static_cast<DWORD_PTR>(lParam)))),
+                                        static_cast<LONG>(static_cast<short>(HIWORD(static_cast<DWORD_PTR>(lParam))))};
+                    screenPoint = clientPoint;
+                    static_cast<void>(ClientToScreen(hwnd, &screenPoint));
+                    hitIndex = self->HitTestScreenPoint(screenPoint);
+                }
+
+                Debug::Info(
+                    L"RedSalamander::MenuTrace MainMenu wndproc msg={} hwnd={:#x} capture={:#x} focus={:#x} client=({}, {}) screen=({}, {}) hit={} selected={} "
+                    L"temporary={} visible={}",
+                    MainMenuTraceMessageName(message),
+                    reinterpret_cast<uintptr_t>(hwnd),
+                    reinterpret_cast<uintptr_t>(GetCapture()),
+                    reinterpret_cast<uintptr_t>(GetFocus()),
+                    clientPoint.x,
+                    clientPoint.y,
+                    screenPoint.x,
+                    screenPoint.y,
+                    OptionalMenuIndexForTrace(hitIndex),
+                    OptionalMenuIndexForTrace(self->GetSelectedIndex()),
+                    g_menuBarTemporarilyShown ? L"true" : L"false",
+                    g_menuBarVisible ? L"true" : L"false");
+            }
+
             bool handled         = false;
             const LRESULT result = self->_host.HandleMessage(hwnd, message, wParam, lParam, handled);
             if (handled)
@@ -4898,14 +5192,22 @@ private:
                 {
                     self->_menuBar = nullptr;
                     self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
+                    self->_visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
                     self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
                     self->_focusRestoreHwnd = nullptr;
+                    self->_popupSessionActive = false;
+                    self->_activePopupIndex.reset();
+                    self->_pendingHoverRootSwitchIndex.reset();
                 }
                 else
                 {
                     self->UpdateSelectedIndexSnapshot();
+                    if (message == WM_MOUSEMOVE)
+                    {
+                        self->PostPendingMenuBarHoverRootSwitch();
+                    }
                 }
-                if (message == WM_KILLFOCUS && g_menuBarTemporarilyShown && ! g_menuBarVisible)
+                if (message == WM_KILLFOCUS && g_menuBarTemporarilyShown && ! g_menuBarVisible && ! self->_popupSessionActive)
                 {
                     self->DismissTemporaryBar();
                     return 0;
@@ -4913,7 +5215,7 @@ private:
                 return result;
             }
 
-            if (message == WM_KILLFOCUS && g_menuBarTemporarilyShown && ! g_menuBarVisible)
+            if (message == WM_KILLFOCUS && g_menuBarTemporarilyShown && ! g_menuBarVisible && ! self->_popupSessionActive)
             {
                 self->DismissTemporaryBar();
                 return 0;
@@ -4922,8 +5224,12 @@ private:
             {
                 self->_menuBar = nullptr;
                 self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
+                self->_visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
                 self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
                 self->_focusRestoreHwnd = nullptr;
+                self->_popupSessionActive = false;
+                self->_activePopupIndex.reset();
+                self->_pendingHoverRootSwitchIndex.reset();
             }
         }
 
@@ -4935,13 +5241,33 @@ private:
         if (! _menuBar)
         {
             _selectedIndexSnapshot.store(-1, std::memory_order_release);
+            _visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
             _visualHighlightCountSnapshot.store(0, std::memory_order_release);
             return;
         }
 
         const std::optional<size_t> selectedIndex = _menuBar->GetSelectedIndex();
+        const std::optional<size_t> highlightIndex = _menuBar->GetVisualHighlightIndex();
         _selectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
+        _visualHighlightIndexSnapshot.store(highlightIndex.has_value() ? static_cast<int>(highlightIndex.value()) : -1, std::memory_order_release);
         _visualHighlightCountSnapshot.store(static_cast<int>(_menuBar->GetVisualHighlightCount()), std::memory_order_release);
+    }
+
+    void SetActiveMenuBarRoot(size_t index, bool repaintNow) noexcept
+    {
+        if (! _menuBar)
+        {
+            return;
+        }
+
+        _menuBar->SetSelectedIndex(index);
+        UpdateSelectedIndexSnapshot();
+
+        if (repaintNow && _hwnd && IsWindow(_hwnd.get()) != FALSE)
+        {
+            static_cast<void>(RedrawWindow(_hwnd.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOCHILDREN));
+            UpdateSelectedIndexSnapshot();
+        }
     }
 
     HWND _ownerWindow = nullptr;
@@ -4950,8 +5276,12 @@ private:
     RedSalamander::DxUi::WindowHost _host;
     RedSalamander::DxUi::MenuBar* _menuBar = nullptr;
     std::atomic<int> _selectedIndexSnapshot{-1};
+    std::atomic<int> _visualHighlightIndexSnapshot{-1};
     std::atomic<int> _visualHighlightCountSnapshot{0};
     HWND _focusRestoreHwnd = nullptr;
+    bool _popupSessionActive = false;
+    std::optional<size_t> _activePopupIndex;
+    std::optional<size_t> _pendingHoverRootSwitchIndex;
 };
 
 MainMenuBarHost g_mainMenuBarHost;
@@ -5018,6 +5348,12 @@ MainMenuBarHost g_mainMenuBarHost;
 [[nodiscard]] int DebugGetMainMenuBarVisualHighlightCount() noexcept
 {
     return static_cast<int>(g_mainMenuBarHost.GetVisualHighlightCount());
+}
+
+[[nodiscard]] int DebugGetMainMenuBarVisualHighlightIndex() noexcept
+{
+    const std::optional<size_t> highlightIndex = g_mainMenuBarHost.GetVisualHighlightIndex();
+    return highlightIndex.has_value() ? static_cast<int>(highlightIndex.value()) : -1;
 }
 
 [[nodiscard]] uint64_t DebugGetMainMenuBarRenderCount() noexcept
@@ -7598,6 +7934,7 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
             bool navigationBarVisible               = true;
             bool filterBarVisible                   = false;
             bool statusBarVisible                   = true;
+            uint32_t thumbnailSizeDip               = Common::Settings::Thumbnail::kDefaultSizeDip;
 
             if (settingsPane)
             {
@@ -7605,6 +7942,7 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
                 sortBy                = SortByFromSettings(settingsPane->view.sortBy);
                 sortDirection         = SortDirectionFromSettings(settingsPane->view.sortDirection);
                 fileExtensionsVisible = settingsPane->view.fileExtensionsVisible;
+                thumbnailSizeDip      = settingsPane->view.thumbnailSizeDip;
                 if (settingsPane->view.thumbnailsVisible)
                 {
                     displayMode = FolderView::DisplayMode::Thumbnails;
@@ -7619,6 +7957,7 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
             g_folderWindow.SetFilterBarVisible(pane, filterBarVisible);
             g_folderWindow.SetStatusBarVisible(pane, statusBarVisible);
             g_folderWindow.SetSort(pane, sortBy, sortDirection);
+            g_folderWindow.SetThumbnailSizeDip(pane, thumbnailSizeDip);
             g_folderWindow.SetDisplayMode(pane, displayMode);
         };
 
@@ -8086,12 +8425,14 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         bool navigationBarVisible               = true;
         bool filterBarVisible                   = false;
         bool statusBarVisible                   = true;
+        uint32_t thumbnailSizeDip               = Common::Settings::Thumbnail::kDefaultSizeDip;
         if (! useDeterministicSelfTestPaneStartup && settingsPane)
         {
             displayMode           = DisplayModeFromSettings(settingsPane->view.display);
             sortBy                = SortByFromSettings(settingsPane->view.sortBy);
             sortDirection         = SortDirectionFromSettings(settingsPane->view.sortDirection);
             fileExtensionsVisible = settingsPane->view.fileExtensionsVisible;
+            thumbnailSizeDip      = settingsPane->view.thumbnailSizeDip;
             if (settingsPane->view.thumbnailsVisible)
             {
                 displayMode = FolderView::DisplayMode::Thumbnails;
@@ -8146,6 +8487,13 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
             callPerf.SetValue0(static_cast<uint64_t>(sortBy));
             callPerf.SetValue1(static_cast<uint64_t>(sortDirection));
             g_folderWindow.SetSort(pane, sortBy, sortDirection);
+        }
+        {
+            Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetThumbnailSize"
+                                                                         : L"App.Startup.ApplyPane.Right.SetThumbnailSize");
+            callPerf.SetDetail(current.native());
+            callPerf.SetValue0(thumbnailSizeDip);
+            g_folderWindow.SetThumbnailSizeDip(pane, thumbnailSizeDip);
         }
 #ifdef ENABLE_TESTS
         if (IsRunningAnySelfTest())
@@ -9641,6 +9989,38 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::ExtraDetailed);
             UpdatePaneMenuChecks();
+            break;
+        case IDM_LEFT_THUMBNAIL_SIZE_SMALL:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Left, Common::Settings::Thumbnail::StopsDip[0u]);
+            break;
+        case IDM_LEFT_THUMBNAIL_SIZE_MEDIUM:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Left, Common::Settings::Thumbnail::StopsDip[1u]);
+            break;
+        case IDM_LEFT_THUMBNAIL_SIZE_LARGE:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Left, Common::Settings::Thumbnail::StopsDip[2u]);
+            break;
+        case IDM_LEFT_THUMBNAIL_SIZE_EXTRA_LARGE:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Left, Common::Settings::Thumbnail::StopsDip[3u]);
+            break;
+        case IDM_RIGHT_THUMBNAIL_SIZE_SMALL:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Right, Common::Settings::Thumbnail::StopsDip[0u]);
+            break;
+        case IDM_RIGHT_THUMBNAIL_SIZE_MEDIUM:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Right, Common::Settings::Thumbnail::StopsDip[1u]);
+            break;
+        case IDM_RIGHT_THUMBNAIL_SIZE_LARGE:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Right, Common::Settings::Thumbnail::StopsDip[2u]);
+            break;
+        case IDM_RIGHT_THUMBNAIL_SIZE_EXTRA_LARGE:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            g_folderWindow.SetThumbnailSizeDip(FolderWindow::Pane::Right, Common::Settings::Thumbnail::StopsDip[3u]);
             break;
         case IDM_LEFT_OVERLAY_SAMPLE_ERROR:
             if (! IsOverlaySampleEnabled())

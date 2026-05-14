@@ -860,6 +860,45 @@ void TestTreeRowMetricsClampToSegoeVariableBodyLineHeight()
         second.rowRect.top - first.rowRect.top, kMinimumInteractiveTextRowHeightDip, 0.5f, "tree hit-test row cadence follows the shared row-height minimum");
 }
 
+void TestTreeCompactDensityShrinksRowMetrics()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* tree = root->AddChild<Tree>();
+    tree->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 160.0f));
+    tree->SetRowHeightDip(30.0f);
+
+    MutableTreeModel model;
+    model.SetVisibleItems({
+        TreeItemData{.id = 1u, .text = L"General"},
+        TreeItemData{.id = 2u, .text = L"Viewers"},
+    });
+    tree->SetModel(&model);
+    host.SetRoot(std::move(root));
+
+    ThemePalette standardTheme = MakeDefaultThemePalette(false);
+    standardTheme.density      = Density::Standard;
+    host.SetTheme(standardTheme);
+    const TreeItemLayoutMetrics standardFirst  = tree->GetItemLayoutMetrics(host, 0u);
+    const TreeItemLayoutMetrics standardSecond = tree->GetItemLayoutMetrics(host, 1u);
+    const float standardHeight                 = standardFirst.rowRect.bottom - standardFirst.rowRect.top;
+    const float standardCadence                = standardSecond.rowRect.top - standardFirst.rowRect.top;
+
+    ThemePalette compactTheme = standardTheme;
+    compactTheme.density      = Density::Compact;
+    host.SetTheme(compactTheme);
+    const TreeItemLayoutMetrics compactFirst  = tree->GetItemLayoutMetrics(host, 0u);
+    const TreeItemLayoutMetrics compactSecond = tree->GetItemLayoutMetrics(host, 1u);
+    const float compactHeight                 = compactFirst.rowRect.bottom - compactFirst.rowRect.top;
+    const float compactCadence                = compactSecond.rowRect.top - compactFirst.rowRect.top;
+
+    Require(compactHeight + 0.5f < standardHeight, "compact tree rows shrink below standard density");
+    Require(compactCadence + 0.5f < standardCadence, "compact tree hit-test cadence shrinks below standard density");
+    Require(compactHeight >= kMinimumInteractiveTextRowHeightDip, "compact tree rows keep the shared text-row minimum");
+}
+
 } // namespace
 
 void RunTreeTests()
@@ -886,4 +925,5 @@ void RunTreeTests()
     TestTreeLayoutMetricsReserveSpaceForIconAndBadge();
     TestTreeLayoutMetricsOmitOptionalAdornmentRectsWhenUnused();
     TestTreeRowMetricsClampToSegoeVariableBodyLineHeight();
+    TestTreeCompactDensityShrinksRowMetrics();
 }

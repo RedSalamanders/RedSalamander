@@ -54,7 +54,7 @@ Search work SHOULD prefer the existing `find.ui.*` metrics and the relevant `--c
 
 - `cmd/pane/find` opens or activates the modeless `Find Files and Directories` window.
 - The command targets the focused pane when focus is inside a pane; otherwise it targets the active pane.
-- The default shortcut is `Alt+F7`.
+- The default shortcuts are `Alt+F7` and `Ctrl+F`.
 - If the window already exists, the host must reuse it and refresh its pane context instead of opening duplicates.
 
 ### Default scope

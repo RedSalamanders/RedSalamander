@@ -42,6 +42,19 @@
     return normalized;
 }
 
+std::atomic<uint64_t> g_connectionManagerSecretRevealHelloCallCount{0u};
+
+HRESULT ConnectionManagerSecretRevealHelloVerifier(HWND ownerWindow, std::wstring_view message) noexcept
+{
+    if (! ownerWindow || IsWindow(ownerWindow) == FALSE || message.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    g_connectionManagerSecretRevealHelloCallCount.fetch_add(1u, std::memory_order_relaxed);
+    return S_OK;
+}
+
 [[nodiscard]] size_t CountConnectionManagerVisibleUiaProviders(HWND hwnd) noexcept
 {
     return (WindowExposesUiaProvider(hwnd) ? 1u : 0u) + CountVisibleDescendantWindowsExposingUiaProviders(hwnd);
@@ -498,7 +511,7 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
     {
         if (dialog && IsWindow(dialog) != FALSE)
         {
-            PostMessageW(dialog, WM_CLOSE, 0, 0);
+            PostMessageW(dialog, WM_COMMAND, MAKEWPARAM(IDCANCEL, 0), 0);
             static_cast<void>(WaitForWindowClosed(dialog, SelfTest::Scale(3000ms)));
         }
     });
@@ -2456,6 +2469,9 @@ enum class ConnectionManagerCloseAction
                                                    snapshot,
                                                    SelfTest::Scale(5000ms)),
                   L"Connection Manager did not settle before localized dynamic-label validation.");
+    state.Require(DebugClickConnectionManagerListRow(0u), L"Failed to select Quick Connect before localized dynamic-label validation.");
+    state.Require(DebugSetConnectionManagerSecretText(L"localized-label-secret"),
+                  L"Failed to seed an editable secret before localized dynamic-label validation.");
 
     const std::wstring expectedShow = LoadStringResource(nullptr, IDS_CONNECTIONS_BTN_SHOW_SECRET);
     const std::wstring expectedHide = LoadStringResource(nullptr, IDS_CONNECTIONS_BTN_HIDE_SECRET);
@@ -2467,6 +2483,8 @@ enum class ConnectionManagerCloseAction
                   L"Connection Manager did not expose the secret visibility button label.");
     state.Require(label == expectedShow, std::format(L"Secret visibility button should start with resource label '{}', got '{}'.", expectedShow, label));
 
+    state.Require(DebugScrollConnectionManagerCommandButtonIntoView(IDC_CONNECTION_SHOW_SECRET),
+                  L"Failed to scroll the Connection Manager secret visibility button into view.");
     state.Require(ClickConnectionManagerCommandButton(IDC_CONNECTION_SHOW_SECRET), L"Failed to click the Connection Manager secret visibility button.");
     state.Require(WaitForConnectionManagerCommandButtonLabel(IDC_CONNECTION_SHOW_SECRET, expectedHide, SelfTest::Scale(3000ms)),
                   std::format(L"Secret visibility button did not switch to localized Hide label '{}'.", expectedHide));
@@ -2486,6 +2504,136 @@ enum class ConnectionManagerCloseAction
                   std::format(L"New Connection Manager profile should use localized default name '{}', got '{}'.", defaultName, snapshot.currentNameText));
 
     SelfTest::AppendSelfTestTrace(L"ConnectionManager localized-dynamic-labels: complete");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestConnectionManagerWindowListHasNoHorizontalScrollAndSavedSecretReveals(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager saved-secret-reveal: begin");
+
+    const auto originalConnections = g_settings.connections;
+    Common::Settings::ConnectionProfile profile = MakeSelfTestConnectionProfile(L"SelfTest Saved Secret");
+    profile.userName            = L"selftest-user";
+    profile.savePassword        = true;
+    profile.requireWindowsHello = true;
+    const std::wstring savedSecret = L"stored-selftest-password";
+    const std::wstring targetName =
+        RedSalamander::Connections::BuildCredentialTargetName(profile.id, RedSalamander::Connections::SecretKind::Password);
+
+    const auto restoreState = wil::scope_exit([&]() noexcept
+    {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+        if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
+        {
+            PostMessageW(existing, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
+        }
+        HostClearTestPromptResultOverride();
+        if (! targetName.empty())
+        {
+            static_cast<void>(RedSalamander::Connections::DeleteGenericCredential(targetName));
+        }
+        g_settings.connections = originalConnections;
+        static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
+    });
+
+    const auto previousVerifier = RedSalamander::Security::SetWindowsHelloTestVerifier(&ConnectionManagerSecretRevealHelloVerifier);
+    const auto restoreVerifier = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(RedSalamander::Security::SetWindowsHelloTestVerifier(previousVerifier));
+    });
+    g_connectionManagerSecretRevealHelloCallCount.store(0u, std::memory_order_relaxed);
+
+    EnsureRuntimeConnectionsForSelfTest();
+    g_settings.connections->bypassWindowsHello                  = false;
+    g_settings.connections->windowsHelloReauthTimeoutMinute     = 0u;
+    g_settings.connections->allowInsecureTlsInAutomation        = originalConnections ? originalConnections->allowInsecureTlsInAutomation : false;
+    ReplaceRuntimeConnectionsForSelfTest(profile);
+
+    const HRESULT saveSecretHr = RedSalamander::Connections::SaveGenericCredential(targetName, profile.userName, savedSecret);
+    state.Require(SUCCEEDED(saveSecretHr),
+                  std::format(L"Failed to seed the saved Connection Manager password credential (hr=0x{:08X}).",
+                              static_cast<unsigned long>(saveSecretHr)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HWND dialog = OpenConnectionManagerForSelfTest(mainWindow, state, L"saved-secret-reveal");
+    if (! dialog || IsWindow(dialog) == FALSE)
+    {
+        return false;
+    }
+
+    ConnectionManagerDebugSnapshot snapshot{};
+    state.Require(WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.usesDxUiList && value.visibleDxListHostCount > 0u && value.listRowCount >= 2u; },
+                                                   snapshot,
+                                                   SelfTest::Scale(5000ms)),
+                  L"Connection Manager did not expose the saved-secret test profile in the DxUi list.");
+    state.Require(DebugClickConnectionManagerListRow(1u), L"Failed to select the saved-secret test profile row.");
+    state.Require(WaitForConnectionManagerSnapshot([&](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.currentNameText == profile.name && value.currentPluginId == profile.pluginId; },
+                                                   snapshot,
+                                                   SelfTest::Scale(3000ms)),
+                  L"Connection Manager did not select the saved-secret test profile.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(! snapshot.listHasHorizontalScrollbar,
+                  L"Connection Manager connection list should not expose a horizontal scrollbar for its single-column profile list.");
+    state.Require(snapshot.secretStoredPlaceholderVisible,
+                  L"Connection Manager should show a protected placeholder when the selected profile has a saved password.");
+    state.Require(snapshot.secretStoredPlaceholderLength >= 8u && snapshot.secretStoredPlaceholderLength <= 14u,
+                  std::format(L"Saved-password placeholder should use a non-secret display length in [8..14], got {}.",
+                              snapshot.secretStoredPlaceholderLength));
+    state.Require(snapshot.secretMasked, L"Saved-password placeholder should start masked.");
+
+    std::wstring secretFieldText;
+    state.Require(DebugGetConnectionManagerSecretText(secretFieldText), L"Failed to read the saved-secret password field before reveal.");
+    state.Require(secretFieldText.empty(), L"Saved-password placeholder should not expose the real secret as editable text before reveal.");
+
+    state.Require(DebugScrollConnectionManagerCommandButtonIntoView(IDC_CONNECTION_SHOW_SECRET),
+                  L"Failed to scroll the saved-password Show button into view.");
+    state.Require(ClickConnectionManagerCommandButton(IDC_CONNECTION_SHOW_SECRET), L"Failed to click Show for the saved-password placeholder.");
+    const bool revealed = WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return ! value.secretMasked && ! value.secretStoredPlaceholderVisible; },
+                                                           snapshot,
+                                                           SelfTest::Scale(3000ms));
+    std::wstring revealFieldText;
+    static_cast<void>(DebugGetConnectionManagerSecretText(revealFieldText));
+    HWND showHost = nullptr;
+    RECT showRect{};
+    std::wstring showLabel;
+    static_cast<void>(DebugGetConnectionManagerCommandButtonHostAndClientRect(IDC_CONNECTION_SHOW_SECRET, showHost, showRect, showLabel));
+    state.Require(revealed,
+                  std::format(L"Connection Manager did not reveal the saved password after Show (masked={}, placeholder={}, placeholderLen={}, showVisible={}, showEnabled={}, helloCalls={}, fieldLen={}, showRect=[{},{},{},{}], showLabel='{}').",
+                              snapshot.secretMasked,
+                              snapshot.secretStoredPlaceholderVisible,
+                              snapshot.secretStoredPlaceholderLength,
+                              snapshot.showSecretButtonVisible,
+                              snapshot.showSecretButtonEnabled,
+                              g_connectionManagerSecretRevealHelloCallCount.load(std::memory_order_relaxed),
+                              revealFieldText.size(),
+                              showRect.left,
+                              showRect.top,
+                              showRect.right,
+                              showRect.bottom,
+                              showLabel));
+
+    std::wstring revealedSecret;
+    state.Require(DebugGetConnectionManagerSecretText(revealedSecret), L"Failed to read the saved password after reveal.");
+    state.Require(revealedSecret == savedSecret,
+                  std::format(L"Connection Manager revealed the wrong saved secret length; expected {} chars, got {}.",
+                              savedSecret.size(),
+                              revealedSecret.size()));
+    state.Require(g_connectionManagerSecretRevealHelloCallCount.load(std::memory_order_relaxed) >= 1u,
+                  L"Revealing a saved password should require Windows Hello verification.");
+
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager saved-secret-reveal: complete");
     return state.failure.empty();
 }
 
@@ -2594,7 +2742,8 @@ enum class ConnectionManagerCloseAction
     for (size_t chunk = 0; chunk < 8u; ++chunk)
     {
         SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager long-run scroll: chunk {} begin", chunk));
-        state.Require(DebugScrollConnectionManagerListByWheelDetents(-12),
+        const int scrollDetents = (chunk % 2u == 0u) ? -3 : 3;
+        state.Require(DebugScrollConnectionManagerListByWheelDetents(scrollDetents),
                       std::format(L"Connection Manager DxUi list did not accept long-run scroll chunk {}.", chunk));
         if (! state.failure.empty())
         {
@@ -6213,6 +6362,7 @@ template <typename Predicate>
             return;
         }
 
+        std::this_thread::sleep_for(std::chrono::milliseconds{static_cast<long long>(GetDoubleClickTime()) + 50ll});
         toggleHost                 = nullptr;
         toggleRect                 = {};
         workerResult.toggledMasked = DebugGetConnectionCredentialPromptToggleSecretButtonHostAndClientRect(toggleHost, toggleRect) &&
@@ -6316,6 +6466,9 @@ void RunConnectionsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     });
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_uses_localized_strings_for_dynamic_labels", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowUsesLocalizedStringsForDynamicLabels(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_list_no_horizontal_scroll_and_saved_secret_reveals", [=](CaseState& state) noexcept {
+        return TestConnectionManagerWindowListHasNoHorizontalScrollAndSavedSecretReveals(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_retired_dialog_files_absent", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowRetiredDialogFilesAbsent(state);

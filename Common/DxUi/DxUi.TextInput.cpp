@@ -5,7 +5,6 @@
 #include <cwctype>
 #include <limits>
 
-#include <commctrl.h>
 #include <imm.h>
 #include <richedit.h>
 #include <windowsx.h>

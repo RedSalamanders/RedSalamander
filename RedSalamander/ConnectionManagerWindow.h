@@ -72,6 +72,7 @@ struct ConnectionManagerDebugSnapshot
     size_t visibleListColumnCount               = 0u;
     size_t visibleListCellCount                 = 0u;
     bool listHasVerticalScrollbar               = false;
+    bool listHasHorizontalScrollbar             = false;
     bool themeDark                              = false;
     bool themeHighContrast                      = false;
     bool themeRainbow                           = false;
@@ -104,6 +105,11 @@ struct ConnectionManagerDebugSnapshot
     bool removeButtonFocusable = false;
     std::wstring currentNameText;
     std::wstring currentPluginId;
+    bool secretStoredPlaceholderVisible = false;
+    size_t secretStoredPlaceholderLength = 0u;
+    bool secretMasked = false;
+    bool showSecretButtonVisible = false;
+    bool showSecretButtonEnabled = false;
     bool nameHostPresent             = false;
     bool nameHostVisible             = false;
     bool nameHostEnabled             = false;
@@ -149,6 +155,7 @@ struct ConnectionManagerDebugSnapshot
 [[nodiscard]] bool DebugScrollConnectionManagerS3UseHttpsToggleIntoView() noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerSavePasswordToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerSavePasswordToggleState(bool& outChecked, std::wstring& outLabel) noexcept;
+[[nodiscard]] bool DebugScrollConnectionManagerCommandButtonIntoView(UINT commandId) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerCommandButtonHostAndClientRect(UINT commandId, HWND& outHost, RECT& outRect, std::wstring& outLabel) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerS3UseHttpsToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerS3UseHttpsToggleState(bool& outChecked, std::wstring& outLabel) noexcept;
@@ -212,6 +219,7 @@ void UpdateTheme(const AppTheme& theme) noexcept;
 [[nodiscard]] bool DebugScrollS3UseHttpsToggleIntoView() noexcept;
 [[nodiscard]] bool DebugGetSavePasswordToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetSavePasswordToggleState(bool& outChecked, std::wstring& outLabel) noexcept;
+[[nodiscard]] bool DebugScrollCommandButtonIntoView(UINT commandId) noexcept;
 [[nodiscard]] bool DebugGetCommandButtonHostAndClientRect(UINT commandId, HWND& outHost, RECT& outRect, std::wstring& outLabel) noexcept;
 [[nodiscard]] bool DebugGetS3UseHttpsToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetS3UseHttpsToggleState(bool& outChecked, std::wstring& outLabel) noexcept;

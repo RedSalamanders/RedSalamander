@@ -661,7 +661,12 @@ void IconCache::SetDpi(float dpi)
     }
 }
 
-wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceContext* d2dContext)
+int IconCache::MakeBitmapCacheSizeClass(float targetDipSize) const noexcept
+{
+    return SelectOptimalImageListSize(targetDipSize);
+}
+
+wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceContext* d2dContext, float targetDipSize)
 {
     if (! _initialized.load(std::memory_order_acquire) || ! d2dContext || iconIndex < 0)
     {
@@ -675,6 +680,8 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
         return nullptr;
     }
 
+    const IconBitmapCacheKey cacheKey{.iconIndex = iconIndex, .imageListSize = MakeBitmapCacheSizeClass(targetDipSize)};
+
     // Check cache first
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
@@ -685,7 +692,7 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
         auto deviceIt            = _deviceCaches.find(device.get());
         if (deviceIt != _deviceCaches.end())
         {
-            auto it = deviceIt->second.bitmaps.find(iconIndex);
+            auto it = deviceIt->second.bitmaps.find(cacheKey);
             if (it != deviceIt->second.bitmaps.end())
             {
                 _hitCount++;
@@ -700,8 +707,12 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
 
     // Cache miss - extract icon from system image list
     const auto extractStart = std::chrono::steady_clock::now();
-    wil::unique_hicon icon  = ExtractSystemIcon(iconIndex);
-    PerfEmitDuration(L"iconcache.miss_extract_us", PerfElapsedUs(extractStart), static_cast<uint64_t>(iconIndex), 0, icon ? S_OK : S_FALSE);
+    wil::unique_hicon icon  = ExtractSystemIcon(iconIndex, targetDipSize);
+    PerfEmitDuration(L"iconcache.miss_extract_us",
+                     PerfElapsedUs(extractStart),
+                     static_cast<uint64_t>(iconIndex),
+                     static_cast<uint64_t>(cacheKey.imageListSize),
+                     icon ? S_OK : S_FALSE);
     if (! icon)
     {
         return nullptr;
@@ -733,19 +744,21 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
         entry.bitmap             = bitmap;
         entry.lastAccessTime     = ++cache.accessCounter;
         entry.bytes              = bytes;
-        cache.bitmaps[iconIndex] = std::move(entry);
+        cache.bitmaps[cacheKey]  = std::move(entry);
         PerfEmitDuration(L"iconcache.miss_store_us", PerfElapsedUs(storeStart), static_cast<uint64_t>(iconIndex), bytes, S_OK);
     }
 
     return bitmap;
 }
 
-bool IconCache::HasCachedIcon(int iconIndex, ID2D1Device* device) const
+bool IconCache::HasCachedIcon(int iconIndex, ID2D1Device* device, float targetDipSize) const
 {
     if (iconIndex < 0 || ! device)
     {
         return false;
     }
+
+    const IconBitmapCacheKey cacheKey{.iconIndex = iconIndex, .imageListSize = MakeBitmapCacheSizeClass(targetDipSize)};
 
     const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
@@ -758,10 +771,10 @@ bool IconCache::HasCachedIcon(int iconIndex, ID2D1Device* device) const
         return false;
     }
 
-    return deviceIt->second.bitmaps.find(iconIndex) != deviceIt->second.bitmaps.end();
+    return deviceIt->second.bitmaps.find(cacheKey) != deviceIt->second.bitmaps.end();
 }
 
-wil::com_ptr<ID2D1Bitmap1> IconCache::GetCachedBitmap(int iconIndex, ID2D1DeviceContext* d2dContext) const
+wil::com_ptr<ID2D1Bitmap1> IconCache::GetCachedBitmap(int iconIndex, ID2D1DeviceContext* d2dContext, float targetDipSize) const
 {
     if (iconIndex < 0 || ! d2dContext)
     {
@@ -775,6 +788,8 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetCachedBitmap(int iconIndex, ID2D1Device
         return nullptr;
     }
 
+    const IconBitmapCacheKey cacheKey{.iconIndex = iconIndex, .imageListSize = MakeBitmapCacheSizeClass(targetDipSize)};
+
     const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
     PerfEmitSlowIconCacheLockWait(L"cached_bitmap_lookup", PerfElapsedUs(lockWaitStart));
@@ -786,7 +801,7 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetCachedBitmap(int iconIndex, ID2D1Device
         return nullptr;
     }
 
-    const auto it = deviceIt->second.bitmaps.find(iconIndex);
+    const auto it = deviceIt->second.bitmaps.find(cacheKey);
     if (it != deviceIt->second.bitmaps.end())
     {
         return it->second.bitmap;
@@ -1227,7 +1242,7 @@ std::optional<IconCache::SpecialFolderMatch> IconCache::TryGetSpecialFolderForPa
     return match;
 }
 
-wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, int iconIndex, ID2D1DeviceContext* d2dContext)
+wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, int iconIndex, ID2D1DeviceContext* d2dContext, float targetDipSize)
 {
     if (! icon || ! d2dContext || iconIndex < 0)
     {
@@ -1241,6 +1256,8 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
         return nullptr;
     }
 
+    const IconBitmapCacheKey cacheKey{.iconIndex = iconIndex, .imageListSize = MakeBitmapCacheSizeClass(targetDipSize)};
+
     // Check if already cached (another thread might have added it)
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
@@ -1251,7 +1268,7 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
         const auto deviceIt      = _deviceCaches.find(device.get());
         if (deviceIt != _deviceCaches.end())
         {
-            const auto it = deviceIt->second.bitmaps.find(iconIndex);
+            const auto it = deviceIt->second.bitmaps.find(cacheKey);
             if (it != deviceIt->second.bitmaps.end())
             {
                 PerfEmitCounter(L"iconcache.ui_convert_hit_after_race", 1);
@@ -1284,7 +1301,7 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
         entry.bitmap             = bitmap;
         entry.lastAccessTime     = ++cache.accessCounter;
         entry.bytes              = bytes;
-        cache.bitmaps[iconIndex] = std::move(entry);
+        cache.bitmaps[cacheKey]  = std::move(entry);
     }
 
     return bitmap;
@@ -1461,7 +1478,7 @@ size_t IconCache::PrewarmBitmaps(ID2D1DeviceContext* d2dContext)
     for (int iconIndex : iconIndices)
     {
         // Check if already cached for this device
-        if (HasCachedIcon(iconIndex, device.get()))
+        if (HasCachedIcon(iconIndex, device.get(), 16.0f))
         {
             continue;
         }
@@ -1470,7 +1487,7 @@ size_t IconCache::PrewarmBitmaps(ID2D1DeviceContext* d2dContext)
         wil::unique_hicon hIcon = ExtractSystemIcon(iconIndex, 16.0f);
         if (hIcon)
         {
-            auto bitmap = ConvertIconToBitmapOnUIThread(hIcon.get(), iconIndex, d2dContext);
+            auto bitmap = ConvertIconToBitmapOnUIThread(hIcon.get(), iconIndex, d2dContext, 16.0f);
             if (bitmap)
             {
                 ++created;
@@ -1599,8 +1616,9 @@ void IconCache::EvictLRUIfNeeded(IconCache::DeviceCache& cache)
 
     const auto scanStart = std::chrono::steady_clock::now();
     // Find oldest entry by access time
-    int oldestKey     = -1;
-    size_t oldestTime = SIZE_MAX;
+    IconBitmapCacheKey oldestKey{};
+    bool haveOldest    = false;
+    size_t oldestTime  = SIZE_MAX;
 
     for (const auto& [key, entry] : cache.bitmaps)
     {
@@ -1608,20 +1626,24 @@ void IconCache::EvictLRUIfNeeded(IconCache::DeviceCache& cache)
         {
             oldestTime = entry.lastAccessTime;
             oldestKey  = key;
+            haveOldest = true;
         }
     }
 
-    if (oldestKey >= 0)
+    if (haveOldest)
     {
         cache.bitmaps.erase(oldestKey);
         _lruEvictions++;
-        DBGOUT_INFO(L"IconCache: Evicted icon index {} (LRU), cache size now {}", oldestKey, cache.bitmaps.size());
+        DBGOUT_INFO(L"IconCache: Evicted icon index {} sizeClass {} (LRU), cache size now {}",
+                    oldestKey.iconIndex,
+                    oldestKey.imageListSize,
+                    cache.bitmaps.size());
     }
 
     PerfEmitDuration(L"iconcache.device_lru_evict_scan_us",
                      PerfElapsedUs(scanStart),
                      static_cast<uint64_t>(cache.bitmaps.size()),
-                     static_cast<uint64_t>(oldestKey >= 0 ? oldestKey : 0),
+                     static_cast<uint64_t>(haveOldest ? oldestKey.iconIndex : 0),
                      S_OK);
 }
 
@@ -1803,9 +1825,9 @@ size_t IconCache::GetMemoryUsage() const
     size_t bytes = 0;
     for (const auto& entry : _deviceCaches)
     {
-        for (const auto& [iconIndex, cacheEntry] : entry.second.bitmaps)
+        for (const auto& [key, cacheEntry] : entry.second.bitmaps)
         {
-            static_cast<void>(iconIndex);
+            static_cast<void>(key);
             bytes += cacheEntry.bytes;
         }
     }

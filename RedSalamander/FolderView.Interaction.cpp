@@ -55,14 +55,15 @@ void FolderView::OnMouseLeave()
     }
 }
 
-void FolderView::OnKeyDownMessage(WPARAM key)
+void FolderView::OnKeyDownMessage(WPARAM key, LPARAM keyInfo)
 {
     const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-    OnKeyDown(key, ctrl, shift);
+    const bool translatedSpaceCharMayFollow = key == VK_SPACE && keyInfo != 0;
+    OnKeyDown(key, ctrl, shift, translatedSpaceCharMayFollow);
 }
 
-bool FolderView::OnSysKeyDownMessage(WPARAM key)
+bool FolderView::OnSysKeyDownMessage(WPARAM key, LPARAM keyInfo)
 {
     if (key != 'D' && key != VK_DOWN && key != VK_UP)
     {
@@ -71,7 +72,8 @@ bool FolderView::OnSysKeyDownMessage(WPARAM key)
 
     const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-    OnKeyDown(key, ctrl, shift);
+    const bool translatedSpaceCharMayFollow = key == VK_SPACE && keyInfo != 0;
+    OnKeyDown(key, ctrl, shift, translatedSpaceCharMayFollow);
     return true;
 }
 
@@ -133,38 +135,34 @@ void FolderView::OnHScrollMessage(UINT scrollRequest)
     si.fMask  = SIF_ALL;
     GetScrollInfo(_hWnd.get(), SB_HORZ, &si);
 
-    const float columnStride = _tileWidthDip + kColumnSpacingDip;
-    int newPos               = si.nPos;
+    const float viewWidthDip        = std::max(0.0f, DipFromPx(_clientSize.cx));
+    const float maxHorizontalOffset = std::max(0.0f, _contentWidth - viewWidthDip);
+    const float pageWidthDip        = std::max(1.0f, viewWidthDip);
 
-    const float viewWidthDip = DipFromPx(_clientSize.cx);
-    const int visibleColumns = std::max(1, static_cast<int>(std::floor(viewWidthDip / columnStride)));
+    float newOffsetDip = _horizontalOffset;
 
     switch (scrollRequest)
     {
-        case SB_LINELEFT: newPos -= PxFromDip(columnStride); break;
-        case SB_LINERIGHT: newPos += PxFromDip(columnStride); break;
-        case SB_PAGELEFT: newPos -= PxFromDip(static_cast<float>(visibleColumns) * columnStride); break;
-        case SB_PAGERIGHT: newPos += PxFromDip(static_cast<float>(visibleColumns) * columnStride); break;
+        case SB_LINELEFT: newOffsetDip = FolderViewColumnLayout::ResolvePreviousScrollStop(_horizontalOffset, maxHorizontalOffset, _columnLayout); break;
+        case SB_LINERIGHT: newOffsetDip = FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset, maxHorizontalOffset, _columnLayout); break;
+        case SB_PAGELEFT:
+            newOffsetDip = FolderViewColumnLayout::ResolvePreviousScrollStop(_horizontalOffset - pageWidthDip, maxHorizontalOffset, _columnLayout);
+            break;
+        case SB_PAGERIGHT:
+            newOffsetDip = FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset + pageWidthDip, maxHorizontalOffset, _columnLayout);
+            break;
         case SB_THUMBTRACK:
         case SB_THUMBPOSITION:
-        {
-            const float thumbDip    = DipFromPx(static_cast<int>(si.nTrackPos));
-            const float columnIndex = std::round((thumbDip - kColumnSpacingDip) / columnStride);
-            const float snappedDip  = kColumnSpacingDip + (columnIndex * columnStride);
-            newPos                  = PxFromDip(snappedDip);
+            newOffsetDip = DipFromPx(static_cast<int>(si.nTrackPos));
             break;
-        }
-        case SB_LEFT: newPos = si.nMin; break;
-        case SB_RIGHT: newPos = si.nMax; break;
+        case SB_LEFT: newOffsetDip = 0.0f; break;
+        case SB_RIGHT: newOffsetDip = maxHorizontalOffset; break;
     }
 
-    newPos            = std::clamp(newPos, si.nMin, si.nMax);
-    _horizontalOffset = DipFromPx(newPos);
-
-    const float maxHorizontalOffset = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
-    _horizontalOffset               = std::clamp(_horizontalOffset, 0.0f, maxHorizontalOffset);
+    _horizontalOffset = std::clamp(newOffsetDip, 0.0f, maxHorizontalOffset);
 
     UpdateScrollMetrics();
+    QueueMissingVisibleThumbnails();
     BoostIconLoadingForVisibleRange();
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
 }
@@ -288,37 +286,18 @@ void FolderView::OnCommandMessage(UINT commandId)
 
 void FolderView::OnMouseWheel(int delta, bool horizontal)
 {
-    const float columnStride = _tileWidthDip + kColumnSpacingDip;
-
-    if (horizontal)
-    {
-        // Horizontal wheel: scroll by full columns
-        const int wheelClicks   = delta / WHEEL_DELTA;
-        const float deltaOffset = static_cast<float>(wheelClicks) * columnStride;
-
-        _horizontalOffset += deltaOffset;
-    }
-    else
-    {
-        // Vertical wheel: treat as horizontal scroll in horizontal-only layout
-        const int wheelClicks   = -delta / WHEEL_DELTA; // Invert for natural scrolling
-        const float deltaOffset = static_cast<float>(wheelClicks) * columnStride;
-
-        _horizontalOffset += deltaOffset;
-    }
-
-    // Clamp to valid range
     const float maxHorizontal = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
-    _horizontalOffset         = std::clamp(_horizontalOffset, 0.0f, maxHorizontal);
+    const int wheelClicks = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
+    for (int click = 0; click < std::abs(wheelClicks); ++click)
+    {
+        _horizontalOffset = wheelClicks > 0 ? FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset, maxHorizontal, _columnLayout) :
+                                              FolderViewColumnLayout::ResolvePreviousScrollStop(_horizontalOffset, maxHorizontal, _columnLayout);
+    }
 
-    // Snap to nearest column boundary for crisp alignment
-    const float currentColumnIndex = std::round((_horizontalOffset - kColumnSpacingDip) / columnStride);
-    _horizontalOffset              = kColumnSpacingDip + (currentColumnIndex * columnStride);
-
-    // Clamp again after snapping
     _horizontalOffset = std::clamp(_horizontalOffset, 0.0f, maxHorizontal);
 
     UpdateScrollMetrics();
+    QueueMissingVisibleThumbnails();
     BoostIconLoadingForVisibleRange();
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
 }
@@ -582,10 +561,8 @@ void FolderView::NavigateUp() noexcept
     }
 }
 
-void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
+void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpaceCharMayFollow)
 {
-    static_cast<void>(ctrl);
-
     ErrorOverlayState overlay{};
     bool hasOverlay = false;
     {
@@ -650,6 +627,13 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
             case VK_UP: HandleIncrementalSearchNavigate(false); return;
             case VK_RIGHT:
             case VK_DOWN: HandleIncrementalSearchNavigate(true); return;
+            case VK_SPACE:
+                if (! ctrl)
+                {
+                    OnCharMessage(L' ');
+                    _incrementalSearch.suppressNextSpaceChar = translatedSpaceCharMayFollow;
+                }
+                return;
             case VK_HOME:
             case VK_END:
             case VK_PRIOR:
@@ -762,6 +746,32 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
         }
     };
 
+    auto visibleColumnCount = [&]() noexcept
+    {
+        if (_columnLayout.empty())
+        {
+            return 1;
+        }
+
+        const float viewWidthDip = std::max(0.0f, DipFromPx(_clientSize.cx));
+        const float layoutLeft   = _horizontalOffset;
+        const float layoutRight  = layoutLeft + viewWidthDip;
+        int count                = 0;
+        for (const auto& column : _columnLayout)
+        {
+            if (column.RightDip() < layoutLeft)
+            {
+                continue;
+            }
+            if (column.leftDip > layoutRight)
+            {
+                break;
+            }
+            ++count;
+        }
+        return std::max(1, count);
+    };
+
     switch (key)
     {
         case VK_HOME:
@@ -782,18 +792,13 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
         {
             ExitIncrementalSearch();
             // Scroll left by visible columns
-            const float columnStride = _tileWidthDip + kColumnSpacingDip;
-            const float viewWidthDip = DipFromPx(_clientSize.cx);
-            const int visibleColumns = std::max(1, static_cast<int>(std::floor(viewWidthDip / columnStride)));
-            const float scrollDelta  = static_cast<float>(visibleColumns) * columnStride;
-
-            _horizontalOffset -= scrollDelta;
-            _horizontalOffset = std::max(0.0f, _horizontalOffset);
-
-            // Snap to column boundary
-            const float columnIndex = std::round((_horizontalOffset - kColumnSpacingDip) / columnStride);
-            _horizontalOffset       = kColumnSpacingDip + (columnIndex * columnStride);
-            _horizontalOffset       = std::max(0.0f, _horizontalOffset);
+            const float viewWidthDip        = std::max(0.0f, DipFromPx(_clientSize.cx));
+            const float maxHorizontalOffset = std::max(0.0f, _contentWidth - viewWidthDip);
+            const int visibleColumns        = visibleColumnCount();
+            _horizontalOffset               = std::clamp(FolderViewColumnLayout::ResolvePreviousScrollStop(
+                                           _horizontalOffset - std::max(1.0f, viewWidthDip), maxHorizontalOffset, _columnLayout),
+                                       0.0f,
+                                       maxHorizontalOffset);
 
             // Move focus left by visible columns
             if (hasFocus && ! _columnCounts.empty())
@@ -809,6 +814,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
             }
 
             UpdateScrollMetrics();
+            QueueMissingVisibleThumbnails();
             InvalidateRect(_hWnd.get(), nullptr, FALSE);
             break;
         }
@@ -816,19 +822,13 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
         {
             ExitIncrementalSearch();
             // Scroll right by visible columns
-            const float columnStride = _tileWidthDip + kColumnSpacingDip;
-            const float viewWidthDip = DipFromPx(_clientSize.cx);
-            const int visibleColumns = std::max(1, static_cast<int>(std::floor(viewWidthDip / columnStride)));
-            const float scrollDelta  = static_cast<float>(visibleColumns) * columnStride;
-
-            _horizontalOffset += scrollDelta;
+            const float viewWidthDip = std::max(0.0f, DipFromPx(_clientSize.cx));
+            const int visibleColumns = visibleColumnCount();
             const float maxHorizontal = std::max(0.0f, _contentWidth - viewWidthDip);
-            _horizontalOffset         = std::min(_horizontalOffset, maxHorizontal);
-
-            // Snap to column boundary
-            const float columnIndex = std::round((_horizontalOffset - kColumnSpacingDip) / columnStride);
-            _horizontalOffset       = kColumnSpacingDip + (columnIndex * columnStride);
-            _horizontalOffset       = std::clamp(_horizontalOffset, 0.0f, maxHorizontal);
+            _horizontalOffset         = std::clamp(FolderViewColumnLayout::ResolveNextScrollStop(
+                                           _horizontalOffset + std::max(1.0f, viewWidthDip), maxHorizontal, _columnLayout),
+                                       0.0f,
+                                       maxHorizontal);
 
             // Move focus right by visible columns
             if (hasFocus && ! _columnCounts.empty())
@@ -845,6 +845,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
             }
 
             UpdateScrollMetrics();
+            QueueMissingVisibleThumbnails();
             InvalidateRect(_hWnd.get(), nullptr, FALSE);
             break;
         }
@@ -927,6 +928,15 @@ void FolderView::OnCharMessage(wchar_t character)
     if (ctrl || alt)
     {
         return;
+    }
+
+    if (_incrementalSearch.suppressNextSpaceChar)
+    {
+        _incrementalSearch.suppressNextSpaceChar = false;
+        if (character == L' ')
+        {
+            return;
+        }
     }
 
     if (character == L'\b')
@@ -1053,6 +1063,7 @@ void FolderView::ExitIncrementalSearch() noexcept
     }
     const std::wstring previousQuery = _incrementalSearch.query;
     _incrementalSearch.active        = false;
+    _incrementalSearch.suppressNextSpaceChar = false;
     _incrementalSearch.query.clear();
     ClearIncrementalSearchHighlight();
     NotifyIncrementalSearchChanged();
@@ -1212,6 +1223,7 @@ void FolderView::ActivateIncrementalSearch()
     const auto quickSearchStart = std::chrono::steady_clock::now();
 
     _incrementalSearch.active = true;
+    _incrementalSearch.suppressNextSpaceChar = false;
     _incrementalSearch.query.clear();
     ClearIncrementalSearchHighlight();
     NotifyIncrementalSearchChanged();

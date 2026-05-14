@@ -107,6 +107,7 @@
     <ClCompile Include="..\..\RedConfigure\Localization\RcWriter.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureApp.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureSession.cpp" />
+    <ClCompile Include="..\..\RedConfigure\RedConfigureTraceProvider.cpp" />
     <ClCompile Include="..\..\RedConfigure\Themes\ThemeCatalog.cpp" />
     <ClCompile Include="..\..\RedConfigure\Themes\ThemePreviewModel.cpp" />
     <ClCompile Include="..\..\RedConfigure\Workspace\WorkspaceDiscovery.cpp" />

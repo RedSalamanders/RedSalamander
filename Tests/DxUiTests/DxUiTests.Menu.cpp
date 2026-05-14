@@ -5,6 +5,7 @@
 #include "FolderViewVisualState.h"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <format>
@@ -652,6 +653,49 @@ bool WaitForFocusedWindow(HWND hwnd, std::chrono::milliseconds timeout = std::ch
     return GetFocus() == hwnd;
 }
 
+void TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands()
+{
+    using namespace RedSalamander::DxUi;
+
+    wil::unique_hmenu menu{CreatePopupMenu()};
+    Require(menu != nullptr, "embedded viewer context-menu conversion creates a native popup menu");
+
+    wil::unique_hmenu standaloneSubmenu{CreatePopupMenu()};
+    Require(standaloneSubmenu != nullptr, "embedded viewer context-menu conversion creates a standalone-only submenu");
+    Require(AppendMenuW(standaloneSubmenu.get(), MF_STRING, 91701u, L"&Standalone action\tAlt+S") != FALSE,
+            "embedded viewer context-menu conversion populates a submenu that should become empty after filtering");
+
+    Require(AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr) != FALSE, "embedded viewer context-menu conversion can start with a separator");
+    Require(AppendMenuW(menu.get(), MF_STRING, 91702u, L"&Open standalone\tCtrl+O") != FALSE,
+            "embedded viewer context-menu conversion populates a standalone-only command");
+    Require(AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr) != FALSE, "embedded viewer context-menu conversion can trim interior separators");
+    Require(AppendMenuW(menu.get(), MF_STRING, 91703u, L"&Copy path\tCtrl+C") != FALSE,
+            "embedded viewer context-menu conversion populates an embedded-safe command");
+    Require(AppendMenuW(menu.get(), MF_POPUP | MF_STRING, reinterpret_cast<UINT_PTR>(standaloneSubmenu.get()), L"&Standalone") != FALSE,
+            "embedded viewer context-menu conversion attaches the standalone-only submenu");
+    static_cast<void>(standaloneSubmenu.release());
+    Require(AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr) != FALSE, "embedded viewer context-menu conversion can trim trailing separators");
+    Require(AppendMenuW(menu.get(), MF_STRING | MF_CHECKED, 91704u, L"Show &metadata\tF4") != FALSE,
+            "embedded viewer context-menu conversion preserves checked embedded-safe commands");
+
+    static constexpr std::array<int, 2> kPreviewContextMenuExcludedCommandIds{{91701, 91702}};
+    const NativeMenuFlyoutOptions options{
+        .includeAcceleratorText = false,
+        .omitEmptySubmenus      = true,
+        .trimSeparators         = true,
+        .excludedCommandIds     = kPreviewContextMenuExcludedCommandIds,
+    };
+
+    const std::vector<MenuFlyoutItem> items = ConvertNativeHMenuToFlyoutItems(menu.get(), options);
+    Require(items.size() == 3u, "embedded viewer context-menu conversion removes standalone-only commands, empty submenus, and outer separator runs");
+    Require(items[0].text == L"Copy path", "embedded viewer context-menu conversion strips mnemonics from retained command text");
+    Require(items[0].commandId == 91703, "embedded viewer context-menu conversion preserves retained command IDs");
+    Require(items[0].acceleratorText.empty(), "embedded viewer context-menu conversion suppresses standalone keyboard shortcut text");
+    Require(items[1].kind == MenuItemKind::Separator, "embedded viewer context-menu conversion preserves one intentional separator between retained groups");
+    Require(items[2].text == L"Show metadata", "embedded viewer context-menu conversion keeps the second embedded-safe command");
+    Require(items[2].kind == MenuItemKind::Toggle && items[2].checked, "embedded viewer context-menu conversion preserves checked state");
+}
+
 void RunMenuDismissalKeyScenario(UINT message, WPARAM virtualKey, const char* appearExpectation, const char* dismissExpectation, const char* focusExpectation)
 {
     using namespace RedSalamander::DxUi;
@@ -1166,6 +1210,601 @@ void TestStationaryMouseDoesNotOverrideKeyboardRootSwitch()
 
     Require(driverFailure.empty(), driverFailure.c_str());
     Require(! result.has_value(), "closing the stationary-mouse keyboard switching validation popup with Escape returns no invoked command");
+}
+
+void TestMenuPointerOverSiblingRootSwitchesOpenMenu()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 420, 260, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    const std::vector<std::vector<MenuFlyoutItem>> rootMenus = {
+        {
+            {.text = L"View one", .commandId = 36701},
+            {.text = L"View two", .commandId = 36702},
+        },
+        {
+            {.text = L"Plugins one", .commandId = 36711},
+            {.text = L"Plugins two", .commandId = 36712},
+        },
+    };
+    const std::array<POINT, 2> rootPopupPoints = {POINT{270, 180}, POINT{190, 180}};
+
+    size_t activeRootIndex  = 0u;
+    const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
+    {
+        ContextMenuRootSwitchRequest request{};
+        request.screenPoint = rootPopupPoints[rootIndex];
+        request.items       = rootMenus[rootIndex];
+        return request;
+    };
+
+    ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.switchRootFromPointer = [&](POINT screenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        POINT clientPoint = screenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &clientPoint) == FALSE)
+        {
+            return std::nullopt;
+        }
+        if (clientPoint.y < 0 || clientPoint.y >= 40)
+        {
+            return std::nullopt;
+        }
+
+        size_t hitIndex = rootMenus.size();
+        if (clientPoint.x >= 140 && clientPoint.x < 220)
+        {
+            hitIndex = 1u;
+        }
+        else if (clientPoint.x >= 240 && clientPoint.x < 320)
+        {
+            hitIndex = 0u;
+        }
+
+        if (hitIndex >= rootMenus.size() || hitIndex == activeRootIndex)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = hitIndex;
+        return buildRequest(activeRootIndex);
+    };
+
+    POINT viewMenuClientPoint{280, 20};
+    POINT viewMenuScreenPoint = viewMenuClientPoint;
+    Require(ClientToScreen(ownerWindow.Hwnd(), &viewMenuScreenPoint) != FALSE, "View root test point converts to screen coordinates for idle cursor polling validation");
+    SetCursorPos(viewMenuScreenPoint.x, viewMenuScreenPoint.y);
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
+        if (! viewPopupHwnd)
+        {
+            driverFailure = "View root popup opens before pointer root-switch validation";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        POINT pluginsMenuClientPoint{180, 20};
+        POINT pluginsMenuScreenPoint = pluginsMenuClientPoint;
+        if (ClientToScreen(ownerWindow.Hwnd(), &pluginsMenuScreenPoint) == FALSE)
+        {
+            driverFailure = "Plugins root test point converts to screen coordinates";
+            return;
+        }
+
+        RECT viewPopupRect{};
+        if (GetWindowRect(viewPopupHwnd, &viewPopupRect) == FALSE)
+        {
+            driverFailure = "View root popup exposes a screen rect before pointer root-switch validation";
+            return;
+        }
+
+        SetCursorPos(pluginsMenuScreenPoint.x, pluginsMenuScreenPoint.y);
+        const LPARAM capturedMouseMovePoint = MAKELPARAM(pluginsMenuScreenPoint.x - viewPopupRect.left, pluginsMenuScreenPoint.y - viewPopupRect.top);
+        PostMessageW(viewPopupHwnd, WM_MOUSEMOVE, 0, capturedMouseMovePoint);
+
+        const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one");
+        if (! pluginsPopupHwnd)
+        {
+            driverFailure = "moving the pointer from an open View root to the Plugins root opens the Plugins popup";
+            return;
+        }
+
+        ContextMenuPopupDebugState pluginsPopupState{};
+        if (! DebugGetContextMenuPopupState(pluginsPopupHwnd, pluginsPopupState) || pluginsPopupState.rootSwitchImmediateRenderCount == 0u ||
+            pluginsPopupState.renderCount == 0u)
+        {
+            driverFailure = "root-switched Plugins popup is painted before the menu loop accepts another pointer move";
+            return;
+        }
+
+        if (IsWindow(viewPopupHwnd) != FALSE)
+        {
+            driverFailure = "switching to the Plugins root closes the previous View popup";
+        }
+    });
+
+    const ThemePalette theme        = MakeDefaultThemePalette(true);
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(! result.has_value(), "closing the pointer root-switch validation popup with Escape returns no invoked command");
+}
+
+void TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 420, 260, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    const std::array<std::vector<MenuFlyoutItem>, 2> rootMenus = {
+        std::vector<MenuFlyoutItem>{{.text = L"View one", .commandId = 36741}, {.text = L"View two", .commandId = 36742}},
+        std::vector<MenuFlyoutItem>{{.text = L"Plugins one", .commandId = 36751}, {.text = L"Plugins two", .commandId = 36752}},
+    };
+    const std::array<POINT, 2> rootPopupPoints = {
+        ClientScreenPointForTest(ownerWindow.Hwnd(), 270, 60, "View synthetic hover root popup point converts to screen coordinates"),
+        ClientScreenPointForTest(ownerWindow.Hwnd(), 190, 60, "Plugins synthetic hover root popup point converts to screen coordinates"),
+    };
+
+    size_t activeRootIndex  = 0u;
+    const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
+    {
+        ContextMenuRootSwitchRequest request{};
+        request.screenPoint = rootPopupPoints[rootIndex];
+        request.items       = rootMenus[rootIndex];
+        return request;
+    };
+
+    std::atomic<int> pendingMenuBarHoverRootSwitch{-1};
+    ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.switchRootFromMenuBarHover = [&]() -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        const int hoverIndex = pendingMenuBarHoverRootSwitch.exchange(-1);
+        if (hoverIndex < 0)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = static_cast<size_t>(hoverIndex);
+        return buildRequest(activeRootIndex);
+    };
+
+    POINT idleScreenPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "synthetic hover idle point converts to screen coordinates");
+    SetCursorPos(idleScreenPoint.x, idleScreenPoint.y);
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
+        if (! viewPopupHwnd)
+        {
+            driverFailure = "View root popup opens before direct synthetic menu-bar hover validation";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        pendingMenuBarHoverRootSwitch.store(1);
+        if (PostMessageW(viewPopupHwnd, WndMsg::kDxUiContextMenuRootHoverChanged, 1u, 0) == 0)
+        {
+            driverFailure = "View popup receives the direct synthetic menu-bar hover switch message";
+            return;
+        }
+
+        const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one");
+        if (! pluginsPopupHwnd)
+        {
+            driverFailure = "direct synthetic menu-bar hover message switches from View to Plugins while cursor is outside the popup";
+            return;
+        }
+
+        ContextMenuPopupDebugState pluginsPopupState{};
+        if (! DebugGetContextMenuPopupState(pluginsPopupHwnd, pluginsPopupState) || pluginsPopupState.rootSwitchImmediateRenderCount == 0u ||
+            pluginsPopupState.renderCount == 0u)
+        {
+            driverFailure = "synthetic menu-bar hover root switch paints the replacement Plugins popup immediately";
+            return;
+        }
+
+        if (IsWindow(viewPopupHwnd) != FALSE)
+        {
+            driverFailure = "synthetic menu-bar hover root switch closes the previous View popup";
+        }
+    });
+
+    const ThemePalette theme        = MakeDefaultThemePalette(true);
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(activeRootIndex == 1u, "direct synthetic menu-bar hover validation records the accepted root index");
+    Require(! result.has_value(), "closing the direct synthetic menu-bar hover popup with Escape returns no invoked command");
+}
+
+void TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 420, 260, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    const std::array<std::vector<MenuFlyoutItem>, 2> rootMenus = {
+        std::vector<MenuFlyoutItem>{{.text = L"View one", .commandId = 36721}, {.text = L"View two", .commandId = 36722}},
+        std::vector<MenuFlyoutItem>{{.text = L"Plugins one", .commandId = 36731}, {.text = L"Plugins two", .commandId = 36732}},
+    };
+    const std::array<POINT, 2> rootPopupPoints = {
+        ClientScreenPointForTest(ownerWindow.Hwnd(), 90, 0, "View overlapping root popup point converts to screen coordinates"),
+        ClientScreenPointForTest(ownerWindow.Hwnd(), 190, 0, "Plugins overlapping root popup point converts to screen coordinates"),
+    };
+    constexpr LONG kMainMenuStripHeightPx = 96;
+
+    size_t activeRootIndex  = 0u;
+    const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
+    {
+        ContextMenuRootSwitchRequest request{};
+        request.screenPoint = rootPopupPoints[rootIndex];
+        request.items       = rootMenus[rootIndex];
+        return request;
+    };
+
+    ContextMenuSessionCallbacks sessionCallbacks{};
+    std::atomic<int> pendingMenuBarHoverRootSwitch{-1};
+    sessionCallbacks.switchRootFromPointer = [&](POINT screenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        POINT clientPoint = screenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &clientPoint) == FALSE || clientPoint.y < 0 || clientPoint.y >= kMainMenuStripHeightPx)
+        {
+            return std::nullopt;
+        }
+        if (activeRootIndex == 1u)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = 1u;
+        return buildRequest(activeRootIndex);
+    };
+    sessionCallbacks.switchRootFromMenuBarHover = [&]() -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        const int hoverIndex = pendingMenuBarHoverRootSwitch.exchange(-1);
+        if (hoverIndex < 0)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = static_cast<size_t>(hoverIndex);
+        return buildRequest(activeRootIndex);
+    };
+
+    POINT idleClientPoint{20, 140};
+    POINT idleScreenPoint = idleClientPoint;
+    Require(ClientToScreen(ownerWindow.Hwnd(), &idleScreenPoint) != FALSE, "idle cursor point converts to screen coordinates");
+    SetCursorPos(idleScreenPoint.x, idleScreenPoint.y);
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
+        if (! viewPopupHwnd)
+        {
+            driverFailure = "View root popup opens before overlapping-popup validation";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        ContextMenuPopupDebugState popupState{};
+        if (! WaitForContextMenuPopupState(viewPopupHwnd, [](const ContextMenuPopupDebugState&) noexcept { return true; }, popupState))
+        {
+            driverFailure = "overlapping View popup exposes debug state";
+            return;
+        }
+
+        D2D1_RECT_F firstItemRectDip{};
+        if (! WaitForContextMenuPopupItemRect(viewPopupHwnd, 0u, firstItemRectDip))
+        {
+            driverFailure = "overlapping View popup exposes its first item rect";
+            return;
+        }
+
+        const float itemMidXDip = (firstItemRectDip.left + firstItemRectDip.right) * 0.5f;
+        const float itemMidYDip = (firstItemRectDip.top + firstItemRectDip.bottom) * 0.5f;
+        const POINT popupItemScreenPoint{
+            popupState.surfaceRectPx.left + static_cast<LONG>(DipToPixelForPopup(itemMidXDip, popupState.dpi)),
+            popupState.surfaceRectPx.top + static_cast<LONG>(DipToPixelForPopup(itemMidYDip, popupState.dpi)),
+        };
+
+        POINT ownerClientPoint = popupItemScreenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &ownerClientPoint) == FALSE)
+        {
+            driverFailure = "overlapping popup sample point converts to owner client coordinates";
+            return;
+        }
+        if (ownerClientPoint.y < 0 || ownerClientPoint.y >= kMainMenuStripHeightPx)
+        {
+            driverFailure = "overlapping popup sample point sits over the owner main-menu strip";
+            return;
+        }
+
+        RECT popupWindowRect{};
+        if (GetWindowRect(viewPopupHwnd, &popupWindowRect) == FALSE)
+        {
+            driverFailure = "overlapping View popup exposes a screen rect";
+            return;
+        }
+
+        SetCursorPos(popupItemScreenPoint.x, popupItemScreenPoint.y);
+        PostMessageW(viewPopupHwnd,
+                     WM_MOUSEMOVE,
+                     0,
+                     MAKELPARAM(popupItemScreenPoint.x - popupWindowRect.left, popupItemScreenPoint.y - popupWindowRect.top));
+
+        const HWND pluginsPopupHwnd =
+            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
+        if (pluginsPopupHwnd)
+        {
+            driverFailure = "moving inside a frontmost popup must not switch the root menu underneath it";
+            return;
+        }
+
+        if (SetCursorPos(popupItemScreenPoint.x, popupItemScreenPoint.y) == FALSE)
+        {
+            driverFailure = "overlapping popup sample point remains available as the live cursor position before synthetic hover validation";
+            return;
+        }
+        pendingMenuBarHoverRootSwitch.store(1);
+        if (PostMessageW(viewPopupHwnd, WndMsg::kDxUiContextMenuRootHoverChanged, 1u, 0) == 0)
+        {
+            driverFailure = "overlapping popup can receive the synthetic menu-bar hover switch message";
+            return;
+        }
+        const HWND pluginsPopupFromHoverHwnd =
+            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
+        if (pluginsPopupFromHoverHwnd)
+        {
+            driverFailure = "a menu-bar hover message must not switch root while the live cursor is inside a frontmost popup";
+            return;
+        }
+
+        if (IsWindow(viewPopupHwnd) == FALSE)
+        {
+            driverFailure = "View popup remains alive after moving inside its overlapping surface";
+        }
+    });
+
+    const ThemePalette theme        = MakeDefaultThemePalette(true);
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(! result.has_value(), "closing the overlapping popup validation with Escape returns no invoked command");
+}
+
+void TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    const std::array<std::vector<MenuFlyoutItem>, 2> rootMenus = {
+        std::vector<MenuFlyoutItem>{{.text = L"View one", .commandId = 36801}, {.text = L"View two", .commandId = 36802}},
+        std::vector<MenuFlyoutItem>{{.text = L"Plugins one", .commandId = 36811}, {.text = L"Plugins two", .commandId = 36812}},
+    };
+    const std::array<POINT, 2> rootPopupPoints = {POINT{270, 180}, POINT{190, 180}};
+
+    size_t activeRootIndex  = 0u;
+    const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
+    {
+        ContextMenuRootSwitchRequest request{};
+        request.screenPoint = rootPopupPoints[rootIndex];
+        request.items       = rootMenus[rootIndex];
+        return request;
+    };
+
+    ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.switchRootFromPointer = [&](POINT screenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        POINT clientPoint = screenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &clientPoint) == FALSE || clientPoint.y < 0 || clientPoint.y >= 40)
+        {
+            return std::nullopt;
+        }
+
+        size_t hitIndex = rootMenus.size();
+        if (clientPoint.x >= 140 && clientPoint.x < 220)
+        {
+            hitIndex = 1u;
+        }
+        else if (clientPoint.x >= 240 && clientPoint.x < 320)
+        {
+            hitIndex = 0u;
+        }
+
+        if (hitIndex >= rootMenus.size() || hitIndex == activeRootIndex)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = hitIndex;
+        return buildRequest(activeRootIndex);
+    };
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
+        if (! viewPopupHwnd)
+        {
+            driverFailure = "View root popup opens before stale mouse-move validation";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        POINT pluginsMenuClientPoint{180, 20};
+        POINT pluginsMenuScreenPoint = pluginsMenuClientPoint;
+        if (ClientToScreen(ownerWindow.Hwnd(), &pluginsMenuScreenPoint) == FALSE)
+        {
+            driverFailure = "Plugins root test point converts to screen coordinates for stale mouse-move validation";
+            return;
+        }
+
+        POINT viewMenuClientPoint{280, 20};
+        POINT viewMenuScreenPoint = viewMenuClientPoint;
+        if (ClientToScreen(ownerWindow.Hwnd(), &viewMenuScreenPoint) == FALSE)
+        {
+            driverFailure = "View root stale point converts to screen coordinates";
+            return;
+        }
+
+        RECT viewPopupRect{};
+        if (GetWindowRect(viewPopupHwnd, &viewPopupRect) == FALSE)
+        {
+            driverFailure = "View root popup exposes a screen rect before stale mouse-move validation";
+            return;
+        }
+
+        SetCursorPos(pluginsMenuScreenPoint.x, pluginsMenuScreenPoint.y);
+        const LPARAM pluginsMovePoint = MAKELPARAM(pluginsMenuScreenPoint.x - viewPopupRect.left, pluginsMenuScreenPoint.y - viewPopupRect.top);
+        PostMessageW(viewPopupHwnd, WM_MOUSEMOVE, 0, pluginsMovePoint);
+
+        const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one");
+        if (! pluginsPopupHwnd)
+        {
+            driverFailure = "moving the live cursor to Plugins opens the Plugins popup before stale mouse-move validation";
+            return;
+        }
+
+        POINT staleViewClientPoint = viewMenuScreenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &staleViewClientPoint) == FALSE)
+        {
+            driverFailure = "stale View screen point converts to owner client coordinates";
+            return;
+        }
+        PostMessageW(ownerWindow.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(staleViewClientPoint.x, staleViewClientPoint.y));
+
+        const HWND staleViewPopupHwnd =
+            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one", std::chrono::milliseconds(180));
+        if (staleViewPopupHwnd && staleViewPopupHwnd != viewPopupHwnd)
+        {
+            driverFailure = "a stale View mouse-move message switched away from the live Plugins cursor";
+            return;
+        }
+
+        if (IsWindow(pluginsPopupHwnd) == FALSE)
+        {
+            driverFailure = "Plugins popup remains alive after the stale View mouse-move message";
+        }
+    });
+
+    const ThemePalette theme        = MakeDefaultThemePalette(true);
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(! result.has_value(), "closing the stale mouse-move validation popup with Escape returns no invoked command");
+}
+
+void TestMenuRootSwitchDoesNotPollCursorWhileIdle()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    const std::array<std::vector<MenuFlyoutItem>, 2> rootMenus = {
+        std::vector<MenuFlyoutItem>{{.text = L"View one", .commandId = 36901}, {.text = L"View two", .commandId = 36902}},
+        std::vector<MenuFlyoutItem>{{.text = L"Plugins one", .commandId = 36911}, {.text = L"Plugins two", .commandId = 36912}},
+    };
+    const std::array<POINT, 2> rootPopupPoints = {POINT{270, 180}, POINT{190, 180}};
+
+    size_t activeRootIndex  = 0u;
+    const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
+    {
+        ContextMenuRootSwitchRequest request{};
+        request.screenPoint = rootPopupPoints[rootIndex];
+        request.items       = rootMenus[rootIndex];
+        return request;
+    };
+
+    ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.switchRootFromPointer = [&](POINT screenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        POINT clientPoint = screenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &clientPoint) == FALSE || clientPoint.y < 0 || clientPoint.y >= 40)
+        {
+            return std::nullopt;
+        }
+
+        size_t hitIndex = rootMenus.size();
+        if (clientPoint.x >= 140 && clientPoint.x < 220)
+        {
+            hitIndex = 1u;
+        }
+        else if (clientPoint.x >= 240 && clientPoint.x < 320)
+        {
+            hitIndex = 0u;
+        }
+
+        if (hitIndex >= rootMenus.size() || hitIndex == activeRootIndex)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = hitIndex;
+        return buildRequest(activeRootIndex);
+    };
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
+        if (! viewPopupHwnd)
+        {
+            driverFailure = "View root popup opens before idle cursor polling validation";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        const HWND pluginsPopupHwnd =
+            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
+        if (pluginsPopupHwnd)
+        {
+            driverFailure = "waiting without a mouse-move message must not switch root menus by idle polling";
+            return;
+        }
+
+        if (IsWindow(viewPopupHwnd) == FALSE)
+        {
+            driverFailure = "View popup remains alive when no mouse-move message is delivered";
+        }
+    });
+
+    const ThemePalette theme        = MakeDefaultThemePalette(true);
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(! result.has_value(), "closing the idle cursor polling validation popup with Escape returns no invoked command");
 }
 
 void TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay()
@@ -3233,10 +3872,16 @@ void RunMenuTests()
     runTest("TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout", TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout);
     runTest("TestMenuMnemonicHonorsExplicitAmpersandLabels", TestMenuMnemonicHonorsExplicitAmpersandLabels);
     runTest("TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface", TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface);
+    runTest("TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands", TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands);
     runTest("TestMenuShadowMarginMouseUpLightDismissesAfterInitialRelease", TestMenuShadowMarginMouseUpLightDismissesAfterInitialRelease);
     runTest("TestMenuKeyboardNavigationSkipsInfoRows", TestMenuKeyboardNavigationSkipsInfoRows);
     runTest("TestMenuKeyboardRightArrowMatchesWindowsMenuLoop", TestMenuKeyboardRightArrowMatchesWindowsMenuLoop);
     runTest("TestStationaryMouseDoesNotOverrideKeyboardRootSwitch", TestStationaryMouseDoesNotOverrideKeyboardRootSwitch);
+    runTest("TestMenuPointerOverSiblingRootSwitchesOpenMenu", TestMenuPointerOverSiblingRootSwitchesOpenMenu);
+    runTest("TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup", TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup);
+    runTest("TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot", TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot);
+    runTest("TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch", TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch);
+    runTest("TestMenuRootSwitchDoesNotPollCursorWhileIdle", TestMenuRootSwitchDoesNotPollCursorWhileIdle);
     runTest("TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay", TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay);
     runTest("TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay", TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay);
     runTest("TestMenuPointerInsideSubmenuAndParentItemCancelPendingCloseDelay", TestMenuPointerInsideSubmenuAndParentItemCancelPendingCloseDelay);

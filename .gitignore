@@ -47,6 +47,19 @@ Generated\ Files/
 [Bb]uild[Ll]og.*
 Specs/TestRuns/*
 !Specs/TestRuns/README.md
+!Specs/TestRuns/4cb089111a23/
+Specs/TestRuns/4cb089111a23/*
+!Specs/TestRuns/4cb089111a23/FileSystemCurl/
+Specs/TestRuns/4cb089111a23/FileSystemCurl/*
+!Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_metadata_display_perf/
+Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_metadata_display_perf/*
+!Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_metadata_display_perf/README.md
+!Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_listing_metadata_repair/
+Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_listing_metadata_repair/*
+!Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_listing_metadata_repair/README.md
+!Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_subject_decoding/
+Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_subject_decoding/*
+!Specs/TestRuns/4cb089111a23/FileSystemCurl/2026-05-14_imap_subject_decoding/README.md
 
 # NUnit
 *.VisualState.xml

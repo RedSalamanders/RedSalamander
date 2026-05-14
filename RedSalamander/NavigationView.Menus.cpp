@@ -5,7 +5,6 @@
 
 #include <windowsx.h>
 
-#include <commctrl.h>
 #include <shellapi.h>
 
 #include "ConnectionSecrets.h"

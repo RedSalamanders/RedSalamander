@@ -94,6 +94,15 @@ Environment variables may select alternate test inputs such as profile names, bu
   concise. Worktree-local absolute roots can already be long; tests should use
   variables, comments, and assertion text for readability rather than embedding
   long descriptive names into temporary filesystem paths.
+- Adversarial filename fixtures that claim near-maximum filename coverage must
+  budget for the full absolute self-test temp root plus every generated
+  subdirectory before choosing the file-name component length. A component that
+  is individually legal can still break the test when the total path exceeds the
+  active Windows path budget.
+- Column, grid, or viewport fixtures that depend on row counts must derive those
+  counts from the same visible UI mode they assert. Horizontal scrollbars,
+  display mode, DPI, and density can change the pane's visible height; a
+  no-scroll probe row count is not enough evidence for a scrolled fixture.
 - Commands UI tests that call `FolderWindow::SetFolderPath(...)` must wait for
   the requested pane path to settle before dispatching commands that consume
   the current pane roots.
@@ -275,13 +284,15 @@ For command selftests that validate NavigationView address-bar edit mode or full
 For command selftests that validate embedded preview behavior:
 - `FolderWindow::PreviewPaneDebugSnapshot` is the authoritative contract for preview activity, source/host panes, selected Folder/Preview tab, hosted plugin ID, tab-strip HWND and tab hit rectangles, Preview close visibility, tab-strip visible/pending tooltip text, content HWND, embedded viewer HWND, and embedded viewer instance identity.
 - Preview tests must verify that embedded viewers do not take keyboard focus from the source pane, that focus changes reuse the current embedded viewer instance and HWND when the resolved plugin is unchanged, that stale content is cleared before the new file is reported as rendered, and that preview close/replacement persists changed plugin configuration.
+- Preview source-contract tests must cover menu-bearing embedded viewers so Preview-appropriate menu options remain reachable from right-click context menus without requiring a visible embedded menubar, while standalone-only actions and shortcut labels stay out of the embedded menu.
 - Preview responsiveness coverage must verify that rapid same-plugin and cross-plugin preview switches do not wait for slow media/player teardown on the UI thread.
+- Preview source-contract tests must cover embedded media audio-only paths so VLC visualizers cannot create top-level player or visualization windows outside the Preview host.
 - When saved viewer associations are empty or resolve only the default text viewer, preview tests must cover the built-in embedded viewer defaults before `builtin/viewer-text` fallback.
 
 For command selftests that validate `builtin/viewer-vlc`:
 - `WndMsg::ViewerVlcDebugGetSnapshot` is the authoritative contract for HUD state, volume/mute state, snapshot dimensions, Fluent icon glyph usage, and filled-button HUD styling.
 - Wheel-seek coverage must exercise both normal viewer surfaces and libVLC-owned child video windows so embedded preview and standalone playback keep the same wheel behavior.
-- Slow-stop coverage must use `WndMsg::kViewerVlcDebugSetStopDelay` to ensure media-to-media preview switches avoid slow player retirement, media-to-image preview switches stay responsive while VLC player cleanup continues in the background, and VLC debug snapshots must assert that the embedded video surface remains a child of the preview viewer after same-plugin video navigation.
+- Slow-stop coverage must use `WndMsg::kViewerVlcDebugSetStopDelay` to ensure media-to-media preview switches, including video-to-audio transitions, avoid slow player retirement, media-to-image preview switches stay responsive while VLC player cleanup continues in the background, and VLC debug snapshots must assert that the embedded video surface remains a child of the preview viewer after same-plugin media navigation.
 
 ## Search-Specific Coverage
 

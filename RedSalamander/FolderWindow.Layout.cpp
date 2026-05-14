@@ -51,6 +51,18 @@ constexpr UINT kPreviewPaneRefreshDebounceMs  = 35;
     const int b = (static_cast<int>(GetBValue(baseColor)) * baseWeight + static_cast<int>(GetBValue(towardSelectColor)) * kTowardSelectionWeight) / kDenom;
     return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
 }
+
+[[nodiscard]] std::vector<std::wstring> BuildFilterHistoryEntries(const Common::Settings::Settings* settings)
+{
+    std::vector<std::wstring> history;
+    if (settings && settings->selectionMasks.has_value())
+    {
+        history = settings->selectionMasks->filterHistory;
+    }
+
+    MaskSyntax::NormalizeWildcardMaskHistory(history, MaskSyntax::kWildcardMaskHistoryMaxItems);
+    return history;
+}
 } // namespace
 
 COLORREF FolderWindow::GetSplitterGripColor() const noexcept
@@ -253,6 +265,7 @@ void FolderWindow::ApplyTheme(const AppTheme& theme)
         if (pane.hPreviewContent)
         {
             pane.previewContentHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+            UpdatePreviewPropertiesTheme(pane.hPreviewContent.get() == _leftPane.hPreviewContent.get() ? Pane::Left : Pane::Right);
             pane.previewContentHost.Invalidate();
         }
     };
@@ -289,6 +302,7 @@ void FolderWindow::ApplyTheme(const AppTheme& theme)
     ApplyFileOperationsTheme();
     ApplyViewerTheme();
     ApplyOpenedFilesDialogTheme();
+    ApplySharedDirectoriesDialogTheme();
 
     if (_hWnd)
     {
@@ -598,7 +612,7 @@ void FolderWindow::AdjustChildWindows()
 void FolderWindow::UpdateFilterBarLayout(Pane pane) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
-    if (! state.hFilterBar || ! state.filterBarLabel)
+    if (! state.hFilterBar)
     {
         return;
     }
@@ -608,14 +622,31 @@ void FolderWindow::UpdateFilterBarLayout(Pane pane) noexcept
     const float widthDip  = state.filterBarHost.PixelsToDip(static_cast<float>(std::max(0L, client.right - client.left)));
     const float heightDip = state.filterBarHost.PixelsToDip(static_cast<float>(std::max(0L, client.bottom - client.top)));
     const float padX      = state.filterBarHost.PixelsToDip(static_cast<float>(MulDiv(kFilterBarPaddingXDip, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI)));
-    state.filterBarLabel->SetBounds(D2D1::RectF(padX, 0.0f, std::max(padX, widthDip - padX), heightDip));
+    const float gapDip    = state.filterBarHost.PixelsToDip(static_cast<float>(MulDiv(kFilterBarGapDip, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI)));
+    const float rowHeight = std::min(28.0f, std::max(0.0f, heightDip - 4.0f));
+    const float rowTop    = std::max(0.0f, (heightDip - rowHeight) * 0.5f);
+    const float rowBottom = std::min(heightDip, rowTop + rowHeight);
+    const float toggleWidth = std::min(86.0f, std::max(70.0f, widthDip * 0.22f));
+    const float contentRight = std::max(padX, widthDip - padX);
+    const float toggleLeft = std::max(padX, contentRight - toggleWidth);
+    const float comboLeft = padX;
+    const float comboRight = std::max(comboLeft, toggleLeft - gapDip);
+
+    if (state.filterBarCombo)
+    {
+        state.filterBarCombo->SetBounds(D2D1::RectF(comboLeft, rowTop, comboRight, rowBottom));
+    }
+    if (state.filterBarToggle)
+    {
+        state.filterBarToggle->SetBounds(D2D1::RectF(toggleLeft, rowTop, contentRight, rowBottom));
+    }
     state.filterBarHost.Invalidate();
 }
 
 void FolderWindow::UpdatePreviewContentLayout(Pane pane) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
-    if (! state.hPreviewContent || ! state.previewContentLabel)
+    if (! state.hPreviewContent)
     {
         return;
     }
@@ -626,7 +657,11 @@ void FolderWindow::UpdatePreviewContentLayout(Pane pane) noexcept
     const float heightDip = state.previewContentHost.PixelsToDip(static_cast<float>(std::max(0L, client.bottom - client.top)));
     const float padX      = state.previewContentHost.PixelsToDip(static_cast<float>(MulDiv(10, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI)));
     const float padY      = state.previewContentHost.PixelsToDip(static_cast<float>(MulDiv(8, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI)));
-    state.previewContentLabel->SetBounds(D2D1::RectF(padX, padY, std::max(padX, widthDip - padX), std::max(padY, heightDip - padY)));
+    if (state.previewContentLabel)
+    {
+        state.previewContentLabel->SetBounds(D2D1::RectF(padX, padY, std::max(padX, widthDip - padX), std::max(padY, heightDip - padY)));
+    }
+    LayoutPreviewProperties(pane);
     state.previewContentHost.Invalidate();
 }
 
@@ -656,6 +691,7 @@ void FolderWindow::LayoutEmbeddedPreviewViewer(Pane hostPane) noexcept
 void FolderWindow::SetPreviewPlaceholder(Pane hostPane, std::wstring text) noexcept
 {
     PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    ClearPreviewProperties(hostPane);
     host.previewText = std::move(text);
     if (host.previewContentLabel)
     {
@@ -680,12 +716,138 @@ void FolderWindow::UpdatePaneFilterBar(Pane pane)
 
     if (state.hFilterBar)
     {
-        if (state.filterBarLabel)
+        RefreshFilterBarHistoryItems(pane);
+        state.filterBarSyncing = true;
+        const auto clearSyncing = wil::scope_exit([&state]() noexcept { state.filterBarSyncing = false; });
+        if (state.filterBarCombo && state.filterBarCombo->GetText() != filter.text)
         {
-            state.filterBarLabel->SetText(state.filterBarText);
-            state.filterBarHost.Invalidate();
+            state.filterBarCombo->SetText(filter.text);
+        }
+        if (state.filterBarToggle)
+        {
+            state.filterBarToggle->SetChecked(filter.enabled && ! filter.text.empty());
+        }
+        state.filterBarHost.Invalidate();
+    }
+}
+
+void FolderWindow::RefreshFilterBarHistoryItems(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! state.filterBarCombo)
+    {
+        return;
+    }
+
+    const std::vector<std::wstring> history = BuildFilterHistoryEntries(_settings);
+
+    std::vector<RedSalamander::DxUi::ComboBox::Item> items;
+    items.reserve(history.size());
+    for (const std::wstring& entry : history)
+    {
+        if (! entry.empty())
+        {
+            items.push_back(RedSalamander::DxUi::ComboBox::Item{entry, entry});
         }
     }
+
+    state.filterBarCombo->SetItems(std::move(items));
+}
+
+bool FolderWindow::ShowFilterBarHistoryMenu(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! state.filterBarCombo || ! state.hFilterBar || ! _hWnd || IsWindow(_hWnd.get()) == FALSE)
+    {
+        return false;
+    }
+
+    const std::vector<std::wstring> history = BuildFilterHistoryEntries(_settings);
+    if (history.empty())
+    {
+        return false;
+    }
+
+    const std::wstring currentText = std::wstring(state.filterBarCombo->GetText());
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    items.reserve(history.size());
+    for (size_t index = 0; index < history.size(); ++index)
+    {
+        RedSalamander::DxUi::MenuFlyoutItem item{};
+        item.text      = history[index];
+        item.checked   = OrdinalString::EqualsNoCase(history[index], currentText);
+        item.commandId = static_cast<int>(index) + 1;
+        items.push_back(std::move(item));
+    }
+
+    const D2D1_RECT_F bounds = state.filterBarCombo->GetBounds();
+    const POINT screenPoint  = state.filterBarHost.DipPointToScreenPoint(D2D1::Point2F(bounds.left, bounds.bottom));
+    RedSalamander::DxUi::ContextMenuSessionCallbacks callbacks{};
+    callbacks.ignoreInitialLeftButtonUp = true;
+    callbacks.focusFirstNavigableItem   = true;
+    const auto result =
+        RedSalamander::DxUi::ContextMenu::Show(_hWnd.get(), screenPoint, items, MakeAppThemeDxPalette(_theme, _theme.windowBackground), callbacks);
+    if (! result.has_value())
+    {
+        return true;
+    }
+
+    const int commandId = result.value();
+    if (commandId <= 0)
+    {
+        return true;
+    }
+
+    const size_t selectedIndex = static_cast<size_t>(commandId - 1);
+    if (selectedIndex >= history.size())
+    {
+        return true;
+    }
+
+    SetActivePane(pane);
+    state.filterBarCombo->SetText(history[selectedIndex]);
+    static_cast<void>(ApplyPaneFilterState(pane, FolderView::NameFilterState{.enabled = ! history[selectedIndex].empty(), .text = history[selectedIndex]}, true, true));
+    return true;
+}
+
+void FolderWindow::OnFilterBarTextChanged(Pane pane, std::wstring_view text) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.filterBarSyncing)
+    {
+        return;
+    }
+
+    SetActivePane(pane);
+    const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(std::wstring(text));
+    static_cast<void>(ApplyPaneFilterState(pane, FolderView::NameFilterState{.enabled = ! trimmed.empty(), .text = std::wstring(text)}, false, false));
+}
+
+void FolderWindow::OnFilterBarSubmitted(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.filterBarSyncing || ! state.filterBarCombo)
+    {
+        return;
+    }
+
+    SetActivePane(pane);
+    const std::wstring text    = std::wstring(state.filterBarCombo->GetText());
+    const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(text);
+    static_cast<void>(ApplyPaneFilterState(pane, FolderView::NameFilterState{.enabled = ! trimmed.empty(), .text = text}, true, true));
+}
+
+void FolderWindow::OnFilterBarToggled(Pane pane, bool checked) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.filterBarSyncing)
+    {
+        return;
+    }
+
+    SetActivePane(pane);
+    const std::wstring text = state.filterBarCombo ? std::wstring(state.filterBarCombo->GetText()) : state.folderView.GetNameFilterState().text;
+    static_cast<void>(ApplyPaneFilterState(pane, FolderView::NameFilterState{.enabled = checked, .text = text}, true, true));
 }
 
 void FolderWindow::SetStatusBarVisible(Pane pane, bool visible)
@@ -735,6 +897,18 @@ bool FolderWindow::GetThumbnailsVisible(Pane pane) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.GetThumbnailsVisible();
+}
+
+void FolderWindow::SetThumbnailSizeDip(Pane pane, uint32_t sizeDip)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.SetThumbnailSizeDip(sizeDip);
+}
+
+uint32_t FolderWindow::GetThumbnailSizeDip(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.GetThumbnailSizeDip();
 }
 
 void FolderWindow::SetNavigationBarVisible(Pane pane, bool visible)
@@ -967,10 +1141,14 @@ void FolderWindow::RefreshPreviewPane() noexcept
         hostState.previewBytes  = 0;
         if (! OpenPreviewFocusedPathWithViewer(sourcePane, hostPane))
         {
-            const std::wstring text = BuildPreviewTextForPath(sourcePane, hostState.previewedPath, hostState.previewBytes);
             ClosePreviewViewer(hostPane);
             hostState.previewViewerPluginId.clear();
-            SetPreviewPlaceholder(hostPane, text);
+            HRESULT propertiesHr = E_FAIL;
+            if (! ShowPreviewPropertiesForPath(sourcePane, hostPane, hostState.previewedPath, propertiesHr))
+            {
+                const std::wstring text = BuildPreviewTextForPath(sourcePane, hostState.previewedPath, hostState.previewBytes);
+                SetPreviewPlaceholder(hostPane, text);
+            }
         }
     }
     LayoutEmbeddedPreviewViewer(hostPane);
@@ -1014,9 +1192,18 @@ std::wstring FolderWindow::BuildPreviewTextForPath(Pane sourcePane, const std::f
         return LoadStringResource(nullptr, IDS_PREVIEW_EMPTY);
     }
 
+    HRESULT propertiesHr = E_FAIL;
+    std::wstring propertiesText = BuildPreviewPropertiesTextForPath(sourcePane, path, propertiesHr);
+    if (! propertiesText.empty())
+    {
+        perf.SetDetail(L"properties");
+        return propertiesText;
+    }
+
     const PaneState& sourceState = sourcePane == Pane::Left ? _leftPane : _rightPane;
     if (! OrdinalString::EqualsNoCase(sourceState.pluginId, L"builtin/file-system"))
     {
+        perf.SetHr(propertiesHr);
         return LoadStringResource(nullptr, IDS_PREVIEW_UNSUPPORTED);
     }
 

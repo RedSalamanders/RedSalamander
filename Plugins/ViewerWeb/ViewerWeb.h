@@ -113,6 +113,7 @@ private:
     void OnDestroy() noexcept;
     void OnSize(UINT width, UINT height) noexcept;
     void OnCommand(HWND hwnd, UINT commandId, UINT code, HWND control) noexcept;
+    void OnContextMenu(HWND hwnd, POINT screenPt) noexcept;
     void OnKeyDown(HWND hwnd, UINT vk) noexcept;
     void OnPaint(HWND hwnd) noexcept;
     LRESULT OnEraseBkgnd(HWND hwnd, HDC hdc) noexcept;

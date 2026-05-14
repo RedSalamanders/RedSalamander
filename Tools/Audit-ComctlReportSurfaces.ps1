@@ -7,12 +7,23 @@ Set-Location $repoRoot
 
 $auditedFiles = @()
 
+$sourceRoots = @(
+    "Common",
+    "Plugins",
+    "RedSalamander",
+    "RedSalamanderMonitor",
+    "RedConfigure"
+)
+
+$sourceExtensions = @(".cpp", ".h", ".rc", ".rc2", ".vcxproj", ".props", ".targets", ".manifest")
+$reportSurfacePattern = "SysListView32|WC_LISTVIEWW|TOOLTIPS_CLASSW|TOOLINFOW|NMTTDISPINFOW|TTM_|TTN_|TTS_|TTF_|ListView_|LVS_|LVN_|LVIF_|LVIS_|LVNI_"
+
 $actualFiles = @(
-    foreach ($root in @("RedSalamander", "Plugins"))
+    foreach ($root in $sourceRoots)
     {
         Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object {
-            $_.Extension -in @(".cpp", ".h", ".rc")
-        } | Select-String -Pattern "WC_LISTVIEWW|SysListView32" | Select-Object -ExpandProperty Path -Unique
+            $_.Extension -in $sourceExtensions
+        } | Select-String -Pattern $reportSurfacePattern | Select-Object -ExpandProperty Path -Unique
     }
 ) | ForEach-Object { (Resolve-Path -LiteralPath $_ -Relative).TrimStart('.', '\', '/').Replace('\', '/') } | Sort-Object -Unique
 
@@ -48,4 +59,6 @@ foreach ($row in ($auditedFiles | Sort-Object File, Surface))
 }
 
 Write-Host ""
-Write-Host "Audit passed: every remaining SysListView32/WC_LISTVIEWW reference is classified." -ForegroundColor Green
+Write-Host ""
+Write-Host "Audited roots: $($sourceRoots -join ', ')" -ForegroundColor Green
+Write-Host "Audit passed: every remaining visible listview/tooltip comctl report-surface reference is classified." -ForegroundColor Green

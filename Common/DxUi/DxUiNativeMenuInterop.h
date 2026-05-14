@@ -7,7 +7,9 @@
 #include <array>
 #include <cwctype>
 #include <functional>
+#include <iterator>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,6 +17,14 @@
 namespace RedSalamander::DxUi
 {
 inline constexpr wchar_t kNativeMenuBarHostWindowClassName[] = L"RedSalamander.DxNativeMenuBar";
+
+struct NativeMenuFlyoutOptions final
+{
+    bool includeAcceleratorText = true;
+    bool omitEmptySubmenus      = false;
+    bool trimSeparators         = false;
+    std::span<const int> excludedCommandIds{};
+};
 
 inline void SplitNativeMenuText(std::wstring_view raw, std::wstring& outText, std::wstring& outShortcut) noexcept
 {
@@ -103,7 +113,36 @@ inline void SplitNativeMenuText(std::wstring_view raw, std::wstring& outText, st
     return true;
 }
 
-[[nodiscard]] inline std::vector<MenuFlyoutItem> ConvertNativeHMenuToFlyoutItems(HMENU menu) noexcept
+[[nodiscard]] inline bool IsNativeMenuCommandExcluded(int commandId, const NativeMenuFlyoutOptions& options) noexcept
+{
+    return std::find(options.excludedCommandIds.begin(), options.excludedCommandIds.end(), commandId) != options.excludedCommandIds.end();
+}
+
+inline void TrimNativeMenuFlyoutSeparators(std::vector<MenuFlyoutItem>& items) noexcept
+{
+    while (! items.empty() && items.front().kind == MenuItemKind::Separator)
+    {
+        items.erase(items.begin());
+    }
+
+    for (auto it = items.begin(); it != items.end();)
+    {
+        if (it != items.begin() && it->kind == MenuItemKind::Separator && std::prev(it)->kind == MenuItemKind::Separator)
+        {
+            it = items.erase(it);
+            continue;
+        }
+
+        ++it;
+    }
+
+    while (! items.empty() && items.back().kind == MenuItemKind::Separator)
+    {
+        items.pop_back();
+    }
+}
+
+[[nodiscard]] inline std::vector<MenuFlyoutItem> ConvertNativeHMenuToFlyoutItems(HMENU menu, const NativeMenuFlyoutOptions& options = {}) noexcept
 {
     std::vector<MenuFlyoutItem> items;
     if (! menu)
@@ -128,6 +167,11 @@ inline void SplitNativeMenuText(std::wstring_view raw, std::wstring& outText, st
             continue;
         }
 
+        if ((itemInfo.fType & MFT_SEPARATOR) == 0 && ! itemInfo.hSubMenu && IsNativeMenuCommandExcluded(static_cast<int>(itemInfo.wID), options))
+        {
+            continue;
+        }
+
         MenuFlyoutItem item{};
         if ((itemInfo.fType & MFT_SEPARATOR) != 0)
         {
@@ -144,7 +188,7 @@ inline void SplitNativeMenuText(std::wstring_view raw, std::wstring& outText, st
         }
 
         item.text            = StripNativeMenuMnemonicMarkers(text);
-        item.acceleratorText = shortcut;
+        item.acceleratorText = options.includeAcceleratorText ? shortcut : std::wstring{};
         item.commandId       = static_cast<int>(itemInfo.wID);
         item.enabled         = (itemInfo.fState & MFS_GRAYED) == 0;
         item.checked         = (itemInfo.fState & MFS_CHECKED) != 0;
@@ -160,13 +204,79 @@ inline void SplitNativeMenuText(std::wstring_view raw, std::wstring& outText, st
 
         if (itemInfo.hSubMenu)
         {
-            item.children = ConvertNativeHMenuToFlyoutItems(itemInfo.hSubMenu);
+            item.children = ConvertNativeHMenuToFlyoutItems(itemInfo.hSubMenu, options);
+            if (options.omitEmptySubmenus && item.children.empty())
+            {
+                continue;
+            }
         }
 
         items.push_back(std::move(item));
     }
 
+    if (options.trimSeparators)
+    {
+        TrimNativeMenuFlyoutSeparators(items);
+    }
+
     return items;
+}
+
+[[nodiscard]] inline POINT ResolveNativeContextMenuScreenPoint(HWND hwnd, LPARAM lParam) noexcept
+{
+    POINT screenPoint{static_cast<LONG>(static_cast<short>(LOWORD(lParam))), static_cast<LONG>(static_cast<short>(HIWORD(lParam)))};
+    if (screenPoint.x != -1 || screenPoint.y != -1)
+    {
+        return screenPoint;
+    }
+
+    RECT client{};
+    if (hwnd && GetClientRect(hwnd, &client) != FALSE)
+    {
+        screenPoint.x = client.left + ((client.right - client.left) / 2);
+        screenPoint.y = client.top + ((client.bottom - client.top) / 2);
+        ClientToScreen(hwnd, &screenPoint);
+        return screenPoint;
+    }
+
+    if (GetCursorPos(&screenPoint) == FALSE)
+    {
+        screenPoint = {};
+    }
+    return screenPoint;
+}
+
+[[nodiscard]] inline std::optional<int> ShowNativeHMenuContextMenu(
+    HWND ownerHwnd,
+    POINT screenPoint,
+    HMENU menu,
+    const ThemePalette& theme,
+    const ContextMenuSessionCallbacks& sessionCallbacks = {}) noexcept
+{
+    const std::vector<MenuFlyoutItem> flyoutItems = ConvertNativeHMenuToFlyoutItems(menu);
+    if (flyoutItems.empty())
+    {
+        return std::nullopt;
+    }
+
+    return ContextMenu::Show(ownerHwnd, screenPoint, flyoutItems, theme, sessionCallbacks);
+}
+
+[[nodiscard]] inline std::optional<int> ShowNativeHMenuContextMenu(
+    HWND ownerHwnd,
+    POINT screenPoint,
+    HMENU menu,
+    const ThemePalette& theme,
+    const NativeMenuFlyoutOptions& options,
+    const ContextMenuSessionCallbacks& sessionCallbacks = {}) noexcept
+{
+    const std::vector<MenuFlyoutItem> flyoutItems = ConvertNativeHMenuToFlyoutItems(menu, options);
+    if (flyoutItems.empty())
+    {
+        return std::nullopt;
+    }
+
+    return ContextMenu::Show(ownerHwnd, screenPoint, flyoutItems, theme, sessionCallbacks);
 }
 
 [[nodiscard]] inline std::vector<MenuBarItem> BuildNativeMenuBarItems(HMENU menu) noexcept

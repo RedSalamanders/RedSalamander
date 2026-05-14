@@ -2,8 +2,6 @@
 
 #include <windowsx.h>
 
-#include <commctrl.h>
-
 #include "DirectoryInfoCache.h"
 #include "Helpers.h"
 #include "IconCache.h"

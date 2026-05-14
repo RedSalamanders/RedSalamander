@@ -80,6 +80,7 @@ private:
     void OnVScroll(WORD request, WORD position) noexcept;
     void OnKeyDown(UINT vk) noexcept;
     void OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT notifyCode, [[maybe_unused]] HWND control) noexcept;
+    void OnContextMenu(HWND hwnd, POINT screenPt) noexcept;
 
     void ApplyTitleBarTheme(bool windowActive) noexcept;
     void ResetDeviceResources() noexcept;

@@ -42,6 +42,7 @@ constexpr wchar_t kViewerVLCWindowClassName[]        = L"RedSalamander.ViewerVLC
 constexpr wchar_t kViewerTextWindowClassName[]       = L"RedSalamander.ViewerText";
 constexpr wchar_t kViewerTextPromptWindowClassName[] = L"RedSalamander.ViewerText.Prompt";
 constexpr wchar_t kDxNativeMenuBarWindowClassName[]  = L"RedSalamander.DxNativeMenuBar";
+constexpr wchar_t kNativeTooltipWindowClassName[]    = L"tooltips_class32";
 constexpr wchar_t kViewerPEPluginId[]                = L"builtin/viewer-pe";
 constexpr wchar_t kViewerWebPluginId[]               = L"builtin/viewer-web";
 constexpr wchar_t kViewerImgRawPluginId[]            = L"builtin/viewer-imgraw";
@@ -103,21 +104,22 @@ template <typename TPredicate> [[nodiscard]] bool PumpUntil(TPredicate&& predica
     return predicate();
 }
 
-[[nodiscard]] std::vector<HWND> CollectVisibleWindowsByClass(std::wstring_view className) noexcept
+[[nodiscard]] std::vector<HWND> CollectWindowsByClass(std::wstring_view className, bool requireVisible) noexcept
 {
     std::vector<HWND> windows;
     struct EnumArgs
     {
         std::wstring_view className;
         DWORD processId            = 0;
+        bool requireVisible        = true;
         std::vector<HWND>* windows = nullptr;
-    } args{className, GetCurrentProcessId(), &windows};
+    } args{className, GetCurrentProcessId(), requireVisible, &windows};
 
     static_cast<void>(EnumWindows(
         [](HWND hwnd, LPARAM lParam) noexcept -> BOOL
     {
         auto* args = reinterpret_cast<EnumArgs*>(lParam);
-        if (! args || IsWindowVisible(hwnd) == FALSE)
+        if (! args || (args->requireVisible && IsWindowVisible(hwnd) == FALSE))
         {
             return TRUE;
         }
@@ -144,6 +146,11 @@ template <typename TPredicate> [[nodiscard]] bool PumpUntil(TPredicate&& predica
     },
         reinterpret_cast<LPARAM>(&args)));
     return windows;
+}
+
+[[nodiscard]] std::vector<HWND> CollectVisibleWindowsByClass(std::wstring_view className) noexcept
+{
+    return CollectWindowsByClass(className, true);
 }
 
 [[nodiscard]] HWND FindNewVisibleWindowByClass(std::wstring_view className, std::span<const HWND> existingWindows) noexcept
@@ -271,7 +278,9 @@ template <typename Predicate>
 
     return ready;
 }
+#endif
 
+#ifdef _DEBUG
 ViewerTheme MakeViewerTextTestTheme(bool highContrast, bool rainbowMode = false) noexcept
 {
     ViewerTheme theme{};
@@ -533,6 +542,7 @@ void PrintVisibleChildWindowClasses(HWND hwnd, std::wstring_view prefix) noexcep
 }
 
 bool Check(bool condition, std::wstring_view message, bool& success);
+void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept;
 
 void CheckDxNativeMenuBar(HWND viewerWindow, std::wstring_view viewerName, bool& success) noexcept
 {
@@ -3605,6 +3615,7 @@ private:
     Check(CountActuallyVisibleChildWindows(viewerWindow) == 1u,
           L"ViewerSpace only exposes the DxUi menu bar child and no visible fallback child surface",
           success);
+    CheckViewerSpaceTooltipOverlay(viewerWindow, success);
     Check(SetFocus(viewerWindow) != nullptr, L"ViewerSpace window accepts keyboard focus", success);
     const LRESULT escapeHandled = SendMessageW(viewerWindow, WM_KEYDOWN, VK_ESCAPE, 0);
     static_cast<void>(escapeHandled);
@@ -3858,6 +3869,10 @@ private:
 
 [[nodiscard]] bool TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts() noexcept
 {
+#ifndef _DEBUG
+    std::wcout << L"[SKIP] ViewerVLC HUD snapshot contract requires ViewerVLC test hooks; Release plugin builds omit ENABLE_TESTS.\n";
+    return true;
+#else
     bool success = true;
 
     std::array<wchar_t, MAX_PATH + 1> modulePath{};
@@ -3925,6 +3940,10 @@ private:
         static_cast<void>(informations->SetConfiguration(R"json({"autoDetectVlc":false})json"));
     }
 
+    const ViewerTheme rainbowTheme = MakeViewerTextTestTheme(false, true);
+    const HRESULT themeHr = viewer->SetTheme(&rainbowTheme);
+    Check(SUCCEEDED(themeHr), L"ViewerVLC accepts a rainbow viewer theme for loading-overlay validation", success);
+
     const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerVLCWindowClassName);
 
     const std::filesystem::path tempDir = buildDir / L"ViewerVLCTests";
@@ -3978,6 +3997,15 @@ private:
     snapshot = {};
     static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
     Check(snapshot.loadingActive && snapshot.loadingVisible, L"ViewerVLC shows a loading overlay once VLC init exceeds the delay", success);
+    Check(snapshot.loadingSpinnerDotCount >= 12, L"ViewerVLC loading spinner uses a denser, easier-to-see dot ring", success);
+    Check(snapshot.loadingSpinnerOrbitPx >= 18, L"ViewerVLC loading spinner is larger than the old compact wheel", success);
+    Check(snapshot.loadingSpinnerActiveDotRadiusPx > snapshot.loadingSpinnerDotRadiusPx,
+          L"ViewerVLC loading spinner gives the active dot extra visual weight",
+          success);
+    Check(snapshot.loadingSpinnerUsesRainbow, L"ViewerVLC loading spinner honors rainbow viewer themes", success);
+    Check(snapshot.loadingSpinnerFirstDotArgb != snapshot.loadingSpinnerSecondDotArgb,
+          L"ViewerVLC rainbow loading spinner uses multiple dot colors instead of one accent color",
+          success);
 
     WndMsg::ViewerVlcDebugPlaybackState playbackState{};
     playbackState.lengthMs = 120'000;
@@ -4025,6 +4053,60 @@ private:
     Check(SUCCEEDED(closeHr), L"ViewerVLC HUD contract window close succeeds", success);
     Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerVLC HUD contract window closes cleanly", success);
     return success;
+#endif
+}
+
+void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept
+{
+    static_cast<void>(UpdateWindow(viewerWindow));
+    const std::vector<HWND> existingTooltipWindows = CollectWindowsByClass(kNativeTooltipWindowClassName, false);
+
+    WndMsg::ViewerSpaceTooltipDebugSnapshot before{};
+    const LRESULT beforeResult =
+        SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&before));
+    Check(beforeResult != FALSE, L"ViewerSpace answers the tooltip-overlay debug contract", success);
+    if (beforeResult == FALSE)
+    {
+        return;
+    }
+
+    Check(before.hasRenderTarget, L"ViewerSpace has a Direct2D render target before tooltip overlay validation", success);
+    Check(before.hasTooltipFormat, L"ViewerSpace has a DirectWrite tooltip format before tooltip overlay validation", success);
+    Check(std::abs(before.tooltipMaxWidthDip - 420.0f) <= 0.01f, L"ViewerSpace tooltip overlay uses a 420 DIP maximum text width", success);
+
+    const LRESULT showResult = SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugShowTooltipOverlay, 0, 0);
+    Check(showResult != FALSE, L"ViewerSpace debug hook shows the Direct2D tooltip overlay", success);
+    if (showResult == FALSE)
+    {
+        return;
+    }
+
+    WndMsg::ViewerSpaceTooltipDebugSnapshot after{};
+    const bool painted = PumpUntil(
+        [&]() noexcept
+        {
+            static_cast<void>(UpdateWindow(viewerWindow));
+            const LRESULT queryResult =
+                SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&after));
+            return queryResult != FALSE && after.tooltipNodeId != 0u && after.tooltipTextLength > 0u &&
+                   after.tooltipPaintCount > before.tooltipPaintCount;
+        },
+        5000ms);
+    Check(painted, L"ViewerSpace Direct2D tooltip overlay paints after it is shown", success);
+    if (painted)
+    {
+        Check(after.tooltipAnchorXDip > 0.0f && after.tooltipAnchorYDip > 0.0f, L"ViewerSpace tooltip overlay tracks a client DIP anchor", success);
+        Check(std::abs(after.tooltipMaxWidthDip - 420.0f) <= 0.01f, L"ViewerSpace tooltip overlay keeps the high-DPI-safe width cap", success);
+    }
+
+    const std::vector<HWND> currentTooltipWindows = CollectWindowsByClass(kNativeTooltipWindowClassName, false);
+    const auto isExisting = [&](HWND hwnd) noexcept {
+        return std::find(existingTooltipWindows.begin(), existingTooltipWindows.end(), hwnd) != existingTooltipWindows.end();
+    };
+    const bool createdNativeTooltip =
+        std::find_if(currentTooltipWindows.begin(), currentTooltipWindows.end(), [&](HWND hwnd) noexcept { return ! isExisting(hwnd); }) !=
+        currentTooltipWindows.end();
+    Check(! createdNativeTooltip, L"ViewerSpace tooltip overlay does not create a native tooltip window", success);
 }
 
 [[nodiscard]] bool CheckViewerTextPromptUsesDxUiHostAndClosesCleanly(UINT commandId,
@@ -4321,7 +4403,9 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
         success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout, success) && success;
         success = RunFilteredSelfExecutable(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout, success) && success;
         success = RunFilteredSelfExecutable(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout, success) && success;
+#ifdef _DEBUG
         success = RunFilteredSelfExecutable(L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout, success) && success;
+#endif
     }
 
     return success;
@@ -4339,10 +4423,10 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
         {L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout},
         {L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout},
         {L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout},
-        {L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout},
         {L"TestViewerShellComboHostsLongRunOpenCloseStayStable", kViewerShellComboLongRunTimeout},
     };
 #ifdef _DEBUG
+    isolatedTests.push_back({L"TestViewerVlcHudLoadingWheelSnapshotAndVolumeContracts", kViewerHarnessDefaultTimeout});
     isolatedTests.push_back({L"TestViewerTextHexByteColorsFollowConfigAndHighContrastFallback", kViewerHarnessDefaultTimeout});
     isolatedTests.push_back({L"TestViewerTextDiffModesAndPlaceholders", kViewerHarnessDefaultTimeout});
 #endif

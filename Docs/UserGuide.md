@@ -103,9 +103,9 @@ Use the drive/menu dropdown to reach:
 
 ### Display, Sort, and Pane Layout
 
-Folder views can be switched between **Brief**, **Detailed**, and **Extra Detailed** layouts. Sorting is available by name, extension, time, size, attributes, or no sort.
+Folder views can be switched between **Brief**, **Detailed**, **Extra Detailed**, and **Thumbnails** layouts. Sorting is available by name, extension, time, size, attributes, or no sort.
 
-Use the **Left** and **Right** menus to toggle per-pane display and chrome options. **Show -> File Extensions** changes only displayed labels in the named pane; file operations still use real names and paths. **Thumbnails** uses larger item visuals and background thumbnail loading with icon fallback. **Preview Pane** opens a Folder/Preview tabbed host in the opposite pane and follows the named pane's focused item. **Filter Bar** shows the current persistent folder filter below the named pane. **Navigation Bar** targets the named pane, and address-bar focus commands show the bar first when needed. Persistent options are saved per pane.
+Use the **Left** and **Right** menus to toggle per-pane display and chrome options. **Show -> File Extensions** changes only displayed labels in the named pane; file operations still use real names and paths. **Thumbnails** uses larger item visuals and background thumbnail loading with shell/WIC thumbnail fallback to icons. The sort indicator at the bottom right of each pane opens a sort popup that also includes a per-pane thumbnail-size slider. **Preview Pane** opens a Folder/Preview tabbed host in the opposite pane, follows the named pane's focused item, and shows scrollable Properties cards when no specific embedded preview is available. **Filter Bar** shows the current persistent folder filter below the named pane. **Navigation Bar** targets the named pane, and address-bar focus commands show the bar first when needed. Persistent options are saved per pane.
 
 Default shortcuts:
 

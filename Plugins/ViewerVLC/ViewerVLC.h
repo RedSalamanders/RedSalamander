@@ -129,7 +129,7 @@ private:
     void OnHudMouseWheel(HWND hwnd, WPARAM wheelParam) noexcept;
     void OnHudKillFocus(HWND hwnd) noexcept;
 
-    [[nodiscard]] bool BuildVlcLoadSpec(bool enableAudioVisualization, VlcLoadSpec& spec, std::wstring& outError) const noexcept;
+    [[nodiscard]] bool BuildVlcLoadSpec(VlcLoadSpec& spec, std::wstring& outError) const noexcept;
     [[nodiscard]] static std::unique_ptr<VlcState> LoadVlcState(const VlcLoadSpec& spec, std::wstring& outError) noexcept;
     bool StartPlayback(const std::filesystem::path& path) noexcept;
     bool StartPlaybackWithLoadedVlc(const std::filesystem::path& path) noexcept;

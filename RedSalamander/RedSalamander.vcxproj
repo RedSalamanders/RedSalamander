@@ -247,6 +247,7 @@
     <ClInclude Include="FolderViewIncrementalSearch.h" />
     <ClInclude Include="FolderViewVisualState.h" />
     <ClInclude Include="FolderViewInternal.h" />
+    <ClInclude Include="FolderViewThumbnailGeometry.h" />
     <ClInclude Include="FolderWindow.h" />
     <ClInclude Include="FolderWindow.FileOperationsInternal.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesPane.h" />

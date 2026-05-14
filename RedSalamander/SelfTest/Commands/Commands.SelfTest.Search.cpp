@@ -10794,6 +10794,7 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     state.Require(SelfTest::WriteTextFile(root / L"alpine.log", "alpine"), L"Failed to create alpine.log for quick-search test.");
     state.Require(SelfTest::WriteTextFile(root / L"beta-alpha.txt", "beta"), L"Failed to create beta-alpha.txt for quick-search test.");
     state.Require(SelfTest::WriteTextFile(root / L"gamma.txt", "gamma"), L"Failed to create gamma.txt for quick-search test.");
+    state.Require(SelfTest::WriteTextFile(root / L"space name.txt", "space"), L"Failed to create space name.txt for quick-search test.");
     if (! state.failure.empty())
     {
         return false;
@@ -10814,7 +10815,7 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
                   L"Failed to activate builtin file-system for quick-search test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for quick-search test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"alpine.log", L"beta-alpha.txt", L"gamma.txt"}, SelfTest::Scale(3000ms)),
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"alpine.log", L"beta-alpha.txt", L"gamma.txt", L"space name.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for quick-search test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"gamma.txt"),
                   L"Failed to focus gamma.txt before quick-search test.");
@@ -10967,6 +10968,39 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
                   L"Quick Search snapshot should be available after Escape.");
     state.Require(! snapshot.active, L"Quick Search Escape should exit search mode.");
     state.Require(snapshot.query.empty(), L"Quick Search Escape should clear the query.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
+    PumpPendingMessages();
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L's'), 0);
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'p'), 0);
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'a'), 0);
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'c'), 0);
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'e'), 0);
+
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/selectCalculateDirectorySizeNext"),
+                  L"Shortcut-routed Space should dispatch while Quick Search is active.");
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after shortcut-routed Space.");
+    state.Require(snapshot.active, L"Quick Search should stay active after shortcut-routed Space.");
+    state.Require(snapshot.query == L"space ", std::format(L"Quick Search should include shortcut-routed Space in the query; got '{}'.", snapshot.query));
+    state.Require(snapshot.focusedDisplayName == L"space name.txt",
+                  std::format(L"Quick Search should keep focus on the spaced filename; got '{}'.", snapshot.focusedDisplayName));
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"space name.txt", 0u, 6u, true),
+                  L"Quick Search should expose a prefix match that includes shortcut-routed Space.");
+
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'n'), 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after typing after shortcut-routed Space.");
+    state.Require(snapshot.query == L"space n",
+                  std::format(L"Quick Search should preserve shortcut-routed Space before the next character; got '{}'.", snapshot.query));
+    state.Require(snapshot.focusedDisplayName == L"space name.txt",
+                  std::format(L"Quick Search should keep focus on the spaced filename after the next character; got '{}'.", snapshot.focusedDisplayName));
 
     return state.failure.empty();
 }

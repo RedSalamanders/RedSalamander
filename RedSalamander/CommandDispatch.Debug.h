@@ -28,6 +28,9 @@
 // Debug-only hook for menu-bar self-tests: returns how many top-level menu-bar items are visually highlighted.
 [[nodiscard]] int DebugGetMainMenuBarVisualHighlightCount() noexcept;
 
+// Debug-only hook for menu-bar self-tests: returns the visually highlighted top-level menu index, or -1 when nothing is highlighted.
+[[nodiscard]] int DebugGetMainMenuBarVisualHighlightIndex() noexcept;
+
 // Debug-only hook for menu-bar self-tests: returns the current retained menu-bar render count.
 [[nodiscard]] uint64_t DebugGetMainMenuBarRenderCount() noexcept;
 

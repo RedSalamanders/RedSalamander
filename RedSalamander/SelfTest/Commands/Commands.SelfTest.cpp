@@ -57,6 +57,7 @@ struct ForceWilTemplateInstantiations
 #include "CompareDirectoriesWindow.h"
 #include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionManagerWindow.h"
+#include "ConnectionSecrets.h"
 #include "DxUi/DxUi.Typography.h"
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
@@ -88,6 +89,7 @@ struct ForceWilTemplateInstantiations
 #include "SplashScreen.h"
 #include "ViewerPluginManager.h"
 #include "WindowBackdropPolicy.h"
+#include "WindowsHello.h"
 #include "WindowMessages.h"
 #include "resource.h"
 #pragma warning(pop)

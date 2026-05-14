@@ -38,7 +38,6 @@
 #include <utility>
 #include <vector>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <lm.h>
 #include <oleauto.h>
@@ -752,7 +751,7 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
 {
     return _wcsicmp(className.data(), L"#32770") == 0 || _wcsicmp(className.data(), L"Button") == 0 ||
            _wcsicmp(className.data(), L"Edit") == 0 || _wcsicmp(className.data(), L"Static") == 0 ||
-           _wcsicmp(className.data(), L"ComboBox") == 0 || _wcsicmp(className.data(), L"SysListView32") == 0;
+           _wcsicmp(className.data(), L"ComboBox") == 0;
 }
 
 [[nodiscard]] size_t CountVisibleNativeChildControlWindowsLocal(HWND hwnd) noexcept
@@ -795,7 +794,6 @@ constexpr float kPaneFilterPromptGapDip          = 8.0f;
 constexpr float kPaneFilterPromptRowHeightDip    = 34.0f;
 constexpr float kPaneFilterPromptLabelHeightDip  = 22.0f;
 constexpr float kPaneFilterPromptToggleWidthDip  = 112.0f;
-constexpr float kPaneFilterPromptHistoryWidthDip = 88.0f;
 constexpr float kPaneFilterPromptHintHeightDip   = 28.0f;
 constexpr float kPaneFilterPromptHelpHeightDip   = 112.0f;
 constexpr float kPaneFilterPromptButtonWidthDip  = 96.0f;
@@ -803,9 +801,8 @@ constexpr float kPaneFilterPromptButtonHeightDip = 34.0f;
 
 [[nodiscard]] constexpr int ResolvePaneFilterPromptClientHeightDip(bool helpExpanded) noexcept
 {
-    float height = kPaneFilterPromptMarginDip + kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip + kPaneFilterPromptLabelHeightDip +
-                   kPaneFilterPromptGapDip + kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip + kPaneFilterPromptHintHeightDip +
-                   kPaneFilterPromptGapDip;
+    float height = kPaneFilterPromptMarginDip + kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip + kPaneFilterPromptRowHeightDip +
+                   kPaneFilterPromptGapDip + kPaneFilterPromptHintHeightDip + kPaneFilterPromptGapDip;
     if (helpExpanded)
     {
         height += kPaneFilterPromptHelpHeightDip + kPaneFilterPromptGapDip;
@@ -1198,12 +1195,12 @@ private:
         BuildUi();
         ApplyTheme();
         UpdateHintUi();
-        if (_textField)
+        if (_filterCombo)
         {
-            _textField->SetText(_initialText);
+            _filterCombo->SetText(_initialText);
         }
         Layout();
-        _dxHost.SetFocusControl(_textField);
+        _dxHost.SetFocusControl(_filterCombo);
         _dxHost.SetDefaultButton(_okButton);
         _dxHost.SetCancelButton(_cancelButton);
         return true;
@@ -1237,18 +1234,24 @@ private:
             }
         });
 
-        _label = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER));
-        _label->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        std::vector<ComboBox::Item> historyItems;
+        const std::vector<std::wstring> historyEntries = BuildPromptHistoryEntries(_history);
+        historyItems.reserve(historyEntries.size());
+        for (const std::wstring& entry : historyEntries)
+        {
+            historyItems.push_back(ComboBox::Item{entry, entry});
+        }
 
-        _textField = _root->AddChild<TextField>(_initialText);
-        _textField->SetMultiline(false);
-        _textField->SetAccessibleName(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER));
-        _textField->SetOnTextChanged([this](std::wstring_view text) noexcept { SyncEnabledForFilterText(text); });
-        _textField->SetOnSubmitted([this] { Confirm(); });
-
-        _historyButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_HISTORY));
-        _historyButton->SetVisible(! BuildPromptHistoryEntries(_history).empty());
-        _historyButton->SetOnClick([this] { ShowHistoryMenu(); });
+        _filterCombo = _root->AddChild<ComboBox>();
+        _filterCombo->SetEditable(true);
+        _filterCombo->SetVariant(ComboBoxVariant::Edit);
+        _filterCombo->SetAutoOpenOnTextInput(false);
+        _filterCombo->SetMaxVisibleItems(MaskSyntax::kWildcardMaskHistoryMaxItems);
+        _filterCombo->SetItems(std::move(historyItems));
+        _filterCombo->SetPlaceholder(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER));
+        _filterCombo->SetAccessibleName(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER));
+        _filterCombo->SetOnTextChanged([this](std::wstring_view text) noexcept { SyncEnabledForFilterText(text); });
+        _filterCombo->SetOnSubmitted([this] { Confirm(); });
 
         _hintButton = _root->AddChild<Button>(L"");
         _hintButton->SetOnClick([this]
@@ -1345,27 +1348,9 @@ private:
         }
         y += kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip;
 
-        if (_label)
+        if (_filterCombo)
         {
-            _label->SetBounds(D2D1::RectF(left, y, right, y + kPaneFilterPromptLabelHeightDip));
-        }
-        y += kPaneFilterPromptLabelHeightDip + kPaneFilterPromptGapDip;
-
-        const bool showHistoryButton = _historyButton && _historyButton->IsVisible();
-        const float historyLeft      = std::max(left, right - kPaneFilterPromptHistoryWidthDip);
-        const float fieldRight       = showHistoryButton ? std::max(left, historyLeft - kPaneFilterPromptGapDip) : right;
-
-        if (_textField)
-        {
-            _textField->SetBounds(D2D1::RectF(left, y, fieldRight, y + kPaneFilterPromptRowHeightDip));
-        }
-        if (_historyButton)
-        {
-            _historyButton->SetVisible(showHistoryButton);
-            if (showHistoryButton)
-            {
-                _historyButton->SetBounds(D2D1::RectF(historyLeft, y, right, y + kPaneFilterPromptRowHeightDip));
-            }
+            _filterCombo->SetBounds(D2D1::RectF(left, y, right, y + kPaneFilterPromptRowHeightDip));
         }
         y += kPaneFilterPromptRowHeightDip + kPaneFilterPromptGapDip;
 
@@ -1404,32 +1389,6 @@ private:
         }
     }
 
-    void ShowHistoryMenu() noexcept
-    {
-        if (! _textField || ! _historyButton || ! _historyButton->IsVisible() || ! _hWnd || IsWindow(_hWnd.get()) == FALSE)
-        {
-            return;
-        }
-
-        _dxHost.CommitFocusedTextInputBridge(false);
-        TryShowPromptHistoryMenu(_hWnd.get(),
-                                 _dxHost,
-                                 _palette,
-                                 _historyButton->GetBounds(),
-                                 _history,
-                                 _textField->GetText(),
-                                 [this](std::wstring_view value) noexcept
-        {
-            if (! _textField)
-            {
-                return;
-            }
-
-            _textField->SetTextAndNotify(std::wstring(value));
-            _dxHost.SetFocusControl(_textField);
-        });
-    }
-
     void SetFilterEnabled(bool enabled) noexcept
     {
         _enabled = enabled;
@@ -1446,7 +1405,7 @@ private:
 
     void Confirm() noexcept
     {
-        const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(_textField ? std::wstring(_textField->GetText()) : std::wstring{});
+        const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(_filterCombo ? std::wstring(_filterCombo->GetText()) : std::wstring{});
         if (trimmed.empty())
         {
             SetFilterEnabled(false);
@@ -1459,9 +1418,9 @@ private:
             if (! hasMask)
             {
                 MessageBeep(MB_ICONWARNING);
-                if (_textField)
+                if (_filterCombo)
                 {
-                    _dxHost.SetFocusControl(_textField);
+                    _dxHost.SetFocusControl(_filterCombo);
                 }
                 return;
             }
@@ -1497,7 +1456,10 @@ private:
                 snapshot.visibleChildWindowCount = CountVisibleChildWindowsLocal(_hWnd.get());
                 snapshot.enabled                 = _enabled;
                 snapshot.helpExpanded            = _helpExpanded;
-                snapshot.text                    = _textField ? std::wstring(_textField->GetText()) : std::wstring{};
+                snapshot.historyComboVisible     = _filterCombo && _filterCombo->IsVisible();
+                snapshot.historyButtonVisible    = false;
+                snapshot.historyItemCount        = BuildPromptHistoryEntries(_history).size();
+                snapshot.text                    = _filterCombo ? std::wstring(_filterCombo->GetText()) : std::wstring{};
                 const D2D1_RECT_F client         = _dxHost.GetClientBoundsDip();
                 snapshot.clientBottomDip         = client.bottom;
                 if (_okButton)
@@ -1524,7 +1486,7 @@ private:
                 return TRUE;
             case FolderViewPaneFilterPromptDebugCommand::SetText:
             {
-                if (! _textField)
+                if (! _filterCombo)
                 {
                     return FALSE;
                 }
@@ -1535,13 +1497,13 @@ private:
                     text = g_folderViewPaneFilterPromptDebugText;
                 }
 
-                _textField->SetText(std::move(text));
-                _dxHost.SetFocusControl(_textField);
+                _filterCombo->SetText(std::move(text));
+                _dxHost.SetFocusControl(_filterCombo);
                 return TRUE;
             }
             case FolderViewPaneFilterPromptDebugCommand::SetTextAndNotify:
             {
-                if (! _textField)
+                if (! _filterCombo)
                 {
                     return FALSE;
                 }
@@ -1552,8 +1514,8 @@ private:
                     text = g_folderViewPaneFilterPromptDebugText;
                 }
 
-                _textField->SetTextAndNotify(std::move(text));
-                _dxHost.SetFocusControl(_textField);
+                _filterCombo->SetTextAndNotify(std::move(text));
+                _dxHost.SetFocusControl(_filterCombo);
                 return TRUE;
             }
             case FolderViewPaneFilterPromptDebugCommand::SetHelpExpanded:
@@ -1582,9 +1544,7 @@ private:
     RedSalamander::DxUi::Panel* _root           = nullptr;
     RedSalamander::DxUi::Label* _useLabel       = nullptr;
     RedSalamander::DxUi::Toggle* _toggle        = nullptr;
-    RedSalamander::DxUi::Label* _label          = nullptr;
-    RedSalamander::DxUi::TextField* _textField  = nullptr;
-    RedSalamander::DxUi::Button* _historyButton = nullptr;
+    RedSalamander::DxUi::ComboBox* _filterCombo = nullptr;
     RedSalamander::DxUi::Button* _hintButton    = nullptr;
     RedSalamander::DxUi::Label* _helpLabel      = nullptr;
     RedSalamander::DxUi::Button* _okButton      = nullptr;

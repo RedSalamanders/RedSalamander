@@ -68,9 +68,6 @@ std::vector<MergedStringEntry> MergeStringTables(std::span<const RcStringEntry> 
 
 std::wstring BuildSatelliteRcStringTable(std::wstring_view resourceHeader, std::wstring_view cultureName, std::span<const MergedStringEntry> entries)
 {
-    std::vector<MergedStringEntry> sorted(entries.begin(), entries.end());
-    std::sort(sorted.begin(), sorted.end(), [](const auto& lhs, const auto& rhs) noexcept { return lhs.id < rhs.id; });
-
     std::wstring output;
     output.append(L"#include \"");
     output.append(resourceHeader);
@@ -80,7 +77,7 @@ std::wstring BuildSatelliteRcStringTable(std::wstring_view resourceHeader, std::
     output.append(L"\r\n\r\n");
     output.append(L"STRINGTABLE\r\nBEGIN\r\n");
 
-    for (const MergedStringEntry& entry : sorted)
+    for (const MergedStringEntry& entry : entries)
     {
         const std::wstring_view text = entry.targetText.empty() ? std::wstring_view(entry.sourceText) : std::wstring_view(entry.targetText);
         output.append(L"    ");

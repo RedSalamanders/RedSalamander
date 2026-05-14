@@ -1065,6 +1065,9 @@ void FolderWindow::Destroy()
         _rightPane.selectionSizeThread = std::jthread{};
     }
 
+    CloseSharedDirectoriesDialog();
+    CloseOpenedFilesDialog();
+
     _backgroundBrush.reset();
     _splitterBrush.reset();
     _splitterGripBrush.reset();
@@ -1088,12 +1091,16 @@ void FolderWindow::Destroy()
 
     _leftPane.filterBarHost.Detach();
     _leftPane.filterBarLabel = nullptr;
+    _leftPane.filterBarCombo = nullptr;
+    _leftPane.filterBarToggle = nullptr;
     _leftPane.hFilterBar.reset();
     _leftPane.previewTabsHost.Detach();
     _leftPane.previewTabsControl = nullptr;
     _leftPane.hPreviewTabs.reset();
     _leftPane.previewContentHost.Detach();
     _leftPane.previewContentLabel = nullptr;
+    _leftPane.previewPropertiesScroll = nullptr;
+    _leftPane.previewPropertiesSections.clear();
     _leftPane.hPreviewContent.reset();
     _leftPane.hStatusBar.reset();
 
@@ -1111,12 +1118,16 @@ void FolderWindow::Destroy()
 
     _rightPane.filterBarHost.Detach();
     _rightPane.filterBarLabel = nullptr;
+    _rightPane.filterBarCombo = nullptr;
+    _rightPane.filterBarToggle = nullptr;
     _rightPane.hFilterBar.reset();
     _rightPane.previewTabsHost.Detach();
     _rightPane.previewTabsControl = nullptr;
     _rightPane.hPreviewTabs.reset();
     _rightPane.previewContentHost.Detach();
     _rightPane.previewContentLabel = nullptr;
+    _rightPane.previewPropertiesScroll = nullptr;
+    _rightPane.previewPropertiesSections.clear();
     _rightPane.hPreviewContent.reset();
     _rightPane.hStatusBar.reset();
 
@@ -1198,7 +1209,7 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_CAPTURECHANGED: OnCaptureChanged(); return 0;
         case WM_PARENTNOTIFY: OnParentNotify(LOWORD(wp), HIWORD(wp)); return 0;
-        case WM_NOTIFY: return OnNotify(reinterpret_cast<const NMHDR*>(lp));
+        case WM_NOTIFY: return OnNotify(lp);
         case WM_SETCURSOR: return OnSetCursor(reinterpret_cast<HWND>(wp), LOWORD(lp), HIWORD(lp));
         case WndMsg::kPaneFocusChanged: UpdatePaneFocusStates(); return 0;
         case WndMsg::kPaneRestoreFolderFocus: static_cast<void>(TryRestoreActivePaneFolderViewFocus()); return 0;
@@ -1209,6 +1220,8 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kChangeCaseCompleted: return OnChangeCaseCompleted(lp);
         case WndMsg::kChangeAttributesTaskUpdate: return OnChangeAttributesTaskUpdate(lp);
         case WndMsg::kChangeAttributesCompleted: return OnChangeAttributesCompleted(lp);
+        case WndMsg::kFolderWindowCloseOpenedFilesDialog: CloseOpenedFilesDialog(); return 0;
+        case WndMsg::kFolderWindowCloseSharedDirectoriesDialog: CloseSharedDirectoriesDialog(); return 0;
         case WndMsg::kHostShowAlert: return OnHostServicesMessage(msg, wp, lp);
         case WndMsg::kHostClearAlert: return OnHostServicesMessage(msg, wp, lp);
         case WndMsg::kHostShowPrompt: return OnHostServicesMessage(msg, wp, lp);
@@ -1332,13 +1345,13 @@ LRESULT FolderWindow::OnDrawItem(DRAWITEMSTRUCT* dis)
     return DefWindowProcW(_hWnd.get(), WM_DRAWITEM, controlId, reinterpret_cast<LPARAM>(dis));
 }
 
-LRESULT FolderWindow::OnNotify(const NMHDR* header)
+LRESULT FolderWindow::OnNotify(LPARAM data)
 {
-    if (header && header->code == NM_CLICK && (header->idFrom == kLeftStatusBarId || header->idFrom == kRightStatusBarId))
+    const auto* header = reinterpret_cast<const FolderWindowNotifyHeader*>(data);
+    if (header && header->code == kStatusBarSortClickNotification && (header->idFrom == kLeftStatusBarId || header->idFrom == kRightStatusBarId))
     {
-        const auto* mouse = reinterpret_cast<const NMMOUSE*>(header);
-        const int part    = static_cast<int>(mouse->dwItemSpec);
-        if (part == kStatusBarPartSort && _showSortMenuCallback)
+        const auto* mouse = reinterpret_cast<const StatusBarSortClickNotification*>(header);
+        if (mouse->part == kStatusBarPartSort && _showSortMenuCallback)
         {
             const Pane pane = header->idFrom == kLeftStatusBarId ? Pane::Left : Pane::Right;
             SetActivePane(pane);
@@ -1351,7 +1364,7 @@ LRESULT FolderWindow::OnNotify(const NMHDR* header)
             }
             else
             {
-                screenPoint = mouse->pt;
+                screenPoint = mouse->clientPoint;
             }
             ClientToScreen(header->hwndFrom, &screenPoint);
             _showSortMenuCallback(pane, screenPoint);
@@ -1364,7 +1377,7 @@ LRESULT FolderWindow::OnNotify(const NMHDR* header)
         return 0;
     }
     const WPARAM controlId = header ? static_cast<WPARAM>(header->idFrom) : 0;
-    return DefWindowProcW(_hWnd.get(), WM_NOTIFY, controlId, reinterpret_cast<LPARAM>(header));
+    return DefWindowProcW(_hWnd.get(), WM_NOTIFY, controlId, data);
 }
 
 LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
@@ -1374,7 +1387,8 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
                               RedSalamander::DxUi::WindowHost& host,
                               RedSalamander::DxUi::Label** label,
                               RedSalamander::DxUi::TabControl** tabs,
-                              bool previewContent) noexcept -> std::optional<LRESULT>
+                              bool previewContent,
+                              bool filterBar) noexcept -> std::optional<LRESULT>
     {
         if (! expectedHwnd || hwnd != expectedHwnd.get())
         {
@@ -1389,6 +1403,12 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
             if (label)
             {
                 *label = nullptr;
+            }
+            if (filterBar)
+            {
+                PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+                state.filterBarCombo = nullptr;
+                state.filterBarToggle = nullptr;
             }
             if (tabs)
             {
@@ -1406,7 +1426,7 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
                 UpdatePreviewContentLayout(pane);
                 LayoutEmbeddedPreviewViewer(pane);
             }
-            else if (label && *label)
+            else if (filterBar)
             {
                 UpdateFilterBarLayout(pane);
             }
@@ -1415,22 +1435,22 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
     };
 
     if (const auto result =
-            dispatch(Pane::Left, _leftPane.hFilterBar, _leftPane.filterBarHost, &_leftPane.filterBarLabel, nullptr, false))
+            dispatch(Pane::Left, _leftPane.hFilterBar, _leftPane.filterBarHost, &_leftPane.filterBarLabel, nullptr, false, true))
     {
         return result.value();
     }
     if (const auto result =
-            dispatch(Pane::Right, _rightPane.hFilterBar, _rightPane.filterBarHost, &_rightPane.filterBarLabel, nullptr, false))
+            dispatch(Pane::Right, _rightPane.hFilterBar, _rightPane.filterBarHost, &_rightPane.filterBarLabel, nullptr, false, true))
     {
         return result.value();
     }
     if (const auto result =
-            dispatch(Pane::Left, _leftPane.hPreviewTabs, _leftPane.previewTabsHost, nullptr, &_leftPane.previewTabsControl, false))
+            dispatch(Pane::Left, _leftPane.hPreviewTabs, _leftPane.previewTabsHost, nullptr, &_leftPane.previewTabsControl, false, false))
     {
         return result.value();
     }
     if (const auto result =
-            dispatch(Pane::Right, _rightPane.hPreviewTabs, _rightPane.previewTabsHost, nullptr, &_rightPane.previewTabsControl, false))
+            dispatch(Pane::Right, _rightPane.hPreviewTabs, _rightPane.previewTabsHost, nullptr, &_rightPane.previewTabsControl, false, false))
     {
         return result.value();
     }
@@ -1439,7 +1459,8 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
                                      _leftPane.previewContentHost,
                                      &_leftPane.previewContentLabel,
                                      nullptr,
-                                     true))
+                                     true,
+                                     false))
     {
         return result.value();
     }
@@ -1448,7 +1469,8 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
                                      _rightPane.previewContentHost,
                                      &_rightPane.previewContentLabel,
                                      nullptr,
-                                     true))
+                                     true,
+                                     false))
     {
         return result.value();
     }
@@ -1569,12 +1591,28 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             return false;
         }
         {
-            auto root            = std::make_unique<RedSalamander::DxUi::Panel>();
-            state.filterBarLabel = root->AddChild<RedSalamander::DxUi::Label>();
-            state.filterBarLabel->SetFontRole(RedSalamander::DxUi::FontRole::Small);
-            state.filterBarLabel->SetMultiline(false);
+            auto root = std::make_unique<RedSalamander::DxUi::Panel>();
+
+            state.filterBarCombo = root->AddChild<RedSalamander::DxUi::ComboBox>();
+            state.filterBarCombo->SetEditable(true);
+            state.filterBarCombo->SetVariant(RedSalamander::DxUi::ComboBoxVariant::Edit);
+            state.filterBarCombo->SetAutoOpenOnTextInput(false);
+            state.filterBarCombo->SetMaxVisibleItems(MaskSyntax::kWildcardMaskHistoryMaxItems);
+            state.filterBarCombo->SetPlaceholder(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER));
+            state.filterBarCombo->SetAccessibleName(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER));
+            state.filterBarCombo->SetOnTextChanged([this, pane](std::wstring_view text) noexcept { OnFilterBarTextChanged(pane, text); });
+            state.filterBarCombo->SetOnSelectionChanged([this, pane](size_t) noexcept { OnFilterBarSubmitted(pane); });
+            state.filterBarCombo->SetOnSubmitted([this, pane] { OnFilterBarSubmitted(pane); });
+            state.filterBarCombo->SetOnPopupRequested([this, pane] { return ShowFilterBarHistoryMenu(pane); });
+
+            state.filterBarToggle = root->AddChild<RedSalamander::DxUi::Toggle>();
+            state.filterBarToggle->SetAccessibleName(LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER_USE_FILTER));
+            state.filterBarToggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF), LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+            state.filterBarToggle->SetOnToggled([this, pane](bool checked) noexcept { OnFilterBarToggled(pane, checked); });
+
             state.filterBarHost.SetRoot(std::move(root));
             state.filterBarHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+            RefreshFilterBarHistoryItems(pane);
             UpdateFilterBarLayout(pane);
         }
 
@@ -1700,6 +1738,9 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             state.previewContentLabel    = root->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PREVIEW_EMPTY));
             state.previewContentLabel->SetFontRole(RedSalamander::DxUi::FontRole::Body);
             state.previewContentLabel->SetMultiline(true);
+            state.previewPropertiesScroll = root->AddChild<RedSalamander::DxUi::ScrollPanel>();
+            state.previewPropertiesScroll->SetScrollStepDip(48.0f);
+            state.previewPropertiesScroll->SetVisible(false);
             state.previewContentHost.SetRoot(std::move(root));
             state.previewContentHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
             UpdatePreviewContentLayout(pane);
@@ -2037,6 +2078,8 @@ void FolderWindow::OnDestroy()
         {
             state.filterBarHost.Detach();
             state.filterBarLabel = nullptr;
+            state.filterBarCombo = nullptr;
+            state.filterBarToggle = nullptr;
             state.hFilterBar = nullptr;
         }
 
@@ -2051,6 +2094,8 @@ void FolderWindow::OnDestroy()
         {
             state.previewContentHost.Detach();
             state.previewContentLabel = nullptr;
+            state.previewPropertiesScroll = nullptr;
+            state.previewPropertiesSections.clear();
             state.hPreviewContent = nullptr;
         }
 
