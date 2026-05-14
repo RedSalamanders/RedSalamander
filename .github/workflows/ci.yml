@@ -40,8 +40,16 @@ jobs:
       - name: Install clang-format
         shell: pwsh
         run: |
-          choco install llvm -y --no-progress
-          if ($LASTEXITCODE -notin 0,3010) { throw "LLVM install failed: $LASTEXITCODE" }
+          $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+          try {
+            $PSNativeCommandUseErrorActionPreference = $false
+            choco install llvm -y --no-progress
+            $exitCode = $LASTEXITCODE
+          } finally {
+            $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
+          }
+
+          if ($exitCode -notin 0,3010) { throw "LLVM install failed: $exitCode" }
 
       - name: Run format-all.ps1
         shell: pwsh

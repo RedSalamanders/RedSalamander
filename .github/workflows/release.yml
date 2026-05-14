@@ -139,18 +139,36 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          choco install visualstudio2026buildtools -y --no-progress
-          if ($LASTEXITCODE -notin 0,3010) { throw "VS Build Tools install failed: $LASTEXITCODE" }
+          function Invoke-ChocoInstall {
+            param(
+              [Parameter(Mandatory = $true)]
+              [string] $PackageName,
+              [Parameter(Mandatory = $true)]
+              [string] $FailureMessage,
+              [string[]] $ExtraArguments = @()
+            )
+
+            $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+            try {
+              $PSNativeCommandUseErrorActionPreference = $false
+              & choco install $PackageName -y --no-progress @ExtraArguments
+              $exitCode = $LASTEXITCODE
+            } finally {
+              $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
+            }
+
+            if ($exitCode -notin 0,3010) { throw "${FailureMessage}: $exitCode" }
+          }
+
+          Invoke-ChocoInstall -PackageName visualstudio2026buildtools -FailureMessage "VS Build Tools install failed"
 
           $vcPackageParameters = "--includeRecommended"
           if ("${{ matrix.platform }}" -eq "ARM64") {
             $vcPackageParameters += " --add Microsoft.VisualStudio.Component.VC.Tools.ARM64"
           }
 
-          choco install visualstudio2026-workload-vctools -y --no-progress --package-parameters $vcPackageParameters
-          if ($LASTEXITCODE -notin 0,3010) { throw "VC workload install failed: $LASTEXITCODE" }
-          choco install visualstudio2026-workload-universalbuildtools -y --no-progress
-          if ($LASTEXITCODE -notin 0,3010) { throw "UWP workload install failed: $LASTEXITCODE" }
+          Invoke-ChocoInstall -PackageName visualstudio2026-workload-vctools -FailureMessage "VC workload install failed" -ExtraArguments @("--package-parameters", $vcPackageParameters)
+          Invoke-ChocoInstall -PackageName visualstudio2026-workload-universalbuildtools -FailureMessage "UWP workload install failed"
 
       - name: Select MSBuild (VS 2026)
         shell: pwsh
