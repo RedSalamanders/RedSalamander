@@ -43,13 +43,15 @@ jobs:
           $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
           try {
             $PSNativeCommandUseErrorActionPreference = $false
-            choco install llvm -y --no-progress
+            choco install llvm -y --no-progress --ignore-detected-reboot --ignore-package-exit-codes
             $exitCode = $LASTEXITCODE
           } finally {
             $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
           }
 
           if ($exitCode -notin 0,3010) { throw "LLVM install failed: $exitCode" }
+          if ($exitCode -eq 3010) { Write-Warning "LLVM requested a reboot; continuing because the Chocolatey install succeeded." }
+          $global:LASTEXITCODE = 0
 
       - name: Run format-all.ps1
         shell: pwsh

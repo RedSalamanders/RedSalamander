@@ -48,13 +48,15 @@ jobs:
             $oldNativeErrorPreference = $PSNativeCommandUseErrorActionPreference
             try {
               $PSNativeCommandUseErrorActionPreference = $false
-              & choco install $PackageName -y --no-progress @ExtraArguments
+              & choco install $PackageName -y --no-progress --ignore-detected-reboot --ignore-package-exit-codes @ExtraArguments
               $exitCode = $LASTEXITCODE
             } finally {
               $PSNativeCommandUseErrorActionPreference = $oldNativeErrorPreference
             }
 
             if ($exitCode -notin 0,3010) { throw "${FailureMessage}: $exitCode" }
+            if ($exitCode -eq 3010) { Write-Warning "$PackageName requested a reboot; continuing because the Chocolatey install succeeded." }
+            $global:LASTEXITCODE = 0
           }
 
           Invoke-ChocoInstall -PackageName visualstudio2026buildtools -FailureMessage "VS Build Tools install failed"
