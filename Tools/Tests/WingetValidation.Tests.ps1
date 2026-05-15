@@ -121,6 +121,28 @@ exit /b 99
     }
 }
 
+Describe 'Winget release workflow' {
+    BeforeAll {
+        $workflowPath = Join-Path $repoRoot '.github\workflows\winget-release.yml'
+        $workflow = Get-Content -Path $workflowPath -Raw
+    }
+
+    It 'enables local manifest installs before testing the generated manifest' {
+        $enableIndex = $workflow.IndexOf('winget settings --enable LocalManifestFiles')
+        $installMatch = [regex]::Match($workflow, '(?ms)winget install\s+`\r?\n\s+--manifest "winget-manifest"')
+
+        if ($enableIndex -lt 0) {
+            throw 'winget-release.yml must enable LocalManifestFiles before winget install --manifest.'
+        }
+
+        if (-not $installMatch.Success) {
+            throw 'winget-release.yml must install the generated winget-manifest.'
+        }
+
+        ($enableIndex -lt $installMatch.Index) | Should Be $true
+    }
+}
+
 Describe 'Winget manifest template' {
     BeforeAll {
         $installerTemplatePath = Join-Path $repoRoot 'Installer\winget\templates\RedSalamanders.RedSalamander.installer.yaml'
@@ -140,25 +162,42 @@ Describe 'Winget manifest template' {
 
     It 'copies RedLauncher.exe into the portable ZIP root' {
         $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "RedLauncher\.exe"\) \$TempDir'
+        $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "RedLauncherConsole\.exe"\) \$TempDir'
     }
 }
 
 Describe 'RedLauncher project' {
     BeforeAll {
         $launcherProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncher.vcxproj'
+        $consoleLauncherProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncherConsole.vcxproj'
         $launcherSourcePath = Join-Path $repoRoot 'RedLauncher\Main.cpp'
     }
 
-    It 'is a first-party static-CRT executable project' {
+    It 'is a first-party static-CRT GUI executable project for the WinGet alias' {
         Test-Path $launcherProjectPath | Should Be $true
 
         $launcherProject = Get-Content -Path $launcherProjectPath -Raw
         $launcherProject | Should Match '<ClCompile Include="Main\.cpp" />'
-        $launcherProject | Should Match '<SubSystem>Console</SubSystem>'
+        $launcherProject | Should Match '<SubSystem>Windows</SubSystem>'
+        $launcherProject | Should Match 'REDLAUNCHER_GUI=1;'
         $launcherProject | Should Match '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
         $launcherProject | Should Match '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
         $launcherProject | Should Not Match '<ProjectReference'
         $launcherProject | Should Not Match 'Common\.vcxproj'
+    }
+
+    It 'keeps a first-party static-CRT console companion for foreground automation' {
+        Test-Path $consoleLauncherProjectPath | Should Be $true
+
+        $consoleLauncherProject = Get-Content -Path $consoleLauncherProjectPath -Raw
+        $consoleLauncherProject | Should Match '<ClCompile Include="Main\.cpp" />'
+        $consoleLauncherProject | Should Match '<SubSystem>Console</SubSystem>'
+        $consoleLauncherProject | Should Match '<TargetName>RedLauncherConsole</TargetName>'
+        $consoleLauncherProject | Should Match 'REDLAUNCHER_CONSOLE=1;'
+        $consoleLauncherProject | Should Match '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
+        $consoleLauncherProject | Should Match '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
+        $consoleLauncherProject | Should Not Match '<ProjectReference'
+        $consoleLauncherProject | Should Not Match 'Common\.vcxproj'
     }
 
     It 'resolves the WinGet alias symlink before launching RedSalamander.exe' {
@@ -175,6 +214,8 @@ Describe 'RedLauncher project' {
 
         $launcherSource = Get-Content -Path $launcherSourcePath -Raw
         $launcherSource | Should Match 'ShouldWaitForTargetExit'
+        $launcherSource | Should Match 'wWinMain'
+        $launcherSource | Should Match 'wmain'
         $launcherSource | Should Match '--selftest'
         $launcherSource | Should Match '--compare-selftest'
         $launcherSource | Should Match '--commands-selftest'

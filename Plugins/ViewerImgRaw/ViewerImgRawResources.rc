@@ -91,4 +91,5 @@ BEGIN
     IDS_VIEWERRAW_STATUS_FILESYSTEM_MISSING "Active filesystem is missing."
     IDS_VIEWERRAW_STATUS_UNSUPPORTED_FORMAT "Unsupported file format."
     IDS_VIEWERRAW_STATUS_STORE_OOM "Out of memory while storing decoded image."
+    IDS_VIEWERRAW_STATUS_CANCELED "Canceled."
 END

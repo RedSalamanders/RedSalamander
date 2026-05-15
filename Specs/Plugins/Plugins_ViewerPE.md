@@ -12,14 +12,14 @@ It extends the shared viewer contract in `Specs/Plugins/Plugins_ViewerPlugins.md
 
 - Standalone ViewerPE opens as a normal top-level viewer window with the shared DxUi menu bar.
 - The main surface is the parsed PE text/content viewport.
-- In standalone mode, ViewerPE shows the filename dropdown only when `otherFiles` contains more than one peer file.
+- In standalone mode, ViewerPE shows the filename dropdown only when `otherFiles` contains more than one peer file; the dropdown uses the shared compact 28 DIP combo height to leave more vertical room for parsed data.
 - In embedded preview mode, ViewerPE hides the standalone filename dropdown and menu/title chrome so the parsed content blends into the preview/tab background.
 
 ## Keyboard Contract
 
 - Keyboard focus opens on, and returns to, the parsed-content viewport after peer-file selection or menu commands.
-- While focus is inside the filename dropdown or menu, that focused control owns arrow/Enter/Escape behavior.
-- `Esc` closes the viewer from the content viewport or focused viewer chrome.
+- While focus is inside the filename dropdown or menu, that focused control owns arrow/Enter behavior; `Esc` from that chrome returns focus to the parsed-content viewport.
+- `Esc` from the parsed-content viewport posts `WM_CLOSE` and closes the idle viewer.
 - Peer navigation follows the shared viewer rules: next/previous/first/last commands use the `otherFiles` list and preserve the same viewer instance where possible.
 
 ## Data Contract

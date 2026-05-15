@@ -796,7 +796,7 @@ try {
         }
     } else {
         # Show output paths for main executables
-        $mainProjects = @("RedLauncher", "RedSalamander", "RedSalamanderMonitor")
+        $mainProjects = @("RedLauncher", "RedLauncherConsole", "RedSalamander", "RedSalamanderMonitor")
         foreach ($project in $mainProjects) {
             $outputPath = ".build\\$Platform\\$Configuration\\$project.exe"
             if (Test-Path $outputPath) {

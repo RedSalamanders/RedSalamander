@@ -41,7 +41,7 @@ This specification applies to:
 - After a database page or query result is loaded, keyboard focus MUST land on the results grid as the main viewer surface.
 - `Tab` advances from the results grid through the file combo, reload button, table combo, previous/next page buttons, query field, `Run Query`, `Table Preview`, and back to the results grid. `Shift+Tab` walks the same controls in reverse.
 - While focus is inside a combo box or query field, that control owns its normal arrow/editing/Enter behavior. After file selection, table preview, paging, or query completion, focus SHOULD return to the results grid when rows are available.
-- `Esc` closes the viewer from the results grid or any focused DX control.
+- `Esc` from focused controls returns focus to the results grid; `Esc` from the focused results grid posts `WM_CLOSE` and closes the idle viewer.
 
 ## Data And Query Contract
 

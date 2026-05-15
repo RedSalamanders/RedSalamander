@@ -47,6 +47,7 @@
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 #include "LocalizationManager.h"
+#include "ViewerFileComboHost.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 
@@ -72,70 +73,12 @@ static const int kViewerWebModuleAnchor = 0;
 constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerWeb.FileComboHostOriginalWndProc";
 constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerWeb.FileComboHostState";
 
-[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
-{
-    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
-}
-
-[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
-{
-    if (! hwnd || ! originalWndProcProp || ! hookWndProc)
-    {
-        return false;
-    }
-
-    if (GetStoredWndProc(hwnd, originalWndProcProp))
-    {
-        return true;
-    }
-
-    const auto originalWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
-    if (! originalWndProc)
-    {
-        return false;
-    }
-
-    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(originalWndProc)))
-    {
-        return false;
-    }
-
-    const auto previousWndProc =
-        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(hookWndProc)));
-    if (previousWndProc != originalWndProc)
-    {
-        RemovePropW(hwnd, originalWndProcProp);
-        if (previousWndProc)
-        {
-            static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWndProc)));
-        }
-        return false;
-    }
-
-    return true;
-}
-
-[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
-{
-    if (const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp))
-    {
-        return RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp);
-    }
-
-    return DefWindowProcW(hwnd, msg, wp, lp);
-}
-
 LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
 void UnhookFileComboHostWindow(HWND hwnd) noexcept
 {
-    if (! hwnd || IsWindow(hwnd) == FALSE)
-    {
-        return;
-    }
-
-    RemovePropW(hwnd, kFileComboHostStateProp);
-    RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(
+        hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 [[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
@@ -285,48 +228,8 @@ void UnhookFileComboHostWindow(HWND hwnd) noexcept
 
 LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    auto* self = reinterpret_cast<ViewerWeb*>(GetPropW(hwnd, kFileComboHostStateProp));
-    if (! self)
-    {
-        return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
-    }
-
-    if (msg == WM_NCDESTROY)
-    {
-        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp);
-        RemovePropW(hwnd, kFileComboHostStateProp);
-        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
-
-        bool handled = false;
-        static_cast<void>(self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled));
-
-        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
-    }
-
-    bool handled           = false;
-    const LRESULT dxResult = self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled);
-    if (handled)
-    {
-        return dxResult;
-    }
-
-    if (msg == WM_KEYUP && (wp == VK_ESCAPE || wp == VK_TAB))
-    {
-        self->FocusMainSurfaceFromFileCombo(GetAncestor(hwnd, GA_ROOT));
-        return 0;
-    }
-
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
-    {
-        const HWND root = GetAncestor(hwnd, GA_ROOT);
-        if (root)
-        {
-            PostMessageW(root, WM_CLOSE, 0, 0);
-            return 0;
-        }
-    }
-
-    return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+    return RedSalamander::ViewerFileComboHost::DispatchFileComboHostWndProc<ViewerWeb>(
+        hwnd, msg, wp, lp, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 [[maybe_unused]] [[nodiscard]] std::wstring KeyGlyphFromVirtualKey(UINT vk, HKL keyboardLayout) noexcept
@@ -1605,10 +1508,9 @@ void ViewerWeb::OnCreate(HWND hwnd)
         Debug::Error(L"ViewerWeb: failed to attach DxUi host for file combo.");
         _hFileComboHost.reset();
     }
-    else if (! SetPropW(_hFileComboHost.get(), kFileComboHostStateProp, reinterpret_cast<HANDLE>(this)) ||
-             ! InstallWndProcHook(_hFileComboHost.get(), kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
+    else if (! RedSalamander::ViewerFileComboHost::InstallFileComboHostWindow(
+                 _hFileComboHost.get(), this, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
     {
-        RemovePropW(_hFileComboHost.get(), kFileComboHostStateProp);
         Debug::ErrorWithLastError(L"ViewerWeb: failed to install WNDPROC hook for DxUi file combo host.");
         _fileComboHost.Detach();
         _hFileComboHost.reset();
@@ -1632,16 +1534,8 @@ void ViewerWeb::OnCreate(HWND hwnd)
                 SetFocus(hwnd);
             }
         });
-        _fileComboHost.SetOnTabBoundary([this, hwnd](bool) noexcept
-        {
-            FocusMainSurfaceFromFileCombo(hwnd);
-            return true;
-        });
-        _fileComboHost.SetOnEscape([hwnd]() noexcept
-        {
-            PostMessageW(hwnd, WM_CLOSE, 0, 0);
-            return true;
-        });
+        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this, hwnd]() noexcept
+        { FocusMainSurfaceFromFileCombo(hwnd); });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
     }
@@ -1654,6 +1548,16 @@ void ViewerWeb::OnCreate(HWND hwnd)
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
+        _menuBarHost.SetOnTabBoundary([this, hwnd](bool) noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
+        _menuBarHost.SetOnEscape([this, hwnd]() noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
         static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
@@ -1801,7 +1705,7 @@ void ViewerWeb::OnKeyDown(HWND hwnd, UINT vk) noexcept
 
     if (vk == VK_ESCAPE)
     {
-        static_cast<void>(Close());
+        PostMessageW(hwnd, WM_CLOSE, 0, 0);
         return;
     }
 
@@ -2808,9 +2712,9 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
     ComputeLayoutRects(hwnd);
 
     const UINT dpi       = GetDpiForWindow(hwnd);
-    const int minPadding = MulDiv(3, static_cast<int>(dpi), 96);
-    const int accentH    = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
-    const int accentGap  = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
+    const int minPadding = PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip, dpi);
+    const int accentH    = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip, dpi));
+    const int accentGap  = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip, dpi));
     const bool showCombo = _hFileComboHost && ! _embeddedMode && _otherFiles.size() > 1;
 
     RECT headerContentRect{};
@@ -2891,11 +2795,11 @@ void ViewerWeb::ComputeLayoutRects(HWND hwnd) noexcept
 
     const UINT dpi               = GetDpiForWindow(hwnd);
     const int baseHeaderHeight   = _embeddedMode ? 0 : MulDiv(kHeaderHeightDip, static_cast<int>(dpi), 96);
-    const int accentH            = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
-    const int accentGap          = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
-    const int minPadding         = MulDiv(3, static_cast<int>(dpi), 96);
+    const int accentH            = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip, dpi));
+    const int accentGap          = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip, dpi));
+    const int minPadding         = PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip, dpi);
     const bool showCombo         = _hFileComboHost && ! _embeddedMode && _otherFiles.size() > 1;
-    const int desiredComboHeight = std::max(1, MulDiv(32, static_cast<int>(dpi), 96));
+    const int desiredComboHeight = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip, dpi));
 
     const int minChromeHeight = MulDiv(22, static_cast<int>(dpi), 96) + accentH + accentGap + 2 * minPadding;
     int headerH               = _embeddedMode ? 0 : std::max(baseHeaderHeight, minChromeHeight);

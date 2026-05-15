@@ -73,8 +73,11 @@ Default viewer associations route `.diff`, `.patch`, and `.rej` to `builtin/view
 - An embedded preview viewer is the exception: it renders as a non-activating child window under `ViewerOpenContext.ownerWindow`, does not own a top-level menu or title bar, hides standalone viewer header chrome such as filename dropdowns, visually blends into the preview/tab background, and MUST NOT take keyboard focus from the source pane during open or content updates.
 - Standalone viewers SHOULD place keyboard focus on the main viewer surface after opening or activating the window: text/hex content for text, image canvas for images, document/web content for web/PDF/Markdown/JSON, results grid for SQLite, parsed-content surface for PE, treemap for Space, and media/HUD surface for VLC.
 - `Tab` / `Shift+Tab` may move focus into viewer chrome, menus, combo boxes, and command controls. While focus is inside a combo box or menu, normal keyboard navigation belongs to that control; after the user activates a peer-file selection or menu command, focus SHOULD return to the main viewer surface unless the command deliberately leaves focus in an editable field.
-- Pressing **Esc** closes the viewer window from the main surface, a focused DxUi/Win32 child control, or the viewer menu/toolbar path.
-  - If an in-view alert overlay is visible (errors/info), **Esc** dismisses the alert first, then closes on the next press.
+- Pressing **Esc** follows the shared focus-cancel-close contract:
+  - If focus is inside viewer chrome such as a menu, filename combo, or other non-main control, **Esc** returns focus to the main viewer surface and does not close the viewer.
+  - If focus is on the main viewer surface and cancellable work is active (for example a ViewerSpace scan or ViewerImgRaw RAW decode), **Esc** cancels that work and keeps the viewer open.
+  - If focus is on the main viewer surface and the viewer is idle, **Esc** posts `WM_CLOSE` instead of calling the close path synchronously.
+  - If an in-view alert overlay is visible (errors/info), **Esc** dismisses the alert first, then follows the same contract on the next press.
 - “Other Files” navigation is supported using the `otherFiles` list passed at open time.
 
 ## Baseline UX expectations (ViewerText reference)
@@ -82,7 +85,7 @@ Default viewer associations route `.diff`, `.patch`, and `.rej` to `builtin/view
 The built-in `builtin/viewer-text` is used as a reference for viewer UX. Other viewer plugins are encouraged to provide equivalent navigation and theme behavior:
 
 - In standalone mode, if `otherFileCount > 1`, the viewer SHOULD expose a **filename dropdown** (combo box) listing the `otherFiles` list and selecting `focusedOtherFileIndex`; if there is no peer-file navigation target, the standalone filename dropdown SHOULD be hidden or disabled according to the viewer layout.
-- Standalone filename dropdowns MUST be fully inset inside the themed header/chrome band in their collapsed state. They must not overlap the content background or leave a mismatched strip below the combo.
+- Standalone filename dropdowns MUST be fully inset inside a compact themed header/chrome band in their collapsed state. The shared target is a 28 DIP combo with minimal padding so data surfaces keep vertical room; dropdowns must not overlap the content background or leave a mismatched strip below the combo.
 - Embedded preview mode MUST NOT show the standalone filename dropdown/header. Preview-only commands should be reachable through the embedded viewer context-menu contract instead of visible standalone chrome.
 - The header SHOULD expose a clearly clickable **mode toggle button** (`TEXT` / `HEX`) so users can switch view mode without hunting in menus.
 - The viewer SHOULD also provide “Other Files” navigation commands (Next/Previous/First/Last) using the same shortcuts described in the menu spec.

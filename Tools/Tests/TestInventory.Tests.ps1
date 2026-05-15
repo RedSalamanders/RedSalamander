@@ -31,7 +31,7 @@ Describe 'Test inventory helper' {
     It 'counts the in-product self-test surfaces from source' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
 
-        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 570 -Message 'Commands static RunCase count drifted.'
+        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 598 -Message 'Commands static RunCase count drifted.'
         Assert-RSEqual -Actual $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Expected 141 -Message 'CompareDirectories static RunCase count drifted.'
         Assert-RSEqual -Actual $inventory.SelfTests.FileOperations.ActivePhases -Expected 73 -Message 'FileOperations active phase count drifted.'
     }
@@ -39,8 +39,8 @@ Describe 'Test inventory helper' {
     It 'counts standalone, performance, and script test surfaces from source' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
 
-        Assert-RSEqual -Actual $inventory.Standalone.PerformanceTests2.TestMethods -Expected 7 -Message 'PerformanceTests2 method count drifted.'
-        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 65 -Message 'Tools Pester test count drifted.'
+        Assert-RSEqual -Actual $inventory.Standalone.PerformanceTests2.TestMethods -Expected 11 -Message 'PerformanceTests2 method count drifted.'
+        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 74 -Message 'Tools Pester test count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.RequiresBuildToolchainCases -Expected 1 -Message 'Build-toolchain Pester count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeSynthetic.Cases -Expected 5 -Message 'Synthetic vcpkg merge count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeLockValidation.Cases -Expected 3 -Message 'Lock-validation vcpkg count drifted.'
@@ -51,8 +51,8 @@ Describe 'Test inventory helper' {
         $json = ConvertTo-RSTestInventoryJson -Inventory $inventory
         $roundTrip = $json | ConvertFrom-Json
 
-        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 570 -Message 'JSON manifest should include Commands count.'
-        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 65 -Message 'JSON manifest should include Tools Pester count.'
+        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 598 -Message 'JSON manifest should include Commands count.'
+        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 74 -Message 'JSON manifest should include Tools Pester count.'
     }
 
     It 'guards FileOperations Step enum values against phase-order drift' {

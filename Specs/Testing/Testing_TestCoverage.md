@@ -5,7 +5,7 @@
 This document provides a comprehensive inventory of every declared test case across all
 RedSalamander test suites. It serves as the authoritative reference for test coverage.
 
-Current runner-native inventory as of 2026-05-14:
+Current runner-native inventory as of 2026-05-15:
 
 - Commands: 617 listed cases.
 - CompareDirectories: 149 listed cases.
@@ -15,7 +15,7 @@ Current runner-native inventory as of 2026-05-14:
 - MonitorTest: 3 ETW burst scenarios plus 3 fast guards
   (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
   `--document-model-selftest`).
-- Tooling scripts: 65 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
+- Tooling scripts: 74 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
   synthetic vcpkg merge cases.
 
 `RedSalamander.exe --selftest-list-cases` emits the authoritative in-product
@@ -26,7 +26,7 @@ equivalent to runner-listed cases.
 
 Current source-derived fallback counts:
 
-- Commands: 587 static `SelfTest::RunCase` call-site registrations.
+- Commands: 598 static `SelfTest::RunCase` call-site registrations.
 - CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
 - FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
 
@@ -1044,8 +1044,8 @@ kill valid nested churn before the per-child checks can report their result.
 |---------|-------|---------------|
 | **DxUiTests** | ~50+ | DxUi color parsing, theme rendering, control creation, HSL/RGB conversion, submenu cascade hover timing, single-line text selection clipping, selected TextField emoji color-font rendering, text-input bridge keyboard forwarding, FolderView incremental-search helper behavior, inactive-pane visual-state helpers, and empty-folder placeholder layout metrics |
 | **LocalizationTests** | ~5 | Resource owner registration, satellite string/menu/dialog lookup, localized dialog templates with executable-owned custom child classes, fallback to embedded resources, and persisted `ui.language` roundtrips |
-| **ViewerPETests** | ~20+ | PE viewer plugin, image viewer, text viewer including AppTheme-driven parsed diff semantic colors with runtime theme switching, explicit rainbow-mode coverage, and high-contrast coverage, base-background unchanged rows plus dim diff-marker metadata, clickable hidden-context banners in hunks-only diff mode, non-anchor parsed hunk presentation, pane-local side-by-side visual-layout metadata and visible split-row counters for parsed diff viewports, split-row top-visible text snapshot coverage after hunk navigation, parsed hunk count and active-hunk snapshot metadata, next/previous hunk navigation, diff presentation, lazy referenced-file expansion, parsed-document reuse across diff variants, active-section-only unchanged-text hydration with on-demand section jumps, viewport-windowed unchanged-row rehydration on scroll, range-bounded referenced-file reads for viewport-nearby unchanged context, cached reuse when revisiting already hydrated viewport ranges, referenced-file content reuse across expanded layouts, hatched placeholder-gap metadata for unresolved rows, diff section navigation, horizontal scrolling in both parsed diff layouts after wrap is disabled including side-by-side to inline presentation switches, shared viewer combo-host popup expansion/collapse, Escape/Tab focus return, embedded standalone-combo hiding, Image/RAW header-combo inset, and clean close behavior across `ViewerPE`, `ViewerWeb`, `ViewerImgRaw`, and `ViewerText`, larger fully buffered diff parsing including promotion beyond the normal text buffer size for both extension-recognized and header-sniffed diffs, raw streamed multi-file section indexing/navigation beyond the fully buffered parse cap, parser-fallback coverage, ViewerSpace window/menu hosting plus Direct2D tooltip overlay width/native-tooltip regression coverage, and VLC viewer |
-| **ViewerSqliteTests** | ~15+ | SQLite engine, query execution, schema inspection, UI rendering, results-grid-first keyboard focus, Tab/Shift+Tab traversal order, and Escape close behavior |
+| **ViewerPETests** | ~20+ | PE viewer plugin, image viewer, text viewer including AppTheme-driven parsed diff semantic colors with runtime theme switching, explicit rainbow-mode coverage, and high-contrast coverage, base-background unchanged rows plus dim diff-marker metadata, clickable hidden-context banners in hunks-only diff mode, non-anchor parsed hunk presentation, pane-local side-by-side visual-layout metadata and visible split-row counters for parsed diff viewports, split-row top-visible text snapshot coverage after hunk navigation, parsed hunk count and active-hunk snapshot metadata, next/previous hunk navigation, diff presentation, lazy referenced-file expansion, parsed-document reuse across diff variants, active-section-only unchanged-text hydration with on-demand section jumps, viewport-windowed unchanged-row rehydration on scroll, range-bounded referenced-file reads for viewport-nearby unchanged context, cached reuse when revisiting already hydrated viewport ranges, referenced-file content reuse across expanded layouts, hatched placeholder-gap metadata for unresolved rows, diff section navigation, horizontal scrolling in both parsed diff layouts after wrap is disabled including side-by-side to inline presentation switches, shared viewer combo-host popup expansion/collapse, compact combo chrome, Escape/Tab focus return without closing from chrome, embedded standalone-combo/chrome hiding including ViewerSpace, Image/RAW header-combo inset, and clean idle close behavior across `ViewerPE`, `ViewerWeb`, `ViewerImgRaw`, and `ViewerText`, larger fully buffered diff parsing including promotion beyond the normal text buffer size for both extension-recognized and header-sniffed diffs, raw streamed multi-file section indexing/navigation beyond the fully buffered parse cap, parser-fallback coverage, ViewerSpace window/menu hosting plus Direct2D tooltip overlay width/native-tooltip regression coverage and Escape scan-cancel/idle-close behavior, and VLC viewer |
+| **ViewerSqliteTests** | ~15+ | SQLite engine, query execution, schema inspection, UI rendering, results-grid-first keyboard focus, Tab/Shift+Tab traversal order, and Escape focus-return/posted-close behavior |
 | **MonitorTest** | ~6 | ETW TraceLogging provider emit/receive validation plus compile-time/runtime guards that invalid rectangle visualization remains opt-in, normal Debug and Release monitor self diagnostics suppress Info/Perf output unless the runtime ETW flag is enabled, normal monitor display rejects self-originated ETW events, and ColorTextView scrollbar visibility reaches a stable minimal state |
 
 ---
@@ -1063,9 +1063,10 @@ kill valid nested churn before the per-child checks can report their result.
 | `Tools\Tests\SanitizedEnvironment.Tests.ps1` | Child process environment normalization |
 | `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` | Source guards for test harness CLI/error handling, case-listing, result-emission, and duplicate-name contracts |
 | `Tools\Tests\TestInventory.Tests.ps1` | Source-derived test inventory manifest, FileOperations phase-order drift guard, and doc-count lint |
+| `Tools\Tests\ViewerChromeSourceContracts.Tests.ps1` | Source/spec guards for shared viewer combo keyboard routing, Escape focus-cancel-close docs, and launcher subsystem split |
 | `Tools\Tests\VcpkgInstallSafety.Tests.ps1` | vcpkg triplet leaf-name validation and staging/install child path containment |
 | `Tools\Tests\Versioning.Tests.ps1` | Local build-number reuse/allocation |
-| `Tools\Tests\WingetValidation.Tests.ps1` | Winget validation warning suppression, failure propagation, portable manifest metadata, and VC runtime ZIP helper coverage |
+| `Tools\Tests\WingetValidation.Tests.ps1` | Winget validation warning suppression, failure propagation, portable manifest metadata, Windows-subsystem WinGet launcher plus console companion contracts, and VC runtime ZIP helper coverage |
 | `Tests\vcpkg-merge-synthetic-test.ps1` | Fast synthetic vcpkg lock/merge cases |
 | `Tests\vcpkg-merge-lock-validation.ps1` | Manual-only vcpkg install/lock validation; intentionally excluded from PR CI and `Run-AllTests.ps1 -Suite Full` because it mutates `.build` |
 

@@ -363,6 +363,16 @@ public:
         _refreshMenuState = std::move(callback);
     }
 
+    void SetOnTabBoundary(std::function<bool(bool reverse)> onTabBoundary)
+    {
+        _host.SetOnTabBoundary(std::move(onTabBoundary));
+    }
+
+    void SetOnEscape(std::function<bool()> onEscape)
+    {
+        _host.SetOnEscape(std::move(onEscape));
+    }
+
     [[nodiscard]] bool Attach(HINSTANCE instance, HWND ownerWindow, HMENU menu, HWND commandTarget = nullptr) noexcept
     {
         if (! instance || ! ownerWindow || ! menu)

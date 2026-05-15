@@ -167,6 +167,12 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
+          Write-Host "Enabling winget local manifest installs..."
+          winget settings --enable LocalManifestFiles
+          if ($LASTEXITCODE -ne 0) {
+            throw "winget settings --enable LocalManifestFiles failed with exit code $LASTEXITCODE."
+          }
+
           winget install `
             --manifest "winget-manifest" `
             --accept-package-agreements `

@@ -1281,7 +1281,14 @@ void ViewerSqlite::BuildUi() noexcept
     _dxHost.SetDefaultButton(_runButton);
     _dxHost.SetOnEscape([this]() noexcept
     {
-        static_cast<void>(Close());
+        if (FocusMainContentIfPossible())
+        {
+            return true;
+        }
+        if (_hWnd)
+        {
+            PostMessageW(_hWnd.get(), WM_CLOSE, 0, 0);
+        }
         return true;
     });
 }
@@ -1544,14 +1551,20 @@ void ViewerSqlite::UpdateControlState() noexcept
     _dxHost.Invalidate();
 }
 
-void ViewerSqlite::FocusMainContentIfPossible() noexcept
+bool ViewerSqlite::FocusMainContentIfPossible() noexcept
 {
     if (_embeddedMode || ! _resultGrid || ! _resultGrid->IsFocusable())
     {
-        return;
+        return false;
+    }
+
+    if (_dxHost.GetFocusControl() == _resultGrid)
+    {
+        return false;
     }
 
     _dxHost.SetFocusControl(_resultGrid);
+    return true;
 }
 
 void ViewerSqlite::ResetTableSort() noexcept
