@@ -1064,6 +1064,7 @@ void ViewerSqlite::OnCreate(HWND hwnd) noexcept
     UpdateWindowTitle();
     UpdateStatusText(ReadStatusText(IDS_VIEWERSQLITE_STATUS_READY));
     UpdateControlState();
+    FocusMainContentIfPossible();
 }
 
 void ViewerSqlite::OnSize(UINT /*width*/, UINT /*height*/) noexcept
@@ -1148,6 +1149,7 @@ void ViewerSqlite::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result, 
     }
 
     UpdateControlState();
+    FocusMainContentIfPossible();
 }
 
 void ViewerSqlite::OnAsyncQueryComplete(std::unique_ptr<AsyncQueryResult> result, const uint64_t requestIdFromMessage) noexcept
@@ -1198,6 +1200,7 @@ void ViewerSqlite::OnAsyncQueryComplete(std::unique_ptr<AsyncQueryResult> result
     }
 
     UpdateControlState();
+    FocusMainContentIfPossible();
 }
 
 void ViewerSqlite::BuildUi() noexcept
@@ -1276,6 +1279,11 @@ void ViewerSqlite::BuildUi() noexcept
 
     _dxHost.SetRoot(std::move(root));
     _dxHost.SetDefaultButton(_runButton);
+    _dxHost.SetOnEscape([this]() noexcept
+    {
+        static_cast<void>(Close());
+        return true;
+    });
 }
 
 void ViewerSqlite::ApplyTheme(HWND hwnd) noexcept
@@ -1534,6 +1542,16 @@ void ViewerSqlite::UpdateControlState() noexcept
     }
 
     _dxHost.Invalidate();
+}
+
+void ViewerSqlite::FocusMainContentIfPossible() noexcept
+{
+    if (_embeddedMode || ! _resultGrid || ! _resultGrid->IsFocusable())
+    {
+        return;
+    }
+
+    _dxHost.SetFocusControl(_resultGrid);
 }
 
 void ViewerSqlite::ResetTableSort() noexcept

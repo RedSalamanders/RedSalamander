@@ -1,6 +1,6 @@
 # ViewerSqlite Specification
 
-Last updated: 2026-03-28
+Last updated: 2026-05-15
 
 ## Purpose
 
@@ -26,7 +26,7 @@ This specification applies to:
 - `ViewerSqlite` MUST open as a top-level viewer window following the shared viewer-window contract in `Specs/Plugins/Plugins_ViewerPlugins.md`.
 - The visible shell MUST be fully DX-hosted.
 - The window exposes:
-  - an `Other Files` filename combo box when more than one peer file is available,
+  - an `Other Files` filename combo box that is enabled when more than one peer file is available,
   - a table selector combo box,
   - previous/next page buttons for table preview paging,
   - a query text field,
@@ -34,6 +34,14 @@ This specification applies to:
   - a `Table Preview` command,
   - a results grid,
   - a status strip.
+- Embedded preview mode MUST preserve source-pane focus and must not show standalone title/menu/header chrome beyond the embedded DX surface.
+
+## Keyboard Contract
+
+- After a database page or query result is loaded, keyboard focus MUST land on the results grid as the main viewer surface.
+- `Tab` advances from the results grid through the file combo, reload button, table combo, previous/next page buttons, query field, `Run Query`, `Table Preview`, and back to the results grid. `Shift+Tab` walks the same controls in reverse.
+- While focus is inside a combo box or query field, that control owns its normal arrow/editing/Enter behavior. After file selection, table preview, paging, or query completion, focus SHOULD return to the results grid when rows are available.
+- `Esc` closes the viewer from the results grid or any focused DX control.
 
 ## Data And Query Contract
 

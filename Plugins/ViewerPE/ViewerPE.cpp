@@ -167,6 +167,12 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return dxResult;
     }
 
+    if (msg == WM_KEYUP && (wp == VK_ESCAPE || wp == VK_TAB))
+    {
+        self->FocusMainSurfaceFromFileCombo(GetAncestor(hwnd, GA_ROOT));
+        return 0;
+    }
+
     if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
     {
         const HWND root = GetAncestor(hwnd, GA_ROOT);
@@ -883,6 +889,19 @@ LRESULT ViewerPE::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPA
     return dxResult;
 }
 
+void ViewerPE::FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept
+{
+    if (_embeddedMode)
+    {
+        return;
+    }
+
+    if (hwnd && IsWindow(hwnd) != FALSE)
+    {
+        SetFocus(hwnd);
+    }
+}
+
 void ViewerPE::OnCreate(HWND hwnd) noexcept
 {
     _dpi = GetDpiForWindow(hwnd);
@@ -927,6 +946,16 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
             {
                 SetFocus(hwnd);
             }
+        });
+        _fileComboHost.SetOnTabBoundary([this, hwnd](bool) noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
+        _fileComboHost.SetOnEscape([hwnd]() noexcept
+        {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            return true;
         });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
@@ -1258,7 +1287,7 @@ void ViewerPE::Layout(HWND hwnd) noexcept
 
     const UINT dpi            = GetDpiForWindow(hwnd);
     const int menuBarHeightPx = _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
-    const bool showCombo      = (_otherFiles.size() > 1);
+    const bool showCombo      = (! _embeddedMode && _otherFiles.size() > 1);
     const int outerPaddingPx  = PxFromDip(kOuterPaddingDip, dpi);
     const int innerPaddingPx  = PxFromDip(kInnerPaddingDip, dpi);
 

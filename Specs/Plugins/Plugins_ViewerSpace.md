@@ -85,13 +85,13 @@ While scanning:
   - Standard FolderView file/folder commands (Open/Open With/Delete/Move/Rename/Copy/Paste/Properties), excluding `View Space` and debug-only items.
   - The popup surface MUST use the shared DxUI context-menu renderer so the menu matches the viewer theme/backdrop contract instead of falling back to a native `TrackPopupMenu` surface.
 - Up stays available during scanning; if the current scan root has no parent in the current model, Up restarts a scan at the parent path. Up is disabled when the scan root is already at a volume/share root.
-- While scanning, click header **Cancel** (or press `Esc`) to stop the scan.
+- While scanning, click header **Cancel** to stop the scan without closing the viewer. Pressing `Esc` closes the viewer; in-flight scanning is cancelled as part of close teardown.
 - Double-clicking an aggregated “Other” bucket triggers a focused action to explore that part (typically drilling into the parent directory or rescanning it with a higher `topFilesPerDirectory`).
 - Hover: show an in-canvas Direct2D/DirectWrite tooltip overlay with name/path, size, and share for the tile under the cursor; scan state is shown only while in-progress (not shown for `Done`); tooltip tracks the cursor within the tile (no “stuck” tooltip position), wraps at about 420 DIPs, uses viewer theme/high-contrast colors, and must not create a native `TOOLTIPS_CLASS` window or send `TTM_*` messages.
 - Keyboard:
   - `Backspace` / `Alt+Up`: drill up
   - `F5`: refresh/rescan current node (forces a full rescan; bypasses cache)
-  - `Esc`: cancel scan if scanning; otherwise close viewer
+  - `Esc`: close viewer
 - The window menu bar still sources commands from `IDR_VIEWERSPACE_MENU`, but the visible top chrome is rendered through the shared `RedSalamander.DxNativeMenuBar` host instead of a native owner-drawn menu bar. The live window menu handle is detached after attach, and `Alt`, `F10`, and menu mnemonics continue to route through the DxUi menu bar.
 
 ### Labels
@@ -120,7 +120,8 @@ While scanning:
   - viewer closes
   - user refreshes
   - a new scan starts
-  - user presses **Cancel** / `Esc` during scanning
+  - user presses **Cancel** during scanning
+  - user presses `Esc` or otherwise closes the viewer while scanning
 
 ## Traversal Rules
 

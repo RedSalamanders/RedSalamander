@@ -10,6 +10,7 @@
 - [x] Requeue visible thumbnail work after horizontal scroll so newly visible valid images do not remain on icon fallback.
 - [x] Requeue visible thumbnail work after pane resize so newly visible valid images do not remain on icon fallback.
 - [x] Keep normal-view icons at their normal shell image-list size after returning from thumbnail mode.
+- [x] Clear and reload thumbnail-mode fallback icons when thumbnail size changes so old target-size bitmaps are not stretched.
 - [x] Keep thumbnail loading asynchronous, bounded, cancelable, and resilient during scroll, refresh, navigation, sort, and size changes.
 - [x] Add a discrete thumbnail-size slider to the pane bottom-right sort popup.
 - [x] Persist thumbnail size per pane, defaulting missing settings to the current `64 DIP` size.
@@ -39,6 +40,7 @@ These scenarios must be named in the before/after evidence:
 - `folderView.thumbnail.scroll_requeues_visible`: horizontal scrolling into new columns queues visible thumbnail work instead of leaving valid images on icon fallback.
 - `folderView.thumbnail.resize_requeues_visible`: widening a thumbnail pane after an initial narrow queue loads thumbnails for newly visible columns instead of leaving valid images on icon fallback.
 - `folderView.thumbnail.resize_change`: changing thumbnail size while work is pending cancels stale payloads, relayouts once, and requeues visible work at the new size.
+- `folderView.thumbnail.size_change_fallback_icons`: changing thumbnail size while fallback icons are visible clears stale fallback icon bitmaps, requeues normal icon loading, and redraws fallback icons at the new target size.
 - `folderView.thumbnail.return_to_normal_icon_size`: returning from thumbnail mode to Brief/Detailed/Extra Detailed uses the normal shell image-list size class instead of shrinking thumbnail-mode jumbo icon bitmaps into the normal icon slot.
 - `folderView.thumbnail.bad_files`: zero-byte, truncated, renamed, inaccessible, and non-image files fall back to icons without stuck pending work.
 - `folderView.thumbnail.settings_roundtrip`: left/right panes persist independent thumbnail sizes and missing settings load as `64 DIP`.
@@ -204,6 +206,7 @@ Add selftest cases:
 - `folderView_thumbnail_scroll_requeues_visible`
 - `folderView_thumbnail_resize_requeues_visible`
 - `folderView_thumbnail_size_change_while_pending`
+- `folderView_thumbnail_size_change_regenerates_fallback_icons`
 - `folderView_thumbnail_return_to_normal_icon_size`
 - `folderView_thumbnail_bad_files_fallback`
 - `folderView_thumbnail_settings_roundtrip`
@@ -336,7 +339,7 @@ Settings contract:
 FolderView contract:
 
 - add `SetThumbnailSizeDip(uint32_t sizeDip)` and `GetThumbnailSizeDip()`,
-- changing size while in thumbnail mode cancels current thumbnail work, clears/invalidates size-dependent thumbnails, relayouts, updates scroll metrics, and requeues visible thumbnails,
+- changing size while in thumbnail mode cancels current thumbnail work, clears/invalidates size-dependent thumbnails and fallback icons, relayouts, updates scroll metrics, requeues normal icon loading, and requeues visible thumbnails,
 - changing size while outside thumbnail mode stores the value without disturbing the current non-thumbnail layout.
 
 ### Task 6: Sort Popup Thumbnail Size Slider
@@ -442,3 +445,11 @@ Closeout must list:
 - correctness failures fixed,
 - residual caveats if any,
 - exact durable specs updated.
+
+## Regression Closeout - 2026-05-15
+
+- Red evidence: `Specs/TestRuns/4cb089111a23/Commands/2026-05-15_102634` failed `folderView_thumbnail_size_change_regenerates_fallback_icons` because a size change left `immediate icon count=1`.
+- Green evidence: `Specs/TestRuns/4cb089111a23/Commands/2026-05-15_103431` passed the focused fallback-icon regeneration case.
+- Thumbnail family evidence: `Specs/TestRuns/4cb089111a23/Commands/2026-05-15_103454` passed 11/11 `folderView_thumbnail_` cases.
+- Perf guard: `Specs/TestRuns/4cb089111a23/Commands/2026-05-15_103511` passed `folderView_perf_large_folder_baseline`; same-machine baseline `Specs/TestRuns/4cb089111a23/Commands/2026-05-14_193215` had matching counts for 241 items, 241 bitmap icons, 5 warm renders, 20 render calls, 12 icon-queue calls, 0 process-queue calls, and 5 batch updates.
+- Durable specs updated: `Specs/UI/UI_FolderView.md` and `Specs/Testing/Testing_TestCoverage.md`.

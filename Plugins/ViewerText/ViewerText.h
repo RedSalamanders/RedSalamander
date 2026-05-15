@@ -93,6 +93,7 @@ public:
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
+    void FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept;
 
 private:
     struct ViewerTextConfig

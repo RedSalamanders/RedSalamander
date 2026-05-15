@@ -79,7 +79,7 @@ Notes:
 ## UI / UX
 
 Layout:
-- **Header**: filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1`.
+- **Header**: in standalone mode only, filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1`; the header reserves enough themed background height and padding for the collapsed combo so the combo never bleeds into the image/content background. Embedded preview mode hides this standalone header/dropdown and renders the image surface against the preview/tab background.
 - **Content**: decoded image (fit-to-window by default, with manual zoom controls).
 - **Scrollbars**: when not in Fit-to-Window and the image exceeds the viewport, standard Win32 scrollbars are shown and can be used to pan (no scrollbars in Fit mode); ranges are based on the oriented (EXIF+user) image size at the current zoom.
 - **Status bar** (owner-drawn, themed):
@@ -104,6 +104,7 @@ The window detaches its live native `HMENU` after opening and renders the visibl
 
 Keyboard shortcuts (ViewerText-aligned where meaningful):
 - `Esc`: dismiss alert (if visible) or close viewer
+- File-dropdown and menu keyboard use stays local to the focused combo/menu; after peer-file selection or command activation, focus returns to the image surface.
 - `F5`: refresh current file
 - `Right` / `PgDn` / `Space`: next file
 - `Left` / `PgUp` / `Backspace`: previous file

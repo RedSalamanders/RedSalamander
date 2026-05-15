@@ -125,15 +125,64 @@ Describe 'Winget manifest template' {
     BeforeAll {
         $installerTemplatePath = Join-Path $repoRoot 'Installer\winget\templates\RedSalamanders.RedSalamander.installer.yaml'
         $installerTemplate = Get-Content -Path $installerTemplatePath -Raw
+        $zipScriptPath = Join-Path $repoRoot 'Installer\zip\build-zip.ps1'
+        $zipScript = Get-Content -Path $zipScriptPath -Raw
     }
 
-    It 'declares the portable executable once at root for Winget discovery' {
+    It 'declares the dependency-free launcher as the portable alias target' {
         [regex]::Matches($installerTemplate, '(?m)^NestedInstallerFiles:\r?$').Count | Should Be 1
-        $installerTemplate | Should Match '(?ms)^NestedInstallerFiles:\s*\r?\n\s+- RelativeFilePath: RedSalamander\.exe\r?\n\s+PortableCommandAlias: RedSalamander'
+        $installerTemplate | Should Match '(?ms)^NestedInstallerFiles:\s*\r?\n\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+PortableCommandAlias: RedSalamander'
     }
 
-    It 'marks RedSalamander.exe as the launch file in installation metadata' {
-        $installerTemplate | Should Match '(?ms)^InstallationMetadata:\s*\r?\n\s+Files:\s*\r?\n\s+- RelativeFilePath: RedSalamander\.exe\r?\n\s+FileType: launch\r?\n\s+DisplayName: RedSalamander'
+    It 'marks RedLauncher.exe as the launch file in installation metadata' {
+        $installerTemplate | Should Match '(?ms)^InstallationMetadata:\s*\r?\n\s+Files:\s*\r?\n\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+FileType: launch\r?\n\s+DisplayName: RedSalamander'
+    }
+
+    It 'copies RedLauncher.exe into the portable ZIP root' {
+        $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "RedLauncher\.exe"\) \$TempDir'
+    }
+}
+
+Describe 'RedLauncher project' {
+    BeforeAll {
+        $launcherProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncher.vcxproj'
+        $launcherSourcePath = Join-Path $repoRoot 'RedLauncher\Main.cpp'
+    }
+
+    It 'is a first-party static-CRT executable project' {
+        Test-Path $launcherProjectPath | Should Be $true
+
+        $launcherProject = Get-Content -Path $launcherProjectPath -Raw
+        $launcherProject | Should Match '<ClCompile Include="Main\.cpp" />'
+        $launcherProject | Should Match '<SubSystem>Console</SubSystem>'
+        $launcherProject | Should Match '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
+        $launcherProject | Should Match '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
+        $launcherProject | Should Not Match '<ProjectReference'
+        $launcherProject | Should Not Match 'Common\.vcxproj'
+    }
+
+    It 'resolves the WinGet alias symlink before launching RedSalamander.exe' {
+        Test-Path $launcherSourcePath | Should Be $true
+
+        $launcherSource = Get-Content -Path $launcherSourcePath -Raw
+        $launcherSource | Should Match 'GetFinalPathNameByHandleW'
+        $launcherSource | Should Match 'RedSalamander\.exe'
+        $launcherSource | Should Match 'CreateProcessW'
+    }
+
+    It 'waits only for foreground self-test invocations' {
+        Test-Path $launcherSourcePath | Should Be $true
+
+        $launcherSource = Get-Content -Path $launcherSourcePath -Raw
+        $launcherSource | Should Match 'ShouldWaitForTargetExit'
+        $launcherSource | Should Match '--selftest'
+        $launcherSource | Should Match '--compare-selftest'
+        $launcherSource | Should Match '--commands-selftest'
+        $launcherSource | Should Match '--fileops-selftest'
+        $launcherSource | Should Match '--selftest-list-cases'
+        $launcherSource | Should Not Match 'argc\s*>\s*1'
+        $launcherSource | Should Not Match '--etw'
+        $launcherSource | Should Not Match '--perf'
     }
 }
 

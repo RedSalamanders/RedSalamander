@@ -64,6 +64,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
 
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
+    void FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept;
 
 private:
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;

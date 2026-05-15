@@ -52,7 +52,7 @@ Notes:
 ## UI / UX
 
 Layout:
-- **Header**: filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1` (ViewerText-style).
+- **Header**: in standalone mode only, filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1` (ViewerText-style); embedded preview mode hides this standalone header/dropdown and lets the WebView/content surface blend into the preview/tab background.
 - **Content**: WebView2 surface.
 - Header status text is a DirectWrite/Direct2D-only render path. If the DX path cannot draw the status message, ViewerWeb deliberately shows no fallback GDI status text and logs one error so the failure is visible in diagnostics.
 - Internal HTML pages (`json`, `jsonl`, `markdown`) theme their own scrollbars from the current viewer colors, including nested code-block scrollers.
@@ -62,9 +62,11 @@ Menu (DxUi-hosted from the hidden native menu model):
 - File: Save As, Refresh, Exit, Other Files navigation (Next/Previous/First/Last)
 - Search: Find, Find Next, Find Previous
 - View: Zoom In/Out/Reset, Toggle DevTools
+- Tools: Copy URL, Open in Browser, JSON Expand/Collapse, Toggle Markdown Source
 
 The window detaches its live native `HMENU` after opening and renders the visible top menu bar through the shared `RedSalamander.DxNativeMenuBar` host. `Alt`, `F10`, and menu mnemonics continue to route through that DxUi menu bar.
-- Tools: Copy URL, Open in Browser, JSON Expand/Collapse, Toggle Markdown Source
+
+Keyboard focus opens on the web/content surface. If focus moves to the filename dropdown or menu, that focused control owns its keyboard navigation; accepted peer-file selections or menu commands return focus to the main content surface unless the command intentionally opens an editable find/control surface.
 
 JSON viewer modes:
 - `pretty`: syntax-highlighted formatted JSON text.
