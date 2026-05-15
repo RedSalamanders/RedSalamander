@@ -31,6 +31,7 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "ViewerFileComboHost.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
@@ -53,68 +54,10 @@ constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerPE.FileComboH
 
 LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
-[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
-{
-    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
-}
-
-[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
-{
-    if (! hwnd || ! originalWndProcProp || ! hookWndProc)
-    {
-        return false;
-    }
-
-    if (GetStoredWndProc(hwnd, originalWndProcProp))
-    {
-        return true;
-    }
-
-    const auto originalWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
-    if (! originalWndProc)
-    {
-        return false;
-    }
-
-    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(originalWndProc)))
-    {
-        return false;
-    }
-
-    const auto previousWndProc =
-        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(hookWndProc)));
-    if (previousWndProc != originalWndProc)
-    {
-        RemovePropW(hwnd, originalWndProcProp);
-        if (previousWndProc)
-        {
-            static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWndProc)));
-        }
-        return false;
-    }
-
-    return true;
-}
-
 void UnhookFileComboHostWindow(HWND hwnd) noexcept
 {
-    if (! hwnd || IsWindow(hwnd) == FALSE)
-    {
-        return;
-    }
-
-    RemovePropW(hwnd, kFileComboHostStateProp);
-    RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
-}
-
-[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
-{
-    if (const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp))
-    {
-        return RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp);
-    }
-
-    return DefWindowProcW(hwnd, msg, wp, lp);
+    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(
+        hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 [[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
@@ -142,54 +85,14 @@ void UnhookFileComboHostWindow(HWND hwnd) noexcept
 
 LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    auto* self = reinterpret_cast<ViewerPE*>(GetPropW(hwnd, kFileComboHostStateProp));
-    if (! self)
-    {
-        return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
-    }
-
-    if (msg == WM_NCDESTROY)
-    {
-        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp);
-        RemovePropW(hwnd, kFileComboHostStateProp);
-        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
-
-        bool handled = false;
-        static_cast<void>(self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled));
-
-        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
-    }
-
-    bool handled           = false;
-    const LRESULT dxResult = self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled);
-    if (handled)
-    {
-        return dxResult;
-    }
-
-    if (msg == WM_KEYUP && (wp == VK_ESCAPE || wp == VK_TAB))
-    {
-        self->FocusMainSurfaceFromFileCombo(GetAncestor(hwnd, GA_ROOT));
-        return 0;
-    }
-
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
-    {
-        const HWND root = GetAncestor(hwnd, GA_ROOT);
-        if (root)
-        {
-            PostMessageW(root, WM_CLOSE, 0, 0);
-            return 0;
-        }
-    }
-
-    return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+    return RedSalamander::ViewerFileComboHost::DispatchFileComboHostWndProc<ViewerPE>(
+        hwnd, msg, wp, lp, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 constexpr float kOuterPaddingDip    = 12.0f;
 constexpr float kCardRadiusDip      = 10.0f;
 constexpr float kInnerPaddingDip    = 12.0f;
-constexpr float kHeaderGapDip       = 10.0f;
+constexpr float kHeaderGapDip       = 4.0f;
 constexpr float kScrollWheelStepDip = 48.0f;
 constexpr float kScrollLineStepDip  = 24.0f;
 
@@ -918,10 +821,9 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
         Debug::Error(L"ViewerPE: failed to attach DxUi host for file combo.");
         _hFileComboHost.reset();
     }
-    else if (! SetPropW(_hFileComboHost.get(), kFileComboHostStateProp, reinterpret_cast<HANDLE>(this)) ||
-             ! InstallWndProcHook(_hFileComboHost.get(), kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
+    else if (! RedSalamander::ViewerFileComboHost::InstallFileComboHostWindow(
+                 _hFileComboHost.get(), this, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
     {
-        RemovePropW(_hFileComboHost.get(), kFileComboHostStateProp);
         Debug::ErrorWithLastError(L"ViewerPE: failed to install WNDPROC hook for DxUi file combo host.");
         _fileComboHost.Detach();
         _hFileComboHost.reset();
@@ -947,16 +849,8 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
                 SetFocus(hwnd);
             }
         });
-        _fileComboHost.SetOnTabBoundary([this, hwnd](bool) noexcept
-        {
-            FocusMainSurfaceFromFileCombo(hwnd);
-            return true;
-        });
-        _fileComboHost.SetOnEscape([hwnd]() noexcept
-        {
-            PostMessageW(hwnd, WM_CLOSE, 0, 0);
-            return true;
-        });
+        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this, hwnd]() noexcept
+        { FocusMainSurfaceFromFileCombo(hwnd); });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
     }
@@ -969,6 +863,16 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
+        _menuBarHost.SetOnTabBoundary([this, hwnd](bool) noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
+        _menuBarHost.SetOnEscape([this, hwnd]() noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
         static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
@@ -1150,7 +1054,7 @@ void ViewerPE::OnKeyDown(UINT vk) noexcept
 
     if (vk == VK_ESCAPE)
     {
-        CommandExit();
+        PostMessageW(_hWnd.get(), WM_CLOSE, 0, 0);
         return;
     }
 
@@ -1313,7 +1217,7 @@ void ViewerPE::Layout(HWND hwnd) noexcept
     float newHeaderHeightDip = 0.0f;
     if (showCombo)
     {
-        const int comboHeight      = std::max(1, PxFromDip(32.0f, dpi));
+        const int comboHeight      = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip, dpi));
         const int comboX           = contentLeft;
         const int comboW           = std::max(1, contentRight - contentLeft);
         const int comboY           = cardTop + innerPaddingPx;

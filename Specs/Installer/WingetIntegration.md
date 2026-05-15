@@ -58,7 +58,7 @@ Installers:
 
 Do not use `InstallerType: portable` for a ZIP archive. ZIP archives require `InstallerType: zip` plus `NestedInstallerType: portable`.
 
-Declare `NestedInstallerFiles` at the manifest root because the executable path is identical in x64 and ARM64 ZIPs. The alias target is `RedLauncher.exe`, not `RedSalamander.exe`: Winget creates the command alias under its `Links` directory, and launching a symlinked executable directly can make the Windows loader search that alias directory before the package root. `RedLauncher.exe` is a dependency-free static-CRT shim that resolves its own final symlink target, finds the package root, and starts the real package-root `RedSalamander.exe` by absolute path so `Common.dll`, `yyjson.dll`, and other app-local DLLs are found. Normal GUI launches, including diagnostic flags such as `--etw` and `--perf`, return control to the console immediately; foreground self-test invocations wait and propagate the real app exit code. Keep `InstallationMetadata.Files` with `FileType: launch` pointing at `RedLauncher.exe` so Winget's repository validation has an explicit primary executable to locate after installation.
+Declare `NestedInstallerFiles` at the manifest root because the executable path is identical in x64 and ARM64 ZIPs. The alias target is `RedLauncher.exe`, not `RedSalamander.exe`: Winget creates the command alias under its `Links` directory, and launching a symlinked executable directly can make the Windows loader search that alias directory before the package root. `RedLauncher.exe` is a dependency-free static-CRT Windows-subsystem shim that resolves its own final symlink target, finds the package root, and starts the real package-root `RedSalamander.exe` by absolute path so `Common.dll`, `yyjson.dll`, and other app-local DLLs are found without a console flash. Normal GUI launches, including diagnostic flags such as `--etw` and `--perf`, return control to the console immediately. The portable ZIP also includes `RedLauncherConsole.exe`, built from the same source as a console-subsystem companion, for foreground self-test automation that needs a wait and real app exit code. Keep `InstallationMetadata.Files` with `FileType: launch` pointing at `RedLauncher.exe` so Winget's repository validation has an explicit primary executable to locate after installation.
 
 Use Winget's `Architecture` field for CPU selection: `x64` is the Intel/AMD 64-bit build, and `arm64` is the native Windows on ARM build. By default Winget chooses from the installers compatible with the current machine; users can override that choice with `winget install --architecture x64` or `winget install --architecture arm64`.
 
@@ -90,9 +90,12 @@ Validate and smoke-test locally before submission:
 
 ```powershell
 winget validate --manifest .build\AppPackages\winget-manifest
+winget settings --enable LocalManifestFiles
 winget install --manifest .build\AppPackages\winget-manifest
 winget uninstall RedSalamanders.RedSalamander
 ```
+
+`winget install --manifest` requires the `LocalManifestFiles` feature setting to be enabled before local manifest installation. Enabling that setting may require an administrator shell on developer machines.
 
 `Installer\winget\WingetValidation.ps1` is the supported local helper for validating a generated manifest with the same legacy `winget.exe v1.11.x` schema-header warning policy used by the release workflow. The workflow intentionally keeps an inline copy of that policy because it checks out the release tag before manifest generation, and older release tags may not contain helper scripts added later.
 
@@ -108,7 +111,7 @@ The workflow:
 4. Fails with the available asset names if either `RedSalamander-<version>-x64-Portable.zip` or `RedSalamander-<version>-ARM64-Portable.zip` is missing.
 5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
 6. Runs a self-contained `winget validate --manifest` wrapper in the workflow. It is intentionally inline because the workflow checks out the release tag before generating the manifest, and older release tags may not contain helper scripts added later. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
-7. Runs `winget install --manifest winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`.
+7. Enables Winget `LocalManifestFiles`, runs `winget install --manifest winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`.
 8. Submits the generated manifest directory with `wingetcreate submit` only for `release.published` runs or manual runs where `submit=true`.
 
 `WINGET_TOKEN` must be a GitHub personal access token with the permissions required by WingetCreate to open a pull request against `microsoft/winget-pkgs`.

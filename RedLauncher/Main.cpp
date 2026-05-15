@@ -320,7 +320,14 @@ int LaunchRedSalamander()
 }
 } // namespace
 
+#if defined(REDLAUNCHER_GUI)
+int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
+{
+    return LaunchRedSalamander();
+}
+#else
 int wmain()
 {
     return LaunchRedSalamander();
 }
+#endif

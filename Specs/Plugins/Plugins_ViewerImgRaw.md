@@ -79,7 +79,7 @@ Notes:
 ## UI / UX
 
 Layout:
-- **Header**: in standalone mode only, filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1`; the header reserves enough themed background height and padding for the collapsed combo so the combo never bleeds into the image/content background. Embedded preview mode hides this standalone header/dropdown and renders the image surface against the preview/tab background.
+- **Header**: in standalone mode only, filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1`; the collapsed combo uses compact chrome (28 DIP control height with minimal themed padding) so the header leaves more vertical space for image data while still keeping the combo fully inside the header background. Embedded preview mode hides this standalone header/dropdown and renders the image surface against the preview/tab background.
 - **Content**: decoded image (fit-to-window by default, with manual zoom controls).
 - **Scrollbars**: when not in Fit-to-Window and the image exceeds the viewport, standard Win32 scrollbars are shown and can be used to pan (no scrollbars in Fit mode); ranges are based on the oriented (EXIF+user) image size at the current zoom.
 - **Status bar** (owner-drawn, themed):
@@ -103,8 +103,8 @@ Menu (DxUi-hosted from the hidden native menu model):
 The window detaches its live native `HMENU` after opening and renders the visible top menu bar through the shared `RedSalamander.DxNativeMenuBar` host. `Alt`, `F10`, and menu mnemonics continue to route through that DxUi menu bar.
 
 Keyboard shortcuts (ViewerText-aligned where meaningful):
-- `Esc`: dismiss alert (if visible) or close viewer
-- File-dropdown and menu keyboard use stays local to the focused combo/menu; after peer-file selection or command activation, focus returns to the image surface.
+- `Esc`: cancel active RAW decoding if loading; otherwise close viewer
+- File-dropdown and menu keyboard use stays local to the focused combo/menu; `Esc` from that chrome returns focus to the image surface instead of closing. After peer-file selection or command activation, focus returns to the image surface.
 - `F5`: refresh current file
 - `Right` / `PgDn` / `Space`: next file
 - `Left` / `PgUp` / `Backspace`: previous file
@@ -146,6 +146,7 @@ Decode runs on background threads:
 - **Progress reporting**:
   - ViewerImgRaw installs a LibRaw progress handler via `LibRaw::set_progress_handler(...)` during full RAW decode and forwards updates to the UI.
   - The loading overlay shows a progress line and bar under the spinner when percent information is available.
+  - Pressing `Esc` while the image surface is focused and a RAW decode/load is active invalidates the current open request, drops pending decode entries, stops the loading UI, and leaves the viewer open.
 - **Full RAW image**: ViewerImgRaw decodes the full RAW using:
   - `LibRaw::open_buffer()` + `unpack()` + `dcraw_process()` + `dcraw_make_mem_image()`
   - output is converted to 8-bit BGRA for display

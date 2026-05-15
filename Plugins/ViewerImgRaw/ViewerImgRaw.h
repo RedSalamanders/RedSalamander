@@ -228,6 +228,7 @@ private:
 
     void BeginLoadingUi() noexcept;
     void EndLoadingUi() noexcept;
+    bool CancelActiveOpen() noexcept;
     void UpdateLoadingSpinner() noexcept;
     void DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidColorBrush* brush) noexcept;
     void DrawExifOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidColorBrush* brush) noexcept;

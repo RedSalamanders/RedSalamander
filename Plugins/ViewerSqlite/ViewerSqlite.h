@@ -111,7 +111,7 @@ private:
     void UpdateStatusText(std::wstring text) noexcept;
     void UpdateControlState() noexcept;
     void ResetTableSort() noexcept;
-    void FocusMainContentIfPossible() noexcept;
+    bool FocusMainContentIfPossible() noexcept;
 
     void QueueOpenCurrentPath() noexcept;
     void QueueTablePreview(std::wstring tableName, uint64_t rowOffset) noexcept;

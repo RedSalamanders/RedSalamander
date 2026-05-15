@@ -1999,6 +1999,22 @@ void ViewerSpace::OnCreate(HWND hwnd)
     {
         _menuBarHost.SetTheme(_hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
+        _menuBarHost.SetOnTabBoundary([hwnd](bool) noexcept
+        {
+            if (hwnd && IsWindow(hwnd) != FALSE)
+            {
+                SetFocus(hwnd);
+            }
+            return true;
+        });
+        _menuBarHost.SetOnEscape([hwnd]() noexcept
+        {
+            if (hwnd && IsWindow(hwnd) != FALSE)
+            {
+                SetFocus(hwnd);
+            }
+            return true;
+        });
         static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
@@ -3378,7 +3394,10 @@ void ViewerSpace::OnKeyDown(WPARAM vk, bool alt) noexcept
             return;
         }
 
-        static_cast<void>(Close());
+        if (_hWnd)
+        {
+            PostMessageW(_hWnd.get(), WM_CLOSE, 0, 0);
+        }
         return;
     }
 

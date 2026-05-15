@@ -84,4 +84,5 @@ BEGIN
     IDS_VIEWERRAW_STATUS_FILESYSTEM_MISSING "Le système de fichiers actif est manquant."
     IDS_VIEWERRAW_STATUS_UNSUPPORTED_FORMAT "Format de fichier non pris en charge."
     IDS_VIEWERRAW_STATUS_STORE_OOM "Mémoire insuffisante lors du stockage de l’image décodée."
+    IDS_VIEWERRAW_STATUS_CANCELED "Annulé."
 END

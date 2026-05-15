@@ -4,7 +4,7 @@
 
 RedSalamander has multiple test surfaces covering UI automation, plugin
 integration, file operations, DirectX rendering, performance baselines, tooling
-scripts, and ETW diagnostics. Counts below are current as of 2026-05-14.
+scripts, and ETW diagnostics. Counts below are current as of 2026-05-15.
 
 | Category | Suites | Tests | Framework |
 |----------|--------|-------|-----------|
@@ -14,7 +14,7 @@ scripts, and ETW diagnostics. Counts below are current as of 2026-05-14.
 | Viewer Plugin Tests | 2 | 17 | Standalone harness |
 | File-System Plugin Tests | 1 | 5 | Standalone harness |
 | Monitor/ETW Tests | 1 | 3 burst scenarios + 3 fast guards | Standalone harness |
-| Tooling Script Tests | 1 folder + vcpkg scripts | 65 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
+| Tooling Script Tests | 1 folder + vcpkg scripts | 74 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
 
 Related specifications:
 - `Specs/Testing/Testing_SelfTests.md` — result contract

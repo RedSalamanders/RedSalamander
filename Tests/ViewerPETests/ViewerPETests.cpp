@@ -768,6 +768,7 @@ void CheckDxComboHostClickActivation(HWND viewerWindow, int comboControlId, std:
         },
             2000ms);
         Check(popupCollapsed, std::format(L"{} DxUi combo host collapses back to header height after Escape", viewerName), success);
+        Check(IsWindow(viewerWindow) != FALSE, std::format(L"{} stays open when Escape leaves the file combo chrome", viewerName), success);
 
         const bool focusReturned = PumpUntil(
             [&]() noexcept
@@ -790,6 +791,25 @@ void CheckDxComboHostClickActivation(HWND viewerWindow, int comboControlId, std:
     },
         1000ms);
     Check(tabFocusReturned, std::format(L"{} DxUi combo host returns keyboard focus after Tab wraps", viewerName), success);
+}
+
+void CheckDxComboHostCompactChrome(HWND viewerWindow, int comboControlId, std::wstring_view viewerName, bool& success) noexcept
+{
+    const HWND comboHost = GetDlgItem(viewerWindow, comboControlId);
+    Check(comboHost != nullptr && IsWindowVisible(comboHost) != FALSE, std::format(L"{} exposes a visible combo host for compact chrome validation", viewerName), success);
+    if (! comboHost || IsWindowVisible(comboHost) == FALSE)
+    {
+        return;
+    }
+
+    RECT comboClient{};
+    static_cast<void>(GetClientRect(comboHost, &comboClient));
+    const UINT dpi      = GetDpiForWindow(viewerWindow);
+    const int maxHeight = MulDiv(30, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI);
+    const int height    = static_cast<int>(std::max<LONG>(0, comboClient.bottom - comboClient.top));
+    Check(height <= maxHeight,
+          std::format(L"{} file combo chrome uses a compact 28 DIP control height (height={}, max={})", viewerName, height, maxHeight),
+          success);
 }
 
 [[nodiscard]] bool TryCollectVisibleUiaHostPatternStats(HWND hwnd, UiaHostPatternStats& stats) noexcept
@@ -994,12 +1014,15 @@ void CheckImageRawComboHostIsInsetInsideHeader(HWND viewerWindow, bool& success)
     const RECT comboRect = GetChildRectInParent(viewerWindow, comboHost);
     const RECT menuRect  = GetChildRectInParent(viewerWindow, menuHost);
     const UINT dpi       = GetDpiForWindow(viewerWindow);
-    const int minInset   = (std::max)(1, MulDiv(4, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
-    Check(comboRect.top >= menuRect.bottom + minInset,
-          std::format(L"ViewerImgRaw combo host is inset within the header background (top={}, menuBottom={}, inset={})",
+    const int minInset   = (std::max)(1, MulDiv(1, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
+    const int maxInset   = (std::max)(1, MulDiv(4, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
+    const int actualInset = comboRect.top - menuRect.bottom;
+    Check(actualInset >= minInset && actualInset <= maxInset,
+          std::format(L"ViewerImgRaw combo host is tightly inset within the header background (top={}, menuBottom={}, inset={}, max={})",
                       comboRect.top,
                       menuRect.bottom,
-                      minInset),
+                      actualInset,
+                      maxInset),
           success);
 }
 
@@ -1071,10 +1094,13 @@ void CheckEmbeddedViewerHidesStandaloneFileCombo(RedSalamanderCreateFn createFn,
         return;
     }
 
-    const HWND comboHost = GetDlgItem(embeddedWindow, comboControlId);
-    Check(comboHost == nullptr || IsWindowVisible(comboHost) == FALSE,
-          std::format(L"{} embedded viewer hides the standalone filename combo host", viewerName),
-          success);
+    if (comboControlId != 0)
+    {
+        const HWND comboHost = GetDlgItem(embeddedWindow, comboControlId);
+        Check(comboHost == nullptr || IsWindowVisible(comboHost) == FALSE,
+              std::format(L"{} embedded viewer hides the standalone filename combo host", viewerName),
+              success);
+    }
     Check(CountVisibleChildWindowsByClass(embeddedWindow, L"ComboBox") == 0u,
           std::format(L"{} embedded viewer has no visible legacy ComboBox child", viewerName),
           success);
@@ -1805,6 +1831,7 @@ private:
     Check(CountVisibleChildWindowsByClass(viewerWindow, L"ComboBox") == 0u, L"ViewerPE does not expose a visible legacy ComboBox child", success);
     CheckDxNativeMenuBar(viewerWindow, L"ViewerPE", success);
     CheckDxComboHostClickActivation(viewerWindow, kViewerPEFileComboId, L"ViewerPE", success);
+    CheckDxComboHostCompactChrome(viewerWindow, kViewerPEFileComboId, L"ViewerPE", success);
     CheckDxComboHostAccessibility(viewerWindow, kViewerPEFileComboId, L"ViewerPE", pluginPath.filename().wstring(), success);
 
     static_cast<void>(PumpUntil([]() noexcept { return false; }, 250ms));
@@ -1930,6 +1957,7 @@ private:
     CheckDxNativeMenuBar(viewerWindow, L"ViewerWeb", success);
     CheckPlainMenuModelContract(viewerWindow, L"ViewerWeb", success);
     CheckDxComboHostClickActivation(viewerWindow, kViewerWebFileComboId, L"ViewerWeb", success);
+    CheckDxComboHostCompactChrome(viewerWindow, kViewerWebFileComboId, L"ViewerWeb", success);
     CheckDxComboHostAccessibility(viewerWindow, kViewerWebFileComboId, L"ViewerWeb", firstPath.filename().wstring(), success);
 
     static_cast<void>(PumpUntil([]() noexcept { return false; }, 250ms));
@@ -2056,6 +2084,7 @@ private:
     CheckPlainMenuModelContract(viewerWindow, L"ViewerImgRaw", success);
     CheckImageRawComboHostIsInsetInsideHeader(viewerWindow, success);
     CheckDxComboHostClickActivation(viewerWindow, kViewerImgRawFileComboId, L"ViewerImgRaw", success);
+    CheckDxComboHostCompactChrome(viewerWindow, kViewerImgRawFileComboId, L"ViewerImgRaw", success);
     CheckDxComboHostAccessibility(viewerWindow, kViewerImgRawFileComboId, L"ViewerImgRaw", firstPath.filename().wstring(), success);
 
     static_cast<void>(PumpUntil([]() noexcept { return false; }, 250ms));
@@ -2187,6 +2216,7 @@ private:
     CheckDxNativeMenuBar(viewerWindow, L"ViewerText", success);
     CheckPlainMenuModelContract(viewerWindow, L"ViewerText", success);
     CheckDxComboHostClickActivation(viewerWindow, kViewerTextFileComboId, L"ViewerText", success);
+    CheckDxComboHostCompactChrome(viewerWindow, kViewerTextFileComboId, L"ViewerText", success);
     CheckDxComboHostAccessibility(viewerWindow, kViewerTextFileComboId, L"ViewerText", firstPath.filename().wstring(), success);
 #ifdef _DEBUG
     WndMsg::ViewerTextDebugSnapshot snapshot{};
@@ -3773,6 +3803,7 @@ private:
           L"ViewerSpace only exposes the DxUi menu bar child and no visible fallback child surface",
           success);
     CheckViewerSpaceTooltipOverlay(viewerWindow, success);
+    CheckEmbeddedViewerHidesStandaloneFileCombo(createFn, kViewerSpacePluginId, context, kViewerSpaceWindowClassName, 0, L"ViewerSpace", success);
     Check(SetFocus(viewerWindow) != nullptr, L"ViewerSpace window accepts keyboard focus", success);
     const LRESULT escapeHandled = SendMessageW(viewerWindow, WM_KEYDOWN, VK_ESCAPE, 0);
     static_cast<void>(escapeHandled);

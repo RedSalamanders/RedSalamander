@@ -14,7 +14,7 @@ The examples below use generated documentation samples, not personal files.
 
 The Preview Pane hosts the viewer for the focused file in the opposite pane, using the same viewer associations where an embedded viewer is available. When no specific embedded preview is available, it shows the focused file or folder Properties as compact cards with wrapping text and an on-demand scrollbar. Rainbow theme adds subtle rainbow section accents. The source Folder view keeps keyboard focus, embedded viewers hide standalone filename/header chrome so they blend with the Preview tab, and compatible preview viewers are reused by closing the previous preview content before opening the next file.
 
-Standalone viewers share a keyboard rule: focus starts on the main viewer surface, `Tab` / `Shift+Tab` moves through menus, dropdowns, and tool controls, and accepted combo/menu actions return focus to the main surface. `Esc` closes the standalone viewer unless a visible alert consumes the first press.
+Standalone viewers share a keyboard rule: focus starts on the main viewer surface, `Tab` / `Shift+Tab` moves through menus, dropdowns, and tool controls, and accepted combo/menu actions return focus to the main surface. `Esc` from viewer chrome returns focus to the main surface; from the main surface it cancels active long work when available, then closes when idle unless a visible alert consumes the first press.
 
 ## Default Viewer Associations
 
@@ -68,7 +68,7 @@ Shortcuts:
 | `Space` / `Ctrl+Down` | Next peer file. |
 | `Backspace` / `Ctrl+Up` | Previous peer file. |
 | `Ctrl+Home` / `Ctrl+End` | First/last peer file. |
-| `Esc` | Close. |
+| `Esc` | Close when idle. |
 
 ## Image / RAW Viewer (`builtin/viewer-imgraw`)
 
@@ -106,7 +106,7 @@ Shortcuts:
 | `G` / `N` | Grayscale/negative. |
 | `I` | Exif overlay. |
 | `Ctrl+Alt+Arrow`, `Ctrl+Alt+PgUp/PgDn` | Adjustment shortcuts. |
-| `Esc` | Close. |
+| `Esc` | Cancel active RAW loading; close when idle. |
 
 Mouse wheel zooms, and dragging pans when the image is zoomed.
 
@@ -134,7 +134,7 @@ Shortcuts:
 |----------|--------|
 | `F5` | Refresh/rescan. |
 | `Backspace` | Go up. |
-| `Esc` | Close. |
+| `Esc` | Cancel scan while scanning; close when idle. |
 
 ## PE Viewer (`builtin/viewer-pe`)
 
@@ -160,7 +160,7 @@ Shortcuts:
 | `Space` / `Ctrl+Down` | Next peer file. |
 | `Backspace` / `Ctrl+Up` | Previous peer file. |
 | `Ctrl+Home` / `Ctrl+End` | First/last peer file. |
-| `Esc` | Close. |
+| `Esc` | Close when idle. |
 
 ## SQLite Viewer (`builtin/viewer-sqlite`)
 
@@ -186,7 +186,7 @@ Shortcuts:
 | `Tab` / `Shift+Tab` | Move through viewer controls. |
 | `Arrow keys` | Move inside focused controls and grids. |
 | `Enter` / `Space` | Activate the focused button, selector, or command. |
-| `Esc` | Close. |
+| `Esc` | Return focus to results grid from controls; close from the grid when idle. |
 
 ## VLC Viewer (`builtin/viewer-vlc`)
 
@@ -213,7 +213,7 @@ Shortcuts:
 | `F3` | Open the selected media file from the pane. |
 | `Tab` / `Shift+Tab` | Move through visible playback controls. |
 | `Enter` / `Space` | Activate the focused control. |
-| `Esc` | Close. |
+| `Esc` | Close when idle. |
 
 No separate viewer menu accelerator table is currently defined for VLC; use the visible playback controls.
 
@@ -247,7 +247,7 @@ Shortcuts:
 | `Ctrl+Enter` | Open in browser. |
 | `Space` / `Ctrl+Down` | Next peer file. |
 | `Backspace` / `Ctrl+Up` | Previous peer file. |
-| `Esc` | Close. |
+| `Esc` | Close when idle. |
 
 ## JSON Viewer (`builtin/viewer-json`)
 
@@ -280,7 +280,7 @@ Shortcuts:
 | `Ctrl+Enter` | Open in browser. |
 | `Space` / `Ctrl+Down` | Next peer file. |
 | `Backspace` / `Ctrl+Up` | Previous peer file. |
-| `Esc` | Close. |
+| `Esc` | Close when idle. |
 
 ## Markdown Viewer (`builtin/viewer-markdown`)
 
@@ -314,6 +314,6 @@ Shortcuts:
 | `Ctrl+Backtick` | Toggle Markdown source. |
 | `Space` / `Ctrl+Down` | Next peer file. |
 | `Backspace` / `Ctrl+Up` | Previous peer file. |
-| `Esc` | Close. |
+| `Esc` | Close when idle. |
 
 See also: [Plugins](Plugins.md), [Preferences](Preferences.md), and [Settings File & Advanced Configuration](SettingsFile.md).

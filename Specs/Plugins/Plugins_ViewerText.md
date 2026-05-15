@@ -133,10 +133,10 @@ The visible top menu bar is rendered through the shared `RedSalamander.DxNativeM
 
 ## Viewer Shell And Keyboard
 
-- In standalone mode, the header shows the filename/dropdown navigation control only when the active file/section list has more than one entry, and keeps the `TEXT` / `HEX` mode toggle in the same top chrome.
+- In standalone mode, the header shows the filename/dropdown navigation control only when the active file/section list has more than one entry, uses compact combo chrome to preserve text/hex viewport height, and keeps the `TEXT` / `HEX` mode toggle in the same top chrome.
 - In embedded preview mode, ViewerText hides the standalone header and filename dropdown so the text/hex content starts at the preview tab background without a separate viewer band.
-- Keyboard focus opens on, and returns to, the active text or hex content surface after file navigation or menu commands. While focus is inside the filename dropdown or menu, the focused control owns arrow/Enter/Escape behavior; after a selection is accepted, focus returns to the active content surface.
-- `Esc` dismisses a visible alert first and otherwise closes the standalone viewer.
+- Keyboard focus opens on, and returns to, the active text or hex content surface after file navigation or menu commands. While focus is inside the filename dropdown or menu, the focused control owns arrow/Enter behavior; `Esc` from that chrome returns focus to the active content surface.
+- `Esc` dismisses a visible alert first; otherwise it posts `WM_CLOSE` from the active text/hex surface when the standalone viewer is idle.
 
 The viewer exposes the same option through `View -> Hex byte colors`:
 - `Leading nibble (00/FF emphasized)`
