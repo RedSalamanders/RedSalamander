@@ -1029,6 +1029,7 @@ void FolderView::SetThumbnailSizeDip(uint32_t sizeDip)
     for (auto& item : _items)
     {
         item.thumbnail.reset();
+        item.icon.reset();
         item.labelLayout.reset();
         item.labelMetrics = {};
         item.detailsLayout.reset();
@@ -1039,6 +1040,7 @@ void FolderView::SetThumbnailSizeDip(uint32_t sizeDip)
 
     LayoutItems();
     UpdateScrollMetrics();
+    QueueIconLoading();
     QueueThumbnailLoading();
 
     if (_hWnd)

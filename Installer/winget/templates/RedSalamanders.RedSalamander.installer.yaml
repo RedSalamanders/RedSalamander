@@ -8,14 +8,14 @@ MinimumOSVersion: 10.0.19041.0
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
-  - RelativeFilePath: RedSalamander.exe
+  - RelativeFilePath: RedLauncher.exe
     PortableCommandAlias: RedSalamander
 UpgradeBehavior: install
 Commands:
   - RedSalamander
 InstallationMetadata:
   Files:
-    - RelativeFilePath: RedSalamander.exe
+    - RelativeFilePath: RedLauncher.exe
       FileType: launch
       DisplayName: RedSalamander
 ReleaseDate: { RELEASE_DATE }

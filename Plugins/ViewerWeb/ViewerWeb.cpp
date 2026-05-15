@@ -310,6 +310,12 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return dxResult;
     }
 
+    if (msg == WM_KEYUP && (wp == VK_ESCAPE || wp == VK_TAB))
+    {
+        self->FocusMainSurfaceFromFileCombo(GetAncestor(hwnd, GA_ROOT));
+        return 0;
+    }
+
     if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
     {
         const HWND root = GetAncestor(hwnd, GA_ROOT);
@@ -1572,6 +1578,19 @@ LRESULT ViewerWeb::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
     return dxResult;
 }
 
+void ViewerWeb::FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept
+{
+    if (_embeddedMode)
+    {
+        return;
+    }
+
+    if (hwnd && IsWindow(hwnd) != FALSE)
+    {
+        SetFocus(hwnd);
+    }
+}
+
 void ViewerWeb::OnCreate(HWND hwnd)
 {
     const DWORD comboHostStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY;
@@ -1612,6 +1631,16 @@ void ViewerWeb::OnCreate(HWND hwnd)
             {
                 SetFocus(hwnd);
             }
+        });
+        _fileComboHost.SetOnTabBoundary([this, hwnd](bool) noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
+        _fileComboHost.SetOnEscape([hwnd]() noexcept
+        {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            return true;
         });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
@@ -2782,7 +2811,7 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
     const int minPadding = MulDiv(3, static_cast<int>(dpi), 96);
     const int accentH    = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
     const int accentGap  = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
-    const bool showCombo = _hFileComboHost && _otherFiles.size() > 1;
+    const bool showCombo = _hFileComboHost && ! _embeddedMode && _otherFiles.size() > 1;
 
     RECT headerContentRect{};
     headerContentRect        = _headerRect;
@@ -2861,15 +2890,15 @@ void ViewerWeb::ComputeLayoutRects(HWND hwnd) noexcept
     client.top += _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
 
     const UINT dpi               = GetDpiForWindow(hwnd);
-    const int baseHeaderHeight   = MulDiv(kHeaderHeightDip, static_cast<int>(dpi), 96);
+    const int baseHeaderHeight   = _embeddedMode ? 0 : MulDiv(kHeaderHeightDip, static_cast<int>(dpi), 96);
     const int accentH            = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
     const int accentGap          = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
     const int minPadding         = MulDiv(3, static_cast<int>(dpi), 96);
-    const bool showCombo         = _hFileComboHost && _otherFiles.size() > 1;
+    const bool showCombo         = _hFileComboHost && ! _embeddedMode && _otherFiles.size() > 1;
     const int desiredComboHeight = std::max(1, MulDiv(32, static_cast<int>(dpi), 96));
 
     const int minChromeHeight = MulDiv(22, static_cast<int>(dpi), 96) + accentH + accentGap + 2 * minPadding;
-    int headerH               = std::max(baseHeaderHeight, minChromeHeight);
+    int headerH               = _embeddedMode ? 0 : std::max(baseHeaderHeight, minChromeHeight);
     if (showCombo)
     {
         headerH = std::max(headerH, desiredComboHeight + accentH + accentGap + 2 * minPadding);

@@ -557,7 +557,7 @@ private:
 
     void RestoreCapturedFocus() noexcept
     {
-        static_cast<void>(RedSalamander::DxUi::RestoreCapturedFocus(_focusRestoreHwnd));
+        static_cast<void>(RedSalamander::DxUi::RestoreCapturedFocus(_focusRestoreHwnd, _ownerWindow));
     }
 
     void SyncMenuModelInternal(bool invokeRefresh) noexcept

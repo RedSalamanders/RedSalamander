@@ -796,7 +796,7 @@ try {
         }
     } else {
         # Show output paths for main executables
-        $mainProjects = @("RedSalamander", "RedSalamanderMonitor")
+        $mainProjects = @("RedLauncher", "RedSalamander", "RedSalamanderMonitor")
         foreach ($project in $mainProjects) {
             $outputPath = ".build\\$Platform\\$Configuration\\$project.exe"
             if (Test-Path $outputPath) {
@@ -1000,12 +1000,7 @@ try {
         $zipStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
         try {
-            $zipArgs = @(
-                "-Configuration", $Configuration,
-                "-Platform", $Platform,
-                "-BuildNumber", "$($versionContext.BuildNumber)"
-            )
-            & $zipScript @zipArgs
+            & $zipScript -Configuration $Configuration -Platform $Platform -BuildNumber $versionContext.BuildNumber
         }
         catch {
             $zipStopwatch.Stop()

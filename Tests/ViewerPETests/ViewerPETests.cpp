@@ -511,6 +511,23 @@ ViewerTheme MakeViewerTextTestTheme(bool highContrast, bool rainbowMode = false)
     return state.found;
 }
 
+[[nodiscard]] RECT GetChildRectInParent(HWND parent, HWND child) noexcept
+{
+    RECT rect{};
+    if (! parent || ! child || IsWindow(parent) == FALSE || IsWindow(child) == FALSE || GetWindowRect(child, &rect) == 0)
+    {
+        return {};
+    }
+
+    POINT points[] = {{rect.left, rect.top}, {rect.right, rect.bottom}};
+    static_cast<void>(MapWindowPoints(HWND_DESKTOP, parent, points, static_cast<UINT>(std::size(points))));
+    rect.left   = points[0].x;
+    rect.top    = points[0].y;
+    rect.right  = points[1].x;
+    rect.bottom = points[1].y;
+    return rect;
+}
+
 void PrintVisibleChildWindowClasses(HWND hwnd, std::wstring_view prefix) noexcept
 {
     if (! hwnd || IsWindow(hwnd) == FALSE)
@@ -751,7 +768,28 @@ void CheckDxComboHostClickActivation(HWND viewerWindow, int comboControlId, std:
         },
             2000ms);
         Check(popupCollapsed, std::format(L"{} DxUi combo host collapses back to header height after Escape", viewerName), success);
+
+        const bool focusReturned = PumpUntil(
+            [&]() noexcept
+        {
+            const HWND focused = GetFocus();
+            return focused != comboHost && (! focused || IsChild(comboHost, focused) == FALSE);
+        },
+            1000ms);
+        Check(focusReturned, std::format(L"{} DxUi combo host returns keyboard focus after Escape", viewerName), success);
     }
+
+    static_cast<void>(SetFocus(comboHost));
+    static_cast<void>(SendMessageW(comboHost, WM_KEYDOWN, VK_TAB, 0));
+    static_cast<void>(SendMessageW(comboHost, WM_KEYUP, VK_TAB, 0));
+    const bool tabFocusReturned = PumpUntil(
+        [&]() noexcept
+    {
+        const HWND focused = GetFocus();
+        return focused != comboHost && (! focused || IsChild(comboHost, focused) == FALSE);
+    },
+        1000ms);
+    Check(tabFocusReturned, std::format(L"{} DxUi combo host returns keyboard focus after Tab wraps", viewerName), success);
 }
 
 [[nodiscard]] bool TryCollectVisibleUiaHostPatternStats(HWND hwnd, UiaHostPatternStats& stats) noexcept
@@ -934,6 +972,118 @@ void CheckDxComboHostAccessibility(HWND viewerWindow, int comboControlId, std::w
     Check((! stats.comboName.empty() && stats.comboName.find(expectedSelectionText) != std::wstring::npos) ||
               (! stats.valueText.empty() && stats.valueText.find(expectedSelectionText) != std::wstring::npos),
           std::format(L"{} DxUi combo host exposes the current selection text through UIA", viewerName),
+          success);
+}
+
+void CheckImageRawComboHostIsInsetInsideHeader(HWND viewerWindow, bool& success) noexcept
+{
+    const HWND comboHost = GetDlgItem(viewerWindow, kViewerImgRawFileComboId);
+    Check(comboHost != nullptr && IsWindowVisible(comboHost) != FALSE, L"ViewerImgRaw exposes a visible combo host for header inset validation", success);
+    if (! comboHost || IsWindowVisible(comboHost) == FALSE)
+    {
+        return;
+    }
+
+    const HWND menuHost = FindFirstChildWindowByClass(viewerWindow, kDxNativeMenuBarWindowClassName);
+    Check(menuHost != nullptr && IsWindowVisible(menuHost) != FALSE, L"ViewerImgRaw exposes a visible menu host for header inset validation", success);
+    if (! menuHost || IsWindowVisible(menuHost) == FALSE)
+    {
+        return;
+    }
+
+    const RECT comboRect = GetChildRectInParent(viewerWindow, comboHost);
+    const RECT menuRect  = GetChildRectInParent(viewerWindow, menuHost);
+    const UINT dpi       = GetDpiForWindow(viewerWindow);
+    const int minInset   = (std::max)(1, MulDiv(4, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
+    Check(comboRect.top >= menuRect.bottom + minInset,
+          std::format(L"ViewerImgRaw combo host is inset within the header background (top={}, menuBottom={}, inset={})",
+                      comboRect.top,
+                      menuRect.bottom,
+                      minInset),
+          success);
+}
+
+void CheckEmbeddedViewerHidesStandaloneFileCombo(RedSalamanderCreateFn createFn,
+                                                 const wchar_t* pluginId,
+                                                 const ViewerOpenContext& sourceContext,
+                                                 std::wstring_view windowClassName,
+                                                 int comboControlId,
+                                                 std::wstring_view viewerName,
+                                                 bool& success) noexcept
+{
+    if (! createFn || ! pluginId)
+    {
+        Check(false, std::format(L"{} embedded combo normalization has a valid factory", viewerName), success);
+        return;
+    }
+
+    wil::com_ptr<IViewer> embeddedViewer;
+    const FactoryOptions factoryOptions{DEBUG_LEVEL_NONE};
+    const HRESULT createHr = createFn(__uuidof(IViewer), &factoryOptions, nullptr, pluginId, embeddedViewer.put_void());
+    Check(SUCCEEDED(createHr) && embeddedViewer != nullptr, std::format(L"{} factory creates an embedded IViewer instance", viewerName), success);
+    if (FAILED(createHr) || ! embeddedViewer)
+    {
+        return;
+    }
+
+    const std::wstring hostTitle = std::format(L"{} embedded host", viewerName);
+    wil::unique_hwnd hostWindow(CreateWindowExW(0,
+                                                L"STATIC",
+                                                hostTitle.c_str(),
+                                                WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+                                                CW_USEDEFAULT,
+                                                CW_USEDEFAULT,
+                                                640,
+                                                480,
+                                                nullptr,
+                                                nullptr,
+                                                GetModuleHandleW(nullptr),
+                                                nullptr));
+    Check(hostWindow.is_valid(), std::format(L"{} embedded host window is created", viewerName), success);
+    if (! hostWindow.is_valid())
+    {
+        return;
+    }
+
+    ViewerOpenContext embeddedContext = sourceContext;
+    embeddedContext.ownerWindow       = hostWindow.get();
+    embeddedContext.flags             = VIEWER_OPEN_FLAG_EMBEDDED;
+
+    const HRESULT openHr = embeddedViewer->Open(&embeddedContext);
+    Check(SUCCEEDED(openHr), std::format(L"{} embedded viewer open succeeds", viewerName), success);
+    if (FAILED(openHr))
+    {
+        return;
+    }
+
+    HWND embeddedWindow      = nullptr;
+    const bool embeddedReady = PumpUntil(
+        [&]() noexcept
+    {
+        embeddedWindow = FindFirstChildWindowByClass(hostWindow.get(), windowClassName);
+        return embeddedWindow != nullptr;
+    },
+        8000ms);
+    Check(embeddedReady && embeddedWindow != nullptr, std::format(L"{} embedded child window becomes visible", viewerName), success);
+    if (! embeddedReady || ! embeddedWindow)
+    {
+        static_cast<void>(embeddedViewer->Close());
+        return;
+    }
+
+    const HWND comboHost = GetDlgItem(embeddedWindow, comboControlId);
+    Check(comboHost == nullptr || IsWindowVisible(comboHost) == FALSE,
+          std::format(L"{} embedded viewer hides the standalone filename combo host", viewerName),
+          success);
+    Check(CountVisibleChildWindowsByClass(embeddedWindow, L"ComboBox") == 0u,
+          std::format(L"{} embedded viewer has no visible legacy ComboBox child", viewerName),
+          success);
+    Check(GetMenu(embeddedWindow) == nullptr, std::format(L"{} embedded viewer has no top-level native menu", viewerName), success);
+
+    const HRESULT closeHr = embeddedViewer->Close();
+    Check(SUCCEEDED(closeHr), std::format(L"{} embedded viewer close succeeds", viewerName), success);
+    Check(PumpUntil([&]() noexcept { return IsWindow(embeddedWindow) == FALSE; }, 5000ms),
+          std::format(L"{} embedded child window closes cleanly", viewerName),
           success);
 }
 
@@ -1661,6 +1811,7 @@ private:
     const HRESULT closeHr = viewer->Close();
     Check(SUCCEEDED(closeHr), L"ViewerPE window close succeeds", success);
     Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerPE window closes cleanly", success);
+    CheckEmbeddedViewerHidesStandaloneFileCombo(createFn, kViewerPEPluginId, context, kViewerPEWindowClassName, kViewerPEFileComboId, L"ViewerPE", success);
     return success;
 }
 
@@ -1785,6 +1936,7 @@ private:
     const HRESULT closeHr = viewer->Close();
     Check(SUCCEEDED(closeHr), L"ViewerWeb window close succeeds", success);
     Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerWeb window closes cleanly", success);
+    CheckEmbeddedViewerHidesStandaloneFileCombo(createFn, kViewerWebPluginId, context, kViewerWebWindowClassName, kViewerWebFileComboId, L"ViewerWeb", success);
     return success;
 }
 
@@ -1902,6 +2054,7 @@ private:
     Check(CountVisibleChildWindowsByClass(viewerWindow, L"ComboBox") == 0u, L"ViewerImgRaw does not expose a visible legacy ComboBox child", success);
     CheckDxNativeMenuBar(viewerWindow, L"ViewerImgRaw", success);
     CheckPlainMenuModelContract(viewerWindow, L"ViewerImgRaw", success);
+    CheckImageRawComboHostIsInsetInsideHeader(viewerWindow, success);
     CheckDxComboHostClickActivation(viewerWindow, kViewerImgRawFileComboId, L"ViewerImgRaw", success);
     CheckDxComboHostAccessibility(viewerWindow, kViewerImgRawFileComboId, L"ViewerImgRaw", firstPath.filename().wstring(), success);
 
@@ -1909,6 +2062,8 @@ private:
     const HRESULT closeHr = viewer->Close();
     Check(SUCCEEDED(closeHr), L"ViewerImgRaw window close succeeds", success);
     Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerImgRaw window closes cleanly", success);
+    CheckEmbeddedViewerHidesStandaloneFileCombo(
+        createFn, kViewerImgRawPluginId, context, kViewerImgRawWindowClassName, kViewerImgRawFileComboId, L"ViewerImgRaw", success);
     return success;
 }
 
@@ -2044,6 +2199,8 @@ private:
     const HRESULT closeHr = viewer->Close();
     Check(SUCCEEDED(closeHr), L"ViewerText window close succeeds", success);
     Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"ViewerText window closes cleanly", success);
+    CheckEmbeddedViewerHidesStandaloneFileCombo(
+        createFn, kViewerTextPluginId, context, kViewerTextWindowClassName, kViewerTextFileComboId, L"ViewerText", success);
     return success;
 }
 

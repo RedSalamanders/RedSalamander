@@ -12481,6 +12481,141 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestFolderViewThumbnailSizeChangeRegeneratesFallbackIcons(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"thumbnail_size_change_fallback_icon_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create thumbnail fallback size-change fixture.");
+    state.Require(SelfTest::WriteTextFile(root / L"fallback_size_probe.zzziconcache", "thumbnail fallback size probe"),
+                  L"Failed to write thumbnail fallback size-change fixture item.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const FolderView::DisplayMode displayBefore = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
+    const auto restoreState = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugSetThumbnailProviderMode(FolderWindow::Pane::Left, FolderView::DebugThumbnailProviderMode::Shell);
+        g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, displayBefore);
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    IconCache::GetInstance().Clear();
+    g_folderWindow.DebugSetThumbnailProviderMode(FolderWindow::Pane::Left, FolderView::DebugThumbnailProviderMode::ForceFallback);
+    g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Detailed);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_LEFT_THUMBNAIL_SIZE_SMALL, 0), 0);
+    PumpPendingMessages();
+
+    state.Require(LoadLeftPaneThumbnailFixture(state, root, {L"fallback_size_probe.zzziconcache"}, SelfTest::Scale(5000ms)),
+                  L"Thumbnail fallback size-change fixture did not load.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Thumbnails);
+    FolderWindow::PaneViewOptionsDebugSnapshot smallMode{};
+    state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
+                                            [](const FolderWindow::PaneViewOptionsDebugSnapshot& snapshot) noexcept {
+                                                return snapshot.thumbnailTargetDip >= 47.0f && snapshot.thumbnailTargetDip <= 49.0f &&
+                                                       snapshot.thumbnailPendingCount == 0u && snapshot.thumbnailCompletedCount > 0u;
+                                            },
+                                            SelfTest::Scale(5000ms),
+                                            &smallMode),
+                  L"Initial 48 DIP forced-fallback thumbnail work did not settle.");
+    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Failed to warm initial forced-fallback thumbnail rendering.");
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, smallMode),
+                  L"Failed to capture initial forced-fallback thumbnail snapshot.");
+    state.Require(smallMode.iconLastDrawSawIcon, L"Initial forced-fallback thumbnail mode should draw a fallback icon.");
+    state.Require(smallMode.iconLastDrawSourceWidthPx > 0u && smallMode.iconLastDrawSourceHeightPx > 0u,
+                  L"Initial forced-fallback thumbnail icon source should be non-empty.");
+    state.Require(g_folderWindow.DebugGetPaneBitmapIconCount(FolderWindow::Pane::Left) > 0u,
+                  L"Initial forced-fallback thumbnail mode should cache at least one fallback icon bitmap.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SelfTest::AppendSelfTestTrace(std::format(L"thumbnail_size_change_regenerates_fallback_icons: before source={}x{} drawWidth={:.1f}",
+                                              smallMode.iconLastDrawSourceWidthPx,
+                                              smallMode.iconLastDrawSourceHeightPx,
+                                              smallMode.iconLastDrawRectDip.right - smallMode.iconLastDrawRectDip.left));
+
+    IconCache::GetInstance().Clear();
+    const auto perfBeforeSizeChange = g_folderWindow.DebugGetWarmPanePerfSnapshot(FolderWindow::Pane::Left);
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_LEFT_THUMBNAIL_SIZE_LARGE, 0), 0);
+    const size_t immediateIconCount = g_folderWindow.DebugGetPaneBitmapIconCount(FolderWindow::Pane::Left);
+    const auto perfAfterSizeChange = g_folderWindow.DebugGetWarmPanePerfSnapshot(FolderWindow::Pane::Left);
+
+    state.Require(immediateIconCount == 0u,
+                  std::format(L"Thumbnail size changes must clear stale fallback icon bitmaps before reloading; immediate icon count={}.",
+                              immediateIconCount));
+    state.Require(perfAfterSizeChange.queueIconLoadingCalls > perfBeforeSizeChange.queueIconLoadingCalls,
+                  std::format(L"Thumbnail size changes must requeue fallback icon loading; before={} after={}.",
+                              perfBeforeSizeChange.queueIconLoadingCalls,
+                              perfAfterSizeChange.queueIconLoadingCalls));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FolderWindow::PaneViewOptionsDebugSnapshot largeMode{};
+    state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
+                                            [](const FolderWindow::PaneViewOptionsDebugSnapshot& snapshot) noexcept {
+                                                return snapshot.thumbnailTargetDip >= 95.0f && snapshot.thumbnailTargetDip <= 97.0f &&
+                                                       snapshot.thumbnailPendingCount == 0u;
+                                            },
+                                            SelfTest::Scale(5000ms),
+                                            &largeMode),
+                  std::format(L"Large forced-fallback thumbnail work should settle at 96 DIP; target={:.1f} pending={}.",
+                              largeMode.thumbnailTargetDip,
+                              largeMode.thumbnailPendingCount));
+    const auto iconReloadDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < iconReloadDeadline && g_folderWindow.DebugGetPaneBitmapIconCount(FolderWindow::Pane::Left) == 0u)
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(SelfTest::Scale(20ms));
+    }
+
+    state.Require(g_folderWindow.DebugGetPaneBitmapIconCount(FolderWindow::Pane::Left) > 0u,
+                  L"Forced-fallback thumbnail size change should reload fallback icon bitmaps.");
+    state.Require(g_folderWindow.DebugWarmPaneRendering(FolderWindow::Pane::Left), L"Failed to warm large forced-fallback thumbnail rendering.");
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, largeMode),
+                  L"Failed to capture large forced-fallback thumbnail snapshot.");
+    SelfTest::AppendSelfTestTrace(std::format(L"thumbnail_size_change_regenerates_fallback_icons: after source={}x{} drawWidth={:.1f} target={:.1f} pending={}",
+                                              largeMode.iconLastDrawSourceWidthPx,
+                                              largeMode.iconLastDrawSourceHeightPx,
+                                              largeMode.iconLastDrawRectDip.right - largeMode.iconLastDrawRectDip.left,
+                                              largeMode.thumbnailTargetDip,
+                                              largeMode.thumbnailPendingCount));
+    state.Require(largeMode.thumbnailTargetDip >= 95.0f && largeMode.thumbnailTargetDip <= 97.0f,
+                  std::format(L"Thumbnail size command should switch to 96 DIP; target={:.1f}.", largeMode.thumbnailTargetDip));
+    state.Require(largeMode.iconLastDrawSawIcon, L"Large forced-fallback thumbnail mode should draw a fallback icon.");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestFolderViewThumbnailReturnToNormalIconSize(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -13888,6 +14023,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"folderView_thumbnail_size_change_while_pending", [=](CaseState& state) noexcept {
         return TestFolderViewThumbnailSizeChangeWhilePending(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"folderView_thumbnail_size_change_regenerates_fallback_icons", [=](CaseState& state) noexcept {
+        return TestFolderViewThumbnailSizeChangeRegeneratesFallbackIcons(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"folderView_thumbnail_return_to_normal_icon_size", [=](CaseState& state) noexcept {
         return TestFolderViewThumbnailReturnToNormalIconSize(mainWindow, state);

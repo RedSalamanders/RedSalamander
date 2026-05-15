@@ -688,6 +688,12 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return dxResult;
     }
 
+    if (msg == WM_KEYUP && (wp == VK_ESCAPE || wp == VK_TAB))
+    {
+        self->FocusMainSurfaceFromFileCombo(GetAncestor(hwnd, GA_ROOT));
+        return 0;
+    }
+
     if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
     {
         const HWND root = GetAncestor(hwnd, GA_ROOT);
@@ -4746,6 +4752,31 @@ LRESULT ViewerText::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, L
     return dxResult;
 }
 
+void ViewerText::FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept
+{
+    if (_embeddedMode)
+    {
+        return;
+    }
+
+    if (_viewMode == ViewMode::Hex && _hHex && IsWindow(_hHex.get()) != FALSE)
+    {
+        SetFocus(_hHex.get());
+        return;
+    }
+
+    if (_hEdit && IsWindow(_hEdit.get()) != FALSE)
+    {
+        SetFocus(_hEdit.get());
+        return;
+    }
+
+    if (hwnd && IsWindow(hwnd) != FALSE)
+    {
+        SetFocus(hwnd);
+    }
+}
+
 void ViewerText::OnCreate(HWND hwnd)
 {
     _allowEraseBkgnd         = true;
@@ -4819,6 +4850,16 @@ void ViewerText::OnCreate(HWND hwnd)
             {
                 SetFocus(hwnd);
             }
+        });
+        _fileComboHost.SetOnTabBoundary([this, hwnd](bool) noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
+        _fileComboHost.SetOnEscape([hwnd]() noexcept
+        {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            return true;
         });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
@@ -6166,15 +6207,16 @@ void ViewerText::Layout(HWND hwnd) noexcept
     _menuBarHost.UpdateLayout();
     client.top += _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
 
-    const UINT dpi             = GetDpiForWindow(hwnd);
-    const int baseHeaderHeight = PxFromDip(kHeaderHeightDip, dpi);
+    const UINT dpi                   = GetDpiForWindow(hwnd);
+    const bool showStandaloneHeader  = ! _embeddedMode;
+    const int baseHeaderHeight       = showStandaloneHeader ? PxFromDip(kHeaderHeightDip, dpi) : 0;
     const int statusHeight     = PxFromDip(kStatusHeightDip, dpi);
     const int accentHeight     = std::max(1, PxFromDip(2, dpi));
     const int accentGap        = std::max(1, PxFromDip(1, dpi));
     const int minPadding       = PxFromDip(3, dpi);
-    const int minChromeHeight  = PxFromDip(22, dpi) + accentHeight + accentGap + 2 * minPadding;
+    const int minChromeHeight  = showStandaloneHeader ? PxFromDip(22, dpi) + accentHeight + accentGap + 2 * minPadding : 0;
 
-    const bool showCombo         = (_hFileComboHost && ActiveFileComboEntryCount() > 1u);
+    const bool showCombo         = (showStandaloneHeader && _hFileComboHost && ActiveFileComboEntryCount() > 1u);
     const int desiredComboHeight = showCombo ? std::max(1, PxFromDip(32, dpi)) : 0;
 
     int headerHeight = baseHeaderHeight;
@@ -6207,14 +6249,21 @@ void ViewerText::Layout(HWND hwnd) noexcept
 
         const int headerContentH = std::max(0L, headerContentRect.bottom - headerContentRect.top);
         const int margin         = PxFromDip(10, dpi);
-        const int buttonH        = std::min(headerContentH, PxFromDip(22, dpi));
-        const int buttonW        = PxFromDip(72, dpi);
-        const int buttonY        = headerContentRect.top + std::max(0, (headerContentH - buttonH) / 2);
-        const int buttonX        = std::max<LONG>(headerContentRect.left, headerContentRect.right - margin - buttonW);
-        _modeButtonRect.left     = buttonX;
-        _modeButtonRect.top      = buttonY;
-        _modeButtonRect.right    = std::min<LONG>(headerContentRect.right, buttonX + buttonW);
-        _modeButtonRect.bottom   = std::min<LONG>(headerContentRect.bottom, buttonY + buttonH);
+        if (showStandaloneHeader)
+        {
+            const int buttonH      = std::min(headerContentH, PxFromDip(22, dpi));
+            const int buttonW      = PxFromDip(72, dpi);
+            const int buttonY      = headerContentRect.top + std::max(0, (headerContentH - buttonH) / 2);
+            const int buttonX      = std::max<LONG>(headerContentRect.left, headerContentRect.right - margin - buttonW);
+            _modeButtonRect.left   = buttonX;
+            _modeButtonRect.top    = buttonY;
+            _modeButtonRect.right  = std::min<LONG>(headerContentRect.right, buttonX + buttonW);
+            _modeButtonRect.bottom = std::min<LONG>(headerContentRect.bottom, buttonY + buttonH);
+        }
+        else
+        {
+            _modeButtonRect = {};
+        }
 
         int measuredComboHeight = 0;
         if (_hFileComboHost)

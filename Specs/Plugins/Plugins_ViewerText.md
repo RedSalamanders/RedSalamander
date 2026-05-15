@@ -131,6 +131,13 @@ If a byte color would be unreadable over the effective background, the glyph fal
 
 The visible top menu bar is rendered through the shared `RedSalamander.DxNativeMenuBar` host while the underlying command model continues to come from the hidden native viewer menu. `Alt`, `F10`, and menu mnemonics continue to work through that DxUi surface.
 
+## Viewer Shell And Keyboard
+
+- In standalone mode, the header shows the filename/dropdown navigation control only when the active file/section list has more than one entry, and keeps the `TEXT` / `HEX` mode toggle in the same top chrome.
+- In embedded preview mode, ViewerText hides the standalone header and filename dropdown so the text/hex content starts at the preview tab background without a separate viewer band.
+- Keyboard focus opens on, and returns to, the active text or hex content surface after file navigation or menu commands. While focus is inside the filename dropdown or menu, the focused control owns arrow/Enter/Escape behavior; after a selection is accepted, focus returns to the active content surface.
+- `Esc` dismisses a visible alert first and otherwise closes the standalone viewer.
+
 The viewer exposes the same option through `View -> Hex byte colors`:
 - `Leading nibble (00/FF emphasized)`
 - `Off`

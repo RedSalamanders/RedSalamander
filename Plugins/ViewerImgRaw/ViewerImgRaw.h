@@ -73,6 +73,7 @@ public:
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
+    void FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept;
 
 private:
     enum class DisplayMode : uint8_t

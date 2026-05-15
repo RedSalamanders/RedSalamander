@@ -22,7 +22,7 @@ Embedded preview-capable:
 - `builtin/viewer-space`: folder disk-usage treemap (see `Specs/Plugins/Plugins_ViewerSpace.md`).
 - `builtin/viewer-imgraw`: image viewer using WIC + LibRaw (see `Specs/Plugins/Plugins_ViewerImgRaw.md`).
 - `builtin/viewer-vlc`: media viewer for video/audio formats supported by the VLC backend.
-- `builtin/viewer-pe`: PE executable/module inspector.
+- `builtin/viewer-pe`: PE executable/module inspector (see `Specs/Plugins/Plugins_ViewerPE.md`).
 
 ### VLC viewer behavior
 
@@ -70,8 +70,10 @@ Default viewer associations route `.diff`, `.patch`, and `.rej` to `builtin/view
   - Host SHOULD call `IViewer::SetTheme()` before `IViewer::Open()` so the plugin can create the window with the correct initial background, but plugins MUST accept either order.
   - Plugins SHOULD ensure the window class has a valid `WNDCLASSEXW::hbrBackground` consistent with the current `ViewerTheme.backgroundArgb` and allow `DefWindowProcW(WM_ERASEBKGND)` to run at least until the first `WM_PAINT` (after which returning `1` is fine for full-surface Direct2D renderers to avoid redundant clears/flicker).
 - The viewer behaves like a normal window after opening (it may be in front of or behind the main window); plugins SHOULD NOT rely on Win32 ownership to keep it above the main window.
-- An embedded preview viewer is the exception: it renders as a non-activating child window under `ViewerOpenContext.ownerWindow`, does not own a top-level menu or title bar, and MUST NOT take keyboard focus from the source pane during open or content updates.
-- Pressing **Esc** closes the viewer window.
+- An embedded preview viewer is the exception: it renders as a non-activating child window under `ViewerOpenContext.ownerWindow`, does not own a top-level menu or title bar, hides standalone viewer header chrome such as filename dropdowns, visually blends into the preview/tab background, and MUST NOT take keyboard focus from the source pane during open or content updates.
+- Standalone viewers SHOULD place keyboard focus on the main viewer surface after opening or activating the window: text/hex content for text, image canvas for images, document/web content for web/PDF/Markdown/JSON, results grid for SQLite, parsed-content surface for PE, treemap for Space, and media/HUD surface for VLC.
+- `Tab` / `Shift+Tab` may move focus into viewer chrome, menus, combo boxes, and command controls. While focus is inside a combo box or menu, normal keyboard navigation belongs to that control; after the user activates a peer-file selection or menu command, focus SHOULD return to the main viewer surface unless the command deliberately leaves focus in an editable field.
+- Pressing **Esc** closes the viewer window from the main surface, a focused DxUi/Win32 child control, or the viewer menu/toolbar path.
   - If an in-view alert overlay is visible (errors/info), **Esc** dismisses the alert first, then closes on the next press.
 - “Other Files” navigation is supported using the `otherFiles` list passed at open time.
 
@@ -79,7 +81,9 @@ Default viewer associations route `.diff`, `.patch`, and `.rej` to `builtin/view
 
 The built-in `builtin/viewer-text` is used as a reference for viewer UX. Other viewer plugins are encouraged to provide equivalent navigation and theme behavior:
 
-- If `otherFileCount > 1`, the viewer SHOULD expose a **filename dropdown** (combo box) listing the `otherFiles` list and selecting `focusedOtherFileIndex`.
+- In standalone mode, if `otherFileCount > 1`, the viewer SHOULD expose a **filename dropdown** (combo box) listing the `otherFiles` list and selecting `focusedOtherFileIndex`; if there is no peer-file navigation target, the standalone filename dropdown SHOULD be hidden or disabled according to the viewer layout.
+- Standalone filename dropdowns MUST be fully inset inside the themed header/chrome band in their collapsed state. They must not overlap the content background or leave a mismatched strip below the combo.
+- Embedded preview mode MUST NOT show the standalone filename dropdown/header. Preview-only commands should be reachable through the embedded viewer context-menu contract instead of visible standalone chrome.
 - The header SHOULD expose a clearly clickable **mode toggle button** (`TEXT` / `HEX`) so users can switch view mode without hunting in menus.
 - The viewer SHOULD also provide “Other Files” navigation commands (Next/Previous/First/Last) using the same shortcuts described in the menu spec.
 - Text/hex rows in `builtin/viewer-text` SHOULD use explicit uniform DirectWrite line spacing with pixel-snapped row origins so long monospace files do not show alternating vertical gaps while scrolling.

@@ -1375,10 +1375,11 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     const size_t initialVisibleColumnCount = baselineSnapshot.visibleColumnCount;
     const uint64_t initialResizeCount      = baselineSnapshot.resizeCount;
 
+    constexpr int kWheelDetentsPerChunk = -4;
     for (size_t chunkIndex = 0; chunkIndex < 8u; ++chunkIndex)
     {
         const uint64_t previousRenderCount = baselineSnapshot.renderCount;
-        Check(DebugScrollViewerSqliteGridByWheelDetents(viewerWindow, -12),
+        Check(DebugScrollViewerSqliteGridByWheelDetents(viewerWindow, kWheelDetentsPerChunk),
               std::format(L"viewer window scroll chunk {} dispatch succeeds", chunkIndex + 1u),
               success);
 
@@ -2243,24 +2244,19 @@ bool Check(bool condition, std::wstring_view message, bool& success)
         return false;
     }
 
-    bool initialFocusReady = snapshot.focusTarget == WndMsg::ViewerSqliteDebugFocusTarget::FileCombo;
+    bool initialFocusReady = snapshot.focusTarget == WndMsg::ViewerSqliteDebugFocusTarget::ResultGrid;
     if (! initialFocusReady)
     {
-        SendViewerSqliteTab(viewerWindow, false);
         initialFocusReady = WaitForViewerSnapshot(viewerWindow,
                                                   [](const WndMsg::ViewerSqliteDebugSnapshot& value) noexcept
         {
-            return value.pendingAsyncWork == 0u && value.focusTarget == WndMsg::ViewerSqliteDebugFocusTarget::FileCombo && value.rowOffset == 200u &&
+            return value.pendingAsyncWork == 0u && value.focusTarget == WndMsg::ViewerSqliteDebugFocusTarget::ResultGrid && value.rowOffset == 200u &&
                    value.primarySelectedRowId == 202u;
         },
                                                   5000ms,
                                                   &snapshot);
-        Check(initialFocusReady, L"viewer initial Tab lands keyboard focus on the file combo", success);
     }
-    else
-    {
-        Check(true, L"viewer activation already leaves keyboard focus on the file combo", success);
-    }
+    Check(initialFocusReady, L"viewer activation leaves keyboard focus on the results grid", success);
     if (! initialFocusReady)
     {
         static_cast<void>(viewer->Close());
@@ -2296,6 +2292,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     };
 
     constexpr std::array<WndMsg::ViewerSqliteDebugFocusTarget, 9u> kForwardOrder{{
+        WndMsg::ViewerSqliteDebugFocusTarget::FileCombo,
         WndMsg::ViewerSqliteDebugFocusTarget::ReloadButton,
         WndMsg::ViewerSqliteDebugFocusTarget::TableCombo,
         WndMsg::ViewerSqliteDebugFocusTarget::PrevButton,
@@ -2304,7 +2301,6 @@ bool Check(bool condition, std::wstring_view message, bool& success)
         WndMsg::ViewerSqliteDebugFocusTarget::RunButton,
         WndMsg::ViewerSqliteDebugFocusTarget::TableButton,
         WndMsg::ViewerSqliteDebugFocusTarget::ResultGrid,
-        WndMsg::ViewerSqliteDebugFocusTarget::FileCombo,
     }};
 
     for (const WndMsg::ViewerSqliteDebugFocusTarget target : kForwardOrder)
@@ -2316,7 +2312,6 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     }
 
     constexpr std::array<WndMsg::ViewerSqliteDebugFocusTarget, 9u> kReverseOrder{{
-        WndMsg::ViewerSqliteDebugFocusTarget::ResultGrid,
         WndMsg::ViewerSqliteDebugFocusTarget::TableButton,
         WndMsg::ViewerSqliteDebugFocusTarget::RunButton,
         WndMsg::ViewerSqliteDebugFocusTarget::QueryField,
@@ -2325,6 +2320,7 @@ bool Check(bool condition, std::wstring_view message, bool& success)
         WndMsg::ViewerSqliteDebugFocusTarget::TableCombo,
         WndMsg::ViewerSqliteDebugFocusTarget::ReloadButton,
         WndMsg::ViewerSqliteDebugFocusTarget::FileCombo,
+        WndMsg::ViewerSqliteDebugFocusTarget::ResultGrid,
     }};
 
     for (const WndMsg::ViewerSqliteDebugFocusTarget target : kReverseOrder)
@@ -2335,10 +2331,10 @@ bool Check(bool condition, std::wstring_view message, bool& success)
         Check(targetReady, std::format(L"reverse Tab advances focus to the {}", focusTargetName(target)), success);
     }
 
-    const HRESULT closeHr = viewer->Close();
-    Check(SUCCEEDED(closeHr), L"viewer window close succeeds after tab traversal validation", success);
+    static_cast<void>(SendMessageW(viewerWindow, WM_KEYDOWN, VK_ESCAPE, 0));
+    static_cast<void>(SendMessageW(viewerWindow, WM_KEYUP, VK_ESCAPE, 0));
     Check(
-        PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"viewer window closes cleanly after tab traversal validation", success);
+        PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"viewer window closes cleanly after Escape from the results grid", success);
 
     static_cast<void>(viewer->SetCallback(nullptr, nullptr));
     viewer.reset();

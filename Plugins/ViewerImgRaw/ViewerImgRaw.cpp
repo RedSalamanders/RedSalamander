@@ -189,6 +189,12 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return dxResult;
     }
 
+    if (msg == WM_KEYUP && (wp == VK_ESCAPE || wp == VK_TAB))
+    {
+        self->FocusMainSurfaceFromFileCombo(GetAncestor(hwnd, GA_ROOT));
+        return 0;
+    }
+
     if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
     {
         const HWND root = GetAncestor(hwnd, GA_ROOT);
@@ -1477,6 +1483,19 @@ LRESULT ViewerImgRaw::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp,
     return dxResult;
 }
 
+void ViewerImgRaw::FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept
+{
+    if (_embeddedMode)
+    {
+        return;
+    }
+
+    if (hwnd && IsWindow(hwnd) != FALSE)
+    {
+        SetFocus(hwnd);
+    }
+}
+
 void ViewerImgRaw::OnCreate(HWND hwnd)
 {
     _allowEraseBkgnd = true;
@@ -1537,6 +1556,16 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
             {
                 SetFocus(hwnd);
             }
+        });
+        _fileComboHost.SetOnTabBoundary([this, hwnd](bool) noexcept
+        {
+            FocusMainSurfaceFromFileCombo(hwnd);
+            return true;
+        });
+        _fileComboHost.SetOnEscape([hwnd]() noexcept
+        {
+            PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            return true;
         });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
@@ -1646,7 +1675,14 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
         client.bottom     = std::max(client.top, client.bottom - scrollH);
     }
 
-    const int headerH = PxFromDip(kHeaderHeightDip, dpi);
+    const bool showCombo = ! _embeddedMode && _otherItems.size() > 1;
+    const int padding    = PxFromDip(6, dpi);
+    const int comboH     = std::max(1, MulDiv(32, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
+    int headerH          = _embeddedMode ? 0 : PxFromDip(kHeaderHeightDip, dpi);
+    if (showCombo)
+    {
+        headerH = (std::max)(headerH, comboH + 2 * padding);
+    }
     const int statusH = PxFromDip(kStatusHeightDip, dpi);
 
     _headerRect        = client;
@@ -1661,16 +1697,19 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
 
     if (_hFileComboHost)
     {
-        const bool showCombo = _otherItems.size() > 1;
         ShowWindow(_hFileComboHost.get(), showCombo ? SW_SHOW : SW_HIDE);
+        EnableWindow(_hFileComboHost.get(), showCombo ? TRUE : FALSE);
+        if (_fileComboControl)
+        {
+            _fileComboControl->SetEnabled(showCombo);
+            _fileComboControl->SetVisible(showCombo);
+        }
         if (! showCombo)
         {
             _fileComboHostPreExpandPopup = false;
         }
         if (showCombo)
         {
-            const int padding          = PxFromDip(6, dpi);
-            const int comboH           = std::max(1, MulDiv(32, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
             const int x                = _headerRect.left + padding;
             const int w                = std::max(1L, (_headerRect.right - _headerRect.left) - 2 * padding);
             const int y                = _headerRect.top + std::max(0L, ((_headerRect.bottom - _headerRect.top) - comboH) / 2);
