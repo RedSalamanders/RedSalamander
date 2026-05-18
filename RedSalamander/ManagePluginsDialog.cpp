@@ -961,7 +961,7 @@ int MeasureInfoHeight(HWND dlg, int width, const std::wstring& text) noexcept
             return true;
         }
 
-        return controls.dxEditSlot.host && WindowOwnsFocus(controls.dxEditSlot.host->GetTextInputBridgeHwnd(), focused);
+        return controls.dxEditSlot.host && WindowOwnsFocus(controls.dxEditSlot.host->GetTextInputHwnd(), focused);
     }
 
     return controls.dxEditControl && controls.dxEditSlot.host && controls.dxEditSlot.host->GetFocusControl() == controls.dxEditControl;

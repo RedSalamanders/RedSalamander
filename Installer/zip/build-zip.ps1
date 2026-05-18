@@ -65,7 +65,6 @@ New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 try {
     # Copy main executables
     Copy-Item (Join-Path $BuildOutputDir "RedLauncher.exe") $TempDir
-    Copy-Item (Join-Path $BuildOutputDir "RedLauncherConsole.exe") $TempDir
     Copy-Item (Join-Path $BuildOutputDir "RedSalamander.exe") $TempDir
     Copy-Item (Join-Path $BuildOutputDir "RedSalamanderMonitor.exe") $TempDir
     
@@ -118,14 +117,16 @@ This is a portable distribution of RedSalamander.
 GETTING STARTED
 ---------------
 1. Run RedSalamander.exe to launch the file manager
-2. Winget's "RedSalamander" command alias runs the flash-free RedLauncher.exe,
+2. Winget's "RedSalamander" command alias runs the detached-console RedLauncher.exe,
    which starts RedSalamander.exe from this directory so app-local DLLs are found
-3. Run RedLauncherConsole.exe when a console foreground wait and process exit
-   code are required, for example self-test automation
+3. Run RedLauncher.exe with self-test flags when a foreground wait and process
+   exit code are required, for example self-test automation
 4. Run RedSalamanderMonitor.exe for debugging/monitoring
 
 RUNTIME REQUIREMENT
 -------------------
+RedSalamander requires Windows 11 24H2 (build 26100) or later.
+
 This package includes the Microsoft Visual C++ runtime DLLs required for this
 CPU architecture.
 

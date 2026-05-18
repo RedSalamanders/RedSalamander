@@ -88,7 +88,7 @@
           Target="[INSTALLFOLDER]RedSalamanderMonitor.exe"
           WorkingDirectory="INSTALLFOLDER" />
 
-        <!-- Windows 10/11 "Installed apps" uses DisplayIcon from the Uninstall key (not always ARPPRODUCTICON). -->
+        <!-- Windows "Installed apps" uses DisplayIcon from the Uninstall key (not always ARPPRODUCTICON). -->
         <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\[ProductCode]" Name="DisplayIcon" Type="string"
           Value="[INSTALLFOLDER]RedSalamander.exe" />
 

@@ -130,25 +130,19 @@ struct DecodedThumbnailPixels
     }
 };
 
-[[nodiscard]] HRESULT DecodeWicThumbnailPixels(const std::filesystem::path& fullPath,
+[[nodiscard]] HRESULT DecodeWicThumbnailPixels(IWICImagingFactory* factory,
+                                               const std::filesystem::path& fullPath,
                                                uint32_t targetPx,
                                                DecodedThumbnailPixels& outPixels) noexcept
 {
     outPixels = {};
-    if (fullPath.empty() || targetPx == 0u)
+    if (! factory || fullPath.empty() || targetPx == 0u)
     {
         return E_INVALIDARG;
     }
 
-    wil::com_ptr<IWICImagingFactory> factory;
-    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put()));
-    if (FAILED(hr) || ! factory)
-    {
-        return hr;
-    }
-
     wil::com_ptr<IWICBitmapDecoder> decoder;
-    hr = factory->CreateDecoderFromFilename(fullPath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder.put());
+    HRESULT hr = factory->CreateDecoderFromFilename(fullPath.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand, decoder.put());
     if (FAILED(hr) || ! decoder)
     {
         return hr;
@@ -872,6 +866,44 @@ void FolderView::CancelThumbnailLoading() noexcept
     _enumerationCv.notify_one();
 }
 
+HRESULT FolderView::EnsureThumbnailWicFactory(wil::com_ptr<IWICImagingFactory>& thumbnailWicFactory, IWICImagingFactory** outFactory) noexcept
+{
+    if (! outFactory)
+    {
+        return E_POINTER;
+    }
+    *outFactory = nullptr;
+
+    if (! thumbnailWicFactory)
+    {
+        APTTYPE apartmentType{};
+        APTTYPEQUALIFIER apartmentQualifier{};
+        const HRESULT apartmentHr = CoGetApartmentType(&apartmentType, &apartmentQualifier);
+        if (FAILED(apartmentHr))
+        {
+            Debug::Error(L"FolderView thumbnail WIC fallback requires COM on the worker thread: 0x{:08X}", apartmentHr);
+            return apartmentHr;
+        }
+        if (apartmentType != APTTYPE_MTA)
+        {
+            Debug::Warning(L"FolderView thumbnail WIC fallback expected worker MTA, apartment={}", static_cast<int>(apartmentType));
+        }
+
+        wil::com_ptr<IWICImagingFactory> factory;
+        HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.put()));
+        if (FAILED(hr) || ! factory)
+        {
+            return hr;
+        }
+
+        thumbnailWicFactory = std::move(factory);
+        _thumbnailLoadStats.wicFactoryCreate.fetch_add(1u, std::memory_order_relaxed);
+    }
+
+    *outFactory = thumbnailWicFactory.get();
+    return S_OK;
+}
+
 void FolderView::ProcessThumbnailLoadQueue()
 {
     const uint64_t batchId = _thumbnailLoadStats.batchId.load(std::memory_order_acquire);
@@ -879,6 +911,7 @@ void FolderView::ProcessThumbnailLoadQueue()
     perf.SetDetail(_itemsFolder.native());
     perf.SetValue0(_thumbnailLoadStats.queued.load(std::memory_order_relaxed));
 
+    wil::com_ptr<IWICImagingFactory> thumbnailWicFactory;
     while (_thumbnailLoadingActive.load(std::memory_order_acquire))
     {
         if (_thumbnailLoadStats.batchId.load(std::memory_order_acquire) != batchId)
@@ -979,7 +1012,12 @@ void FolderView::ProcessThumbnailLoadQueue()
             triedWicFallback = true;
             const auto wicStart = std::chrono::steady_clock::now();
             DecodedThumbnailPixels pixels;
-            const HRESULT wicHr = DecodeWicThumbnailPixels(request.fullPath, request.targetPx, pixels);
+            IWICImagingFactory* wicFactory = nullptr;
+            HRESULT wicHr = EnsureThumbnailWicFactory(thumbnailWicFactory, &wicFactory);
+            if (SUCCEEDED(wicHr))
+            {
+                wicHr = DecodeWicThumbnailPixels(wicFactory, request.fullPath, request.targetPx, pixels);
+            }
             PerfEmitDuration(L"thumbnails.wic_decode_us",
                              PerfElapsedUs(wicStart),
                              static_cast<uint64_t>(request.itemIndex),
@@ -1382,6 +1420,7 @@ FolderView::ThumbnailDebugSnapshot FolderView::DebugGetThumbnailSnapshot() const
     snapshot.cacheHitCount = _thumbnailLoadStats.cacheHits.load(std::memory_order_acquire);
     snapshot.shellSuccessCount = _thumbnailLoadStats.shellSuccess.load(std::memory_order_acquire);
     snapshot.wicSuccessCount = _thumbnailLoadStats.wicSuccess.load(std::memory_order_acquire);
+    snapshot.wicFactoryCreateCount = _thumbnailLoadStats.wicFactoryCreate.load(std::memory_order_acquire);
     snapshot.decodeFailureCount = _thumbnailLoadStats.decodeFailures.load(std::memory_order_acquire);
     snapshot.visibleApplyCount = _thumbnailLoadStats.visibleApply.load(std::memory_order_acquire);
     const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();

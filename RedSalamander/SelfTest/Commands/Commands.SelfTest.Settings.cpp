@@ -2183,6 +2183,194 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     return state.failure.empty();
 }
 
+[[nodiscard]] Common::Settings::ShortcutBinding* FindTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                                                         uint32_t vk,
+                                                                         uint32_t modifiers) noexcept
+{
+    for (Common::Settings::ShortcutBinding& binding : bindings)
+    {
+        if (binding.vk == vk && (binding.modifiers & 0x7u) == (modifiers & 0x7u))
+        {
+            return &binding;
+        }
+    }
+    return nullptr;
+}
+
+void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& bindings, uint32_t vk, uint32_t modifiers) noexcept
+{
+    bindings.erase(std::remove_if(bindings.begin(),
+                                  bindings.end(),
+                                  [=](const Common::Settings::ShortcutBinding& binding) noexcept {
+        return binding.vk == vk && (binding.modifiers & 0x7u) == (modifiers & 0x7u);
+    }),
+                   bindings.end());
+}
+
+[[nodiscard]] bool TestShortcutDefaultsRestoreMissingF3View(CaseState& state) noexcept
+{
+    Common::Settings::Settings settings{};
+    settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+
+    auto& functionBar = settings.shortcuts.value().functionBar;
+    RemoveTestShortcutBinding(functionBar, VK_F3, 0u);
+
+    ShortcutDefaults::EnsureShortcutsInitialized(settings);
+    state.Require(settings.shortcuts.has_value(), L"Shortcut initialization should preserve the existing shortcuts block.");
+    if (! settings.shortcuts.has_value())
+    {
+        return false;
+    }
+
+    ShortcutManager manager;
+    manager.Load(settings.shortcuts.value());
+
+    const auto functionCommand = manager.FindFunctionBarCommand(VK_F3, 0u);
+    state.Require(functionCommand.has_value() && functionCommand.value() == std::wstring_view{L"cmd/pane/view"},
+                  L"Missing plain F3 should be restored to cmd/pane/view when existing shortcuts are initialized.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestShortcutDefaultsRestoreMissingDefaultsAndPreserveUnassigned(CaseState& state) noexcept
+{
+    static constexpr std::wstring_view kUnassignedCommandId = L"cmd/shortcut/unassigned";
+
+    Common::Settings::Settings settings{};
+    settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+    auto& shortcuts    = settings.shortcuts.value();
+
+    RemoveTestShortcutBinding(shortcuts.functionBar, VK_F4, 0u);
+    RemoveTestShortcutBinding(shortcuts.functionBar, VK_F12, ShortcutManager::kModCtrl);
+    RemoveTestShortcutBinding(shortcuts.folderView, VK_RETURN, 0u);
+    RemoveTestShortcutBinding(shortcuts.folderView, static_cast<uint32_t>('1'), ShortcutManager::kModCtrl);
+
+    Common::Settings::ShortcutBinding* unassignedFunction =
+        FindTestShortcutBinding(shortcuts.functionBar, VK_F5, 0u);
+    state.Require(unassignedFunction != nullptr, L"Shortcut default fixture should include plain F5 before marking it unassigned.");
+    if (unassignedFunction)
+    {
+        unassignedFunction->commandId = kUnassignedCommandId;
+    }
+
+    Common::Settings::ShortcutBinding* unassignedFolder =
+        FindTestShortcutBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl);
+    state.Require(unassignedFolder != nullptr, L"Shortcut default fixture should include Ctrl+Insert before marking it unassigned.");
+    if (unassignedFolder)
+    {
+        unassignedFolder->commandId = kUnassignedCommandId;
+    }
+
+    ShortcutDefaults::EnsureShortcutsInitialized(settings);
+    state.Require(settings.shortcuts.has_value(), L"Shortcut initialization should preserve a customized shortcuts block.");
+    if (! settings.shortcuts.has_value())
+    {
+        return false;
+    }
+
+    ShortcutManager manager;
+    manager.Load(settings.shortcuts.value());
+
+    const auto f4Command = manager.FindFunctionBarCommand(VK_F4, 0u);
+    state.Require(f4Command.has_value() && f4Command.value() == std::wstring_view{L"cmd/pane/edit"},
+                  L"Missing plain F4 should be restored to cmd/pane/edit.");
+
+    const auto ctrlF12Command = manager.FindFunctionBarCommand(VK_F12, ShortcutManager::kModCtrl);
+    state.Require(ctrlF12Command.has_value() && ctrlF12Command.value() == std::wstring_view{L"cmd/pane/filter"},
+                  L"Missing Ctrl+F12 should be restored to cmd/pane/filter.");
+
+    const auto enterCommand = manager.FindFolderViewCommand(VK_RETURN, 0u);
+    state.Require(enterCommand.has_value() && enterCommand.value() == std::wstring_view{L"cmd/pane/executeOpen"},
+                  L"Missing Enter should be restored to cmd/pane/executeOpen.");
+
+    const auto hotPathCommand = manager.FindFolderViewCommand(static_cast<uint32_t>('1'), ShortcutManager::kModCtrl);
+    state.Require(hotPathCommand.has_value() && hotPathCommand.value() == std::wstring_view{L"cmd/pane/hotPath/1"},
+                  L"Missing Ctrl+1 should be restored to cmd/pane/hotPath/1.");
+
+    const auto f5Command = manager.FindFunctionBarCommand(VK_F5, 0u);
+    state.Require(f5Command.has_value() && f5Command.value() == kUnassignedCommandId,
+                  L"Plain F5 marked unassigned should remain an explicit no-op instead of restoring its default command.");
+
+    const auto ctrlInsertCommand = manager.FindFolderViewCommand(VK_INSERT, ShortcutManager::kModCtrl);
+    state.Require(ctrlInsertCommand.has_value() && ctrlInsertCommand.value() == kUnassignedCommandId,
+                  L"Ctrl+Insert marked unassigned should remain an explicit no-op instead of restoring its default command.");
+
+    const auto sentinelShortcut = manager.TryGetShortcutForCommand(kUnassignedCommandId);
+    state.Require(! sentinelShortcut.has_value(), L"The internal unassigned sentinel should not be exposed as a reverse shortcut for a command.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsStoreShortcutUnassignedSentinelRoundTrip(CaseState& state) noexcept
+{
+    static constexpr std::wstring_view kTestAppId             = L"RedSalamanderSelfTestShortcutUnassignedSentinelRoundTrip";
+    static constexpr std::wstring_view kUnassignedCommandId   = L"cmd/shortcut/unassigned";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::Settings settings{};
+    settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+    auto& shortcuts    = settings.shortcuts.value();
+
+    Common::Settings::ShortcutBinding* functionBinding = FindTestShortcutBinding(shortcuts.functionBar, VK_F5, 0u);
+    state.Require(functionBinding != nullptr, L"Shortcut default fixture should include plain F5 before saving an explicit unassignment.");
+    if (functionBinding)
+    {
+        functionBinding->commandId = kUnassignedCommandId;
+    }
+
+    Common::Settings::ShortcutBinding* folderBinding = FindTestShortcutBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl);
+    state.Require(folderBinding != nullptr, L"Shortcut default fixture should include Ctrl+Insert before saving an explicit unassignment.");
+    if (folderBinding)
+    {
+        folderBinding->commandId = kUnassignedCommandId;
+    }
+
+    const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
+    state.Require(prepared.shortcuts.has_value(), L"Canonical save path should persist explicit unassigned shortcut sentinels.");
+    if (! prepared.shortcuts.has_value())
+    {
+        return false;
+    }
+
+    const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
+    state.Require(SUCCEEDED(saveHr), L"Failed to save shortcut unassigned sentinel round-trip test settings.");
+    if (FAILED(saveHr))
+    {
+        return false;
+    }
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(loadHr == S_OK, L"TryLoadSettingsNoRecovery should succeed for shortcut unassigned sentinel round-trip settings.");
+    if (FAILED(loadHr))
+    {
+        return false;
+    }
+
+    ShortcutDefaults::EnsureShortcutsInitialized(loaded);
+    state.Require(loaded.shortcuts.has_value(), L"Shortcut initialization should keep loaded sentinel shortcuts.");
+    if (! loaded.shortcuts.has_value())
+    {
+        return false;
+    }
+
+    ShortcutManager manager;
+    manager.Load(loaded.shortcuts.value());
+
+    const auto f5Command = manager.FindFunctionBarCommand(VK_F5, 0u);
+    state.Require(f5Command.has_value() && f5Command.value() == kUnassignedCommandId,
+                  L"Plain F5 explicit unassignment should survive save/load and shortcut initialization.");
+
+    const auto ctrlInsertCommand = manager.FindFolderViewCommand(VK_INSERT, ShortcutManager::kModCtrl);
+    state.Require(ctrlInsertCommand.has_value() && ctrlInsertCommand.value() == kUnassignedCommandId,
+                  L"Ctrl+Insert explicit unassignment should survive save/load and shortcut initialization.");
+
+    const auto sentinelShortcut = manager.TryGetShortcutForCommand(kUnassignedCommandId);
+    state.Require(! sentinelShortcut.has_value(), L"The internal unassigned sentinel should not be exposed as a reverse shortcut after load.");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestSettingsStoreShortcutsViewStateRoundTrip(CaseState& state) noexcept
 {
     constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestShortcutsViewStateRoundTrip";
@@ -11585,6 +11773,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"settings_shortcuts_invalid_section_rejected", [](CaseState& state) noexcept {
         return TestSettingsStoreRejectsMalformedShortcutSection(state);
     });
+    SelfTest::RunCase(options, suite, L"settings_shortcuts_unassigned_sentinel_roundtrip", [](CaseState& state) noexcept {
+        return TestSettingsStoreShortcutUnassignedSentinelRoundTrip(state);
+    });
     SelfTest::RunCase(options, suite, L"settings_hot_reload_self_save_suppression", [=](CaseState& state) noexcept {
         return TestSettingsHotReloadSelfSaveSuppression(mainWindow, state);
     });
@@ -11604,6 +11795,12 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     });
     SelfTest::RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });
     SelfTest::RunCase(options, suite, L"shortcut_defaults_mapping", [](CaseState& state) noexcept { return TestShortcutDefaultsMapping(state); });
+    SelfTest::RunCase(options, suite, L"shortcut_defaults_restore_missing_f3_view", [](CaseState& state) noexcept {
+        return TestShortcutDefaultsRestoreMissingF3View(state);
+    });
+    SelfTest::RunCase(options, suite, L"shortcut_defaults_restore_missing_defaults_and_preserve_unassigned", [](CaseState& state) noexcept {
+        return TestShortcutDefaultsRestoreMissingDefaultsAndPreserveUnassigned(state);
+    });
     SelfTest::RunCase(options, suite, L"implemented_menu_labels_not_todo", [](CaseState& state) noexcept { return TestImplementedCommandMenuLabelsAreNotMarkedTodo(state); });
     SelfTest::RunCase(options, suite, L"pane_view_options_live_in_left_right_menus", [](CaseState& state) noexcept {
         return TestPaneViewOptionsLiveInLeftRightMenus(state);

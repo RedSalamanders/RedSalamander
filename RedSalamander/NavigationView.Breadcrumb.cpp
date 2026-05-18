@@ -31,6 +31,7 @@ void NavigationView::RenderPathSection()
 
     // Allow rendering background even without path
     _d2dContext->BeginDraw();
+    auto refreshActiveEditHost = wil::scope_exit([this] { RefreshActiveEditHostAfterParentPaint(); });
     auto endDraw = wil::scope_exit([&]
     {
         const HRESULT hrEnd = _d2dContext->EndDraw();

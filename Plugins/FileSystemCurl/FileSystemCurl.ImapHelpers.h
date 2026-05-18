@@ -42,4 +42,5 @@ struct ImapUidBatchRange
 [[nodiscard]] std::wstring BuildImapMessageLeafName(std::wstring_view subject, std::wstring_view from, uint64_t uid) noexcept;
 [[nodiscard]] bool TryParseImapMailboxStatus(std::string_view response, ImapMailboxStatus& out) noexcept;
 [[nodiscard]] std::vector<ImapUidBatchRange> BuildImapUidBatchRanges(size_t uidCount, size_t maxBatchSize);
+[[nodiscard]] size_t ResolveImapSummaryRepairFetchBudget(size_t requestedUidCount) noexcept;
 } // namespace FileSystemCurlInternal

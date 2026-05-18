@@ -93,6 +93,62 @@ Describe 'Test harness source contracts' {
         }
     }
 
+    It 'keeps IconCache association LRU perf emission outside the association cache lock helper' {
+        $source = Get-RSText -Path 'RedSalamander\IconCache.cpp'
+        $bodyMatch = [regex]::Match($source, 'EvictAssociationQueryBatch\(\)[\s\S]*?\n\}')
+        $bodyMatch.Success | Should Be $true
+        $bodyMatch.Value | Should Not Match 'PerfEmit'
+        $source | Should Match 'EmitAssociationLruEvictScanMetric'
+    }
+
+    It 'keeps FolderView thumbnail WIC factory ownership local to the processing thread' {
+        $header = Get-RSText -Path 'RedSalamander\FolderView.h'
+        $source = Get-RSText -Path 'RedSalamander\FolderView.Icons.cpp'
+
+        $header | Should Not Match '_thumbnailWicFactory'
+        $source | Should Match 'EnsureThumbnailWicFactory\(\s*wil::com_ptr<IWICImagingFactory>&'
+        $source | Should Match 'thumbnailWicFactory'
+    }
+
+    It 'keeps IMAP summary repair budget exhaustion local to the current repair pass' {
+        $source = Get-RSText -Path 'Plugins\FileSystemCurl\FileSystemCurl.Imap.cpp'
+        $bodyMatch = [regex]::Match($source, 'auto\s+repairMissingSummaries\s*=\s*\[[\s\S]*?return\s+repairResult;\s*\n\s*\};')
+        $bodyMatch.Success | Should Be $true
+
+        $bodyMatch.Value | Should Not Match 'kRepairBudgetExceededHr'
+        $bodyMatch.Value | Should Not Match 'tryConsumeRepairFetch[\s\S]*?noexcept'
+        $bodyMatch.Value | Should Match 'break;'
+    }
+
+    It 'clears FolderView incremental-search layout effects over the full DWrite label text' {
+        $source = Get-RSText -Path 'RedSalamander\FolderView.Interaction.cpp'
+        $bodyMatch = [regex]::Match($source, 'void\s+FolderView::ClearIncrementalSearchLayoutEffects\(\)\s+noexcept[\s\S]*?\n\}')
+        $bodyMatch.Success | Should Be $true
+        $bodyMatch.Value | Should Match 'item\.displayName'
+        $bodyMatch.Value | Should Not Match 'GetVisualDisplayName'
+    }
+
+    It 'matches FolderView incremental-search highlights against visual display names' {
+        $source = Get-RSText -Path 'RedSalamander\FolderView.Interaction.cpp'
+        $bodyMatch = [regex]::Match($source, 'void\s+FolderView::UpdateIncrementalSearchHighlightForFocusedItem\(\)[\s\S]*?\n\}')
+        $bodyMatch.Success | Should Be $true
+
+        $bodyMatch.Value | Should Match 'GetVisualDisplayName\(item\)'
+        $bodyMatch.Value | Should Not Match 'FindIncrementalSearchMatchOffset\(item\.displayName\)'
+    }
+
+    It 'cleans stale FolderView incremental-search drawing effects when search is inactive' {
+        $header = Get-RSText -Path 'RedSalamander\FolderView.h'
+        $rendering = Get-RSText -Path 'RedSalamander\FolderView.Rendering.cpp'
+        $interaction = Get-RSText -Path 'RedSalamander\FolderView.Interaction.cpp'
+
+        $header | Should Match '_incrementalSearchLayoutEffectsDirty'
+        $rendering | Should Match '_incrementalSearchLayoutEffectsDirty'
+        $rendering | Should Match 'ClearIncrementalSearchLayoutEffects\(\)'
+        $interaction | Should Match '_incrementalSearchLayoutEffectsDirty\s*=\s*true'
+        $interaction | Should Match '_incrementalSearchLayoutEffectsDirty\s*=\s*false'
+    }
+
     It 'exposes runner-native self-test case listing without executing case bodies' {
         $main = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
         $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
@@ -176,5 +232,24 @@ Describe 'Test harness source contracts' {
         $fileOpsSource | Should Match 'StartsWithIgnoreCase\(StepToString\(step\),\s*prefix\)'
         $fileOpsSource | Should Match 'selection\.activePhases\s*=\s*prefixMatches'
         $fileOpsSource | Should Match 'ResolveRunSelection\(filter\)\.recognized'
+    }
+
+    It 'keeps native DxUi text hosts compatible with Win32 edit text and selection messages' {
+        $windowHostSource = Get-RSText -Path 'Common\DxUi\DxUi.WindowHost.cpp'
+        $nativeTextInputSource = Get-RSText -Path 'Common\DxUi\DxUi.NativeTextInput.cpp'
+
+        $windowHostSource | Should Match 'case WM_GETTEXTLENGTH:'
+        $windowHostSource | Should Match 'case WM_GETTEXT:'
+        $windowHostSource | Should Match 'case WM_SETTEXT:'
+        $windowHostSource | Should Match 'case EM_GETSEL:'
+        $windowHostSource | Should Match 'case EM_SETSEL:'
+        $windowHostSource | Should Match 'case EM_REPLACESEL:'
+
+        $nativeTextInputSource | Should Match 'case WM_GETTEXTLENGTH:'
+        $nativeTextInputSource | Should Match 'case WM_GETTEXT:'
+        $nativeTextInputSource | Should Match 'case WM_SETTEXT:'
+        $nativeTextInputSource | Should Match 'case EM_GETSEL:'
+        $nativeTextInputSource | Should Match 'case EM_SETSEL:'
+        $nativeTextInputSource | Should Match 'case EM_REPLACESEL:'
     }
 }

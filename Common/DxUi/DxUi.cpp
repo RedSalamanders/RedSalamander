@@ -35,6 +35,27 @@ D2D1_RECT_F Control::GetHitBounds() const noexcept
     return _bounds;
 }
 
+std::optional<D2D1_RECT_F> Control::TryGetTextInputViewportRect() const noexcept
+{
+    return GetTextInputViewportRect();
+}
+
+std::optional<D2D1_RECT_F> Control::TryGetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept
+{
+    return GetTextInputCaretRect(host, controlTextIndex);
+}
+
+std::optional<std::vector<D2D1_RECT_F>> Control::TryGetTextInputRangeRects(
+    const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const
+{
+    return GetTextInputRangeRects(host, controlTextStartIndex, controlTextEndIndex);
+}
+
+std::optional<size_t> Control::TryHitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept
+{
+    return HitTestTextInputPoint(host, point);
+}
+
 void Control::SetVisible(bool visible) noexcept
 {
     if (_visible != visible)
@@ -54,6 +75,7 @@ void Control::SetEnabled(bool enabled) noexcept
     if (_enabled != enabled)
     {
         _enabled = enabled;
+        OnEnabledChanged(enabled);
         RequestInvalidate();
     }
 }
@@ -123,6 +145,11 @@ bool Control::OnMouseWheel(WindowHost& /*host*/, D2D1_POINT_2F /*point*/, float 
 }
 
 bool Control::OnKeyDown(WindowHost& /*host*/, UINT /*virtualKey*/, UINT /*modifiers*/)
+{
+    return false;
+}
+
+bool Control::OnKeyUp(WindowHost& /*host*/, UINT /*virtualKey*/, UINT /*modifiers*/)
 {
     return false;
 }
@@ -324,6 +351,20 @@ std::wstring_view Control::GetAccessibleName() const noexcept
     return _accessibleName;
 }
 
+void Control::SetAccessibleHelpText(std::wstring helpText)
+{
+    if (_accessibleHelpText != helpText)
+    {
+        _accessibleHelpText = std::move(helpText);
+        RequestInvalidate();
+    }
+}
+
+std::wstring_view Control::GetAccessibleHelpText() const noexcept
+{
+    return _accessibleHelpText;
+}
+
 void Control::SetOnContextMenu(std::function<void(POINT screenPoint, bool keyboardInvocation)> onContextMenu)
 {
     _onContextMenu = std::move(onContextMenu);
@@ -402,12 +443,24 @@ void Control::OnBoundsChanged() noexcept
 
 void Control::OnFlowDirectionChanged() noexcept
 {
+    if (_host && _host->GetFocusControl() == this && SupportsTextInput())
+    {
+        _host->SyncTextInput(this);
+    }
     RequestInvalidate();
 }
 
 void Control::OnDensityChanged() noexcept
 {
+    if (_host && _host->GetFocusControl() == this && SupportsTextInput())
+    {
+        _host->SyncTextInput(this);
+    }
     RequestInvalidate();
+}
+
+void Control::OnEnabledChanged(bool /*enabled*/) noexcept
+{
 }
 
 void Control::OnHostDpiChanged(WindowHost& /*host*/) noexcept
@@ -428,27 +481,38 @@ void Control::OnCaptureLost(WindowHost& /*host*/)
 {
 }
 
-bool Control::SupportsTextInputBridge() const noexcept
+bool Control::SupportsTextInput() const noexcept
 {
     return false;
 }
 
-std::optional<D2D1_RECT_F> Control::GetTextInputBridgeViewportRect() const noexcept
+std::optional<D2D1_RECT_F> Control::GetTextInputViewportRect() const noexcept
 {
     return std::nullopt;
 }
 
-std::optional<D2D1_RECT_F> Control::GetTextInputBridgeCaretRect(const WindowHost& /*host*/, size_t /*controlTextIndex*/) const noexcept
+std::optional<D2D1_RECT_F> Control::GetTextInputCaretRect(const WindowHost& /*host*/, size_t /*controlTextIndex*/) const noexcept
 {
     return std::nullopt;
 }
 
-bool Control::ExportTextInputBridgeState(TextInputBridgeState& /*outState*/) const
+std::optional<std::vector<D2D1_RECT_F>> Control::GetTextInputRangeRects(
+    const WindowHost& /*host*/, size_t /*controlTextStartIndex*/, size_t /*controlTextEndIndex*/) const
+{
+    return std::nullopt;
+}
+
+std::optional<size_t> Control::HitTestTextInputPoint(const WindowHost& /*host*/, D2D1_POINT_2F /*point*/) const noexcept
+{
+    return std::nullopt;
+}
+
+bool Control::ExportTextInputState(TextInputState& /*outState*/) const
 {
     return false;
 }
 
-bool Control::ImportTextInputBridgeState(WindowHost& /*host*/, const TextInputBridgeState& /*state*/, bool /*notifyChange*/)
+bool Control::ImportTextInputState(WindowHost& /*host*/, const TextInputState& /*state*/, bool /*notifyChange*/)
 {
     return false;
 }

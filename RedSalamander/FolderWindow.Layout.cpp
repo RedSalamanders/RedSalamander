@@ -278,25 +278,10 @@ void FolderWindow::ApplyTheme(const AppTheme& theme)
         _functionBar.SetTheme(_theme);
     }
 
-    if (_hCommandLineEdit)
+    if (_hCommandLineHost)
     {
-        if (_theme.highContrast)
-        {
-            SetWindowTheme(_hCommandLineEdit.get(), L"", nullptr);
-        }
-        else if (_theme.dark)
-        {
-            SetWindowTheme(_hCommandLineEdit.get(), L"DarkMode_Explorer", nullptr);
-        }
-        else
-        {
-            SetWindowTheme(_hCommandLineEdit.get(), L"Explorer", nullptr);
-        }
-    }
-
-    if (_hCommandLineLabel)
-    {
-        InvalidateRect(_hCommandLineLabel.get(), nullptr, TRUE);
+        _commandLineHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+        _commandLineHost.Invalidate();
     }
 
     ApplyFileOperationsTheme();
@@ -535,15 +520,12 @@ void FolderWindow::AdjustChildWindows()
     items[11].hwnd = _rightPane.hPreviewContent.get();
     items[11].rect = _rightPreviewContentRect;
     items[11].visible = rightPreviewSelected;
-    items[12].hwnd = _hCommandLineLabel.get();
-    items[12].rect = _commandLineLabelRect;
+    items[12].hwnd = _hCommandLineHost.get();
+    items[12].rect = _commandLineRect;
     items[12].visible = _commandLineVisible;
-    items[13].hwnd = _hCommandLineEdit.get();
-    items[13].rect = _commandLineEditRect;
-    items[13].visible = _commandLineVisible;
-    items[14].hwnd = _functionBar.GetHwnd();
-    items[14].rect = _functionBarRect;
-    items[14].visible = _functionBarVisible;
+    items[13].hwnd = _functionBar.GetHwnd();
+    items[13].rect = _functionBarRect;
+    items[13].visible = _functionBarVisible;
 
     int moveCount = 0;
     for (const auto& item : items)
@@ -607,6 +589,32 @@ void FolderWindow::AdjustChildWindows()
         MoveWindow(item.hwnd, rect.left, rect.top, w, h, TRUE);
         ShowWindow(item.hwnd, item.visible ? SW_SHOWNA : SW_HIDE);
     }
+}
+
+void FolderWindow::UpdateCommandLineHostLayout() noexcept
+{
+    if (! _hCommandLineHost || ! _commandLineLabel || ! _commandLineField)
+    {
+        return;
+    }
+
+    const auto toDip = [this](LONG valuePx) noexcept
+    {
+        return _commandLineHost.PixelsToDip(static_cast<float>(valuePx));
+    };
+
+    const LONG hostLeft = _commandLineRect.left;
+    const LONG hostTop  = _commandLineRect.top;
+
+    _commandLineLabel->SetBounds(D2D1::RectF(toDip(_commandLineLabelRect.left - hostLeft),
+                                             toDip(_commandLineLabelRect.top - hostTop),
+                                             toDip(_commandLineLabelRect.right - hostLeft),
+                                             toDip(_commandLineLabelRect.bottom - hostTop)));
+    _commandLineField->SetBounds(D2D1::RectF(toDip(_commandLineEditRect.left - hostLeft),
+                                             toDip(_commandLineEditRect.top - hostTop),
+                                             toDip(_commandLineEditRect.right - hostLeft),
+                                             toDip(_commandLineEditRect.bottom - hostTop)));
+    _commandLineHost.Invalidate();
 }
 
 void FolderWindow::UpdateFilterBarLayout(Pane pane) noexcept

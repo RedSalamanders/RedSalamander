@@ -66,14 +66,30 @@ void LoadBindings(const std::vector<Common::Settings::ShortcutBinding>& bindings
         {
             continue;
         }
-        const uint32_t key        = ShortcutManager::MakeChordKey(binding.vk, binding.modifiers);
-        const auto [it, inserted] = outMap.try_emplace(key, binding.commandId);
+        const uint32_t key                         = ShortcutManager::MakeChordKey(binding.vk, binding.modifiers);
+        const std::wstring_view canonicalCommandId = CanonicalizeCommandId(binding.commandId);
+        const bool isUnassigned                    = ShortcutIds::IsUnassignedCommandId(canonicalCommandId);
+        const auto [it, inserted]                  = outMap.try_emplace(key, binding.commandId);
         if (! inserted)
         {
-            outConflicts.push_back(key);
+            const bool existingUnassigned = ShortcutIds::IsUnassignedCommandId(CanonicalizeCommandId(it->second));
+            if (existingUnassigned && ! isUnassigned)
+            {
+                it->second = binding.commandId;
+            }
+            else
+            {
+                if (! isUnassigned)
+                {
+                    outConflicts.push_back(key);
+                }
+                continue;
+            }
+        }
+        if (isUnassigned)
+        {
             continue;
         }
-        const std::wstring_view canonicalCommandId = CanonicalizeCommandId(binding.commandId);
         const auto [reverseIt, reverseInserted]    = outReverseMap.try_emplace(std::wstring(canonicalCommandId), key);
         if (! reverseInserted && PreferShortcutReverseLookupKey(key, reverseIt->second))
         {
@@ -148,6 +164,10 @@ std::optional<ShortcutManager::ShortcutChord> ShortcutManager::TryGetShortcutFor
     }
 
     commandId = CanonicalizeCommandId(commandId);
+    if (ShortcutIds::IsUnassignedCommandId(commandId))
+    {
+        return std::nullopt;
+    }
 
     const auto findIn = [&](const std::unordered_map<std::wstring, uint32_t>& bindings) -> std::optional<ShortcutChord>
     {

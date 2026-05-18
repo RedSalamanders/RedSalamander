@@ -986,6 +986,10 @@ void FunctionBar::RecomputeLabels()
         {
             continue;
         }
+        if (ShortcutIds::IsUnassignedCommandId(CanonicalizeCommandId(commandOpt.value())))
+        {
+            continue;
+        }
 
         std::wstring label;
         if (const std::optional<unsigned int> shortDisplayNameId = TryGetCommandShortDisplayNameStringId(commandOpt.value()))

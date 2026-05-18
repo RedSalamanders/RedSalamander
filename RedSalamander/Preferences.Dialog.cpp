@@ -3121,7 +3121,7 @@ void LogPreferencesPageHostState(HWND host, const PreferencesDialogState& state,
         GetDxHostDebugWidthPx(hostState._pageHostHost),
         GetDxHostDebugHeightPx(hostState._pageHostHost),
         static_cast<const void*>(hostState._pageHostHost.GetFocusControl()),
-        hostState._pageHostHost.HasActiveTextInputBridge() ? L"true" : L"false",
+        hostState._pageHostHost.HasActiveTextInput() ? L"true" : L"false",
         wrapperChildren,
         state.pageHostUsesDxUi ? L"true" : L"false");
 }

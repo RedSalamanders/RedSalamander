@@ -54,6 +54,7 @@
 #include "EtwListener.h"
 #include "ExceptionHelpers.h" // Shared exception handling utilities
 #include "LocalizationManager.h"
+#include "MinimumOsVersion.h"
 #include "MonitorDiagnostics.h"
 #include "RedSalamanderMonitor.h"
 #include "SettingsStore.h"
@@ -2566,7 +2567,7 @@ static void InitializeDpiAwareness()
     OutputDebugStringA("Attempting to set DPI awareness programmatically\n");
 #endif
 
-    // Try the modern API first (Windows 10 1703+)
+    // Try the DPI-specific API first on the supported Windows 11 baseline.
     if (SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
     {
 #ifdef _DEBUG
@@ -2907,6 +2908,11 @@ void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionNam
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE /*hPrevInstance*/, _In_ LPWSTR /*lpCmdLine*/, _In_ int nCmdShow)
 {
+    if (! Common::MinimumOsVersion::EnsureCurrentWindowsVersionSupported(nullptr))
+    {
+        return 1;
+    }
+
     // Use SEH to catch all exceptions (no C++ objects in this scope)
     __try
     {

@@ -214,11 +214,13 @@ Environment variables may select alternate test inputs such as profile names, bu
   HWND, such as a dialog category tree, does not require a DxUi host's retained
   focus target to become `None` when the retained control still belongs to that
   host.
-- UI self-tests that send native edit messages to a DxUi text-input bridge must
+- UI self-tests that send native edit messages to a DxUi text-input target must
   wait for both the retained DxUi text-field focus and a valid focused Win32
   input target after any deferred rebuild, search refresh, or list rebind. A
-  matching retained focus target alone is not enough evidence that the hidden
-  native bridge is ready to receive `EM_SETSEL`/`EM_REPLACESEL`.
+  matching retained focus target alone is not enough evidence that native
+  `WM_CHAR` / edit-message routing is ready to receive input; tests that probe
+  compatibility `EM_SETSEL` / `EM_REPLACESEL` paths must drive the native DxUi
+  host target and retained text session directly.
 - UI self-test debug snapshots that expose a single `focusTarget` field and use
   it to drive keyboard input must report the active native-focus owner, not a
   retained-only DxUi control from a host that no longer owns native focus.
@@ -269,9 +271,12 @@ For command selftests that validate real pointer interaction on DxUi controls:
 ## NavigationView DxUi Text-Host Validation
 
 For command selftests that validate NavigationView address-bar edit mode or full-path popup edit mode:
-- `NavigationViewDebugSnapshot` is the authoritative contract for edit visibility, focus target, current edit text, selection range, and the active DxUi host/bridge HWNDs,
-- tests must not enumerate descendant native `Edit` / `RICHEDIT50W` windows to prove edit mode, because NavigationView no longer exposes a visible native edit child and the hidden bridge is an implementation detail behind the DxUi host.
+- `NavigationViewDebugSnapshot` is the authoritative contract for edit visibility, focus target, current edit text, selection range, `currentEditUsesNativeTextInput`, `currentEditHostHwnd`, the active backend-neutral `currentEditInputHwnd`, caret screen rectangle validity/coordinates, and active composition start/end state,
+- tests must not enumerate descendant native `Edit` / `RICHEDIT50W` windows to prove edit mode, because NavigationView no longer exposes a visible native edit child and no longer installs NavigationView policy on a hidden child edit surface.
+- path-region keyboard activation selftests must verify active native IME composition owns Enter/Escape/Tab before NavigationView submit/cancel/tab policy runs.
+- edit-suggest keyboard-routing selftests must verify active native IME composition owns Up/Down before NavigationView suggestion-selection policy runs, so candidate/navigation keys do not change edit-suggest selection while composing.
 - address-bar edit clipboard coverage must verify the focused DxUi host remains active and pane-level Select All, Copy, and Paste commands mutate/copy the edit text instead of falling through to FolderView command handling.
+- invalid-path validation coverage must assert edit mode remains active and `NavigationViewDebugSnapshot::currentEditHelpText` exposes the rejected path text through the retained DxUi `TextField` HelpText contract.
 - NavigationView pointer and region-keyboard selftests must not inherit the
   navigation-bar visibility left by earlier commands. Before using hit-test
   rectangles or `DebugFocusNavigationViewRegion(...)`, they must snapshot the

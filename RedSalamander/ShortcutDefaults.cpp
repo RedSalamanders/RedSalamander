@@ -30,6 +30,57 @@ void MigrateDeprecatedShortcutCommandIds(std::vector<Common::Settings::ShortcutB
     }
 }
 
+[[nodiscard]] bool SameChord(const Common::Settings::ShortcutBinding& binding, uint32_t vk, uint32_t modifiers) noexcept
+{
+    return binding.vk == vk && (binding.modifiers & 0x7u) == (modifiers & 0x7u);
+}
+
+[[nodiscard]] Common::Settings::ShortcutBinding* FindBindingByChord(std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                                                    uint32_t vk,
+                                                                    uint32_t modifiers) noexcept
+{
+    for (Common::Settings::ShortcutBinding& binding : bindings)
+    {
+        if (SameChord(binding, vk, modifiers))
+        {
+            return &binding;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] bool IsDefaultBindingIn(const std::vector<Common::Settings::ShortcutBinding>& defaults,
+                                      const Common::Settings::ShortcutBinding& binding) noexcept
+{
+    for (const Common::Settings::ShortcutBinding& defaultBinding : defaults)
+    {
+        if (SameChord(binding, defaultBinding.vk, defaultBinding.modifiers) && binding.commandId == defaultBinding.commandId)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void RestoreMissingDefaultBindings(std::vector<Common::Settings::ShortcutBinding>& bindings,
+                                   const std::vector<Common::Settings::ShortcutBinding>& defaults)
+{
+    for (const Common::Settings::ShortcutBinding& defaultBinding : defaults)
+    {
+        Common::Settings::ShortcutBinding* existing = FindBindingByChord(bindings, defaultBinding.vk, defaultBinding.modifiers);
+        if (! existing)
+        {
+            bindings.push_back(defaultBinding);
+            continue;
+        }
+
+        if (existing->commandId.empty())
+        {
+            existing->commandId = defaultBinding.commandId;
+        }
+    }
+}
+
 using NormalizedBinding = std::tuple<uint32_t, uint32_t, std::wstring>;
 
 [[nodiscard]] uint32_t VkFromScanCode(uint32_t scanCode) noexcept
@@ -262,6 +313,18 @@ bool ShortcutDefaults::AreShortcutsDefault(const Common::Settings::ShortcutsSett
            GridLayoutEqual(shortcuts.gridLayout, defaults.gridLayout);
 }
 
+bool ShortcutDefaults::IsDefaultFunctionBarBinding(const Common::Settings::ShortcutBinding& binding)
+{
+    const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
+    return IsDefaultBindingIn(defaults.functionBar, binding);
+}
+
+bool ShortcutDefaults::IsDefaultFolderViewBinding(const Common::Settings::ShortcutBinding& binding)
+{
+    const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
+    return IsDefaultBindingIn(defaults.folderView, binding);
+}
+
 void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& settings)
 {
     if (! settings.shortcuts.has_value())
@@ -274,29 +337,7 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     MigrateDeprecatedShortcutCommandIds(shortcuts.functionBar);
     MigrateDeprecatedShortcutCommandIds(shortcuts.folderView);
 
-    auto findFunctionBarBinding = [&](uint32_t vk, uint32_t modifiers) noexcept -> Common::Settings::ShortcutBinding*
-    {
-        for (auto& binding : shortcuts.functionBar)
-        {
-            if (binding.vk == vk && (binding.modifiers & 0x7u) == modifiers)
-            {
-                return &binding;
-            }
-        }
-        return nullptr;
-    };
-
-    const bool hasF1NoneBinding =
-        std::any_of(shortcuts.functionBar.begin(), shortcuts.functionBar.end(), [](const Common::Settings::ShortcutBinding& binding) noexcept {
-        return binding.vk == static_cast<uint32_t>(VK_F1) && (binding.modifiers & 0x7u) == 0u && ! binding.commandId.empty();
-    });
-
-    if (! hasF1NoneBinding)
-    {
-        AddBinding(shortcuts.functionBar, VK_F1, 0, L"cmd/app/showShortcuts");
-    }
-
-    Common::Settings::ShortcutBinding* ctrlF2 = findFunctionBarBinding(VK_F2, ShortcutManager::kModCtrl);
+    Common::Settings::ShortcutBinding* ctrlF2 = FindBindingByChord(shortcuts.functionBar, VK_F2, ShortcutManager::kModCtrl);
     if (! ctrlF2)
     {
         AddBinding(shortcuts.functionBar, VK_F2, ShortcutManager::kModCtrl, L"cmd/pane/sort/none");
@@ -306,186 +347,7 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
         ctrlF2->commandId = L"cmd/pane/sort/none";
     }
 
-    if (! findFunctionBarBinding(VK_F8, ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.functionBar, VK_F8, ShortcutManager::kModCtrl, L"cmd/pane/changeAttributes");
-    }
-
-    auto findFolderViewBinding = [&](uint32_t vk, uint32_t modifiers) noexcept -> Common::Settings::ShortcutBinding*
-    {
-        for (auto& binding : shortcuts.folderView)
-        {
-            if (binding.vk == vk && (binding.modifiers & 0x7u) == modifiers)
-            {
-                return &binding;
-            }
-        }
-        return nullptr;
-    };
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('U'), ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('U'), ShortcutManager::kModCtrl, L"cmd/app/swapPanes");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('2'), ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('2'), ShortcutManager::kModAlt, L"cmd/pane/display/brief");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('3'), ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('3'), ShortcutManager::kModAlt, L"cmd/pane/display/detailed");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('4'), ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('4'), ShortcutManager::kModAlt, L"cmd/pane/display/extraDetailed");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('5'), ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('5'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/toggleThumbnails");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('6'), ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('6'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/togglePreviewPane");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('A'), ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('F'), ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('F'), ShortcutManager::kModCtrl, L"cmd/pane/find");
-    }
-
-    if (! findFolderViewBinding(VK_ESCAPE, 0u))
-    {
-        AddBinding(shortcuts.folderView, VK_ESCAPE, 0u, L"cmd/pane/selection/unselectAll");
-    }
-
-    const uint32_t selectVk = DefaultSelectDialogVk();
-    if (! findFolderViewBinding(selectVk, ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, selectVk, ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
-    }
-
-    if (! findFolderViewBinding(selectVk, ShortcutManager::kModCtrl | ShortcutManager::kModShift))
-    {
-        AddBinding(shortcuts.folderView, selectVk, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/selectSameExtension");
-    }
-
-    const uint32_t unselectVk = DefaultUnselectDialogVk();
-    if (! findFolderViewBinding(unselectVk, ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, unselectVk, ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
-    }
-
-    if (! findFolderViewBinding(unselectVk, ShortcutManager::kModCtrl | ShortcutManager::kModShift))
-    {
-        AddBinding(shortcuts.folderView, unselectVk, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/unselectSameExtension");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('C'), ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('V'), ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('V'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardPaste");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('L'), ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('L'), ShortcutManager::kModCtrl, L"cmd/pane/focusAddressBar");
-    }
-
-    if (! findFolderViewBinding(VK_OEM_PERIOD, ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, VK_OEM_PERIOD, ShortcutManager::kModCtrl, L"cmd/pane/setPathFromOtherPane");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('J'), ShortcutManager::kModCtrl))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('J'), ShortcutManager::kModCtrl, L"cmd/app/toggleFileOperationsFailedItems");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('D'), ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('D'), ShortcutManager::kModAlt, L"cmd/pane/focusAddressBar");
-    }
-
-    if (! findFolderViewBinding(VK_DOWN, ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, VK_DOWN, ShortcutManager::kModAlt, L"cmd/pane/selection/goToNextSelectedName");
-    }
-
-    if (! findFolderViewBinding(VK_UP, ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, VK_UP, ShortcutManager::kModAlt, L"cmd/pane/selection/goToPreviousSelectedName");
-    }
-
-    if (! findFolderViewBinding(VK_BACK, ShortcutManager::kModShift))
-    {
-        AddBinding(shortcuts.folderView, VK_BACK, ShortcutManager::kModShift, L"cmd/pane/goRootDirectory");
-    }
-
-    if (! findFolderViewBinding(VK_LEFT, ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, VK_LEFT, ShortcutManager::kModAlt, L"cmd/pane/historyBack");
-    }
-
-    if (! findFolderViewBinding(VK_RIGHT, ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/historyForward");
-    }
-
-    if (! findFolderViewBinding(static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>('T'), ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/openCommandShell");
-    }
-
-    if (! findFolderViewBinding(VK_OEM_2, ShortcutManager::kModAlt))
-    {
-        AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt, L"cmd/app/about");
-    }
-
-    if (! findFolderViewBinding(VK_OEM_2, ShortcutManager::kModAlt | ShortcutManager::kModShift))
-    {
-        AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/app/about");
-    }
-
-    for (wchar_t driveLetter = L'A'; driveLetter <= L'Z'; ++driveLetter)
-    {
-        if (findFolderViewBinding(static_cast<uint32_t>(driveLetter), ShortcutManager::kModShift))
-        {
-            continue;
-        }
-
-        std::wstring commandId = L"cmd/pane/goDriveRoot/";
-        commandId.push_back(driveLetter);
-        AddBinding(shortcuts.folderView, static_cast<uint32_t>(driveLetter), ShortcutManager::kModShift, commandId);
-    }
-
-    // Ensure hot path shortcuts exist.
-    for (int i = 0; i < 10; ++i)
-    {
-        const wchar_t digit = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
-        const uint32_t vk   = static_cast<uint32_t>(digit);
-
-        if (! findFolderViewBinding(vk, ShortcutManager::kModCtrl))
-        {
-            AddBinding(shortcuts.folderView, vk, ShortcutManager::kModCtrl, std::wstring(L"cmd/pane/hotPath/") + digit);
-        }
-
-        if (! findFolderViewBinding(vk, ShortcutManager::kModCtrl | ShortcutManager::kModShift))
-        {
-            AddBinding(shortcuts.folderView, vk, ShortcutManager::kModCtrl | ShortcutManager::kModShift, std::wstring(L"cmd/pane/setHotPath/") + digit);
-        }
-    }
+    const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
+    RestoreMissingDefaultBindings(shortcuts.functionBar, defaults.functionBar);
+    RestoreMissingDefaultBindings(shortcuts.folderView, defaults.folderView);
 }

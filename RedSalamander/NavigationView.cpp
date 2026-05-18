@@ -309,6 +309,30 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hwnd)); break;
         case WM_ERASEBKGND: return 1;
         case WM_PAINT: OnPaint(); return 0;
+        case WM_SETREDRAW:
+        {
+            const LRESULT result = DefWindowProcW(hwnd, msg, wp, lp);
+            if (wp != FALSE)
+            {
+                RefreshActiveEditHostAfterParentPaint();
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return result;
+        }
+        case WM_SHOWWINDOW:
+            if (wp != FALSE)
+            {
+                RefreshActiveEditHostAfterParentPaint();
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        case WM_DISPLAYCHANGE:
+        case WM_SETTINGCHANGE:
+        case WM_THEMECHANGED:
+            ApplyDxEditHostThemes();
+            RefreshActiveEditHostAfterParentPaint();
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
         case WM_DPICHANGED_AFTERPARENT: OnDpiChanged(static_cast<float>(GetDpiForWindow(hwnd))); return 0;
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
         case WM_COMMAND: OnCommand(LOWORD(wp), reinterpret_cast<HWND>(lp), HIWORD(wp)); return 0;
@@ -481,6 +505,7 @@ void NavigationView::OnDestroy()
 
     CloseFullPathPopup();
     CloseEditSuggestPopup();
+    CloseEditValidationPopup();
 
     if (_editSuggestThread.joinable())
     {
@@ -531,6 +556,7 @@ void NavigationView::OnPaint()
         {
             _deferredInitPosted = PostMessageW(_hWnd.get(), WndMsg::kNavigationViewDeferredInit, 0, 0) != 0;
         }
+        RefreshActiveEditHostAfterParentPaint();
         return;
     }
 
@@ -948,11 +974,14 @@ void NavigationView::SetPaneFocused(bool focused) noexcept
 
     _paneFocused = focused;
     UpdateEffectiveTheme();
+    ApplyDxEditHostThemes();
 
     if (_d2dContext)
     {
         EnsureD2DResources();
     }
+
+    RefreshActiveEditHostAfterParentPaint();
 
     if (_hWnd)
     {
@@ -971,7 +1000,23 @@ void NavigationView::UpdatePathEditHostLayout() noexcept
     const auto chrome     = ComputeEditChromeRects(editBounds, _dpi);
     const int hostWidth   = static_cast<int>((std::max)(0L, chrome.editRect.right - chrome.editRect.left));
     const int hostHeight  = static_cast<int>((std::max)(0L, chrome.editRect.bottom - chrome.editRect.top));
-    SetWindowPos(_pathEdit->hwnd.get(), nullptr, chrome.editRect.left, chrome.editRect.top, hostWidth, hostHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(_pathEdit->hwnd.get(),
+                 nullptr,
+                 chrome.editRect.left,
+                 chrome.editRect.top,
+                 hostWidth,
+                 hostHeight,
+                 SWP_NOZORDER | SWP_NOACTIVATE | (_editMode ? SWP_SHOWWINDOW : 0u));
+
+    if (_editMode)
+    {
+        RefreshActiveEditHostAfterParentPaint();
+    }
+
+    if (_pathEdit->field && ! _pathEdit->field->GetAccessibleHelpText().empty())
+    {
+        UpdateEditValidationPopupWindow(*_pathEdit);
+    }
 }
 
 void NavigationView::UpdateFullPathPopupEditHostLayout() noexcept
@@ -986,6 +1031,11 @@ void NavigationView::UpdateFullPathPopupEditHostLayout() noexcept
     const int hostWidth  = static_cast<int>((std::max)(0L, rc.right - rc.left));
     const int hostHeight = static_cast<int>((std::max)(0L, rc.bottom - rc.top));
     SetWindowPos(_fullPathPopupEdit->hwnd.get(), nullptr, rc.left, rc.top, hostWidth, hostHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (_fullPathPopupEdit->field && ! _fullPathPopupEdit->field->GetAccessibleHelpText().empty())
+    {
+        UpdateEditValidationPopupWindow(*_fullPathPopupEdit);
+    }
 }
 
 void NavigationView::ApplyDxEditHostThemes() noexcept
@@ -1100,6 +1150,18 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
         out.editSuggestSelectedIndex   = _editSuggestSelectedIndex;
         out.editSuggestPopupClientSize = _editSuggestPopupClientSize;
     }
+    if (_editValidationPopup && IsWindowVisible(_editValidationPopup.get()) != FALSE)
+    {
+        out.currentEditValidationPopupVisible = true;
+        out.currentEditValidationPopupHwnd    = _editValidationPopup.get();
+        out.currentEditValidationPopupRoundedRegion = _editValidationPopupRoundedRegion;
+        out.currentEditValidationPopupUsesFluentIcon = _editValidationPopupIconUsesFluent;
+        out.currentEditValidationPopupIconGlyph = _editValidationPopupIconGlyph;
+        if (GetWindowRect(_editValidationPopup.get(), &out.currentEditValidationPopupScreenRect) == FALSE)
+        {
+            out.currentEditValidationPopupScreenRect = _editValidationPopupScreenRect;
+        }
+    }
     if (_currentPath.has_value())
     {
         out.currentPathText = _currentPath->wstring();
@@ -1129,11 +1191,41 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
         text.resize(static_cast<size_t>(copied));
     };
 
+    const auto captureCurrentEditDiagnostics = [&out](const NavigationDxTextHost& textHost) noexcept
+    {
+        out.currentEditHostHwnd            = textHost.hwnd.get();
+        out.currentEditInputHwnd           = textHost.GetTextInputHwnd();
+        out.currentEditUsesNativeTextInput = textHost.host.GetTextInputBackend() == RedSalamander::DxUi::TextInputBackend::Native;
+        if (textHost.field)
+        {
+            out.currentEditHelpText.assign(textHost.field->GetAccessibleHelpText());
+        }
+
+        D2D1_RECT_F caretRectDip{};
+        RECT caretScreenRectPx{};
+        if (textHost.host.DebugGetNativeTextInputCaretRect(caretRectDip, caretScreenRectPx))
+        {
+            out.currentEditCaretScreenRectValid = true;
+            out.currentEditCaretScreenRect      = caretScreenRectPx;
+        }
+
+        RedSalamander::DxUi::NativeTextInputState nativeState{};
+        if (textHost.host.DebugGetNativeTextInputState(nativeState) && nativeState.compositionStartIndex.has_value() &&
+            nativeState.compositionEndIndex.has_value())
+        {
+            out.currentEditHasActiveComposition = true;
+            out.currentEditCompositionStart     = nativeState.compositionStartIndex.value();
+            out.currentEditCompositionEnd       = nativeState.compositionEndIndex.value();
+        }
+    };
+
     if (_pathEdit && _pathEdit->field && _pathEdit->hwnd && IsWindowVisible(_pathEdit->hwnd.get()) != FALSE)
     {
         out.currentEditText.assign(_pathEdit->field->GetText());
-        out.currentEditHostHwnd   = _pathEdit->hwnd.get();
-        out.currentEditBridgeHwnd = _pathEdit->GetBridgeHwnd();
+        captureCurrentEditDiagnostics(*_pathEdit);
+        const size_t caretIndex       = std::min(_pathEdit->field->GetCaretIndex(), out.currentEditText.size());
+        out.currentEditSelectionStart = caretIndex;
+        out.currentEditSelectionEnd   = caretIndex;
         if (const auto selection = _pathEdit->field->GetSelectionRange(); selection.has_value())
         {
             out.currentEditHasSelection   = true;
@@ -1162,8 +1254,10 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     if (_fullPathPopupEdit && _fullPathPopupEdit->field && _fullPathPopupEdit->hwnd && IsWindowVisible(_fullPathPopupEdit->hwnd.get()) != FALSE)
     {
         out.currentEditText.assign(_fullPathPopupEdit->field->GetText());
-        out.currentEditHostHwnd   = _fullPathPopupEdit->hwnd.get();
-        out.currentEditBridgeHwnd = _fullPathPopupEdit->GetBridgeHwnd();
+        captureCurrentEditDiagnostics(*_fullPathPopupEdit);
+        const size_t caretIndex       = std::min(_fullPathPopupEdit->field->GetCaretIndex(), out.currentEditText.size());
+        out.currentEditSelectionStart = caretIndex;
+        out.currentEditSelectionEnd   = caretIndex;
         if (const auto selection = _fullPathPopupEdit->field->GetSelectionRange(); selection.has_value())
         {
             out.currentEditHasSelection   = true;
@@ -1188,7 +1282,7 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
 
     const HWND focused = GetFocus();
     if (_pathEdit && _pathEdit->hwnd && focused &&
-        (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetBridgeHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE))
+        (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetTextInputHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE))
     {
         out.focusTarget = NavigationViewDebugFocusTarget::PathEdit;
         return true;
@@ -1201,7 +1295,7 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     }
 
     if (_fullPathPopupEdit && _fullPathPopupEdit->hwnd && focused &&
-        (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetBridgeHwnd() ||
+        (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetTextInputHwnd() ||
          IsChild(_fullPathPopupEdit->hwnd.get(), focused) != FALSE))
     {
         out.focusTarget = NavigationViewDebugFocusTarget::FullPathPopupEdit;

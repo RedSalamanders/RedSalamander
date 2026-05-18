@@ -1,10 +1,12 @@
 #include "NavigationViewInternal.h"
 
+#include "DxUi/DxUi.Typography.h"
 #include <windowsx.h>
 
 #include "ConnectionSecrets.h"
 #include "DirectoryInfoCache.h"
 #include "FileSystemPluginManager.h"
+#include "FluentIcons.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "IconCache.h"
@@ -21,6 +23,17 @@ namespace
 {
 constexpr wchar_t kNavigationEditOriginalWndProcProp[] = L"RS.NavigationView.Edit.OriginalWndProc";
 constexpr wchar_t kNavigationEditOwnerProp[]           = L"RS.NavigationView.Edit.Owner";
+constexpr UINT kDxUiModifierAlt                        = 0x0100u;
+constexpr int kValidationPopupPreferredWidthDip        = 420;
+constexpr int kValidationPopupMinWidthDip              = 280;
+constexpr int kValidationPopupMinHeightDip             = 36;
+constexpr int kValidationPopupMarginDip                = 8;
+constexpr int kValidationPopupGapDip                   = 2;
+constexpr int kValidationPopupPaddingXDip              = 10;
+constexpr int kValidationPopupPaddingYDip              = 7;
+constexpr int kValidationPopupIconSizeDip              = 16;
+constexpr int kValidationPopupIconGapDip               = 8;
+constexpr int kValidationPopupCornerRadiusDip          = 6;
 
 [[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
 {
@@ -77,6 +90,95 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
     const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp);
     return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
 }
+
+[[nodiscard]] UINT32 ClampTextLengthForDWrite(std::wstring_view text) noexcept
+{
+    return static_cast<UINT32>(std::min(text.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
+}
+
+[[nodiscard]] wil::com_ptr<IDWriteTextFormat> CreateValidationPopupTextFormat(IDWriteFactory* dwriteFactory, UINT dpi) noexcept
+{
+    if (! dwriteFactory)
+    {
+        return {};
+    }
+
+    const float textSizeDip = static_cast<float>(MulDiv(13, static_cast<int>(std::max<UINT>(USER_DEFAULT_SCREEN_DPI, dpi)), USER_DEFAULT_SCREEN_DPI));
+    wil::com_ptr<IDWriteTextFormat> format;
+    const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+        dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(textSizeDip), format.put(), L"");
+    if (FAILED(hr) || ! format)
+    {
+        return {};
+    }
+
+    static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
+    static_cast<void>(format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
+    static_cast<void>(format->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP));
+    return format;
+}
+
+[[nodiscard]] wil::com_ptr<IDWriteTextFormat> CreateValidationPopupIconTextFormat(
+    IDWriteFactory* dwriteFactory, UINT dpi, bool& usesFluentIcon, wchar_t& iconGlyph) noexcept
+{
+    usesFluentIcon = false;
+    iconGlyph      = FluentIcons::kFallbackWarning;
+    if (! dwriteFactory)
+    {
+        return {};
+    }
+
+    const float iconSizeDip = static_cast<float>(MulDiv(kValidationPopupIconSizeDip,
+                                                        static_cast<int>(std::max<UINT>(USER_DEFAULT_SCREEN_DPI, dpi)),
+                                                        USER_DEFAULT_SCREEN_DPI));
+    usesFluentIcon          = RedSalamander::DxUi::Typography::IsFontFamilyAvailable(
+        dwriteFactory, RedSalamander::DxUi::Typography::kSegoeFluentIconsFamily);
+    iconGlyph = usesFluentIcon ? FluentIcons::kWarning : FluentIcons::kFallbackWarning;
+
+    wil::com_ptr<IDWriteTextFormat> format;
+    const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+        dwriteFactory,
+        usesFluentIcon ? RedSalamander::DxUi::Typography::MakeUiIconSpec(iconSizeDip)
+                       : RedSalamander::DxUi::Typography::TypographySpec{
+                             .familyName = L"Segoe UI Symbol", .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = iconSizeDip},
+        format.put(),
+        L"");
+    if (FAILED(hr) || ! format)
+    {
+        usesFluentIcon = false;
+        iconGlyph      = L'\0';
+        return {};
+    }
+
+    static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
+    static_cast<void>(format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    static_cast<void>(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+    return format;
+}
+
+[[nodiscard]] bool ApplyValidationPopupRoundedRegion(HWND hwnd, int widthPx, int heightPx, UINT dpi) noexcept
+{
+    if (! hwnd || widthPx <= 0 || heightPx <= 0)
+    {
+        return false;
+    }
+
+    const int radiusPx   = std::max(1, DipsToPixelsInt(kValidationPopupCornerRadiusDip, dpi));
+    const int diameterPx = std::max(1, radiusPx * 2);
+    wil::unique_hrgn region(CreateRoundRectRgn(0, 0, widthPx + 1, heightPx + 1, diameterPx, diameterPx));
+    if (! region)
+    {
+        return false;
+    }
+
+    if (SetWindowRgn(hwnd, region.get(), TRUE) == 0)
+    {
+        return false;
+    }
+
+    region.release();
+    return true;
+}
 } // namespace
 
 ATOM NavigationView::RegisterEditSuggestPopupWndClass(HINSTANCE instance)
@@ -95,6 +197,27 @@ ATOM NavigationView::RegisterEditSuggestPopupWndClass(HINSTANCE instance)
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = nullptr;
     wc.lpszClassName = kSuggestPopupClassName;
+
+    atom = RegisterClassExW(&wc);
+    return atom;
+}
+
+ATOM NavigationView::RegisterEditValidationPopupWndClass(HINSTANCE instance)
+{
+    static ATOM atom = 0;
+    if (atom)
+    {
+        return atom;
+    }
+
+    WNDCLASSEXW wc{};
+    wc.cbSize        = sizeof(wc);
+    wc.style         = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc   = EditValidationPopupWndProcThunk;
+    wc.hInstance     = instance;
+    wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
+    wc.hbrBackground = nullptr;
+    wc.lpszClassName = kValidationPopupClassName;
 
     atom = RegisterClassExW(&wc);
     return atom;
@@ -123,9 +246,54 @@ LRESULT CALLBACK NavigationView::EditSuggestPopupWndProcThunk(HWND hwnd, UINT ms
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+LRESULT CALLBACK NavigationView::EditValidationPopupWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    NavigationView* self = nullptr;
+
+    if (msg == WM_NCCREATE)
+    {
+        auto cs = reinterpret_cast<CREATESTRUCTW*>(lp);
+        self    = reinterpret_cast<NavigationView*>(cs->lpCreateParams);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+    }
+    else
+    {
+        self = reinterpret_cast<NavigationView*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    }
+
+    if (self)
+    {
+        return self->EditValidationPopupWndProc(hwnd, msg, wp, lp);
+    }
+
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+LRESULT NavigationView::EditValidationPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    switch (msg)
+    {
+        case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
+        case WM_ERASEBKGND: return 1;
+        case WM_PAINT:
+            PaintEditValidationPopup(hwnd);
+            return 0;
+        case WM_NCDESTROY:
+            if (_editValidationPopup.get() == hwnd)
+            {
+                static_cast<void>(_editValidationPopup.release());
+            }
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            return 0;
+        default: break;
+    }
+
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
 LRESULT NavigationView::OnCtlColorEdit(HDC hdc, HWND hwndControl)
 {
-    if (_pathEdit && hwndControl == _pathEdit->GetBridgeHwnd())
+    if (_pathEdit && hwndControl == _pathEdit->GetTextInputHwnd())
     {
         SetTextColor(hdc, ColorToCOLORREF(_theme.text));
         SetBkColor(hdc, _theme.gdiBackground);
@@ -358,6 +526,7 @@ void NavigationView::EnterEditMode()
         }
 
         hostState->hwnd.reset(hwnd);
+        hostState->host.SetTextInputBackend(RedSalamander::DxUi::TextInputBackend::Native);
         hostState->host.SetTheme(MakeNavigationDxEditPalette(_appTheme, _theme));
 
         auto field       = std::make_unique<RedSalamander::DxUi::TextField>();
@@ -379,15 +548,141 @@ void NavigationView::EnterEditMode()
 
     _pathEdit->field->SetOnTextChanged([this](std::wstring_view text)
     {
+        if (_pathEdit)
+        {
+            ClearEditValidationError(*_pathEdit);
+        }
         _currentEditPath = std::filesystem::path(text);
         UpdateEditSuggest();
     });
+    _pathEdit->field->SetOnSubmitted([this]()
+    {
+        if (_editSuggestSelectedIndex >= 0 && static_cast<size_t>(_editSuggestSelectedIndex) < _editSuggestItems.size())
+        {
+            ApplyEditSuggestIndex(static_cast<size_t>(_editSuggestSelectedIndex));
+            return;
+        }
+
+        ExitEditMode(true);
+        if (! _editMode && _requestFolderViewFocusCallback)
+        {
+            _requestFolderViewFocusCallback();
+        }
+    });
+    _pathEdit->field->SetOnPreviewKeyDown([this](RedSalamander::DxUi::WindowHost& /*host*/, UINT virtualKey, UINT modifiers) -> bool
+    {
+        if ((virtualKey != VK_DOWN && virtualKey != VK_UP) || (modifiers & (MK_CONTROL | MK_SHIFT | kDxUiModifierAlt)) != 0u ||
+            ! _editSuggestPopup || _editSuggestItems.empty())
+        {
+            return false;
+        }
+
+        const int count = static_cast<int>(_editSuggestItems.size());
+        if (count > 0)
+        {
+            int next = _editSuggestSelectedIndex;
+            if (virtualKey == VK_DOWN)
+            {
+                next = (next < 0) ? 0 : std::min(next + 1, count - 1);
+                while (next < count && ! _editSuggestItems[static_cast<size_t>(next)].enabled)
+                {
+                    ++next;
+                }
+                if (next >= count)
+                {
+                    next = _editSuggestSelectedIndex;
+                }
+            }
+            else
+            {
+                next = (next < 0) ? (count - 1) : std::max(next - 1, 0);
+                while (next >= 0 && ! _editSuggestItems[static_cast<size_t>(next)].enabled)
+                {
+                    --next;
+                }
+                if (next < 0)
+                {
+                    next = _editSuggestSelectedIndex;
+                }
+            }
+
+            if (next != _editSuggestSelectedIndex)
+            {
+                _editSuggestSelectedIndex = next;
+                InvalidateRect(_editSuggestPopup.get(), nullptr, FALSE);
+                return true;
+            }
+
+            if (_pathEdit && _pathEdit->field)
+            {
+                const size_t caretIndex = (virtualKey == VK_DOWN) ? _pathEdit->field->GetText().size() : 0u;
+                _pathEdit->field->SetSelectionRange(caretIndex, caretIndex);
+                _pathEdit->host.SyncTextInput(_pathEdit->field);
+                if (_pathEdit->hwnd)
+                {
+                    InvalidateRect(_pathEdit->hwnd.get(), nullptr, FALSE);
+                }
+                return true;
+            }
+        }
+        return false;
+    });
     _pathEdit->field->SetOnBlur([this]() noexcept
     {
+        if (_editMode && _pathEdit && _pathEdit->hwnd && IsWindowVisible(_pathEdit->hwnd.get()) == FALSE)
+        {
+            return;
+        }
+
+        const HWND focused = GetFocus();
+        if (! focused)
+        {
+            return;
+        }
+        if (_pathEdit && _pathEdit->hwnd &&
+            (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetTextInputHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE))
+        {
+            return;
+        }
+        if (IsEditValidationPopupWindow(focused))
+        {
+            return;
+        }
         if (_editMode)
         {
             ExitEditMode(false);
         }
+    });
+    _pathEdit->host.SetOnEscape([this]() -> bool
+    {
+        if (_editSuggestPopup)
+        {
+            CloseEditSuggestPopup();
+            return true;
+        }
+
+        ExitEditMode(false);
+        if (_requestFolderViewFocusCallback)
+        {
+            _requestFolderViewFocusCallback();
+        }
+        return true;
+    });
+    _pathEdit->host.SetOnTabBoundary([this](bool reverse) -> bool
+    {
+        ExitEditMode(false);
+        if (_requestFolderViewFocusCallback)
+        {
+            _requestFolderViewFocusCallback();
+            return true;
+        }
+
+        if (_hWnd)
+        {
+            SetFocus(_hWnd.get());
+        }
+        MoveFocus(! reverse);
+        return true;
     });
 
     _pathEdit->field->SetText(currentPath.native());
@@ -395,17 +690,9 @@ void NavigationView::EnterEditMode()
     UpdatePathEditHostLayout();
     ApplyDxEditHostThemes();
     ShowWindow(_pathEdit->hwnd.get(), SW_SHOW);
+    InstallEditHostHook(*_pathEdit);
     _pathEdit->host.SetFocusControl(_pathEdit->field);
     SetFocus(_pathEdit->hwnd.get());
-
-    if (const HWND bridge = _pathEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
-    {
-        SetPropW(bridge, kNavigationEditOwnerProp, reinterpret_cast<HANDLE>(this));
-        if (! InstallWndProcHook(bridge, NavigationView::EditWndProc, kNavigationEditOriginalWndProcProp))
-        {
-            RemovePropW(bridge, kNavigationEditOwnerProp);
-        }
-    }
 
     const std::wstring_view currentPathText = currentPath.native();
     const bool endsWithSeparator            = ! currentPathText.empty() && (currentPathText.back() == L'\\' || currentPathText.back() == L'/');
@@ -436,7 +723,7 @@ void NavigationView::ExitEditMode(bool accept)
     }
     _editSuggestMountedInstance.reset();
 
-    _editMode = false;
+    std::optional<std::filesystem::path> pendingPathChange;
 
     if (accept && _pathEdit && _pathEdit->field)
     {
@@ -462,44 +749,49 @@ void NavigationView::ExitEditMode(bool accept)
                     newPath = std::filesystem::path(std::move(canonical));
                 }
             }
-            RequestPathChange(newPath);
+            pendingPathChange = std::move(newPath);
         }
         else
         {
             const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, acceptedText.c_str());
-            const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_INVALID_PATH);
+            ShowEditValidationError(*_pathEdit, message);
 
-            if (const HWND bridge = _pathEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
+            if (const HWND inputHwnd = _pathEdit->GetTextInputHwnd(); inputHwnd && IsWindow(inputHwnd) != FALSE)
             {
-                EDITBALLOONTIP tip{};
-                tip.cbStruct = sizeof(tip);
-                tip.pszTitle = title.c_str();
-                tip.pszText  = message.c_str();
-                tip.ttiIcon  = TTI_WARNING;
-                SendMessageW(bridge, EM_SHOWBALLOONTIP, 0, reinterpret_cast<LPARAM>(&tip));
-                SetFocus(bridge);
+                SetFocus(inputHwnd);
             }
             else if (_pathEdit->hwnd)
             {
                 SetFocus(_pathEdit->hwnd.get());
             }
 
-            _editMode = true;
+            _renderMode = RenderMode::Edit;
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), nullptr, FALSE);
+            }
             UpdateHoverTimerState();
             return;
         }
     }
 
+    _editMode = false;
+
     if (_pathEdit && _pathEdit->hwnd)
     {
         if (_pathEdit->field)
         {
+            ClearEditValidationError(*_pathEdit);
             _pathEdit->field->SetOnTextChanged({});
+            _pathEdit->field->SetOnSubmitted({});
+            _pathEdit->field->SetOnPreviewKeyDown({});
             _pathEdit->field->SetOnBlur({});
         }
+        _pathEdit->host.SetOnEscape({});
+        _pathEdit->host.SetOnTabBoundary({});
 
         const HWND focused = GetFocus();
-        if (focused && (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetBridgeHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE) && _hWnd)
+        if (focused && (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetTextInputHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE) && _hWnd)
         {
             SetFocus(_hWnd.get());
         }
@@ -507,6 +799,11 @@ void NavigationView::ExitEditMode(bool accept)
     }
     _renderMode = RenderMode::Breadcrumb;
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
+
+    if (pendingPathChange.has_value())
+    {
+        RequestPathChange(pendingPathChange.value());
+    }
 
     UpdateHoverTimerState();
 }
@@ -1220,8 +1517,12 @@ void NavigationView::UpdateEditSuggestPopupWindow()
         x = std::max(static_cast<int>(work.left), static_cast<int>(work.right - winWidth));
     }
 
-    x = std::clamp(x, static_cast<int>(work.left), static_cast<int>(work.right - winWidth));
-    y = std::clamp(y, static_cast<int>(work.top), static_cast<int>(work.bottom - winHeight));
+    const int minX = static_cast<int>(work.left);
+    const int minY = static_cast<int>(work.top);
+    const int maxX = std::max(minX, static_cast<int>(work.right - winWidth));
+    const int maxY = std::max(minY, static_cast<int>(work.bottom - winHeight));
+    x = std::clamp(x, minX, maxX);
+    y = std::clamp(y, minY, maxY);
 
     if (! _editSuggestPopup)
     {
@@ -1536,32 +1837,32 @@ bool NavigationView::TryHandleEditClipboardCommand(UINT commandId) noexcept
     }
 
     const HWND focused = GetFocus();
-    if (! focused || (focused != _pathEdit->hwnd.get() && focused != _pathEdit->GetBridgeHwnd() && IsChild(_pathEdit->hwnd.get(), focused) == FALSE))
+    if (! focused || (focused != _pathEdit->hwnd.get() && focused != _pathEdit->GetTextInputHwnd() && IsChild(_pathEdit->hwnd.get(), focused) == FALSE))
     {
         return false;
     }
 
     _pathEdit->host.SetFocusControl(_pathEdit->field);
-    const auto syncBridge = [this]() noexcept { _pathEdit->host.SyncTextInputBridge(_pathEdit->field); };
+    const auto syncTextInput = [this]() noexcept { _pathEdit->host.SyncTextInput(_pathEdit->field); };
 
     switch (commandId)
     {
         case IDM_PANE_SELECTION_SELECT_ALL:
             static_cast<void>(_pathEdit->field->OnSelectAll(_pathEdit->host));
-            syncBridge();
+            syncTextInput();
             return true;
         case IDM_PANE_CLIPBOARD_COPY:
             static_cast<void>(_pathEdit->field->OnKeyDown(_pathEdit->host, 'C', MK_CONTROL));
-            syncBridge();
+            syncTextInput();
             return true;
         case IDM_PANE_CLIPBOARD_CUT:
             static_cast<void>(_pathEdit->field->OnKeyDown(_pathEdit->host, 'X', MK_CONTROL));
-            syncBridge();
+            syncTextInput();
             return true;
         case IDM_PANE_CLIPBOARD_PASTE:
         case IDM_PANE_CLIPBOARD_PASTE_SHORTCUT:
             static_cast<void>(_pathEdit->field->OnKeyDown(_pathEdit->host, 'V', MK_CONTROL));
-            syncBridge();
+            syncTextInput();
             return true;
         default: return false;
     }
@@ -1888,224 +2189,475 @@ bool NavigationView::ValidatePath(const std::wstring& pathStr)
     return (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
-bool NavigationView::HandleEditSubclassKeyDown(HWND editHwnd, WPARAM key)
+NavigationDxTextHost* NavigationView::ResolveEditTextHost(HWND hwnd) noexcept
 {
-    _suppressCtrlBackspaceCharHwnd = nullptr;
-
-    const bool isPopupEdit = _fullPathPopupEdit && editHwnd == _fullPathPopupEdit->GetBridgeHwnd();
-    if (key == VK_BACK)
-    {
-        const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-        const bool altDown  = (GetKeyState(VK_MENU) & 0x8000) != 0;
-        if (ctrlDown && ! altDown)
-        {
-            DWORD selectionStart = 0;
-            DWORD selectionEnd   = 0;
-            SendMessageW(editHwnd, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
-
-            if (selectionStart != selectionEnd)
-            {
-                SendMessageW(editHwnd, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L""));
-                _suppressCtrlBackspaceCharHwnd = editHwnd;
-                return true;
-            }
-
-            const int length = GetWindowTextLengthW(editHwnd);
-            std::wstring text;
-            text.resize(static_cast<size_t>(std::max(0, length)) + 1u);
-            GetWindowTextW(editHwnd, text.data(), static_cast<int>(text.size()));
-            text.resize(wcsnlen(text.c_str(), text.size()));
-
-            const size_t caret = std::min(static_cast<size_t>(selectionEnd), text.size());
-            if (caret == 0u)
-            {
-                _suppressCtrlBackspaceCharHwnd = editHwnd;
-                return true;
-            }
-
-            auto isSeparator = [](wchar_t ch) noexcept { return ch == L'\\' || ch == L'/'; };
-
-            size_t eraseFrom = caret;
-            while (eraseFrom > 0u && std::iswspace(text[eraseFrom - 1u]) != 0)
-            {
-                --eraseFrom;
-            }
-            while (eraseFrom > 0u && isSeparator(text[eraseFrom - 1u]))
-            {
-                --eraseFrom;
-            }
-            while (eraseFrom > 0u)
-            {
-                const wchar_t ch = text[eraseFrom - 1u];
-                if (std::iswspace(ch) != 0 || isSeparator(ch))
-                {
-                    break;
-                }
-                --eraseFrom;
-            }
-
-            if (eraseFrom == caret)
-            {
-                eraseFrom = caret > 0u ? (caret - 1u) : 0u;
-            }
-
-            SendMessageW(editHwnd, EM_SETSEL, static_cast<WPARAM>(eraseFrom), static_cast<LPARAM>(caret));
-            SendMessageW(editHwnd, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L""));
-            _suppressCtrlBackspaceCharHwnd = editHwnd;
-            return true;
-        }
-    }
-
-    if (key == VK_RETURN)
-    {
-        if (! isPopupEdit && _editSuggestSelectedIndex >= 0 && static_cast<size_t>(_editSuggestSelectedIndex) < _editSuggestItems.size())
-        {
-            ApplyEditSuggestIndex(static_cast<size_t>(_editSuggestSelectedIndex));
-        }
-        else if (isPopupEdit)
-        {
-            ExitFullPathPopupEditMode(true);
-        }
-        else
-        {
-            ExitEditMode(true);
-            if (! _editMode && _requestFolderViewFocusCallback)
-            {
-                _requestFolderViewFocusCallback();
-            }
-        }
-        return true;
-    }
-
-    if (key == VK_ESCAPE)
-    {
-        if (! isPopupEdit && _editSuggestPopup)
-        {
-            CloseEditSuggestPopup();
-            return true;
-        }
-
-        if (isPopupEdit)
-        {
-            _restoreFolderViewFocusAfterFullPathPopupClose = true;
-            ExitFullPathPopupEditMode(false);
-        }
-        else
-        {
-            ExitEditMode(false);
-            if (_requestFolderViewFocusCallback)
-            {
-                _requestFolderViewFocusCallback();
-            }
-        }
-        return true;
-    }
-
-    if (! isPopupEdit && (key == VK_DOWN || key == VK_UP) && _editSuggestPopup && ! _editSuggestItems.empty())
-    {
-        const int count = static_cast<int>(_editSuggestItems.size());
-        if (count > 0)
-        {
-            int next = _editSuggestSelectedIndex;
-            if (key == VK_DOWN)
-            {
-                next = (next < 0) ? 0 : std::min(next + 1, count - 1);
-                while (next < count && ! _editSuggestItems[static_cast<size_t>(next)].enabled)
-                {
-                    ++next;
-                }
-                if (next >= count)
-                {
-                    next = _editSuggestSelectedIndex;
-                }
-            }
-            else
-            {
-                next = (next < 0) ? (count - 1) : std::max(next - 1, 0);
-                while (next >= 0 && ! _editSuggestItems[static_cast<size_t>(next)].enabled)
-                {
-                    --next;
-                }
-                if (next < 0)
-                {
-                    next = _editSuggestSelectedIndex;
-                }
-            }
-
-            if (next != _editSuggestSelectedIndex)
-            {
-                _editSuggestSelectedIndex = next;
-                InvalidateRect(_editSuggestPopup.get(), nullptr, FALSE);
-            }
-        }
-        return true;
-    }
-
-    if (key == VK_TAB)
-    {
-        if (isPopupEdit)
-        {
-            ExitFullPathPopupEditMode(false);
-        }
-        else
-        {
-            ExitEditMode(false);
-        }
-        if (_requestFolderViewFocusCallback)
-        {
-            _requestFolderViewFocusCallback();
-            return true;
-        }
-
-        const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-        if (_hWnd)
-        {
-            SetFocus(_hWnd.get());
-        }
-        MoveFocus(! shift);
-        return true;
-    }
-
-    return false;
+    return const_cast<NavigationDxTextHost*>(std::as_const(*this).ResolveEditTextHost(hwnd));
 }
 
-bool NavigationView::HandleEditSubclassChar(HWND editHwnd, WPARAM key)
+const NavigationDxTextHost* NavigationView::ResolveEditTextHost(HWND hwnd) const noexcept
 {
-    if (_suppressCtrlBackspaceCharHwnd && _suppressCtrlBackspaceCharHwnd == editHwnd && key == 0x7Fu)
+    if (! hwnd)
     {
-        _suppressCtrlBackspaceCharHwnd = nullptr;
-        return true;
+        return nullptr;
     }
-    return key == L'\r' || key == L'\n';
+
+    const auto matches = [hwnd](const std::unique_ptr<NavigationDxTextHost>& textHost) noexcept
+    {
+        if (! textHost || ! textHost->hwnd)
+        {
+            return false;
+        }
+
+        const HWND hostHwnd  = textHost->hwnd.get();
+        const HWND inputHwnd = textHost->GetTextInputHwnd();
+        return hwnd == hostHwnd || hwnd == inputHwnd || IsChild(hostHwnd, hwnd) != FALSE;
+    };
+
+    if (matches(_pathEdit))
+    {
+        return _pathEdit.get();
+    }
+    if (matches(_fullPathPopupEdit))
+    {
+        return _fullPathPopupEdit.get();
+    }
+    return nullptr;
 }
 
-bool NavigationView::HandleEditSubclassPaste(HWND editHwnd)
+void NavigationView::InstallEditHostHook(NavigationDxTextHost& textHost) noexcept
 {
-    if (OpenClipboard(editHwnd) == 0)
+    const HWND hwnd = textHost.hwnd.get();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
     {
-        return false;
+        return;
     }
 
-    auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
-
-    HANDLE hText = GetClipboardData(CF_UNICODETEXT);
-    if (! hText)
+    SetPropW(hwnd, kNavigationEditOwnerProp, reinterpret_cast<HANDLE>(this));
+    if (! InstallWndProcHook(hwnd, NavigationView::EditWndProc, kNavigationEditOriginalWndProcProp))
     {
-        return false;
+        RemovePropW(hwnd, kNavigationEditOwnerProp);
+    }
+}
+
+void NavigationView::ReplaceEditTextSelection(NavigationDxTextHost& textHost, std::wstring_view replacement) noexcept
+{
+    if (! textHost.field)
+    {
+        return;
     }
 
-    const auto* raw = static_cast<const wchar_t*>(GlobalLock(hText));
-    if (! raw)
+    textHost.field->ReplaceSelectionAndNotify(replacement);
+    textHost.host.SyncTextInput(textHost.field);
+    if (textHost.hwnd)
     {
-        return false;
+        InvalidateRect(textHost.hwnd.get(), nullptr, FALSE);
+    }
+}
+
+void NavigationView::ShowEditValidationError(NavigationDxTextHost& textHost, const std::wstring& message) noexcept
+{
+    if (textHost.field)
+    {
+        textHost.field->SetAccessibleHelpText(message);
     }
 
-    auto unlock = wil::scope_exit([&] { GlobalUnlock(hText); });
+    _editValidationMessage = message;
+    UpdateEditValidationPopupWindow(textHost);
+}
 
-    std::wstring text(raw);
-    text.erase(std::remove_if(text.begin(), text.end(), [](wchar_t ch) { return ch == L'\r' || ch == L'\n'; }), text.end());
-    SendMessageW(editHwnd, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(text.c_str()));
-    return true;
+void NavigationView::ClearEditValidationError(NavigationDxTextHost& textHost) noexcept
+{
+    if (textHost.field && ! textHost.field->GetAccessibleHelpText().empty())
+    {
+        textHost.field->SetAccessibleHelpText({});
+    }
+    if (textHost.host.HasTooltip())
+    {
+        static_cast<void>(textHost.host.ClearTooltip());
+    }
+
+    CloseEditValidationPopup();
+}
+
+void NavigationView::RefreshActiveEditHostAfterParentPaint() noexcept
+{
+    if (! _editMode || ! _pathEdit || ! _pathEdit->hwnd || IsWindow(_pathEdit->hwnd.get()) == FALSE)
+    {
+        return;
+    }
+
+    const HWND hostHwnd  = _pathEdit->hwnd.get();
+    const HWND inputHwnd = _pathEdit->GetTextInputHwnd();
+    const HWND focused   = GetFocus();
+    const bool focusStillBelongsToEdit =
+        focused == nullptr || focused == _hWnd.get() || focused == hostHwnd || focused == inputHwnd || IsChild(hostHwnd, focused) != FALSE;
+
+    ShowWindow(hostHwnd, SW_SHOWNOACTIVATE);
+    SetWindowPos(hostHwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+    if (_pathEdit->field)
+    {
+        _pathEdit->host.SetFocusControl(_pathEdit->field);
+        _pathEdit->host.SyncTextInput(_pathEdit->field);
+        _pathEdit->host.Invalidate();
+    }
+
+    if (_hWnd && focusStillBelongsToEdit)
+    {
+        const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
+        if (! root || GetActiveWindow() == root)
+        {
+            SetFocus(hostHwnd);
+        }
+    }
+
+    RedrawWindow(hostHwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+
+    if (_pathEdit->field && ! _pathEdit->field->GetAccessibleHelpText().empty())
+    {
+        UpdateEditValidationPopupWindow(*_pathEdit);
+    }
+}
+
+void NavigationView::UpdateEditValidationPopupWindow(NavigationDxTextHost& textHost) noexcept
+{
+    const bool ownerEditActive = (_pathEdit.get() == &textHost && _editMode) || (_fullPathPopupEdit.get() == &textHost && _fullPathPopupEditMode);
+    if (! _hWnd || ! ownerEditActive || _editValidationMessage.empty() || ! textHost.hwnd || IsWindow(textHost.hwnd.get()) == FALSE)
+    {
+        CloseEditValidationPopup();
+        return;
+    }
+
+    if (! RegisterEditValidationPopupWndClass(_hInstance))
+    {
+        return;
+    }
+
+    EnsureD2DResources();
+    if (! _d2dFactory || ! _dwriteFactory || ! _pathFormat)
+    {
+        return;
+    }
+    wil::com_ptr<IDWriteTextFormat> validationFormat = CreateValidationPopupTextFormat(_dwriteFactory.get(), _dpi);
+    if (! validationFormat)
+    {
+        return;
+    }
+    bool usesFluentIcon = false;
+    wchar_t iconGlyph   = L'\0';
+    wil::com_ptr<IDWriteTextFormat> iconFormat = CreateValidationPopupIconTextFormat(_dwriteFactory.get(), _dpi, usesFluentIcon, iconGlyph);
+
+    RECT anchorRect{};
+    if (GetWindowRect(textHost.hwnd.get(), &anchorRect) == FALSE)
+    {
+        CloseEditValidationPopup();
+        return;
+    }
+
+    const int anchorWidthPx = static_cast<int>(std::max<LONG>(1, anchorRect.right - anchorRect.left));
+    const int marginPx      = std::max(1, DipsToPixelsInt(kValidationPopupMarginDip, _dpi));
+    const int gapPx         = std::max(0, DipsToPixelsInt(kValidationPopupGapDip, _dpi));
+    const int paddingXPx    = std::max(1, DipsToPixelsInt(kValidationPopupPaddingXDip, _dpi));
+    const int paddingYPx    = std::max(1, DipsToPixelsInt(kValidationPopupPaddingYDip, _dpi));
+    const int iconSizePx    = iconFormat ? std::max(1, DipsToPixelsInt(kValidationPopupIconSizeDip, _dpi)) : 0;
+    const int iconGapPx     = iconFormat ? std::max(0, DipsToPixelsInt(kValidationPopupIconGapDip, _dpi)) : 0;
+
+    HMONITOR monitor = MonitorFromRect(&anchorRect, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    if (GetMonitorInfoW(monitor, &monitorInfo) == FALSE)
+    {
+        CloseEditValidationPopup();
+        return;
+    }
+
+    const RECT workRect    = monitorInfo.rcWork;
+    const int workWidthPx  = static_cast<int>(std::max<LONG>(1, workRect.right - workRect.left));
+    const int workHeightPx = static_cast<int>(std::max<LONG>(1, workRect.bottom - workRect.top));
+    const int maxWidthPx   = std::max(1, workWidthPx - (marginPx * 2));
+    const int minWidthPx   = std::min(maxWidthPx, std::max(anchorWidthPx, DipsToPixelsInt(kValidationPopupMinWidthDip, _dpi)));
+
+    int popupWidthPx = std::min(maxWidthPx, std::max(minWidthPx, DipsToPixelsInt(kValidationPopupPreferredWidthDip, _dpi)));
+    popupWidthPx     = std::max(1, popupWidthPx);
+
+    int textHeightPx       = DipsToPixelsInt(16, _dpi);
+    wil::com_ptr<IDWriteTextLayout> layout;
+    const float textWidthDip = static_cast<float>(std::max(1, popupWidthPx - (paddingXPx * 2) - iconSizePx - iconGapPx));
+    if (SUCCEEDED(_dwriteFactory->CreateTextLayout(_editValidationMessage.c_str(),
+                                                   ClampTextLengthForDWrite(_editValidationMessage),
+                                                   validationFormat.get(),
+                                                   textWidthDip,
+                                                   8192.0f,
+                                                   layout.addressof())))
+    {
+        DWRITE_TEXT_METRICS metrics{};
+        if (SUCCEEDED(layout->GetMetrics(&metrics)))
+        {
+            textHeightPx = std::max(1, static_cast<int>(std::ceil(metrics.height)));
+        }
+    }
+
+    const int minHeightPx = DipsToPixelsInt(kValidationPopupMinHeightDip, _dpi);
+    const int maxHeightPx = std::max(1, workHeightPx - (marginPx * 2));
+    int popupHeightPx     = std::min(maxHeightPx, std::max(minHeightPx, std::max(textHeightPx, iconSizePx) + (paddingYPx * 2)));
+    popupHeightPx         = std::max(1, popupHeightPx);
+
+    const int workLeftPx   = static_cast<int>(workRect.left);
+    const int workRightPx  = static_cast<int>(workRect.right);
+    const int workTopPx    = static_cast<int>(workRect.top);
+    const int workBottomPx = static_cast<int>(workRect.bottom);
+
+    const int minX = workLeftPx + marginPx;
+    const int maxX = std::max(minX, workRightPx - marginPx - popupWidthPx);
+    int x          = std::clamp(static_cast<int>(anchorRect.left), minX, maxX);
+
+    int y = static_cast<int>(anchorRect.bottom) + gapPx;
+    if (y + popupHeightPx > workBottomPx - marginPx)
+    {
+        const int aboveY = static_cast<int>(anchorRect.top) - gapPx - popupHeightPx;
+        y                = (aboveY >= workTopPx + marginPx) ? aboveY : std::max(workTopPx + marginPx, workBottomPx - marginPx - popupHeightPx);
+    }
+
+    const DWORD style   = WS_POPUP;
+    const DWORD exStyle = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+    if (! _editValidationPopup)
+    {
+        HWND popup =
+            CreateWindowExW(exStyle, kValidationPopupClassName, L"", style, x, y, popupWidthPx, popupHeightPx, _hWnd.get(), nullptr, _hInstance, this);
+        if (! popup)
+        {
+            _editValidationPopupScreenRect = {};
+            return;
+        }
+
+        _editValidationPopup.reset(popup);
+    }
+    else
+    {
+        SetWindowPos(_editValidationPopup.get(), HWND_TOP, x, y, popupWidthPx, popupHeightPx, SWP_NOACTIVATE);
+    }
+
+    _editValidationPopupIconUsesFluent = iconFormat && usesFluentIcon;
+    _editValidationPopupIconGlyph      = iconFormat ? iconGlyph : L'\0';
+    _editValidationPopupRoundedRegion  = ApplyValidationPopupRoundedRegion(_editValidationPopup.get(), popupWidthPx, popupHeightPx, _dpi);
+    ShowWindow(_editValidationPopup.get(), SW_SHOWNOACTIVATE);
+    SetWindowPos(_editValidationPopup.get(), HWND_TOP, x, y, popupWidthPx, popupHeightPx, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    GetWindowRect(_editValidationPopup.get(), &_editValidationPopupScreenRect);
+    InvalidateRect(_editValidationPopup.get(), nullptr, FALSE);
+}
+
+void NavigationView::CloseEditValidationPopup() noexcept
+{
+    if (_editValidationPopup)
+    {
+        _editValidationPopup.reset();
+    }
+    _editValidationMessage.clear();
+    _editValidationPopupScreenRect = {};
+    _editValidationPopupRoundedRegion = false;
+    _editValidationPopupIconUsesFluent = false;
+    _editValidationPopupIconGlyph = L'\0';
+}
+
+bool NavigationView::IsEditValidationPopupWindow(HWND hwnd) const noexcept
+{
+    return hwnd && _editValidationPopup && (hwnd == _editValidationPopup.get() || IsChild(_editValidationPopup.get(), hwnd) != FALSE);
+}
+
+void NavigationView::PaintEditValidationPopup(HWND hwnd) noexcept
+{
+    PAINTSTRUCT ps{};
+    wil::unique_hdc_paint hdc = wil::BeginPaint(hwnd, &ps);
+    static_cast<void>(hdc);
+
+    EnsureD2DResources();
+    if (! _d2dFactory || ! _dwriteFactory)
+    {
+        return;
+    }
+    wil::com_ptr<IDWriteTextFormat> validationFormat = CreateValidationPopupTextFormat(_dwriteFactory.get(), _dpi);
+    if (! validationFormat)
+    {
+        return;
+    }
+    bool usesFluentIcon = false;
+    wchar_t iconGlyph   = L'\0';
+    wil::com_ptr<IDWriteTextFormat> iconFormat = CreateValidationPopupIconTextFormat(_dwriteFactory.get(), _dpi, usesFluentIcon, iconGlyph);
+
+    RECT clientRect{};
+    if (GetClientRect(hwnd, &clientRect) == FALSE)
+    {
+        return;
+    }
+
+    const UINT32 width  = static_cast<UINT32>(std::max<LONG>(1, clientRect.right - clientRect.left));
+    const UINT32 height = static_cast<UINT32>(std::max<LONG>(1, clientRect.bottom - clientRect.top));
+
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties();
+    props.dpiX                          = 96.0f;
+    props.dpiY                          = 96.0f;
+    const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(width, height));
+
+    wil::com_ptr<ID2D1HwndRenderTarget> target;
+    if (FAILED(_d2dFactory->CreateHwndRenderTarget(props, hwndProps, target.addressof())))
+    {
+        return;
+    }
+    target->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+
+    wil::com_ptr<ID2D1SolidColorBrush> backgroundBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> textBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> borderBrush;
+    if (FAILED(target->CreateSolidColorBrush(_appTheme.folderView.warningBackground, backgroundBrush.addressof())) ||
+        FAILED(target->CreateSolidColorBrush(_appTheme.folderView.warningText, textBrush.addressof())) ||
+        FAILED(target->CreateSolidColorBrush(_appTheme.folderView.warningText, borderBrush.addressof())))
+    {
+        return;
+    }
+
+    target->BeginDraw();
+    auto endDraw = wil::scope_exit([&] { static_cast<void>(target->EndDraw()); });
+
+    const float widthDip             = static_cast<float>(width);
+    const float heightDip            = static_cast<float>(height);
+    const D2D1_RECT_F borderRect      = D2D1::RectF(0.5f, 0.5f, std::max(0.5f, widthDip - 0.5f), std::max(0.5f, heightDip - 0.5f));
+    const float cornerRadiusDip       = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupCornerRadiusDip, _dpi)));
+    const D2D1_ROUNDED_RECT rounded   = D2D1::RoundedRect(borderRect, cornerRadiusDip, cornerRadiusDip);
+    const float paddingXDip           = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupPaddingXDip, _dpi)));
+    const float paddingYDip           = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupPaddingYDip, _dpi)));
+    const float iconSizeDip           = iconFormat ? static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupIconSizeDip, _dpi))) : 0.0f;
+    const float iconGapDip            = iconFormat ? static_cast<float>(std::max(0, DipsToPixelsInt(kValidationPopupIconGapDip, _dpi))) : 0.0f;
+    const float textLeftDip           = paddingXDip + (iconFormat ? iconSizeDip + iconGapDip : 0.0f);
+    const D2D1_RECT_F textRect        = D2D1::RectF(textLeftDip,
+                                                    paddingYDip,
+                                                    std::max(textLeftDip, widthDip - paddingXDip),
+                                                    std::max(paddingYDip, heightDip - paddingYDip));
+
+    target->FillRoundedRectangle(rounded, backgroundBrush.get());
+    target->DrawRoundedRectangle(rounded, borderBrush.get(), 1.0f);
+    if (iconFormat && iconGlyph != L'\0')
+    {
+        const float iconTopDip      = std::max(paddingYDip, (heightDip - iconSizeDip) * 0.5f);
+        const D2D1_RECT_F iconRect  = D2D1::RectF(paddingXDip, iconTopDip, paddingXDip + iconSizeDip, iconTopDip + iconSizeDip);
+        const wchar_t iconText[2]   = {iconGlyph, L'\0'};
+        target->DrawTextW(iconText, 1u, iconFormat.get(), iconRect, textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_NO_SNAP, DWRITE_MEASURING_MODE_NATURAL);
+    }
+    constexpr auto textOptions = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+    target->DrawTextW(_editValidationMessage.c_str(),
+                      ClampTextLengthForDWrite(_editValidationMessage),
+                      validationFormat.get(),
+                      textRect,
+                      textBrush.get(),
+                      textOptions);
+}
+
+LRESULT NavigationView::HandleEditSubclassGetTextLength(HWND editHwnd) const noexcept
+{
+    const NavigationDxTextHost* textHost = ResolveEditTextHost(editHwnd);
+    return (textHost && textHost->field) ? static_cast<LRESULT>(textHost->field->GetText().size()) : 0;
+}
+
+LRESULT NavigationView::HandleEditSubclassGetText(HWND editHwnd, WPARAM maxChars, LPARAM buffer) const noexcept
+{
+    auto* output = reinterpret_cast<wchar_t*>(buffer);
+    if (! output || maxChars == 0u)
+    {
+        return 0;
+    }
+
+    const NavigationDxTextHost* textHost = ResolveEditTextHost(editHwnd);
+    const std::wstring_view text         = (textHost && textHost->field) ? textHost->field->GetText() : std::wstring_view{};
+    const size_t copyCount              = std::min(text.size(), static_cast<size_t>(maxChars - 1u));
+    if (copyCount > 0u)
+    {
+        std::copy_n(text.data(), copyCount, output);
+    }
+    output[copyCount] = L'\0';
+    return static_cast<LRESULT>(copyCount);
+}
+
+LRESULT NavigationView::HandleEditSubclassSetText(HWND editHwnd, LPARAM text) noexcept
+{
+    NavigationDxTextHost* textHost = ResolveEditTextHost(editHwnd);
+    if (! textHost || ! textHost->field)
+    {
+        return FALSE;
+    }
+
+    const auto* input = reinterpret_cast<const wchar_t*>(text);
+    textHost->field->SetTextAndNotify(input ? std::wstring(input) : std::wstring{});
+    textHost->host.SyncTextInput(textHost->field);
+    if (textHost->hwnd)
+    {
+        InvalidateRect(textHost->hwnd.get(), nullptr, FALSE);
+    }
+    return TRUE;
+}
+
+LRESULT NavigationView::HandleEditSubclassGetSelection(HWND editHwnd, WPARAM selectionStart, LPARAM selectionEnd) const noexcept
+{
+    const NavigationDxTextHost* textHost = ResolveEditTextHost(editHwnd);
+    if (! textHost || ! textHost->field)
+    {
+        return 0;
+    }
+
+    size_t start = textHost->field->GetCaretIndex();
+    size_t end   = start;
+    if (const auto selection = textHost->field->GetSelectionRange(); selection.has_value())
+    {
+        start = selection->first;
+        end   = selection->second;
+    }
+
+    if (auto* outStart = reinterpret_cast<DWORD*>(selectionStart))
+    {
+        *outStart = static_cast<DWORD>(std::min<size_t>(start, std::numeric_limits<DWORD>::max()));
+    }
+    if (auto* outEnd = reinterpret_cast<DWORD*>(selectionEnd))
+    {
+        *outEnd = static_cast<DWORD>(std::min<size_t>(end, std::numeric_limits<DWORD>::max()));
+    }
+    return static_cast<LRESULT>(MAKELONG(static_cast<WORD>(std::min<size_t>(start, std::numeric_limits<WORD>::max())),
+                                         static_cast<WORD>(std::min<size_t>(end, std::numeric_limits<WORD>::max()))));
+}
+
+LRESULT NavigationView::HandleEditSubclassSetSelection(HWND editHwnd, WPARAM selectionStart, LPARAM selectionEnd) noexcept
+{
+    NavigationDxTextHost* textHost = ResolveEditTextHost(editHwnd);
+    if (! textHost || ! textHost->field)
+    {
+        return 0;
+    }
+
+    const size_t textLength = textHost->field->GetText().size();
+    size_t start            = selectionStart == static_cast<WPARAM>(-1) ? textLength : std::min(static_cast<size_t>(selectionStart), textLength);
+    size_t end              = selectionEnd == static_cast<LPARAM>(-1) ? textLength : std::min(static_cast<size_t>(selectionEnd), textLength);
+    if (selectionStart == static_cast<WPARAM>(-1))
+    {
+        end = start;
+    }
+
+    textHost->field->SetSelectionRange(start, end);
+    textHost->host.SyncTextInput(textHost->field);
+    if (textHost->hwnd)
+    {
+        InvalidateRect(textHost->hwnd.get(), nullptr, FALSE);
+    }
+    return 0;
+}
+
+LRESULT NavigationView::HandleEditSubclassReplaceSelection(HWND editHwnd, LPARAM replacement) noexcept
+{
+    NavigationDxTextHost* textHost = ResolveEditTextHost(editHwnd);
+    if (! textHost || ! textHost->field)
+    {
+        return FALSE;
+    }
+
+    const auto* input = reinterpret_cast<const wchar_t*>(replacement);
+    ReplaceEditTextSelection(*textHost, input ? std::wstring_view(input) : std::wstring_view{});
+    return TRUE;
 }
 
 namespace
@@ -2135,24 +2687,12 @@ LRESULT CALLBACK NavigationView::EditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
     {
         case WM_SETFOCUS: NotifyPaneFocusChangedForEdit(self); break;
         case WM_KILLFOCUS: NotifyPaneFocusChangedForEdit(self); break;
-        case WM_KEYDOWN:
-            if (self && self->HandleEditSubclassKeyDown(hwnd, wp))
-            {
-                return 0;
-            }
-            break;
-        case WM_CHAR:
-            if (self && self->HandleEditSubclassChar(hwnd, wp))
-            {
-                return 0;
-            }
-            break;
-        case WM_PASTE:
-            if (self && self->HandleEditSubclassPaste(hwnd))
-            {
-                return 0;
-            }
-            break;
+        case WM_GETTEXTLENGTH: return self ? self->HandleEditSubclassGetTextLength(hwnd) : 0;
+        case WM_GETTEXT: return self ? self->HandleEditSubclassGetText(hwnd, wp, lp) : 0;
+        case WM_SETTEXT: return self ? self->HandleEditSubclassSetText(hwnd, lp) : FALSE;
+        case EM_GETSEL: return self ? self->HandleEditSubclassGetSelection(hwnd, wp, lp) : 0;
+        case EM_SETSEL: return self ? self->HandleEditSubclassSetSelection(hwnd, wp, lp) : 0;
+        case EM_REPLACESEL: return self ? self->HandleEditSubclassReplaceSelection(hwnd, lp) : FALSE;
         case WM_NCDESTROY:
         {
             const LRESULT result = CallStoredWndProc(hwnd, kNavigationEditOriginalWndProcProp, msg, wp, lp);

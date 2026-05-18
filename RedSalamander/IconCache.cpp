@@ -59,6 +59,14 @@ struct AssociationIconCacheEntry
     size_t lastAccessTime = 0;
 };
 
+struct AssociationLruEvictScanMetric
+{
+    bool shouldEmit       = false;
+    uint64_t durationUs   = 0;
+    uint64_t cacheSize    = 0;
+    uint64_t removedCount = 0;
+};
+
 std::mutex g_associationCacheMutex;
 std::unordered_map<AssociationQueryKey, AssociationIconCacheEntry, AssociationQueryKeyHash> g_associationToIconIndex;
 size_t g_associationQueryAccessCounter = 0;
@@ -193,11 +201,21 @@ void PerfEmitSlowIconCacheLockHold(std::wstring_view detail, uint64_t durationUs
     }
 }
 
-void EvictAssociationQueryBatch()
+void EmitAssociationLruEvictScanMetric(const AssociationLruEvictScanMetric& metric) noexcept
+{
+    if (! metric.shouldEmit)
+    {
+        return;
+    }
+
+    PerfEmitDuration(L"iconcache.association_lru_evict_scan_us", metric.durationUs, metric.cacheSize, metric.removedCount, S_OK);
+}
+
+[[nodiscard]] AssociationLruEvictScanMetric EvictAssociationQueryBatch()
 {
     if (g_associationToIconIndex.size() < kAssociationCacheSize)
     {
-        return;
+        return {};
     }
 
     const auto scanStart    = std::chrono::steady_clock::now();
@@ -227,11 +245,12 @@ void EvictAssociationQueryBatch()
     }
 
     g_associationLruEvictions += removed;
-    PerfEmitDuration(L"iconcache.association_lru_evict_scan_us",
-                     PerfElapsedUs(scanStart),
-                     static_cast<uint64_t>(g_associationToIconIndex.size()),
-                     static_cast<uint64_t>(removed),
-                     S_OK);
+    return AssociationLruEvictScanMetric{
+        .shouldEmit   = true,
+        .durationUs   = PerfElapsedUs(scanStart),
+        .cacheSize    = static_cast<uint64_t>(g_associationToIconIndex.size()),
+        .removedCount = static_cast<uint64_t>(removed),
+    };
 }
 
 [[nodiscard]] std::wstring NormalizeExtensionKey(std::wstring_view extension)
@@ -283,19 +302,28 @@ void EvictAssociationQueryBatch()
 {
     const std::wstring extensionKey(normalizedExtension);
 
+    std::optional<int> cachedIconIndex;
+    uint64_t lookupWaitUs = 0;
+    uint64_t lookupHoldUs = 0;
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(g_associationCacheMutex);
-        PerfEmitSlowIconCacheLockWait(L"association_lookup", PerfElapsedUs(lockWaitStart));
+        lookupWaitUs = PerfElapsedUs(lockWaitStart);
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"association_lookup", PerfElapsedUs(lockHoldStart)); });
         AssociationQueryKey cacheKey{extensionKey, fileAttributes};
         const auto cached = g_associationToIconIndex.find(cacheKey);
         if (cached != g_associationToIconIndex.end())
         {
             cached->second.lastAccessTime = ++g_associationQueryAccessCounter;
-            return cached->second.iconIndex;
+            cachedIconIndex               = cached->second.iconIndex;
         }
+        lookupHoldUs = PerfElapsedUs(lockHoldStart);
+    }
+    PerfEmitSlowIconCacheLockWait(L"association_lookup", lookupWaitUs);
+    PerfEmitSlowIconCacheLockHold(L"association_lookup", lookupHoldUs);
+    if (cachedIconIndex.has_value())
+    {
+        return cachedIconIndex;
     }
 
     SHFILEINFOW sfi{};
@@ -314,21 +342,29 @@ void EvictAssociationQueryBatch()
         return std::nullopt;
     }
 
+    uint64_t storeWaitUs = 0;
+    uint64_t storeHoldUs = 0;
+    AssociationLruEvictScanMetric evictionMetric{};
+    std::optional<int> storedIconIndex;
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(g_associationCacheMutex);
-        PerfEmitSlowIconCacheLockWait(L"association_store", PerfElapsedUs(lockWaitStart));
+        storeWaitUs = PerfElapsedUs(lockWaitStart);
         const auto lockHoldStart = std::chrono::steady_clock::now();
-        auto lockHold            = wil::scope_exit([&] { PerfEmitSlowIconCacheLockHold(L"association_store", PerfElapsedUs(lockHoldStart)); });
         AssociationQueryKey cacheKey{extensionKey, fileAttributes};
-        EvictAssociationQueryBatch();
+        evictionMetric = EvictAssociationQueryBatch();
 
         AssociationIconCacheEntry entry{};
         entry.iconIndex                               = sfi.iIcon;
         entry.lastAccessTime                          = ++g_associationQueryAccessCounter;
         g_associationToIconIndex[std::move(cacheKey)] = entry;
-        return entry.iconIndex;
+        storedIconIndex                               = entry.iconIndex;
+        storeHoldUs                                   = PerfElapsedUs(lockHoldStart);
     }
+    PerfEmitSlowIconCacheLockWait(L"association_store", storeWaitUs);
+    PerfEmitSlowIconCacheLockHold(L"association_store", storeHoldUs);
+    EmitAssociationLruEvictScanMetric(evictionMetric);
+    return storedIconIndex;
 }
 
 [[nodiscard]] std::optional<int> QueryCachedDefaultAssociationIconIndex() noexcept

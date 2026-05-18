@@ -1087,17 +1087,15 @@ std::optional<size_t> FolderView::HitTest(POINT clientPt) const
         return std::nullopt;
     }
 
-    const auto columnIt = std::find_if(_columnLayout.begin(), _columnLayout.end(), [x](const FolderViewColumnLayout::Column& column) noexcept
-    {
-        return x >= column.leftDip && x <= column.RightDip();
-    });
-    if (columnIt == _columnLayout.end())
+    const std::optional<size_t> columnIndex = FolderViewColumnLayout::ResolveHitColumnIndex(x, _columnLayout);
+    if (! columnIndex.has_value())
     {
         return std::nullopt;
     }
+    const FolderViewColumnLayout::Column& column = _columnLayout[columnIndex.value()];
 
     int row = static_cast<int>(std::floor((y - firstRowTop) / rowStride));
-    if (row < 0 || row >= static_cast<int>(columnIt->itemCount))
+    if (row < 0 || row >= static_cast<int>(column.itemCount))
     {
         return std::nullopt;
     }
@@ -1108,7 +1106,7 @@ std::optional<size_t> FolderView::HitTest(POINT clientPt) const
         return std::nullopt;
     }
 
-    const size_t index = columnIt->startIndex + static_cast<size_t>(row);
+    const size_t index = column.startIndex + static_cast<size_t>(row);
     if (index >= _items.size())
     {
         return std::nullopt;

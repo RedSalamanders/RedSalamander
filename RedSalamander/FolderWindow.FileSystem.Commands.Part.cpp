@@ -10709,6 +10709,7 @@ bool FolderWindow::DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDeb
     out.thumbnailCacheHitCount      = thumbnails.cacheHitCount;
     out.thumbnailShellSuccessCount  = thumbnails.shellSuccessCount;
     out.thumbnailWicSuccessCount    = thumbnails.wicSuccessCount;
+    out.thumbnailWicFactoryCreateCount = thumbnails.wicFactoryCreateCount;
     out.thumbnailDecodeFailureCount = thumbnails.decodeFailureCount;
     out.thumbnailVisibleApplyCount  = thumbnails.visibleApplyCount;
     out.thumbnailVisibleItemCount = thumbnails.visibleItemCount;

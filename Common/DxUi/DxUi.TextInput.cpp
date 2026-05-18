@@ -1,43 +1,22 @@
 #include "DxUi.Internal.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cwctype>
 #include <limits>
 
-#include <imm.h>
-#include <richedit.h>
-#include <windowsx.h>
-
-#include "DxUi.Typography.h"
 #include "Helpers.h"
-#include "WindowMessages.h"
-
-#pragma comment(lib, "imm32.lib")
 
 namespace RedSalamander::DxUi
 {
 namespace
 {
 constexpr UINT kModifierAlt                                        = 0x0100u;
-constexpr int kTextInputBridgeMinWidthPx                           = 64;
-constexpr int kTextInputBridgeMinHeightPx                          = 32;
-constexpr int kTextInputBridgeControlId                            = 0x7A41;
-constexpr wchar_t kTextInputBridgeWindowClass[]                    = L"DxUiTextInputBridgeWindow";
-constexpr wchar_t kDxUiTextInputBridgeImeComposingProp[]           = L"DxUiTextInputBridgeImeComposing";
-constexpr wchar_t kDxUiTextInputBridgeShiftProp[]                  = L"DxUiTextInputBridgeShift";
-constexpr wchar_t kDxUiTextInputBridgeCtrlProp[]                   = L"DxUiTextInputBridgeCtrl";
-constexpr wchar_t kDxUiTextInputBridgeAltProp[]                    = L"DxUiTextInputBridgeAlt";
-constexpr float kTextInputBridgeFontSizeDip                        = 14.0f;
-constexpr std::wstring_view kNonVisibleTextServiceBridgeFontFamily = Typography::kSegoeUiVariableTextFamily;
 constexpr float kMultilineLayoutHeightDip                          = 32768.0f;
 constexpr uint64_t kCaretBlinkPeriodMs                             = 530u;
-constexpr size_t kTextInputBridgeMaxHistoryEntries                 = 256u;
 
-[[nodiscard]] std::wstring NormalizeBridgeTextFromControlText(std::wstring_view text, bool multiline);
-[[nodiscard]] std::wstring NormalizeControlTextFromBridgeText(std::wstring_view text, bool multiline);
-[[nodiscard]] size_t MapBridgeIndexToControlIndex(std::wstring_view bridgeText, size_t bridgeIndex, bool multiline, bool logicalSelectionNewlines) noexcept;
-[[nodiscard]] bool UseLogicalNewlinesForCollapsedBridgeCaret(const TextInputBridgeState& state) noexcept;
+[[nodiscard]] std::wstring NormalizeMultilineLineEndings(std::wstring_view text, bool multiline);
 
 [[nodiscard]] bool ModifiersContainCtrl(UINT modifiers) noexcept
 {
@@ -54,244 +33,140 @@ constexpr size_t kTextInputBridgeMaxHistoryEntries                 = 256u;
     return (modifiers & kModifierAlt) != 0u;
 }
 
-[[nodiscard]] LONG DipsToNegativePixels(float sizeDip, UINT dpi) noexcept
+[[nodiscard]] size_t CountTextElements(std::wstring_view text) noexcept
 {
-    const UINT effectiveDpi = (std::max<UINT>)(dpi, USER_DEFAULT_SCREEN_DPI);
-    return -(std::max<LONG>)(1L, static_cast<LONG>(std::lround((sizeDip * static_cast<float>(effectiveDpi)) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))));
+    size_t count = 0u;
+    for (size_t index = 0u; index < text.size();)
+    {
+        const size_t next = StepToNextTextElement(text, index);
+        index             = next > index ? next : index + 1u;
+        ++count;
+    }
+    return count;
 }
 
-[[nodiscard]] wil::unique_hfont CreateNonVisibleTextServiceBridgeFont(UINT dpi) noexcept
+struct ConcealedMaskBucket final
 {
-    static_assert(kNonVisibleTextServiceBridgeFontFamily.size() < LF_FACESIZE);
+    size_t start = 0u;
+    size_t end = 0u;
+    size_t displayBase = 0u;
+    size_t displaySpan = 1u;
+};
 
-    LOGFONTW lf{};
-    lf.lfHeight        = DipsToNegativePixels(kTextInputBridgeFontSizeDip, dpi);
-    lf.lfWeight        = FW_NORMAL;
-    lf.lfQuality       = CLEARTYPE_QUALITY;
-    lf.lfCharSet       = DEFAULT_CHARSET;
-    lf.lfOutPrecision  = OUT_TT_PRECIS;
-    lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-    std::copy(kNonVisibleTextServiceBridgeFontFamily.begin(), kNonVisibleTextServiceBridgeFontFamily.end(), lf.lfFaceName);
-    lf.lfFaceName[kNonVisibleTextServiceBridgeFontFamily.size()] = L'\0';
-    return wil::unique_hfont(CreateFontIndirectW(&lf));
+[[nodiscard]] ConcealedMaskBucket GetConcealedMaskBucket(size_t exactCount) noexcept
+{
+    if (exactCount == 0u)
+    {
+        return {};
+    }
+    if (exactCount <= 4u)
+    {
+        return {.start = 1u, .end = 4u, .displayBase = 4u, .displaySpan = 4u};
+    }
+    if (exactCount <= 8u)
+    {
+        return {.start = 5u, .end = 8u, .displayBase = 8u, .displaySpan = 4u};
+    }
+    if (exactCount <= 12u)
+    {
+        return {.start = 9u, .end = 12u, .displayBase = 12u, .displaySpan = 4u};
+    }
+
+    const size_t bucketEnd = ((exactCount + 7u) / 8u) * 8u;
+    return {.start = bucketEnd - 7u, .end = bucketEnd, .displayBase = bucketEnd, .displaySpan = 8u};
 }
 
-[[nodiscard]] bool EnsureTextInputBridgeWindowClassRegistered() noexcept
+} // namespace
+
+[[nodiscard]] std::optional<std::pair<size_t, size_t>> ResolveNativeTextInputOptionalRange(
+    const NativeTextInputState& state, std::optional<size_t> startIndex, std::optional<size_t> endIndex) noexcept
 {
-    static bool registered = false;
-    if (registered)
+    if (! startIndex.has_value() || ! endIndex.has_value())
     {
-        return true;
+        return std::nullopt;
     }
 
-    WNDCLASSEXW windowClass{};
-    windowClass.cbSize        = sizeof(windowClass);
-    windowClass.style         = CS_DBLCLKS;
-    windowClass.lpfnWndProc   = TextInputBridgeWndProc;
-    windowClass.hInstance     = GetModuleHandleW(nullptr);
-    windowClass.lpszClassName = kTextInputBridgeWindowClass;
-    if (RegisterClassExW(&windowClass) == 0)
+    const size_t start = (std::min)(startIndex.value(), state.text.size());
+    const size_t end   = (std::min)(endIndex.value(), state.text.size());
+    if (end <= start)
     {
-        const DWORD lastError = GetLastError();
-        if (lastError != ERROR_CLASS_ALREADY_EXISTS)
-        {
-            Debug::Error(L"DxUi::WindowHost: RegisterClassExW failed for text-input bridge window ({:08X})", HRESULT_FROM_WIN32(lastError));
-            return false;
-        }
+        return std::nullopt;
     }
 
-    registered = true;
-    return true;
+    return std::pair<size_t, size_t>{start, end};
 }
 
-[[nodiscard]] UINT ComputeModifierMask() noexcept
+[[nodiscard]] std::vector<D2D1_RECT_F> BuildTextInputUnderlineRects(
+    const WindowHost& host, const Control& control, std::pair<size_t, size_t> range, float bottomInsetDip, float thicknessDip)
 {
-    UINT mask = 0;
-    if ((GetKeyState(VK_SHIFT) & 0x8000) != 0)
+    std::vector<D2D1_RECT_F> underlineRects;
+    const std::optional<std::vector<D2D1_RECT_F>> rangeRects = control.TryGetTextInputRangeRects(host, range.first, range.second);
+    if (! rangeRects.has_value())
     {
-        mask |= MK_SHIFT;
-    }
-    if ((GetKeyState(VK_CONTROL) & 0x8000) != 0)
-    {
-        mask |= MK_CONTROL;
-    }
-    if ((GetKeyState(VK_MENU) & 0x8000) != 0)
-    {
-        mask |= kModifierAlt;
-    }
-    if ((GetKeyState(VK_LBUTTON) & 0x8000) != 0)
-    {
-        mask |= MK_LBUTTON;
-    }
-    if ((GetKeyState(VK_RBUTTON) & 0x8000) != 0)
-    {
-        mask |= MK_RBUTTON;
-    }
-    return mask;
-}
-
-void SetTextBridgeModifierState(HWND hwnd, UINT virtualKey, bool keyDown) noexcept
-{
-    if (! hwnd)
-    {
-        return;
+        return underlineRects;
     }
 
-    const auto setPropFlag = [hwnd, keyDown](const wchar_t* propName) noexcept
+    for (const D2D1_RECT_F& rangeRect : rangeRects.value())
     {
-        if (keyDown)
-        {
-            static_cast<void>(SetPropW(hwnd, propName, reinterpret_cast<HANDLE>(1)));
-        }
-        else
-        {
-            RemovePropW(hwnd, propName);
-        }
-    };
-
-    switch (virtualKey)
-    {
-        case VK_SHIFT: setPropFlag(kDxUiTextInputBridgeShiftProp); break;
-        case VK_CONTROL: setPropFlag(kDxUiTextInputBridgeCtrlProp); break;
-        case VK_MENU: setPropFlag(kDxUiTextInputBridgeAltProp); break;
-        default: break;
-    }
-}
-
-[[nodiscard]] UINT ComputeTextBridgeModifierMask(HWND hwnd) noexcept
-{
-    UINT mask = ComputeModifierMask();
-    if (hwnd && GetPropW(hwnd, kDxUiTextInputBridgeShiftProp))
-    {
-        mask |= MK_SHIFT;
-    }
-    if (hwnd && GetPropW(hwnd, kDxUiTextInputBridgeCtrlProp))
-    {
-        mask |= MK_CONTROL;
-    }
-    if (hwnd && GetPropW(hwnd, kDxUiTextInputBridgeAltProp))
-    {
-        mask |= kModifierAlt;
-    }
-    return mask;
-}
-
-[[nodiscard]] bool IsTextBridgeSpecialKey(UINT msg, UINT virtualKey, UINT modifiers, bool multiline) noexcept
-{
-    if (virtualKey == VK_TAB || virtualKey == VK_ESCAPE || virtualKey == VK_APPS)
-    {
-        return true;
-    }
-
-    if (virtualKey == VK_RETURN)
-    {
-        return ! multiline;
-    }
-
-    if (virtualKey == VK_F10 && ModifiersContainShift(modifiers))
-    {
-        return true;
-    }
-
-    if (! ModifiersContainAlt(modifiers))
-    {
-        switch (virtualKey)
-        {
-            case VK_LEFT:
-            case VK_RIGHT:
-            case VK_HOME:
-            case VK_END:
-            case VK_BACK:
-            case VK_DELETE: return true;
-            case VK_UP:
-            case VK_DOWN:
-            case VK_PRIOR:
-            case VK_NEXT: return multiline;
-            case VK_INSERT: return ModifiersContainCtrl(modifiers) || ModifiersContainShift(modifiers);
-            default: break;
-        }
-
-        if (ModifiersContainCtrl(modifiers))
-        {
-            switch (virtualKey)
-            {
-                case 'A':
-                case 'C':
-                case 'V':
-                case 'X':
-                case 'Y':
-                case 'Z': return true;
-                default: break;
-            }
-        }
-    }
-
-    return msg == WM_SYSKEYDOWN && ModifiersContainAlt(modifiers) && (virtualKey == VK_DOWN || virtualKey == VK_UP);
-}
-
-void SetTextBridgeImeComposing(HWND hwnd, bool composing) noexcept
-{
-    if (! hwnd)
-    {
-        return;
-    }
-
-    if (composing)
-    {
-        static_cast<void>(SetPropW(hwnd, kDxUiTextInputBridgeImeComposingProp, reinterpret_cast<HANDLE>(1)));
-    }
-    else
-    {
-        RemovePropW(hwnd, kDxUiTextInputBridgeImeComposingProp);
-    }
-}
-
-[[nodiscard]] bool TextBridgeImeCompositionHasActiveComposition(LPARAM compositionFlags) noexcept
-{
-    constexpr LPARAM kActiveCompositionFlags =
-        GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_COMPREADSTR | GCS_COMPREADATTR | GCS_COMPREADCLAUSE | GCS_CURSORPOS | GCS_DELTASTART;
-    return (compositionFlags & kActiveCompositionFlags) != 0;
-}
-
-[[nodiscard]] bool TextBridgeImeCompositionHasCommittedResult(LPARAM compositionFlags) noexcept
-{
-    constexpr LPARAM kCommittedResultFlags = GCS_RESULTSTR | GCS_RESULTCLAUSE | GCS_RESULTREADSTR | GCS_RESULTREADCLAUSE;
-    return (compositionFlags & kCommittedResultFlags) != 0;
-}
-
-[[nodiscard]] bool TextBridgeImeCompositionKeepsCompositionActive(LPARAM compositionFlags) noexcept
-{
-    return TextBridgeImeCompositionHasActiveComposition(compositionFlags) || ! TextBridgeImeCompositionHasCommittedResult(compositionFlags);
-}
-
-[[nodiscard]] std::wstring NormalizeBridgeTextFromControlText(std::wstring_view text, bool multiline)
-{
-    if (! multiline || text.empty())
-    {
-        return std::wstring(text);
-    }
-
-    std::wstring normalized;
-    normalized.reserve(text.size() + static_cast<size_t>(std::count(text.begin(), text.end(), L'\n')));
-    for (wchar_t ch : text)
-    {
-        if (ch == L'\r')
+        const D2D1_RECT_F snappedRange = SnapRectToPixel(host, rangeRect);
+        if (snappedRange.right <= snappedRange.left || snappedRange.bottom <= snappedRange.top)
         {
             continue;
         }
 
-        if (ch == L'\n')
+        const float thickness = std::max(1.0f, thicknessDip);
+        const float bottom    = std::min(snappedRange.bottom, std::max(snappedRange.top + thickness, snappedRange.bottom - bottomInsetDip));
+        const D2D1_RECT_F underline =
+            SnapRectToPixel(host, D2D1::RectF(snappedRange.left, bottom - thickness, snappedRange.right, bottom));
+        if (underline.right > underline.left && underline.bottom > underline.top)
         {
-            normalized.push_back(L'\r');
+            underlineRects.push_back(underline);
         }
-
-        normalized.push_back(ch);
     }
 
-    return normalized;
+    return underlineRects;
 }
 
-[[nodiscard]] std::wstring NormalizeControlTextFromBridgeText(std::wstring_view text, bool multiline)
+[[nodiscard]] std::vector<D2D1_RECT_F> BuildNativeCompositionUnderlineRects(
+    const WindowHost& host, const Control& control, const bool conversionTarget)
+{
+    NativeTextInputState state{};
+    if (! host.TryReadNativeTextInputState(&control, state))
+    {
+        return {};
+    }
+
+    const std::optional<std::pair<size_t, size_t>> range =
+        conversionTarget
+            ? ResolveNativeTextInputOptionalRange(state, state.conversionTargetStartIndex, state.conversionTargetEndIndex)
+            : ResolveNativeTextInputOptionalRange(state, state.compositionStartIndex, state.compositionEndIndex);
+    if (! range.has_value())
+    {
+        return {};
+    }
+
+    return BuildTextInputUnderlineRects(host, control, range.value(), conversionTarget ? 1.0f : 2.0f, conversionTarget ? 2.0f : 1.0f);
+}
+
+void DrawTextInputUnderlineRects(WindowHost& host, const std::vector<D2D1_RECT_F>& underlineRects, const D2D1_COLOR_F& color) noexcept
+{
+    auto* dc    = host.GetDeviceContext();
+    auto* brush = host.GetSolidBrush(color);
+    if (! dc || ! brush)
+    {
+        return;
+    }
+
+    for (const D2D1_RECT_F& rect : underlineRects)
+    {
+        dc->FillRectangle(rect, brush);
+    }
+}
+
+namespace
+{
+
+[[nodiscard]] std::wstring NormalizeMultilineLineEndings(std::wstring_view text, bool multiline)
 {
     if (! multiline || text.empty())
     {
@@ -329,14 +204,15 @@ void SetTextBridgeImeComposing(HWND hwnd, bool composing) noexcept
 
     if (multiline)
     {
-        return NormalizeControlTextFromBridgeText(text, true);
+        return NormalizeMultilineLineEndings(text, true);
     }
 
     std::wstring normalized;
     normalized.reserve(text.size());
     for (wchar_t ch : text)
     {
-        if (std::iswcntrl(static_cast<wint_t>(ch)) != 0)
+        const auto codeUnit = static_cast<unsigned int>(ch);
+        if (codeUnit < 0x20u || (codeUnit >= 0x7Fu && codeUnit <= 0x9Fu))
         {
             continue;
         }
@@ -345,204 +221,6 @@ void SetTextBridgeImeComposing(HWND hwnd, bool composing) noexcept
     }
 
     return normalized;
-}
-
-[[nodiscard]] size_t MapControlIndexToBridgeIndex(std::wstring_view controlText, size_t controlIndex, bool multiline, bool logicalSelectionNewlines) noexcept
-{
-    const size_t clampedIndex = std::min(controlIndex, controlText.size());
-    if (! multiline)
-    {
-        return clampedIndex;
-    }
-
-    size_t bridgeIndex = 0u;
-    for (size_t index = 0u; index < clampedIndex; ++index)
-    {
-        if (controlText[index] == L'\n')
-        {
-            bridgeIndex += logicalSelectionNewlines ? 1u : 2u;
-            continue;
-        }
-
-        bridgeIndex += 1u;
-    }
-    return bridgeIndex;
-}
-
-[[nodiscard]] size_t MapBridgeIndexToControlIndex(std::wstring_view bridgeText, size_t bridgeIndex, bool multiline, bool logicalSelectionNewlines) noexcept
-{
-    const size_t clampedIndex = std::min(bridgeIndex, bridgeText.size());
-    if (! multiline)
-    {
-        return clampedIndex;
-    }
-
-    size_t controlIndex = 0u;
-    size_t index        = 0u;
-    size_t logicalIndex = 0u;
-    while (index < bridgeText.size() && logicalIndex < clampedIndex)
-    {
-        if (bridgeText[index] == L'\r' && index + 1u < bridgeText.size() && bridgeText[index + 1u] == L'\n')
-        {
-            if (logicalSelectionNewlines)
-            {
-                index += 2u;
-                ++logicalIndex;
-                ++controlIndex;
-                continue;
-            }
-
-            if (index + 2u <= clampedIndex)
-            {
-                index += 2u;
-                logicalIndex += 2u;
-                ++controlIndex;
-                continue;
-            }
-
-            break;
-        }
-
-        ++index;
-        ++logicalIndex;
-        ++controlIndex;
-    }
-
-    return controlIndex;
-}
-
-struct TextBridgeImeAnchor
-{
-    POINT compositionPoint{};
-    RECT exclusionRect{};
-};
-
-[[nodiscard]] bool TryGetTextBridgeSelectionEnd(HWND edit, size_t& outSelectionEnd) noexcept
-{
-    if (! edit)
-    {
-        return false;
-    }
-
-    DWORD selectionStart = 0u;
-    DWORD selectionEnd   = 0u;
-    SendMessageW(edit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
-    outSelectionEnd = static_cast<size_t>(selectionEnd);
-    return true;
-}
-
-[[nodiscard]] bool IsRichEditBridge(HWND edit) noexcept
-{
-    if (! edit)
-    {
-        return false;
-    }
-
-    std::array<wchar_t, 16> className{};
-    const int classLength = GetClassNameW(edit, className.data(), static_cast<int>(className.size()));
-    return classLength > 0 && _wcsicmp(className.data(), MSFTEDIT_CLASS) == 0;
-}
-
-[[nodiscard]] bool TryGetTextBridgeCaretClientRect(HWND edit, RECT& outCaretRect) noexcept
-{
-    if (! edit)
-    {
-        return false;
-    }
-
-    size_t selectionEnd = 0u;
-    static_cast<void>(TryGetTextBridgeSelectionEnd(edit, selectionEnd));
-
-    std::optional<POINT> caretPoint;
-    if (IsRichEditBridge(edit))
-    {
-        POINTL richEditPoint{};
-        if (SendMessageW(edit, EM_POSFROMCHAR, reinterpret_cast<WPARAM>(&richEditPoint), static_cast<LPARAM>(selectionEnd)) != -1)
-        {
-            caretPoint = POINT{richEditPoint.x, richEditPoint.y};
-        }
-    }
-    else
-    {
-        const LRESULT position = SendMessageW(edit, EM_POSFROMCHAR, static_cast<WPARAM>(selectionEnd), 0);
-        caretPoint             = POINT{GET_X_LPARAM(position), GET_Y_LPARAM(position)};
-    }
-
-    if (! caretPoint.has_value())
-    {
-        GUITHREADINFO guiThreadInfo{};
-        guiThreadInfo.cbSize = sizeof(guiThreadInfo);
-        if (GetGUIThreadInfo(0, &guiThreadInfo) != FALSE && guiThreadInfo.hwndCaret)
-        {
-            RECT caretRect = guiThreadInfo.rcCaret;
-            if (guiThreadInfo.hwndCaret != edit)
-            {
-                MapWindowPoints(guiThreadInfo.hwndCaret, edit, reinterpret_cast<POINT*>(&caretRect), 2);
-            }
-
-            if (caretRect.right <= caretRect.left)
-            {
-                caretRect.right = caretRect.left + 1;
-            }
-            if (caretRect.bottom <= caretRect.top)
-            {
-                caretRect.bottom = caretRect.top + std::max(12, GetSystemMetrics(SM_CYCURSOR));
-            }
-
-            outCaretRect = caretRect;
-            return true;
-        }
-
-        return false;
-    }
-
-    RECT textRect{};
-    if (SendMessageW(edit, EM_GETRECT, 0, reinterpret_cast<LPARAM>(&textRect)) == 0)
-    {
-        GetClientRect(edit, &textRect);
-    }
-
-    const LONG caretHeight = std::max<LONG>(12, std::max(1L, textRect.bottom - textRect.top));
-    outCaretRect           = RECT{caretPoint->x, caretPoint->y, caretPoint->x + 1, caretPoint->y + caretHeight};
-    return true;
-}
-
-void UpdateTextBridgeImeWindows(HWND edit) noexcept
-{
-    if (! edit)
-    {
-        return;
-    }
-
-    HIMC inputContext = ImmGetContext(edit);
-    if (! inputContext)
-    {
-        return;
-    }
-    const auto releaseContext = wil::scope_exit([&] { ImmReleaseContext(edit, inputContext); });
-
-    RECT caretRect{};
-    if (! TryGetTextBridgeCaretClientRect(edit, caretRect))
-    {
-        return;
-    }
-
-    const TextBridgeImeAnchor anchor{
-        .compositionPoint = POINT{caretRect.left, caretRect.top},
-        .exclusionRect    = caretRect,
-    };
-
-    COMPOSITIONFORM compositionForm{};
-    compositionForm.dwStyle      = CFS_FORCE_POSITION;
-    compositionForm.ptCurrentPos = anchor.compositionPoint;
-    static_cast<void>(ImmSetCompositionWindow(inputContext, &compositionForm));
-
-    CANDIDATEFORM candidateForm{};
-    candidateForm.dwIndex      = 0u;
-    candidateForm.dwStyle      = CFS_EXCLUDE;
-    candidateForm.ptCurrentPos = POINT{caretRect.left, caretRect.bottom};
-    candidateForm.rcArea       = anchor.exclusionRect;
-    static_cast<void>(ImmSetCandidateWindow(inputContext, &candidateForm));
 }
 
 [[nodiscard]] size_t FindLineStart(std::wstring_view text, size_t caretIndex) noexcept
@@ -844,11 +522,6 @@ struct MultilineViewportMetrics
     return moveToLineEnd ? range.end : range.start;
 }
 
-[[nodiscard]] bool UseLogicalNewlinesForCollapsedBridgeCaret(const TextInputBridgeState& state) noexcept
-{
-    return state.multiline && ! state.selectionAnchorIndex.has_value();
-}
-
 [[nodiscard]] wil::com_ptr<IDWriteTextLayout> CreateMultilineTextLayout(
     const WindowHost* host, std::wstring_view text, FontRole role, float widthDip, float heightDip) noexcept
 {
@@ -1120,6 +793,15 @@ struct MultilineViewportMetrics
     return fallbackRect;
 }
 
+[[nodiscard]] D2D1_RECT_F ClipTextInputRectToBounds(D2D1_RECT_F rect, const D2D1_RECT_F& bounds) noexcept
+{
+    rect.left   = std::clamp(rect.left, bounds.left, bounds.right);
+    rect.right  = std::clamp(rect.right, rect.left, bounds.right);
+    rect.top    = std::clamp(rect.top, bounds.top, bounds.bottom);
+    rect.bottom = std::clamp(rect.bottom, rect.top, bounds.bottom);
+    return rect;
+}
+
 void DrawMultilineSelection(WindowHost& host,
                             std::wstring_view text,
                             const D2D1_RECT_F& rect,
@@ -1209,914 +891,43 @@ void DrawMultilineSelection(WindowHost& host,
     dc->PopAxisAlignedClip();
 }
 
-[[nodiscard]] std::wstring GetBridgeTextFromState(const TextInputBridgeState& state)
-{
-    return NormalizeBridgeTextFromControlText(state.text, state.multiline);
-}
-
-[[nodiscard]] std::pair<size_t, size_t> GetTextInputBridgeSelectionRange(const TextInputBridgeState& state) noexcept
-{
-    const size_t anchorIndex = state.selectionAnchorIndex.value_or(state.caretIndex);
-    return {(std::min)(anchorIndex, state.caretIndex), (std::max)(anchorIndex, state.caretIndex)};
-}
-
-void SetTextInputBridgeSelectionRange(TextInputBridgeState& state, size_t start, size_t end) noexcept
-{
-    start = (std::min)(start, state.text.size());
-    end   = (std::min)(end, state.text.size());
-    if (start >= end)
-    {
-        state.selectionAnchorIndex.reset();
-        state.caretIndex = end;
-        return;
-    }
-
-    state.selectionAnchorIndex = start;
-    state.caretIndex           = end;
-}
-
-[[nodiscard]] bool ReplaceTextInputBridgeSelection(TextInputBridgeState& state, std::wstring_view replacement)
-{
-    if (state.readOnly)
-    {
-        return false;
-    }
-
-    auto [selectionStart, selectionEnd] = GetTextInputBridgeSelectionRange(state);
-    selectionStart                      = (std::min)(selectionStart, state.text.size());
-    selectionEnd                        = (std::min)(selectionEnd, state.text.size());
-    state.text.replace(selectionStart, selectionEnd - selectionStart, replacement);
-    state.selectionAnchorIndex.reset();
-    state.caretIndex = selectionStart + replacement.size();
-    return true;
-}
-
-[[nodiscard]] std::optional<std::wstring> GetSelectedBridgeTextFromState(const TextInputBridgeState& state)
-{
-    const auto [selectionStart, selectionEnd] = GetTextInputBridgeSelectionRange(state);
-    if (selectionEnd <= selectionStart || selectionEnd > state.text.size())
-    {
-        return std::nullopt;
-    }
-
-    return NormalizeBridgeTextFromControlText(state.text.substr(selectionStart, selectionEnd - selectionStart), state.multiline);
-}
-
 } // namespace
 
-LRESULT CALLBACK TextInputBridgeWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+void WindowHost::CommitFocusedTextInput() noexcept
 {
-    if (msg == WM_NCCREATE)
-    {
-        const auto* createStruct = reinterpret_cast<const CREATESTRUCTW*>(lp);
-        static_cast<void>(SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(createStruct ? createStruct->lpCreateParams : nullptr)));
-        return TRUE;
-    }
-
-    auto* host = reinterpret_cast<WindowHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    if (! host)
-    {
-        return DefWindowProcW(hwnd, msg, wp, lp);
-    }
-
-    if (msg == WM_NCDESTROY)
-    {
-        const LRESULT result = host->HandleTextInputBridgeWindowMessage(hwnd, msg, wp, lp);
-        static_cast<void>(SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0));
-        return result;
-    }
-
-    return host->HandleTextInputBridgeWindowMessage(hwnd, msg, wp, lp);
+    SyncNativeTextInputSession(_focusedControl);
 }
 
-LRESULT WindowHost::HandleTextInputBridgeWindowMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+bool WindowHost::TryReadTextInputState(const Control* control, TextInputState& outState) const noexcept
 {
-    if (hwnd != _textInputBridgeEdit.get())
-    {
-        return DefWindowProcW(hwnd, msg, wp, lp);
-    }
-
-    const auto readState        = [this]() noexcept -> std::optional<TextInputBridgeState> { return ReadTextInputBridgeState(); };
-    const auto pushHistoryState = [](std::vector<TextInputBridgeState>& history, const TextInputBridgeState& state) noexcept
-    {
-        history.push_back(state);
-        if (history.size() > kTextInputBridgeMaxHistoryEntries)
-        {
-            history.erase(history.begin());
-        }
-    };
-    const auto pushUndoState = [this, &pushHistoryState](const TextInputBridgeState& before) noexcept
-    {
-        pushHistoryState(_textInputBridgeUndoHistory, before);
-        _textInputBridgeRedoHistory.clear();
-    };
-    const auto commitState =
-        [this, hwnd, &pushUndoState](const TextInputBridgeState& before, const TextInputBridgeState& after, bool notifyChange, bool recordUndo) noexcept
-    {
-        if (recordUndo && before.text != after.text)
-        {
-            pushUndoState(before);
-        }
-
-        ApplyTextInputBridgeState(after);
-        SyncFocusedControlFromTextInputBridge(notifyChange);
-        UpdateTextBridgeImeWindows(hwnd);
-        return 0;
-    };
-    const auto tryGetViewportRect = [this]() noexcept -> std::optional<RECT>
-    {
-        if (! _textInputBridgeControl)
-        {
-            return std::nullopt;
-        }
-
-        RECT clientRect{};
-        if (GetClientRect(_textInputBridgeEdit.get(), &clientRect) == FALSE)
-        {
-            return std::nullopt;
-        }
-
-        RECT viewportRect = clientRect;
-        if (const std::optional<D2D1_RECT_F> viewportDip = _textInputBridgeControl->GetTextInputBridgeViewportRect(); viewportDip.has_value())
-        {
-            const D2D1_RECT_F bounds = _textInputBridgeControl->GetBounds();
-            const int leftPx         = static_cast<int>(std::lround(DipsToPixels(viewportDip->left - bounds.left)));
-            const int topPx          = static_cast<int>(std::lround(DipsToPixels(viewportDip->top - bounds.top)));
-            const int rightPx        = static_cast<int>(std::lround(DipsToPixels(bounds.right - viewportDip->right)));
-            const int bottomPx       = static_cast<int>(std::lround(DipsToPixels(bounds.bottom - viewportDip->bottom)));
-
-            viewportRect.left   = static_cast<LONG>((std::clamp)(leftPx, 0, static_cast<int>(clientRect.right)));
-            viewportRect.top    = static_cast<LONG>((std::clamp)(topPx, 0, static_cast<int>(clientRect.bottom)));
-            viewportRect.right  = static_cast<LONG>((std::clamp)(static_cast<int>(clientRect.right) - (std::max)(0, rightPx),
-                                                                 static_cast<int>(viewportRect.left) + 1,
-                                                                 static_cast<int>(clientRect.right)));
-            viewportRect.bottom = static_cast<LONG>((std::clamp)(static_cast<int>(clientRect.bottom) - (std::max)(0, bottomPx),
-                                                                 static_cast<int>(viewportRect.top) + 1,
-                                                                 static_cast<int>(clientRect.bottom)));
-        }
-
-        return viewportRect;
-    };
-    const auto tryGetCaretRect = [this](const TextInputBridgeState& state) noexcept -> std::optional<RECT>
-    {
-        if (! _textInputBridgeControl)
-        {
-            return std::nullopt;
-        }
-
-        if (const std::optional<D2D1_RECT_F> caretRectDip = _textInputBridgeControl->GetTextInputBridgeCaretRect(*this, state.caretIndex);
-            caretRectDip.has_value())
-        {
-            const D2D1_RECT_F bounds = _textInputBridgeControl->GetBounds();
-            RECT caretRect{static_cast<LONG>(std::lround(DipsToPixels(caretRectDip->left - bounds.left))),
-                           static_cast<LONG>(std::lround(DipsToPixels(caretRectDip->top - bounds.top))),
-                           static_cast<LONG>(std::lround(DipsToPixels(caretRectDip->right - bounds.left))),
-                           static_cast<LONG>(std::lround(DipsToPixels(caretRectDip->bottom - bounds.top)))};
-            if (caretRect.right <= caretRect.left)
-            {
-                caretRect.right = caretRect.left + 1;
-            }
-            if (caretRect.bottom <= caretRect.top)
-            {
-                caretRect.bottom = caretRect.top + std::max<LONG>(12, GetSystemMetrics(SM_CYCURSOR));
-            }
-            return caretRect;
-        }
-
-        return std::nullopt;
-    };
-
-    switch (msg)
-    {
-        case WM_NCHITTEST: return _textInputBridgeImeComposing ? HTCLIENT : HTTRANSPARENT;
-        case WM_GETDLGCODE: return DLGC_WANTCHARS | DLGC_WANTARROWS | DLGC_WANTTAB;
-        case WM_KILLFOCUS: return _hwnd ? SendMessageW(_hwnd, WndMsg::kDxUiTextInputBridgeBlur, wp, lp) : 0;
-        case WM_LBUTTONDOWN:
-        case WM_RBUTTONDOWN:
-        case WM_LBUTTONDBLCLK:
-        case WM_RBUTTONDBLCLK:
-        {
-            if (! _textInputBridgeControl)
-            {
-                return 0;
-            }
-
-            POINT pointPx{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-            if (_hwnd)
-            {
-                static_cast<void>(MapWindowPoints(hwnd, _hwnd, &pointPx, 1));
-            }
-
-            const D2D1_POINT_2F point = D2D1::Point2F(PixelsToDip(static_cast<float>(pointPx.x)), PixelsToDip(static_cast<float>(pointPx.y)));
-            const bool rightButton    = msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK;
-            const bool doubleClick    = msg == WM_LBUTTONDBLCLK || msg == WM_RBUTTONDBLCLK;
-            const bool handled        = doubleClick ? _textInputBridgeControl->OnMouseDoubleClick(*this, point, rightButton, static_cast<UINT>(wp))
-                                                    : _textInputBridgeControl->OnMouseDown(*this, point, rightButton, static_cast<UINT>(wp));
-            if (handled)
-            {
-                CaptureMouse(_textInputBridgeControl);
-            }
-            return 0;
-        }
-        case WM_LBUTTONUP:
-        case WM_RBUTTONUP:
-        {
-            if (_textInputBridgeControl)
-            {
-                POINT pointPx{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
-                if (_hwnd)
-                {
-                    static_cast<void>(MapWindowPoints(hwnd, _hwnd, &pointPx, 1));
-                }
-
-                const D2D1_POINT_2F point = D2D1::Point2F(PixelsToDip(static_cast<float>(pointPx.x)), PixelsToDip(static_cast<float>(pointPx.y)));
-                const bool rightButton    = msg == WM_RBUTTONUP;
-                _textInputBridgeControl->OnMouseUp(*this, point, rightButton, static_cast<UINT>(wp));
-            }
-
-            ReleaseMouseCapture();
-            return 0;
-        }
-        case WM_KEYDOWN:
-        case WM_SYSKEYDOWN:
-        {
-            const UINT virtualKey = static_cast<UINT>(wp);
-            SetTextBridgeModifierState(hwnd, virtualKey, true);
-
-            const TextInputBridgeState state = readState().value_or(TextInputBridgeState{});
-            UINT modifiers                   = ComputeTextBridgeModifierMask(hwnd);
-            const bool systemKey             = msg == WM_SYSKEYDOWN;
-            if (systemKey && virtualKey != VK_F10 && virtualKey != VK_MENU)
-            {
-                modifiers |= kModifierAlt;
-            }
-
-            if (IsTextBridgeSpecialKey(msg, virtualKey, modifiers, state.multiline))
-            {
-                if (_textInputBridgeImeComposing)
-                {
-                    return 0;
-                }
-
-                return _hwnd ? SendMessageW(_hwnd,
-                                            WndMsg::kDxUiTextInputBridgeSpecialKey,
-                                            wp,
-                                            MAKELPARAM(static_cast<WORD>(modifiers), static_cast<WORD>(systemKey ? 1u : 0u)))
-                             : 0;
-            }
-            break;
-        }
-        case WM_KEYUP:
-        case WM_SYSKEYUP: SetTextBridgeModifierState(hwnd, static_cast<UINT>(wp), false); return 0;
-        case WM_CHAR:
-        case WM_SYSCHAR:
-        {
-            const std::optional<TextInputBridgeState> beforeState = readState();
-            if (! beforeState.has_value())
-            {
-                return 0;
-            }
-
-            TextInputBridgeState afterState = beforeState.value();
-            if (! afterState.multiline && wp == L'\t')
-            {
-                return 0;
-            }
-            if (afterState.readOnly)
-            {
-                return 0;
-            }
-            if (wp == L'\r')
-            {
-                if (! afterState.multiline)
-                {
-                    return 0;
-                }
-
-                _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
-                return commitState(beforeState.value(), afterState, true, ReplaceTextInputBridgeSelection(afterState, L"\n"));
-            }
-            if (std::iswcntrl(static_cast<wint_t>(wp)) != 0)
-            {
-                return 0;
-            }
-
-            const wchar_t insertedChar[]             = {static_cast<wchar_t>(wp), L'\0'};
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
-            return commitState(beforeState.value(), afterState, true, ReplaceTextInputBridgeSelection(afterState, insertedChar));
-        }
-        case WM_IME_STARTCOMPOSITION:
-            _textInputBridgeImeComposing      = true;
-            _textInputBridgeImeHasVisibleText = true;
-            _textInputBridgeImeBaseState      = readState();
-            SetTextBridgeImeComposing(hwnd, true);
-            UpdateTextBridgeImeWindows(hwnd);
-            return 0;
-        case WM_IME_COMPOSITION:
-            if (TextBridgeImeCompositionKeepsCompositionActive(lp))
-            {
-                _textInputBridgeImeComposing = true;
-                if (TextBridgeImeCompositionHasActiveComposition(lp))
-                {
-                    _textInputBridgeImeHasVisibleText = true;
-                }
-                SetTextBridgeImeComposing(hwnd, true);
-            }
-            else if (TextBridgeImeCompositionHasCommittedResult(lp))
-            {
-                _textInputBridgeImeComposing = false;
-                SetTextBridgeImeComposing(hwnd, false);
-            }
-            UpdateTextBridgeImeWindows(hwnd);
-            return 0;
-        case WM_IME_ENDCOMPOSITION:
-            _textInputBridgeImeComposing      = false;
-            _textInputBridgeImeHasVisibleText = false;
-            _textInputBridgeImeBaseState.reset();
-            SetTextBridgeImeComposing(hwnd, false);
-            UpdateTextBridgeImeWindows(hwnd);
-            return 0;
-        case WM_UNDO:
-        {
-            const std::optional<TextInputBridgeState> currentState = readState();
-            if (! currentState.has_value() || _textInputBridgeUndoHistory.empty())
-            {
-                return FALSE;
-            }
-
-            pushHistoryState(_textInputBridgeRedoHistory, currentState.value());
-            const TextInputBridgeState restoredState = std::move(_textInputBridgeUndoHistory.back());
-            _textInputBridgeUndoHistory.pop_back();
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(restoredState);
-            ApplyTextInputBridgeState(restoredState);
-            SyncFocusedControlFromTextInputBridge(true);
-            UpdateTextBridgeImeWindows(hwnd);
-            return TRUE;
-        }
-        case EM_REDO:
-        {
-            const std::optional<TextInputBridgeState> currentState = readState();
-            if (! currentState.has_value() || _textInputBridgeRedoHistory.empty())
-            {
-                return FALSE;
-            }
-
-            pushHistoryState(_textInputBridgeUndoHistory, currentState.value());
-            const TextInputBridgeState restoredState = std::move(_textInputBridgeRedoHistory.back());
-            _textInputBridgeRedoHistory.pop_back();
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(restoredState);
-            ApplyTextInputBridgeState(restoredState);
-            SyncFocusedControlFromTextInputBridge(true);
-            UpdateTextBridgeImeWindows(hwnd);
-            return TRUE;
-        }
-        case EM_GETSEL:
-        {
-            const std::optional<TextInputBridgeState> state = readState();
-            if (! state.has_value())
-            {
-                return 0;
-            }
-
-            const auto [selectionStart, selectionEnd] = GetTextInputBridgeSelectionRange(state.value());
-            const bool logicalSelectionNewlines       = state->multiline && _textInputBridgeSelectionLogicalNewlines;
-            const size_t bridgeSelectionStart         = MapControlIndexToBridgeIndex(state->text, selectionStart, state->multiline, logicalSelectionNewlines);
-            const size_t bridgeSelectionEnd           = MapControlIndexToBridgeIndex(state->text, selectionEnd, state->multiline, logicalSelectionNewlines);
-            const DWORD selectionStartDword = static_cast<DWORD>((std::min)(bridgeSelectionStart, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
-            const DWORD selectionEndDword   = static_cast<DWORD>((std::min)(bridgeSelectionEnd, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
-
-            if (wp != 0)
-            {
-                *reinterpret_cast<DWORD*>(wp) = selectionStartDword;
-            }
-            if (lp != 0)
-            {
-                *reinterpret_cast<DWORD*>(lp) = selectionEndDword;
-            }
-
-            return MAKELRESULT(static_cast<WORD>(selectionStartDword & 0xFFFFu), static_cast<WORD>(selectionEndDword & 0xFFFFu));
-        }
-        case EM_SETSEL:
-        {
-            const std::optional<TextInputBridgeState> beforeState = readState();
-            if (! beforeState.has_value())
-            {
-                return 0;
-            }
-
-            TextInputBridgeState afterState     = beforeState.value();
-            const bool logicalSelectionNewlines = afterState.multiline && _textInputBridgeSelectionLogicalNewlines;
-            const std::wstring bridgeText       = GetBridgeTextFromState(afterState);
-            const auto mapSelectionIndex        = [&](LPARAM value) noexcept -> size_t
-            {
-                if (value < 0)
-                {
-                    return afterState.text.size();
-                }
-
-                return MapBridgeIndexToControlIndex(bridgeText, static_cast<size_t>(value), afterState.multiline, logicalSelectionNewlines);
-            };
-
-            const size_t selectionStart = mapSelectionIndex(static_cast<LPARAM>(wp));
-            const size_t selectionEnd   = mapSelectionIndex(lp);
-            SetTextInputBridgeSelectionRange(afterState, selectionStart, selectionEnd);
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
-            return commitState(beforeState.value(), afterState, false, false);
-        }
-        case EM_REPLACESEL:
-        {
-            const std::optional<TextInputBridgeState> beforeState = readState();
-            if (! beforeState.has_value())
-            {
-                return FALSE;
-            }
-
-            TextInputBridgeState afterState          = beforeState.value();
-            const wchar_t* const replacementText     = lp != 0 ? reinterpret_cast<const wchar_t*>(lp) : L"";
-            const std::wstring normalizedReplacement = NormalizeControlTextFromBridgeText(replacementText, afterState.multiline);
-            const bool replaced                      = ReplaceTextInputBridgeSelection(afterState, normalizedReplacement);
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
-            return commitState(beforeState.value(), afterState, true, replaced && wp != FALSE);
-        }
-        case EM_POSFROMCHAR:
-        {
-            const std::optional<TextInputBridgeState> state = readState();
-            if (! state.has_value())
-            {
-                return 0;
-            }
-
-            const bool logicalSelectionNewlines = state->multiline && _textInputBridgeSelectionLogicalNewlines;
-            const std::wstring bridgeText       = GetBridgeTextFromState(state.value());
-            TextInputBridgeState caretState     = state.value();
-            caretState.selectionAnchorIndex.reset();
-            caretState.caretIndex = MapBridgeIndexToControlIndex(bridgeText, static_cast<size_t>(wp), state->multiline, logicalSelectionNewlines);
-
-            if (const std::optional<RECT> caretRect = tryGetCaretRect(caretState); caretRect.has_value())
-            {
-                return MAKELRESULT(static_cast<SHORT>(caretRect->left), static_cast<SHORT>(caretRect->top));
-            }
-            return 0;
-        }
-        case EM_GETRECT:
-        {
-            RECT viewportRect{};
-            if (const std::optional<RECT> candidate = tryGetViewportRect(); candidate.has_value())
-            {
-                viewportRect = candidate.value();
-            }
-            else
-            {
-                GetClientRect(hwnd, &viewportRect);
-            }
-
-            if (lp != 0)
-            {
-                *reinterpret_cast<RECT*>(lp) = viewportRect;
-            }
-            return 1;
-        }
-        case EM_GETFIRSTVISIBLELINE:
-        {
-            const std::optional<TextInputBridgeState> state = readState();
-            if (! state.has_value() || ! state->multiline)
-            {
-                return 0;
-            }
-
-            return static_cast<LRESULT>((std::min)(state->firstVisibleLine, static_cast<size_t>(std::numeric_limits<LRESULT>::max())));
-        }
-        case WM_COPY:
-        {
-            const std::optional<TextInputBridgeState> state = readState();
-            if (! state.has_value() || state->masked)
-            {
-                return 0;
-            }
-
-            const std::optional<std::wstring> selectedText = GetSelectedBridgeTextFromState(state.value());
-            if (! selectedText.has_value())
-            {
-                return 0;
-            }
-
-            return CopyTextToClipboard(selectedText.value()) ? 1 : 0;
-        }
-        case WM_CUT:
-        {
-            const std::optional<TextInputBridgeState> beforeState = readState();
-            if (! beforeState.has_value() || beforeState->masked || beforeState->readOnly)
-            {
-                return 0;
-            }
-
-            const std::optional<std::wstring> selectedText = GetSelectedBridgeTextFromState(beforeState.value());
-            if (! selectedText.has_value() || ! CopyTextToClipboard(selectedText.value()))
-            {
-                return 0;
-            }
-
-            TextInputBridgeState afterState = beforeState.value();
-            if (! ReplaceTextInputBridgeSelection(afterState, L""))
-            {
-                return 0;
-            }
-
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
-            return commitState(beforeState.value(), afterState, true, true);
-        }
-        case WM_CLEAR:
-        {
-            const std::optional<TextInputBridgeState> beforeState = readState();
-            if (! beforeState.has_value() || beforeState->readOnly)
-            {
-                return 0;
-            }
-
-            TextInputBridgeState afterState           = beforeState.value();
-            const auto [selectionStart, selectionEnd] = GetTextInputBridgeSelectionRange(afterState);
-            if (selectionEnd <= selectionStart || ! ReplaceTextInputBridgeSelection(afterState, L""))
-            {
-                return 0;
-            }
-
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
-            return commitState(beforeState.value(), afterState, true, true);
-        }
-        case WM_PASTE:
-        {
-            const std::optional<TextInputBridgeState> beforeState = readState();
-            if (! beforeState.has_value() || beforeState->readOnly)
-            {
-                return 0;
-            }
-
-            const std::optional<std::wstring> clipboardText = ReadTextFromClipboard();
-            if (! clipboardText.has_value())
-            {
-                return 0;
-            }
-
-            const std::wstring normalizedClipboardText = NormalizePastedControlText(clipboardText.value(), beforeState->multiline);
-            TextInputBridgeState afterState            = beforeState.value();
-            const auto [selectionStart, selectionEnd]  = GetTextInputBridgeSelectionRange(afterState);
-            if (selectionEnd <= selectionStart && normalizedClipboardText.empty())
-            {
-                return 0;
-            }
-
-            if (! ReplaceTextInputBridgeSelection(afterState, normalizedClipboardText))
-            {
-                return 0;
-            }
-
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(afterState);
-            return commitState(beforeState.value(), afterState, true, true);
-        }
-        case WM_SETTEXT:
-        {
-            TextInputBridgeState state = readState().value_or(TextInputBridgeState{});
-            const wchar_t* const text  = lp != 0 ? reinterpret_cast<const wchar_t*>(lp) : L"";
-            state.text                 = NormalizeControlTextFromBridgeText(text, state.multiline);
-            state.selectionAnchorIndex.reset();
-            state.caretIndex                         = state.text.size();
-            state.firstVisibleLine                   = 0u;
-            _textInputBridgeSelectionLogicalNewlines = UseLogicalNewlinesForCollapsedBridgeCaret(state);
-            return commitState(state, state, true, false);
-        }
-        case WM_GETTEXTLENGTH:
-        {
-            const std::optional<TextInputBridgeState> state = readState();
-            return state ? static_cast<LRESULT>(GetBridgeTextFromState(state.value()).size()) : 0;
-        }
-        case WM_GETTEXT:
-        {
-            if (wp == 0 || lp == 0)
-            {
-                return 0;
-            }
-
-            const std::optional<TextInputBridgeState> state = readState();
-            const std::wstring bridgeText                   = state ? GetBridgeTextFromState(state.value()) : std::wstring{};
-            const size_t bufferChars                        = static_cast<size_t>(wp);
-            const size_t copyChars                          = bufferChars > 0u ? (std::min)(bridgeText.size(), bufferChars - 1u) : 0u;
-            auto* buffer                                    = reinterpret_cast<wchar_t*>(lp);
-            if (copyChars > 0u)
-            {
-                std::copy_n(bridgeText.data(), copyChars, buffer);
-            }
-            buffer[copyChars] = L'\0';
-            return static_cast<LRESULT>(copyChars);
-        }
-        default: break;
-    }
-
-    return DefWindowProcW(hwnd, msg, wp, lp);
-}
-
-bool WindowHost::EnsureTextInputBridge(bool multiline) noexcept
-{
-    if (_textInputBridgeEdit && _textInputBridgeMultiline == multiline)
-    {
-        return true;
-    }
-
-    if (_textInputBridgeEdit && _textInputBridgeMultiline != multiline)
-    {
-        DestroyTextInputBridge();
-    }
-
-    if (! _hwnd || ! EnsureTextInputBridgeWindowClassRegistered())
+    if (! control || control != _nativeTextInputControl || ! _nativeTextInputStateCacheValid)
     {
         return false;
     }
 
-    wil::unique_hwnd bridgeEdit(CreateWindowExW(WS_EX_NOPARENTNOTIFY,
-                                                kTextInputBridgeWindowClass,
-                                                L"",
-                                                WS_CHILD | WS_VISIBLE,
-                                                0,
-                                                0,
-                                                kTextInputBridgeMinWidthPx,
-                                                kTextInputBridgeMinHeightPx,
-                                                _hwnd,
-                                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(kTextInputBridgeControlId)),
-                                                GetModuleHandleW(nullptr),
-                                                this));
-    if (! bridgeEdit)
-    {
-        static_cast<void>(Debug::ErrorWithLastError(L"DxUi::WindowHost: CreateWindowExW failed for text-input bridge service"));
-        return false;
-    }
-
-    // Keep the native text helper anchored over the real DX control so IME candidate/composition UI
-    // can follow the visible caret, but suppress all helper chrome so only the DX surface is visible.
-    wil::unique_hrgn emptyRegion(CreateRectRgn(0, 0, 0, 0));
-    if (emptyRegion && SetWindowRgn(bridgeEdit.get(), emptyRegion.get(), FALSE) != 0)
-    {
-        static_cast<void>(emptyRegion.release());
-    }
-    else if (emptyRegion)
-    {
-        static_cast<void>(Debug::Warning(L"DxUi::WindowHost: SetWindowRgn failed for hidden text bridge"));
-    }
-
-    _nonVisibleTextServiceBridgeFontDpi      = 0u;
-    _textInputBridgeEdit                     = std::move(bridgeEdit);
-    _textInputBridgeMultiline                = multiline;
-    _textInputBridgeStateCache               = TextInputBridgeState{.multiline = multiline};
-    _textInputBridgeStateCacheValid          = false;
-    _textInputBridgeSelectionLogicalNewlines = true;
+    outState.text                 = _nativeTextInputStateCache.text;
+    outState.selectionAnchorIndex = _nativeTextInputStateCache.selectionAnchorIndex;
+    outState.caretIndex           = _nativeTextInputStateCache.caretIndex;
+    outState.firstVisibleLine     = _nativeTextInputStateCache.firstVisibleLine;
+    outState.readOnly             = _nativeTextInputStateCache.readOnly;
+    outState.masked               = _nativeTextInputStateCache.masked;
+    outState.multiline            = _nativeTextInputStateCache.multiline;
     return true;
 }
 
-void WindowHost::DestroyTextInputBridge() noexcept
+void WindowHost::SyncTextInput(Control* control) noexcept
 {
-    _textInputBridgeControl = nullptr;
-    _textInputBridgeSyncing = false;
-    _textInputBridgeEdit.reset();
-    _nonVisibleTextServiceBridgeFont.reset();
-    _nonVisibleTextServiceBridgeFontDpi = 0u;
-    _textInputBridgeModule.reset();
-    _textInputBridgeMultiline                = false;
-    _textInputBridgeStateCache               = {};
-    _textInputBridgeStateCacheValid          = false;
-    _textInputBridgeSelectionLogicalNewlines = true;
-    _textInputBridgeImeComposing             = false;
-    _textInputBridgeImeHasVisibleText        = false;
-    _textInputBridgeImeBaseState.reset();
-    _textInputBridgeUndoHistory.clear();
-    _textInputBridgeRedoHistory.clear();
+    SyncNativeTextInputSession(control);
 }
 
-void WindowHost::UpdateTextInputBridgeBounds(Control* control, bool multiline) noexcept
+bool WindowHost::HasActiveTextInput() const noexcept
 {
-    if (! _textInputBridgeEdit || ! control)
-    {
-        return;
-    }
-
-    const D2D1_RECT_F bounds = control->GetBounds();
-    const int xPx            = static_cast<int>(std::lround(DipsToPixels(bounds.left)));
-    const int yPx            = static_cast<int>(std::lround(DipsToPixels(bounds.top)));
-    const float widthDip     = std::max(1.0f, bounds.right - bounds.left);
-    const float heightDip    = std::max(1.0f, bounds.bottom - bounds.top);
-    const int widthPx        = std::max(kTextInputBridgeMinWidthPx, static_cast<int>(std::lround(DipsToPixels(widthDip))));
-    const int heightPx =
-        std::max(multiline ? kTextInputBridgeMinHeightPx : kTextInputBridgeMinHeightPx, static_cast<int>(std::lround(DipsToPixels(heightDip))));
-
-    const UINT fontDpi = (std::max<UINT>)(_dpi, USER_DEFAULT_SCREEN_DPI);
-    if (! _nonVisibleTextServiceBridgeFont || _nonVisibleTextServiceBridgeFontDpi != fontDpi)
-    {
-        wil::unique_hfont font = CreateNonVisibleTextServiceBridgeFont(fontDpi);
-        if (font)
-        {
-            _nonVisibleTextServiceBridgeFont    = std::move(font);
-            _nonVisibleTextServiceBridgeFontDpi = fontDpi;
-        }
-        else
-        {
-            Debug::Warning(L"DxUi::WindowHost: CreateFontIndirectW failed for non-visible text-service bridge font");
-        }
-    }
-    if (_nonVisibleTextServiceBridgeFont)
-    {
-        static_cast<void>(SendMessageW(_textInputBridgeEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_nonVisibleTextServiceBridgeFont.get()), FALSE));
-    }
-
-    static_cast<void>(SetWindowPos(_textInputBridgeEdit.get(), nullptr, xPx, yPx, widthPx, heightPx, SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOZORDER));
-    _textInputBridgeMultiline = multiline;
-    UpdateTextBridgeImeWindows(_textInputBridgeEdit.get());
+    return HasActiveNativeTextInputSession();
 }
 
-void WindowHost::ActivateTextInputBridge(Control* control) noexcept
+HWND WindowHost::GetTextInputHwnd() const noexcept
 {
-    if (! control || ! control->SupportsTextInputBridge())
-    {
-        return;
-    }
-
-    TextInputBridgeState state;
-    if (! control->ExportTextInputBridgeState(state))
-    {
-        return;
-    }
-
-    if (! EnsureTextInputBridge(state.multiline))
-    {
-        return;
-    }
-
-    const bool controlChanged                = _textInputBridgeControl != control;
-    _textInputBridgeControl                  = control;
-    _textInputBridgeSelectionLogicalNewlines = true;
-    ApplyTextInputBridgeState(state);
-    if (controlChanged)
-    {
-        _textInputBridgeUndoHistory.clear();
-        _textInputBridgeRedoHistory.clear();
-    }
-    if (GetFocus() != _textInputBridgeEdit.get())
-    {
-        SetFocus(_textInputBridgeEdit.get());
-    }
-    UpdateTextBridgeImeWindows(_textInputBridgeEdit.get());
-}
-
-void WindowHost::DeactivateTextInputBridge(bool restoreHostFocus) noexcept
-{
-    if (! _textInputBridgeEdit)
-    {
-        _textInputBridgeControl = nullptr;
-        return;
-    }
-
-    if (_textInputBridgeControl && ! _textInputBridgeSyncing)
-    {
-        SyncFocusedControlFromTextInputBridge(true);
-    }
-    _textInputBridgeControl           = nullptr;
-    _textInputBridgeImeComposing      = false;
-    _textInputBridgeImeHasVisibleText = false;
-    _textInputBridgeImeBaseState.reset();
-
-    if (restoreHostFocus && _hwnd && GetFocus() == _textInputBridgeEdit.get())
-    {
-        SetFocus(_hwnd);
-    }
-}
-
-void WindowHost::ApplyTextInputBridgeState(const TextInputBridgeState& state) noexcept
-{
-    _textInputBridgeStateCache      = state;
-    _textInputBridgeStateCacheValid = true;
-    if (_textInputBridgeEdit)
-    {
-        LONG_PTR style = GetWindowLongPtrW(_textInputBridgeEdit.get(), GWL_STYLE);
-        if (state.multiline)
-        {
-            style |= ES_MULTILINE;
-        }
-        else
-        {
-            style &= ~static_cast<LONG_PTR>(ES_MULTILINE);
-        }
-
-        if (state.readOnly)
-        {
-            style |= ES_READONLY;
-        }
-        else
-        {
-            style &= ~static_cast<LONG_PTR>(ES_READONLY);
-        }
-
-        static_cast<void>(SetWindowLongPtrW(_textInputBridgeEdit.get(), GWL_STYLE, style));
-    }
-    if (_textInputBridgeControl)
-    {
-        UpdateTextInputBridgeBounds(_textInputBridgeControl, state.multiline);
-    }
-}
-
-std::optional<TextInputBridgeState> WindowHost::ReadTextInputBridgeState() const noexcept
-{
-    if (! _textInputBridgeEdit || ! _textInputBridgeStateCacheValid)
-    {
-        return std::nullopt;
-    }
-    return _textInputBridgeStateCache;
-}
-
-void WindowHost::SyncFocusedControlFromTextInputBridge(bool notifyChange) noexcept
-{
-    if (_textInputBridgeSyncing || ! _textInputBridgeControl || _textInputBridgeControl != _focusedControl)
-    {
-        return;
-    }
-
-    const std::optional<TextInputBridgeState> state = ReadTextInputBridgeState();
-    if (! state)
-    {
-        return;
-    }
-
-    _textInputBridgeSyncing = true;
-    const auto resetSyncing = wil::scope_exit([&] { _textInputBridgeSyncing = false; });
-
-    Control* const bridgeControl = _textInputBridgeControl;
-    static_cast<void>(bridgeControl->ImportTextInputBridgeState(*this, state.value(), notifyChange));
-
-    // If the OnTextChanged callback modified the control's text (e.g. input
-    // normalization/filtering), sync the corrected state back to the bridge
-    // EDIT so both sides stay in agreement.
-    TextInputBridgeState postState;
-    if (bridgeControl == _textInputBridgeControl && bridgeControl->ExportTextInputBridgeState(postState))
-    {
-        ApplyTextInputBridgeState(postState);
-    }
-}
-
-void WindowHost::HandleTextInputBridgeCommand(UINT /*notifyCode*/) noexcept
-{
-}
-
-void WindowHost::CommitFocusedTextInputBridge(bool notifyChange) noexcept
-{
-    SyncFocusedControlFromTextInputBridge(notifyChange);
-}
-
-bool WindowHost::TryReadTextInputBridgeState(const Control* control, TextInputBridgeState& outState) const noexcept
-{
-    if (! control || control != _textInputBridgeControl)
-    {
-        return false;
-    }
-
-    const std::optional<TextInputBridgeState> state = ReadTextInputBridgeState();
-    if (! state.has_value())
-    {
-        return false;
-    }
-
-    outState = state.value();
-    return true;
-}
-
-void WindowHost::SyncTextInputBridge(Control* control) noexcept
-{
-    TextInputBridgeState state;
-    if (! control || control != _textInputBridgeControl || ! control->ExportTextInputBridgeState(state))
-    {
-        return;
-    }
-
-    if (! EnsureTextInputBridge(state.multiline))
-    {
-        return;
-    }
-
-    _textInputBridgeSelectionLogicalNewlines = true;
-    ApplyTextInputBridgeState(state);
-    UpdateTextBridgeImeWindows(_textInputBridgeEdit.get());
-}
-
-bool WindowHost::HasActiveTextInputBridge() const noexcept
-{
-    return _textInputBridgeEdit && _textInputBridgeControl != nullptr;
-}
-
-#if defined(ENABLE_TESTS)
-bool WindowHost::DebugGetNonVisibleTextServiceBridgeFont(LOGFONTW& outLogFont) const noexcept
-{
-    outLogFont = LOGFONTW{};
-    return _nonVisibleTextServiceBridgeFont && GetObjectW(_nonVisibleTextServiceBridgeFont.get(), sizeof(outLogFont), &outLogFont) == sizeof(outLogFont);
-}
-#endif
-
-HWND WindowHost::GetTextInputBridgeHwnd() const noexcept
-{
-    return _textInputBridgeEdit.get();
+    return HasActiveNativeTextInputSession() ? _hwnd : nullptr;
 }
 
 TextField::TextField(std::wstring text) : _text(std::move(text))
@@ -2140,13 +951,23 @@ void TextField::SetText(std::wstring text)
     _dragSelecting                = false;
     _undoHistory.clear();
     _redoHistory.clear();
+    RegenerateConcealedMaskEpoch();
     InvalidateMultilineLayoutCache();
+    if (auto* host = GetHost(); host && host->GetFocusControl() == this)
+    {
+        host->SyncTextInput(this);
+    }
     RequestInvalidate();
 }
 
 std::wstring_view TextField::GetText() const noexcept
 {
     return _text;
+}
+
+size_t TextField::GetCaretIndex() const noexcept
+{
+    return _caretIndex;
 }
 
 void TextField::SetSelectionRange(const size_t selectionStart, const size_t selectionEnd) noexcept
@@ -2168,6 +989,32 @@ void TextField::SetSelectionRange(const size_t selectionStart, const size_t sele
     }
     _caretBlinkAnchorTickMs = 0u;
     _caretVisible           = true;
+    if (auto* host = GetHost(); host && host->GetFocusControl() == this)
+    {
+        host->SyncTextInput(this);
+    }
+    RequestInvalidate();
+}
+
+void TextField::ReplaceSelectionAndNotify(std::wstring_view replacement)
+{
+    const bool willMutate = HasSelection() || ! replacement.empty();
+    if (! willMutate)
+    {
+        return;
+    }
+
+    RecordUndoStateForDirectEdit();
+    _preferredMultilineXOffsetDip.reset();
+    static_cast<void>(DeleteSelection());
+    _text.insert(_caretIndex, replacement.data(), replacement.size());
+    _caretIndex += replacement.size();
+    _selectionAnchorIndex.reset();
+    ResetSingleLineSelectionClickSequence(_selectionClickSequence);
+    _caretBlinkAnchorTickMs = 0u;
+    _caretVisible           = true;
+    InvalidateMultilineLayoutCache();
+    NotifyChanged();
     RequestInvalidate();
 }
 
@@ -2179,12 +1026,187 @@ void TextField::SetTextAndNotify(std::wstring text)
 
 void TextField::SetMasked(bool masked) noexcept
 {
+    if (_masked == masked)
+    {
+        return;
+    }
+
     _masked = masked;
+    RegenerateConcealedMaskEpoch();
+    if (WindowHost* const host = GetHost(); host && HasFocus())
+    {
+        host->SyncTextInput(this);
+    }
+    RequestInvalidate();
 }
 
 bool TextField::IsMasked() const noexcept
 {
     return _masked;
+}
+
+void TextField::SetPasswordRevealMode(PasswordRevealMode mode) noexcept
+{
+    if (_passwordRevealMode == mode)
+    {
+        return;
+    }
+
+    _passwordRevealMode             = mode;
+    _passwordRevealButtonHovered    = false;
+    _passwordRevealButtonPressed    = false;
+    _passwordRevealKeyboardFocused  = false;
+
+    if (_passwordRevealMode == PasswordRevealMode::Visible)
+    {
+        SetPasswordRevealState(PasswordRevealState::Visible);
+    }
+    else if (_passwordRevealMode == PasswordRevealMode::Hidden)
+    {
+        SetPasswordRevealState(PasswordRevealState::Hidden);
+    }
+    else if (_passwordRevealState == PasswordRevealState::Visible)
+    {
+        SetPasswordRevealState(PasswordRevealState::Hidden);
+    }
+
+    RequestInvalidate();
+}
+
+PasswordRevealMode TextField::GetPasswordRevealMode() const noexcept
+{
+    return _passwordRevealMode;
+}
+
+void TextField::SetPasswordRevealState(PasswordRevealState state) noexcept
+{
+    if (_passwordRevealMode == PasswordRevealMode::Visible)
+    {
+        state = PasswordRevealState::Visible;
+    }
+    else if (_passwordRevealMode == PasswordRevealMode::Hidden)
+    {
+        state = PasswordRevealState::Hidden;
+    }
+
+    if (_passwordRevealState == state)
+    {
+        return;
+    }
+
+    const auto startedAt = std::chrono::steady_clock::now();
+    _passwordRevealState = state;
+    RequestInvalidate();
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::Emit(L"dxui.textinput.reveal_toggle_us",
+                          L"textfield",
+                          Debug::Perf::ElapsedUs(startedAt),
+                          static_cast<uint64_t>(state),
+                          _masked ? 1u : 0u,
+                          S_OK);
+    }
+}
+
+PasswordRevealState TextField::GetPasswordRevealState() const noexcept
+{
+    return _passwordRevealState;
+}
+
+void TextField::SetPasswordMaskLengthPolicy(PasswordMaskLengthPolicy policy) noexcept
+{
+    if (_maskLengthPolicy == policy)
+    {
+        return;
+    }
+
+    _maskLengthPolicy = policy;
+    RegenerateConcealedMaskEpoch();
+    RequestInvalidate();
+}
+
+PasswordMaskLengthPolicy TextField::GetPasswordMaskLengthPolicy() const noexcept
+{
+    return _maskLengthPolicy;
+}
+
+size_t TextField::GetSecretVisibleDotCount() const noexcept
+{
+    const auto startedAt = std::chrono::steady_clock::now();
+    size_t result = 0u;
+    size_t exactCount = 0u;
+    if (! _masked || _text.empty() || _passwordRevealMode == PasswordRevealMode::Visible || _passwordRevealState == PasswordRevealState::Visible)
+    {
+        return result;
+    }
+
+    exactCount = CountTextElements(_text);
+    if (_maskLengthPolicy == PasswordMaskLengthPolicy::Exact)
+    {
+        result = exactCount;
+    }
+    else
+    {
+        result = GetConcealedMaskVisibleDotCount(exactCount);
+    }
+
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        const std::wstring_view policyDetail = _maskLengthPolicy == PasswordMaskLengthPolicy::Exact ? L"exact" : L"concealed";
+        Debug::Perf::Emit(L"dxui.textinput.secret_render_us",
+                          policyDetail,
+                          Debug::Perf::ElapsedUs(startedAt),
+                          _text.size(),
+                          result,
+                          S_OK);
+        Debug::Perf::Emit(L"dxui.textinput.secret_display_dot_count", policyDetail, 0u, result, exactCount, S_OK);
+    }
+    return result;
+}
+
+void TextField::SetPasswordRevealAccessibleName(std::wstring name)
+{
+    _passwordRevealAccessibleName = std::move(name);
+}
+
+std::wstring_view TextField::GetPasswordRevealAccessibleName() const noexcept
+{
+    return _passwordRevealAccessibleName;
+}
+
+bool TextField::IsPasswordRevealButtonVisibleForAccessibility() const noexcept
+{
+    return IsPasswordRevealButtonVisible();
+}
+
+D2D1_RECT_F TextField::GetPasswordRevealButtonAccessibilityRect() const noexcept
+{
+    return GetPasswordRevealButtonRect();
+}
+
+bool TextField::InvokePasswordRevealButton(WindowHost& host)
+{
+    if (! IsPasswordRevealButtonVisible())
+    {
+        return false;
+    }
+
+    _passwordRevealButtonHovered   = false;
+    _passwordRevealButtonPressed   = false;
+    _passwordRevealKeyboardFocused = false;
+    if (_passwordRevealState == PasswordRevealState::Visible)
+    {
+        RemaskPasswordReveal();
+    }
+    else
+    {
+        SetPasswordRevealState(PasswordRevealState::Visible);
+    }
+    ResetCaretBlink(host);
+    host.SetFocusControl(this);
+    host.SyncTextInput(this);
+    Invalidate(host);
+    return true;
 }
 
 void TextField::SetPlaceholder(std::wstring text)
@@ -2198,6 +1220,11 @@ void TextField::SetMultiline(bool multiline) noexcept
     _preferredMultilineXOffsetDip.reset();
     _multilineFirstVisibleLine    = 0u;
     _multilineWheelDeltaRemainder = 0.0f;
+}
+
+bool TextField::IsMultiline() const noexcept
+{
+    return _multiline;
 }
 
 void TextField::SetClearButtonEnabled(bool enabled) noexcept
@@ -2221,19 +1248,64 @@ void TextField::SetCaretColor(std::optional<D2D1_COLOR_F> caretColor) noexcept
 
 void TextField::SetHorizontalTextPadding(float leftDip, float rightDip) noexcept
 {
-    _textPaddingLeftDip  = std::max(0.0f, leftDip);
-    _textPaddingRightDip = std::max(0.0f, rightDip);
+    const float clampedLeftDip  = std::max(0.0f, leftDip);
+    const float clampedRightDip = std::max(0.0f, rightDip);
+    if (_hasExplicitHorizontalTextPadding && _textPaddingLeftDip == clampedLeftDip && _textPaddingRightDip == clampedRightDip)
+    {
+        return;
+    }
+
+    _hasExplicitHorizontalTextPadding = true;
+    _textPaddingLeftDip  = clampedLeftDip;
+    _textPaddingRightDip = clampedRightDip;
+    InvalidateMultilineLayoutCache();
+    if (auto* host = GetHost(); host && host->GetFocusControl() == this)
+    {
+        host->SyncTextInput(this);
+    }
+    RequestInvalidate();
 }
 
 void TextField::SetVerticalTextPadding(float topDip, float bottomDip) noexcept
 {
-    _textPaddingTopDip    = std::max(0.0f, topDip);
-    _textPaddingBottomDip = std::max(0.0f, bottomDip);
+    const float clampedTopDip    = std::max(0.0f, topDip);
+    const float clampedBottomDip = std::max(0.0f, bottomDip);
+    if (_hasExplicitVerticalTextPadding && _textPaddingTopDip == clampedTopDip && _textPaddingBottomDip == clampedBottomDip)
+    {
+        return;
+    }
+
+    _hasExplicitVerticalTextPadding = true;
+    _textPaddingTopDip    = clampedTopDip;
+    _textPaddingBottomDip = clampedBottomDip;
+    InvalidateMultilineLayoutCache();
+    if (auto* host = GetHost(); host && host->GetFocusControl() == this)
+    {
+        host->SyncTextInput(this);
+    }
+    RequestInvalidate();
 }
 
 void TextField::SetReadOnly(bool readOnly) noexcept
 {
+    if (_readOnly == readOnly)
+    {
+        return;
+    }
+
     _readOnly = readOnly;
+    if (_readOnly)
+    {
+        _passwordRevealButtonHovered   = false;
+        _passwordRevealButtonPressed   = false;
+        _passwordRevealKeyboardFocused = false;
+        RemaskPasswordReveal();
+    }
+    if (WindowHost* const host = GetHost(); host && HasFocus())
+    {
+        host->SyncTextInput(this);
+    }
+    RequestInvalidate();
 }
 
 bool TextField::IsReadOnly() const noexcept
@@ -2249,6 +1321,11 @@ void TextField::SetOnTextChanged(std::function<void(std::wstring_view)> onTextCh
 void TextField::SetOnSubmitted(std::function<void()> onSubmitted)
 {
     _onSubmitted = std::move(onSubmitted);
+}
+
+void TextField::SetOnPreviewKeyDown(std::function<bool(WindowHost& host, UINT virtualKey, UINT modifiers)> onPreviewKeyDown)
+{
+    _onPreviewKeyDown = std::move(onPreviewKeyDown);
 }
 
 void TextField::SetOnBlur(std::function<void()> onBlur)
@@ -2298,13 +1375,39 @@ bool TextField::DebugGetSingleLinePaintState(const WindowHost& host, TextFieldDe
 
     out.textRect            = SnapRectToPixel(host, textRect);
     out.horizontalScrollDip = _horizontalScrollDip;
+    if (IsClearButtonVisible())
+    {
+        out.trailingButtonRect    = SnapRectToPixel(host, GetClearButtonRect());
+        out.hasTrailingButtonRect = true;
+    }
+    else if (IsPasswordRevealButtonVisible())
+    {
+        out.trailingButtonRect    = SnapRectToPixel(host, GetPasswordRevealButtonRect());
+        out.hasTrailingButtonRect = true;
+    }
+    const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
     if (const std::optional<D2D1_RECT_F> selectionPaintRect =
-            ComputeSingleLineSelectionPaintRect(host, GetDisplayText(), textRect, FontRole::Body, _horizontalScrollDip, GetSelectionRange());
+            ComputeSingleLineSelectionPaintRect(host, GetDisplayText(), textRect, FontRole::Body, _horizontalScrollDip, GetSelectionRange(), readingDirection);
         selectionPaintRect.has_value())
     {
         out.selectionPaintRect    = selectionPaintRect.value();
         out.hasSelectionPaintRect = true;
     }
+    out.compositionUnderlineRects     = BuildNativeCompositionUnderlineRects(host, *this, false);
+    out.conversionTargetUnderlineRects = BuildNativeCompositionUnderlineRects(host, *this, true);
+    return true;
+}
+
+bool TextField::DebugGetCaretRect(const WindowHost& host, size_t controlTextIndex, D2D1_RECT_F& outRect) const noexcept
+{
+    outRect = {};
+    const std::optional<D2D1_RECT_F> caretRect = GetTextInputCaretRect(host, controlTextIndex);
+    if (! caretRect.has_value())
+    {
+        return false;
+    }
+
+    outRect = caretRect.value();
     return true;
 }
 
@@ -2314,6 +1417,10 @@ void TextField::OnBoundsChanged() noexcept
     if (! _multiline)
     {
         _horizontalScrollDip = 0.0f;
+        if (WindowHost* const host = GetHost(); host && HasFocus())
+        {
+            host->SyncTextInput(this);
+        }
         return;
     }
 
@@ -2344,7 +1451,7 @@ void TextField::OnBoundsChanged() noexcept
     if (HasFocus() && ! _readOnly)
     {
         EnsureMultilineCaretVisible(host);
-        host->SyncTextInputBridge(this);
+        host->SyncTextInput(this);
     }
 }
 
@@ -2370,6 +1477,7 @@ void TextField::Paint(WindowHost& host) const
     const D2D1_RECT_F textRect     = GetTextRect();
     const std::wstring displayText = GetDisplayText();
     const bool usePlaceholder      = _text.empty() && ! _placeholder.empty();
+    const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
     if (_multiline)
     {
         const auto multilineLayout =
@@ -2381,13 +1489,28 @@ void TextField::Paint(WindowHost& host) const
     }
     else if (usePlaceholder)
     {
-        DrawSingleLineTextClipped(host, std::wstring_view(_placeholder), textRect, FontRole::Body, style.placeholderText, 0.0f);
+        DrawSingleLineTextClipped(host, std::wstring_view(_placeholder), textRect, FontRole::Body, style.placeholderText, 0.0f, readingDirection);
     }
     else
     {
         EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
         DrawSingleLineSelection(
-            host, displayText, textRect, FontRole::Body, style.text, style.selectionFill, style.selectionText, _horizontalScrollDip, GetSelectionRange());
+            host,
+            displayText,
+            textRect,
+            FontRole::Body,
+            style.text,
+            style.selectionFill,
+            style.selectionText,
+            _horizontalScrollDip,
+            GetSelectionRange(),
+            readingDirection);
+    }
+
+    if (! usePlaceholder)
+    {
+        DrawTextInputUnderlineRects(host, BuildNativeCompositionUnderlineRects(host, *this, false), style.text);
+        DrawTextInputUnderlineRects(host, BuildNativeCompositionUnderlineRects(host, *this, true), host.GetTheme().accent);
     }
 
     if (HasFocus() && _caretVisible)
@@ -2404,7 +1527,13 @@ void TextField::Paint(WindowHost& host) const
         else
         {
             EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
-            const float caretOffset = MeasureCaretOffsetDip(&host, displayText, FontRole::Body, _caretIndex, std::max(1.0f, textRect.bottom - textRect.top));
+            const float caretOffset = MeasureCaretOffsetDip(&host,
+                                                            displayText,
+                                                            FontRole::Body,
+                                                            _caretIndex,
+                                                            std::max(1.0f, textRect.bottom - textRect.top),
+                                                            readingDirection,
+                                                            std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip));
             const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, textRect.right - 1.0f);
             caretRect               = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
         }
@@ -2419,7 +1548,25 @@ void TextField::Paint(WindowHost& host) const
         }
     }
 
-    // Clear button: X icon when editable, single-line, has text, and focused
+    if (IsPasswordRevealButtonVisible())
+    {
+        const D2D1_RECT_F revealRect = GetPasswordRevealButtonRect();
+        if (_passwordRevealButtonHovered || _passwordRevealButtonPressed || _passwordRevealKeyboardFocused)
+        {
+            const D2D1_ROUNDED_RECT hoverBg =
+                D2D1::RoundedRect(D2D1::RectF(revealRect.left + 4.0f, revealRect.top + 4.0f, revealRect.right - 4.0f, revealRect.bottom - 4.0f), 4.0f, 4.0f);
+            if (auto* dc = host.GetDeviceContext())
+            {
+                dc->FillRoundedRectangle(&hoverBg,
+                                         host.GetSolidBrush(_passwordRevealButtonPressed ? host.GetTheme().pressedFill : host.GetTheme().hoverFill));
+            }
+        }
+        DrawCenteredText(host, L"\xE7B3", revealRect, FontRole::Icon, style.text);
+        if (_passwordRevealKeyboardFocused)
+        {
+            PaintFocusRing(host, D2D1::RectF(revealRect.left + 3.0f, revealRect.top + 3.0f, revealRect.right - 3.0f, revealRect.bottom - 3.0f), 4.0f);
+        }
+    }
     if (IsClearButtonVisible())
     {
         const D2D1_RECT_F clearRect = GetClearButtonRect();
@@ -2463,6 +1610,7 @@ void TextField::OnFocusChanged(WindowHost& host, bool focused)
     Control::OnFocusChanged(host, focused);
     if (focused)
     {
+        RegenerateConcealedMaskEpoch();
         if (_multiline)
         {
             if (! _readOnly)
@@ -2474,17 +1622,32 @@ void TextField::OnFocusChanged(WindowHost& host, bool focused)
     }
     else
     {
+        RemaskPasswordReveal();
         _caretBlinkAnchorTickMs = 0u;
         _caretVisible           = true;
         _dragSelecting          = false;
         ResetSingleLineSelectionClickSequence(_selectionClickSequence);
         _preferredMultilineXOffsetDip.reset();
         _multilineWheelDeltaRemainder = 0.0f;
+        _passwordRevealButtonHovered   = false;
+        _passwordRevealButtonPressed   = false;
+        _passwordRevealKeyboardFocused = false;
         if (_onBlur)
         {
             _onBlur();
         }
         Invalidate(host);
+    }
+}
+
+void TextField::OnEnabledChanged(bool enabled) noexcept
+{
+    if (! enabled)
+    {
+        _passwordRevealButtonHovered   = false;
+        _passwordRevealButtonPressed   = false;
+        _passwordRevealKeyboardFocused = false;
+        RemaskPasswordReveal();
     }
 }
 
@@ -2496,10 +1659,24 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
         return OnContextMenu(host, false, point);
     }
 
-    // Clear button click — clear text and keep focus
+    if (IsPasswordRevealButtonVisible() && PointInRect(GetPasswordRevealButtonRect(), point))
+    {
+        ResetSingleLineSelectionClickSequence(_selectionClickSequence);
+        _dragSelecting                 = false;
+        _passwordRevealKeyboardFocused = false;
+        _passwordRevealButtonHovered   = true;
+        _passwordRevealButtonPressed   = true;
+        SetPasswordRevealState(PasswordRevealState::Visible);
+        ResetCaretBlink(host);
+        host.SyncTextInput(this);
+        Invalidate(host);
+        return true;
+    }
+
     if (IsClearButtonVisible() && PointInRect(GetClearButtonRect(), point))
     {
         ResetSingleLineSelectionClickSequence(_selectionClickSequence);
+        _passwordRevealKeyboardFocused = false;
         SetTextAndNotify({});
         ResetCaretBlink(host);
         Invalidate(host);
@@ -2507,6 +1684,20 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
     }
 
     host.SetFocusControl(this);
+    _passwordRevealKeyboardFocused = false;
+    if (_masked && _maskLengthPolicy == PasswordMaskLengthPolicy::Concealed && _passwordRevealState != PasswordRevealState::Visible && ! _multiline)
+    {
+        ResetSingleLineSelectionClickSequence(_selectionClickSequence);
+        SetCaretIndex(_text.size(), false);
+        _dragSelecting = false;
+        const D2D1_RECT_F textRect = GetTextRect();
+        EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
+        ResetCaretBlink(host);
+        host.SyncTextInput(this);
+        Invalidate(host);
+        return true;
+    }
+
     if (! _multiline && ! ModifiersContainShift(modifiers) && ShouldPromoteSingleLineClickToSelectAll(host, _selectionClickSequence, point))
     {
         ResetSingleLineSelectionClickSequence(_selectionClickSequence);
@@ -2515,7 +1706,7 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
         const D2D1_RECT_F textRect = GetTextRect();
         EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
         ResetCaretBlink(host);
-        host.SyncTextInputBridge(this);
+        host.SyncTextInput(this);
         Invalidate(host);
         return true;
     }
@@ -2550,7 +1741,8 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
     {
         const D2D1_RECT_F textRect     = GetTextRect();
         const std::wstring displayText = GetDisplayText();
-        const size_t hitIndex          = HitTestCaretIndexDip(&host, displayText, FontRole::Body, textRect, _horizontalScrollDip, point);
+        const size_t hitIndex = HitTestCaretIndexDip(
+            &host, displayText, FontRole::Body, textRect, _horizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
         _preferredMultilineXOffsetDip.reset();
         if (ModifiersContainShift(modifiers))
         {
@@ -2565,7 +1757,7 @@ bool TextField::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBut
         EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
     }
     ResetCaretBlink(host);
-    host.SyncTextInputBridge(this);
+    host.SyncTextInput(this);
     Invalidate(host);
     return true;
 }
@@ -2594,7 +1786,8 @@ bool TextField::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool r
     }
     else
     {
-        hitIndex = HitTestCaretIndexDip(&host, displayText, FontRole::Body, textRect, _horizontalScrollDip, point);
+        hitIndex =
+            HitTestCaretIndexDip(&host, displayText, FontRole::Body, textRect, _horizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
     }
     _preferredMultilineXOffsetDip.reset();
     SelectWordAt(hitIndex);
@@ -2613,24 +1806,25 @@ bool TextField::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool r
         EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
     }
     ResetCaretBlink(host);
-    host.SyncTextInputBridge(this);
+    host.SyncTextInput(this);
     Invalidate(host);
     return true;
 }
 
 bool TextField::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/)
 {
-    // Track clear button hover state
-    const bool wasClearHovered = _clearButtonHovered;
-    _clearButtonHovered        = IsClearButtonVisible() && PointInRect(GetClearButtonRect(), point);
-    if (_clearButtonHovered != wasClearHovered)
+    const bool wasClearHovered   = _clearButtonHovered;
+    const bool wasRevealHovered  = _passwordRevealButtonHovered;
+    _clearButtonHovered          = IsClearButtonVisible() && PointInRect(GetClearButtonRect(), point);
+    _passwordRevealButtonHovered = IsPasswordRevealButtonVisible() && PointInRect(GetPasswordRevealButtonRect(), point);
+    if (_clearButtonHovered != wasClearHovered || _passwordRevealButtonHovered != wasRevealHovered)
     {
         Invalidate(host);
     }
 
     if (! _dragSelecting)
     {
-        return _clearButtonHovered;
+        return _clearButtonHovered || _passwordRevealButtonHovered || _passwordRevealButtonPressed;
     }
 
     const D2D1_RECT_F textRect     = GetTextRect();
@@ -2649,7 +1843,8 @@ bool TextField::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifi
     }
     else
     {
-        hitIndex = HitTestCaretIndexDip(&host, displayText, FontRole::Body, textRect, _horizontalScrollDip, point);
+        hitIndex =
+            HitTestCaretIndexDip(&host, displayText, FontRole::Body, textRect, _horizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
     }
     _preferredMultilineXOffsetDip.reset();
     SetCaretIndex(hitIndex, true);
@@ -2662,7 +1857,7 @@ bool TextField::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifi
         EnsureCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
     }
     ResetCaretBlink(host);
-    host.SyncTextInputBridge(this);
+    host.SyncTextInput(this);
     Invalidate(host);
     return true;
 }
@@ -2674,6 +1869,16 @@ bool TextField::OnMouseUp(WindowHost& host, D2D1_POINT_2F /*point*/, bool rightB
         return false;
     }
 
+    if (_passwordRevealButtonPressed)
+    {
+        _passwordRevealButtonPressed = false;
+        RemaskPasswordReveal();
+        ResetCaretBlink(host);
+        host.SyncTextInput(this);
+        Invalidate(host);
+        return true;
+    }
+
     const bool wasDragging = _dragSelecting;
     _dragSelecting         = false;
     if (wasDragging)
@@ -2681,6 +1886,26 @@ bool TextField::OnMouseUp(WindowHost& host, D2D1_POINT_2F /*point*/, bool rightB
         Invalidate(host);
     }
     return wasDragging;
+}
+
+void TextField::OnCaptureLost(WindowHost& host)
+{
+    const bool hadRevealPress = _passwordRevealButtonPressed;
+    const bool wasDragging    = _dragSelecting;
+    _dragSelecting            = false;
+    _passwordRevealButtonPressed = false;
+    _passwordRevealButtonHovered = false;
+
+    if (hadRevealPress)
+    {
+        RemaskPasswordReveal();
+        ResetCaretBlink(host);
+        host.SyncTextInput(this);
+    }
+    if (hadRevealPress || wasDragging)
+    {
+        Invalidate(host);
+    }
 }
 
 bool TextField::OnMouseWheel(WindowHost& host, D2D1_POINT_2F /*point*/, float wheelDelta, UINT /*modifiers*/)
@@ -2710,7 +1935,7 @@ bool TextField::OnMouseWheel(WindowHost& host, D2D1_POINT_2F /*point*/, float wh
         _multilineWheelDeltaRemainder = 0.0f;
         if (host.GetFocusControl() == this)
         {
-            host.SyncTextInputBridge(this);
+            host.SyncTextInput(this);
         }
         return true;
     }
@@ -2743,7 +1968,7 @@ bool TextField::OnMouseWheel(WindowHost& host, D2D1_POINT_2F /*point*/, float wh
     _multilineFirstVisibleLine = static_cast<size_t>(nextFirstVisibleLine);
     if (host.GetFocusControl() == this)
     {
-        host.SyncTextInputBridge(this);
+        host.SyncTextInput(this);
     }
     Invalidate(host);
     return true;
@@ -2767,6 +1992,56 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         Invalidate(host);
     };
 
+    if (virtualKey == VK_ESCAPE && _masked && _passwordRevealState != PasswordRevealState::Hidden)
+    {
+        _passwordRevealButtonPressed = false;
+        _passwordRevealKeyboardFocused = false;
+        RemaskPasswordReveal();
+        host.SyncTextInput(this);
+        Invalidate(host);
+        return false;
+    }
+
+    if (virtualKey == VK_TAB && ! ModifiersContainAlt(modifiers) && ! ModifiersContainCtrl(modifiers))
+    {
+        if (_passwordRevealKeyboardFocused)
+        {
+            _passwordRevealKeyboardFocused = false;
+            _passwordRevealButtonPressed   = false;
+            RemaskPasswordReveal();
+            host.SyncTextInput(this);
+            Invalidate(host);
+            return ModifiersContainShift(modifiers);
+        }
+
+        if (! ModifiersContainShift(modifiers) && IsPasswordRevealButtonVisible())
+        {
+            _passwordRevealKeyboardFocused = true;
+            _passwordRevealButtonPressed   = false;
+            _passwordRevealButtonHovered   = false;
+            Invalidate(host);
+            return true;
+        }
+
+        return false;
+    }
+
+    if (_passwordRevealKeyboardFocused && (virtualKey == VK_SPACE || virtualKey == VK_RETURN) && ! ModifiersContainAlt(modifiers) &&
+        ! ModifiersContainCtrl(modifiers))
+    {
+        _passwordRevealButtonPressed = true;
+        SetPasswordRevealState(PasswordRevealState::Visible);
+        ResetCaretBlink(host);
+        host.SyncTextInput(this);
+        Invalidate(host);
+        return true;
+    }
+
+    if (_onPreviewKeyDown && _onPreviewKeyDown(host, virtualKey, modifiers))
+    {
+        return true;
+    }
+
     if (ModifiersContainCtrl(modifiers))
     {
         if (virtualKey == 'Z' && ! ModifiersContainShift(modifiers) && ! _readOnly)
@@ -2775,7 +2050,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
             {
                 NotifyChanged();
                 refreshCaret();
-                host.SyncTextInputBridge(this);
+                host.SyncTextInput(this);
                 return true;
             }
             return false;
@@ -2786,7 +2061,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
             {
                 NotifyChanged();
                 refreshCaret();
-                host.SyncTextInputBridge(this);
+                host.SyncTextInput(this);
                 return true;
             }
             return false;
@@ -2946,7 +2221,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         }
         if (_caretIndex > 0u)
         {
-            SetCaretIndex(StepToPreviousCodePoint(_text, _caretIndex), extendSelection);
+            SetCaretIndex(StepToPreviousTextElement(_text, _caretIndex), extendSelection);
             refreshCaret();
         }
         return true;
@@ -2968,7 +2243,21 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
             refreshCaret();
             return true;
         }
-        SetCaretIndex(StepToNextCodePoint(_text, _caretIndex), extendSelection);
+        SetCaretIndex(StepToNextTextElement(_text, _caretIndex), extendSelection);
+        refreshCaret();
+        return true;
+    }
+    if (! _multiline && virtualKey == VK_UP && ! ModifiersContainCtrl(modifiers) && ! ModifiersContainAlt(modifiers))
+    {
+        _preferredMultilineXOffsetDip.reset();
+        SetCaretIndex(0u, ModifiersContainShift(modifiers));
+        refreshCaret();
+        return true;
+    }
+    if (! _multiline && virtualKey == VK_DOWN && ! ModifiersContainCtrl(modifiers) && ! ModifiersContainAlt(modifiers))
+    {
+        _preferredMultilineXOffsetDip.reset();
+        SetCaretIndex(_text.size(), ModifiersContainShift(modifiers));
         refreshCaret();
         return true;
     }
@@ -3072,7 +2361,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         }
         if (_caretIndex > 0 && ! _text.empty())
         {
-            const size_t eraseFrom = StepToPreviousCodePoint(_text, _caretIndex);
+            const size_t eraseFrom = StepToPreviousTextElement(_text, _caretIndex);
             _text.erase(eraseFrom, _caretIndex - eraseFrom);
             _caretIndex = eraseFrom;
             _selectionAnchorIndex.reset();
@@ -3096,7 +2385,7 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
         }
         if (_caretIndex < _text.size())
         {
-            const size_t eraseTo = StepToNextCodePoint(_text, _caretIndex);
+            const size_t eraseTo = StepToNextTextElement(_text, _caretIndex);
             _text.erase(_caretIndex, eraseTo - _caretIndex);
             _selectionAnchorIndex.reset();
             NotifyChanged();
@@ -3107,9 +2396,32 @@ bool TextField::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
     return false;
 }
 
+bool TextField::OnKeyUp(WindowHost& host, UINT virtualKey, UINT modifiers)
+{
+    if (! _passwordRevealKeyboardFocused || (virtualKey != VK_SPACE && virtualKey != VK_RETURN) || ModifiersContainAlt(modifiers) ||
+        ModifiersContainCtrl(modifiers))
+    {
+        return false;
+    }
+
+    if (_passwordRevealButtonPressed)
+    {
+        _passwordRevealButtonPressed = false;
+        RemaskPasswordReveal();
+        ResetCaretBlink(host);
+        host.SyncTextInput(this);
+        Invalidate(host);
+    }
+    return true;
+}
+
 bool TextField::OnChar(WindowHost& host, wchar_t ch, UINT /*modifiers*/)
 {
     ResetSingleLineSelectionClickSequence(_selectionClickSequence);
+    if (_passwordRevealKeyboardFocused && (ch == L' ' || ch == L'\r'))
+    {
+        return true;
+    }
     if (_readOnly)
     {
         return false;
@@ -3160,7 +2472,7 @@ bool TextField::OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_PO
 {
     ResetSingleLineSelectionClickSequence(_selectionClickSequence);
     host.SetFocusControl(this);
-    host.SyncTextInputBridge(this);
+    host.SyncTextInput(this);
     ResetCaretBlink(host);
     Invalidate(host);
     return Control::OnContextMenu(host, keyboardInvocation, pointDip);
@@ -3168,7 +2480,7 @@ bool TextField::OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_PO
 
 bool TextField::OnCopy(WindowHost& host)
 {
-    if (_masked)
+    if (_masked && _passwordRevealMode != PasswordRevealMode::Visible && _passwordRevealState != PasswordRevealState::Visible)
     {
         return false;
     }
@@ -3196,26 +2508,35 @@ bool TextField::OnSelectAll(WindowHost& host)
     {
         EnsureCaretVisible(&host, std::max(1.0f, GetTextRect().right - GetTextRect().left));
     }
-    host.SyncTextInputBridge(this);
+    host.SyncTextInput(this);
     Invalidate(host);
     return true;
 }
 
-bool TextField::SupportsTextInputBridge() const noexcept
+bool TextField::SupportsTextInput() const noexcept
 {
     return true;
 }
 
-std::optional<D2D1_RECT_F> TextField::GetTextInputBridgeViewportRect() const noexcept
+std::optional<D2D1_RECT_F> TextField::GetTextInputViewportRect() const noexcept
 {
-    return GetTextRect();
+    const D2D1_RECT_F textRect = GetTextRect();
+    if (textRect.right <= textRect.left || textRect.bottom <= textRect.top)
+    {
+        return std::nullopt;
+    }
+    return textRect;
 }
 
-std::optional<D2D1_RECT_F> TextField::GetTextInputBridgeCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept
+std::optional<D2D1_RECT_F> TextField::GetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept
 {
     const D2D1_RECT_F textRect     = GetTextRect();
     const std::wstring displayText = GetDisplayText();
     const size_t clampedCaretIndex = (std::min)(controlTextIndex, displayText.size());
+    if (textRect.right <= textRect.left || textRect.bottom <= textRect.top)
+    {
+        return std::nullopt;
+    }
 
     if (_multiline)
     {
@@ -3226,12 +2547,193 @@ std::optional<D2D1_RECT_F> TextField::GetTextInputBridgeCaretRect(const WindowHo
         return MeasureMultilineCaretRectDip(&host, displayText, FontRole::Body, textRect, multilineScrollDip, clampedCaretIndex);
     }
 
-    const float caretOffset = MeasureCaretOffsetDip(&host, displayText, FontRole::Body, clampedCaretIndex, std::max(1.0f, textRect.bottom - textRect.top));
+    const bool perfEnabled = Debug::Perf::IsCaptureEnabled();
+    const auto startedAt   = perfEnabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
+    const float caretOffset = MeasureCaretOffsetDip(&host,
+                                                    displayText,
+                                                    FontRole::Body,
+                                                    clampedCaretIndex,
+                                                    std::max(1.0f, textRect.bottom - textRect.top),
+                                                    readingDirection,
+                                                    std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip));
     const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, textRect.right - 1.0f);
-    return D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
+    const D2D1_RECT_F result = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
+    if (perfEnabled && ShouldEmitSingleLineBiDiTextMetric(displayText, readingDirection))
+    {
+        const std::wstring_view detail = readingDirection == DWRITE_READING_DIRECTION_RIGHT_TO_LEFT ? L"text-field-rtl" : L"text-field-ltr";
+        Debug::Perf::Emit(
+            L"dxui.textinput.bidi_caret_rect_us", detail, Debug::Perf::ElapsedUs(startedAt), clampedCaretIndex, displayText.size(), S_OK);
+    }
+    return result;
 }
 
-bool TextField::ExportTextInputBridgeState(TextInputBridgeState& outState) const
+std::optional<std::vector<D2D1_RECT_F>> TextField::GetTextInputRangeRects(
+    const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const
+{
+    if (controlTextStartIndex >= controlTextEndIndex)
+    {
+        return std::nullopt;
+    }
+
+    const std::wstring displayText = GetDisplayText();
+    const size_t rangeStart        = (std::min)(controlTextStartIndex, displayText.size());
+    const size_t rangeEnd          = (std::min)(controlTextEndIndex, displayText.size());
+    if (rangeStart >= rangeEnd || rangeStart > static_cast<size_t>(std::numeric_limits<UINT32>::max()) ||
+        rangeEnd - rangeStart > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+    {
+        return std::nullopt;
+    }
+
+    const D2D1_RECT_F textRect = GetTextRect();
+    if (textRect.right <= textRect.left || textRect.bottom <= textRect.top)
+    {
+        return std::nullopt;
+    }
+
+    if (! _multiline)
+    {
+        const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
+        const float heightDip                           = std::max(1.0f, textRect.bottom - textRect.top);
+        const float measuredTextWidthDip                = MeasureSingleLineTextWidthDip(&host, displayText, FontRole::Body, heightDip, readingDirection);
+        const float layoutWidthDip =
+            std::max({1.0f, textRect.right - textRect.left + _horizontalScrollDip, measuredTextWidthDip + 32.0f});
+        const wil::com_ptr<IDWriteTextLayout> layout =
+            CreateSingleLineTextLayout(&host, displayText, FontRole::Body, layoutWidthDip, heightDip, readingDirection);
+        if (! layout)
+        {
+            return std::nullopt;
+        }
+
+        UINT32 actualCount = 0u;
+        std::vector<DWRITE_HIT_TEST_METRICS> metrics((rangeEnd - rangeStart) + 4u);
+        HRESULT hr = layout->HitTestTextRange(static_cast<UINT32>(rangeStart),
+                                              static_cast<UINT32>(rangeEnd - rangeStart),
+                                              textRect.left - _horizontalScrollDip,
+                                              textRect.top,
+                                              metrics.data(),
+                                              static_cast<UINT32>(metrics.size()),
+                                              &actualCount);
+        if (hr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) && actualCount > 0u)
+        {
+            metrics.resize(actualCount);
+            hr = layout->HitTestTextRange(static_cast<UINT32>(rangeStart),
+                                          static_cast<UINT32>(rangeEnd - rangeStart),
+                                          textRect.left - _horizontalScrollDip,
+                                          textRect.top,
+                                          metrics.data(),
+                                          static_cast<UINT32>(metrics.size()),
+                                          &actualCount);
+        }
+        if (FAILED(hr) || actualCount == 0u)
+        {
+            return std::nullopt;
+        }
+
+        std::vector<D2D1_RECT_F> rects;
+        rects.reserve(actualCount);
+        for (UINT32 index = 0u; index < actualCount; ++index)
+        {
+            const DWRITE_HIT_TEST_METRICS& hit = metrics[index];
+            D2D1_RECT_F rect = D2D1::RectF(hit.left, hit.top, hit.left + hit.width, hit.top + hit.height);
+            rect             = ClipTextInputRectToBounds(rect, textRect);
+            if (rect.right > rect.left && rect.bottom > rect.top)
+            {
+                rects.push_back(rect);
+            }
+        }
+
+        if (rects.empty())
+        {
+            return std::nullopt;
+        }
+        return rects;
+    }
+
+    const auto multilineLayout =
+        GetOrCreateMultilineLayout(&host, displayText, std::max(1.0f, textRect.right - textRect.left), std::max(1.0f, textRect.bottom - textRect.top));
+    if (! multilineLayout)
+    {
+        return std::nullopt;
+    }
+
+    const std::vector<DWRITE_LINE_METRICS> lineMetrics = GetMultilineLineMetrics(multilineLayout.get());
+    const float multilineScrollDip                     = MeasureWrappedLineOffsetDip(lineMetrics, _multilineFirstVisibleLine);
+
+    UINT32 actualCount = 0u;
+    std::vector<DWRITE_HIT_TEST_METRICS> metrics((rangeEnd - rangeStart) + 4u);
+    HRESULT hr = multilineLayout->HitTestTextRange(static_cast<UINT32>(rangeStart),
+                                                   static_cast<UINT32>(rangeEnd - rangeStart),
+                                                   textRect.left,
+                                                   textRect.top - multilineScrollDip,
+                                                   metrics.data(),
+                                                   static_cast<UINT32>(metrics.size()),
+                                                   &actualCount);
+    if (hr == HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER) && actualCount > 0u)
+    {
+        metrics.resize(actualCount);
+        hr = multilineLayout->HitTestTextRange(static_cast<UINT32>(rangeStart),
+                                               static_cast<UINT32>(rangeEnd - rangeStart),
+                                               textRect.left,
+                                               textRect.top - multilineScrollDip,
+                                               metrics.data(),
+                                               static_cast<UINT32>(metrics.size()),
+                                               &actualCount);
+    }
+    if (FAILED(hr) || actualCount == 0u)
+    {
+        return std::nullopt;
+    }
+
+    std::vector<D2D1_RECT_F> rects;
+    rects.reserve(actualCount);
+    for (UINT32 index = 0u; index < actualCount; ++index)
+    {
+        const DWRITE_HIT_TEST_METRICS& hit = metrics[index];
+        D2D1_RECT_F rect = D2D1::RectF(hit.left, hit.top, hit.left + hit.width, hit.top + hit.height);
+        rect             = ClipTextInputRectToBounds(rect, textRect);
+        if (rect.right > rect.left && rect.bottom > rect.top)
+        {
+            rects.push_back(rect);
+        }
+    }
+
+    if (rects.empty())
+    {
+        return std::nullopt;
+    }
+    return rects;
+}
+
+std::optional<size_t> TextField::HitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept
+{
+    const D2D1_RECT_F textRect = GetTextRect();
+    if (textRect.right <= textRect.left || textRect.bottom <= textRect.top)
+    {
+        return std::nullopt;
+    }
+
+    const std::wstring displayText = GetDisplayText();
+    if (_multiline)
+    {
+        const auto multilineLayout =
+            GetOrCreateMultilineLayout(&host, displayText, std::max(1.0f, textRect.right - textRect.left), std::max(1.0f, textRect.bottom - textRect.top));
+        const size_t hitIndex =
+            HitTestMultilineCaretIndexDip(&host,
+                                          displayText,
+                                          FontRole::Body,
+                                          textRect,
+                                          MeasureWrappedLineOffsetDip(GetMultilineLineMetrics(multilineLayout.get()), _multilineFirstVisibleLine),
+                                          point);
+        return (std::min)(hitIndex, _text.size());
+    }
+
+    const size_t hitIndex =
+        HitTestCaretIndexDip(&host, displayText, FontRole::Body, textRect, _horizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
+    return (std::min)(hitIndex, _text.size());
+}
+
+bool TextField::ExportTextInputState(TextInputState& outState) const
 {
     outState.text                 = _text;
     outState.selectionAnchorIndex = _selectionAnchorIndex;
@@ -3243,7 +2745,7 @@ bool TextField::ExportTextInputBridgeState(TextInputBridgeState& outState) const
     return true;
 }
 
-bool TextField::ImportTextInputBridgeState(WindowHost& host, const TextInputBridgeState& state, bool notifyChange)
+bool TextField::ImportTextInputState(WindowHost& host, const TextInputState& state, bool notifyChange)
 {
     const std::wstring previousText       = _text;
     const size_t previousFirstVisibleLine = _multilineFirstVisibleLine;
@@ -3344,8 +2846,88 @@ void TextField::RestoreEditHistoryState(const EditHistoryState& state) noexcept
     InvalidateMultilineLayoutCache();
 }
 
+void TextField::BeginEditTransactionMetric(const wchar_t* detail) noexcept
+{
+    if (! Debug::Perf::IsCaptureEnabled())
+    {
+        return;
+    }
+
+    _pendingEditTransactionStartedAt = std::chrono::steady_clock::now();
+    _pendingEditTransactionDetail    = detail ? detail : L"";
+}
+
+void TextField::FinishEditTransactionMetric() noexcept
+{
+    if (! _pendingEditTransactionStartedAt.has_value())
+    {
+        return;
+    }
+
+    const auto startedAt = _pendingEditTransactionStartedAt.value();
+    const wchar_t* const detail = _pendingEditTransactionDetail ? _pendingEditTransactionDetail : L"";
+    _pendingEditTransactionStartedAt.reset();
+    _pendingEditTransactionDetail = L"";
+
+    Debug::Perf::Emit(L"dxui.textinput.edit_transaction_us",
+                      detail,
+                      Debug::Perf::ElapsedUs(startedAt),
+                      static_cast<uint64_t>(_text.size()),
+                      static_cast<uint64_t>(_caretIndex),
+                      S_OK);
+    Debug::Perf::Emit(L"dxui.textinput.undo_depth",
+                      detail,
+                      0u,
+                      static_cast<uint64_t>(_undoHistory.size()),
+                      static_cast<uint64_t>(_redoHistory.size()),
+                      S_OK);
+}
+
+void TextField::RegenerateConcealedMaskEpoch() const noexcept
+{
+    _concealedMaskVisibleDotCountValid = false;
+}
+
+size_t TextField::GetConcealedMaskVisibleDotCount(size_t exactCount) const noexcept
+{
+    const ConcealedMaskBucket bucket = GetConcealedMaskBucket(exactCount);
+    if (bucket.displayBase == 0u)
+    {
+        _concealedMaskVisibleDotCountValid = false;
+        _concealedMaskBucketStart          = 0u;
+        _concealedMaskBucketEnd            = 0u;
+        _concealedMaskVisibleDotCount      = 0u;
+        return 0u;
+    }
+
+    if (_concealedMaskVisibleDotCountValid && exactCount >= _concealedMaskBucketStart && exactCount <= _concealedMaskBucketEnd)
+    {
+        return _concealedMaskVisibleDotCount;
+    }
+
+    const size_t previousDotCount = _concealedMaskVisibleDotCount;
+    const size_t displaySpan      = std::max<size_t>(1u, bucket.displaySpan);
+    const uint64_t mixedEpoch =
+        (_concealedMaskEpoch * 1103515245ull) + 12345ull + (static_cast<uint64_t>(bucket.displayBase) * 2654435761ull);
+    size_t displayOffset = static_cast<size_t>(mixedEpoch % displaySpan);
+    size_t dotCount               = bucket.displayBase + displayOffset;
+    if (displaySpan > 1u && dotCount == previousDotCount)
+    {
+        displayOffset = (displayOffset + 1u) % displaySpan;
+        dotCount      = bucket.displayBase + displayOffset;
+    }
+
+    ++_concealedMaskEpoch;
+    _concealedMaskBucketStart             = bucket.start;
+    _concealedMaskBucketEnd               = bucket.end;
+    _concealedMaskVisibleDotCount         = dotCount;
+    _concealedMaskVisibleDotCountValid    = true;
+    return _concealedMaskVisibleDotCount;
+}
+
 void TextField::RecordUndoStateForDirectEdit()
 {
+    BeginEditTransactionMetric(L"direct-edit");
     _undoHistory.push_back(CaptureEditHistoryState());
     if (_undoHistory.size() > kMaxEditHistoryEntries)
     {
@@ -3361,6 +2943,7 @@ bool TextField::TryUndoDirectEdit() noexcept
         return false;
     }
 
+    BeginEditTransactionMetric(L"undo");
     _redoHistory.push_back(CaptureEditHistoryState());
     if (_redoHistory.size() > kMaxEditHistoryEntries)
     {
@@ -3380,6 +2963,7 @@ bool TextField::TryRedoDirectEdit() noexcept
         return false;
     }
 
+    BeginEditTransactionMetric(L"redo");
     _undoHistory.push_back(CaptureEditHistoryState());
     if (_undoHistory.size() > kMaxEditHistoryEntries)
     {
@@ -3390,6 +2974,14 @@ bool TextField::TryRedoDirectEdit() noexcept
     _redoHistory.pop_back();
     RestoreEditHistoryState(state);
     return true;
+}
+
+void TextField::RemaskPasswordReveal() noexcept
+{
+    if (_masked && _passwordRevealMode != PasswordRevealMode::Visible && _passwordRevealState != PasswordRevealState::Hidden)
+    {
+        SetPasswordRevealState(PasswordRevealState::Hidden);
+    }
 }
 
 void TextField::SetCaretIndex(size_t caretIndex, bool extendSelection) noexcept
@@ -3425,16 +3017,20 @@ void TextField::SelectWordAt(size_t hitIndex) noexcept
 
 D2D1_RECT_F TextField::GetTextRect() const noexcept
 {
-    const float rightInset = IsClearButtonVisible() ? std::max(38.0f, _textPaddingRightDip) : _textPaddingRightDip; // 30 DIP button + padding
+    const bool hasTrailingButton = IsClearButtonVisible() || IsPasswordRevealButtonVisible();
+    const float rightInset       = hasTrailingButton ? std::max(38.0f, _textPaddingRightDip) : _textPaddingRightDip; // 30 DIP button + padding
+    const float verticalPadding  = IsCompactDensity() ? 2.0f : 4.0f;
+    const float topInset         = _hasExplicitVerticalTextPadding ? _textPaddingTopDip : verticalPadding;
+    const float bottomInset      = _hasExplicitVerticalTextPadding ? _textPaddingBottomDip : verticalPadding;
     return D2D1::RectF(GetBounds().left + _textPaddingLeftDip,
-                       GetBounds().top + _textPaddingTopDip,
+                       GetBounds().top + topInset,
                        GetBounds().right - rightInset,
-                       GetBounds().bottom - _textPaddingBottomDip);
+                       GetBounds().bottom - bottomInset);
 }
 
 bool TextField::IsClearButtonVisible() const noexcept
 {
-    return _clearButtonEnabled && ! _readOnly && ! _multiline && ! _text.empty() && HasFocus();
+    return _clearButtonEnabled && ! _masked && ! _readOnly && ! _multiline && ! _text.empty() && HasFocus();
 }
 
 D2D1_RECT_F TextField::GetClearButtonRect() const noexcept
@@ -3443,14 +3039,26 @@ D2D1_RECT_F TextField::GetClearButtonRect() const noexcept
     return D2D1::RectF(GetBounds().right - kClearButtonWidthDip, GetBounds().top, GetBounds().right, GetBounds().bottom);
 }
 
+bool TextField::IsPasswordRevealButtonVisible() const noexcept
+{
+    return _passwordRevealMode == PasswordRevealMode::Peek && _masked && IsEnabled() && ! _readOnly && ! _multiline && ! _text.empty() && HasFocus();
+}
+
+D2D1_RECT_F TextField::GetPasswordRevealButtonRect() const noexcept
+{
+    constexpr float kRevealButtonWidthDip = 30.0f;
+    return D2D1::RectF(GetBounds().right - kRevealButtonWidthDip, GetBounds().top, GetBounds().right, GetBounds().bottom);
+}
+
 std::wstring TextField::GetDisplayText() const
 {
-    if (! _masked || _text.empty())
+    if (! _masked || _text.empty() || _passwordRevealMode == PasswordRevealMode::Visible || _passwordRevealState == PasswordRevealState::Visible)
     {
         return _text;
     }
 
-    return std::wstring(_text.size(), L'\u2022');
+    const size_t dotCount = GetSecretVisibleDotCount();
+    return std::wstring(dotCount, L'\u2022');
 }
 
 wil::com_ptr<IDWriteTextLayout> TextField::GetOrCreateMultilineLayout(const WindowHost* host,
@@ -3494,7 +3102,13 @@ void TextField::EnsureCaretVisible(const WindowHost* host, float availableWidthD
     }
 
     const std::wstring displayText = GetDisplayText();
-    const float caretOffset = MeasureCaretOffsetDip(host, displayText, FontRole::Body, _caretIndex, std::max(1.0f, GetTextRect().bottom - GetTextRect().top));
+    const float caretOffset = MeasureCaretOffsetDip(host,
+                                                    displayText,
+                                                    FontRole::Body,
+                                                    _caretIndex,
+                                                    std::max(1.0f, GetTextRect().bottom - GetTextRect().top),
+                                                    ResolveReadingDirection(GetFlowDirection()),
+                                                    std::max(1.0f, availableWidthDip + _horizontalScrollDip));
     const float padding     = 6.0f;
     if (caretOffset < _horizontalScrollDip + padding)
     {
@@ -3551,10 +3165,16 @@ void TextField::OnHostDpiChanged(WindowHost& host) noexcept
 {
     Control::OnHostDpiChanged(host);
     InvalidateMultilineLayoutCache();
-    if (SupportsTextInputBridge() && host.GetFocusControl() == this)
+    if (SupportsTextInput() && host.GetFocusControl() == this)
     {
-        host.SyncTextInputBridge(this);
+        host.SyncTextInput(this);
     }
+}
+
+void TextField::OnDensityChanged() noexcept
+{
+    InvalidateMultilineLayoutCache();
+    Control::OnDensityChanged();
 }
 
 void TextField::ResetCaretBlink(WindowHost& host) noexcept
@@ -3564,11 +3184,12 @@ void TextField::ResetCaretBlink(WindowHost& host) noexcept
     host.RequestAnimation();
 }
 
-void TextField::NotifyChanged() const
+void TextField::NotifyChanged()
 {
     if (_onTextChanged)
     {
         _onTextChanged(_text);
     }
+    FinishEditTransactionMetric();
 }
 } // namespace RedSalamander::DxUi

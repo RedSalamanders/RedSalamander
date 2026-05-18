@@ -904,4 +904,22 @@ struct EncodedWord
 
     return ranges;
 }
+
+[[nodiscard]] size_t ResolveImapSummaryRepairFetchBudget(size_t requestedUidCount) noexcept
+{
+    if (requestedUidCount == 0u)
+    {
+        return 0u;
+    }
+
+    constexpr size_t kPrimaryFetchChunkSize = 200u;
+    constexpr size_t kMinRepairFetchBudget  = 4u;
+    constexpr size_t kMaxRepairFetchBudget  = 64u;
+    constexpr size_t kRepairFetchesPerChunk = 4u;
+
+    const size_t chunkCount = (requestedUidCount + kPrimaryFetchChunkSize - 1u) / kPrimaryFetchChunkSize;
+    const size_t scaledBudget =
+        chunkCount > ((std::numeric_limits<size_t>::max)() / kRepairFetchesPerChunk) ? kMaxRepairFetchBudget : chunkCount * kRepairFetchesPerChunk;
+    return (std::min)(kMaxRepairFetchBudget, (std::max)(kMinRepairFetchBudget, scaledBudget));
+}
 } // namespace FileSystemCurlInternal

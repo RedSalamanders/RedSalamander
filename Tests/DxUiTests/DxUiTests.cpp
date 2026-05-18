@@ -13,8 +13,8 @@ void RunComboBoxTests();
 void RunWindowHostTests();
 void RunTreeTests();
 void RunTextFieldTests();
+void RunNativeTextInputTests();
 void RunMultilineTextTests();
-void RunTextInputBridgeTests();
 void RunReadOnlyTests();
 void RunTooltipTests();
 void RunRenderingTests();
@@ -22,17 +22,20 @@ void RunAnimationTests();
 void RunAccessibilityTests();
 void RunMenuTests();
 void RunNewControlTests();
+void RunGalleryGenerator(const std::filesystem::path& outputPath);
 
 int wmain(int argc, wchar_t** argv)
 {
     std::optional<std::wstring> suiteFilter;
     std::optional<std::filesystem::path> perfJsonlPath;
+    std::optional<std::filesystem::path> galleryOutputPath;
     bool writeBaselines = false;
     for (int argIndex = 1; argIndex < argc; ++argIndex)
     {
         const std::wstring_view arg                  = argv[argIndex] ? std::wstring_view(argv[argIndex]) : std::wstring_view{};
         constexpr std::wstring_view kSuitePrefix     = L"--suite=";
         constexpr std::wstring_view kPerfJsonlPrefix = L"--perf-jsonl=";
+        constexpr std::wstring_view kGalleryPrefix   = L"--gallery-output=";
         if (arg.rfind(kSuitePrefix, 0) == 0)
         {
             if (arg.size() == kSuitePrefix.size())
@@ -56,6 +59,16 @@ int wmain(int argc, wchar_t** argv)
                 return 2;
             }
             perfJsonlPath = std::filesystem::path(arg.substr(kPerfJsonlPrefix.size()));
+            continue;
+        }
+        if (arg.rfind(kGalleryPrefix, 0) == 0)
+        {
+            if (arg.size() == kGalleryPrefix.size())
+            {
+                std::wcerr << L"Missing output path for --gallery-output.\n";
+                return 2;
+            }
+            galleryOutputPath = std::filesystem::path(arg.substr(kGalleryPrefix.size()));
             continue;
         }
         if (! arg.empty() && arg[0] == L'-')
@@ -102,6 +115,16 @@ int wmain(int argc, wchar_t** argv)
     };
 
     bool ranAnySuite = false;
+    if (suiteFilter.has_value() && shouldRunSuite("Gallery"))
+    {
+        const std::filesystem::path outputPath =
+            galleryOutputPath.value_or(FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"DxUiGallery" / L"DxUiControlGallery.png");
+        std::cerr << "[START] Gallery\n" << std::flush;
+        RunGalleryGenerator(outputPath);
+        RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
+        std::cerr << "[DONE] Gallery\n" << std::flush;
+        ranAnySuite = true;
+    }
     if (shouldRunSuite("Grid"))
     {
         runSuite("Grid", RunGridTests);
@@ -132,6 +155,11 @@ int wmain(int argc, wchar_t** argv)
         runSuite("TextField", RunTextFieldTests);
         ranAnySuite = true;
     }
+    if (shouldRunSuite("NativeTextInput"))
+    {
+        runSuite("NativeTextInput", RunNativeTextInputTests);
+        ranAnySuite = true;
+    }
     if (shouldRunSuite("ComboBox"))
     {
         runSuite("ComboBox", RunComboBoxTests);
@@ -150,11 +178,6 @@ int wmain(int argc, wchar_t** argv)
     if (shouldRunSuite("MultilineText"))
     {
         runSuite("MultilineText", RunMultilineTextTests);
-        ranAnySuite = true;
-    }
-    if (shouldRunSuite("TextInputBridge"))
-    {
-        runSuite("TextInputBridge", RunTextInputBridgeTests);
         ranAnySuite = true;
     }
     if (shouldRunSuite("ReadOnly"))

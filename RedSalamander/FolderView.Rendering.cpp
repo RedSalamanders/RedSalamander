@@ -960,6 +960,11 @@ void FolderView::Render(const RECT& invalidRect)
     Debug::Perf::Scope framePerf(L"render.frame_us");
     framePerf.SetDetail(_itemsFolder.native());
 
+    if (_incrementalSearchLayoutEffectsDirty && (! _incrementalSearch.active || _incrementalSearch.query.empty()))
+    {
+        ClearIncrementalSearchLayoutEffects();
+    }
+
     DrawItemPerfStats drawStats{};
     uint64_t itemsConsidered   = 0;
     uint64_t itemsDrawn        = 0;
@@ -1810,6 +1815,9 @@ void FolderView::Render(const RECT& invalidRect)
     PerfEmitCounter(L"render.item_textlayout_details", drawStats.itemTextLayoutDetails);
     PerfEmitCounter(L"render.item_textlayout_metadata", drawStats.itemTextLayoutMetadata);
     PerfEmitCounter(L"render.incremental_search_effect_updates", drawStats.incrementalSearchUpdates);
+#ifdef ENABLE_TESTS
+    _debugIncrementalSearchEffectUpdateCount += drawStats.incrementalSearchUpdates;
+#endif
 
     if (FAILED(hr))
     {
@@ -2426,7 +2434,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     };
 
     std::optional<DWRITE_TEXT_RANGE> incrementalSearchRange;
-    if (item.labelLayout)
+    if (item.labelLayout && _incrementalSearch.active && ! _incrementalSearch.query.empty())
     {
         if (visualDisplayName.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
         {
@@ -2466,6 +2474,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
                                 ++perfStats->incrementalSearchUpdates;
                             }
                             static_cast<void>(item.labelLayout->SetDrawingEffect(_incrementalSearchHighlightBrush.get(), range));
+                            _incrementalSearchLayoutEffectsDirty = true;
                         }
                     }
                 }

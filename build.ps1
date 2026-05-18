@@ -467,7 +467,7 @@ function Resolve-UapTargetPlatformVersion {
 
     $installed = Get-InstalledUapTargetPlatformVersions
     if (-not $installed -or $installed.Count -eq 0) {
-        throw "Windows SDK folder containing 'UAP.props' was not found. Install Windows 10/11 SDK (UAP) or set TargetPlatformVersion to an installed version."
+        throw "Windows SDK folder containing 'UAP.props' was not found. Install the Windows 11 24H2 SDK (10.0.26100.0 UAP) or set TargetPlatformVersion to an installed version."
     }
 
     $selected = $installed | Sort-Object { [version]$_ } -Descending | Select-Object -First 1
@@ -796,7 +796,7 @@ try {
         }
     } else {
         # Show output paths for main executables
-        $mainProjects = @("RedLauncher", "RedLauncherConsole", "RedSalamander", "RedSalamanderMonitor")
+        $mainProjects = @("RedLauncher", "RedSalamander", "RedSalamanderMonitor")
         foreach ($project in $mainProjects) {
             $outputPath = ".build\\$Platform\\$Configuration\\$project.exe"
             if (Test-Path $outputPath) {

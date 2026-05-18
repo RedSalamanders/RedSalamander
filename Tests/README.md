@@ -4,17 +4,17 @@
 
 RedSalamander has multiple test surfaces covering UI automation, plugin
 integration, file operations, DirectX rendering, performance baselines, tooling
-scripts, and ETW diagnostics. Counts below are current as of 2026-05-15.
+scripts, and ETW diagnostics. Counts below are current as of 2026-05-18.
 
 | Category | Suites | Tests | Framework |
 |----------|--------|-------|-----------|
-| Self-Tests (in-process) | 3 | 604 Commands listed cases, 149 Compare listed cases, 75 FileOps listed phases | Custom harnesses |
-| DxUi Component Tests | 1 | 571 | Standalone harness |
-| Performance Tests | 1 | 7 | CppUnitTest DLL |
+| Self-Tests (in-process) | 3 | 633 Commands listed cases, 149 Compare listed cases, 75 FileOps listed phases | Custom harnesses |
+| DxUi Component Tests | 1 | 630 | Standalone harness |
+| Performance Tests | 1 | 12 | CppUnitTest DLL |
 | Viewer Plugin Tests | 2 | 17 | Standalone harness |
-| File-System Plugin Tests | 1 | 5 | Standalone harness |
+| File-System Plugin Tests | 1 | 8 | Standalone harness |
 | Monitor/ETW Tests | 1 | 3 burst scenarios + 3 fast guards | Standalone harness |
-| Tooling Script Tests | 1 folder + vcpkg scripts | 74 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
+| Tooling Script Tests | 1 folder + vcpkg scripts | 82 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
 
 Related specifications:
 - `Specs/Testing/Testing_SelfTests.md` — result contract
@@ -37,12 +37,12 @@ Related specifications:
 
 ---
 
-## 1. Commands Self-Test Suite — 604 runner-listed cases
+## 1. Commands Self-Test Suite — 633 runner-listed cases
 
 **Flag:** `--commands-selftest`
 **Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` + 12 `.cpp` family files
 **Inventory:** `RedSalamander.exe --selftest-list-cases --commands-selftest`
-lists 604 cases. The source fallback scan still reports 574 static
+lists 633 cases. The source fallback scan reports 604 static
 `SelfTest::RunCase` call sites because some helper call sites generate multiple
 declared cases.
 
@@ -51,16 +51,16 @@ and command dispatch inside the live application window.
 
 | Family | File | Tests | Coverage |
 |--------|------|-------|----------|
-| Settings | `SelfTest\Commands\Commands.SelfTest.Settings.cpp` | 72 | Hot-reload, registry store, shortcut defaults |
+| Settings | `SelfTest\Commands\Commands.SelfTest.Settings.cpp` | 79 | Hot-reload, registry store, shortcut defaults |
 | PluginConfig | `SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp` | 17 | Plugin configuration, file-system plugin |
 | Connections | `SelfTest\Commands\Commands.SelfTest.Connections.cpp` | 39 | Connection manager, credential prompts |
-| Preferences Dispatch | `SelfTest\Commands\Commands.SelfTest.Preferences.Dispatch.cpp` | 169 | Preferences dialog — all categories, DxUi surfaces |
+| Preferences Dispatch | `SelfTest\Commands\Commands.SelfTest.Preferences.Dispatch.cpp` | 171 | Preferences dialog — all categories, DxUi surfaces |
 | CompareOptions | `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` | 11 | Compare directories options, progress |
-| Search | `SelfTest\Commands\Commands.SelfTest.Search.cpp` | 60 | Find dialog, local search index, quick search/filter |
+| Search | `SelfTest\Commands\Commands.SelfTest.Search.cpp` | 61 | Find dialog, local search index, quick search/filter |
 | Shortcuts | `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` | 1 | Shortcuts window grouped runner |
-| ViewCommands | `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` | 59 | View commands, selection, sort, pane, tabs |
-| FileOps | `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` | 19 | File operations issues pane, speed limit |
-| Navigation | `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` | 46 | Navigation location, GoTo |
+| ViewCommands | `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` | 79 | View commands, selection, sort, pane, tabs |
+| FileOps | `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` | 21 | File operations issues pane, speed limit |
+| Navigation | `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` | 47 | Navigation location, GoTo |
 | Dialogs | `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` | 60 | About, fatal error, splash, change case, rename, filter, mask |
 | ShellCommands | `SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp` | 17 | Shell-integrated pane commands |
 
@@ -116,30 +116,31 @@ Organised into 12 families spanning phases 5–16.
 
 ---
 
-## 4. DxUi Component Tests — 571 tests
+## 4. DxUi Component Tests — 630 tests
 
 **Project:** `Tests\DxUiTests\`  •  **Run:** `.\.build\x64\Debug\DxUiTests.exe`
 
 Tests the DirectX UI framework: controls, text input, rendering, theming, and accessibility.
+Run HWND focus-sensitive suites such as `NativeTextInput` serially when collecting closeout evidence; they create real test windows and can legitimately affect process/global Win32 focus.
 
 | Family | File | Tests |
 |--------|------|-------|
-| TextInputBridge | `DxUiTests.TextInputBridge.cpp` | 171 |
-| MultilineText | `DxUiTests.MultilineText.cpp` | 101 |
-| Theme | `DxUiTests.Theme.cpp` | 54 |
-| WindowHost | `DxUiTests.WindowHost.cpp` | 40 |
-| TextField | `DxUiTests.TextField.cpp` | 39 |
-| Grid | `DxUiTests.Grid.cpp` | 36 |
-| ReadOnly | `DxUiTests.ReadOnly.cpp` | 25 |
-| Animation | `DxUiTests.Animation.cpp` | 21 |
-| Controls | `DxUiTests.Controls.cpp` | 18 |
-| Tree | `DxUiTests.Tree.cpp` | 17 |
-| Rendering | `DxUiTests.Rendering.cpp` | 15 |
-| ComboBox | `DxUiTests.ComboBox.cpp` | 15 |
-| Accessibility | `DxUiTests.Accessibility.cpp` | 10 |
-| Tooltip | `DxUiTests.Tooltip.cpp` | 9 |
+| MultilineText | `DxUiTests.MultilineText.cpp` | 106 |
+| Theme | `DxUiTests.Theme.cpp` | 76 |
+| WindowHost | `DxUiTests.WindowHost.cpp` | 51 |
+| TextField | `DxUiTests.TextField.cpp` | 62 |
+| Grid | `DxUiTests.Grid.cpp` | 49 |
+| ReadOnly | `DxUiTests.ReadOnly.cpp` | 24 |
+| Animation | `DxUiTests.Animation.cpp` | 24 |
+| Controls | `DxUiTests.Controls.cpp` | 22 |
+| Tree | `DxUiTests.Tree.cpp` | 23 |
+| Rendering | `DxUiTests.Rendering.cpp` | 22 |
+| ComboBox | `DxUiTests.ComboBox.cpp` | 24 |
+| Accessibility | `DxUiTests.Accessibility.cpp` | 27 |
+| Tooltip | `DxUiTests.Tooltip.cpp` | 10 |
+| NativeTextInput | `DxUiTests.NativeTextInput.cpp` | 114 |
 
-## 5. Performance Tests — 7 tests
+## 5. Performance Tests — 12 tests
 
 **Project:** `Tests\PerformanceTests2\`  •  **Run:** `vstest.console.exe .\.build\x64\Debug\PerformanceTests2.dll`
 
@@ -151,6 +152,11 @@ CppUnitTest DLL for performance baselines.
 | LargeFolderIconEnumeration_MixedItems | Icon cache enumeration throughput |
 | FolderViewRefresh_PluginDuplicatePaths | Folder view refresh optimisation |
 | FolderViewCompactMode_SetAppThemeCollapsesRowGapAndUpdatesHitTest | Compact mode hit-test/theme behavior |
+| VisibleColumnWidths_DifferentColumnsDoNotShareGlobalMax | Variable column widths stay column-local |
+| VisibleColumnWidths_DetailedAndMetadataLinesStayColumnLocal | Detailed/metadata width calculations stay column-local |
+| ScrollStops_FirstRightSkipsInitialLeftGap | First-column horizontal scroll snapping |
+| ScrollStops_FirstLeftRestoresInitialLeftGap | Left-leading gap hit-test and snap-back behavior |
+| SortPolicy_ParallelPathStartsAtLargeFolderThreshold | FolderView parallel-sort threshold policy |
 | SplashScreenCloseGuardTriggersWhenCloseEventWasSignaled | Splash close guard |
 | FileSystemPluginManagerInitializeFailsWhenNoPluginsAreDiscovered | File-system plugin manager empty discovery |
 | ViewerPluginManagerInitializeFailsWhenNoPluginsAreDiscovered | Viewer plugin manager empty discovery |
@@ -169,7 +175,7 @@ CppUnitTest DLL for performance baselines.
 dedicated 600-second parent timeout so valid long-run coverage is not killed
 before the per-child viewer checks can finish and report their own results.
 
-## 7. File-System Plugin Tests — 7 tests
+## 7. File-System Plugin Tests — 8 tests
 
 **Project:** `Tests\FileSystemCurlTests\`  •  **Run:** `.\.build\x64\Debug\FileSystemCurlTests.exe`
 
@@ -181,7 +187,7 @@ Focused deterministic coverage for `Plugins\FileSystemCurl\` helpers that do not
 | IMAP subject decoding | 1 | RFC2047 Q/B decoding, mixed plain/encoded fragments, UTF-8 emoji, non-UTF code pages, malformed sanitized fragments |
 | IMAP mailbox status parsing | 1 | `STATUS` counts: messages, recent, uidNext, uidValidity, unseen |
 | IMAP properties perf model | 1 | Command-count guard proving single-message Properties stays constant with mailbox size |
-| IMAP listing metadata repair | 1 | Batch plan guard proving large missing summary sets are retried instead of skipped |
+| IMAP listing metadata repair | 2 | Batch plan guard proving large missing summary sets are retried instead of skipped, plus bounded per-listing repair fetch budget coverage |
 
 The executable also supports `--perf` for a lightweight deterministic probe of IMAP leaf parsing, subject decoding, leaf building, `STATUS` parsing, repair batch planning, and the message Properties command-count model.
 
@@ -262,6 +268,11 @@ Tests remain declared even when prerequisites are absent. Missing preconditions 
 | `--selftest-fail-fast` | Abort after first failure |
 | `--selftest-case=NAME` | Run a specific case (prefix match with trailing `_`) |
 | `--selftest-timeout-multiplier=N` | Scale timeouts by a finite value clamped to `[0.1, 100.0]`; invalid values fail fast |
+
+PowerShell harnesses that need the exit code or final artifacts from `RedSalamander.exe`
+self-test runs must launch the GUI-subsystem executable with `Start-Process -Wait -PassThru`
+or `System.Diagnostics.Process`. Direct invocation can return before `results.json` and
+the repository archive are finalized.
 
 ### Artifacts
 

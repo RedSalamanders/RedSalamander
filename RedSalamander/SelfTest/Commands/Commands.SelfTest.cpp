@@ -64,6 +64,7 @@ struct ForceWilTemplateInstantiations
 #include "FileActionResolver.h"
 #include "FileSystemPluginManager.h"
 #include "FindFilesWindow.h"
+#include "FluentIcons.h"
 #include "FolderViewEmptyStateLayout.h"
 #include "FolderWindow.FileOperations.IssuesPane.h"
 #include "FolderWindow.FileOperations.Popup.h"

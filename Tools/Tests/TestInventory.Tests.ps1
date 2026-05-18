@@ -31,7 +31,7 @@ Describe 'Test inventory helper' {
     It 'counts the in-product self-test surfaces from source' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
 
-        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 598 -Message 'Commands static RunCase count drifted.'
+        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 604 -Message 'Commands static RunCase count drifted.'
         Assert-RSEqual -Actual $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Expected 141 -Message 'CompareDirectories static RunCase count drifted.'
         Assert-RSEqual -Actual $inventory.SelfTests.FileOperations.ActivePhases -Expected 73 -Message 'FileOperations active phase count drifted.'
     }
@@ -39,8 +39,9 @@ Describe 'Test inventory helper' {
     It 'counts standalone, performance, and script test surfaces from source' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
 
-        Assert-RSEqual -Actual $inventory.Standalone.PerformanceTests2.TestMethods -Expected 11 -Message 'PerformanceTests2 method count drifted.'
-        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 74 -Message 'Tools Pester test count drifted.'
+        Assert-RSEqual -Actual $inventory.Standalone.PerformanceTests2.TestMethods -Expected 12 -Message 'PerformanceTests2 method count drifted.'
+        Assert-RSEqual -Actual $inventory.Standalone.DxUiTests.NativeTextInputCases -Expected 114 -Message 'NativeTextInput method count drifted.'
+        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 82 -Message 'Tools Pester test count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.RequiresBuildToolchainCases -Expected 1 -Message 'Build-toolchain Pester count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeSynthetic.Cases -Expected 5 -Message 'Synthetic vcpkg merge count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeLockValidation.Cases -Expected 3 -Message 'Lock-validation vcpkg count drifted.'
@@ -51,8 +52,9 @@ Describe 'Test inventory helper' {
         $json = ConvertTo-RSTestInventoryJson -Inventory $inventory
         $roundTrip = $json | ConvertFrom-Json
 
-        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 598 -Message 'JSON manifest should include Commands count.'
-        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 74 -Message 'JSON manifest should include Tools Pester count.'
+        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 604 -Message 'JSON manifest should include Commands count.'
+        Assert-RSEqual -Actual $roundTrip.standalone.dxUiTests.nativeTextInputCases -Expected 114 -Message 'JSON manifest should include NativeTextInput count.'
+        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 82 -Message 'JSON manifest should include Tools Pester count.'
     }
 
     It 'guards FileOperations Step enum values against phase-order drift' {
@@ -74,6 +76,8 @@ Describe 'Test inventory helper' {
         Assert-RSEqual -Actual $coverageDoc.CompareRunCases -Expected $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Message 'Coverage spec CompareDirectories count drifted from source.'
         Assert-RSEqual -Actual $coverageDoc.FileOpsActivePhases -Expected $inventory.SelfTests.FileOperations.ActivePhases -Message 'Coverage spec FileOperations count drifted from source.'
         Assert-RSEqual -Actual $coverageDoc.PerformanceTestMethods -Expected $inventory.Standalone.PerformanceTests2.TestMethods -Message 'Coverage spec PerformanceTests2 count drifted from source.'
+        Assert-RSEqual -Actual $coverageDoc.NativeTextInputCases -Expected $inventory.Standalone.DxUiTests.NativeTextInputCases -Message 'Coverage spec NativeTextInput count drifted from source.'
+        Assert-RSEqual -Actual $readmeDoc.NativeTextInputCases -Expected $inventory.Standalone.DxUiTests.NativeTextInputCases -Message 'Tests README NativeTextInput count drifted from source.'
         Assert-RSEqual -Actual $coverageDoc.ToolsPesterCases -Expected $inventory.Scripts.ToolsPester.Cases -Message 'Coverage spec Tools Pester count drifted from source.'
         Assert-RSEqual -Actual $readmeDoc.ToolsPesterCases -Expected $inventory.Scripts.ToolsPester.Cases -Message 'Tests README Tools Pester count drifted from source.'
         Assert-RSEqual -Actual $readmeDoc.VcpkgSyntheticCases -Expected $inventory.Scripts.VcpkgMergeSynthetic.Cases -Message 'Tests README vcpkg synthetic count drifted from source.'

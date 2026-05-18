@@ -1968,7 +1968,7 @@ private:
             return;
         }
 
-        _dxHost.CommitFocusedTextInputBridge(false);
+        _dxHost.CommitFocusedTextInput();
         TryShowPromptHistoryMenu(_hWnd.get(),
                                  _dxHost,
                                  _palette,
@@ -2046,7 +2046,7 @@ private:
                 }
                 _textField->SetTextAndNotify(*text);
                 _dxHost.SetFocusControl(_textField);
-                _dxHost.SyncTextInputBridge(_textField);
+                _dxHost.SyncTextInput(_textField);
                 _dxHost.Invalidate();
                 return TRUE;
             }
@@ -2475,7 +2475,7 @@ private:
         {
             _dxHost.SetFocusControl(_nameField);
             _nameField->SetSelectionRange(0u, _initialName.size());
-            _dxHost.SyncTextInputBridge(_nameField);
+            _dxHost.SyncTextInput(_nameField);
         }
         _dxHost.SetDefaultButton(_createButton);
         _dxHost.SetCancelButton(_cancelButton);
@@ -3019,7 +3019,7 @@ private:
             _dxHost.SetFocusControl(_nameField);
             const size_t selectionEnd = _currentText.empty() ? 0u : _currentText.size();
             _nameField->SetSelectionRange(0u, selectionEnd);
-            _dxHost.SyncTextInputBridge(_nameField);
+            _dxHost.SyncTextInput(_nameField);
         }
         _dxHost.SetDefaultButton(_createButton);
         _dxHost.SetCancelButton(_cancelButton);

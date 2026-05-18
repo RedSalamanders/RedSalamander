@@ -23,6 +23,47 @@ namespace
 {
 constexpr wchar_t kTargetExeName[] = L"RedSalamander.exe";
 constexpr wchar_t kErrorCaption[]  = L"RedSalamander Launcher";
+constexpr DWORD kMinimumWindowsMajorVersion = 10u;
+constexpr DWORD kMinimumWindowsMinorVersion = 0u;
+constexpr DWORD kMinimumWindowsBuildNumber  = 26100u;
+constexpr wchar_t kUnsupportedWindowsMessage[] = L"RedSalamander requires Windows 11 24H2 (build 26100) or later.";
+
+using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
+
+[[nodiscard]] bool TryGetWindowsVersion(OSVERSIONINFOW& version) noexcept
+{
+    version                      = {};
+    version.dwOSVersionInfoSize = sizeof(version);
+
+    const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
+    if (! ntdll)
+    {
+        return false;
+    }
+
+    const FARPROC proc = ::GetProcAddress(ntdll, "RtlGetVersion");
+#pragma warning(suppress : 4191)
+    const auto rtlGetVersion = reinterpret_cast<RtlGetVersionFn>(proc);
+    return rtlGetVersion != nullptr && rtlGetVersion(&version) == 0;
+}
+
+[[nodiscard]] bool IsCurrentWindowsVersionSupported() noexcept
+{
+    OSVERSIONINFOW version{};
+    if (! TryGetWindowsVersion(version))
+    {
+        return false;
+    }
+    if (version.dwMajorVersion != kMinimumWindowsMajorVersion)
+    {
+        return version.dwMajorVersion > kMinimumWindowsMajorVersion;
+    }
+    if (version.dwMinorVersion != kMinimumWindowsMinorVersion)
+    {
+        return version.dwMinorVersion > kMinimumWindowsMinorVersion;
+    }
+    return version.dwBuildNumber >= kMinimumWindowsBuildNumber;
+}
 
 [[nodiscard]] std::wstring StripLongPathPrefix(std::wstring path)
 {
@@ -247,6 +288,12 @@ void ShowError(std::wstring_view message)
 
 int LaunchRedSalamander()
 {
+    if (! IsCurrentWindowsVersionSupported())
+    {
+        ShowError(kUnsupportedWindowsMessage);
+        return 1;
+    }
+
     const std::wstring modulePath = GetCurrentModulePath();
     if (modulePath.empty())
     {
@@ -320,14 +367,7 @@ int LaunchRedSalamander()
 }
 } // namespace
 
-#if defined(REDLAUNCHER_GUI)
-int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int)
-{
-    return LaunchRedSalamander();
-}
-#else
 int wmain()
 {
     return LaunchRedSalamander();
 }
-#endif

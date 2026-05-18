@@ -123,7 +123,7 @@ Detailed patterns in `.github/skills/`:
 - **Language**: C++23, Unicode UTF-16
 - **Build**: Visual Studio 2026 / toolset v145, MSBuild, vcpkg
 - **Graphics**: Direct2D, DirectWrite, Direct3D 11, DXGI
-- **Platform**: Windows 10/11, x64 and ARM64
+- **Platform**: Windows 11 24H2 (build 26100), x64 and ARM64
 - **Key Dependencies**: WIL, fmt, yyjson, libraw, libjpeg-turbo, 7zip, pe-parse
 
 ## Specifications

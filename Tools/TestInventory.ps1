@@ -151,6 +151,7 @@ function Get-RSTestInventoryDocSnapshot {
         CompareRunCases = Get-RSRegexInt -Text $text -Pattern 'CompareDirectories:\s+(\d+)\s+static'
         FileOpsActivePhases = Get-RSRegexInt -Text $text -Pattern 'FileOperations:\s+(\d+)\s+active'
         PerformanceTestMethods = Get-RSRegexInt -Text $text -Pattern 'PerformanceTests2:\s+(\d+)\s+CppUnitTest'
+        NativeTextInputCases = Get-RSRegexInt -Text $text -Pattern '\|\s+(?:NativeTextInput|\*\*DxUiTests / NativeTextInput\*\*)\s+\|(?:\s+`[^`]+`\s+\|)?\s+(\d+)\s+\|'
         ToolsPesterCases = Get-RSRegexInt -Text $text -Pattern '(\d+)\s+Pester-style'
         VcpkgSyntheticCases = Get-RSRegexInt -Text $text -Pattern '(\d+)\s+fast\s+synthetic'
     }
@@ -166,6 +167,7 @@ function Get-RSTestInventory {
     $compareFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'RedSalamander\SelfTest\CompareDirectories') -Filter '*.cpp')
     $fileOpsCoordinator = Join-Path $RepoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
     $performanceFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tests\PerformanceTests2') -Filter '*.cpp')
+    $nativeTextInputTests = Join-Path $RepoRoot 'Tests\DxUiTests\DxUiTests.NativeTextInput.cpp'
     $toolTestFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepoRoot 'Tools\Tests') -Filter '*.Tests.ps1')
     $syntheticScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-synthetic-test.ps1'
     $lockValidationScript = Join-Path $RepoRoot 'Tests\vcpkg-merge-lock-validation.ps1'
@@ -195,6 +197,9 @@ function Get-RSTestInventory {
             NativeExecutables = $standaloneNames
             PerformanceTests2 = [pscustomobject]@{
                 TestMethods = Get-RSSelectStringCount -Path @($performanceFiles.FullName) -Pattern 'TEST_METHOD\('
+            }
+            DxUiTests = [pscustomobject]@{
+                NativeTextInputCases = Get-RSSelectStringCount -Path @($nativeTextInputTests) -Pattern '^void\s+TestNativeTextInput'
             }
         }
         Scripts = [pscustomobject]@{
@@ -235,6 +240,9 @@ function ConvertTo-RSTestInventoryJson {
             nativeExecutables = @($Inventory.Standalone.NativeExecutables)
             performanceTests2 = [ordered]@{
                 testMethods = $Inventory.Standalone.PerformanceTests2.TestMethods
+            }
+            dxUiTests = [ordered]@{
+                nativeTextInputCases = $Inventory.Standalone.DxUiTests.NativeTextInputCases
             }
         }
         scripts = [ordered]@{

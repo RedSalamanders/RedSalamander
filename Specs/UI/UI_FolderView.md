@@ -165,6 +165,11 @@ columnWidth[column] = min(columnWidth[column], windowWidth)  // Don't exceed win
   the second column's left edge, not to the first column's left gutter; the
   matching first left line-scroll from the second column MUST return to `0` in
   one step.
+- Horizontal thumb tracking may follow raw pixel/DIP offsets while the user is
+  dragging, but thumb release MUST snap to the nearest valid column scroll stop.
+- Hit testing treats the leading gutter before column 0 as part of column 0 so
+  the first visible strip remains clickable. Gaps between later columns remain
+  empty hit-test space.
 
 **Item Spacing:**
 - **Vertical spacing**:
@@ -205,6 +210,7 @@ columnWidth[column] = min(columnWidth[column], windowWidth)  // Don't exceed win
 - Thumbnail mode uses larger DPI-aware visuals for the item bitmap area. The per-pane size is one of `48`, `64`, `96`, or `128 DIP`, defaulting to `64 DIP`.
 - Thumbnail bitmaps MUST preserve their source aspect ratio inside the thumbnail slot. Landscape images are letterboxed, portrait images are pillarboxed, and the draw rect MUST NOT exceed the slot.
 - For local files, the pane requests shell thumbnails asynchronously for visible items only. If shell thumbnail extraction fails for a likely WIC-supported image extension, the worker decodes a bounded first-frame thumbnail through WIC before falling back to the normal icon.
+- WIC fallback decoding MUST reuse one WIC imaging factory per enumeration worker and release it before that worker uninitializes COM. Thumbnail workers that use WIC are expected to have COM initialized as MTA.
 - Until a thumbnail is ready, or when neither shell nor WIC can provide one, the normal folder/file icon is rendered in the same larger visual slot.
 - Folder/file icon bitmap caching MUST keep separate entries for the shell image-list size class selected for the current target DIP size. Returning from thumbnail mode to Brief/Detailed/Extra Detailed MUST NOT reuse thumbnail-mode jumbo icon bitmaps in the normal `16 DIP` icon slot.
 - Thumbnail-size changes while thumbnail mode is active MUST clear size-dependent fallback icon bitmaps as well as thumbnail bitmaps, reset dependent layout state, and requeue normal icon loading before thumbnail work so fallback slots do not stretch stale icons from the previous target size.
@@ -1090,6 +1096,12 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 - Scroll smoothness: 60fps sustained
 - Icon loading: 100 icons/second
 - `folderView_perf_large_folder_baseline` must verify that stock icon loading resolves into item bitmap icons, not only that icon-index lookup or cache warming occurred.
+- `folderView_perf_sort_toggle_stress` is the focused sort baseline: it uses a 5,000-entry adversarial local folder, repeatedly toggles Name, Extension, Time, Size, and None sort modes, writes `folderView_perf_sort_toggle_stress_metrics.json`, emits `folder.sort_toggle_us`, and keeps `FolderView.ApplyCurrentSort` / `FolderView.ExecuteEnumeration.SortMerge` as the product metric families. This case is a deterministic metric recorder and structural regression guard, not a wall-clock CI threshold gate.
+- FolderView sorting keeps medium interactive folders on the sequential `std::sort` path; parallel sort is reserved for genuinely large folders where scheduling overhead is amortized. `FolderViewSortPolicy::ShouldUseParallelSort(...)` defines and unit-tests the threshold boundary. The comparator must remain a total ordering by ending ties with `unsortedOrder`, which is what makes non-stable sorting behavior-preserving.
+- Normal FolderView rendering must not apply or clear incremental-search text drawing effects unless incremental quick search is active with a non-empty query. Exiting quick search clears any existing DirectWrite layout effects once so inactive renders cannot leave stale highlighted text behind. `folderView_perf_sort_toggle_stress` guards inactive quick-search renders with `incrementalSearchEffectUpdates == 0`, and `cmd_pane_quickSearch_integrated_navigation` remains the active quick-search correctness guard.
+- `folderView_perf_scroll_render_stress` is the focused normal-mode scroll/render baseline: it uses a 1,600-item folder in Brief, Detailed, and Extra Detailed modes, drives scroll through window messages, writes `folderView_perf_scroll_render_stress_metrics.json`, emits `folder.scroll_input_to_paint_us`, `folder.scroll_frame_count`, and `folder.scroll_visible_item_count`, and keeps `render.frame_us`, `render.layout_items_us`, and `render.draw_item_us` as the product metric families.
+- `folderView_perf_directory_change_storm` is the pane-visible DirectoryInfoCache notification baseline: it opens a local folder in FolderView, applies deterministic create/rename/delete/directory churn, verifies final visible item count and focus stability, writes `folderView_perf_directory_change_storm_metrics.json`, and emits `folder.directory_change_storm_*` plus `directorycache.post_refresh_count`.
+- `folderView_perf_iconcache_contention` is the IconCache lock-diagnostic baseline: it opens dual icon-heavy panes with repeated unique extensions, writes `folderView_perf_iconcache_contention_metrics.json`, and reviews `iconcache.lock_wait_slow_us` / `iconcache.lock_hold_slow_us`. Slow-lock metric emission must run outside the measured IconCache mutex critical section; otherwise the diagnostic path can create the wait contention it reports. Treat hold-only rows as monitoring evidence; additional contention optimization requires repeated slow wait rows or an explicitly accepted hold-time bottleneck.
 - Memory usage: <100MB for 10K items
 
 ### Manual Tests

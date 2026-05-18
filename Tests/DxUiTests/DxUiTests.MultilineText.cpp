@@ -44,8 +44,8 @@ void TestMultilineTextFieldSelectAllReplacesAllText()
     const std::wstring originalText(field.GetText());
     Require(field.OnSelectAll(host), "multiline text field handles direct select-all");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after direct select-all");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline text field exports state after direct select-all");
     Require(state.selectionAnchorIndex.has_value(), "direct multiline select-all creates a visible selection range");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
     const size_t selectionEnd   = (std::max)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -70,8 +70,8 @@ void TestWrappedMultilineTextFieldSelectAllReplacesAllText()
     const std::wstring originalText(field.GetText());
     Require(field.OnSelectAll(host), "wrapped multiline text field handles direct select-all");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct select-all");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct select-all");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline select-all creates a visible selection range");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
     const size_t selectionEnd   = (std::max)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -95,13 +95,13 @@ void TestMultilineTextFieldBackspaceDeleteRemoveSelectedRange()
 
         Require(field.OnKeyDown(host, 'A', MK_CONTROL), "multiline text field handles ctrl+a before backspace selection deletion");
 
-        TextInputBridgeState state;
-        Require(field.ExportTextInputBridgeState(state), "multiline text field exports state before backspace selection deletion");
+        TextInputState state;
+        Require(field.ExportTextInputState(state), "multiline text field exports state before backspace selection deletion");
         Require(state.selectionAnchorIndex.has_value(), "multiline backspace selection deletion starts from a visible selection");
 
         Require(field.OnKeyDown(host, VK_BACK, 0), "multiline text field handles backspace selection deletion");
         Require(field.GetText().empty(), "multiline backspace removes the selected logical text range");
-        Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after backspace selection deletion");
+        Require(field.ExportTextInputState(state), "multiline text field exports state after backspace selection deletion");
         Require(! state.selectionAnchorIndex.has_value(), "multiline backspace leaves no visible selection");
         Require(state.caretIndex == 0u, "multiline backspace leaves the caret collapsed at the start");
     }
@@ -119,13 +119,13 @@ void TestWrappedMultilineTextFieldBackspaceDeleteRemoveSelectedRange()
 
         Require(field.OnKeyDown(host, 'A', MK_CONTROL), "wrapped multiline text field handles ctrl+a before backspace selection deletion");
 
-        TextInputBridgeState state;
-        Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state before backspace selection deletion");
+        TextInputState state;
+        Require(field.ExportTextInputState(state), "wrapped multiline text field exports state before backspace selection deletion");
         Require(state.selectionAnchorIndex.has_value(), "wrapped multiline backspace selection deletion starts from a visible selection");
 
         Require(field.OnKeyDown(host, VK_BACK, 0), "wrapped multiline text field handles backspace selection deletion");
         Require(field.GetText().empty(), "wrapped multiline backspace removes the selected wrapped text range");
-        Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after backspace selection deletion");
+        Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after backspace selection deletion");
         Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline backspace leaves no visible selection");
         Require(state.caretIndex == 0u, "wrapped multiline backspace leaves the caret collapsed at the start");
     }
@@ -142,16 +142,16 @@ void TestMultilineTextFieldBackspaceDeleteRemovesSelectionAcrossLogicalNewline()
         field.SetMultiline(true);
         field.SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
 
-        TextInputBridgeState state;
+        TextInputState state;
         state.text                 = field.GetText();
         state.caretIndex           = 7u;
         state.selectionAnchorIndex = 2u;
         state.firstVisibleLine     = 0u;
         state.multiline            = true;
-        Require(field.ImportTextInputBridgeState(host, state, false),
+        Require(field.ImportTextInputState(host, state, false),
                 virtualKey == VK_BACK ? "multiline text field imports newline-crossing selection before backspace deletion"
                                       : "multiline text field imports newline-crossing selection before delete deletion");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "multiline text field exports newline-crossing selection before backspace deletion"
                                       : "multiline text field exports newline-crossing selection before delete deletion");
         Require(state.selectionAnchorIndex.has_value(),
@@ -164,7 +164,7 @@ void TestMultilineTextFieldBackspaceDeleteRemovesSelectionAcrossLogicalNewline()
         Require(field.GetText() == L"aleta",
                 virtualKey == VK_BACK ? "multiline newline-crossing backspace removes the selected logical newline-spanning range"
                                       : "multiline newline-crossing delete removes the selected logical newline-spanning range");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "multiline text field exports state after newline-crossing backspace deletion"
                                       : "multiline text field exports state after newline-crossing delete deletion");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -189,15 +189,15 @@ void TestMultilineTextFieldBackspaceDeleteAtBoundariesLeaveTextUnchanged()
         field.SetMultiline(true);
         field.SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
 
-        TextInputBridgeState state;
+        TextInputState state;
         Require(field.OnKeyDown(host, VK_HOME, MK_CONTROL), "multiline text field handles ctrl+home before backspace boundary no-op");
-        Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting state before backspace boundary no-op");
+        Require(field.ExportTextInputState(state), "multiline text field exports starting state before backspace boundary no-op");
         Require(! state.selectionAnchorIndex.has_value(), "multiline backspace boundary no-op starts without a selection");
         Require(state.caretIndex == 0u, "multiline backspace boundary no-op starts at the beginning");
 
         Require(field.OnKeyDown(host, VK_BACK, 0), "multiline text field handles backspace at the beginning");
         Require(field.GetText() == L"alpha\nbeta", "multiline backspace at the beginning leaves the text unchanged");
-        Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after backspace boundary no-op");
+        Require(field.ExportTextInputState(state), "multiline text field exports state after backspace boundary no-op");
         Require(! state.selectionAnchorIndex.has_value(), "multiline backspace at the beginning leaves no selection");
         Require(state.caretIndex == 0u, "multiline backspace at the beginning keeps the caret collapsed at the start");
     }
@@ -215,15 +215,15 @@ void TestWrappedMultilineTextFieldBackspaceDeleteAtBoundariesLeaveTextUnchanged(
         field.SetMultiline(true);
         field.SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f));
 
-        TextInputBridgeState state;
+        TextInputState state;
         Require(field.OnKeyDown(host, VK_HOME, MK_CONTROL), "wrapped multiline text field handles ctrl+home before backspace boundary no-op");
-        Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting state before backspace boundary no-op");
+        Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting state before backspace boundary no-op");
         Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline backspace boundary no-op starts without a selection");
         Require(state.caretIndex == 0u, "wrapped multiline backspace boundary no-op starts at the beginning");
 
         Require(field.OnKeyDown(host, VK_BACK, 0), "wrapped multiline text field handles backspace at the beginning");
         Require(field.GetText() == originalText, "wrapped multiline backspace at the beginning leaves the text unchanged");
-        Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after backspace boundary no-op");
+        Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after backspace boundary no-op");
         Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline backspace at the beginning leaves no selection");
         Require(state.caretIndex == 0u, "wrapped multiline backspace at the beginning keeps the caret collapsed at the start");
     }
@@ -240,16 +240,16 @@ void TestMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCharacter
         field.SetMultiline(true);
         field.SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
 
-        TextInputBridgeState state;
+        TextInputState state;
         state.text       = field.GetText();
         state.caretIndex = 8u;
         state.selectionAnchorIndex.reset();
         state.firstVisibleLine = 0u;
         state.multiline        = true;
-        Require(field.ImportTextInputBridgeState(host, state, false),
+        Require(field.ImportTextInputState(host, state, false),
                 virtualKey == VK_BACK ? "multiline text field imports starting state before collapsed-caret backspace deletion"
                                       : "multiline text field imports starting state before collapsed-caret delete deletion");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "multiline text field exports starting state before collapsed-caret backspace deletion"
                                       : "multiline text field exports starting state before collapsed-caret delete deletion");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -265,7 +265,7 @@ void TestMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCharacter
         Require(field.GetText() == (virtualKey == VK_BACK ? L"alpha\nbta" : L"alpha\nbea"),
                 virtualKey == VK_BACK ? "multiline collapsed-caret backspace removes the previous logical character"
                                       : "multiline collapsed-caret delete removes the next logical character");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "multiline text field exports state after collapsed-caret backspace deletion"
                                       : "multiline text field exports state after collapsed-caret delete deletion");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -291,16 +291,16 @@ void TestMultilineTextFieldBackspaceDeleteAtLogicalNewlineMergesLines()
         field.SetMultiline(true);
         field.SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
 
-        TextInputBridgeState state;
+        TextInputState state;
         state.text       = field.GetText();
         state.caretIndex = (virtualKey == VK_BACK ? 6u : 5u);
         state.selectionAnchorIndex.reset();
         state.firstVisibleLine = 0u;
         state.multiline        = true;
-        Require(field.ImportTextInputBridgeState(host, state, false),
+        Require(field.ImportTextInputState(host, state, false),
                 virtualKey == VK_BACK ? "multiline text field imports starting state before logical-newline backspace deletion"
                                       : "multiline text field imports starting state before logical-newline delete deletion");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "multiline text field exports starting state before logical-newline backspace deletion"
                                       : "multiline text field exports starting state before logical-newline delete deletion");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -316,7 +316,7 @@ void TestMultilineTextFieldBackspaceDeleteAtLogicalNewlineMergesLines()
         Require(field.GetText() == L"alphabeta",
                 virtualKey == VK_BACK ? "multiline logical-newline backspace merges the two logical lines"
                                       : "multiline logical-newline delete merges the two logical lines");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "multiline text field exports state after logical-newline backspace deletion"
                                       : "multiline text field exports state after logical-newline delete deletion");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -343,16 +343,16 @@ void TestWrappedMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCh
         field.SetMultiline(true);
         field.SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f));
 
-        TextInputBridgeState state;
+        TextInputState state;
         state.text       = field.GetText();
         state.caretIndex = 8u;
         state.selectionAnchorIndex.reset();
         state.firstVisibleLine = 0u;
         state.multiline        = true;
-        Require(field.ImportTextInputBridgeState(host, state, false),
+        Require(field.ImportTextInputState(host, state, false),
                 virtualKey == VK_BACK ? "wrapped multiline text field imports starting state before collapsed-caret backspace deletion"
                                       : "wrapped multiline text field imports starting state before collapsed-caret delete deletion");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "wrapped multiline text field exports starting state before collapsed-caret backspace deletion"
                                       : "wrapped multiline text field exports starting state before collapsed-caret delete deletion");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -369,7 +369,7 @@ void TestWrappedMultilineTextFieldBackspaceDeleteAtCollapsedCaretRemovesSingleCh
                     (virtualKey == VK_BACK ? L"alpha bavo charlie delta echo foxtrot golf hotel" : L"alpha brvo charlie delta echo foxtrot golf hotel"),
                 virtualKey == VK_BACK ? "wrapped multiline collapsed-caret backspace removes the previous wrapped character"
                                       : "wrapped multiline collapsed-caret delete removes the next wrapped character");
-        Require(field.ExportTextInputBridgeState(state),
+        Require(field.ExportTextInputState(state),
                 virtualKey == VK_BACK ? "wrapped multiline text field exports state after collapsed-caret backspace deletion"
                                       : "wrapped multiline text field exports state after collapsed-caret delete deletion");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -408,7 +408,7 @@ void TestMultilineTextFieldCtrlCCopiesSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -506,8 +506,8 @@ void TestMultilineTextFieldCtrlInsertCopiesSelectionAcrossLogicalNewline()
 
     ImportLogicalNewlineClipboardSelectionForTest(window.Host(), *field, "multiline text field imports newline-spanning selection before ctrl+insert copy");
 
-    TextInputBridgeState state;
-    Require(field->ExportTextInputBridgeState(state), "multiline text field exports newline-spanning selection before ctrl+insert copy");
+    TextInputState state;
+    Require(field->ExportTextInputState(state), "multiline text field exports newline-spanning selection before ctrl+insert copy");
     RequireLogicalNewlineClipboardVisibleSelectionForTest(state, "multiline ctrl+insert copy starts from the expected newline-spanning visible selection");
 
     Require(field->OnKeyDown(window.Host(), VK_INSERT, MK_CONTROL), "multiline text field handles ctrl+insert copy across a logical newline");
@@ -523,7 +523,7 @@ void TestMultilineTextFieldCtrlCCopiesSelectionAcrossLogicalNewline()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -536,8 +536,8 @@ void TestMultilineTextFieldCtrlCCopiesSelectionAcrossLogicalNewline()
 
         ImportLogicalNewlineClipboardSelectionForTest(window.Host(), *field, "multiline text field imports newline-spanning selection before ctrl+c copy");
 
-        TextInputBridgeState state;
-        Require(field->ExportTextInputBridgeState(state), "multiline text field exports newline-spanning selection before ctrl+c copy");
+        TextInputState state;
+        Require(field->ExportTextInputState(state), "multiline text field exports newline-spanning selection before ctrl+c copy");
         RequireLogicalNewlineClipboardVisibleSelectionForTest(state, "multiline ctrl+c copy starts from the expected newline-spanning visible selection");
 
         if (! field->OnKeyDown(window.Host(), 'C', MK_CONTROL))
@@ -566,8 +566,8 @@ void TestMultilineTextFieldCtrlXCutsSelectionAcrossLogicalNewline()
 
     ImportLogicalNewlineClipboardSelectionForTest(window.Host(), *field, "multiline text field imports newline-spanning selection before ctrl+x cut");
 
-    TextInputBridgeState state;
-    Require(field->ExportTextInputBridgeState(state), "multiline text field exports newline-spanning selection before ctrl+x cut");
+    TextInputState state;
+    Require(field->ExportTextInputState(state), "multiline text field exports newline-spanning selection before ctrl+x cut");
     RequireLogicalNewlineClipboardVisibleSelectionForTest(state, "multiline ctrl+x cut starts from the expected newline-spanning visible selection");
 
     Require(field->OnKeyDown(window.Host(), 'X', MK_CONTROL), "multiline text field handles ctrl+x cut across a logical newline");
@@ -576,7 +576,7 @@ void TestMultilineTextFieldCtrlXCutsSelectionAcrossLogicalNewline()
     Require(clipboardText.has_value(), "clipboard readable after ctrl+x newline-spanning multiline cut");
     Require(clipboardText.value() == kLogicalNewlineClipboardSelectedTextForTest, "ctrl+x copies exactly the selected logical newline-spanning multiline text");
     Require(field->GetText() == kLogicalNewlineClipboardCutResultForTest, "ctrl+x across a logical newline removes exactly the selected multiline range");
-    Require(field->ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+x newline-spanning cut");
+    Require(field->ExportTextInputState(state), "multiline text field exports state after ctrl+x newline-spanning cut");
     Require(! state.selectionAnchorIndex.has_value(), "multiline ctrl+x across a logical newline leaves no selection");
     Require(state.caretIndex == kLogicalNewlineClipboardSelectionStartForTest,
             "multiline ctrl+x across a logical newline collapses the caret at the selection start");
@@ -638,8 +638,8 @@ void TestMultilineTextFieldShiftDeleteCutsSelectionAcrossLogicalNewline()
 
     ImportLogicalNewlineClipboardSelectionForTest(window.Host(), *field, "multiline text field imports newline-spanning selection before shift+delete cut");
 
-    TextInputBridgeState state;
-    Require(field->ExportTextInputBridgeState(state), "multiline text field exports newline-spanning selection before shift+delete cut");
+    TextInputState state;
+    Require(field->ExportTextInputState(state), "multiline text field exports newline-spanning selection before shift+delete cut");
     RequireLogicalNewlineClipboardVisibleSelectionForTest(state, "multiline shift+delete cut starts from the expected newline-spanning visible selection");
 
     Require(field->OnKeyDown(window.Host(), VK_DELETE, MK_SHIFT), "multiline text field handles shift+delete cut across a logical newline");
@@ -649,7 +649,7 @@ void TestMultilineTextFieldShiftDeleteCutsSelectionAcrossLogicalNewline()
     Require(clipboardText.value() == kLogicalNewlineClipboardSelectedTextForTest,
             "shift+delete copies exactly the selected logical newline-spanning multiline text");
     Require(field->GetText() == kLogicalNewlineClipboardCutResultForTest, "shift+delete across a logical newline removes exactly the selected multiline range");
-    Require(field->ExportTextInputBridgeState(state), "multiline text field exports state after shift+delete newline-spanning cut");
+    Require(field->ExportTextInputState(state), "multiline text field exports state after shift+delete newline-spanning cut");
     Require(! state.selectionAnchorIndex.has_value(), "multiline shift+delete across a logical newline leaves no selection");
     Require(state.caretIndex == kLogicalNewlineClipboardSelectionStartForTest,
             "multiline shift+delete across a logical newline collapses the caret at the selection start");
@@ -680,7 +680,7 @@ void TestWrappedMultilineTextFieldCtrlInsertCopiesSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -711,7 +711,7 @@ void TestWrappedMultilineTextFieldCtrlCCopiesSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -738,7 +738,7 @@ void TestWrappedMultilineTextFieldCtrlInsertWithoutSelectionLeavesClipboardUncha
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -809,7 +809,7 @@ void TestWrappedMultilineTextFieldCtrlInsertCopiesPartialSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -823,8 +823,8 @@ void TestWrappedMultilineTextFieldCtrlInsertCopiesPartialSelection()
         ImportWrappedMultilineClipboardSelectionForTest(
             window.Host(), *field, "wrapped multiline text field imports partial selection before ctrl+insert copy");
 
-        TextInputBridgeState state;
-        Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports partial selection before ctrl+insert copy");
+        TextInputState state;
+        Require(field->ExportTextInputState(state), "wrapped multiline text field exports partial selection before ctrl+insert copy");
         RequireWrappedMultilineClipboardVisibleSelectionForTest(state, "wrapped multiline ctrl+insert copy starts from the expected visible partial selection");
 
         if (! SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"))
@@ -857,8 +857,8 @@ void TestWrappedMultilineTextFieldCtrlCCopiesPartialSelection()
 
     ImportWrappedMultilineClipboardSelectionForTest(window.Host(), *field, "wrapped multiline text field imports partial selection before ctrl+c copy");
 
-    TextInputBridgeState state;
-    Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports partial selection before ctrl+c copy");
+    TextInputState state;
+    Require(field->ExportTextInputState(state), "wrapped multiline text field exports partial selection before ctrl+c copy");
     RequireWrappedMultilineClipboardVisibleSelectionForTest(state, "wrapped multiline ctrl+c copy starts from the expected visible partial selection");
 
     Require(field->OnKeyDown(window.Host(), 'C', MK_CONTROL), "wrapped multiline text field handles ctrl+c partial copy");
@@ -883,8 +883,8 @@ void TestWrappedMultilineTextFieldCtrlXCutsPartialSelection()
 
     ImportWrappedMultilineClipboardSelectionForTest(window.Host(), *field, "wrapped multiline text field imports partial selection before ctrl+x cut");
 
-    TextInputBridgeState state;
-    Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports partial selection before ctrl+x cut");
+    TextInputState state;
+    Require(field->ExportTextInputState(state), "wrapped multiline text field exports partial selection before ctrl+x cut");
     RequireWrappedMultilineClipboardVisibleSelectionForTest(state, "wrapped multiline ctrl+x cut starts from the expected visible partial selection");
 
     Require(field->OnKeyDown(window.Host(), 'X', MK_CONTROL), "wrapped multiline text field handles ctrl+x partial cut");
@@ -896,7 +896,7 @@ void TestWrappedMultilineTextFieldCtrlXCutsPartialSelection()
                                                        kWrappedMultilineClipboardSelectionStartForTest,
                                                        kWrappedMultilineClipboardSelectionEndForTest),
             "ctrl+x removes exactly the selected wrapped multiline partial range");
-    Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+x partial cut");
+    Require(field->ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+x partial cut");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+x partial cut leaves no selection");
     Require(state.caretIndex == kWrappedMultilineClipboardSelectionStartForTest,
             "wrapped multiline ctrl+x partial cut collapses the caret at the selection start");
@@ -927,7 +927,7 @@ void TestWrappedMultilineTextFieldShiftDeleteCutsSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -958,7 +958,7 @@ void TestWrappedMultilineTextFieldShiftDeleteCutsPartialSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -972,8 +972,8 @@ void TestWrappedMultilineTextFieldShiftDeleteCutsPartialSelection()
         ImportWrappedMultilineClipboardSelectionForTest(
             window.Host(), *field, "wrapped multiline text field imports partial selection before shift+delete cut");
 
-        TextInputBridgeState state{};
-        if (! field->ExportTextInputBridgeState(state))
+        TextInputState state{};
+        if (! field->ExportTextInputState(state))
         {
             return false;
         }
@@ -1004,7 +1004,7 @@ void TestWrappedMultilineTextFieldShiftDeleteCutsPartialSelection()
             return false;
         }
 
-        if (! field->ExportTextInputBridgeState(state))
+        if (! field->ExportTextInputState(state))
         {
             return false;
         }
@@ -1040,7 +1040,7 @@ void TestMultilineTextFieldShiftInsertPastesClipboard()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1076,7 +1076,7 @@ void TestWrappedMultilineTextFieldShiftInsertPastesClipboard()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1112,7 +1112,7 @@ void TestMultilineTextFieldCtrlVPastesClipboard()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1143,7 +1143,7 @@ void TestWrappedMultilineTextFieldCtrlVPastesClipboard()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1174,7 +1174,7 @@ void TestMultilineTextFieldShiftInsertReplacesPartialSelectionAcrossLogicalNewli
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1187,8 +1187,8 @@ void TestMultilineTextFieldShiftInsertReplacesPartialSelectionAcrossLogicalNewli
 
         ImportLogicalNewlineClipboardSelectionForTest(
             window.Host(), *field, "multiline text field imports newline-spanning partial selection before shift+insert paste");
-        TextInputBridgeState state;
-        Require(field->ExportTextInputBridgeState(state), "multiline text field exports newline-spanning partial selection before shift+insert paste");
+        TextInputState state;
+        Require(field->ExportTextInputState(state), "multiline text field exports newline-spanning partial selection before shift+insert paste");
         RequireLogicalNewlineClipboardVisibleSelectionForTest(state,
                                                               "multiline shift+insert paste starts from the expected newline-spanning visible selection");
 
@@ -1211,7 +1211,7 @@ void TestMultilineTextFieldShiftInsertReplacesPartialSelectionAcrossLogicalNewli
             return false;
         }
 
-        Require(field->ExportTextInputBridgeState(state), "multiline text field exports state after shift+insert newline-spanning partial paste");
+        Require(field->ExportTextInputState(state), "multiline text field exports state after shift+insert newline-spanning partial paste");
         Require(! state.selectionAnchorIndex.has_value(), "multiline shift+insert newline-spanning partial paste clears the visible selection");
         return state.caretIndex == kLogicalNewlineClipboardSelectionStartForTest + kLogicalNewlinePasteInsertedTextForTest.size();
     }),
@@ -1222,7 +1222,7 @@ void TestMultilineTextFieldCtrlVReplacesPartialSelectionAcrossLogicalNewline()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1235,8 +1235,8 @@ void TestMultilineTextFieldCtrlVReplacesPartialSelectionAcrossLogicalNewline()
 
         ImportLogicalNewlineClipboardSelectionForTest(
             window.Host(), *field, "multiline text field imports newline-spanning partial selection before ctrl+v paste");
-        TextInputBridgeState state;
-        Require(field->ExportTextInputBridgeState(state), "multiline text field exports newline-spanning partial selection before ctrl+v paste");
+        TextInputState state;
+        Require(field->ExportTextInputState(state), "multiline text field exports newline-spanning partial selection before ctrl+v paste");
         RequireLogicalNewlineClipboardVisibleSelectionForTest(state, "multiline ctrl+v paste starts from the expected newline-spanning visible selection");
 
         if (! SetClipboardUnicodeTextForTest(window.Hwnd(), kLogicalNewlinePasteClipboardTextForTest))
@@ -1253,7 +1253,7 @@ void TestMultilineTextFieldCtrlVReplacesPartialSelectionAcrossLogicalNewline()
             return false;
         }
 
-        Require(field->ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+v newline-spanning partial paste");
+        Require(field->ExportTextInputState(state), "multiline text field exports state after ctrl+v newline-spanning partial paste");
         Require(! state.selectionAnchorIndex.has_value(), "multiline ctrl+v newline-spanning partial paste clears the visible selection");
         return state.caretIndex == kLogicalNewlineClipboardSelectionStartForTest + kLogicalNewlinePasteInsertedTextForTest.size();
     }),
@@ -1264,7 +1264,7 @@ void TestWrappedMultilineTextFieldShiftInsertReplacesPartialSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1277,8 +1277,8 @@ void TestWrappedMultilineTextFieldShiftInsertReplacesPartialSelection()
 
         ImportWrappedMultilineClipboardSelectionForTest(
             window.Host(), *field, "wrapped multiline text field imports partial selection before shift+insert paste");
-        TextInputBridgeState state;
-        Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports partial selection before shift+insert paste");
+        TextInputState state;
+        Require(field->ExportTextInputState(state), "wrapped multiline text field exports partial selection before shift+insert paste");
         RequireWrappedMultilineClipboardVisibleSelectionForTest(state,
                                                                 "wrapped multiline shift+insert paste starts from the expected visible partial selection");
 
@@ -1301,7 +1301,7 @@ void TestWrappedMultilineTextFieldShiftInsertReplacesPartialSelection()
             return false;
         }
 
-        Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports state after shift+insert partial paste");
+        Require(field->ExportTextInputState(state), "wrapped multiline text field exports state after shift+insert partial paste");
         Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline shift+insert partial paste clears the visible selection");
         return state.caretIndex == kWrappedMultilineClipboardSelectionStartForTest + kWrappedMultilinePasteClipboardTextForTest.size();
     }),
@@ -1312,7 +1312,7 @@ void TestWrappedMultilineTextFieldCtrlVReplacesPartialSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -1324,8 +1324,8 @@ void TestWrappedMultilineTextFieldCtrlVReplacesPartialSelection()
         window.Host().SetFocusControl(field);
 
         ImportWrappedMultilineClipboardSelectionForTest(window.Host(), *field, "wrapped multiline text field imports partial selection before ctrl+v paste");
-        TextInputBridgeState state;
-        Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports partial selection before ctrl+v paste");
+        TextInputState state;
+        Require(field->ExportTextInputState(state), "wrapped multiline text field exports partial selection before ctrl+v paste");
         RequireWrappedMultilineClipboardVisibleSelectionForTest(state, "wrapped multiline ctrl+v paste starts from the expected visible partial selection");
 
         if (! SetClipboardUnicodeTextForTest(window.Hwnd(), kWrappedMultilinePasteClipboardTextForTest))
@@ -1342,7 +1342,7 @@ void TestWrappedMultilineTextFieldCtrlVReplacesPartialSelection()
             return false;
         }
 
-        Require(field->ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+v partial paste");
+        Require(field->ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+v partial paste");
         Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+v partial paste clears the visible selection");
         return state.caretIndex == kWrappedMultilineClipboardSelectionStartForTest + kWrappedMultilinePasteClipboardTextForTest.size();
     }),
@@ -1359,11 +1359,11 @@ void TestMultilineTextFieldUndoRedoRestoresCollapsedCaretInsertion()
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
     host.SetFocusControl(&field);
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = state.text.size();
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline direct undo/redo imports collapsed-caret insertion starting state");
+    Require(field.ImportTextInputState(host, state, false), "multiline direct undo/redo imports collapsed-caret insertion starting state");
 
     Require(field.OnChar(host, L'x', 0), "multiline direct undo/redo inserts at a collapsed caret");
     Require(field.GetText() == L"alpha\nbetax", "multiline direct undo/redo updates the logical text after insertion");
@@ -1383,11 +1383,11 @@ void TestWrappedMultilineTextFieldUndoRedoRestoresCollapsedCaretInsertion()
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f));
     host.SetFocusControl(&field);
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = state.text.size();
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline direct undo/redo imports collapsed-caret insertion starting state");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline direct undo/redo imports collapsed-caret insertion starting state");
 
     Require(field.OnChar(host, L'x', 0), "wrapped multiline direct undo/redo inserts at a collapsed caret");
     Require(field.GetText() == std::wstring(kWrappedMultilineClipboardTextForTest) + L"x",
@@ -1495,15 +1495,15 @@ void TestMultilineTextFieldUndoRedoWithoutHistoryLeavesTextAndCaretUnchanged()
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
     host.SetFocusControl(&field);
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline direct undo/redo no-op exports the starting state");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline direct undo/redo no-op exports the starting state");
     const size_t originalCaretIndex = state.caretIndex;
     Require(! state.selectionAnchorIndex.has_value(), "multiline direct undo/redo no-op starts without a visible selection");
 
     Require(! field.OnKeyDown(host, 'Z', MK_CONTROL), "multiline direct undo/redo without history reports ctrl+z as a no-op");
     Require(! field.OnKeyDown(host, 'Y', MK_CONTROL), "multiline direct undo/redo without history reports ctrl+y as a no-op");
     Require(field.GetText() == L"alpha\nbeta", "multiline direct undo/redo without history leaves the logical text unchanged");
-    Require(field.ExportTextInputBridgeState(state), "multiline direct undo/redo no-op exports state after empty-history keys");
+    Require(field.ExportTextInputState(state), "multiline direct undo/redo no-op exports state after empty-history keys");
     Require(! state.selectionAnchorIndex.has_value(), "multiline direct undo/redo without history leaves selection collapsed");
     Require(state.caretIndex == originalCaretIndex, "multiline direct undo/redo without history leaves the caret unchanged");
 }
@@ -1518,15 +1518,15 @@ void TestWrappedMultilineTextFieldUndoRedoWithoutHistoryLeavesTextAndCaretUnchan
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f));
     host.SetFocusControl(&field);
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline direct undo/redo no-op exports the starting state");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline direct undo/redo no-op exports the starting state");
     const size_t originalCaretIndex = state.caretIndex;
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline direct undo/redo no-op starts without a visible selection");
 
     Require(! field.OnKeyDown(host, 'Z', MK_CONTROL), "wrapped multiline direct undo/redo without history reports ctrl+z as a no-op");
     Require(! field.OnKeyDown(host, 'Y', MK_CONTROL), "wrapped multiline direct undo/redo without history reports ctrl+y as a no-op");
     Require(field.GetText() == kWrappedMultilineClipboardTextForTest, "wrapped multiline direct undo/redo without history leaves the wrapped text unchanged");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline direct undo/redo no-op exports state after empty-history keys");
+    Require(field.ExportTextInputState(state), "wrapped multiline direct undo/redo no-op exports state after empty-history keys");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline direct undo/redo without history leaves selection collapsed");
     Require(state.caretIndex == originalCaretIndex, "wrapped multiline direct undo/redo without history leaves the caret unchanged");
 }
@@ -1541,11 +1541,11 @@ void TestMultilineTextFieldRedoClearsAfterNewEdit()
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
     host.SetFocusControl(&field);
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = state.text.size();
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline direct redo-clear imports collapsed-caret starting state");
+    Require(field.ImportTextInputState(host, state, false), "multiline direct redo-clear imports collapsed-caret starting state");
 
     Require(field.OnChar(host, L'x', 0), "multiline direct redo-clear inserts the first character");
     Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "multiline direct redo-clear undoes the first character");
@@ -1566,11 +1566,11 @@ void TestWrappedMultilineTextFieldRedoClearsAfterNewEdit()
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f));
     host.SetFocusControl(&field);
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = state.text.size();
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline direct redo-clear imports collapsed-caret starting state");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline direct redo-clear imports collapsed-caret starting state");
 
     Require(field.OnChar(host, L'x', 0), "wrapped multiline direct redo-clear inserts the first character");
     Require(field.OnKeyDown(host, 'Z', MK_CONTROL), "wrapped multiline direct redo-clear undoes the first character");
@@ -1596,8 +1596,8 @@ void TestMultilineTextFieldMouseClickPlacesCaretByPointAndTypesAtCaret()
     const std::wstring originalText(field.GetText());
     Require(field.OnMouseDown(host, D2D1::Point2F(10.0f, 36.0f), false, 0), "multiline text field handles direct pointer caret placement");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after direct pointer caret placement");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline text field exports state after direct pointer caret placement");
     Require(state.caretIndex >= 6u, "direct multiline pointer hit testing moves the caret into the clicked later line");
     Require(state.caretIndex < originalText.size(), "direct multiline pointer hit testing no longer snaps the caret to the text end");
 
@@ -1622,8 +1622,8 @@ void TestMultilineTextFieldDragSelectionReplacesDraggedRange()
     Require(field.OnMouseMove(host, D2D1::Point2F(62.0f, 36.0f), 0), "multiline text field updates direct drag selection");
     Require(field.OnMouseUp(host, D2D1::Point2F(62.0f, 36.0f), false, 0), "multiline text field completes direct drag selection");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after direct drag selection");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline text field exports state after direct drag selection");
     Require(state.selectionAnchorIndex.has_value(), "direct multiline drag selection creates a visible selection range");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
     const size_t selectionEnd   = (std::max)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -1647,12 +1647,12 @@ void TestMultilineTextFieldShiftClickExtendsSelectionAndReplacesRange()
     const std::wstring originalText(field.GetText());
     Require(field.OnMouseDown(host, D2D1::Point2F(10.0f, 36.0f), false, 0), "multiline text field places an initial direct caret before shift-click");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after initial direct pointer placement");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline text field exports state after initial direct pointer placement");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnMouseDown(host, D2D1::Point2F(62.0f, 36.0f), false, MK_SHIFT), "multiline text field handles direct shift-click selection extension");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after direct shift-click selection");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after direct shift-click selection");
     Require(state.selectionAnchorIndex.has_value(), "direct multiline shift-click creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "direct multiline shift-click keeps the original caret as the selection anchor");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -1677,8 +1677,8 @@ void TestMultilineTextFieldDoubleClickSelectsWordByPointAndReplacesRange()
     const std::wstring originalText(field.GetText());
     Require(field.OnMouseDoubleClick(host, D2D1::Point2F(28.0f, 36.0f), false, 0), "multiline text field handles direct double-click word selection");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after direct double-click word selection");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline text field exports state after direct double-click word selection");
     Require(state.selectionAnchorIndex.has_value(), "direct multiline double click creates a visible selection range");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
     const size_t selectionEnd   = (std::max)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -1702,16 +1702,16 @@ void TestMultilineTextFieldArrowKeysMoveCaretByCodeUnit()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for left/right test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for left/right test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for left/right test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for left/right test");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, 0), "multiline text field handles left");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after left");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after left");
     Require(! state.selectionAnchorIndex.has_value(), "multiline left keeps the visible caret collapsed");
     Require(state.caretIndex + 1u == originalCaretIndex, "multiline left moves one code unit left");
 
@@ -1719,12 +1719,12 @@ void TestMultilineTextFieldArrowKeysMoveCaretByCodeUnit()
     state.text       = field.GetText();
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports starting caret state for right test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports restarted caret state for right test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports starting caret state for right test");
+    Require(field.ExportTextInputState(state), "multiline text field exports restarted caret state for right test");
     const size_t rightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, 0), "multiline text field handles right");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after right");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after right");
     Require(! state.selectionAnchorIndex.has_value(), "multiline right keeps the visible caret collapsed");
     Require(state.caretIndex == rightStartIndex + 1u, "multiline right moves one code unit right");
 }
@@ -1740,16 +1740,16 @@ void TestMultilineTextFieldShiftArrowExtendsSelection()
     host.SetFocusControl(&field);
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for shift+left test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+left test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for shift+left test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+left test");
     const size_t shiftLeftStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_SHIFT), "multiline text field handles shift+left");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+left");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+left");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+left creates a selection range");
     Require(state.selectionAnchorIndex.value() == shiftLeftStartIndex, "multiline shift+left keeps the original caret as the selection anchor");
     Require(state.caretIndex + 1u == shiftLeftStartIndex, "multiline shift+left moves one code unit left");
@@ -1763,12 +1763,12 @@ void TestMultilineTextFieldShiftArrowExtendsSelection()
     state.text       = originalText;
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports starting caret state for shift+right test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+right test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports starting caret state for shift+right test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+right test");
     const size_t shiftRightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_SHIFT), "multiline text field handles shift+right");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+right");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+right");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+right creates a selection range");
     Require(state.selectionAnchorIndex.value() == shiftRightStartIndex, "multiline shift+right keeps the original caret as the selection anchor");
     Require(state.caretIndex == shiftRightStartIndex + 1u, "multiline shift+right moves one code unit right");
@@ -1787,28 +1787,28 @@ void TestMultilineTextFieldHomeEndUseLineBoundaries()
     ExposedTextField field(L"alpha\nbeta\ngamma");
     field.SetMultiline(true);
 
-    TextInputBridgeState state;
+    TextInputState state;
     state.text       = L"alpha\nbeta\ngamma";
     state.multiline  = true;
     state.caretIndex = 8u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for home/end test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for home/end test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for home/end test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for home/end test");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_HOME, 0), "multiline text field handles line-home");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after line-home");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after line-home");
     Require(state.caretIndex < originalCaretIndex, "multiline home moves to the start of the current line");
 
     Require(field.OnKeyDown(host, VK_END, 0), "multiline text field handles line-end");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after line-end");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after line-end");
     Require(state.caretIndex > originalCaretIndex, "multiline end moves to the end of the current line");
 
     Require(field.OnKeyDown(host, VK_HOME, MK_CONTROL), "multiline text field handles ctrl+home");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+home");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+home");
     Require(state.caretIndex == 0u, "multiline ctrl+home moves to the start of the document");
 
     Require(field.OnKeyDown(host, VK_END, MK_CONTROL), "multiline text field handles ctrl+end");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+end");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+end");
     Require(state.caretIndex == field.GetText().size(), "multiline ctrl+end moves to the end of the document");
 }
 
@@ -1823,16 +1823,16 @@ void TestMultilineTextFieldShiftHomeEndExtendSelection()
     host.SetFocusControl(&field);
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for shift+home/end test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+home/end test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for shift+home/end test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+home/end test");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_HOME, MK_SHIFT), "multiline text field handles shift+home");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+home");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+home");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+home creates a selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "multiline shift+home keeps the original caret as the selection anchor");
     Require(state.caretIndex < originalCaretIndex, "multiline shift+home moves to the line start");
@@ -1846,12 +1846,12 @@ void TestMultilineTextFieldShiftHomeEndExtendSelection()
     state.text       = originalText;
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports starting caret state for shift+end test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+end test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports starting caret state for shift+end test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+end test");
     const size_t shiftEndStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_END, MK_SHIFT), "multiline text field handles shift+end");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+end");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+end");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+end creates a selection range");
     Require(state.selectionAnchorIndex.value() == shiftEndStartIndex, "multiline shift+end keeps the original caret as the selection anchor");
     Require(state.caretIndex > shiftEndStartIndex, "multiline shift+end moves to the line end");
@@ -1873,16 +1873,16 @@ void TestMultilineTextFieldCtrlShiftHomeEndExtendSelection()
     host.SetFocusControl(&field);
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for ctrl+shift+home/end test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for ctrl+shift+home/end test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for ctrl+shift+home/end test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for ctrl+shift+home/end test");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_HOME, MK_CONTROL | MK_SHIFT), "multiline text field handles ctrl+shift+home");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+shift+home");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+shift+home");
     Require(state.selectionAnchorIndex.has_value(), "multiline ctrl+shift+home creates a selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "multiline ctrl+shift+home keeps the original caret as the selection anchor");
     Require(state.caretIndex == 0u, "multiline ctrl+shift+home moves to the document start");
@@ -1896,12 +1896,12 @@ void TestMultilineTextFieldCtrlShiftHomeEndExtendSelection()
     state.text       = originalText;
     state.caretIndex = 8u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports starting caret state for ctrl+shift+end test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for ctrl+shift+end test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports starting caret state for ctrl+shift+end test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for ctrl+shift+end test");
     const size_t ctrlShiftEndStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_END, MK_CONTROL | MK_SHIFT), "multiline text field handles ctrl+shift+end");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+shift+end");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+shift+end");
     Require(state.selectionAnchorIndex.has_value(), "multiline ctrl+shift+end creates a selection range");
     Require(state.selectionAnchorIndex.value() == ctrlShiftEndStartIndex, "multiline ctrl+shift+end keeps the original caret as the selection anchor");
     Require(state.caretIndex == field.GetText().size(), "multiline ctrl+shift+end moves to the document end");
@@ -1921,11 +1921,11 @@ void TestMultilineTextFieldCtrlBackspaceDeletesPreviousWord()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 10u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for ctrl+backspace test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for ctrl+backspace test");
 
     Require(field.OnKeyDown(host, VK_BACK, MK_CONTROL), "multiline text field handles ctrl+backspace");
     Require(field.GetText() == L"alpha \ngamma", "multiline ctrl+backspace deletes the previous word within the current line");
@@ -1940,11 +1940,11 @@ void TestMultilineTextFieldCtrlDeleteDeletesNextWord()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 0u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for ctrl+delete test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for ctrl+delete test");
 
     Require(field.OnKeyDown(host, VK_DELETE, MK_CONTROL), "multiline text field handles ctrl+delete");
     Require(field.GetText() == L"beta\ngamma", "multiline ctrl+delete deletes the next word and spacing within the current line");
@@ -1959,16 +1959,16 @@ void TestMultilineTextFieldCtrlArrowMovesByWordBoundary()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 10u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for ctrl+left test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for ctrl+left test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for ctrl+left test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for ctrl+left test");
     const size_t ctrlLeftStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_CONTROL), "multiline text field handles ctrl+left");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+left");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+left");
     Require(! state.selectionAnchorIndex.has_value(), "multiline ctrl+left keeps a collapsed selection");
     Require(state.caretIndex < ctrlLeftStartIndex, "multiline ctrl+left moves to the previous word boundary");
 
@@ -1976,12 +1976,12 @@ void TestMultilineTextFieldCtrlArrowMovesByWordBoundary()
     state.text       = field.GetText();
     state.caretIndex = 6u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports starting caret state for ctrl+right test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for ctrl+right test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports starting caret state for ctrl+right test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for ctrl+right test");
     const size_t ctrlRightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_CONTROL), "multiline text field handles ctrl+right");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+right");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+right");
     Require(! state.selectionAnchorIndex.has_value(), "multiline ctrl+right keeps a collapsed selection");
     Require(state.caretIndex > ctrlRightStartIndex, "multiline ctrl+right moves to the next word start after trailing whitespace");
 }
@@ -1997,16 +1997,16 @@ void TestMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord()
     host.SetFocusControl(&field);
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.caretIndex = 10u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for ctrl+shift+left test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for ctrl+shift+left test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for ctrl+shift+left test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for ctrl+shift+left test");
     const size_t ctrlShiftLeftStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_CONTROL | MK_SHIFT), "multiline text field handles ctrl+shift+left");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+shift+left");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+shift+left");
     Require(state.selectionAnchorIndex.has_value(), "multiline ctrl+shift+left creates a selection range");
     Require(state.selectionAnchorIndex.value() == ctrlShiftLeftStartIndex, "multiline ctrl+shift+left keeps the original caret as the selection anchor");
     Require(state.caretIndex < ctrlShiftLeftStartIndex, "multiline ctrl+shift+left moves to the previous word boundary");
@@ -2020,12 +2020,12 @@ void TestMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord()
     state.text       = originalText;
     state.caretIndex = 6u;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports starting caret state for ctrl+shift+right test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for ctrl+shift+right test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports starting caret state for ctrl+shift+right test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for ctrl+shift+right test");
     const size_t ctrlShiftRightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_CONTROL | MK_SHIFT), "multiline text field handles ctrl+shift+right");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after ctrl+shift+right");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after ctrl+shift+right");
     Require(state.selectionAnchorIndex.has_value(), "multiline ctrl+shift+right creates a selection range");
     Require(state.selectionAnchorIndex.value() == ctrlShiftRightStartIndex, "multiline ctrl+shift+right keeps the original caret as the selection anchor");
     Require(state.caretIndex > ctrlShiftRightStartIndex, "multiline ctrl+shift+right moves to the next word start after trailing whitespace");
@@ -2044,25 +2044,25 @@ void TestMultilineTextFieldUpDownPreservePreferredColumn()
     ExposedTextField field(L"alpha\nbe\ngamma");
     field.SetMultiline(true);
 
-    TextInputBridgeState state;
+    TextInputState state;
     state.text       = L"alpha\nbe\ngamma";
     state.multiline  = true;
     state.caretIndex = 5u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for vertical navigation test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for vertical navigation test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for vertical navigation test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for vertical navigation test");
     auto originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_DOWN, 0), "multiline text field handles first down-arrow");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after first down-arrow");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after first down-arrow");
     auto middleLineCaretIndex = state.caretIndex;
     Require(middleLineCaretIndex > originalCaretIndex, "multiline down-arrow moves the caret forward onto the shorter next line");
 
     Require(field.OnKeyDown(host, VK_DOWN, 0), "multiline text field handles second down-arrow");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after second down-arrow");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after second down-arrow");
     Require(state.caretIndex > middleLineCaretIndex, "multiline down-arrow preserves the preferred column on a later longer line");
 
     Require(field.OnKeyDown(host, VK_UP, 0), "multiline text field handles up-arrow after preserved-column move");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after up-arrow");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after up-arrow");
     Require(state.caretIndex == middleLineCaretIndex, "multiline up-arrow returns to the shorter middle line while keeping the preferred column");
 }
 
@@ -2076,16 +2076,16 @@ void TestMultilineTextFieldShiftUpDownExtendSelection()
     host.SetFocusControl(&field);
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 8u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for shift+up test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+up test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for shift+up test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+up test");
     const size_t shiftUpStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_UP, MK_SHIFT), "multiline text field handles shift+up");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+up");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+up");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+up creates a selection range");
     Require(state.selectionAnchorIndex.value() == shiftUpStartIndex, "multiline shift+up keeps the original caret as the selection anchor");
     Require(state.caretIndex < shiftUpStartIndex, "multiline shift+up moves to the previous logical line while preserving the preferred column");
@@ -2099,12 +2099,12 @@ void TestMultilineTextFieldShiftUpDownExtendSelection()
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = 8u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports starting caret state for shift+down test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+down test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports starting caret state for shift+down test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+down test");
     const size_t shiftDownStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_DOWN, MK_SHIFT), "multiline text field handles shift+down");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+down");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+down");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+down creates a selection range");
     Require(state.selectionAnchorIndex.value() == shiftDownStartIndex, "multiline shift+down keeps the original caret as the selection anchor");
     Require(state.caretIndex > shiftDownStartIndex, "multiline shift+down moves to the next logical line while preserving the preferred column");
@@ -2124,21 +2124,21 @@ void TestMultilineTextFieldPageUpDownUseViewportLines()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 76.0f));
 
-    TextInputBridgeState state;
+    TextInputState state;
     state.text       = L"alpha\nbravo\ncharlie\ndelta\necho";
     state.multiline  = true;
     state.caretIndex = 2u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for page navigation test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for page navigation test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for page navigation test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for page navigation test");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_NEXT, 0), "multiline text field handles page-down");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after page-down");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after page-down");
     const size_t pageDownCaretIndex = state.caretIndex;
     Require(pageDownCaretIndex > originalCaretIndex, "multiline page-down advances the caret by the measured viewport line count");
 
     Require(field.OnKeyDown(host, VK_PRIOR, 0), "multiline text field handles page-up");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after page-up");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after page-up");
     Require(state.caretIndex == originalCaretIndex, "multiline page-up returns the caret to its original position");
 }
 
@@ -2154,17 +2154,17 @@ void TestWrappedMultilineTextFieldArrowKeysUseVisualLines()
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field handles pointer caret placement on a later visual line");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after later-line pointer placement");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after later-line pointer placement");
     const size_t laterWrappedCaretIndex = state.caretIndex;
     Require(laterWrappedCaretIndex > 0u, "wrapped multiline pointer placement lands beyond the first visual line even without logical newlines");
 
     Require(field.OnKeyDown(host, VK_UP, 0), "wrapped multiline text field handles visual-line up navigation");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after visual-line up navigation");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after visual-line up navigation");
     Require(state.caretIndex < laterWrappedCaretIndex, "wrapped multiline up moves to the previous wrapped visual line within the same logical paragraph");
 
     Require(field.OnKeyDown(host, VK_DOWN, 0), "wrapped multiline text field handles visual-line down navigation");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after visual-line down navigation");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after visual-line down navigation");
     Require(state.caretIndex == laterWrappedCaretIndex, "wrapped multiline down returns to the original wrapped-line caret position");
 }
 
@@ -2177,16 +2177,16 @@ void TestWrappedMultilineTextFieldCtrlArrowUsesWordBoundaries()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 25u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting caret state for ctrl+left");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting caret state for ctrl+left");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_CONTROL), "wrapped multiline text field handles ctrl+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after wrapped ctrl+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after wrapped ctrl+left");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+left keeps a collapsed selection");
     const size_t previousWordBoundaryIndex = state.caretIndex;
     Require(previousWordBoundaryIndex < originalCaretIndex, "wrapped multiline ctrl+left moves to the previous word boundary inside a long wrapped paragraph");
@@ -2195,12 +2195,12 @@ void TestWrappedMultilineTextFieldCtrlArrowUsesWordBoundaries()
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = previousWordBoundaryIndex;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field reimports starting caret state for ctrl+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting caret state for ctrl+right");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field reimports starting caret state for ctrl+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting caret state for ctrl+right");
     const size_t ctrlRightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_CONTROL), "wrapped multiline text field handles ctrl+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after wrapped ctrl+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after wrapped ctrl+right");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+right keeps a collapsed selection");
     Require(state.caretIndex > ctrlRightStartIndex && state.caretIndex > originalCaretIndex,
             "wrapped multiline ctrl+right moves to the next word start after trailing whitespace inside a long wrapped paragraph");
@@ -2216,16 +2216,16 @@ void TestWrappedMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord()
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f));
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 25u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+shift+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting state for ctrl+shift+left");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+shift+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting state for ctrl+shift+left");
     const size_t ctrlShiftLeftStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_CONTROL | MK_SHIFT), "wrapped multiline text field handles ctrl+shift+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after wrapped ctrl+shift+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after wrapped ctrl+shift+left");
     Require(state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+shift+left creates a selection range");
     Require(state.selectionAnchorIndex.value() == ctrlShiftLeftStartIndex,
             "wrapped multiline ctrl+shift+left keeps the original caret as the selection anchor");
@@ -2242,12 +2242,12 @@ void TestWrappedMultilineTextFieldCtrlShiftArrowExtendsSelectionByWord()
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = ctrlShiftLeftBoundaryIndex;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field reimports starting caret state for ctrl+shift+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting state for ctrl+shift+right");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field reimports starting caret state for ctrl+shift+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting state for ctrl+shift+right");
     const size_t ctrlShiftRightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_CONTROL | MK_SHIFT), "wrapped multiline text field handles ctrl+shift+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after wrapped ctrl+shift+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after wrapped ctrl+shift+right");
     Require(state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+shift+right creates a selection range");
     Require(state.selectionAnchorIndex.value() == ctrlShiftRightStartIndex,
             "wrapped multiline ctrl+shift+right keeps the original caret as the selection anchor");
@@ -2274,12 +2274,12 @@ void TestWrappedMultilineTextFieldShiftArrowExtendsSelectionAndReplacesRange()
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field places a direct caret on a later visual line before shift+arrow selection");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state before direct wrapped shift+arrow selection");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state before direct wrapped shift+arrow selection");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_SHIFT), "wrapped multiline text field handles shift+left on a wrapped visual line");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+left");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+left creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "direct wrapped multiline shift+left keeps the original caret as the selection anchor");
     Require(state.caretIndex + 1u == originalCaretIndex, "direct wrapped multiline shift+left moves one code unit left on the wrapped visual line");
@@ -2289,17 +2289,17 @@ void TestWrappedMultilineTextFieldShiftArrowExtendsSelectionAndReplacesRange()
     Require(field.GetText() == originalText.substr(0u, shiftLeftSelectionStart) + L"X" + originalText.substr(shiftLeftSelectionEnd),
             "direct wrapped multiline shift+left replaces exactly the selected wrapped code unit");
 
-    TextInputBridgeState resetState{};
+    TextInputState resetState{};
     resetState.text             = originalText;
     resetState.caretIndex       = originalCaretIndex;
     resetState.multiline        = true;
     resetState.firstVisibleLine = state.firstVisibleLine;
-    Require(field.ImportTextInputBridgeState(host, resetState, false),
+    Require(field.ImportTextInputState(host, resetState, false),
             "wrapped multiline text field reimports the original wrapped caret before direct shift+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+right");
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_SHIFT), "wrapped multiline text field handles shift+right on a wrapped visual line");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+right");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+right creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "direct wrapped multiline shift+right keeps the original caret as the selection anchor");
     Require(state.caretIndex == originalCaretIndex + 1u, "direct wrapped multiline shift+right moves one code unit right on the wrapped visual line");
@@ -2324,13 +2324,13 @@ void TestWrappedMultilineTextFieldShiftHomeEndExtendSelectionAndReplaceRange()
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field places a direct caret on a later visual line before shift+home/end");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state before direct wrapped shift+home/end");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state before direct wrapped shift+home/end");
     const size_t originalCaretIndex = state.caretIndex;
     Require(originalCaretIndex > 0u, "direct wrapped multiline shift+home/end starts from a later wrapped visual line");
 
     Require(field.OnKeyDown(host, VK_HOME, MK_SHIFT), "wrapped multiline text field handles direct shift+home on a wrapped visual line");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+home");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+home");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+home creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "direct wrapped multiline shift+home keeps the original caret as the selection anchor");
     Require(state.caretIndex > 0u, "direct wrapped multiline shift+home moves to a wrapped-line start within the same paragraph");
@@ -2340,17 +2340,17 @@ void TestWrappedMultilineTextFieldShiftHomeEndExtendSelectionAndReplaceRange()
     Require(field.GetText() == originalText.substr(0u, shiftHomeSelectionStart) + L"X" + originalText.substr(shiftHomeSelectionEnd),
             "direct wrapped multiline shift+home replaces exactly the wrapped-line prefix selection");
 
-    TextInputBridgeState resetState{};
+    TextInputState resetState{};
     resetState.text             = originalText;
     resetState.caretIndex       = originalCaretIndex;
     resetState.multiline        = true;
     resetState.firstVisibleLine = state.firstVisibleLine;
-    Require(field.ImportTextInputBridgeState(host, resetState, false),
+    Require(field.ImportTextInputState(host, resetState, false),
             "wrapped multiline text field reimports the original wrapped caret before direct shift+end");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+end");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+end");
 
     Require(field.OnKeyDown(host, VK_END, MK_SHIFT), "wrapped multiline text field handles direct shift+end on a wrapped visual line");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+end");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+end");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+end creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "direct wrapped multiline shift+end keeps the original caret as the selection anchor");
     Require(state.caretIndex > originalCaretIndex, "direct wrapped multiline shift+end moves to the wrapped-line end");
@@ -2377,13 +2377,13 @@ void TestWrappedMultilineTextFieldCtrlShiftHomeEndExtendSelectionAndReplaceRange
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field places a direct caret on a later visual line before ctrl+shift+home/end");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state before direct wrapped ctrl+shift+home/end");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state before direct wrapped ctrl+shift+home/end");
     const size_t originalCaretIndex = state.caretIndex;
     Require(originalCaretIndex > 0u, "direct wrapped multiline ctrl+shift+home/end starts from a later wrapped visual line");
 
     Require(field.OnKeyDown(host, VK_HOME, MK_CONTROL | MK_SHIFT), "wrapped multiline text field handles direct ctrl+shift+home");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped ctrl+shift+home");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped ctrl+shift+home");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline ctrl+shift+home creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex,
             "direct wrapped multiline ctrl+shift+home keeps the original caret as the selection anchor");
@@ -2394,17 +2394,17 @@ void TestWrappedMultilineTextFieldCtrlShiftHomeEndExtendSelectionAndReplaceRange
     Require(field.GetText() == originalText.substr(0u, ctrlShiftHomeSelectionStart) + L"X" + originalText.substr(ctrlShiftHomeSelectionEnd),
             "direct wrapped multiline ctrl+shift+home replaces exactly the document prefix");
 
-    TextInputBridgeState resetState{};
+    TextInputState resetState{};
     resetState.text             = originalText;
     resetState.caretIndex       = originalCaretIndex;
     resetState.multiline        = true;
     resetState.firstVisibleLine = state.firstVisibleLine;
-    Require(field.ImportTextInputBridgeState(host, resetState, false),
+    Require(field.ImportTextInputState(host, resetState, false),
             "wrapped multiline text field reimports the original wrapped caret before direct ctrl+shift+end");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports restarted state before direct wrapped ctrl+shift+end");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports restarted state before direct wrapped ctrl+shift+end");
 
     Require(field.OnKeyDown(host, VK_END, MK_CONTROL | MK_SHIFT), "wrapped multiline text field handles direct ctrl+shift+end");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped ctrl+shift+end");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped ctrl+shift+end");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline ctrl+shift+end creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex,
             "direct wrapped multiline ctrl+shift+end keeps the original caret as the selection anchor");
@@ -2430,13 +2430,13 @@ void TestWrappedMultilineTextFieldShiftUpDownExtendSelectionAndReplaceRange()
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field places a direct caret on a later visual line before shift+up/down");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state before direct wrapped shift+up/down");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state before direct wrapped shift+up/down");
     const size_t originalCaretIndex = state.caretIndex;
     Require(originalCaretIndex > 0u, "direct wrapped multiline shift+up/down starts from a later wrapped visual line");
 
     Require(field.OnKeyDown(host, VK_UP, MK_SHIFT), "wrapped multiline text field handles direct shift+up");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+up");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+up");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+up creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "direct wrapped multiline shift+up keeps the original caret as the selection anchor");
     Require(state.caretIndex < originalCaretIndex, "direct wrapped multiline shift+up moves to the previous wrapped visual line");
@@ -2446,17 +2446,17 @@ void TestWrappedMultilineTextFieldShiftUpDownExtendSelectionAndReplaceRange()
     Require(field.GetText() == originalText.substr(0u, shiftUpSelectionStart) + L"X" + originalText.substr(shiftUpSelectionEnd),
             "direct wrapped multiline shift+up replaces exactly the selected wrapped vertical range");
 
-    TextInputBridgeState resetState{};
+    TextInputState resetState{};
     resetState.text             = originalText;
     resetState.caretIndex       = originalCaretIndex;
     resetState.multiline        = true;
     resetState.firstVisibleLine = state.firstVisibleLine;
-    Require(field.ImportTextInputBridgeState(host, resetState, false),
+    Require(field.ImportTextInputState(host, resetState, false),
             "wrapped multiline text field reimports the original wrapped caret before direct shift+down");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+down");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+down");
 
     Require(field.OnKeyDown(host, VK_DOWN, MK_SHIFT), "wrapped multiline text field handles direct shift+down");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+down");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+down");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+down creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "direct wrapped multiline shift+down keeps the original caret as the selection anchor");
     Require(state.caretIndex > originalCaretIndex, "direct wrapped multiline shift+down moves to the next wrapped visual line");
@@ -2479,27 +2479,27 @@ void TestWrappedMultilineTextFieldCtrlBackspaceDeleteUsesWordBoundaries()
     const std::wstring originalText(field.GetText());
     const std::wstring expectedText = L"alpha bravo charlie echo foxtrot golf hotel";
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = 26u; // just past "delta " (start of "echo")
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+backspace");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+backspace");
 
     Require(field.OnKeyDown(host, VK_BACK, MK_CONTROL), "wrapped multiline text field handles ctrl+backspace");
     Require(field.GetText() == expectedText,
             "wrapped multiline ctrl+backspace deletes the previous word and trailing whitespace inside a long wrapped paragraph");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+backspace");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+backspace");
     const size_t previousWordBoundaryIndex = state.caretIndex;
 
     state            = {};
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = previousWordBoundaryIndex;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field reimports exported word-boundary state for ctrl+delete");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field reimports exported word-boundary state for ctrl+delete");
 
     Require(field.OnKeyDown(host, VK_DELETE, MK_CONTROL), "wrapped multiline text field handles ctrl+delete");
     Require(field.GetText() == expectedText, "wrapped multiline ctrl+delete deletes the next word and trailing whitespace inside a long wrapped paragraph");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+delete");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+delete");
     Require(state.caretIndex == previousWordBoundaryIndex, "wrapped multiline ctrl+delete keeps the caret at the exported wrapped word boundary");
 }
 
@@ -2517,8 +2517,8 @@ void TestWrappedMultilineTextFieldMouseClickPlacesCaretByPointAndTypesAtCaret()
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field handles direct pointer caret placement on a later visual line");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped pointer placement");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped pointer placement");
     Require(state.caretIndex > 0u, "direct wrapped multiline pointer placement lands beyond the first visual line");
 
     const size_t insertionIndex = state.caretIndex;
@@ -2541,8 +2541,8 @@ void TestWrappedMultilineTextFieldDoubleClickSelectsWordByPointAndReplacesRange(
     Require(field.OnMouseDoubleClick(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field handles direct double-click word selection on a later visual line");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped double-click selection");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped double-click selection");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline double click creates a visible selection range");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
     const size_t selectionEnd   = (std::max)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -2570,8 +2570,8 @@ void TestWrappedMultilineTextFieldDragSelectionReplacesDraggedRange()
     Require(field.OnMouseMove(host, D2D1::Point2F(78.0f, 34.0f), 0), "wrapped multiline text field updates direct drag selection");
     Require(field.OnMouseUp(host, D2D1::Point2F(78.0f, 34.0f), false, 0), "wrapped multiline text field completes direct drag selection");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped drag selection");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped drag selection");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline drag creates a visible selection range");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
     const size_t selectionEnd   = (std::max)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -2596,13 +2596,13 @@ void TestWrappedMultilineTextFieldShiftClickExtendsSelectionAndReplacesRange()
     Require(field.OnMouseDown(host, D2D1::Point2F(12.0f, 34.0f), false, 0),
             "wrapped multiline text field places an initial direct caret before wrapped shift-click");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after initial direct wrapped pointer placement");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after initial direct wrapped pointer placement");
     const size_t anchorCaretIndex = state.caretIndex;
 
     Require(field.OnMouseDown(host, D2D1::Point2F(78.0f, 34.0f), false, MK_SHIFT),
             "wrapped multiline text field handles direct wrapped shift-click selection extension");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift-click selection");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift-click selection");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift-click creates a selection range");
     Require(state.selectionAnchorIndex.value() == anchorCaretIndex, "direct wrapped multiline shift-click keeps the original caret as the selection anchor");
     const size_t selectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -2623,21 +2623,21 @@ void TestWrappedMultilineTextFieldPageKeysUseVisualLines()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 124.0f, 72.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 1u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for visual page navigation");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting caret state for visual page navigation");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for visual page navigation");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting caret state for visual page navigation");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_NEXT, 0), "wrapped multiline text field handles visual page-down navigation");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after visual page-down navigation");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after visual page-down navigation");
     const size_t pageDownCaretIndex = state.caretIndex;
     Require(pageDownCaretIndex > originalCaretIndex, "wrapped multiline page-down advances within the same logical paragraph by wrapped visual lines");
 
     Require(field.OnKeyDown(host, VK_PRIOR, 0), "wrapped multiline text field handles visual page-up navigation");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after visual page-up navigation");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after visual page-up navigation");
     Require(state.caretIndex == originalCaretIndex, "wrapped multiline page-up returns to the original caret position within the logical paragraph");
 }
 
@@ -2653,16 +2653,16 @@ void TestWrappedMultilineTextFieldShiftPageDownExtendsSelectionAndReplacesRange(
 
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 1u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for direct shift+page-down");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting caret state for direct shift+page-down");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for direct shift+page-down");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting caret state for direct shift+page-down");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_NEXT, MK_SHIFT), "wrapped multiline text field handles direct shift+page-down");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+page-down");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+page-down");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+page-down creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex,
             "direct wrapped multiline shift+page-down keeps the original caret as the selection anchor");
@@ -2686,20 +2686,20 @@ void TestWrappedMultilineTextFieldShiftPageUpExtendsSelectionAndReplacesRange()
 
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 1u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for direct shift+page-up");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting caret state for direct shift+page-up");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for direct shift+page-up");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting caret state for direct shift+page-up");
     const size_t originalCaretIndex = state.caretIndex;
     Require(field.OnKeyDown(host, VK_NEXT, 0), "wrapped multiline text field advances to a later caret position before direct shift+page-up");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports the later caret position before direct shift+page-up");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports the later caret position before direct shift+page-up");
     const size_t laterCaretIndex = state.caretIndex;
     Require(laterCaretIndex > originalCaretIndex, "direct wrapped multiline shift+page-up starts from a later wrapped caret");
 
     Require(field.OnKeyDown(host, VK_PRIOR, MK_SHIFT), "wrapped multiline text field handles direct shift+page-up");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after direct wrapped shift+page-up");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after direct wrapped shift+page-up");
     Require(state.selectionAnchorIndex.has_value(), "direct wrapped multiline shift+page-up creates a visible selection range");
     Require(state.selectionAnchorIndex.value() == laterCaretIndex,
             "direct wrapped multiline shift+page-up keeps the original later caret as the selection anchor");
@@ -2723,19 +2723,19 @@ void TestWrappedMultilineTextFieldHomeEndUseVisualLineBoundaries()
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field handles pointer caret placement before visual-line home/end");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after pointer placement for home/end");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after pointer placement for home/end");
     const size_t laterWrappedCaretIndex = state.caretIndex;
     Require(laterWrappedCaretIndex > 0u, "wrapped multiline home/end test starts from a later wrapped visual line within the logical paragraph");
 
     Require(field.OnKeyDown(host, VK_HOME, 0), "wrapped multiline text field handles visual-line home");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after visual-line home");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after visual-line home");
     Require(state.caretIndex > 0u, "wrapped multiline home moves to the wrapped-line start instead of the document start");
     Require(state.caretIndex < laterWrappedCaretIndex, "wrapped multiline home moves backward to the current wrapped-line start");
     const size_t wrappedLineHomeIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_END, 0), "wrapped multiline text field handles visual-line end");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after visual-line end");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after visual-line end");
     Require(state.caretIndex > wrappedLineHomeIndex, "wrapped multiline end moves forward to the current wrapped-line end");
     Require(state.caretIndex < field.GetText().size(),
             "wrapped multiline end stays within the current wrapped visual line instead of jumping to the document end");
@@ -2753,25 +2753,25 @@ void TestWrappedMultilineTextFieldCtrlHomeEndUseDocumentBoundaries()
     Require(field.OnMouseDown(host, D2D1::Point2F(36.0f, 34.0f), false, 0),
             "wrapped multiline text field handles pointer caret placement before ctrl+home/end");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after pointer placement for ctrl+home/end");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after pointer placement for ctrl+home/end");
     const size_t originalCaretIndex = state.caretIndex;
     Require(originalCaretIndex > 0u, "wrapped multiline ctrl+home/end test starts from a later wrapped visual line");
 
     Require(field.OnKeyDown(host, VK_HOME, MK_CONTROL), "wrapped multiline text field handles ctrl+home");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+home");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+home");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+home keeps the visible caret collapsed");
     Require(state.caretIndex == 0u, "wrapped multiline ctrl+home moves to the document start");
 
     state = {};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state before ctrl+end reset");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state before ctrl+end reset");
     state.selectionAnchorIndex.reset();
     state.caretIndex = originalCaretIndex;
     state.multiline  = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field reimports the original caret before ctrl+end");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field reimports the original caret before ctrl+end");
 
     Require(field.OnKeyDown(host, VK_END, MK_CONTROL), "wrapped multiline text field handles ctrl+end");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+end");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+end");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+end keeps the visible caret collapsed");
     Require(state.caretIndex == field.GetText().size(), "wrapped multiline ctrl+end moves to the document end");
 }
@@ -2787,16 +2787,16 @@ void TestMultilineTextFieldShiftPageDownExtendsSelection()
     host.SetFocusControl(&field);
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state;
+    TextInputState state;
     state.text       = L"alpha\nbravo\ncharlie\ndelta\necho";
     state.multiline  = true;
     state.caretIndex = 2u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for shift+page-down test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+page-down test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for shift+page-down test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+page-down test");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_NEXT, MK_SHIFT), "multiline text field handles shift+page-down");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+page-down");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+page-down");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+page-down creates a selection range");
     Require(state.selectionAnchorIndex.value() == originalCaretIndex, "multiline shift+page-down keeps the original caret as the selection anchor");
     Require(state.caretIndex > originalCaretIndex, "multiline shift+page-down moves the caret forward by the measured viewport line count");
@@ -2818,20 +2818,20 @@ void TestMultilineTextFieldShiftPageUpExtendsSelection()
     host.SetFocusControl(&field);
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state;
+    TextInputState state;
     state.text       = L"alpha\nbravo\ncharlie\ndelta\necho";
     state.multiline  = true;
     state.caretIndex = 2u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting caret state for shift+page-up test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports starting caret state for shift+page-up test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting caret state for shift+page-up test");
+    Require(field.ExportTextInputState(state), "multiline text field exports starting caret state for shift+page-up test");
     const size_t originalCaretIndex = state.caretIndex;
     Require(field.OnKeyDown(host, VK_NEXT, 0), "multiline text field advances to a later caret position before shift+page-up");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports the later caret position before shift+page-up");
+    Require(field.ExportTextInputState(state), "multiline text field exports the later caret position before shift+page-up");
     const size_t pageDownCaretIndex = state.caretIndex;
     Require(pageDownCaretIndex > originalCaretIndex, "shift+page-up test has a later caret position to move back from");
 
     Require(field.OnKeyDown(host, VK_PRIOR, MK_SHIFT), "multiline text field handles shift+page-up");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after shift+page-up");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after shift+page-up");
     Require(state.selectionAnchorIndex.has_value(), "multiline shift+page-up creates a selection range");
     Require(state.selectionAnchorIndex.value() == pageDownCaretIndex, "multiline shift+page-up keeps the original later caret as the selection anchor");
     Require(state.caretIndex < pageDownCaretIndex, "multiline shift+page-up moves the caret backward by the measured viewport line count");
@@ -2852,18 +2852,18 @@ void TestMultilineTextFieldImportKeepsLaterCaretVisible()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 44.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 32u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports a later-line caret state for viewport-scroll test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after later-line viewport import");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports a later-line caret state for viewport-scroll test");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after later-line viewport import");
     Require(state.firstVisibleLine > 0u, "multiline import lifts the visible viewport when the caret starts on a later line");
 
     state.firstVisibleLine = 3u;
     state.caretIndex       = 2u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field reimports an early-line caret state for viewport-reset test");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after early-line viewport import");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field reimports an early-line caret state for viewport-reset test");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after early-line viewport import");
     Require(state.firstVisibleLine == 0u, "multiline import can return the visible viewport to the first line when the caret moves back up");
 }
 
@@ -2876,17 +2876,17 @@ void TestMultilineTextFieldMouseWheelScrollsViewport()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 44.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 0u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "multiline text field imports starting state for mouse-wheel viewport test");
+    Require(field.ImportTextInputState(host, state, false), "multiline text field imports starting state for mouse-wheel viewport test");
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), -static_cast<float>(WHEEL_DELTA), 0), "multiline text field handles wheel-down scrolling");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after wheel-down scrolling");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after wheel-down scrolling");
     Require(state.firstVisibleLine > 0u, "multiline mouse wheel scroll advances the visible viewport");
 
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), static_cast<float>(WHEEL_DELTA), 0), "multiline text field handles wheel-up scrolling");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after wheel-up scrolling");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after wheel-up scrolling");
     Require(state.firstVisibleLine == 0u, "multiline mouse wheel scroll can return the visible viewport to the first line");
 }
 
@@ -2900,22 +2900,22 @@ void TestMultilineTextFieldLargeWheelDeltaUsesFullMagnitude()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 44.0f));
 
-    TextInputBridgeState startState{};
+    TextInputState startState{};
     startState.text       = field.GetText();
     startState.multiline  = true;
     startState.caretIndex = 0u;
-    Require(field.ImportTextInputBridgeState(host, startState, false), "multiline text field imports starting state for large wheel-delta test");
+    Require(field.ImportTextInputState(host, startState, false), "multiline text field imports starting state for large wheel-delta test");
 
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), -static_cast<float>(WHEEL_DELTA), 0), "multiline text field handles a single wheel delta");
-    TextInputBridgeState singleStepState{};
-    Require(field.ExportTextInputBridgeState(singleStepState), "multiline text field exports state after a single wheel delta");
+    TextInputState singleStepState{};
+    Require(field.ExportTextInputState(singleStepState), "multiline text field exports state after a single wheel delta");
     Require(singleStepState.firstVisibleLine > 0u, "single multiline wheel delta advances the viewport");
 
-    Require(field.ImportTextInputBridgeState(host, startState, false), "multiline text field restores the starting state before large wheel-delta replay");
+    Require(field.ImportTextInputState(host, startState, false), "multiline text field restores the starting state before large wheel-delta replay");
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), -static_cast<float>(WHEEL_DELTA * 2), 0),
             "multiline text field handles a double wheel delta");
-    TextInputBridgeState doubleStepState{};
-    Require(field.ExportTextInputBridgeState(doubleStepState), "multiline text field exports state after a double wheel delta");
+    TextInputState doubleStepState{};
+    Require(field.ExportTextInputState(doubleStepState), "multiline text field exports state after a double wheel delta");
     Require(doubleStepState.firstVisibleLine == singleStepState.firstVisibleLine * 2u,
             "double multiline wheel delta advances by twice the single-step viewport change");
 }
@@ -2930,28 +2930,28 @@ void TestMultilineTextFieldAccumulatesPartialWheelDelta()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 44.0f));
 
-    TextInputBridgeState startState{};
+    TextInputState startState{};
     startState.text       = field.GetText();
     startState.multiline  = true;
     startState.caretIndex = 0u;
-    Require(field.ImportTextInputBridgeState(host, startState, false), "multiline text field imports starting state for partial wheel-delta test");
+    Require(field.ImportTextInputState(host, startState, false), "multiline text field imports starting state for partial wheel-delta test");
 
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), -static_cast<float>(WHEEL_DELTA), 0),
             "multiline text field handles a single wheel delta for the partial-delta baseline");
-    TextInputBridgeState singleStepState{};
-    Require(field.ExportTextInputBridgeState(singleStepState), "multiline text field exports state after the single wheel-delta baseline");
+    TextInputState singleStepState{};
+    Require(field.ExportTextInputState(singleStepState), "multiline text field exports state after the single wheel-delta baseline");
 
-    Require(field.ImportTextInputBridgeState(host, startState, false), "multiline text field restores the starting state before partial wheel-delta replay");
+    Require(field.ImportTextInputState(host, startState, false), "multiline text field restores the starting state before partial wheel-delta replay");
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), -static_cast<float>(WHEEL_DELTA / 2), 0),
             "multiline text field handles the first half wheel delta");
-    TextInputBridgeState halfStepState{};
-    Require(field.ExportTextInputBridgeState(halfStepState), "multiline text field exports state after the first half wheel delta");
+    TextInputState halfStepState{};
+    Require(field.ExportTextInputState(halfStepState), "multiline text field exports state after the first half wheel delta");
     Require(halfStepState.firstVisibleLine == 0u, "half multiline wheel delta alone does not advance the viewport");
 
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), -static_cast<float>(WHEEL_DELTA / 2), 0),
             "multiline text field handles the second half wheel delta");
-    TextInputBridgeState accumulatedState{};
-    Require(field.ExportTextInputBridgeState(accumulatedState), "multiline text field exports state after the second half wheel delta");
+    TextInputState accumulatedState{};
+    Require(field.ExportTextInputState(accumulatedState), "multiline text field exports state after the second half wheel delta");
     Require(accumulatedState.firstVisibleLine == singleStepState.firstVisibleLine,
             "two half multiline wheel deltas accumulate to the same viewport change as one full step");
 }
@@ -2965,14 +2965,14 @@ void TestWrappedMultilineTextFieldMouseWheelUsesLineMetrics()
     field.SetMultiline(true);
     field.SetBounds(D2D1::RectF(0.0f, 0.0f, 48.0f, 32.0f));
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = field.GetText();
     state.multiline  = true;
     state.caretIndex = 0u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting state for wheel-line metrics test");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting state for wheel-line metrics test");
     Require(field.OnMouseWheel(host, D2D1::Point2F(12.0f, 12.0f), -static_cast<float>(WHEEL_DELTA), 0),
             "wrapped multiline text field handles wheel-down scrolling");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after wheel-down scrolling");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after wheel-down scrolling");
     Require(state.firstVisibleLine > 0u, "wrapped multiline mouse wheel scrolling advances the visible viewport using wrapped DWrite lines");
 }
 
@@ -2987,16 +2987,16 @@ void TestWrappedMultilineTextFieldCtrlWordNavigationUsesWrappedBoundaries()
 
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = 25u; // space before "echo"
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting caret state for ctrl+left");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting caret state for ctrl+left");
     const size_t originalCaretIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_CONTROL), "wrapped multiline text field handles ctrl+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+left");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+left keeps the visible caret collapsed");
     const size_t previousWordBoundaryIndex = state.caretIndex;
     Require(previousWordBoundaryIndex < originalCaretIndex, "wrapped multiline ctrl+left moves to the previous wrapped word boundary");
@@ -3008,12 +3008,12 @@ void TestWrappedMultilineTextFieldCtrlWordNavigationUsesWrappedBoundaries()
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = previousWordBoundaryIndex;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field reimports exported word-boundary state for ctrl+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting caret state for ctrl+right");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field reimports exported word-boundary state for ctrl+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting caret state for ctrl+right");
     const size_t ctrlRightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_CONTROL), "wrapped multiline text field handles ctrl+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+right");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+right keeps the visible caret collapsed");
     Require(state.caretIndex > ctrlRightStartIndex && state.caretIndex > originalCaretIndex,
             "wrapped multiline ctrl+right moves to the next wrapped word start after trailing whitespace");
@@ -3034,16 +3034,16 @@ void TestWrappedMultilineTextFieldCtrlShiftWordSelectionUsesWrappedBoundaries()
 
     const std::wstring originalText(field.GetText());
 
-    TextInputBridgeState state{};
+    TextInputState state{};
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = 25u;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+shift+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting state for ctrl+shift+left");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field imports starting caret state for ctrl+shift+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting state for ctrl+shift+left");
     const size_t ctrlShiftLeftStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_LEFT, MK_CONTROL | MK_SHIFT), "wrapped multiline text field handles ctrl+shift+left");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+shift+left");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+shift+left");
     Require(state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+shift+left creates a selection range");
     Require(state.selectionAnchorIndex.value() == ctrlShiftLeftStartIndex,
             "wrapped multiline ctrl+shift+left keeps the original caret as the selection anchor");
@@ -3057,12 +3057,12 @@ void TestWrappedMultilineTextFieldCtrlShiftWordSelectionUsesWrappedBoundaries()
     state.text       = originalText;
     state.multiline  = true;
     state.caretIndex = wrappedCtrlShiftLeftSelectionStart;
-    Require(field.ImportTextInputBridgeState(host, state, false), "wrapped multiline text field reimports exported word-boundary state for ctrl+shift+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports starting state for ctrl+shift+right");
+    Require(field.ImportTextInputState(host, state, false), "wrapped multiline text field reimports exported word-boundary state for ctrl+shift+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports starting state for ctrl+shift+right");
     const size_t ctrlShiftRightStartIndex = state.caretIndex;
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_CONTROL | MK_SHIFT), "wrapped multiline text field handles ctrl+shift+right");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after ctrl+shift+right");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after ctrl+shift+right");
     Require(state.selectionAnchorIndex.has_value(), "wrapped multiline ctrl+shift+right creates a selection range");
     Require(state.selectionAnchorIndex.value() == ctrlShiftRightStartIndex,
             "wrapped multiline ctrl+shift+right keeps the original caret as the selection anchor");
@@ -3085,8 +3085,8 @@ void TestMultilineTextFieldReturnInsertsNewlineAndCollapsesSelection()
     Require(field.OnChar(host, L'\r', 0), "multiline text field accepts return as character input");
     Require(field.GetText() == L"alpha\n", "multiline return inserts a logical newline into the dx text state");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after return insertion");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline text field exports state after return insertion");
     Require(! state.selectionAnchorIndex.has_value(), "multiline return keeps the visible selection collapsed");
     Require(state.caretIndex == field.GetText().size(), "multiline return leaves the visible caret at the end of the inserted newline");
 }
@@ -3102,15 +3102,15 @@ void TestMultilineTextFieldReturnReplacesSelectionWithNewline()
 
     ImportLogicalNewlineClipboardSelectionForTest(host, field, "multiline text field imports newline-spanning selection before return replacement");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports newline-spanning selection before return replacement");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "multiline text field exports newline-spanning selection before return replacement");
     RequireLogicalNewlineClipboardVisibleSelectionForTest(state, "multiline return replacement starts from the expected newline-spanning visible selection");
 
     Require(field.OnChar(host, L'\r', 0), "multiline text field accepts return as replacement input");
 
     constexpr std::wstring_view expectedText = L"al\neta";
     Require(field.GetText() == expectedText, "multiline return replaces the selected logical newline-spanning range with a single newline");
-    Require(field.ExportTextInputBridgeState(state), "multiline text field exports state after return replacement");
+    Require(field.ExportTextInputState(state), "multiline text field exports state after return replacement");
     Require(! state.selectionAnchorIndex.has_value(), "multiline return replacement clears the visible selection");
     Require(state.caretIndex == kLogicalNewlineClipboardSelectionStartForTest + 1u,
             "multiline return replacement leaves the caret after the inserted logical newline");
@@ -3129,8 +3129,8 @@ void TestWrappedMultilineTextFieldReturnInsertsNewlineAndCollapsesSelection()
     Require(field.GetText() == std::wstring(kWrappedMultilineClipboardTextForTest) + L"\n",
             "wrapped multiline return inserts a logical newline into the dx text state");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after return insertion");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after return insertion");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline return keeps the visible selection collapsed");
     Require(state.caretIndex == field.GetText().size(), "wrapped multiline return leaves the visible caret at the end of the inserted newline");
 }
@@ -3146,8 +3146,8 @@ void TestWrappedMultilineTextFieldReturnReplacesSelectionWithNewline()
 
     ImportWrappedMultilineClipboardSelectionForTest(host, field, "wrapped multiline text field imports partial selection before return replacement");
 
-    TextInputBridgeState state{};
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports partial selection before return replacement");
+    TextInputState state{};
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports partial selection before return replacement");
     RequireWrappedMultilineClipboardVisibleSelectionForTest(state, "wrapped multiline return replacement starts from the expected visible partial selection");
 
     Require(field.OnChar(host, L'\r', 0), "wrapped multiline text field accepts return as replacement input");
@@ -3155,7 +3155,7 @@ void TestWrappedMultilineTextFieldReturnReplacesSelectionWithNewline()
     const std::wstring expectedText = std::wstring(kWrappedMultilineClipboardTextForTest.substr(0u, kWrappedMultilineClipboardSelectionStartForTest)) + L"\n" +
                                       std::wstring(kWrappedMultilineClipboardTextForTest.substr(kWrappedMultilineClipboardSelectionEndForTest));
     Require(field.GetText() == expectedText, "wrapped multiline return replaces the selected visible partial range with a single newline");
-    Require(field.ExportTextInputBridgeState(state), "wrapped multiline text field exports state after return replacement");
+    Require(field.ExportTextInputState(state), "wrapped multiline text field exports state after return replacement");
     Require(! state.selectionAnchorIndex.has_value(), "wrapped multiline return replacement clears the visible selection");
     Require(state.caretIndex == kWrappedMultilineClipboardSelectionStartForTest + 1u,
             "wrapped multiline return replacement leaves the caret after the inserted logical newline");

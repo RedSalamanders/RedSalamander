@@ -47,6 +47,7 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - When a submenu is already open and the pointer settles on a different sibling item that does not keep that submenu active, the existing child submenu chain MUST close after the standard cascade hover delay unless a replacement submenu opens instead.
 - During an active top-level menu session, moving the pointer directly from one enabled root menu item to another MUST immediately move the menu bar highlight to the hovered root, close the previous root popup, and open the target root popup without requiring the pointer to first enter an item inside the original popup. This applies in both directions and across non-adjacent roots, including `View` to `Files`.
 - During an active top-level menu session, the menu bar's hover-changed signal MUST also be able to request that same root switch when the popup owns focus, so top-level hover movement is not lost just because mouse capture currently belongs to the popup window.
+- Main menu root-switch code MUST treat any `MenuBar::GetItems()` span as invalid after rebuilding or resynchronizing the menu model. Diagnostics emitted after a root-switch rebuild must use a fresh menu-bar item span, not a label/view captured before `SyncMenuModel()`.
 - During an active top-level menu session, the menu bar highlight MUST stay on the root menu whose popup is currently open, including while focus is held by the popup window. A stale hover from the cursor's pre-existing position MUST NOT leave a previous top-level item highlighted after another root popup opens.
 - Exiting a DxUi top-level menu session without transferring focus to another control MUST restore keyboard focus to the pane/control that owned focus before menu mode started.
 - Pressing `Escape` while a top-level menu bar, menu popup, or pane-owned context menu has keyboard ownership MUST dismiss that transient UI first, then restore keyboard focus to the active pane's `FolderView` unless the chosen command intentionally opens another focus-owning surface.
@@ -69,7 +70,9 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - Command IDs MUST be in one of these namespaces:
   - `cmd/app/*`: application-global commands.
   - `cmd/pane/*`: pane-targeted commands; these MUST resolve to the **focused pane** when focus is inside a pane, otherwise the **active pane** (see rules above).
+  - `cmd/shortcut/unassigned`: internal shortcut binding sentinel used only to persist an intentionally unassigned chord.
 - Command display names MUST be localized resource strings (`.rc` STRINGTABLE). UI (Function Bar, settings dialog, tooltips) MUST NOT hardcode user-facing command names.
+- A shortcut bound to `cmd/shortcut/unassigned` MUST consume the matching key and perform no action. It MUST NOT be registered or displayed as an assignable command, MUST NOT appear in command reverse-lookup results, and MUST NOT show a not-implemented alert.
 - If a shortcut is bound to a command that is not implemented at runtime, invoking it MUST show a localized message box stating it is not yet implemented and MUST do nothing else.
 - Some commands/menu entries are **parameterized** (drive roots, hot paths, history paths, plugin/theme entries). For shortcuts the parameter is encoded in the command ID (e.g. `cmd/pane/goDriveRoot/C`, `cmd/pane/hotPath/1`) and is canonicalized for display/lookup; for menus the parameter is carried by dynamic menu-item ranges/payloads (or encoded in a command ID suffix for shortcut-like commands).
 
@@ -141,6 +144,7 @@ Pane view option commands target the focused pane, or the active pane when focus
 `cmd/pane/bringCurrentDirToCommandLine` and `cmd/pane/bringFilenameToCommandLine` open a pane-scoped command-line input that is separate from Quick Search and the navigation address edit.
 
 - The command-line input appears above the function bar and below the pane area, receives keyboard focus, and is associated with the pane that invoked it.
+- The command-line input is a `FolderWindow` DxUi host with a retained native-backend `TextField`; it must not create visible native `STATIC` / `EDIT` controls, install an edit subclass, or use `HFONT` / `WM_SETFONT` font propagation.
 - `cmd/pane/bringCurrentDirToCommandLine` appends the active local folder path using command-line quoting.
 - `cmd/pane/bringFilenameToCommandLine` appends the focused item display name when no explicit selection exists. When one or more items are selected, it appends full local item paths; if the focused item is part of the selection, that focused path is first and the rest stay in pane order.
 - Insertions happen at the current caret/selection and add a single separating space when adjacent text would otherwise touch.
@@ -927,6 +931,9 @@ Notes:
   - Function Bar shortcuts (F1..F12)
   - Folder view shortcuts (all supported keys)
 - Settings are loaded at application startup; shortcut bindings are restored and applied before the first main window interaction.
+- If `settings.shortcuts` is absent, startup MUST initialize every canonical default binding for both Function Bar and FolderView scopes.
+- If `settings.shortcuts` exists, startup MUST restore every missing canonical default chord unless that chord already has a non-empty binding. Existing custom bindings and `cmd/shortcut/unassigned` sentinels are user customizations and MUST NOT be overwritten.
+- Preferences → Keyboard `Remove` MUST erase custom bindings, but removing a canonical default binding MUST persist that chord as `cmd/shortcut/unassigned` so startup does not recreate it. Moving a canonical default command away from its default chord MUST likewise leave `cmd/shortcut/unassigned` on the vacated default chord when no other binding occupies it.
 - In the Shortcuts window, clicking the `Key` column MUST sort by semantic key identity rather than the rendered chord text. Ascending order is: function keys (`F1`..`F24`, numeric order), digit keys (`0`..`9`), letter keys (`A`..`Z`), then other keys by localized key display text. Rows with the same base key MUST stay together and compare by displayed modifier phrase alphabetically (unmodified first), then by command text as a stable tie-breaker. Persisted `Key` sort state MUST use the same semantic order when the window is reopened.
 - Editing model (example):
 

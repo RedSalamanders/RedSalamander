@@ -1073,6 +1073,10 @@ LRESULT CompareDirectoriesWindow::OnFunctionBarInvoke(WPARAM wParam, LPARAM lPar
     }
 
     const std::wstring_view commandId = CanonicalizeCommandId(commandOpt.value());
+    if (ShortcutIds::IsUnassignedCommandId(commandId))
+    {
+        return 0;
+    }
     if (commandId.starts_with(L"cmd/app/"))
     {
         // App-scoped commands are handled by the main window's message loop.
@@ -1169,6 +1173,10 @@ void CompareDirectoriesWindow::ExecuteShortcutCommand(std::wstring_view commandI
     }
 
     commandId = CanonicalizeCommandId(commandId);
+    if (ShortcutIds::IsUnassignedCommandId(commandId))
+    {
+        return;
+    }
 
     if (commandId == L"cmd/pane/menu")
     {

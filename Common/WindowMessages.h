@@ -110,10 +110,8 @@ inline constexpr UINT kChangeAttributesCompleted  = WM_APP + 0x52C;
 inline constexpr UINT kPreferencesApplyComboThemeDeferred   = WM_APP + 0x530;
 inline constexpr UINT kPreferencesSelectPluginDetails       = WM_APP + 0x531;
 inline constexpr UINT kPreferencesDeferredPaneAction        = WM_APP + 0x532;
+// WM_APP + 0x533..0x535 were the retired DxUi text-input bridge messages; keep them reserved.
 inline constexpr UINT kPreferencesApplyPageHostScroll       = WM_APP + 0x538;
-inline constexpr UINT kDxUiTextInputBridgeSync              = WM_APP + 0x533;
-inline constexpr UINT kDxUiTextInputBridgeSpecialKey        = WM_APP + 0x534;
-inline constexpr UINT kDxUiTextInputBridgeBlur              = WM_APP + 0x535;
 inline constexpr UINT kPluginConfigurationDialogApplyTheme  = WM_APP + 0x536;
 inline constexpr UINT kConnectionCredentialPromptApplyTheme = WM_APP + 0x537;
 inline constexpr UINT kDxUiContextMenuRootHoverChanged      = WM_APP + 0x539;

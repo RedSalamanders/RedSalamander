@@ -29,6 +29,7 @@
 #include <limits>
 #include <new>
 #include <string_view>
+#include <utility>
 
 #pragma warning(push)
 // C5245 : unreferenced function with internal linkage has been removed
@@ -67,9 +68,14 @@ struct NavigationDxTextHost
         field = nullptr;
     }
 
-    [[nodiscard]] HWND GetBridgeHwnd() const noexcept
+    [[nodiscard]] HWND GetTextInputHwnd() const noexcept
     {
-        return host.GetTextInputBridgeHwnd();
+        const HWND textInputHwnd = host.GetTextInputHwnd();
+        if (textInputHwnd && IsWindow(textInputHwnd) != FALSE)
+        {
+            return textInputHwnd;
+        }
+        return hwnd.get();
     }
 };
 

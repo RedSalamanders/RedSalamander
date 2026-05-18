@@ -224,6 +224,7 @@ public:
         uint64_t queueIconLoadingCalls = 0;
         uint64_t processIconQueueCalls = 0;
         uint64_t batchIconUpdateCalls  = 0;
+        uint64_t incrementalSearchEffectUpdates = 0;
     };
 
     [[nodiscard]] DebugWarmPerfSnapshot DebugGetWarmPerfSnapshot() const noexcept
@@ -235,6 +236,7 @@ public:
             .queueIconLoadingCalls = _debugQueueIconLoadingCallCount,
             .processIconQueueCalls = _debugProcessIconQueueCallCount,
             .batchIconUpdateCalls  = _debugBatchIconUpdateCallCount,
+            .incrementalSearchEffectUpdates = _debugIncrementalSearchEffectUpdateCount,
         };
     }
 
@@ -382,6 +384,7 @@ public:
         uint64_t cacheHitCount       = 0;
         uint64_t shellSuccessCount   = 0;
         uint64_t wicSuccessCount     = 0;
+        uint64_t wicFactoryCreateCount = 0;
         uint64_t decodeFailureCount  = 0;
         uint64_t visibleApplyCount   = 0;
         uint64_t visibleItemCount     = 0;
@@ -1063,6 +1066,7 @@ private:
     std::atomic<std::shared_ptr<const HiddenNamesFilter>> _hiddenNames;
 
     IncrementalSearchState _incrementalSearch{};
+    bool _incrementalSearchLayoutEffectsDirty = false;
     std::wstring _incrementalSearchIndicatorDisplayQuery;
     mutable float _incrementalSearchIndicatorVisibility          = 0.0f;
     mutable float _incrementalSearchIndicatorVisibilityFrom      = 0.0f;
@@ -1222,6 +1226,7 @@ private:
     void HandleIncrementalSearchNavigate(bool forward);
     void UpdateIncrementalSearchHighlightForFocusedItem();
     void ClearIncrementalSearchHighlight() noexcept;
+    void ClearIncrementalSearchLayoutEffects() noexcept;
     void ApplyIncrementalSearchHighlight(size_t itemIndex, const DWRITE_TEXT_RANGE& range) noexcept;
     std::optional<UINT32> FindIncrementalSearchMatchOffset(std::wstring_view displayName) const noexcept;
     std::optional<size_t> FindNextIncrementalSearchPrefixMatch(size_t startIndex, bool forward) const noexcept;
@@ -1257,6 +1262,7 @@ private:
     void QueueThumbnailLoading();
     void CancelThumbnailLoading() noexcept;
     void ProcessThumbnailLoadQueue();
+    [[nodiscard]] HRESULT EnsureThumbnailWicFactory(wil::com_ptr<IWICImagingFactory>& thumbnailWicFactory, IWICImagingFactory** outFactory) noexcept;
 
     void OnIconLoaded(size_t itemIndex);
     void OnBatchIconUpdate();
@@ -1301,6 +1307,7 @@ private:
     uint64_t _debugQueueIconLoadingCallCount = 0;
     uint64_t _debugProcessIconQueueCallCount = 0;
     uint64_t _debugBatchIconUpdateCallCount  = 0;
+    uint64_t _debugIncrementalSearchEffectUpdateCount = 0;
 #endif
 
     struct PendingExternalCommand final
@@ -1389,6 +1396,7 @@ private:
         std::atomic<uint64_t> cacheHits{0};
         std::atomic<uint64_t> shellSuccess{0};
         std::atomic<uint64_t> wicSuccess{0};
+        std::atomic<uint64_t> wicFactoryCreate{0};
         std::atomic<uint64_t> decodeFailures{0};
         std::atomic<uint64_t> visibleApply{0};
         std::atomic<uint64_t> cacheBytes{0};

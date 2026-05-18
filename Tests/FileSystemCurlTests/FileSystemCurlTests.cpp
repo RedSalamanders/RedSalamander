@@ -263,6 +263,23 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
     return ok;
 }
 
+[[nodiscard]] bool TestImapSummaryRepairBudgetCapsFlakyListings()
+{
+    bool ok = true;
+
+    ok = Require(FileSystemCurlInternal::ResolveImapSummaryRepairFetchBudget(0u) == 0u,
+                 L"IMAP summary repair should not reserve fetches for an empty listing.") &&
+         ok;
+    ok = Require(FileSystemCurlInternal::ResolveImapSummaryRepairFetchBudget(37u) >= 3u,
+                 L"IMAP summary repair should leave enough budget for ordinary small repair batches.") &&
+         ok;
+    ok = Require(FileSystemCurlInternal::ResolveImapSummaryRepairFetchBudget(10000u) <= 64u,
+                 L"IMAP summary repair should cap fetches per listing instead of scaling linearly with mailbox size.") &&
+         ok;
+
+    return ok;
+}
+
 void RunPerfProbe()
 {
     constexpr uint64_t iterations = 500000u;
@@ -364,6 +381,10 @@ int wmain(int argc, wchar_t** argv)
         return 1;
     }
     if (! TestImapSummaryRepairBatchPlanCoversLargeMisses())
+    {
+        return 1;
+    }
+    if (! TestImapSummaryRepairBudgetCapsFlakyListings())
     {
         return 1;
     }

@@ -826,7 +826,7 @@ private:
                 _field->SetTextAndNotify(*text);
                 ClearValidation();
                 _dxHost.SetFocusControl(_field);
-                _dxHost.SyncTextInputBridge(_field);
+                _dxHost.SyncTextInput(_field);
                 _dxHost.Invalidate();
                 return TRUE;
             }

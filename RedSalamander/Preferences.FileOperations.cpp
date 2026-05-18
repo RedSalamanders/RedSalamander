@@ -1271,7 +1271,7 @@ bool FileOperationsPane::DebugSetBridgeBufferText(std::wstring_view text) noexce
     _syncingDxBridgeBufferEdit = true;
     _pageHostDx->SetFocusControl(edit);
     edit->SetText(std::wstring{text});
-    _pageHostDx->SyncTextInputBridge(edit);
+    _pageHostDx->SyncTextInput(edit);
     _pageHostDx->Invalidate();
     _syncingDxBridgeBufferEdit = false;
     return edit->GetText() == text && fileOperations->crossFsBridgeBufferSizeKB == parsedValue;

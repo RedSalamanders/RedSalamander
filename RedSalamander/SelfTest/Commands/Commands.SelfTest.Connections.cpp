@@ -1735,48 +1735,23 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
         return false;
     }
 
-    HWND bridgeEdit = nullptr;
-    state.Require(DebugGetConnectionManagerTextInputBridgeHandle(bridgeEdit) && bridgeEdit && IsWindow(bridgeEdit) != FALSE,
-                  L"Connection Manager text input bridge was not active for the User text field.");
-    RECT bridgeClient{};
-    state.Require(GetClientRect(bridgeEdit, &bridgeClient) != FALSE, L"Failed to read the Connection Manager User bridge edit bounds.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    const LRESULT bridgePoint = SendMessageW(bridgeEdit, EM_POSFROMCHAR, 7u, 0);
-    state.Require(bridgePoint != -1, L"Connection Manager User bridge edit could not resolve the test character position.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    POINT clickPoint{
-        static_cast<LONG>(LOWORD(static_cast<DWORD_PTR>(bridgePoint))) + 2,
-        bridgeClient.top + ((bridgeClient.bottom - bridgeClient.top) / 2),
-    };
-    static_cast<void>(MapWindowPoints(bridgeEdit, dialog, &clickPoint, 1));
-    static_cast<void>(SendMessageW(bridgeEdit, EM_SETSEL, 0, 0));
-    const LPARAM hostClick = MAKELPARAM(clickPoint.x, clickPoint.y);
-    SendMessageW(dialog, WM_MOUSEMOVE, 0, hostClick);
-    SendMessageW(dialog, WM_LBUTTONDOWN, MK_LBUTTON, hostClick);
-    SendMessageW(dialog, WM_LBUTTONUP, 0, hostClick);
-    SendMessageW(dialog, WM_LBUTTONDBLCLK, MK_LBUTTON, hostClick);
-    SendMessageW(dialog, WM_LBUTTONUP, 0, hostClick);
+    HWND inputHwnd = nullptr;
+    state.Require(DebugGetConnectionManagerTextInputHandle(inputHwnd) && inputHwnd && IsWindow(inputHwnd) != FALSE,
+                  L"Connection Manager text input was not active for the User text field.");
+    state.Require(DebugDoubleClickConnectionManagerUserTextAtCaretIndex(7u),
+                  L"Connection Manager User text field did not accept retained native double-click validation.");
     PumpPendingMessages();
 
-    state.Require(DebugGetConnectionManagerTextInputBridgeHandle(bridgeEdit) && bridgeEdit && IsWindow(bridgeEdit) != FALSE,
-                  L"Connection Manager text input bridge was not active after User field double-click.");
-    DWORD selectionStart = 0;
-    DWORD selectionEnd   = 0;
-    static_cast<void>(SendMessageW(bridgeEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd)));
+    size_t selectionStart = 0u;
+    size_t selectionEnd   = 0u;
+    state.Require(DebugGetConnectionManagerUserTextSelection(selectionStart, selectionEnd),
+                  L"Connection Manager User text field did not expose a retained selection after double-click.");
     state.Require(selectionStart == 6u && selectionEnd == 10u,
                   std::format(L"Connection Manager User double-click should select 'beta'; got selection [{}..{}].",
-                              static_cast<unsigned long>(selectionStart),
-                              static_cast<unsigned long>(selectionEnd)));
+                              static_cast<unsigned long long>(selectionStart),
+                              static_cast<unsigned long long>(selectionEnd)));
 
-    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L'X'), 0));
+    static_cast<void>(SendMessageW(inputHwnd, WM_CHAR, static_cast<WPARAM>(L'X'), 0));
     PumpPendingMessages();
 
     std::wstring actualText;
@@ -1788,10 +1763,10 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestConnectionManagerWindowMaskedSecretAcceptsBridgeChars(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestConnectionManagerWindowMaskedSecretAcceptsNativeChars(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
-    SelfTest::AppendSelfTestTrace(L"ConnectionManager masked-secret-bridge: begin");
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager masked-secret-native: begin");
 
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
@@ -1807,7 +1782,7 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
         static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
     });
 
-    HWND dialog = OpenConnectionManagerForSelfTest(mainWindow, state, L"masked-secret-bridge-chars");
+    HWND dialog = OpenConnectionManagerForSelfTest(mainWindow, state, L"masked-secret-native-chars");
     if (! dialog || IsWindow(dialog) == FALSE)
     {
         return false;
@@ -1818,39 +1793,39 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     { return value.usesDxUiFormInputs && value.visibleDxFormInputHostCount > 0u && value.listRowCount > 0u; },
                                                    snapshot,
                                                    SelfTest::Scale(5000ms)),
-                  L"Connection Manager did not settle before masked secret bridge validation.");
+                  L"Connection Manager did not settle before masked secret native validation.");
     state.Require(DebugSetConnectionManagerProtocolPluginId(L"builtin/file-system-ftp"),
-                  L"Connection Manager protocol picker does not expose FTP before masked secret bridge validation.");
+                  L"Connection Manager protocol picker does not expose FTP before masked secret native validation.");
     state.Require(WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
     { return value.currentPluginId == L"builtin/file-system-ftp" && value.visibleDxFormInputHostCount > 0u; },
                                                    snapshot,
                                                    SelfTest::Scale(3000ms)),
-                  L"Connection Manager did not settle on FTP before masked secret bridge validation.");
-    state.Require(DebugSetConnectionManagerSecretText(std::wstring_view{}), L"Failed to clear the Connection Manager secret field before bridge typing.");
+                  L"Connection Manager did not settle on FTP before masked secret native validation.");
+    state.Require(DebugSetConnectionManagerSecretText(std::wstring_view{}), L"Failed to clear the Connection Manager secret field before native typing.");
     state.Require(DebugFocusConnectionManagerSecretInput(), L"Failed to focus the Connection Manager secret field.");
     state.Require(WaitForConnectionManagerSnapshot(
                       [](const ConnectionManagerDebugSnapshot& value) noexcept
     { return value.focusKind == ConnectionManagerDebugFocusKind::Edit && NormalizeDxVisibleLabel(value.focusLabel) == LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_PASSWORD); },
                       snapshot,
                       SelfTest::Scale(3000ms)),
-                  L"Connection Manager did not move focus to the secret text field before bridge typing.");
+                  L"Connection Manager did not move focus to the secret text field before native typing.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    HWND bridgeEdit = nullptr;
-    state.Require(DebugGetConnectionManagerTextInputBridgeHandle(bridgeEdit) && bridgeEdit && IsWindow(bridgeEdit) != FALSE,
-                  L"Connection Manager text input bridge was not active for the secret field.");
-    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L's'), 0));
-    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L'3'), 0));
+    HWND inputHwnd = nullptr;
+    state.Require(DebugGetConnectionManagerTextInputHandle(inputHwnd) && inputHwnd && IsWindow(inputHwnd) != FALSE,
+                  L"Connection Manager text input was not active for the secret field.");
+    static_cast<void>(SendMessageW(inputHwnd, WM_CHAR, static_cast<WPARAM>(L's'), 0));
+    static_cast<void>(SendMessageW(inputHwnd, WM_CHAR, static_cast<WPARAM>(L'3'), 0));
     PumpPendingMessages();
 
     std::wstring secretText;
-    state.Require(DebugGetConnectionManagerSecretText(secretText), L"Failed to read the Connection Manager secret field after bridge typing.");
-    state.Require(secretText == L"s3", std::format(L"Connection Manager masked secret bridge typing produced {} characters.", secretText.size()));
+    state.Require(DebugGetConnectionManagerSecretText(secretText), L"Failed to read the Connection Manager secret field after native typing.");
+    state.Require(secretText == L"s3", std::format(L"Connection Manager masked secret native typing produced {} characters.", secretText.size()));
 
-    SelfTest::AppendSelfTestTrace(L"ConnectionManager masked-secret-bridge: complete");
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager masked-secret-native: complete");
     return state.failure.empty();
 }
 
@@ -6479,8 +6454,8 @@ void RunConnectionsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_textfield_doubleclick_selects_word", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowTextFieldDoubleClickSelectsWord(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_masked_secret_accepts_bridge_chars", [=](CaseState& state) noexcept {
-        return TestConnectionManagerWindowMaskedSecretAcceptsBridgeChars(mainWindow, state);
+    SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_masked_secret_accepts_native_chars", [=](CaseState& state) noexcept {
+        return TestConnectionManagerWindowMaskedSecretAcceptsNativeChars(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_close_persists_new_profile", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowClosePersistsNewProfile(mainWindow, state);
