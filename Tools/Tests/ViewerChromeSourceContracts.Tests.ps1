@@ -27,6 +27,24 @@ Describe 'Viewer chrome keyboard contracts' {
         }
     }
 
+    It 'does not persist OnCreate hwnd captures in viewer chrome callbacks' {
+        $chromeCallbackSources = @(
+            'Plugins\ViewerPE\ViewerPE.cpp',
+            'Plugins\ViewerWeb\ViewerWeb.cpp',
+            'Plugins\ViewerImgRaw\ViewerImgRaw.cpp',
+            'Plugins\ViewerText\ViewerText.cpp',
+            'Plugins\ViewerSpace\ViewerSpace.cpp'
+        )
+
+        foreach ($relativePath in $chromeCallbackSources) {
+            $sourcePath = Join-Path $repoRoot $relativePath
+            Test-Path $sourcePath | Should Be $true
+            $source = Get-Content -Path $sourcePath -Raw
+
+            $source | Should Not Match '(SetOnSelectionChanged|ConfigureFileComboKeyboard|SetRefreshMenuStateCallback|SetOnTabBoundary|SetOnEscape)\s*\([^`r`n]*\[[^\]]*\bhwnd\b'
+        }
+    }
+
     It 'documents the shared Escape focus-cancel-close contract' {
         $pluginSpecPath = Join-Path $repoRoot 'Specs\Plugins\Plugins_ViewerPlugins.md'
         $spaceSpecPath = Join-Path $repoRoot 'Specs\Plugins\Plugins_ViewerSpace.md'
@@ -46,26 +64,26 @@ Describe 'Viewer chrome keyboard contracts' {
 }
 
 Describe 'Launcher subsystem contracts' {
-    It 'uses a Windows-subsystem WinGet alias launcher and a console companion for foreground waits' {
-        $guiProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncher.vcxproj'
-        $consoleProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncherConsole.vcxproj'
+    It 'uses one detached console-policy WinGet alias launcher for normal and foreground waits' {
+        $launcherProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncher.vcxproj'
+        $launcherManifestPath = Join-Path $repoRoot 'RedLauncher\res\exe.manifest'
         $solutionPath = Join-Path $repoRoot 'RedSalamander.sln'
         $zipScriptPath = Join-Path $repoRoot 'Installer\zip\build-zip.ps1'
 
-        Test-Path $guiProjectPath | Should Be $true
-        Test-Path $consoleProjectPath | Should Be $true
+        Test-Path $launcherProjectPath | Should Be $true
+        Test-Path (Join-Path $repoRoot 'RedLauncher\RedLauncherConsole.vcxproj') | Should Be $false
+        Test-Path $launcherManifestPath | Should Be $true
 
-        $guiProject = Get-Content -Path $guiProjectPath -Raw
-        $consoleProject = Get-Content -Path $consoleProjectPath -Raw
+        $launcherProject = Get-Content -Path $launcherProjectPath -Raw
+        $launcherManifest = Get-Content -Path $launcherManifestPath -Raw
         $solution = Get-Content -Path $solutionPath -Raw
         $zipScript = Get-Content -Path $zipScriptPath -Raw
 
-        $guiProject | Should Match '<SubSystem>Windows</SubSystem>'
-        $guiProject | Should Match '<PreprocessorDefinitions>REDLAUNCHER_GUI=1;'
-        $consoleProject | Should Match '<SubSystem>Console</SubSystem>'
-        $consoleProject | Should Match '<TargetName>RedLauncherConsole</TargetName>'
-        $consoleProject | Should Match '<PreprocessorDefinitions>REDLAUNCHER_CONSOLE=1;'
-        $solution | Should Match 'RedLauncherConsole'
-        $zipScript | Should Match 'RedLauncherConsole\.exe'
+        $launcherProject | Should Match '<SubSystem>Console</SubSystem>'
+        $launcherProject | Should Match '<AdditionalManifestFiles>\$\(ProjectDir\)res\\exe\.manifest</AdditionalManifestFiles>'
+        $launcherManifest | Should Match 'consoleAllocationPolicy'
+        $launcherManifest | Should Match '>detached<'
+        $solution | Should Not Match 'RedLauncherConsole'
+        $zipScript | Should Not Match 'RedLauncherConsole\.exe'
     }
 }

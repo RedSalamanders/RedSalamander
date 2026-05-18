@@ -3,6 +3,7 @@
 #include <Windows.h>
 
 #include "DxUi.h"
+#include "MinimumOsVersion.h"
 #include "RedConfigureApp.h"
 #include "RedConfigureSession.h"
 #include "RedConfigureRoot.h"
@@ -237,6 +238,11 @@ private:
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
 {
+    if (! Common::MinimumOsVersion::EnsureCurrentWindowsVersionSupported(nullptr))
+    {
+        return 1;
+    }
+
     MainWindow window(instance);
     wil::unique_hwnd hwnd(window.Create(showCommand));
     if (! hwnd)

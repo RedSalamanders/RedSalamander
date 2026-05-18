@@ -147,11 +147,23 @@ Describe 'Winget manifest template' {
     BeforeAll {
         $installerTemplatePath = Join-Path $repoRoot 'Installer\winget\templates\RedSalamanders.RedSalamander.installer.yaml'
         $installerTemplate = Get-Content -Path $installerTemplatePath -Raw
+        $msixManifestPath = Join-Path $repoRoot 'Installer\msix\Package.appxmanifest'
+        $msixManifest = Get-Content -Path $msixManifestPath -Raw
+        $msixProjectPath = Join-Path $repoRoot 'Installer\msix\RedSalamanderInstaller.wapproj'
+        $msixProject = Get-Content -Path $msixProjectPath -Raw
+        $directoryBuildPropsPath = Join-Path $repoRoot 'Directory.Build.props'
+        $directoryBuildProps = Get-Content -Path $directoryBuildPropsPath -Raw
         $zipScriptPath = Join-Path $repoRoot 'Installer\zip\build-zip.ps1'
         $zipScript = Get-Content -Path $zipScriptPath -Raw
     }
 
-    It 'declares the dependency-free launcher as the portable alias target' {
+    It 'declares the dependency-free launcher as the portable alias target on the Windows 11 24H2 floor' {
+        $installerTemplate | Should Match '(?m)^MinimumOSVersion:\s+10\.0\.26100\.0\r?$'
+        $installerTemplate | Should Not Match '10\.0\.19041\.0'
+        $msixManifest | Should Match 'MinVersion="10\.0\.26100\.0"'
+        $msixProject | Should Match '<TargetPlatformMinVersion>10\.0\.26100\.0</TargetPlatformMinVersion>'
+        $directoryBuildProps | Should Match '<WindowsTargetPlatformVersion>10\.0\.26100\.0</WindowsTargetPlatformVersion>'
+        $directoryBuildProps | Should Match 'NTDDI_VERSION=NTDDI_WIN11_GE'
         [regex]::Matches($installerTemplate, '(?m)^NestedInstallerFiles:\r?$').Count | Should Be 1
         $installerTemplate | Should Match '(?ms)^NestedInstallerFiles:\s*\r?\n\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+PortableCommandAlias: RedSalamander'
     }
@@ -162,7 +174,7 @@ Describe 'Winget manifest template' {
 
     It 'copies RedLauncher.exe into the portable ZIP root' {
         $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "RedLauncher\.exe"\) \$TempDir'
-        $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "RedLauncherConsole\.exe"\) \$TempDir'
+        $zipScript | Should Not Match 'RedLauncherConsole\.exe'
     }
 }
 
@@ -170,34 +182,38 @@ Describe 'RedLauncher project' {
     BeforeAll {
         $launcherProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncher.vcxproj'
         $consoleLauncherProjectPath = Join-Path $repoRoot 'RedLauncher\RedLauncherConsole.vcxproj'
+        $launcherManifestPath = Join-Path $repoRoot 'RedLauncher\res\exe.manifest'
         $launcherSourcePath = Join-Path $repoRoot 'RedLauncher\Main.cpp'
+        $redSalamanderSourcePath = Join-Path $repoRoot 'RedSalamander\RedSalamander.cpp'
+        $monitorSourcePath = Join-Path $repoRoot 'RedSalamanderMonitor\RedSalamanderMonitor.cpp'
+        $configureSourcePath = Join-Path $repoRoot 'RedConfigure\Main.cpp'
+        $searchServiceSourcePath = Join-Path $repoRoot 'RedSalamanderSearchService\Main.cpp'
+        $solutionPath = Join-Path $repoRoot 'RedSalamander.sln'
+        $solution = Get-Content -Path $solutionPath -Raw
+        $buildScriptPath = Join-Path $repoRoot 'build.ps1'
+        $buildScript = Get-Content -Path $buildScriptPath -Raw
     }
 
-    It 'is a first-party static-CRT GUI executable project for the WinGet alias' {
+    It 'is a first-party static-CRT detached console executable project for the WinGet alias' {
         Test-Path $launcherProjectPath | Should Be $true
+        Test-Path $consoleLauncherProjectPath | Should Be $false
+        Test-Path $launcherManifestPath | Should Be $true
 
         $launcherProject = Get-Content -Path $launcherProjectPath -Raw
+        $launcherManifest = Get-Content -Path $launcherManifestPath -Raw
         $launcherProject | Should Match '<ClCompile Include="Main\.cpp" />'
-        $launcherProject | Should Match '<SubSystem>Windows</SubSystem>'
-        $launcherProject | Should Match 'REDLAUNCHER_GUI=1;'
+        $launcherProject | Should Match '<SubSystem>Console</SubSystem>'
+        $launcherProject | Should Match '<AdditionalManifestFiles>\$\(ProjectDir\)res\\exe\.manifest</AdditionalManifestFiles>'
+        $launcherManifest | Should Match 'consoleAllocationPolicy'
+        $launcherManifest | Should Match '>detached<'
+        $launcherProject | Should Not Match 'REDLAUNCHER_GUI'
+        $launcherProject | Should Not Match 'REDLAUNCHER_CONSOLE'
         $launcherProject | Should Match '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
         $launcherProject | Should Match '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
         $launcherProject | Should Not Match '<ProjectReference'
         $launcherProject | Should Not Match 'Common\.vcxproj'
-    }
-
-    It 'keeps a first-party static-CRT console companion for foreground automation' {
-        Test-Path $consoleLauncherProjectPath | Should Be $true
-
-        $consoleLauncherProject = Get-Content -Path $consoleLauncherProjectPath -Raw
-        $consoleLauncherProject | Should Match '<ClCompile Include="Main\.cpp" />'
-        $consoleLauncherProject | Should Match '<SubSystem>Console</SubSystem>'
-        $consoleLauncherProject | Should Match '<TargetName>RedLauncherConsole</TargetName>'
-        $consoleLauncherProject | Should Match 'REDLAUNCHER_CONSOLE=1;'
-        $consoleLauncherProject | Should Match '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
-        $consoleLauncherProject | Should Match '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
-        $consoleLauncherProject | Should Not Match '<ProjectReference'
-        $consoleLauncherProject | Should Not Match 'Common\.vcxproj'
+        $solution | Should Not Match 'RedLauncherConsole'
+        $buildScript | Should Not Match 'RedLauncherConsole'
     }
 
     It 'resolves the WinGet alias symlink before launching RedSalamander.exe' {
@@ -207,6 +223,13 @@ Describe 'RedLauncher project' {
         $launcherSource | Should Match 'GetFinalPathNameByHandleW'
         $launcherSource | Should Match 'RedSalamander\.exe'
         $launcherSource | Should Match 'CreateProcessW'
+        $launcherSource | Should Match 'RtlGetVersion'
+        $launcherSource | Should Match 'kMinimumWindowsBuildNumber\s*=\s*26100'
+        $launcherSource | Should Match 'Windows 11 24H2'
+        (Get-Content -Path $redSalamanderSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
+        (Get-Content -Path $monitorSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
+        (Get-Content -Path $configureSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
+        (Get-Content -Path $searchServiceSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
     }
 
     It 'waits only for foreground self-test invocations' {
@@ -214,8 +237,8 @@ Describe 'RedLauncher project' {
 
         $launcherSource = Get-Content -Path $launcherSourcePath -Raw
         $launcherSource | Should Match 'ShouldWaitForTargetExit'
-        $launcherSource | Should Match 'wWinMain'
         $launcherSource | Should Match 'wmain'
+        $launcherSource | Should Not Match 'wWinMain'
         $launcherSource | Should Match '--selftest'
         $launcherSource | Should Match '--compare-selftest'
         $launcherSource | Should Match '--commands-selftest'
@@ -225,6 +248,7 @@ Describe 'RedLauncher project' {
         $launcherSource | Should Not Match '--etw'
         $launcherSource | Should Not Match '--perf'
     }
+
 }
 
 Describe 'VC runtime ZIP helper' {

@@ -99,6 +99,41 @@ WindowHostBitmapCapture CaptureAttachedHostWindowBitmapForComboSuite(AttachedHos
                                  std::abs(channel(lhsBgra, 16u) - channel(rhsBgra, 16u)));
 }
 
+[[nodiscard]] size_t CountWarmSaturatedPixels(const WindowHostBitmapCapture& capture) noexcept
+{
+    size_t count = 0u;
+    for (size_t pixelIndex = 0u; pixelIndex < static_cast<size_t>(capture.widthPx) * static_cast<size_t>(capture.heightPx); ++pixelIndex)
+    {
+        const size_t base = pixelIndex * 4u;
+        if ((base + 3u) >= capture.bgraPixels.size())
+        {
+            break;
+        }
+
+        const uint8_t b = capture.bgraPixels[base + 0u];
+        const uint8_t g = capture.bgraPixels[base + 1u];
+        const uint8_t r = capture.bgraPixels[base + 2u];
+        const uint8_t a = capture.bgraPixels[base + 3u];
+        if (a >= 240u && r >= 170u && g >= 40u && g <= 220u && b <= 120u && r >= static_cast<uint8_t>((std::min)(255, g + 20)) &&
+            g >= static_cast<uint8_t>((std::min)(255, b + 15)))
+        {
+            ++count;
+        }
+    }
+    return count;
+}
+
+void EmitColorGlyphPixelCountForTest(std::wstring_view detail, const WindowHostBitmapCapture& capture, size_t warmPixelCount) noexcept
+{
+    if (! Debug::Perf::IsCaptureEnabled())
+    {
+        return;
+    }
+
+    const size_t pixelCount = static_cast<size_t>(capture.widthPx) * static_cast<size_t>(capture.heightPx);
+    Debug::Perf::Emit(L"dxui.textinput.color_glyph_pixel_count", detail, 0, warmPixelCount, pixelCount, S_OK);
+}
+
 void TestComboRightClickInvokesContextMenuWithoutOpeningPopup()
 {
     using namespace RedSalamander::DxUi;
@@ -124,7 +159,7 @@ void TestComboRightClickInvokesContextMenuWithoutOpeningPopup()
     Require(contextMenu.lastPoint.x == 172 && contextMenu.lastPoint.y == 14,
             "non-editable combo right-click uses the hit point as its client anchor on the detached host");
     Require(host.GetFocusControl() == combo, "non-editable combo right-click keeps focus on the combo");
-    Require(! host.HasActiveTextInputBridge(), "non-editable combo right-click does not activate the hidden bridge");
+    Require(! host.HasActiveTextInput(), "non-editable combo right-click does not activate text input");
     Require(! combo->DebugIsPopupOpen(), "non-editable combo right-click does not open the popup");
 }
 
@@ -743,6 +778,37 @@ void TestComboBoxCompactEditableTextRectPreservesInsetAndWidth()
     Require(textRect.bottom <= comboBounds.bottom - 2.0f, "compact editable combo keeps vertical inset below the text");
 }
 
+void TestNativeEditableComboBoxEmojiUsesColorFontRendering()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    constexpr std::wstring_view kFireEmoji = L"\xD83D\xDD25";
+    std::wstring text                      = L"combo ";
+    for (int index = 0; index < 10; ++index)
+    {
+        text.append(kFireEmoji);
+    }
+
+    auto root   = std::make_unique<Panel>();
+    auto* combo = root->AddChild<ComboBox>();
+    combo->SetEditable(true);
+    combo->SetBounds(D2D1::RectF(20.0f, 20.0f, 520.0f, 64.0f));
+    combo->SetText(text);
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(combo);
+
+    Require(window.Host().GetTextInputBackend() == TextInputBackend::Native, "native editable combo color-font test uses the native backend");
+    Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native editable combo color-font test does not create a bridge child");
+
+    const WindowHostBitmapCapture capture = CaptureAttachedHostWindowBitmapForComboSuite(window, "native editable combo emoji color-font capture succeeds");
+    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    EmitColorGlyphPixelCountForTest(L"native-editable-combo", capture, warmPixels);
+    Require(warmPixels >= 24u, "native editable combo renders warm emoji color-font pixels");
+}
+
 void TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth()
 {
     using namespace RedSalamander::DxUi;
@@ -887,6 +953,7 @@ void RunComboBoxTests()
     runTest("TestComboBoxEightItemsAllFitInDefaultPopup", TestComboBoxEightItemsAllFitInDefaultPopup);
     runTest("TestComboBoxSetMaxVisibleItemsAllowsLargerPopup", TestComboBoxSetMaxVisibleItemsAllowsLargerPopup);
     runTest("TestComboBoxCompactEditableTextRectPreservesInsetAndWidth", TestComboBoxCompactEditableTextRectPreservesInsetAndWidth);
+    runTest("TestNativeEditableComboBoxEmojiUsesColorFontRendering", TestNativeEditableComboBoxEmojiUsesColorFontRendering);
     runTest("TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth", TestComboBoxCompactPopupItemTextRectPreservesInsetAndWidth);
     runTest("TestComboBoxPopupUsesRoundSmallCornerRadius", TestComboBoxPopupUsesRoundSmallCornerRadius);
     runTest("TestComboBoxRainbowPopupUsesAccentDerivedHighlight", TestComboBoxRainbowPopupUsesAccentDerivedHighlight);

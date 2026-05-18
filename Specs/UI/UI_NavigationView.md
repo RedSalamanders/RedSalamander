@@ -8,7 +8,7 @@
 - Renders **all visible sections** (Drive/Menu, Path/Breadcrumb, History button, Disk Info) with **Direct2D/DirectWrite** to a DXGI swap chain.
 - Startup performance: Direct2D/D3D swap-chain initialization is **deferred until after the first paint** (via `WndMsg::kNavigationViewDeferredInit`) so `WM_CREATE` stays fast; the first paint uses only GDI background/border.
 - Graphics resources: NavigationView instances **share** the process-wide D2D/DWrite/D3D device objects; swap chains and device contexts remain per-window.
-- Uses Win32 for the window procedure and a visible `NavigationDxTextHost` child window in edit mode; text input behavior is delegated to DxUi rather than a visible native `EDIT` surface.
+- Uses Win32 for the window procedure and a visible `NavigationDxTextHost` child window in edit mode; text input behavior is delegated to DxUi's native text-input backend rather than a visible native `EDIT` surface or a NavigationView-owned hidden bridge subclass.
 - Uses DxUi-owned popup windows for the Drive/Menu, History, and Disk Info dropdown surfaces; the older NavigationView `WM_MEASUREITEM` / `WM_DRAWITEM` popup forwarding has been retired, and simple GDI painting remains only for fallback background/border work during pre-D2D startup.
 - Pane-level commands that focus or open NavigationView-owned UI (`cmd/pane/focusAddressBar`, change-directory, drive menu, and folder-history commands) MUST reveal the target pane's navigation bar before invoking the NavigationView action. Hidden navigation bars must not leave an active edit/dropdown state attached to an invisible child host.
 - Clicking the current/last breadcrumb segment MUST focus the owning pane without dispatching a redundant same-path navigation. Double-clicking that segment, or whitespace in the path section, MUST enter address-bar edit mode with the current path selected; the leading click of that double-click must not queue a refresh that can close the edit host.
@@ -18,9 +18,12 @@
 - NavigationView visible text must use the shared Windows 11 typography helper.
 - Breadcrumb/path text follows the shared Segoe UI Variable body-text mapping, not a hardcoded `Segoe UI` face.
 - Chevron/history/menu glyphs use `Segoe Fluent Icons` when available, with the shared fallback path only for legacy glyph coverage.
-- Edit-mode path text must flow through `NavigationDxTextHost` and the hidden non-visual DxUi text bridge; NavigationView must not introduce a visible native `EDIT` typography path, direct `CreateFontW(..., L"Segoe UI")` calls, or any new shared-HFONT layout helper.
+- Edit-mode path text must flow through `NavigationDxTextHost` and DxUi's native retained `TextField` session. NavigationView must not subclass the hidden DxUi text bridge, introduce a visible native `EDIT` typography path, call `CreateFontW(..., L"Segoe UI")` directly, or add any new shared-HFONT layout helper.
 - While the address-bar edit host owns Win32 focus, pane-level clipboard/select-all commands (`Ctrl+A`, `Ctrl+C`, `Ctrl+X`, `Ctrl+V`, and the matching menu commands) must be routed to the active DxUi path edit before FolderView selection or clipboard command handling. When no navigation edit host owns focus, the existing FolderView command behavior remains authoritative.
-- Command/selftest coverage for address-bar edit mode and full-path popup edit mode must validate `NavigationViewDebugSnapshot` plus the active DxUi host/bridge HWNDs exposed there, not enumerate descendant native `Edit` / `RICHEDIT50W` windows.
+- NavigationView command and edit-message compatibility paths must mutate the retained DxUi `TextField` first, then use the backend-neutral `WindowHost::SyncTextInput(...)` path to refresh native/compatibility text-input state.
+- Address-bar and full-path popup edit Enter/Escape/Tab policy must be attached to the native DxUi text stack through `TextField::SetOnSubmitted(...)`, `WindowHost::SetOnEscape(...)`, and `WindowHost::SetOnTabBoundary(...)`. Address-bar edit-suggest Up/Down policy must use `TextField::SetOnPreviewKeyDown(...)`, not a Win32 edit subclass. Path-segment Ctrl+Backspace and newline-filtered paste use shared retained `TextField` single-line editing and paste normalization. While native IME composition is active, Enter/Escape/Tab and arrow/navigation edit keys stay owned by DxUi composition handling and must not submit, cancel, tab out, or change edit-suggest selection.
+- Invalid address-bar and full-path popup edit values must keep edit mode active, leave keyboard focus on the native DxUi text host, preserve the user-typed invalid value for typo correction, expose the validation message through the retained `TextField` UIA HelpText, and show a themed no-activate DirectWrite warning popup outside the edit host so the message is not clipped by the 24 DIP navigation bar. The popup uses the warning palette, Segoe Fluent warning glyph when available, a rounded window region, and must not hide/blank the live edit host during parent repaint. A live address-bar edit host must also be restored after parent redraw suppression, display/theme refresh, pane-focus theme changes, or temporary child visibility loss without canceling edit mode or discarding typed text. NavigationView must not call `EM_SHOWBALLOONTIP` or use native edit balloon tips for this path.
+- Command/selftest coverage for address-bar edit mode and full-path popup edit mode must validate `NavigationViewDebugSnapshot`, `currentEditUsesNativeTextInput`, `currentEditHostHwnd`, the backend-neutral `currentEditInputHwnd`, caret screen rectangle state, and active composition start/end state exposed there, not enumerate descendant native `Edit` / `RICHEDIT50W` windows.
 
 ## Localization
 
@@ -1274,14 +1277,7 @@ void ExitEditMode(bool accept) {
             RequestPathChange(std::filesystem::path(typedText));
         } else {
             const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, typedText.c_str());
-            const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_INVALID_PATH);
-
-            EDITBALLOONTIP tip{};
-            tip.cbStruct = sizeof(tip);
-            tip.pszTitle = title.c_str();
-            tip.pszText = message.c_str();
-            tip.ttiIcon = TTI_WARNING;
-            SendMessage(_pathEdit, EM_SHOWBALLOONTIP, 0, reinterpret_cast<LPARAM>(&tip));
+            ShowEditValidationError(*_pathEdit, message);
             return; // Keep edit mode active
         }
     }

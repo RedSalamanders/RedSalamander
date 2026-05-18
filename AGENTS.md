@@ -11,7 +11,7 @@
 
 ## Project Requirements
 
-- **Platform**: Windows development (Windows 10/11 minimum)
+- **Platform**: Windows 11 24H2 (build 26100) minimum
 - **Language Standard**: `stdcpplatest` (latest MSVC mode)
 - **Character Encoding**: Unicode UTF-16
 - **Build System**: Visual Studio 2026 with MSBuild

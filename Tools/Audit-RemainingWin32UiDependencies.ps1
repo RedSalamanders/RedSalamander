@@ -34,51 +34,6 @@ $patterns = @(
 
 $allowedResidualDependencies = @(
     @{
-        Category      = 'GDI font creation'
-        Path          = 'Common\DxUi\DxUi.TextInput.cpp'
-        LinePattern   = 'CreateFontIndirectW\(&lf\)'
-        Visibility    = 'non-visible text service'
-        Owner         = 'DxUi WindowHost'
-        Reason        = 'Hidden zero-region text-service bridge supplies native edit/IME font metrics only; visible text remains DxUi/DirectWrite-rendered.'
-        ExitCondition = 'Remove when DxUi text input no longer needs a child HWND for IME/edit keyboard interop.'
-    },
-    @{
-        Category      = 'Native font message'
-        Path          = 'Common\DxUi\DxUi.TextInput.cpp'
-        LinePattern   = 'WM_SETFONT.*_nonVisibleTextServiceBridgeFont'
-        Visibility    = 'non-visible text service'
-        Owner         = 'DxUi WindowHost'
-        Reason        = 'Font message targets only the hidden zero-region text-service bridge HWND, not app-owned visible UI.'
-        ExitCondition = 'Remove when DxUi text input no longer needs a child HWND for IME/edit keyboard interop.'
-    },
-    @{
-        Category      = 'LOGFONT bridge'
-        Path          = 'Common\DxUi\DxUi.TextInput.cpp'
-        LinePattern   = 'DebugGetNonVisibleTextServiceBridgeFont|LOGFONTW'
-        Visibility    = 'non-visible text service test hook'
-        Owner         = 'DxUi WindowHost'
-        Reason        = 'Test-only inspection proves the allowlisted bridge font is scoped to the non-visible text service.'
-        ExitCondition = 'Remove with the hidden text-service bridge or replace with a non-GDI diagnostic.'
-    },
-    @{
-        Category      = 'LOGFONT bridge'
-        Path          = 'Common\DxUi\DxUi.h'
-        LinePattern   = 'DebugGetNonVisibleTextServiceBridgeFont|LOGFONTW'
-        Visibility    = 'non-visible text service test hook'
-        Owner         = 'DxUi WindowHost'
-        Reason        = 'Test-only declaration for the non-visible text-service bridge font inspection.'
-        ExitCondition = 'Remove with the hidden text-service bridge or replace with a non-GDI diagnostic.'
-    },
-    @{
-        Category      = 'LOGFONT bridge'
-        Path          = 'Tests\DxUiTests\DxUiTests.TextInputBridge.cpp'
-        LinePattern   = 'LOGFONTW|DebugGetNonVisibleTextServiceBridgeFont'
-        Visibility    = 'test-only'
-        Owner         = 'DxUiTests'
-        Reason        = 'Regression guard verifies the explicitly allowlisted non-visible text-service bridge font.'
-        ExitCondition = 'Remove with the hidden text-service bridge or replace with a non-GDI diagnostic.'
-    },
-    @{
         Category      = 'HDC text/selection bridge'
         Path          = 'Common\DxUi\DxUi.ComboBox.cpp'
         LinePattern   = 'GetDC\(nullptr\)|SelectObject\(memoryDc\.get\(\), bitmap\.get\(\)\)'
@@ -95,6 +50,15 @@ $allowedResidualDependencies = @(
         Owner         = 'DxUi Menu'
         Reason        = 'Popup backdrop capture uses a memory DC only to snapshot pixels behind the Direct2D menu; it does not render native text, fonts, or controls.'
         ExitCondition = 'Replace when the popup backdrop path moves to DirectComposition/WIC-only capture or the backdrop effect is removed.'
+    },
+    @{
+        Category      = 'HDC text/selection bridge'
+        Path          = 'RedSalamander\FolderView.Icons.cpp'
+        LinePattern   = 'GetDC\(nullptr\)'
+        Visibility    = 'test-only bitmap interop'
+        Owner         = 'FolderView thumbnail self-tests'
+        Reason        = 'ENABLE_TESTS synthetic thumbnail generation uses a screen DC only to create deterministic DIB thumbnails; it does not render native text, fonts, or controls.'
+        ExitCondition = 'Replace if thumbnail self-tests gain a non-HDC bitmap factory helper.'
     },
     @{
         Category      = 'HDC text/selection bridge'

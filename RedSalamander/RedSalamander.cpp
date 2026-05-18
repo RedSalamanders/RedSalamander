@@ -25,6 +25,7 @@
 #include "FluentIcons.h"
 #include "LocalizationManager.h"
 #include "MaskSyntax.h"
+#include "MinimumOsVersion.h"
 #include "NavigationLocation.h"
 #include "SettingsStore.h"
 #include "resource.h"
@@ -4916,11 +4917,20 @@ private:
 
         if (auto request = BuildRootSwitchRequest(targetIndex); request.has_value())
         {
+            std::wstring_view targetLabel;
+            if (_menuBar)
+            {
+                const std::span<const RedSalamander::DxUi::MenuBarItem> currentItems = _menuBar->GetItems();
+                if (targetIndex < currentItems.size())
+                {
+                    targetLabel = currentItems[targetIndex].text;
+                }
+            }
             Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} accepted from={} to={} label='{}'",
                         source,
                         activeIndex,
                         targetIndex,
-                        std::wstring_view{items[targetIndex].text});
+                        targetLabel);
             _activePopupIndex            = targetIndex;
             _pendingHoverRootSwitchIndex = std::nullopt;
             return request;
@@ -5814,6 +5824,10 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     }
 
     commandId = CanonicalizeCommandId(commandId);
+    if (ShortcutIds::IsUnassignedCommandId(commandId))
+    {
+        return true;
+    }
 
     if (commandId == L"cmd/app/theme/select" && themeId.has_value())
     {
@@ -6404,6 +6418,10 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
 
     const std::wstring_view originalCommandId = commandId;
     commandId                                 = CanonicalizeCommandId(commandId);
+    if (ShortcutIds::IsUnassignedCommandId(commandId))
+    {
+        return true;
+    }
 
     if (commandId == L"cmd/pane/selection/unselectAll")
     {
@@ -7459,6 +7477,11 @@ void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionNam
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTANCE hPrevInstance, [[maybe_unused]] _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
+    if (! Common::MinimumOsVersion::EnsureCurrentWindowsVersionSupported(nullptr))
+    {
+        return 1;
+    }
+
     // Use SEH to catch all exceptions (no C++ objects in this scope)
     CrashHandler::Install();
     __try

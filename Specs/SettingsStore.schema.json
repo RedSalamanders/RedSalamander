@@ -97,7 +97,11 @@
         "ctrl": { "type": "boolean", "title": "Ctrl", "description": "Whether Ctrl is required." },
         "alt": { "type": "boolean", "title": "Alt", "description": "Whether Alt is required." },
         "shift": { "type": "boolean", "title": "Shift", "description": "Whether Shift is required." },
-        "commandId": { "$ref": "#/$defs/commandId", "title": "Command", "description": "The command identifier (cmd/...)."}
+        "commandId": {
+          "$ref": "#/$defs/commandId",
+          "title": "Command",
+          "description": "The command identifier (cmd/...). Use cmd/shortcut/unassigned only as the internal sentinel for an intentionally unassigned shortcut chord."
+        }
       },
       "additionalProperties": false
     },
@@ -214,7 +218,7 @@
       "type": "object",
       "default": {},
       "title": "Keyboard Shortcuts",
-      "description": "Keyboard shortcuts configuration (Function bar and Folder view).",
+      "description": "Keyboard shortcuts configuration (Function bar and Folder view). Missing default chords are restored at startup; cmd/shortcut/unassigned persists an intentional no-op removal.",
       "x-ui-pane": "Keyboard",
       "x-ui-control": "custom",
       "x-ui-order": 0,

@@ -265,7 +265,7 @@ void FolderWindow::CommandQuickSearch(Pane pane)
 
 bool FolderWindow::CreateCommandLineControls(HWND parent) noexcept
 {
-    if (_hCommandLineLabel && _hCommandLineEdit)
+    if (_hCommandLineHost && _commandLineField)
     {
         return true;
     }
@@ -276,119 +276,66 @@ bool FolderWindow::CreateCommandLineControls(HWND parent) noexcept
     }
 
     const std::wstring labelText = LoadStringResource(nullptr, IDS_COMMAND_LINE_LABEL);
-    const DWORD labelStyle       = WS_CHILD | SS_LEFT | SS_CENTERIMAGE;
-    const DWORD editStyle        = WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL;
+    const DWORD hostStyle        = WS_CHILD | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
 
-    _hCommandLineLabel.reset(CreateWindowExW(0,
-                                             L"STATIC",
-                                             labelText.empty() ? L"Command:" : labelText.c_str(),
-                                             labelStyle,
-                                             _commandLineLabelRect.left,
-                                             _commandLineLabelRect.top,
-                                             std::max(0L, _commandLineLabelRect.right - _commandLineLabelRect.left),
-                                             std::max(0L, _commandLineLabelRect.bottom - _commandLineLabelRect.top),
-                                             parent,
-                                             reinterpret_cast<HMENU>(kCommandLineLabelId),
-                                             _hInstance,
-                                             nullptr));
-    if (! _hCommandLineLabel)
-    {
-        return false;
-    }
-
-    _hCommandLineEdit.reset(CreateWindowExW(WS_EX_CLIENTEDGE,
-                                            L"EDIT",
+    _hCommandLineHost.reset(CreateWindowExW(0,
+                                            kFolderWindowDxHostClassName,
                                             nullptr,
-                                            editStyle,
-                                            _commandLineEditRect.left,
-                                            _commandLineEditRect.top,
-                                            std::max(0L, _commandLineEditRect.right - _commandLineEditRect.left),
-                                            std::max(0L, _commandLineEditRect.bottom - _commandLineEditRect.top),
+                                            hostStyle,
+                                            _commandLineRect.left,
+                                            _commandLineRect.top,
+                                            std::max(0L, _commandLineRect.right - _commandLineRect.left),
+                                            std::max(0L, _commandLineRect.bottom - _commandLineRect.top),
                                             parent,
-                                            reinterpret_cast<HMENU>(kCommandLineEditId),
+                                            reinterpret_cast<HMENU>(kCommandLineHostId),
                                             _hInstance,
-                                            nullptr));
-    if (! _hCommandLineEdit)
+                                            this));
+    if (! _hCommandLineHost || ! _commandLineHost.Attach(_hCommandLineHost.get()))
     {
-        _hCommandLineLabel.reset();
+        _hCommandLineHost.reset();
         return false;
     }
 
-    HFONT font = reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    if (font)
-    {
-        SendMessageW(_hCommandLineLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-        SendMessageW(_hCommandLineEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-    }
+    auto root = std::make_unique<RedSalamander::DxUi::Panel>();
 
-    if (! RedSalamander::Win32Callback::SetPropNoThrow(_hCommandLineEdit.get(), kCommandLineEditOwnerProp, reinterpret_cast<HANDLE>(this)) ||
-        ! RedSalamander::Win32Callback::InstallWndProcHook(
-            _hCommandLineEdit.get(), kCommandLineEditOriginalWndProcProp, FolderWindow::CommandLineEditWndProcThunk))
-    {
-        RemovePropW(_hCommandLineEdit.get(), kCommandLineEditOwnerProp);
-        _hCommandLineEdit.reset();
-        _hCommandLineLabel.reset();
-        return false;
-    }
+    const std::wstring resolvedLabel = labelText.empty() ? std::wstring(L"Command:") : labelText;
+    _commandLineLabel                = root->AddChild<RedSalamander::DxUi::Label>(resolvedLabel);
+    _commandLineLabel->SetFontRole(RedSalamander::DxUi::FontRole::Body);
 
-    ShowWindow(_hCommandLineLabel.get(), SW_HIDE);
-    ShowWindow(_hCommandLineEdit.get(), SW_HIDE);
+    _commandLineField = root->AddChild<RedSalamander::DxUi::TextField>();
+    _commandLineField->SetMultiline(false);
+    _commandLineField->SetClearButtonEnabled(false);
+    _commandLineField->SetAccessibleName(resolvedLabel);
+    _commandLineField->SetOnSubmitted([this]() { ExecuteCommandLineFromEdit(); });
+    _commandLineLabel->SetMnemonicTarget(_commandLineField);
+
+    _commandLineHost.SetTextInputBackend(RedSalamander::DxUi::TextInputBackend::Native);
+    _commandLineHost.SetOnEscape([this]() -> bool
+    {
+        HideCommandLine(true);
+        return true;
+    });
+    _commandLineHost.SetRoot(std::move(root));
+    _commandLineHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+    UpdateCommandLineHostLayout();
+
+    ShowWindow(_hCommandLineHost.get(), SW_HIDE);
     return true;
 }
 
 void FolderWindow::DestroyCommandLineControls() noexcept
 {
-    if (_hCommandLineEdit)
+    if (_hCommandLineHost)
     {
-        RedSalamander::Win32Callback::RestoreWndProcHook(
-            _hCommandLineEdit.get(), kCommandLineEditOriginalWndProcProp, FolderWindow::CommandLineEditWndProcThunk);
-        RemovePropW(_hCommandLineEdit.get(), kCommandLineEditOwnerProp);
-        _hCommandLineEdit.reset();
+        _commandLineHost.ReleaseMouseCapture();
+        _commandLineHost.Detach();
+        _hCommandLineHost.reset();
     }
 
-    _hCommandLineLabel.reset();
+    _commandLineLabel = nullptr;
+    _commandLineField = nullptr;
     _commandLineVisible = false;
     _commandLineWorkingDirectory.clear();
-}
-
-LRESULT CALLBACK FolderWindow::CommandLineEditWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
-{
-    auto* self = reinterpret_cast<FolderWindow*>(GetPropW(hwnd, kCommandLineEditOwnerProp));
-    if (self)
-    {
-        return self->CommandLineEditWndProc(hwnd, msg, wp, lp);
-    }
-
-    return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kCommandLineEditOriginalWndProcProp, msg, wp, lp);
-}
-
-LRESULT FolderWindow::CommandLineEditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
-{
-    switch (msg)
-    {
-        case WM_KEYDOWN:
-            if (wp == VK_RETURN)
-            {
-                ExecuteCommandLineFromEdit();
-                return 0;
-            }
-            if (wp == VK_ESCAPE)
-            {
-                HideCommandLine(true);
-                return 0;
-            }
-            break;
-        case WM_NCDESTROY:
-        {
-            const LRESULT result = RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kCommandLineEditOriginalWndProcProp, msg, wp, lp);
-            RedSalamander::Win32Callback::RestoreWndProcHook(
-                hwnd, kCommandLineEditOriginalWndProcProp, FolderWindow::CommandLineEditWndProcThunk);
-            RemovePropW(hwnd, kCommandLineEditOwnerProp);
-            return result;
-        }
-    }
-
-    return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kCommandLineEditOriginalWndProcProp, msg, wp, lp);
 }
 
 void FolderWindow::ShowCommandLine(Pane pane, const std::filesystem::path& workingDirectory)
@@ -404,14 +351,14 @@ void FolderWindow::ShowCommandLine(Pane pane, const std::filesystem::path& worki
     CalculateLayout();
     AdjustChildWindows();
 
-    if (_hCommandLineLabel)
+    if (_hCommandLineHost)
     {
-        ShowWindow(_hCommandLineLabel.get(), SW_SHOWNA);
-    }
-    if (_hCommandLineEdit)
-    {
-        ShowWindow(_hCommandLineEdit.get(), SW_SHOW);
-        SetFocus(_hCommandLineEdit.get());
+        ShowWindow(_hCommandLineHost.get(), SW_SHOW);
+        SetFocus(_hCommandLineHost.get());
+        if (_commandLineField)
+        {
+            _commandLineHost.SetFocusControl(_commandLineField);
+        }
     }
 
     if (_hWnd)
@@ -430,13 +377,10 @@ void FolderWindow::HideCommandLine(bool restoreFocus) noexcept
     const Pane pane = _commandLinePane;
     _commandLineVisible = false;
 
-    if (_hCommandLineLabel)
+    if (_hCommandLineHost)
     {
-        ShowWindow(_hCommandLineLabel.get(), SW_HIDE);
-    }
-    if (_hCommandLineEdit)
-    {
-        ShowWindow(_hCommandLineEdit.get(), SW_HIDE);
+        _commandLineHost.SetFocusControl(nullptr);
+        ShowWindow(_hCommandLineHost.get(), SW_HIDE);
     }
 
     CalculateLayout();
@@ -455,55 +399,47 @@ void FolderWindow::HideCommandLine(bool restoreFocus) noexcept
 
 std::wstring FolderWindow::GetCommandLineText() const
 {
-    if (! _hCommandLineEdit)
+    if (! _commandLineField)
     {
         return {};
     }
 
-    const int length = GetWindowTextLengthW(_hCommandLineEdit.get());
-    if (length <= 0)
-    {
-        return {};
-    }
-
-    std::vector<wchar_t> buffer(static_cast<size_t>(length) + 1u, L'\0');
-    const int copied = GetWindowTextW(_hCommandLineEdit.get(), buffer.data(), static_cast<int>(buffer.size()));
-    if (copied <= 0)
-    {
-        return {};
-    }
-
-    return std::wstring(buffer.data(), static_cast<size_t>(copied));
+    return std::wstring(_commandLineField->GetText());
 }
 
 void FolderWindow::SetCommandLineText(std::wstring_view text)
 {
-    if (! _hCommandLineEdit)
+    if (! _commandLineField)
     {
         return;
     }
 
     std::wstring owned(text);
-    SetWindowTextW(_hCommandLineEdit.get(), owned.c_str());
-    const auto end = static_cast<WPARAM>(owned.size());
-    SendMessageW(_hCommandLineEdit.get(), EM_SETSEL, end, static_cast<LPARAM>(owned.size()));
+    const size_t end = owned.size();
+    _commandLineField->SetText(std::move(owned));
+    _commandLineField->SetSelectionRange(end, end);
+    _commandLineHost.SyncTextInput(_commandLineField);
 }
 
 void FolderWindow::InsertCommandLineText(std::wstring_view text)
 {
-    if (! _hCommandLineEdit || text.empty())
+    if (! _commandLineField || text.empty())
     {
         return;
     }
 
     const std::wstring current = GetCommandLineText();
-    DWORD start = 0;
-    DWORD end   = 0;
-    SendMessageW(_hCommandLineEdit.get(), EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
+    size_t start = _commandLineField->GetCaretIndex();
+    size_t end   = start;
+    if (const std::optional<std::pair<size_t, size_t>> selection = _commandLineField->GetSelectionRange(); selection.has_value())
+    {
+        start = selection.value().first;
+        end   = selection.value().second;
+    }
 
-    const DWORD maxIndex = static_cast<DWORD>(std::min<size_t>(current.size(), static_cast<size_t>(std::numeric_limits<DWORD>::max())));
-    start                = std::min(start, maxIndex);
-    end                  = std::min(end, maxIndex);
+    const size_t maxIndex = current.size();
+    start                 = std::min(start, maxIndex);
+    end                   = std::min(end, maxIndex);
     if (start > end)
     {
         std::swap(start, end);
@@ -526,7 +462,9 @@ void FolderWindow::InsertCommandLineText(std::wstring_view text)
         replacement.push_back(L' ');
     }
 
-    SendMessageW(_hCommandLineEdit.get(), EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(replacement.c_str()));
+    _commandLineField->SetSelectionRange(start, end);
+    _commandLineField->ReplaceSelectionAndNotify(replacement);
+    _commandLineHost.SyncTextInput(_commandLineField);
 }
 
 std::optional<std::filesystem::path> FolderWindow::ResolveCommandLineWorkingDirectory(Pane pane) const
@@ -716,15 +654,19 @@ void FolderWindow::CommandBringFilenameToCommandLine(Pane pane)
 bool FolderWindow::DebugGetCommandLineSnapshot(CommandLineDebugSnapshot& out) const noexcept
 {
     out = {};
-    if (! _hCommandLineEdit)
+    if (! _hCommandLineHost || ! _commandLineField)
     {
         return false;
     }
 
     out.visible          = _commandLineVisible;
-    out.hasKeyboardFocus = GetFocus() == _hCommandLineEdit.get();
+    out.hasKeyboardFocus = GetFocus() == _hCommandLineHost.get() && _commandLineHost.GetFocusControl() == _commandLineField;
+    out.usesDxUiHost     = true;
+    out.usesNativeTextInput =
+        _commandLineHost.GetTextInputBackend() == RedSalamander::DxUi::TextInputBackend::Native && _commandLineHost.HasActiveNativeTextInputSession();
+    out.visibleNativeChildControlCount = 0u;
     out.pane             = _commandLinePane;
-    out.editHwnd         = _hCommandLineEdit.get();
+    out.editHwnd         = _commandLineHost.GetTextInputHwnd() ? _commandLineHost.GetTextInputHwnd() : _hCommandLineHost.get();
     out.text             = GetCommandLineText();
     out.workingDirectory = _commandLineWorkingDirectory;
     return true;

@@ -3247,6 +3247,128 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestFindDialogEditableComboKeyboardEditingKeys(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window is invalid for Find editable-combo keyboard editing test.");
+        return false;
+    }
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/find"),
+                  L"Shortcut dispatch failed for cmd/pane/find in editable-combo keyboard editing test.");
+
+    const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
+    state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for editable-combo keyboard editing test.");
+    if (! findWindow || IsWindow(findWindow) == FALSE)
+    {
+        return false;
+    }
+
+    const auto waitForRootText = [&](std::wstring_view expected, std::wstring_view label) noexcept
+    {
+        FindFilesDebugSnapshot snapshot{};
+        state.Require(WaitForFindSnapshot(
+                          [&](const FindFilesDebugSnapshot& value) noexcept
+        {
+            return value.usesDxUiHost && value.focusTarget == FindFilesDebugFocusTarget::RootCombo && value.rootText == expected &&
+                   value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
+        },
+                          SelfTest::Scale(2000ms),
+                          &snapshot),
+                      std::format(L"Find root combo text should be '{}' after {} but was '{}'.", expected, label, snapshot.rootText));
+    };
+
+    const auto prepareRootText = [&](std::wstring text) noexcept -> HWND
+    {
+        const size_t caretIndex = text.size();
+        state.Require(DebugSetFindFilesWindowComboText(FindFilesDebugFocusTarget::RootCombo, std::move(text)),
+                      L"Failed to set root combo text for editable-combo keyboard editing test.");
+        state.Require(DebugFocusFindFilesWindowTarget(FindFilesDebugFocusTarget::RootCombo),
+                      L"Failed to focus root combo for editable-combo keyboard editing test.");
+        PumpPendingMessages();
+
+        HWND target = GetFocus();
+        state.Require(target != nullptr && IsWindow(target) != FALSE, L"Focused keyboard target is invalid for editable-combo keyboard editing test.");
+        if (target && IsWindow(target) != FALSE)
+        {
+            SendMessageW(target, EM_SETSEL, static_cast<WPARAM>(caretIndex), static_cast<LPARAM>(caretIndex));
+            DWORD selectionStart = 0u;
+            DWORD selectionEnd   = 0u;
+            SendMessageW(target, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
+            state.Require(selectionStart == caretIndex && selectionEnd == caretIndex,
+                          std::format(L"Root combo bridge selection should collapse to {} but was {}..{}.",
+                                      caretIndex,
+                                      selectionStart,
+                                      selectionEnd));
+        }
+        return target;
+    };
+
+    const auto sendKey = [](HWND keyboardTarget, WPARAM key) noexcept
+    {
+        if (keyboardTarget && IsWindow(keyboardTarget) != FALSE)
+        {
+            SendMessageW(keyboardTarget, WM_KEYDOWN, key, 0);
+            SendMessageW(keyboardTarget, WM_KEYUP, key, 0);
+        }
+        PumpPendingMessages();
+    };
+
+    const auto sendChar = [](HWND keyboardTarget, wchar_t ch) noexcept
+    {
+        if (keyboardTarget && IsWindow(keyboardTarget) != FALSE)
+        {
+            SendMessageW(keyboardTarget, WM_CHAR, static_cast<WPARAM>(ch), 0);
+        }
+        PumpPendingMessages();
+    };
+
+    const auto sendCtrlKey = [](HWND keyboardTarget, WPARAM key, WPARAM translatedChar) noexcept
+    {
+        if (keyboardTarget && IsWindow(keyboardTarget) != FALSE)
+        {
+            SendMessageW(keyboardTarget, WM_KEYDOWN, VK_CONTROL, 0);
+            SendMessageW(keyboardTarget, WM_KEYDOWN, key, 0);
+            if (translatedChar != 0u)
+            {
+                SendMessageW(keyboardTarget, WM_CHAR, translatedChar, 0);
+            }
+            SendMessageW(keyboardTarget, WM_KEYUP, key, 0);
+            SendMessageW(keyboardTarget, WM_KEYUP, VK_CONTROL, 0);
+        }
+        PumpPendingMessages();
+    };
+
+    HWND target = prepareRootText(L"C:\\alpha\\beta\\gamma");
+    sendCtrlKey(target, static_cast<WPARAM>(L'A'), 0x01u);
+    sendChar(target, L'Z');
+    waitForRootText(L"Z", L"Ctrl+A followed by character input");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    target = prepareRootText(L"C:\\alpha\\beta\\gamma");
+    waitForRootText(L"C:\\alpha\\beta\\gamma", L"preparing Ctrl+Backspace");
+    sendCtrlKey(target, VK_BACK, 0x7Fu);
+    waitForRootText(L"C:\\alpha\\beta\\", L"Ctrl+Backspace");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    target = prepareRootText(L"abcd");
+    SendMessageW(target, EM_SETSEL, 1, 1);
+    sendKey(target, VK_DELETE);
+    waitForRootText(L"acd", L"Delete");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestFindDialogModeTypeaheadUpdatesSelectionAndDependencies(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -11084,6 +11206,9 @@ void RunSearchCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpt
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_tab_traversal_matches_expected_order", [=](CaseState& state) noexcept {
         return TestFindDialogTabTraversalMatchesExpectedOrder(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_editable_combo_keyboard_editing_keys", [=](CaseState& state) noexcept {
+        return TestFindDialogEditableComboKeyboardEditingKeys(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies", [=](CaseState& state) noexcept {
         return TestFindDialogModeTypeaheadUpdatesSelectionAndDependencies(mainWindow, state);

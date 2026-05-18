@@ -152,8 +152,11 @@ void FolderView::OnHScrollMessage(UINT scrollRequest)
             newOffsetDip = FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset + pageWidthDip, maxHorizontalOffset, _columnLayout);
             break;
         case SB_THUMBTRACK:
-        case SB_THUMBPOSITION:
             newOffsetDip = DipFromPx(static_cast<int>(si.nTrackPos));
+            break;
+        case SB_THUMBPOSITION:
+            newOffsetDip = FolderViewColumnLayout::ResolveNearestScrollStop(
+                DipFromPx(static_cast<int>(si.nTrackPos)), maxHorizontalOffset, _columnLayout);
             break;
         case SB_LEFT: newOffsetDip = 0.0f; break;
         case SB_RIGHT: newOffsetDip = maxHorizontalOffset; break;
@@ -1002,7 +1005,7 @@ void FolderView::OnCharMessage(wchar_t character)
                 index = (startIndex + itemCount - offset) % itemCount;
             }
 
-            if (FindIncrementalSearchMatchOffset(_items[index].displayName).has_value())
+            if (FindIncrementalSearchMatchOffset(GetVisualDisplayName(_items[index])).has_value())
             {
                 return index;
             }
@@ -1016,7 +1019,7 @@ void FolderView::OnCharMessage(wchar_t character)
         startIndex = (_focusedIndex + 1) % _items.size();
     }
 
-    if (hasFocus && FolderViewIncrementalSearch::StartsWithNoCase(_items[_focusedIndex].displayName, _incrementalSearch.query))
+    if (hasFocus && FolderViewIncrementalSearch::StartsWithNoCase(GetVisualDisplayName(_items[_focusedIndex]), _incrementalSearch.query))
     {
         UpdateIncrementalSearchHighlightForFocusedItem();
         return;
@@ -1030,7 +1033,7 @@ void FolderView::OnCharMessage(wchar_t character)
         return;
     }
 
-    if (hasFocus && FindIncrementalSearchMatchOffset(_items[_focusedIndex].displayName).has_value())
+    if (hasFocus && FindIncrementalSearchMatchOffset(GetVisualDisplayName(_items[_focusedIndex])).has_value())
     {
         UpdateIncrementalSearchHighlightForFocusedItem();
         return;
@@ -1066,6 +1069,7 @@ void FolderView::ExitIncrementalSearch() noexcept
     _incrementalSearch.suppressNextSpaceChar = false;
     _incrementalSearch.query.clear();
     ClearIncrementalSearchHighlight();
+    ClearIncrementalSearchLayoutEffects();
     NotifyIncrementalSearchChanged();
     UpdateIncrementalSearchIndicatorState(GetTickCount64(), false, previousQuery);
     if (_hWnd)
@@ -1136,7 +1140,7 @@ void FolderView::HandleIncrementalSearchBackspace()
         const auto invalidIndex = static_cast<size_t>(-1);
         const bool hasFocus     = _focusedIndex != invalidIndex && _focusedIndex < _items.size();
 
-        if (hasFocus && FolderViewIncrementalSearch::StartsWithNoCase(_items[_focusedIndex].displayName, _incrementalSearch.query))
+        if (hasFocus && FolderViewIncrementalSearch::StartsWithNoCase(GetVisualDisplayName(_items[_focusedIndex]), _incrementalSearch.query))
         {
             UpdateIncrementalSearchHighlightForFocusedItem();
             return;
@@ -1252,7 +1256,8 @@ void FolderView::UpdateIncrementalSearchHighlightForFocusedItem()
     }
 
     const FolderItem& item                  = _items[_focusedIndex];
-    const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(item.displayName);
+    const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
+    const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(visualDisplayName);
     if (! matchOffset.has_value())
     {
         ClearIncrementalSearchHighlight();
@@ -1285,9 +1290,10 @@ void FolderView::ClearIncrementalSearchHighlight() noexcept
         FolderItem& item = _items[itemIndex];
         if (item.labelLayout && _incrementalSearch.highlightedRange.length > 0)
         {
-            if (item.displayName.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+            const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
+            if (visualDisplayName.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
             {
-                const UINT32 textLength = static_cast<UINT32>(item.displayName.size());
+                const UINT32 textLength = static_cast<UINT32>(visualDisplayName.size());
                 if (_incrementalSearch.highlightedRange.startPosition < textLength)
                 {
                     DWRITE_TEXT_RANGE normalizedRange{};
@@ -1309,6 +1315,30 @@ void FolderView::ClearIncrementalSearchHighlight() noexcept
 
     _incrementalSearch.highlightedIndex = invalidIndex;
     _incrementalSearch.highlightedRange = {};
+}
+
+void FolderView::ClearIncrementalSearchLayoutEffects() noexcept
+{
+    for (FolderItem& item : _items)
+    {
+        if (! item.labelLayout)
+        {
+            continue;
+        }
+
+        const std::wstring_view labelText = item.displayName;
+        if (labelText.empty() || labelText.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+        {
+            continue;
+        }
+
+        DWRITE_TEXT_RANGE clearRange{};
+        clearRange.startPosition = 0;
+        clearRange.length        = static_cast<UINT32>(labelText.size());
+        static_cast<void>(item.labelLayout->SetDrawingEffect(nullptr, clearRange));
+    }
+
+    _incrementalSearchLayoutEffectsDirty = false;
 }
 
 void FolderView::ApplyIncrementalSearchHighlight(size_t itemIndex, const DWRITE_TEXT_RANGE& range) noexcept
@@ -1341,12 +1371,13 @@ void FolderView::ApplyIncrementalSearchHighlight(size_t itemIndex, const DWRITE_
             return;
         }
 
-        if (itemToClear.displayName.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+        const std::wstring_view visualDisplayName = GetVisualDisplayName(itemToClear);
+        if (visualDisplayName.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
         {
             return;
         }
 
-        const UINT32 textLength = static_cast<UINT32>(itemToClear.displayName.size());
+        const UINT32 textLength = static_cast<UINT32>(visualDisplayName.size());
         if (clearRange.startPosition >= textLength)
         {
             return;
@@ -1378,9 +1409,10 @@ void FolderView::ApplyIncrementalSearchHighlight(size_t itemIndex, const DWRITE_
     FolderItem& item = _items[itemIndex];
     if (item.labelLayout)
     {
-        if (item.displayName.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+        const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
+        if (visualDisplayName.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
         {
-            const UINT32 textLength = static_cast<UINT32>(item.displayName.size());
+            const UINT32 textLength = static_cast<UINT32>(visualDisplayName.size());
             if (range.startPosition < textLength)
             {
                 DWRITE_TEXT_RANGE normalizedRange{};
@@ -1396,6 +1428,7 @@ void FolderView::ApplyIncrementalSearchHighlight(size_t itemIndex, const DWRITE_
                 else
                 {
                     static_cast<void>(item.labelLayout->SetDrawingEffect(_incrementalSearchHighlightBrush.get(), normalizedRange));
+                    _incrementalSearchLayoutEffectsDirty = true;
                 }
             }
         }
@@ -1416,7 +1449,7 @@ std::optional<UINT32> FolderView::FindIncrementalSearchMatchOffset(std::wstring_
 
 std::wstring_view FolderView::GetIncrementalSearchDisplayName(size_t index) const noexcept
 {
-    return index < _items.size() ? _items[index].displayName : std::wstring_view{};
+    return index < _items.size() ? GetVisualDisplayName(_items[index]) : std::wstring_view{};
 }
 
 std::optional<size_t> FolderView::FindNextIncrementalSearchPrefixMatch(size_t startIndex, bool forward) const noexcept
@@ -1452,18 +1485,19 @@ bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapsho
     const UINT32 queryLength = static_cast<UINT32>(_incrementalSearch.query.size());
     for (const FolderItem& item : _items)
     {
-        const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(item.displayName);
+        const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
+        const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(visualDisplayName);
         if (! matchOffset.has_value())
         {
             continue;
         }
 
-        if (item.displayName.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+        if (visualDisplayName.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
         {
             continue;
         }
 
-        const UINT32 textLength = static_cast<UINT32>(item.displayName.size());
+        const UINT32 textLength = static_cast<UINT32>(visualDisplayName.size());
         if (matchOffset.value() >= textLength)
         {
             continue;
@@ -1473,7 +1507,7 @@ bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapsho
         match.displayName.assign(item.displayName);
         match.range.startPosition = matchOffset.value();
         match.range.length        = std::min(queryLength, textLength - match.range.startPosition);
-        match.startsWith          = FolderViewIncrementalSearch::StartsWithNoCase(item.displayName, _incrementalSearch.query);
+        match.startsWith          = FolderViewIncrementalSearch::StartsWithNoCase(visualDisplayName, _incrementalSearch.query);
         out.matches.push_back(std::move(match));
     }
 

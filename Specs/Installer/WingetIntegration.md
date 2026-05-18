@@ -38,6 +38,7 @@ The installer manifest uses schema `1.12.0` and models the portable archive as:
 
 ```yaml
 InstallerType: zip
+MinimumOSVersion: 10.0.26100.0
 NestedInstallerType: portable
 NestedInstallerFiles:
   - RelativeFilePath: RedLauncher.exe
@@ -58,7 +59,9 @@ Installers:
 
 Do not use `InstallerType: portable` for a ZIP archive. ZIP archives require `InstallerType: zip` plus `NestedInstallerType: portable`.
 
-Declare `NestedInstallerFiles` at the manifest root because the executable path is identical in x64 and ARM64 ZIPs. The alias target is `RedLauncher.exe`, not `RedSalamander.exe`: Winget creates the command alias under its `Links` directory, and launching a symlinked executable directly can make the Windows loader search that alias directory before the package root. `RedLauncher.exe` is a dependency-free static-CRT Windows-subsystem shim that resolves its own final symlink target, finds the package root, and starts the real package-root `RedSalamander.exe` by absolute path so `Common.dll`, `yyjson.dll`, and other app-local DLLs are found without a console flash. Normal GUI launches, including diagnostic flags such as `--etw` and `--perf`, return control to the console immediately. The portable ZIP also includes `RedLauncherConsole.exe`, built from the same source as a console-subsystem companion, for foreground self-test automation that needs a wait and real app exit code. Keep `InstallationMetadata.Files` with `FileType: launch` pointing at `RedLauncher.exe` so Winget's repository validation has an explicit primary executable to locate after installation.
+RedSalamander requires Windows 11 24H2 (build 26100) or later. Keep `MinimumOSVersion: 10.0.26100.0` aligned with the MSIX package floor, the shared MSBuild Windows SDK target, and the runtime gates in the launch executables.
+
+Declare `NestedInstallerFiles` at the manifest root because the executable path is identical in x64 and ARM64 ZIPs. The alias target is `RedLauncher.exe`, not `RedSalamander.exe`: Winget creates the command alias under its `Links` directory, and launching a symlinked executable directly can make the Windows loader search that alias directory before the package root. `RedLauncher.exe` is a dependency-free static-CRT console-subsystem shim with the Windows 11 24H2 detached console allocation policy; it resolves its own final symlink target, finds the package root, and starts the real package-root `RedSalamander.exe` by absolute path so `Common.dll`, `yyjson.dll`, and other app-local DLLs are found without a console flash. Normal GUI launches, including diagnostic flags such as `--etw` and `--perf`, return control to the console immediately. Foreground self-test invocations use the same `RedLauncher.exe`, wait for the app process, and propagate the real app exit code. Keep `InstallationMetadata.Files` with `FileType: launch` pointing at `RedLauncher.exe` so Winget's repository validation has an explicit primary executable to locate after installation.
 
 Use Winget's `Architecture` field for CPU selection: `x64` is the Intel/AMD 64-bit build, and `arm64` is the native Windows on ARM build. By default Winget chooses from the installers compatible with the current machine; users can override that choice with `winget install --architecture x64` or `winget install --architecture arm64`.
 

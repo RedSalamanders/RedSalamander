@@ -2,6 +2,7 @@
 
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -30,6 +31,7 @@
 #include "PlugInterfaces/Viewer.h"
 
 struct IRawElementProviderFragmentRoot;
+struct ITextStoreACP;
 
 namespace RedSalamander::DxUi
 {
@@ -371,7 +373,32 @@ enum class Density : uint8_t
     Compact,
 };
 
-struct TextInputBridgeState
+enum class TextInputBackend : uint8_t
+{
+    Native,
+};
+
+enum class PasswordRevealMode : uint8_t
+{
+    Peek,
+    Visible,
+    Hidden,
+};
+
+enum class PasswordRevealState : uint8_t
+{
+    Hidden,
+    Peek,
+    Visible,
+};
+
+enum class PasswordMaskLengthPolicy : uint8_t
+{
+    Exact,
+    Concealed,
+};
+
+struct TextInputState
 {
     std::wstring text;
     std::optional<size_t> selectionAnchorIndex;
@@ -382,7 +409,66 @@ struct TextInputBridgeState
     bool multiline          = false;
 };
 
-LRESULT CALLBACK TextInputBridgeWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+struct NativeTextInputState
+{
+    std::wstring text;
+    std::optional<size_t> selectionAnchorIndex;
+    size_t caretIndex       = 0u;
+    size_t firstVisibleLine = 0u;
+    bool readOnly           = false;
+    bool masked             = false;
+    bool multiline          = false;
+    std::optional<size_t> compositionStartIndex;
+    std::optional<size_t> compositionEndIndex;
+    std::optional<size_t> conversionTargetStartIndex;
+    std::optional<size_t> conversionTargetEndIndex;
+    std::optional<size_t> compositionCursorIndex;
+    std::vector<size_t> compositionClauseBoundaries;
+    FlowDirection flowDirection                 = FlowDirection::LeftToRight;
+    DWRITE_READING_DIRECTION readingDirection   = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT;
+    PasswordRevealMode passwordRevealMode       = PasswordRevealMode::Peek;
+    PasswordRevealState passwordRevealState     = PasswordRevealState::Hidden;
+    PasswordMaskLengthPolicy maskLengthPolicy   = PasswordMaskLengthPolicy::Exact;
+    size_t secretVisibleDotCount                = 0u;
+};
+
+enum class TextInputAutomationEventKind : uint8_t
+{
+    TextChanged,
+    TextSelectionChanged,
+    ActiveTextPositionChanged,
+    TextEditCompositionChanged,
+    TextEditConversionTargetChanged,
+};
+
+struct NativeTextInputEventCounters
+{
+    uint64_t activationCount                         = 0u;
+    uint64_t synchronizationCount                    = 0u;
+    uint64_t deactivationCount                       = 0u;
+    uint64_t tsfActivationAttemptCount               = 0u;
+    uint64_t tsfActivationSuccessCount               = 0u;
+    uint64_t tsfActivationFailureCount               = 0u;
+    uint64_t tsfDeactivationCount                    = 0u;
+    uint64_t caretUpdateCount                        = 0u;
+    uint64_t uiaTextChangedCount                     = 0u;
+    uint64_t uiaTextSelectionChangedCount            = 0u;
+    uint64_t uiaActiveTextPositionChangedCount       = 0u;
+    uint64_t uiaTextEditTextChangedCount             = 0u;
+    uint64_t uiaTextEditConversionTargetChangedCount = 0u;
+};
+
+struct NativeTextInputImePayload
+{
+    bool hasCompositionString = false;
+    std::wstring compositionString;
+    bool hasResultString = false;
+    std::wstring resultString;
+    bool hasCursorPosition = false;
+    size_t cursorPosition = 0u;
+    std::vector<uint8_t> compositionAttributes;
+    std::vector<uint32_t> compositionClauses;
+};
 
 struct TextFieldDebugMultilineState
 {
@@ -400,8 +486,20 @@ struct TextFieldDebugSingleLinePaintState
 {
     D2D1_RECT_F textRect{};
     D2D1_RECT_F selectionPaintRect{};
+    D2D1_RECT_F trailingButtonRect{};
+    std::vector<D2D1_RECT_F> compositionUnderlineRects;
+    std::vector<D2D1_RECT_F> conversionTargetUnderlineRects;
     float horizontalScrollDip  = 0.0f;
     bool hasSelectionPaintRect = false;
+    bool hasTrailingButtonRect = false;
+};
+
+struct ComboBoxDebugEditablePaintState
+{
+    D2D1_RECT_F textRect{};
+    std::vector<D2D1_RECT_F> compositionUnderlineRects;
+    std::vector<D2D1_RECT_F> conversionTargetUnderlineRects;
+    float horizontalScrollDip = 0.0f;
 };
 
 struct VisibleSpan
@@ -1042,6 +1140,11 @@ public:
     void SetBounds(const D2D1_RECT_F& bounds) noexcept;
     [[nodiscard]] D2D1_RECT_F GetBounds() const noexcept;
     [[nodiscard]] virtual D2D1_RECT_F GetHitBounds() const noexcept;
+    [[nodiscard]] std::optional<D2D1_RECT_F> TryGetTextInputViewportRect() const noexcept;
+    [[nodiscard]] std::optional<D2D1_RECT_F> TryGetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept;
+    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> TryGetTextInputRangeRects(
+        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const;
+    [[nodiscard]] std::optional<size_t> TryHitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept;
 
     void SetVisible(bool visible) noexcept;
     [[nodiscard]] bool IsVisible() const noexcept;
@@ -1063,6 +1166,7 @@ public:
     virtual bool OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers);
     virtual bool OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers);
     virtual bool OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers);
+    virtual bool OnKeyUp(WindowHost& host, UINT virtualKey, UINT modifiers);
     virtual bool OnChar(WindowHost& host, wchar_t ch, UINT modifiers);
     virtual bool OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2F pointDip);
     virtual bool OnCopy(WindowHost& host);
@@ -1088,6 +1192,8 @@ public:
     [[nodiscard]] std::wstring_view GetConnectedAnimationKey() const noexcept;
     void SetAccessibleName(std::wstring name);
     [[nodiscard]] std::wstring_view GetAccessibleName() const noexcept;
+    void SetAccessibleHelpText(std::wstring helpText);
+    [[nodiscard]] std::wstring_view GetAccessibleHelpText() const noexcept;
     void SetOnContextMenu(std::function<void(POINT screenPoint, bool keyboardInvocation)> onContextMenu);
 
 protected:
@@ -1112,15 +1218,19 @@ protected:
     virtual void OnBoundsChanged() noexcept;
     virtual void OnFlowDirectionChanged() noexcept;
     virtual void OnDensityChanged() noexcept;
+    virtual void OnEnabledChanged(bool enabled) noexcept;
     virtual void OnHostDpiChanged(WindowHost& host) noexcept;
     virtual void OnFocusChanged(WindowHost& host, bool focused);
     virtual void OnHoverChanged(WindowHost& host, bool hovered);
     virtual void OnCaptureLost(WindowHost& host);
-    [[nodiscard]] virtual bool SupportsTextInputBridge() const noexcept;
-    [[nodiscard]] virtual std::optional<D2D1_RECT_F> GetTextInputBridgeViewportRect() const noexcept;
-    [[nodiscard]] virtual std::optional<D2D1_RECT_F> GetTextInputBridgeCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept;
-    virtual bool ExportTextInputBridgeState(TextInputBridgeState& outState) const;
-    virtual bool ImportTextInputBridgeState(WindowHost& host, const TextInputBridgeState& state, bool notifyChange);
+    [[nodiscard]] virtual bool SupportsTextInput() const noexcept;
+    [[nodiscard]] virtual std::optional<D2D1_RECT_F> GetTextInputViewportRect() const noexcept;
+    [[nodiscard]] virtual std::optional<D2D1_RECT_F> GetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept;
+    [[nodiscard]] virtual std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(
+        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const;
+    [[nodiscard]] virtual std::optional<size_t> HitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept;
+    virtual bool ExportTextInputState(TextInputState& outState) const;
+    virtual bool ImportTextInputState(WindowHost& host, const TextInputState& state, bool notifyChange);
 
 private:
     Panel* _parent      = nullptr;
@@ -1136,6 +1246,7 @@ private:
     std::optional<Density> _explicitDensity;
     std::wstring _connectedAnimationKey;
     std::wstring _accessibleName;
+    std::wstring _accessibleHelpText;
     std::function<void(POINT screenPoint, bool keyboardInvocation)> _onContextMenu;
 };
 
@@ -1737,12 +1848,27 @@ public:
     void SetText(std::wstring text);
     void SetTextAndNotify(std::wstring text);
     [[nodiscard]] std::wstring_view GetText() const noexcept;
+    [[nodiscard]] size_t GetCaretIndex() const noexcept;
     void SetSelectionRange(size_t selectionStart, size_t selectionEnd) noexcept;
     [[nodiscard]] std::optional<std::pair<size_t, size_t>> GetSelectionRange() const noexcept;
+    void ReplaceSelectionAndNotify(std::wstring_view replacement);
     void SetMasked(bool masked) noexcept;
     [[nodiscard]] bool IsMasked() const noexcept;
+    void SetPasswordRevealMode(PasswordRevealMode mode) noexcept;
+    [[nodiscard]] PasswordRevealMode GetPasswordRevealMode() const noexcept;
+    void SetPasswordRevealState(PasswordRevealState state) noexcept;
+    [[nodiscard]] PasswordRevealState GetPasswordRevealState() const noexcept;
+    void SetPasswordMaskLengthPolicy(PasswordMaskLengthPolicy policy) noexcept;
+    [[nodiscard]] PasswordMaskLengthPolicy GetPasswordMaskLengthPolicy() const noexcept;
+    [[nodiscard]] size_t GetSecretVisibleDotCount() const noexcept;
+    void SetPasswordRevealAccessibleName(std::wstring name);
+    [[nodiscard]] std::wstring_view GetPasswordRevealAccessibleName() const noexcept;
+    [[nodiscard]] bool IsPasswordRevealButtonVisibleForAccessibility() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetPasswordRevealButtonAccessibilityRect() const noexcept;
+    [[nodiscard]] bool InvokePasswordRevealButton(WindowHost& host);
     void SetPlaceholder(std::wstring text);
     void SetMultiline(bool multiline) noexcept;
+    [[nodiscard]] bool IsMultiline() const noexcept;
     void SetClearButtonEnabled(bool enabled) noexcept;
     [[nodiscard]] bool IsClearButtonEnabled() const noexcept;
     void SetCaretColor(std::optional<D2D1_COLOR_F> caretColor) noexcept;
@@ -1752,9 +1878,11 @@ public:
     [[nodiscard]] bool IsReadOnly() const noexcept;
     void SetOnTextChanged(std::function<void(std::wstring_view)> onTextChanged);
     void SetOnSubmitted(std::function<void()> onSubmitted);
+    void SetOnPreviewKeyDown(std::function<bool(WindowHost& host, UINT virtualKey, UINT modifiers)> onPreviewKeyDown);
     void SetOnBlur(std::function<void()> onBlur);
     [[nodiscard]] bool DebugGetMultilineState(const WindowHost& host, TextFieldDebugMultilineState& out) const noexcept;
     [[nodiscard]] bool DebugGetSingleLinePaintState(const WindowHost& host, TextFieldDebugSingleLinePaintState& out) const noexcept;
+    [[nodiscard]] bool DebugGetCaretRect(const WindowHost& host, size_t controlTextIndex, D2D1_RECT_F& outRect) const noexcept;
 
     void Paint(WindowHost& host) const override;
     bool Tick(WindowHost& host, uint64_t nowTickMs) override;
@@ -1762,8 +1890,10 @@ public:
     bool OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers) override;
     bool OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
+    void OnCaptureLost(WindowHost& host) override;
     bool OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers) override;
     bool OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers) override;
+    bool OnKeyUp(WindowHost& host, UINT virtualKey, UINT modifiers) override;
     bool OnChar(WindowHost& host, wchar_t ch, UINT modifiers) override;
     bool OnContextMenu(WindowHost& host, bool keyboardInvocation, D2D1_POINT_2F pointDip) override;
     bool OnCopy(WindowHost& host) override;
@@ -1772,12 +1902,17 @@ public:
 protected:
     void OnBoundsChanged() noexcept override;
     void OnFocusChanged(WindowHost& host, bool focused) override;
+    void OnEnabledChanged(bool enabled) noexcept override;
+    void OnDensityChanged() noexcept override;
     void OnHostDpiChanged(WindowHost& host) noexcept override;
-    [[nodiscard]] bool SupportsTextInputBridge() const noexcept override;
-    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputBridgeViewportRect() const noexcept override;
-    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputBridgeCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept override;
-    bool ExportTextInputBridgeState(TextInputBridgeState& outState) const override;
-    bool ImportTextInputBridgeState(WindowHost& host, const TextInputBridgeState& state, bool notifyChange) override;
+    [[nodiscard]] bool SupportsTextInput() const noexcept override;
+    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputViewportRect() const noexcept override;
+    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept override;
+    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(
+        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const override;
+    [[nodiscard]] std::optional<size_t> HitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept override;
+    bool ExportTextInputState(TextInputState& outState) const override;
+    bool ImportTextInputState(WindowHost& host, const TextInputState& state, bool notifyChange) override;
 
 private:
     struct EditHistoryState
@@ -1792,6 +1927,8 @@ private:
     [[nodiscard]] D2D1_RECT_F GetTextRect() const noexcept;
     [[nodiscard]] bool IsClearButtonVisible() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetClearButtonRect() const noexcept;
+    [[nodiscard]] bool IsPasswordRevealButtonVisible() const noexcept;
+    [[nodiscard]] D2D1_RECT_F GetPasswordRevealButtonRect() const noexcept;
     [[nodiscard]] wil::com_ptr<IDWriteTextLayout> GetOrCreateMultilineLayout(const WindowHost* host,
                                                                              std::wstring_view text,
                                                                              float widthDip,
@@ -1805,17 +1942,23 @@ private:
     [[nodiscard]] bool DeleteSelection() noexcept;
     [[nodiscard]] EditHistoryState CaptureEditHistoryState() const;
     void RestoreEditHistoryState(const EditHistoryState& state) noexcept;
+    void BeginEditTransactionMetric(const wchar_t* detail) noexcept;
+    void FinishEditTransactionMetric() noexcept;
+    void RegenerateConcealedMaskEpoch() const noexcept;
+    [[nodiscard]] size_t GetConcealedMaskVisibleDotCount(size_t exactCount) const noexcept;
     void RecordUndoStateForDirectEdit();
     [[nodiscard]] bool TryUndoDirectEdit() noexcept;
     [[nodiscard]] bool TryRedoDirectEdit() noexcept;
+    void RemaskPasswordReveal() noexcept;
     void SelectAllText() noexcept;
     void SelectWordAt(size_t hitIndex) noexcept;
-    void NotifyChanged() const;
+    void NotifyChanged();
 
     std::wstring _text;
     std::wstring _placeholder;
     std::function<void(std::wstring_view)> _onTextChanged;
     std::function<void()> _onSubmitted;
+    std::function<bool(WindowHost& host, UINT virtualKey, UINT modifiers)> _onPreviewKeyDown;
     std::function<void()> _onBlur;
     size_t _caretIndex = 0;
     std::optional<size_t> _selectionAnchorIndex;
@@ -1832,17 +1975,33 @@ private:
     bool _multiline                       = false;
     bool _readOnly                        = false;
     bool _masked                          = false;
+    PasswordRevealMode _passwordRevealMode   = PasswordRevealMode::Peek;
+    PasswordRevealState _passwordRevealState = PasswordRevealState::Hidden;
+    PasswordMaskLengthPolicy _maskLengthPolicy = PasswordMaskLengthPolicy::Exact;
+    std::wstring _passwordRevealAccessibleName = L"Show password";
+    mutable uint64_t _concealedMaskEpoch       = 0u;
+    mutable size_t _concealedMaskBucketStart   = 0u;
+    mutable size_t _concealedMaskBucketEnd     = 0u;
+    mutable size_t _concealedMaskVisibleDotCount = 0u;
+    mutable bool _concealedMaskVisibleDotCountValid = false;
     bool _dragSelecting                   = false;
     bool _clearButtonHovered              = false;
     bool _clearButtonEnabled              = true;
+    bool _passwordRevealButtonHovered     = false;
+    bool _passwordRevealButtonPressed     = false;
+    bool _passwordRevealKeyboardFocused   = false;
     std::optional<D2D1_COLOR_F> _caretColorOverride;
     float _textPaddingLeftDip   = 8.0f;
     float _textPaddingRightDip  = 8.0f;
     float _textPaddingTopDip    = 4.0f;
     float _textPaddingBottomDip = 4.0f;
+    bool _hasExplicitHorizontalTextPadding = false;
+    bool _hasExplicitVerticalTextPadding   = false;
     SingleLineSelectionClickSequence _selectionClickSequence;
     std::vector<EditHistoryState> _undoHistory;
     std::vector<EditHistoryState> _redoHistory;
+    std::optional<std::chrono::steady_clock::time_point> _pendingEditTransactionStartedAt;
+    const wchar_t* _pendingEditTransactionDetail = L"";
 
     static constexpr size_t kMaxEditHistoryEntries = 64u;
 };
@@ -1876,6 +2035,8 @@ public:
     void SetText(std::wstring text);
     void SetTextAndNotify(std::wstring text);
     [[nodiscard]] std::wstring_view GetText() const noexcept;
+    void SetEditableSelectionRange(size_t selectionStart, size_t selectionEnd) noexcept;
+    [[nodiscard]] std::optional<std::pair<size_t, size_t>> GetEditableSelectionRange() const noexcept;
     void SetPlaceholder(std::wstring text);
     void SetOnTextChanged(std::function<void(std::wstring_view)> onTextChanged);
     void SetOnSelectionChanged(std::function<void(size_t)> onSelectionChanged);
@@ -1887,6 +2048,8 @@ public:
     [[nodiscard]] D2D1_RECT_F DebugGetPopupItemRect(size_t popupListIndex, const WindowHost* host = nullptr) const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetPopupItemTextRect(size_t popupListIndex, const WindowHost* host = nullptr) const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetEditableTextRect() const noexcept;
+    [[nodiscard]] bool DebugGetEditablePaintState(const WindowHost& host, ComboBoxDebugEditablePaintState& out) const noexcept;
+    [[nodiscard]] size_t HitTestEditableCaretIndex(const WindowHost& host, D2D1_POINT_2F point) const noexcept;
 
     void Paint(WindowHost& host) const override;
     void PaintOverlay(WindowHost& host) const override;
@@ -1908,26 +2071,43 @@ public:
 
 protected:
     void OnFocusChanged(WindowHost& host, bool focused) override;
+    void OnBoundsChanged() noexcept override;
     [[nodiscard]] Control* HitTestOverlay(D2D1_POINT_2F point) override;
     [[nodiscard]] const Control* HitTestOverlay(D2D1_POINT_2F point) const override;
-    [[nodiscard]] bool SupportsTextInputBridge() const noexcept override;
-    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputBridgeViewportRect() const noexcept override;
-    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputBridgeCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept override;
-    bool ExportTextInputBridgeState(TextInputBridgeState& outState) const override;
-    bool ImportTextInputBridgeState(WindowHost& host, const TextInputBridgeState& state, bool notifyChange) override;
+    [[nodiscard]] bool SupportsTextInput() const noexcept override;
+    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputViewportRect() const noexcept override;
+    [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept override;
+    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(
+        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const override;
+    [[nodiscard]] std::optional<size_t> HitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept override;
+    bool ExportTextInputState(TextInputState& outState) const override;
+    bool ImportTextInputState(WindowHost& host, const TextInputState& state, bool notifyChange) override;
 
 private:
+    struct EditHistoryState
+    {
+        std::wstring text;
+        size_t caretIndex = 0u;
+        std::optional<size_t> selectionAnchorIndex;
+        float horizontalScrollDip = 0.0f;
+    };
+
     [[nodiscard]] std::optional<size_t> GetHighlightedPopupIndex() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetEditableTextRect() const noexcept;
     void EnsureEditableCaretVisible(const WindowHost* host, float availableWidthDip) const noexcept;
     void ResetEditableCaretBlink(WindowHost& host) noexcept;
     void SetEditableCaretIndex(size_t caretIndex, bool extendSelection) noexcept;
     [[nodiscard]] bool HasEditableSelection() const noexcept;
-    [[nodiscard]] std::optional<std::pair<size_t, size_t>> GetEditableSelectionRange() const noexcept;
     [[nodiscard]] bool DeleteEditableSelection() noexcept;
     void SelectAllEditableText() noexcept;
     void SelectEditableWordAt(size_t hitIndex) noexcept;
     void NotifyTextChanged() const;
+    [[nodiscard]] EditHistoryState CaptureEditHistoryState() const;
+    void RestoreEditHistoryState(const EditHistoryState& state) noexcept;
+    void RecordUndoStateForEditableEdit();
+    [[nodiscard]] bool TryUndoEditableEdit() noexcept;
+    [[nodiscard]] bool TryRedoEditableEdit() noexcept;
+    void RefreshEditableTextAfterMutation(WindowHost& host);
     void OpenPopup(WindowHost& host) noexcept;
     void ClosePopup() noexcept;
     bool RequestPopup(WindowHost& host);
@@ -1967,6 +2147,8 @@ private:
     std::function<void()> _onSubmitted;
     std::function<bool()> _onPopupRequested;
     std::wstring _typeaheadBuffer;
+    std::vector<EditHistoryState> _undoHistory;
+    std::vector<EditHistoryState> _redoHistory;
     std::optional<size_t> _selectedIndex;
     std::optional<size_t> _activePopupIndex;
     std::optional<size_t> _hoveredPopupIndex;
@@ -1992,6 +2174,7 @@ private:
     bool _autoOpenOnTextInput          = false;
     bool _open                         = false;
     size_t _maxVisibleItemsOverride    = 0u;
+    static constexpr size_t kMaxEditHistoryEntries = 64u;
 };
 
 class StatusStrip final : public Control
@@ -2785,7 +2968,7 @@ public:
     void SetSmokeOverlayVisible(bool visible) noexcept;
     [[nodiscard]] bool IsSmokeOverlayVisible() const noexcept;
 
-    // Mica/Acrylic backdrop hint — sets DWM system backdrop type on Windows 11 22H2+.
+    // Mica/Acrylic backdrop hint — sets DWM system backdrop type on the supported Windows 11 baseline.
     // Returns true if the backdrop was applied (host HWND exists and API succeeds).
     enum class BackdropType : int
     {
@@ -2810,11 +2993,15 @@ public:
     void SetFocusControl(Control* control) noexcept;
     [[nodiscard]] Control* GetFocusControl() const noexcept;
     [[nodiscard]] bool HandleMnemonic(wchar_t mnemonic) noexcept;
-    void CommitFocusedTextInputBridge(bool notifyChange) noexcept;
-    [[nodiscard]] bool TryReadTextInputBridgeState(const Control* control, TextInputBridgeState& outState) const noexcept;
-    void SyncTextInputBridge(Control* control) noexcept;
-    [[nodiscard]] bool HasActiveTextInputBridge() const noexcept;
-    [[nodiscard]] HWND GetTextInputBridgeHwnd() const noexcept;
+    void SetTextInputBackend(TextInputBackend backend) noexcept;
+    [[nodiscard]] TextInputBackend GetTextInputBackend() const noexcept;
+    [[nodiscard]] bool HasActiveNativeTextInputSession() const noexcept;
+    [[nodiscard]] bool TryReadNativeTextInputState(const Control* control, NativeTextInputState& outState) const noexcept;
+    void CommitFocusedTextInput() noexcept;
+    [[nodiscard]] bool TryReadTextInputState(const Control* control, TextInputState& outState) const noexcept;
+    void SyncTextInput(Control* control) noexcept;
+    [[nodiscard]] bool HasActiveTextInput() const noexcept;
+    [[nodiscard]] HWND GetTextInputHwnd() const noexcept;
     void CaptureMouse(Control* control) noexcept;
     void ReleaseMouseCapture() noexcept;
     [[nodiscard]] HWND GetHwnd() const noexcept;
@@ -2851,6 +3038,7 @@ public:
     [[nodiscard]] uint64_t DebugGetRenderCount() const noexcept;
     [[nodiscard]] uint64_t DebugGetResizeCount() const noexcept;
     [[nodiscard]] uint64_t DebugGetResizeFailureCount() const noexcept;
+    [[nodiscard]] uint64_t DebugGetSwapChainPrepareD2DFlushFailureCount() const noexcept;
     [[nodiscard]] uint64_t DebugGetPresentFailureCount() const noexcept;
     [[nodiscard]] bool DebugHasActiveAnimationSubscription() const noexcept;
     [[nodiscard]] IRawElementProviderFragmentRoot* DebugCreateAccessibilityProvider() const noexcept;
@@ -2860,7 +3048,12 @@ public:
     [[nodiscard]] bool DebugHasD2DContext() const noexcept;
     [[nodiscard]] size_t DebugGetConfiguredTextFormatCount() const noexcept;
     [[nodiscard]] UINT DebugGetModifierState() const noexcept;
-    [[nodiscard]] bool DebugGetNonVisibleTextServiceBridgeFont(LOGFONTW& outLogFont) const noexcept;
+    [[nodiscard]] bool DebugHasActiveNativeTextInputSession() const noexcept;
+    [[nodiscard]] bool DebugHasActiveNativeTextInputTsfDocument() const noexcept;
+    [[nodiscard]] bool DebugGetNativeTextInputState(NativeTextInputState& outState) const noexcept;
+    [[nodiscard]] bool DebugGetNativeTextInputCaretRect(D2D1_RECT_F& outRectDip, RECT& outScreenRectPx) const noexcept;
+    [[nodiscard]] NativeTextInputEventCounters DebugGetNativeTextInputEventCounters() const noexcept;
+    void DebugSetNativeTextInputImePayloadForTest(NativeTextInputImePayload payload);
     void DebugSetForceNullSolidBrushes(bool force) noexcept;
     [[nodiscard]] const Control* DebugHitTestControl(D2D1_POINT_2F pointDip) noexcept;
     [[nodiscard]] WindowHostCursorKind DebugResolveCursorKindForPoint(D2D1_POINT_2F pointDip) noexcept;
@@ -2874,11 +3067,10 @@ public:
     }
     [[nodiscard]] D2D1_RECT_F DebugGetTooltipBoundsDip() const noexcept;
     [[nodiscard]] bool DebugCaptureBitmap(WindowHostBitmapCapture& out) noexcept;
+    [[nodiscard]] ITextStoreACP* DebugCreateNativeTextInputTextStoreForTest() noexcept;
 #endif
 
 private:
-    friend LRESULT CALLBACK TextInputBridgeWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
-
     [[nodiscard]] bool EnsureDeviceIndependentResources() const noexcept;
     [[nodiscard]] bool EnsureDeviceResources() noexcept;
     [[nodiscard]] bool EnsureSizeDependentResources(bool allowHidden = false) noexcept;
@@ -2895,19 +3087,34 @@ private:
     void OnSize(UINT widthPx, UINT heightPx) noexcept;
     void OnSetFocus() noexcept;
     void OnKillFocus(bool clearRetainedFocus) noexcept;
-    [[nodiscard]] bool EnsureTextInputBridge(bool multiline) noexcept;
-    void DestroyTextInputBridge() noexcept;
-    void UpdateTextInputBridgeBounds(Control* control, bool multiline) noexcept;
-    void ActivateTextInputBridge(Control* control) noexcept;
-    void DeactivateTextInputBridge(bool restoreHostFocus) noexcept;
-    void ApplyTextInputBridgeState(const TextInputBridgeState& state) noexcept;
-    [[nodiscard]] std::optional<TextInputBridgeState> ReadTextInputBridgeState() const noexcept;
-    [[nodiscard]] LRESULT HandleTextInputBridgeWindowMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
-    void SyncFocusedControlFromTextInputBridge(bool notifyChange) noexcept;
-    void HandleTextInputBridgeCommand(UINT notifyCode) noexcept;
+    void ActivateTextInput(Control* control) noexcept;
+    void DeactivateTextInput(bool restoreHostFocus) noexcept;
+    void ActivateNativeTextInputSession(Control* control) noexcept;
+    void DeactivateNativeTextInputSession(bool restoreHostFocus) noexcept;
+    void SyncNativeTextInputSession(Control* control) noexcept;
+    [[nodiscard]] bool ActivateNativeTextInputTsf(Control* control) noexcept;
+    void DeactivateNativeTextInputTsf() noexcept;
+    void ApplyNativeTextInputCompositionStateToCache() noexcept;
+    void ClearNativeTextInputCompositionState() noexcept;
+    [[nodiscard]] NativeTextInputImePayload ReadNativeTextInputImePayload(LPARAM compositionFlags) noexcept;
+    void UpdateNativeTextInputImeWindows() noexcept;
+    void UpdateNativeTextInputCaret() noexcept;
+    void DestroyNativeTextInputCaret() noexcept;
+    void RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEventKind kind) noexcept;
+    void RaiseNativeTextInputAccessibilityEvents(const NativeTextInputState& previousState) noexcept;
+    [[nodiscard]] bool TryGetNativeTextInputCaretRects(D2D1_RECT_F& outRectDip, RECT& outClientRectPx, RECT& outScreenRectPx) const noexcept;
     void PruneStaleInteractionState() noexcept;
     void ResetRootInteractionState() noexcept;
     [[nodiscard]] bool HandleTabNavigation(bool reverse) noexcept;
+    [[nodiscard]] bool RouteFocusedCharInput(wchar_t ch, UINT modifiers, const wchar_t* perfDetail) noexcept;
+    void RecordNativeTextInputKeyToStateMetric(std::chrono::steady_clock::time_point inputStartedAt,
+                                               const wchar_t* detail,
+                                               uint64_t value0,
+                                               uint64_t value1,
+                                               bool armPaintMetric = true) noexcept;
+    void EmitPendingNativeTextInputPaintMetric(HRESULT hr) noexcept;
+    [[nodiscard]] bool HandleNativeTextInputEditMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& outResult) noexcept;
+    [[nodiscard]] bool HandleNativeTextInputImeMessage(UINT msg, WPARAM wp, LPARAM lp) noexcept;
     [[nodiscard]] Control* HitTestControl(D2D1_POINT_2F pointDip) noexcept;
     [[nodiscard]] WindowHostCursorKind ResolveCursorKindForPoint(D2D1_POINT_2F pointDip) noexcept;
     [[nodiscard]] HCURSOR ResolveCursorHandle(WindowHostCursorKind cursorKind) const noexcept;
@@ -2921,6 +3128,40 @@ private:
     [[nodiscard]] UINT GetModifierState() const noexcept;
     static bool AnimationTickThunk(void* context, uint64_t nowTickMs) noexcept;
     bool OnAnimationTick(uint64_t nowTickMs) noexcept;
+
+    struct NativeSystemCaret final
+    {
+        NativeSystemCaret() noexcept = default;
+        ~NativeSystemCaret() noexcept;
+        NativeSystemCaret(const NativeSystemCaret&)            = delete;
+        NativeSystemCaret& operator=(const NativeSystemCaret&) = delete;
+        NativeSystemCaret(NativeSystemCaret&&)                 = delete;
+        NativeSystemCaret& operator=(NativeSystemCaret&&)      = delete;
+
+        [[nodiscard]] bool Create(HWND ownerHwnd, int widthPx, int heightPx) noexcept;
+        [[nodiscard]] bool Show() noexcept;
+        void Hide() noexcept;
+        void Reset() noexcept;
+        [[nodiscard]] bool IsCreated() const noexcept
+        {
+            return _created;
+        }
+        [[nodiscard]] int WidthPx() const noexcept
+        {
+            return _widthPx;
+        }
+        [[nodiscard]] int HeightPx() const noexcept
+        {
+            return _heightPx;
+        }
+
+    private:
+        HWND _ownerHwnd = nullptr;
+        bool _created   = false;
+        bool _visible   = false;
+        int _widthPx    = 0;
+        int _heightPx   = 0;
+    };
 
     HWND _hwnd            = nullptr;
     UINT _dpi             = USER_DEFAULT_SCREEN_DPI;
@@ -2966,19 +3207,40 @@ private:
     // Keep test-only storage unconditional so WindowHost layout stays stable
     // even when ENABLE_TESTS differs between a DxUi producer and consumer.
     bool _debugForceNullSolidBrushes = false;
-    wil::unique_hmodule _textInputBridgeModule;
-    wil::unique_hwnd _textInputBridgeEdit;
-    wil::unique_hfont _nonVisibleTextServiceBridgeFont;
-    UINT _nonVisibleTextServiceBridgeFontDpi = 0u;
-    bool _textInputBridgeMultiline           = false;
-    TextInputBridgeState _textInputBridgeStateCache;
-    bool _textInputBridgeStateCacheValid          = false;
-    bool _textInputBridgeSelectionLogicalNewlines = true;
-    bool _textInputBridgeImeComposing             = false;
-    bool _textInputBridgeImeHasVisibleText        = false;
-    std::optional<TextInputBridgeState> _textInputBridgeImeBaseState;
-    std::vector<TextInputBridgeState> _textInputBridgeUndoHistory;
-    std::vector<TextInputBridgeState> _textInputBridgeRedoHistory;
+    TextInputBackend _textInputBackend       = TextInputBackend::Native;
+    Control* _nativeTextInputControl = nullptr;
+    NativeTextInputState _nativeTextInputStateCache;
+    bool _nativeTextInputStateCacheValid = false;
+    NativeTextInputEventCounters _nativeTextInputEventCounters;
+    wil::com_ptr_nothrow<IUnknown> _nativeTextInputTsfThreadMgr;
+    wil::com_ptr_nothrow<IUnknown> _nativeTextInputTsfDocumentMgr;
+    wil::com_ptr_nothrow<IUnknown> _nativeTextInputTsfContext;
+    wil::com_ptr_nothrow<IUnknown> _nativeTextInputTsfTextStore;
+    DWORD _nativeTextInputTsfClientId      = 0u;
+    bool _nativeTextInputTsfActive         = false;
+    bool _nativeTextInputTsfComInitialized = false;
+    bool _nativeTextInputImeComposing = false;
+    std::optional<size_t> _nativeTextInputCompositionStartIndex;
+    std::optional<size_t> _nativeTextInputCompositionEndIndex;
+    std::optional<size_t> _nativeTextInputConversionTargetStartIndex;
+    std::optional<size_t> _nativeTextInputConversionTargetEndIndex;
+    std::optional<size_t> _nativeTextInputCompositionCursorIndex;
+    std::vector<size_t> _nativeTextInputCompositionClauseBoundaries;
+    std::optional<TextInputState> _nativeTextInputImeBaseState;
+    std::optional<NativeTextInputImePayload> _debugNativeTextInputImePayload;
+    NativeSystemCaret _nativeTextInputCaret;
+    bool _nativeTextInputCaretRectValid = false;
+    D2D1_RECT_F _nativeTextInputCaretRectDip = D2D1::RectF();
+    RECT _nativeTextInputCaretClientRectPx{};
+    RECT _nativeTextInputCaretScreenRectPx{};
+    struct PendingNativeTextInputPaintMetric final
+    {
+        std::chrono::steady_clock::time_point inputStartedAt{};
+        const wchar_t* detail = L"";
+        uint64_t value0       = 0u;
+        uint64_t value1       = 0u;
+    };
+    std::optional<PendingNativeTextInputPaintMetric> _pendingNativeTextInputPaintMetric;
 
     std::unique_ptr<Control> _root;
     TooltipLayer _tooltipLayer;
@@ -2986,6 +3248,7 @@ private:
     mutable uint64_t _debugRenderCount         = 0u;
     mutable uint64_t _debugResizeCount         = 0u;
     mutable uint64_t _debugResizeFailureCount  = 0u;
+    mutable uint64_t _debugSwapChainPrepareD2DFlushFailureCount = 0u;
     mutable uint64_t _debugPresentFailureCount = 0u;
     // Non-owning observers into the current retained control tree. Ownership stays with
     // `_root` / `Panel::_children`, so these pointers must be cleared or ignored before
@@ -3003,8 +3266,6 @@ private:
     Control* _focusedControl         = nullptr;
     Button* _defaultButton           = nullptr;
     Button* _cancelButton            = nullptr;
-    Control* _textInputBridgeControl = nullptr;
-    bool _textInputBridgeSyncing     = false;
     PointerDoubleClickCandidate _pendingPointerDoubleClick;
     std::function<bool(bool reverse)> _onTabBoundary;
     std::function<bool()> _onEscape;

@@ -5,17 +5,18 @@
 This document provides a comprehensive inventory of every declared test case across all
 RedSalamander test suites. It serves as the authoritative reference for test coverage.
 
-Current runner-native inventory as of 2026-05-15:
+Current runner-native inventory as of 2026-05-18:
 
-- Commands: 617 listed cases.
+- Commands: 633 listed cases.
 - CompareDirectories: 149 listed cases.
 - FileOperations: 75 listed phases: 73 active ordered phases, plus setup and
   cleanup.
-- PerformanceTests2: 11 CppUnitTest `TEST_METHOD`s.
+- PerformanceTests2: 12 CppUnitTest `TEST_METHOD`s.
+- FileSystemCurlTests: 8 standalone helper cases.
 - MonitorTest: 3 ETW burst scenarios plus 3 fast guards
   (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
   `--document-model-selftest`).
-- Tooling scripts: 74 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
+- Tooling scripts: 82 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
   synthetic vcpkg merge cases.
 
 `RedSalamander.exe --selftest-list-cases` emits the authoritative in-product
@@ -26,7 +27,7 @@ equivalent to runner-listed cases.
 
 Current source-derived fallback counts:
 
-- Commands: 598 static `SelfTest::RunCase` call-site registrations.
+- Commands: 604 static `SelfTest::RunCase` call-site registrations.
 - CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
 - FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
 
@@ -62,7 +63,7 @@ Current test-review evidence:
 - `.build/logs/msbuild-20260510_180124_816.log` — Debug x64 `DxUiTests` build
   after the repeated `Ctrl+Backspace` path-editing regression was added; build
   wrapper diagnostics: 0 warnings, 0 errors.
-- `.build/x64/Debug/DxUiTests.exe TextInputBridge` on 2026-05-10 — passed after
+- `.build/x64/Debug/DxUiTests.exe TextInputBridge` on 2026-05-10 — historical pre-retirement pass after
   fixing repeated Ctrl+Backspace path segment deletion and translated delete
   character suppression in the DxUi text bridge.
 - `.build/logs/msbuild-20260510_180753_126.log` — Debug x64 `RedConfigure`
@@ -292,7 +293,7 @@ FileOperations remaining gaps:
 Standalone and DxUi coverage notes:
 
 - DxUiTests already covers typeahead, scrollbars, single-line editing,
-  TextField bridge routing, ComboBox popup scrolling/hover, Tree
+  native TextField routing, ComboBox popup scrolling/hover, Tree
   selection/context/toggle, reduced motion, and UIA provider patterns. Future
   additions should target controls with only visual-baseline coverage.
 - MonitorTest is intentionally narrow: ETW TraceLogging emit/receive,
@@ -303,10 +304,10 @@ Standalone and DxUi coverage notes:
 - LocalizationTests covers embedded fallback, satellite string/menu/dialog
   lookup, localized dialog templates, invalid-culture fallback, and persisted
   `ui.language` roundtrips. It does not enumerate every shipped satellite.
-- PerformanceTests2 covers 7 CppUnitTest cases focused on icon enumeration,
-  duplicate-path refresh/compact-mode hit testing, splash close guard, and
-  empty plugin-manager discovery; it is not a general rendering/search/Compare
-  throughput suite.
+- PerformanceTests2 covers 12 CppUnitTest cases focused on icon enumeration,
+  duplicate-path refresh/compact-mode hit testing, FolderView column layout and
+  sort threshold policy, splash close guard, and empty plugin-manager discovery;
+  it is not a general rendering/search/Compare throughput suite.
 
 Self-test metric-family map:
 
@@ -332,6 +333,23 @@ Self-test metric-family map:
 
 Recent UI-retirement evidence:
 
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_195623_555.log` — `DxUiTests` Debug build after deleting the remaining production `TextInputBridge` surface from `Common/DxUi`, removing the retired bridge window messages and audit allowlist rows, and trimming bridge-suite-only test helpers; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput`, `MultilineText`, `ReadOnly`, `TextField`, `ComboBox`, `Accessibility`, and `WindowHost` suites exited 0 with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_after_production_bridge_removal_20260517_1958.jsonl`, `dxui_multiline_after_production_bridge_removal_20260517_1958.jsonl`, `dxui_readonly_after_production_bridge_removal_20260517_1958.jsonl`, `dxui_textfield_after_production_bridge_removal_20260517_1958.jsonl`, `dxui_combobox_after_production_bridge_removal_20260517_1958.jsonl`, `dxui_accessibility_after_production_bridge_removal_20260517_1958.jsonl`, and `dxui_windowhost_after_production_bridge_removal_20260517_1958.jsonl`, leaving 628 registered DxUi component tests and no production bridge code. `Audit-RemainingWin32UiDependencies.ps1 -FailOnFindings`, `Audit-VisibleNativeSurfaces.ps1`, `Audit-ComctlReportSurfaces.ps1`, and the production bridge-name audit all exited 0; `git diff --check` exited 0 with only LF/CRLF conversion warnings.
+- `Specs/TestRuns/4cb089111a23/Audit/2026-05-17_2005_dxui_native_textinput_bridge_removed_final_recheck/` — refreshed broad/visible/comctl audit bundle after production bridge deletion and authoritative spec cleanup; `Audit-RemainingWin32UiDependencies.ps1 -FailOnFindings`, `Audit-VisibleNativeSurfaces.ps1`, and `Audit-ComctlReportSurfaces.ps1` each exited 0 with zero unallowlisted findings.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_194303_147.log` — `DxUiTests` Debug build after deleting the final `TextInputBridge` compatibility suite source, runner registration, and project entry because retained/native semantic coverage now lives in `NativeTextInput`, `MultilineText`, and `ReadOnly`; diagnostics `0 warning(s), 0 error(s)`. Serial replacement suites exited 0 with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_after_textinputbridge_suite_removal_20260517_1943.jsonl`, `Specs/TestRuns/local_scratch/dxui_multiline_after_textinputbridge_suite_removal_20260517_1944.jsonl`, and `Specs/TestRuns/local_scratch/dxui_readonly_after_textinputbridge_suite_removal_20260517_1944.jsonl`, leaving 629 registered DxUi component tests and no runnable `TextInputBridge` suite.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_193902_085.log` — `DxUiTests` Debug build after adding native host-HWND focus-loss session teardown/regain plus multiline/wrapped Return default-button suppression, Tab/Shift+Tab traversal, and Escape cancel routing, then retiring twelve hidden-child `WM_KILLFOCUS` / bridge special-key dialog-flow probes from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 117 bridge compatibility cases and raising `NativeTextInput` to 109 cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_multiline_dialog_bridge_retirement_20260517_1940.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_multiline_dialog_retirement_20260517_1940.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_183645_412.log` — `DxUiTests` Debug build after adding native multiline/wrapped host-HWND character replacement plus Return insertion/replacement state coverage, then retiring twelve hidden-edit `WM_SETTEXT` / `EM_REPLACESEL` / `WM_CHAR` / Return bridge probes from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 129 bridge compatibility cases and raising `NativeTextInput` to 107 cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_multiline_edit_probe_retirement_20260517_1837.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_multiline_edit_probe_retirement_20260517_1837.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_183037_025.log` — `DxUiTests` Debug build after adding native multiline/wrapped IME composition/candidate anchoring for caret moves across logical/visual lines and focused-control moves, then retiring six hidden-edit IMM32 placement variants from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 141 bridge compatibility cases and raising `NativeTextInput` to 106 cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_ime_window_bridge_retirement_20260517_1831.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_ime_window_retirement_20260517_1832.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_182322_471.log` — `DxUiTests` Debug build after adding native single-line/multiline/wrapped IME result-only host-key resume coverage plus result-and-continuing-composition key ownership coverage, then retiring six hidden-bridge IME result-routing variants from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. The first serial `NativeTextInput` attempt with `dxui_native_textinput_ime_result_routing_bridge_retirement_20260517_1822.jsonl` exposed an over-strict test assertion for multiline `WM_KEYDOWN/VK_RETURN` text insertion, and the corrected routing-only assertion then passed. Final serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 147 bridge compatibility cases and raising `NativeTextInput` to 104 cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_ime_result_routing_bridge_retirement_20260517_1823.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_ime_result_routing_retirement_20260517_1824.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_181748_496.log` — `DxUiTests` Debug build after adding native multiline/wrapped multiline IME composition-owned Return/Escape/Tab coverage and retiring three hidden-bridge IME special-key variants from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 153 bridge compatibility cases and raising `NativeTextInput` to 102 cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_ime_special_key_bridge_retirement_20260517_1818.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_ime_special_key_retirement_20260517_1818.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_181403_228.log` — `DxUiTests` Debug build after adding native single-line tab-character suppression plus partial-selection paste state coverage and retiring eight hidden-bridge single-line edit-routing probes from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 156 bridge compatibility cases and raising `NativeTextInput` to 101 cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_singleline_bridge_probe_retirement_20260517_1814.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_singleline_probe_retirement_20260517_1815.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_180757_053.log` — `DxUiTests` Debug build after adding native editable ComboBox exact-match selection, undo/redo, paste, Delete, Ctrl+Delete, Ctrl+A replacement, and path-style Ctrl+Backspace coverage, then retiring four hidden-bridge editable ComboBox duplicate tests from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 164 bridge compatibility cases and raising `NativeTextInput` to 100 cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_editable_combo_bridge_retirement_20260517_1808.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_editable_combo_test_retirement_20260517_1808.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_180329_063.log` — `DxUiTests` Debug build after strengthening native masked retained-text character-input assertions and retiring the two hidden-bridge masked copy/cut and character-input duplicate tests from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 168 bridge compatibility cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_after_masked_bridge_retirement_20260517_1803.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_masked_test_retirement_20260517_1803.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_180026_689.log` — `DxUiTests` Debug build after retiring the two single-line hidden-edit word-selection comparison tests from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 170 bridge compatibility cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_after_word_selection_bridge_retirement_20260517_1800.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_word_selection_test_retirement_20260517_1801.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_175718_278.log` — `DxUiTests` Debug build after moving the multiline/wrapped context-menu anchor assertion onto native host-HWND `VK_APPS` / `Shift+F10` coverage and retiring the four hidden-bridge duplicate context-menu tests from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput` and `TextInputBridge` exited 0, leaving 172 bridge compatibility cases, with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_context_menu_bridge_retirement_20260517_1757.jsonl` and `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_context_menu_test_retirement_20260517_1758.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_175236_429.log` — `DxUiTests` Debug build after retiring four bridge-only hidden-window detail tests from `DxUiTests.TextInputBridge.cpp`; diagnostics `0 warning(s), 0 error(s)`. Serial `TextInputBridge` exited 0 with 176 remaining compatibility cases and perf rows in `Specs/TestRuns/local_scratch/dxui_textinputbridge_after_hidden_detail_test_retirement_20260517_1752.jsonl`.
+- `Z:\src\RedSalamander\.build\logs\msbuild-20260517_174859_672.log` — `DxUiTests` Debug build after the native text-input command-line final recheck; diagnostics `0 warning(s), 0 error(s)`. Serial `NativeTextInput`, `TextField`, and `ComboBox` rechecks exited 0 with perf rows in `Specs/TestRuns/local_scratch/dxui_native_textinput_current_recheck_20260517_1749.jsonl`, `dxui_textfield_current_recheck_20260517_1750.jsonl`, and `dxui_combobox_current_recheck_20260517_1750.jsonl`.
+- `Specs/TestRuns/4cb089111a23/Commands/2026-05-17_174604/` — final focused `cmd_pane_command_line_insertion_and_execute` command selftest after replacing the FolderWindow command-line visible native `STATIC` / `EDIT` controls with a DxUi native-backend `TextField`; launched with `Start-Process -Wait -PassThru`; 1 passed, 0 failed. Green candidate evidence for the same guard is `Specs/TestRuns/4cb089111a23/Commands/2026-05-17_173548/`; red evidence is `Specs/TestRuns/4cb089111a23/Commands/2026-05-17_172957/`, which failed at the new DxUi-host assertion before the migration.
+- `Specs/TestRuns/4cb089111a23/Audit/2026-05-17_1748_dxui_native_textinput_commandline_final_recheck/` — final broad remaining Win32 UI dependency audit after command-line migration and the test-only FolderView synthetic-thumbnail allowlist refresh; `HDC text/selection bridge` 16 total / 16 allowed / 0 unallowed, `HFONT handle` 1 total / 1 allowed / 0 unallowed, `Native visible control creation` 1 total / 1 allowed / 0 unallowed. The same archive includes clean `Audit-VisibleNativeSurfaces.ps1` and `Audit-ComctlReportSurfaces.ps1` outputs.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-29_111643/` — Connection Manager battle-test family after dialog shim retirement; `cmd_connection_manager_window_` passed 25 passed / 0 failed / 0 skipped and archived `perf/perf_metrics.jsonl`.
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-26_012857_remaining_win32_ui_dependency_post_closeout_recheck/` — post-closeout broad HFONT/GDI/native-control audit recheck. Audit perf: 3.446 seconds; zero unallowlisted findings.
 - `Specs/TestRuns/4cb089111a23/DxUiTests/2026-04-26_012857_remaining_win32_ui_dependency_post_closeout_menu/` — post-closeout focused DxUi menu run, exited 0 in 15.373 seconds. Current focused invocation syntax is `.build\x64\Debug\DxUiTests.exe --suite=Menu`.
@@ -363,7 +381,7 @@ Recent UI-retirement evidence:
 - `Specs/TestRuns/4cb089111a23/Audit/2026-04-25_224400_remaining_win32_ui_bridge_allowlist_uimetrics_viewerweb_candidate/` — broad HFONT/GDI/native-control audit after hidden text bridge allowlist, `Win32UiHelpers` deletion/`UiMetrics` split, dead HFONT measurement bridge removal, dialog base-`LOGFONT` cloning removal, and ViewerWeb DirectWrite status drawing. Audit perf: 3.331 seconds.
 - `.build/logs/msbuild-20260425_222825_786.log` — Debug build after the helper split/native-font bridge cleanup.
 - `.build/logs/msbuild-20260425_224509_797.log` — Release build after the helper split/native-font bridge cleanup.
-- `.build\x64\Debug\DxUiTests.exe --suite=TextInputBridge` — focused hidden text-service bridge regression, exited 0.
+- `.build\x64\Debug\DxUiTests.exe --suite=TextInputBridge` — historical focused hidden text-service bridge regression before the suite was retired, exited 0.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-25_224155/` — Connection Manager focused family, 13 passed, 0 failed.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-25_224242/` — Plugin Configuration focused family, 10 passed, 0 failed.
 - `Specs/TestRuns/4cb089111a23/Commands/2026-04-25_224312/`, `2026-04-25_224320/`, `2026-04-25_224331/`, and `2026-04-25_224338/` — Preferences shell/page-host/general/panes focused guards.
@@ -480,7 +498,7 @@ window using UIAutomation and direct Win32 message simulation.
 | `cmd_connection_manager_window_enter_from_dx_input_routes_default_connect` | Enter from DxUi input routes the default Connect command |
 | `cmd_connection_manager_window_applies_selected_tool_backdrop` | Shared tool-window backdrop application |
 | `cmd_connection_manager_window_live_dx_interaction` | DxUi interaction |
-| `cmd_connection_manager_window_masked_secret_accepts_bridge_chars` | Masked secret field accepts WM_CHAR through the DxUi bridge |
+| `cmd_connection_manager_window_masked_secret_accepts_native_chars` | Masked secret field accepts host `WM_CHAR` through the native DxUi text input |
 | `cmd_connection_manager_window_textfield_doubleclick_selects_word` | Real Connection Manager text field double-click selects a word |
 | `cmd_connection_manager_window_long_run_list_scrolling_stays_bounded` | Scroll bounds |
 | `cmd_connection_manager_window_long_run_open_close_stays_stable` | Stability |
@@ -699,6 +717,10 @@ Key coverage patterns per page:
 | `folderView_thumbnail_return_to_normal_icon_size` | Returning from thumbnail mode to normal view uses the normal shell image-list size instead of reusing thumbnail-mode jumbo icon bitmaps |
 | `folderView_thumbnail_sort_popup_slider` | Pane bottom-right sort popup exposes the thumbnail size slider row |
 | `folderView_perf_large_folder_baseline` | Large folder performance baseline |
+| `folderView_perf_sort_toggle_stress` | 5,000-entry adversarial folder repeatedly toggles Name, Extension, Time, Size, and None sort modes, records per-sort durations, guards inactive quick search with `incrementalSearchEffectUpdates == 0`, and emits `folder.sort_toggle_us`; this is a metric recorder, not a wall-clock threshold gate |
+| `folderView_perf_scroll_render_stress` | 1,600-item normal-mode folder drives real horizontal and vertical scroll messages across Brief, Detailed, and Extra Detailed modes, recording visible work and `folder.scroll_*` metrics |
+| `folderView_perf_directory_change_storm` | Pane-visible local folder receives deterministic create/rename/delete/directory churn, then verifies final visible count, focus stability, and directory-change storm metrics |
+| `folderView_perf_iconcache_contention` | Dual-pane icon-heavy folders with repeated unique extensions drive IconCache lock diagnostics and archive lock wait/hold evidence before any contention optimization |
 | `file_action_resolution_v16_action_ids_are_case_insensitive` | File-action resolver matches action IDs case-insensitively, preserves action-definition casing, and collapses case-only references |
 | `help_menu_links_external_documentation` | Help menu external documentation command placement and registry binding |
 | `icon_bitmap_alpha_normalization` | Icon alpha normalization including premultiply and AND-mask transparency semantics |
@@ -716,7 +738,7 @@ Key coverage patterns per page:
 | `settings_file_operations_precalc_roundtrip` | Pre-calc settings roundtrip |
 | `settings_file_system_plugin_roundtrip` | Plugin settings roundtrip |
 | `settings_hot_reload_*` | (4 cases) Hot reload merge/suppression |
-| `settings_shortcuts_*` | (2 cases) Shortcut settings roundtrip |
+| `settings_shortcuts_*` | (4 cases) Shortcut settings roundtrip, malformed-section rejection, and explicit unassigned sentinel persistence |
 | `settings_store_search_roundtrip` | Search settings roundtrip |
 | `pane_view_options_toggle_preview_pane_tabs_and_selection` | Preview pane tab-strip pointer clicks switch Folder/Preview, selected/hovered Preview close-glyph visibility, delayed Folder tab path tooltip, Preview close glyph closes preview mode, old embedded text content is cleared before rendering the next focused item, and source-pane focus is preserved |
 | `pane_view_options_preview_uses_configured_embedded_viewer_and_preserves_focus` | Preview uses configured embedded viewers, keeps the same embedded instance and HWND across same-plugin image/media focus changes including `.mp4` to `.m4a`, keeps media-to-media and media-to-image switches responsive while VLC stop/release is slow, verifies VLC child-window parenting after video-to-video and video-to-audio preview navigation, forwards wheel seek from VLC child surfaces, preserves source-pane focus, and persists VLC preview volume/mute state |
@@ -727,6 +749,7 @@ Key coverage patterns per page:
 | `embedded_viewer_context_menus_expose_menu_actions` | Embedded menu-bearing viewers load localized menu resources for Preview right-click context menus, route selected commands through existing handlers, omit standalone-only actions and shortcut labels, trim empty groups, and do not rely on a visible embedded menubar |
 | `embedded_vlc_audio_preview_stays_inside_preview` | Embedded ViewerVLC audio previews apply audio visualization as an audio-file media option, not a global VLC instance argument, so video previews do not get an extra visualizer vout and video-to-audio Preview transitions keep stable embedded playback |
 | `shortcut_defaults_mapping` | Default shortcut mappings |
+| `shortcut_defaults_restore_missing_*` | Startup restoration of missing default shortcut chords while preserving explicit unassigned sentinels |
 | `shortcut_functionbar_dispatch_refresh` | Function bar dispatch and refresh using command short labels |
 
 ---
@@ -1016,7 +1039,7 @@ These cases skip when connection profiles or secrets are absent.
 |-------------------|-------|---------------|
 | `FolderIconEnumerationPerfTest` | 1 | Icon enumeration caching under load |
 | `FolderIconEnumerationDuplicatePathPerfTest` | 1 | Duplicate path icon edge cases |
-| `FolderViewColumnLayoutTests` | 4 | Pure variable-column width calculation, detailed/metadata line locality, and first-column scroll-stop semantics |
+| `FolderViewColumnLayoutTests` | 5 | Pure variable-column width calculation, detailed/metadata line locality, first-column scroll-stop/thumb-release snapping, leading-gutter hit-test semantics, and FolderView sort parallel-threshold policy |
 | `FolderViewRefreshDuplicatePathPerfTest` | 2 | FolderView refresh with duplicate paths and compact-mode hit testing |
 | `PerformanceTests2.cpp` | 3 | Splash close guard and empty plugin-manager discovery failures |
 
@@ -1030,6 +1053,10 @@ fail fast via `Require(...)->std::exit(1)`. ViewerPETests,
 ViewerSqliteTests, MonitorTest, and LocalizationTests use local success
 aggregation. Adding true per-case machine-readable reporting requires a named
 case registry/common reporter contract for these harnesses.
+Run HWND focus-sensitive DxUi suites such as `NativeTextInput` serially rather
+than as parallel foreground-window peers when collecting closeout evidence;
+they create real test windows and can legitimately affect process/global
+Win32 focus.
 
 `Tools\Run-AllTests.ps1 -Suite Full` must preserve stdout/stderr for standalone
 EXE and CppUnitTest entries through per-suite `*.output.log` files and
@@ -1040,9 +1067,45 @@ while the six-cycle `TestViewerShellComboHostsLongRunOpenCloseStayStable`
 stress entry has its own 600-second outer cap so the parent harness does not
 kill valid nested churn before the per-child checks can report their result.
 
+Current DxUi native text-input coverage includes UIA `TextUnit_Line` endpoint
+and selected-range movement over wrapped multiline `TextField` visual lines,
+derived from native caret geometry instead of logical newlines alone.
+It also covers deterministic native IME `GCS_CURSORPOS` and `GCS_COMPCLAUSE`
+diagnostics, mapping cursor and clause offsets to absolute retained-text indexes.
+Multiline/wrapped native IME payload coverage now includes a live preview followed
+by `GCS_RESULTSTR`, proving the result replaces the original composition anchor
+instead of deleting preview-length text from the preserved base state.
+UIA `TextPattern` range geometry also covers multiline mixed-BiDi selected
+ranges, comparing provider rectangles with the retained DirectWrite
+`HitTestTextRange` geometry. Single-line mixed-BiDi selected ranges now use the
+same retained DirectWrite range-rectangle hook instead of a text-viewport
+fallback.
+UIA Text/TextEdit event coverage includes deterministic counters for native
+retained text changes, retained selection changes, IME composition text changes,
+retained caret moves, and IME conversion-target changes while the production
+path raises the matching UI Automation provider events, including active text
+position events with a collapsed caret range.
+Native TSF activation coverage verifies that focusing a native `TextField`
+activates a TSF thread manager/document manager/context over the focused
+`ITextStoreACP`, keeps it alive while text focus remains, and releases it when
+focus leaves.
+Native TSF composition-owner coverage verifies the text store exposes
+`ITfContextOwnerCompositionSink`, accepts composition start callbacks, allows
+composition, and accepts update/end callbacks.
+Native TSF ACP2 coverage verifies the same retained native text store exposes
+`ITextStoreACP2` and answers ACP2 text, selection, screen extent, text extent,
+and point-to-ACP queries while under a TSF read lock.
+Native TSF external-change soak coverage verifies repeated retained emoji text
+changes emit one bounded sink notification set per observed change, even when
+the sink requests a synchronous read lock from the text-change callback.
+
 | Project | Cases | Coverage Area |
 |---------|-------|---------------|
-| **DxUiTests** | ~50+ | DxUi color parsing, theme rendering, control creation, HSL/RGB conversion, submenu cascade hover timing, single-line text selection clipping, selected TextField emoji color-font rendering, text-input bridge keyboard forwarding, FolderView incremental-search helper behavior, inactive-pane visual-state helpers, and empty-folder placeholder layout metrics |
+| **DxUiTests** | ~50+ | DxUi color parsing, theme rendering, control creation, HSL/RGB conversion, submenu cascade hover timing, single-line text selection clipping, compact TextField density default vertical-padding coverage with explicit-padding override semantics, native RTL/mixed-BiDi selection clipping outside visible clear/reveal trailing buttons, selected TextField emoji color-font rendering, native TextField selected/unselected/multiline/mixed-BiDi and editable ComboBox emoji color-font rendering without a hidden bridge child plus color-glyph pixel-count perf rows, native masked emoji color-font suppression and unmask restore, TextField/native extended emoji text-element deletion and Shift+Arrow selection for ZWJ sequences, variation selectors, skin-tone modifiers, and regional-indicator flags, native emoji copy/cut/paste selection replacement, clipboard round-trip, and undo/redo coverage for grinning face, woman technologist, rainbow flag, skin-tone modifier, and regional-indicator flag text elements, native pointer hit-test snapping over extended emoji text elements for TextField and editable ComboBox, native masked exact-policy one-dot-per-text-element state for extended emoji, native concealed-policy privacy display ranges with same-bucket edit stability plus full-reset/refocus epoch regeneration, hidden concealed pointer end-snap plus keyboard edit/paste/undo/redo coverage, secret render/display-dot/reveal-toggle perf rows, native masked reveal-button pointer and keyboard press-and-hold peek without clearing the secret, keyboard release/blur remask, Tab traversal through the reveal affordance, reveal-button UIA Button/Invoke provider coverage with masked value/text non-disclosure after Invoke, explicit `PasswordRevealMode::Hidden` no-affordance coverage, and explicit `PasswordRevealMode::Visible` persistent plaintext/copy coverage across blur/read-only/disabled transitions, native host text-input keyboard routing, native text-input backend focus/session/caret scaffolding, backend-neutral `SupportsTextInput()` consumer coverage for `TextField` and editable `ComboBox`, native editable-combo session/typing coverage without a hidden bridge child, native editable ComboBox Ctrl+A/C/X/V/Z/Y, Shift+Insert, Shift+Delete, normalized paste, Alt+Down popup-open, Escape popup-close, retained selection, and native-session plus backend-neutral `TextInputState` sync coverage, native inherited flow-direction session state and focused inherited-flow refresh, shared single-line DirectWrite reading-direction-aware visible layout/caret/hit-test/selection-paint plumbing for `TextField` and editable `ComboBox` plus TSF point/extents and UIA RangeFromPoint fallback with `dxui.textinput.bidi_hit_test_us` / `dxui.textinput.bidi_caret_rect_us` perf rows, native key-to-state and key-to-paint perf rows from a deterministic typed-and-rendered native TextField scenario, native edit-transaction and undo-depth perf rows for direct edits, undo, and redo, native no-op delete transaction suppression plus once-per-mutation text-change notifications, native pointer caret-placement state sync, native host-HWND single-line double-click, synthesized repeated-click word selection, third-click select-all, drag-selection replacement over punctuation-delimited text, mixed-BiDi drag selection across Latin/Hebrew script boundaries in both LTR and RTL visual directions with logical UTF-16 clipboard order, native mixed-BiDi pointer hit-test matrix coverage for pixel-rounded leading/middle/trailing DirectWrite visual spans in both LTR and RTL flow directions, native BiDi scenario matrix coverage for pure LTR, pure RTL, Arabic plus Latin digits, surrogate pairs inside RTL text, and path-like RTL host text, native BiDi keyboard logical-boundary coverage for Home/End, Ctrl+End, Shift+Home/End, logical Left/Right, Backspace, and Delete in an RTL host, and native mixed-BiDi edit transaction coverage for logical-order copy/cut/paste, undo/redo selection restoration, Ctrl+Backspace, and Ctrl+Delete around mixed-script word/separator boundaries, native surrogate-pair and extended emoji backspace/delete state sync, native Ctrl+Backspace/Ctrl+Delete word-deletion state sync, native root-reset teardown, native focused-field bounds-change caret refresh, native Tab/default/cancel/context-menu/WM_SYSCHAR routing including attached logical/wrapped multiline `VK_APPS` and `Shift+F10` context-menu keys through the host HWND without a hidden bridge child, native IME start/end composition-state lifecycle, no-payload IME suppression without active composition, read-only IME composition suppression, composition-over-selection range tracking, composition-owned Return/Escape/Tab routing, NavigationView edit-suggest active-composition Down-arrow ownership, host-owned IMM32 composition/candidate window placement at the native caret, moved-field, multiline/wrapped caret-line and focused-control move anchoring, editable ComboBox move, programmatic `TextField` and editable `ComboBox` caret movement, focused `TextField` padding-change and editable `ComboBox` density-change reanchoring, multiline-scroll, and DPI IME reanchoring, native IME result commit, active composition preview with retained composition/conversion-target underline paint geometry for `TextField` and editable `ComboBox`, preview-then-result commit against the original multiline/wrapped IME base anchor, cancel restore, masked UIA `IsPassword`, ValuePattern, and TextPattern non-disclosure, explicit UIA HelpText exposure from retained controls, UIA TextPattern/TextEditPattern document/selection ranges, TextRange clone/endpoint comparison, RangeFromPoint leading-edge caret mapping plus multiline native hit-test mapping, text-element-aware character-unit endpoint/range movement over ZWJ emoji clusters, word-unit endpoint/collapsed/noncollapsed range movement, logical line endpoint/selected-range movement for newline-delimited multiline `TextField` content, multiline TextField non-exposure of ValuePattern, host-thread-dispatched TextField/editable ComboBox range `Select()`, and non-empty selected-range bounding rectangles plus simple LTR same-visual-line, newline-delimited multiline caret-geometry, wrapped multiline visual-line, and single-line plus multiline mixed-BiDi DirectWrite selected-range rectangles for `TextField`, UIA TextPattern/TextEditPattern document ranges plus RangeFromPoint and retained selection for editable `ComboBox`, `dxui.uia.text_range_us` perf rows, native IME TextEdit active-composition/conversion-target ranges, direct native TSF `ITextStoreACP` / `ITextStoreACP2` lock/text/end-ACP/selection/basic geometry/point-to-ACP/mutation/mixed-BiDi text-viewport point/extents/same-line and wrapped multiline text extent/multiline and wrapped point-to-ACP mapping/SetText replacement/query-only insert metadata/layout-unavailable/store-originated and retained-external sink notification plus UnadviseSink identity, read-write edit-transaction, and reentrant-lock rejection coverage and logical UTF-16 emoji range selection/replacement for focused `TextField`, direct native TSF retained selection and insert-at-selection mutation coverage for focused editable `ComboBox`, native single-line and multiline clipboard/undo routing, native host edit-message routing including no-selection `WM_CLEAR`, native masked-hidden clipboard suppression, native masked-revealed copy/cut mutation plus remask on blur/read-only/disable, before Escape cancel, on window deactivation, and on reveal-button capture loss, native read-only mutation suppression, NavigationView native DxUi host-backed address/full-path edit routing without a bridge subclass, NavigationView invalid-path retained HelpText validation feedback, FolderView incremental-search helper behavior, inactive-pane visual-state helpers, and empty-folder placeholder layout metrics |
+| **DxUiTests / NativeTextInput** | 114 | Includes native `TextField` and editable `ComboBox` active IME composition/conversion-target inline underline paint geometry derived from retained range rectangles, programmatic retained caret movement reanchoring active IMM32 composition/candidate forms, focused `TextField` padding-change and editable `ComboBox` density-change reanchoring of active IMM32 composition/candidate forms, focused read-only and masked state cache refresh while a native session is active, editable `ComboBox` active IME composition/candidate reanchoring after focused bounds changes without creating a hidden bridge child, native multiline/wrapped multiline IME composition/candidate anchoring across logical/visual caret lines and focused-control bounds changes on the host HWND, native host-HWND focus-loss native-session teardown/regain while retaining logical text focus, native multiline/wrapped Return default-button suppression plus Tab/Shift+Tab traversal and Escape cancel routing, native multiline/wrapped host-HWND character and Return replacement state sync, editable `ComboBox` exact-match selection plus delete/word-delete command sync coverage on the native host HWND, native single-line tab-character suppression plus partial-selection paste state sync, native Win32 edit-message protocol coverage for `WM_GETTEXT`, `WM_SETTEXT`, `EM_GETSEL`, `EM_SETSEL`, and `EM_REPLACESEL`, native multiline/wrapped multiline IME composition-owned Return/Escape/Tab routing, modified navigation-key routing during active IME composition, host/app deactivation teardown of active IME composition, native IME preview/result commit followed by `WM_IME_ENDCOMPOSITION`, and native IME result-only versus continuing-composition host-key routing coverage. |
+| **FileSystemCurlTests** | 8 | IMAP leaf naming/UID parsing, RFC2047 subject decoding, mailbox `STATUS` parsing, single-message Properties command-count model, listing summary repair batching, and bounded per-listing repair fetch budget coverage. |
+| **DxUiTests / Accessibility** | 27 | Includes editable `ComboBox` single-line mixed-BiDi DirectWrite selected-range rectangle coverage through UIA `TextPattern::GetSelection()` / `TextRange::GetBoundingRectangles()`, preserving logical UTF-16 selected text while comparing screen rectangles against retained `ComboBox::TryGetTextInputRangeRects(...)` geometry. |
+| **DxUiTests / ReadOnly** | 24 | Focused read-only multiline/wrapped text-field coverage, including attached native/default-host cases with no bridge opt-in host wrapper that prove host `WM_COPY` copies logical and wrapped multiline text, no-selection host `WM_COPY` is a clipboard no-op, no-selection host `WM_CUT`/`WM_CLEAR` leave clipboard/text/caret unchanged, copy shortcuts preserve full selection, no-selection copy/cut shortcuts leave clipboard/text/caret unchanged, undo/redo no-ops preserve full selection, Ctrl+Backspace/Ctrl+Delete no-ops keep native caret state stable, Ctrl+Arrow word navigation syncs native caret state, and `WM_CUT`, `WM_PASTE`, `WM_CLEAR`, and `WM_CHAR` are suppressed without creating a hidden bridge child. |
 | **LocalizationTests** | ~5 | Resource owner registration, satellite string/menu/dialog lookup, localized dialog templates with executable-owned custom child classes, fallback to embedded resources, and persisted `ui.language` roundtrips |
 | **ViewerPETests** | ~20+ | PE viewer plugin, image viewer, text viewer including AppTheme-driven parsed diff semantic colors with runtime theme switching, explicit rainbow-mode coverage, and high-contrast coverage, base-background unchanged rows plus dim diff-marker metadata, clickable hidden-context banners in hunks-only diff mode, non-anchor parsed hunk presentation, pane-local side-by-side visual-layout metadata and visible split-row counters for parsed diff viewports, split-row top-visible text snapshot coverage after hunk navigation, parsed hunk count and active-hunk snapshot metadata, next/previous hunk navigation, diff presentation, lazy referenced-file expansion, parsed-document reuse across diff variants, active-section-only unchanged-text hydration with on-demand section jumps, viewport-windowed unchanged-row rehydration on scroll, range-bounded referenced-file reads for viewport-nearby unchanged context, cached reuse when revisiting already hydrated viewport ranges, referenced-file content reuse across expanded layouts, hatched placeholder-gap metadata for unresolved rows, diff section navigation, horizontal scrolling in both parsed diff layouts after wrap is disabled including side-by-side to inline presentation switches, shared viewer combo-host popup expansion/collapse, compact combo chrome, Escape/Tab focus return without closing from chrome, embedded standalone-combo/chrome hiding including ViewerSpace, Image/RAW header-combo inset, and clean idle close behavior across `ViewerPE`, `ViewerWeb`, `ViewerImgRaw`, and `ViewerText`, larger fully buffered diff parsing including promotion beyond the normal text buffer size for both extension-recognized and header-sniffed diffs, raw streamed multi-file section indexing/navigation beyond the fully buffered parse cap, parser-fallback coverage, ViewerSpace window/menu hosting plus Direct2D tooltip overlay width/native-tooltip regression coverage and Escape scan-cancel/idle-close behavior, and VLC viewer |
 | **ViewerSqliteTests** | ~15+ | SQLite engine, query execution, schema inspection, UI rendering, results-grid-first keyboard focus, Tab/Shift+Tab traversal order, and Escape focus-return/posted-close behavior |
@@ -1063,10 +1126,10 @@ kill valid nested churn before the per-child checks can report their result.
 | `Tools\Tests\SanitizedEnvironment.Tests.ps1` | Child process environment normalization |
 | `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` | Source guards for test harness CLI/error handling, case-listing, result-emission, and duplicate-name contracts |
 | `Tools\Tests\TestInventory.Tests.ps1` | Source-derived test inventory manifest, FileOperations phase-order drift guard, and doc-count lint |
-| `Tools\Tests\ViewerChromeSourceContracts.Tests.ps1` | Source/spec guards for shared viewer combo keyboard routing, Escape focus-cancel-close docs, and launcher subsystem split |
+| `Tools\Tests\ViewerChromeSourceContracts.Tests.ps1` | Source/spec guards for shared viewer combo keyboard routing, Escape focus-cancel-close docs, and the single detached-console launcher contract |
 | `Tools\Tests\VcpkgInstallSafety.Tests.ps1` | vcpkg triplet leaf-name validation and staging/install child path containment |
 | `Tools\Tests\Versioning.Tests.ps1` | Local build-number reuse/allocation |
-| `Tools\Tests\WingetValidation.Tests.ps1` | Winget validation warning suppression, failure propagation, portable manifest metadata, Windows-subsystem WinGet launcher plus console companion contracts, and VC runtime ZIP helper coverage |
+| `Tools\Tests\WingetValidation.Tests.ps1` | Winget validation warning suppression, failure propagation, portable manifest metadata, single detached-console WinGet launcher contracts, and VC runtime ZIP helper coverage |
 | `Tests\vcpkg-merge-synthetic-test.ps1` | Fast synthetic vcpkg lock/merge cases |
 | `Tests\vcpkg-merge-lock-validation.ps1` | Manual-only vcpkg install/lock validation; intentionally excluded from PR CI and `Run-AllTests.ps1 -Suite Full` because it mutates `.build` |
 

@@ -6,35 +6,14 @@ LET IT ALONE THERE (HUMAN MANAGED)
 (for human) DON'T FORGET TO DELETE THIS FILE LATER
 
 
-------------------------------------------------------------------------------------------------------
-## video viewer 
-- super long first init need a spinner to wait with a message 
-- need to store last volume used and retore it when reopening the video viewer
 
-------------------------------------------------------------------------------------------------------
-## all messages in ressources must be positional
-{} is forbidden becasue it could be translated in a language with different order and it will be a mess to manage that
-all message must be positional with {0}, {1}, etc ... and the order of the parameter in the code must be the same as the order in the message to avoid confusion and error when translating
-for example instead of
-```text 
-{} is not accessible because {}
-```
-it must be
-```text
-{0} is not accessible because {1}
-```
-Add that in normative specs and Skills and make sure to apply that everywhere in the code and ressources
 
 ------------------------------------------------------------------------------------------------------
 ## password in connection manager is not wolrking 
 you could type what you want nothing happen
 
 
-------------------------------------------------------------------------------------------------------
-## IMAP 
-- display received date time as file time
-- display email size as file size
-- display email subject as file name
+
 
 
 ------------------------------------------------------------------------------------------------------
@@ -66,11 +45,6 @@ Don't need to display Windows hello right after connection manager connect butto
 ## Connection manager
 in navigation bar display emoji in color
 
-
-------------------------------------------------------------------------------------------------------
-## preference dialog
-if settings is dirty pressing esc display a message first to ask user if he want to save changes before closing the dialog box
-if no changes done pressing esc close the dialog box directly without message
 
 
 
@@ -200,415 +174,6 @@ review all code using IHost to use these new methods instead of doing the same c
 ## cmd/pane/windowMenu
 ## cmd/pane/zoomPanel
 
--------------------------------------------------------------------------------------------------------
-# PERFORMANCE review FolderView
-# RedSalamander Performance Optimization Plan
-
-**Date:** January 13, 2026
-**Status:** Pending Implementation
-**Overall Assessment:** The codebase demonstrates excellent performance practices. This plan identifies targeted optimizations for further improvement.
-
----
-
-## Executive Summary
-
-This comprehensive audit identifies **14 performance optimization opportunities** across memory, CPU, graphics, and I/O. The codebase already implements many best practices including RAII, move semantics, reader-writer locks, and container pre-allocation.
-
-| Severity | Count | Impact |
-|----------|-------|--------|
-| **Critical** | 2 | High - measurable latency/memory impact |
-| **Moderate** | 8 | Medium - noticeable in specific scenarios |
-| **Minor** | 4 | Low - polish and consistency |
-
----
-
-## 1. CRITICAL OPTIMIZATIONS
-
-### 1.1 Pass-by-Value `std::wstring` in Hot Paths
-
-**Problem:** Functions accepting `std::wstring` by value trigger unnecessary heap allocations and copies on every call.
-
-**Affected Locations:**
-
-| File | Function/Parameter | Frequency |
-|------|-------------------|-----------|
-| `RedSalamander/FolderView.ErrorOverlay.cpp` | Error message parameters | Per-error |
-| `RedSalamander/FolderWatcher.cpp` | Path parameters in callbacks | Per-file-change |
-| `Plugins/FileSystem7z/` | Archive path parameters | Per-archive-operation |
-| `RedSalamander/FolderWindow.FileOperations.cpp` | Lambda captures | Per-file-operation |
-
-**Solution:** Convert to `std::wstring_view` for read-only access or `const std::wstring&` when reference lifetime is guaranteed.
-
-```cpp
-// Before (causes copy)
-void ShowError(std::wstring message);
-
-// After (no copy)
-void ShowError(std::wstring_view message);
-```
-
-**Impact:** Reduces heap allocations in file enumeration and error handling paths.
-
-**Priority:** P0 - Implement first
-
----
-
-### 1.2 Per-Character `towlower()` in Hash Function
-
-**Problem:** `DirectoryInfoCache.cpp` contains a case-insensitive hash function that calls `std::towlower()` for every character:
-
-```cpp
-size_t CaseInsensitiveHash(std::wstring_view text) noexcept
-{
-    uint64_t hash = 14695981039346656037ull;
-    for (wchar_t ch : text)
-    {
-        const wchar_t folded = static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
-        // FNV-1a computation...
-    }
-}
-```
-
-**Location:** `RedSalamander/DirectoryInfoCache.cpp`
-
-**Impact:** Called on every cache lookup during folder enumeration. For folders with thousands of files, this creates measurable overhead.
-
-**Solutions (choose one):**
-
-1. **Pre-lowercase paths on storage:** Store lowercased keys, compare against lowercased lookups
-2. **ASCII fast-path:** Most Windows paths are ASCII; use direct `| 0x20` for A-Z before falling back to `towlower`
-3. **Batch lowercasing:** Use `LCMapStringEx` with `LCMAP_LOWERCASE` for entire string at once
-
-```cpp
-// Fast-path optimization example
-inline wchar_t FastLower(wchar_t ch) noexcept
-{
-    // ASCII fast path (A-Z -> a-z)
-    if (ch >= L'A' && ch <= L'Z')
-        return ch | 0x20;
-    // Non-ASCII fallback
-    return (ch < 128) ? ch : static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
-}
-```
-
-**Priority:** P0 - High-frequency hot path
-
----
-
-## 2. MODERATE OPTIMIZATIONS
-
-### 2.1 Vector Pass-by-Value in File Operations
-
-**Problem:** Large vectors copied on function entry for file operations.
-
-**Locations:**
-- `RedSalamander/FolderWindow.FileOperations.cpp` - `std::vector<std::wstring>` parameters
-- `RedSalamander/FolderView.Enumeration.cpp` - Item vectors
-
-**Solution:** Use `const std::vector<T>&` or move semantics with `std::vector<T>&&`.
-
-**Priority:** P1
-
----
-
-### 2.2 `_wcsicmp` in Sorting Comparators
-
-**Problem:** `_wcsicmp` involves locale-aware comparison which is slower than ordinal comparison. Used extensively in file/folder sorting.
-
-**Locations:**
-- `RedSalamander/FolderView.cpp` - Sort comparators
-- `RedSalamander/FolderWindow.FileOperations.cpp` - Path sorting
-- `RedSalamander/DirectoryInfoCache.cpp` - Name comparison
-
-**Current Pattern:**
-```cpp
-return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
-```
-
-**Solution:** Use `CompareStringOrdinal` for ~20-30% faster sorting:
-```cpp
-return CompareStringOrdinal(a.name.c_str(), -1, b.name.c_str(), -1, TRUE) == CSTR_LESS_THAN;
-```
-
-**Priority:** P1 - Visible improvement on large folders (1000+ files)
-
----
-
-### 2.3 Missing `reserve()` Before Loops
-
-**Problem:** Some container population loops don't pre-allocate capacity.
-
-**Locations:**
-- `RedSalamander/FunctionBar.cpp` - `chordToRows` map population
-- Various location with `push_back` in loops
-
-**Solution:** Add `reserve()` calls when size is known or estimable.
-
-**Priority:** P1
-
----
-
-### 2.4 Repeated `CreateTextLayout` in Hot Paths
-
-**Problem:** DirectWrite `CreateTextLayout` is expensive. Some paths recreate layouts unnecessarily.
-
-**Locations:**
-- `RedSalamander/FolderView.Layout.cpp` - Per-item layout during measurement
-- `RedSalamanderMonitor/ColorTextView.Rendering.cpp` - Multiple layout calls
-
-**Current Mitigation:** The codebase has `_layoutValid` flags - ensure they're used consistently.
-
-**Solution:**
-1. Cache layouts more aggressively
-2. Batch layout creation
-3. Reuse layout objects when only text changes
-
-**Priority:** P1
-
----
-
-### 2.5 Direct `std::thread` Creation
-
-**Problem:** Direct `std::thread` creation has overhead. Short-lived tasks should use thread pool.
-
-**Locations:**
-- `RedSalamanderMonitor/Monitor.cpp` - `std::thread` with detached threads
-- Various async operations
-
-**Positive Pattern Already Used:**
-- `RedSalamander/FolderView.Icons.cpp` uses `TrySubmitThreadpoolCallback` correctly
-
-**Solution:** Use Windows Thread Pool APIs or `std::async` with launch policy for short tasks.
-
-**Priority:** P2
-
----
-
-### 2.6 TextLayout Cache Full-Clear
-
-**Problem:** `ColorTextView._layoutCache` is cleared entirely on minor changes instead of using LRU eviction.
-
-**Location:** `RedSalamanderMonitor/ColorTextView.Layout.cpp`
-
-**Solution:** Implement LRU eviction to preserve valid cached slices.
-
-**Priority:** P2
-
----
-
-### 2.7 Lock Scope in Cache Operations
-
-**Problem:** Some cache operations hold locks during external API calls.
-
-**Current State:** Most patterns are correct (lock released before shell operations).
-
-**Verification Needed:** Audit `IconCache.cpp` lock scopes.
-
-**Priority:** P2
-
----
-
-### 2.8 Brush Creation on Theme Change
-
-**Problem:** Multiple `CreateSolidColorBrush` calls during theme change.
-
-**Location:** `RedSalamander/FolderView.Rendering.cpp`
-
-**Current State:** Acceptable since it only happens on theme change, not per-frame.
-
-**Consideration:** Could batch brush creation for consistency.
-
-**Priority:** P3
-
----
-
-## 3. MINOR OPTIMIZATIONS
-
-### 3.1 String Concatenation vs `std::format`
-
-**Problem:** Some legacy code uses `+` concatenation instead of `std::format`.
-
-**Examples:**
-```cpp
-// Current
-std::wstring(state.pluginShortId) + L":/"
-
-// Better
-std::format(L"{}:/", state.pluginShortId)
-```
-
-**Priority:** P3 - Consistency improvement
-
----
-
-### 3.2 Extension Comparison Pattern
-
-**Problem:** Using `_wcsicmp` for known constant extensions.
-
-**Location:** `RedSalamander/FolderView.Enumeration.cpp`
-```cpp
-item.isShortcut = (_wcsicmp(item.extension.c_str(), L".lnk") == 0);
-```
-
-**Solution:** Use direct character comparison or `CompareStringOrdinal`.
-
-**Priority:** P3
-
----
-
-### 3.3 `InvalidateRect(NULL)` Granularity
-
-**Problem:** Full window invalidation where partial would suffice.
-
-**Current State:** Some areas use targeted invalidation (good), others invalidate entire window.
-
-**Solution:** Use calculated dirty rectangles for partial invalidation.
-
-**Priority:** P3
-
----
-
-### 3.4 Locale-Dependent Comparisons
-
-**Problem:** Using locale-aware functions where ordinal comparison would be faster and correct.
-
-**Solution:** Replace with `CompareStringOrdinal` where locale semantics aren't required.
-
-**Priority:** P3
-
----
-
-## 4. POSITIVE PATTERNS (No Changes Needed)
-
-The following excellent patterns are already implemented:
-
-### 4.1 Reader-Writer Locks ✓
-**Location:** `RedSalamanderMonitor/Document.cpp`
-- Uses `std::shared_lock` for reads
-- Uses `std::unique_lock` for writes
-- Proper lock granularity
-
-### 4.2 Container Pre-allocation ✓
-**Locations:** `Document.cpp`, `FolderView.Enumeration.cpp`
-```cpp
-_lines.reserve(newCapacity);
-_visibleLines.reserve(_lines.size());
-```
-
-### 4.3 Brush Caching ✓
-**Location:** `RedSalamanderMonitor/ColorTextView`
-- LRU cache for brushes
-- Theme pre-warming to avoid first-frame jank
-
-### 4.4 Async Enumeration ✓
-**Location:** `RedSalamander/FolderView.Enumeration.cpp`
-- Background thread with stop tokens
-- Generation-based staleness checks
-- Proper cancellation handling
-
-### 4.5 Thread Pool for Icons ✓
-**Location:** `RedSalamander/FolderView.Icons.cpp`
-- Uses `TrySubmitThreadpoolCallback`
-- Bounded worker count
-- Work-stealing atomic index
-
-### 4.6 Move Semantics ✓
-**Throughout codebase:**
-```cpp
-batch = std::move(_etwEventQueue);
-_lines.push_back(std::move(line));
-```
-
-### 4.7 RAII Resource Management ✓
-- `wil::unique_hicon`, `wil::unique_hbitmap`
-- `wil::com_ptr` for COM objects
-- `wil::scope_exit` for cleanup
-
----
-
-## 5. IMPLEMENTATION PLAN
-
-### Phase 1: Critical (Week 1)
-| Task | File(s) | Est. Time |
-|------|---------|-----------|
-| Convert string params to `string_view` | ErrorOverlay, FolderWatcher, FileSystem7z | 2h |
-| Add ASCII fast-path to `CaseInsensitiveHash` | DirectoryInfoCache.cpp | 1h |
-
-### Phase 2: Moderate (Week 2)
-| Task | File(s) | Est. Time |
-|------|---------|-----------|
-| Replace `_wcsicmp` with `CompareStringOrdinal` | FolderView, FileOperations | 2h |
-| Add missing `reserve()` calls | FunctionBar.cpp, others | 1h |
-| Audit vector pass-by-value | FileOperations | 1h |
-
-### Phase 3: Polish (Week 3)
-| Task | File(s) | Est. Time |
-|------|---------|-----------|
-| Convert concatenation to `std::format` | Various | 1h |
-| Targeted `InvalidateRect` | FolderView | 2h |
-| LRU for layout cache | ColorTextView | 2h |
-
----
-
-## 6. BENCHMARKING RECOMMENDATIONS
-
-Before and after measurements for:
-
-1. **Folder enumeration time** - Navigate to `C:\Windows\System32` (3000+ files)
-2. **Sorting latency** - Sort by name, then by date, measure transition time
-3. **Memory allocation count** - Use ETW or sampling profiler during enumeration
-4. **Scroll smoothness** - Profile frame times during continuous scrolling
-
-### Profiling Tools
-- Visual Studio Profiler (CPU Sampling)
-- Windows Performance Analyzer (ETW traces)
-- `start-etw-trace.ps1` / `stop-etw-trace.ps1` (project scripts)
-
----
-
-## 7. RISK ASSESSMENT
-
-| Change | Risk | Mitigation |
-|--------|------|------------|
-| `string_view` parameters | Dangling references if caller doesn't maintain lifetime | Review call sites, add comments |
-| `CompareStringOrdinal` | Subtle sorting differences from `_wcsicmp` | Test with edge cases (accented characters) |
-| Hash function changes | Cache invalidation, lookup misses | Maintain backward compatibility in transition |
-
----
-
-## 8. APPENDIX: CODE PATTERNS
-
-### Recommended: String Parameter Pattern
-```cpp
-// For read-only access (preferred)
-void ProcessPath(std::wstring_view path);
-
-// When storing a copy
-void SetPath(std::wstring path) { _path = std::move(path); }
-
-// When reference lifetime is guaranteed
-void UpdatePath(const std::wstring& path);
-```
-
-### Recommended: Fast Case-Insensitive Compare
-```cpp
-inline int FastCompareNoCase(std::wstring_view a, std::wstring_view b) noexcept
-{
-    return CompareStringOrdinal(
-        a.data(), static_cast<int>(a.size()),
-        b.data(), static_cast<int>(b.size()),
-        TRUE) - CSTR_EQUAL;
-}
-```
-
-### Recommended: Container Pre-allocation
-```cpp
-std::vector<Item> items;
-items.reserve(estimatedCount);  // Always reserve when size is known/estimable
-for (const auto& source : sources)
-    items.push_back(ProcessItem(source));
-```
-
 
 
 
@@ -645,6 +210,40 @@ for (const auto& source : sources)
 
 ------------------------------------------------------------------------------------------------------
 # DONE
+
+
+
+
+
+------------------------------------------------------------------------------------------------------
+## DONE preference dialog
+if settings is dirty pressing esc display a message first to ask user if he want to save changes before closing the dialog box
+if no changes done pressing esc close the dialog box directly without message
+
+------------------------------------------------------------------------------------------------------
+## DONE IMAP 
+- display received date time as file time
+- display email size as file size
+- display email subject as file name
+
+------------------------------------------------------------------------------------------------------
+## DONE video viewer 
+- super long first init need a spinner to wait with a message 
+- need to store last volume used and retore it when reopening the video viewer
+
+------------------------------------------------------------------------------------------------------
+## DONE all messages in ressources must be positional
+{} is forbidden becasue it could be translated in a language with different order and it will be a mess to manage that
+all message must be positional with {0}, {1}, etc ... and the order of the parameter in the code must be the same as the order in the message to avoid confusion and error when translating
+for example instead of
+```text 
+{} is not accessible because {}
+```
+it must be
+```text
+{0} is not accessible because {1}
+```
+Add that in normative specs and Skills and make sure to apply that everywhere in the code and ressources
 
 
 ------------------------------------------------------------------------------------------------------

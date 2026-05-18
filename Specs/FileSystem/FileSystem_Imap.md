@@ -130,6 +130,8 @@ The IMAP implementation emits these metric names when diagnostics or perf JSONL 
 
 Message Properties performance is protected by a command-count contract: opening Properties for one message must stay constant with respect to mailbox size. The selected UID path uses targeted UID metadata fetches rather than a full mailbox summary refetch.
 
+Mailbox listing summary repair is bounded per listing. The repair path may batch missing UID summaries first and then fall back to singleton fetches, but it MUST cap repair fetch attempts with a per-listing budget, log one warning when the budget is exhausted, and proceed with any summaries already recovered instead of issuing unbounded singleton fetches against flaky servers.
+
 ## Operations
 
 ### Browse

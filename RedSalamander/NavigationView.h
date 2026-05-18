@@ -107,7 +107,19 @@ struct NavigationViewDebugSnapshot
     RECT fullPathPopupAncestorSegmentRect        = {};
     bool fullPathPopupAncestorSegmentVisible     = false;
     HWND currentEditHostHwnd                     = nullptr;
-    HWND currentEditBridgeHwnd                   = nullptr;
+    HWND currentEditInputHwnd                    = nullptr;
+    bool currentEditUsesNativeTextInput          = false;
+    bool currentEditCaretScreenRectValid         = false;
+    RECT currentEditCaretScreenRect              = {};
+    bool currentEditValidationPopupVisible       = false;
+    HWND currentEditValidationPopupHwnd          = nullptr;
+    RECT currentEditValidationPopupScreenRect    = {};
+    bool currentEditValidationPopupRoundedRegion = false;
+    bool currentEditValidationPopupUsesFluentIcon = false;
+    wchar_t currentEditValidationPopupIconGlyph  = L'\0';
+    bool currentEditHasActiveComposition         = false;
+    size_t currentEditCompositionStart           = 0u;
+    size_t currentEditCompositionEnd             = 0u;
     size_t currentEditSelectionStart             = 0u;
     size_t currentEditSelectionEnd               = 0u;
     bool currentEditHasSelection                 = false;
@@ -115,6 +127,7 @@ struct NavigationViewDebugSnapshot
     std::wstring pathAncestorTargetText;
     std::wstring fullPathPopupAncestorTargetText;
     std::wstring currentEditText;
+    std::wstring currentEditHelpText;
 };
 #endif
 
@@ -198,6 +211,7 @@ private:
     static constexpr wchar_t kDxHostClassName[]        = L"RedSalamander.NavigationView.DxHost";
     static constexpr wchar_t kFullPathPopupClassName[] = L"RedSalamander.FullPathPopup";
     static constexpr wchar_t kSuggestPopupClassName[]  = L"RedSalamander.SuggestPopup";
+    static constexpr wchar_t kValidationPopupClassName[] = L"RedSalamander.NavigationValidationPopup";
     static constexpr int kDriveSectionWidth            = 28; // Menu button
     static constexpr int kDiskInfoSectionWidth         = 70; // Disk info
     static constexpr int kHistoryButtonWidth           = 24; // History dropdown
@@ -251,6 +265,10 @@ private:
     static ATOM RegisterEditSuggestPopupWndClass(HINSTANCE instance);
     static LRESULT CALLBACK EditSuggestPopupWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT EditSuggestPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+    static ATOM RegisterEditValidationPopupWndClass(HINSTANCE instance);
+    static LRESULT CALLBACK EditValidationPopupWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+    LRESULT EditValidationPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
     // Message handlers
     void OnCreate(HWND hwnd);
@@ -358,12 +376,26 @@ private:
     void UpdateFullPathPopupEditHostLayout() noexcept;
     void ApplyDxEditHostThemes() noexcept;
     bool ValidatePath(const std::wstring& pathStr);
-    bool HandleEditSubclassKeyDown(HWND editHwnd, WPARAM key);
-    bool HandleEditSubclassChar(HWND editHwnd, WPARAM key);
-    bool HandleEditSubclassPaste(HWND editHwnd);
     static LRESULT CALLBACK EditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
     // Edit autosuggest
+    [[nodiscard]] NavigationDxTextHost* ResolveEditTextHost(HWND hwnd) noexcept;
+    [[nodiscard]] const NavigationDxTextHost* ResolveEditTextHost(HWND hwnd) const noexcept;
+    void InstallEditHostHook(NavigationDxTextHost& textHost) noexcept;
+    void ReplaceEditTextSelection(NavigationDxTextHost& textHost, std::wstring_view replacement) noexcept;
+    void ShowEditValidationError(NavigationDxTextHost& textHost, const std::wstring& message) noexcept;
+    void ClearEditValidationError(NavigationDxTextHost& textHost) noexcept;
+    void RefreshActiveEditHostAfterParentPaint() noexcept;
+    void UpdateEditValidationPopupWindow(NavigationDxTextHost& textHost) noexcept;
+    void CloseEditValidationPopup() noexcept;
+    [[nodiscard]] bool IsEditValidationPopupWindow(HWND hwnd) const noexcept;
+    void PaintEditValidationPopup(HWND hwnd) noexcept;
+    [[nodiscard]] LRESULT HandleEditSubclassGetTextLength(HWND editHwnd) const noexcept;
+    [[nodiscard]] LRESULT HandleEditSubclassGetText(HWND editHwnd, WPARAM maxChars, LPARAM buffer) const noexcept;
+    [[nodiscard]] LRESULT HandleEditSubclassSetText(HWND editHwnd, LPARAM text) noexcept;
+    [[nodiscard]] LRESULT HandleEditSubclassGetSelection(HWND editHwnd, WPARAM selectionStart, LPARAM selectionEnd) const noexcept;
+    [[nodiscard]] LRESULT HandleEditSubclassSetSelection(HWND editHwnd, WPARAM selectionStart, LPARAM selectionEnd) noexcept;
+    [[nodiscard]] LRESULT HandleEditSubclassReplaceSelection(HWND editHwnd, LPARAM replacement) noexcept;
     void UpdateEditSuggest();
     void UpdateEditSuggestPopupWindow();
     void CloseEditSuggestPopup();
@@ -407,7 +439,6 @@ private:
     bool _diskInfoHovered               = false; // Track if Section 3 is hovered
     int _hoveredSegmentIndex            = -1;    // Track which segment is hovered (-1 = none)
     int _hoveredSeparatorIndex          = -1;    // Track which separator is hovered (-1 = none)
-    HWND _suppressCtrlBackspaceCharHwnd = nullptr;
 
     struct EditSuggestItem
     {
@@ -418,6 +449,12 @@ private:
     };
 
     wil::unique_hwnd _editSuggestPopup;
+    wil::unique_hwnd _editValidationPopup;
+    std::wstring _editValidationMessage;
+    RECT _editValidationPopupScreenRect = {};
+    bool _editValidationPopupRoundedRegion = false;
+    bool _editValidationPopupIconUsesFluent = false;
+    wchar_t _editValidationPopupIconGlyph = L'\0';
     SIZE _editSuggestPopupClientSize = {0, 0};
     int _editSuggestPopupRowHeightPx = 0;
     std::vector<EditSuggestItem> _editSuggestItems;

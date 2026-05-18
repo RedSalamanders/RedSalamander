@@ -51,19 +51,22 @@
     <ClInclude Include="DxUiTestHelpers.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\RedSalamander\AppTheme.cpp" />
+    <ClCompile Include="..\..\RedSalamander\UiMetrics.cpp" />
     <ClCompile Include="DxUiTests.cpp" />
     <ClCompile Include="DxUiTests.Accessibility.cpp" />
     <ClCompile Include="DxUiTests.Animation.cpp" />
     <ClCompile Include="DxUiTests.ComboBox.cpp" />
     <ClCompile Include="DxUiTests.Controls.cpp" />
+    <ClCompile Include="DxUiTests.Gallery.cpp" />
     <ClCompile Include="DxUiTests.Grid.cpp" />
     <ClCompile Include="DxUiTests.Menu.cpp" />
     <ClCompile Include="DxUiTests.MultilineText.cpp" />
     <ClCompile Include="DxUiTests.NewControls.cpp" />
+    <ClCompile Include="DxUiTests.NativeTextInput.cpp" />
     <ClCompile Include="DxUiTests.ReadOnly.cpp" />
     <ClCompile Include="DxUiTests.Rendering.cpp" />
     <ClCompile Include="DxUiTests.TextField.cpp" />
-    <ClCompile Include="DxUiTests.TextInputBridge.cpp" />
     <ClCompile Include="DxUiTests.Theme.cpp" />
     <ClCompile Include="DxUiTests.Tooltip.cpp" />
     <ClCompile Include="DxUiTests.Tree.cpp" />

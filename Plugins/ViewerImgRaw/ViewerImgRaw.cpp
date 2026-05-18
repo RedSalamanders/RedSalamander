@@ -1437,9 +1437,9 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
         auto combo        = std::make_unique<ComboBox>();
         _fileComboControl = combo.get();
         _fileComboControl->SetVariant(ComboBoxVariant::Window);
-        _fileComboControl->SetOnSelectionChanged([this, hwnd](const size_t selection) noexcept
+        _fileComboControl->SetOnSelectionChanged([this](const size_t selection) noexcept
         {
-            if (_syncingFileCombo)
+            if (_syncingFileCombo || ! _hWnd)
             {
                 return;
             }
@@ -1450,6 +1450,7 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
                 return;
             }
 
+            const HWND hwnd          = _hWnd.get();
             _otherIndex             = index;
             _currentSidecarJpegPath = _otherItems[_otherIndex].sidecarJpegPath;
             _currentLabel           = _otherItems[_otherIndex].label;
@@ -1459,8 +1460,13 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
                 SetFocus(hwnd);
             }
         });
-        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this, hwnd]() noexcept
-        { FocusMainSurfaceFromFileCombo(hwnd); });
+        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this]() noexcept
+        {
+            if (_hWnd)
+            {
+                FocusMainSurfaceFromFileCombo(_hWnd.get());
+            }
+        });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
     }
@@ -1472,15 +1478,27 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
     if (_menuHandle)
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
-        _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuChecks(hwnd, false); });
-        _menuBarHost.SetOnTabBoundary([this, hwnd](bool) noexcept
+        _menuBarHost.SetRefreshMenuStateCallback([this]
         {
-            FocusMainSurfaceFromFileCombo(hwnd);
+            if (_hWnd)
+            {
+                UpdateMenuChecks(_hWnd.get(), false);
+            }
+        });
+        _menuBarHost.SetOnTabBoundary([this](bool) noexcept
+        {
+            if (_hWnd)
+            {
+                FocusMainSurfaceFromFileCombo(_hWnd.get());
+            }
             return true;
         });
-        _menuBarHost.SetOnEscape([this, hwnd]() noexcept
+        _menuBarHost.SetOnEscape([this]() noexcept
         {
-            FocusMainSurfaceFromFileCombo(hwnd);
+            if (_hWnd)
+            {
+                FocusMainSurfaceFromFileCombo(_hWnd.get());
+            }
             return true;
         });
         static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));

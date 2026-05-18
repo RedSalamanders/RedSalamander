@@ -408,10 +408,12 @@ Each binding entry:
 - `ctrl` (bool, optional): `true` for Ctrl modifier (omit when `false`)
 - `alt` (bool, optional): `true` for Alt modifier (omit when `false`)
 - `shift` (bool, optional): `true` for Shift modifier (omit when `false`)
-- `commandId` (string): command identifier (must start with `cmd/`)
+- `commandId` (string): command identifier (must start with `cmd/`); `cmd/shortcut/unassigned` is the internal sentinel for an intentionally unassigned shortcut chord
 
 Notes:
 - Command IDs are stable; UI display names are localized resource strings. No user-facing command names are hard-coded in C++.
+- Missing shortcut chords mean “use the current canonical default if one exists.” To intentionally remove a default binding, persist the same chord with `commandId: "cmd/shortcut/unassigned"`.
+- The `cmd/shortcut/unassigned` sentinel is preserved during save/load and import/export, consumes its chord as a no-op at runtime, is hidden from assignable command lists, and is excluded from command reverse lookup.
 - If a binding references a command that is not implemented, invoking it shows a localized “not yet implemented” message box and does nothing else (see `Specs/UI/UI_CommandMenuKeyboard.md`).
 - The `ShortcutsWindow` selected row and live search text are transient UI state, not persisted settings fields. Reopen restores persisted group collapse, logical sort, and visible column layout, then selects a valid row from the restored grid.
 

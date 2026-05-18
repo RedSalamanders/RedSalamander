@@ -1268,6 +1268,11 @@ void ShortcutsWindow::RebuildRows() noexcept
         for (size_t bindingIndex = 0u; bindingIndex < bindings.size(); ++bindingIndex)
         {
             const auto& binding = bindings[bindingIndex];
+            if (binding.commandId.empty() || ShortcutIds::IsUnassignedCommandId(binding.commandId))
+            {
+                continue;
+            }
+
             ShortcutRow row;
             row.stableId      = MakeShortcutStableRowId(groupStableId, bindingIndex);
             row.vk            = binding.vk;
@@ -1589,7 +1594,7 @@ bool ShortcutsWindow::DebugSetSearchText(std::wstring_view text) noexcept
 
     const std::wstring trimmed = std::wstring(TrimWhitespace(text));
     _searchEdit->SetTextAndNotify(trimmed);
-    _dxHost.SyncTextInputBridge(_searchEdit);
+    _dxHost.SyncTextInput(_searchEdit);
     if (trimmed != _searchQuery)
     {
         _searchQuery = trimmed;

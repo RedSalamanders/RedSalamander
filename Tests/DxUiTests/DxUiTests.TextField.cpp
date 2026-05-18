@@ -41,6 +41,56 @@ WindowHostBitmapCapture CaptureAttachedTextFieldHostWindowBitmap(AttachedHostWin
     return count;
 }
 
+void EmitColorGlyphPixelCountForTest(std::wstring_view detail, const WindowHostBitmapCapture& capture, size_t warmPixelCount) noexcept
+{
+    if (! Debug::Perf::IsCaptureEnabled())
+    {
+        return;
+    }
+
+    const size_t pixelCount = static_cast<size_t>(capture.widthPx) * static_cast<size_t>(capture.heightPx);
+    Debug::Perf::Emit(L"dxui.textinput.color_glyph_pixel_count", detail, 0, warmPixelCount, pixelCount, S_OK);
+}
+
+[[nodiscard]] std::wstring MakeWomanTechnologistTextElement()
+{
+    std::wstring text;
+    text.push_back(static_cast<wchar_t>(0xD83D));
+    text.push_back(static_cast<wchar_t>(0xDC69));
+    text.push_back(static_cast<wchar_t>(0x200D));
+    text.push_back(static_cast<wchar_t>(0xD83D));
+    text.push_back(static_cast<wchar_t>(0xDCBB));
+    return text;
+}
+
+[[nodiscard]] std::wstring MakeUsFlagTextElement()
+{
+    std::wstring text;
+    text.push_back(static_cast<wchar_t>(0xD83C));
+    text.push_back(static_cast<wchar_t>(0xDDFA));
+    text.push_back(static_cast<wchar_t>(0xD83C));
+    text.push_back(static_cast<wchar_t>(0xDDF8));
+    return text;
+}
+
+[[nodiscard]] std::wstring MakeHeartVariationTextElement()
+{
+    std::wstring text;
+    text.push_back(static_cast<wchar_t>(0x2764));
+    text.push_back(static_cast<wchar_t>(0xFE0F));
+    return text;
+}
+
+[[nodiscard]] std::wstring MakeThumbsUpMediumSkinToneTextElement()
+{
+    std::wstring text;
+    text.push_back(static_cast<wchar_t>(0xD83D));
+    text.push_back(static_cast<wchar_t>(0xDC4D));
+    text.push_back(static_cast<wchar_t>(0xD83C));
+    text.push_back(static_cast<wchar_t>(0xDFFD));
+    return text;
+}
+
 void TestTextFieldHoverStyleUsesSharedOverlayChrome()
 {
     using namespace RedSalamander::DxUi;
@@ -422,7 +472,7 @@ void TestTextFieldCopyWithoutSelectionLeavesClipboardUnchanged()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -449,7 +499,7 @@ void TestTextFieldCtrlInsertCopiesSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -476,7 +526,7 @@ void TestTextFieldShiftInsertPastesClipboard()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -508,7 +558,7 @@ void TestTextFieldCtrlVPasteStripsSingleLineControlCharacters()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -535,7 +585,7 @@ void TestEditableComboCopyWithoutSelectionLeavesClipboardUnchanged()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -564,7 +614,7 @@ void TestEditableComboShiftInsertPastesClipboard()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -598,7 +648,7 @@ void TestEditableComboShiftInsertStripsSingleLineControlCharacters()
 {
     using namespace RedSalamander::DxUi;
 
-    Require(RetryClipboardSensitiveBridgeAction(
+    Require(RetryClipboardSensitiveAction(
                 []() -> bool
     {
         ClipboardHostWindow window;
@@ -804,6 +854,136 @@ void TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint()
     Require(field.OnKeyDown(host, VK_RIGHT, 0), "text field handles right before surrogate-pair delete");
     Require(field.OnKeyDown(host, VK_DELETE, 0), "text field handles delete across a surrogate pair");
     Require(field.GetText() == L"AB", "text field delete removes the full surrogate pair instead of a single code unit");
+}
+
+void TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    std::wstring text = L"A";
+    text += MakeWomanTechnologistTextElement();
+    text.push_back(L'B');
+    TextField field(text);
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnKeyDown(host, VK_LEFT, 0), "text field handles left before emoji ZWJ backspace");
+    Require(field.OnKeyDown(host, VK_BACK, 0), "text field handles backspace across an emoji ZWJ cluster");
+    Require(field.GetText() == L"AB", "text field backspace removes the full emoji ZWJ text element");
+}
+
+void TestTextFieldEmojiZwJDeleteDeletesWholeTextElement()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    std::wstring text = L"A";
+    text += MakeWomanTechnologistTextElement();
+    text.push_back(L'B');
+    TextField field(text);
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnKeyDown(host, VK_HOME, 0), "text field handles home before emoji ZWJ delete");
+    Require(field.OnKeyDown(host, VK_RIGHT, 0), "text field handles right before emoji ZWJ delete");
+    Require(field.OnKeyDown(host, VK_DELETE, 0), "text field handles delete across an emoji ZWJ cluster");
+    Require(field.GetText() == L"AB", "text field delete removes the full emoji ZWJ text element");
+}
+
+void TestTextFieldRegionalIndicatorFlagBackspaceDeletesWholeTextElement()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    std::wstring text = L"A";
+    text += MakeUsFlagTextElement();
+    text.push_back(L'B');
+    TextField field(text);
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnKeyDown(host, VK_LEFT, 0), "text field handles left before regional-indicator flag backspace");
+    Require(field.OnKeyDown(host, VK_BACK, 0), "text field handles backspace across a regional-indicator flag");
+    Require(field.GetText() == L"AB", "text field backspace removes the full regional-indicator flag text element");
+}
+
+void TestTextFieldRegionalIndicatorFlagDeleteDeletesWholeTextElement()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    std::wstring text = L"A";
+    text += MakeUsFlagTextElement();
+    text.push_back(L'B');
+    TextField field(text);
+    field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+    Require(field.OnKeyDown(host, VK_HOME, 0), "text field handles home before regional-indicator flag delete");
+    Require(field.OnKeyDown(host, VK_RIGHT, 0), "text field handles right before regional-indicator flag delete");
+    Require(field.OnKeyDown(host, VK_DELETE, 0), "text field handles delete across a regional-indicator flag");
+    Require(field.GetText() == L"AB", "text field delete removes the full regional-indicator flag text element");
+}
+
+void TestTextFieldEmojiSuffixBackspaceAndDeleteDeletesWholeTextElement()
+{
+    using namespace RedSalamander::DxUi;
+
+    const auto verifyBackspace = [](const std::wstring& textElement, const char* message)
+    {
+        WindowHost host;
+        std::wstring text = L"A";
+        text += textElement;
+        text.push_back(L'B');
+        TextField field(text);
+        field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+        Require(field.OnKeyDown(host, VK_LEFT, 0), "text field handles left before emoji suffix backspace");
+        Require(field.OnKeyDown(host, VK_BACK, 0), "text field handles backspace across an emoji suffix cluster");
+        Require(field.GetText() == L"AB", message);
+    };
+
+    const auto verifyDelete = [](const std::wstring& textElement, const char* message)
+    {
+        WindowHost host;
+        std::wstring text = L"A";
+        text += textElement;
+        text.push_back(L'B');
+        TextField field(text);
+        field.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+        Require(field.OnKeyDown(host, VK_HOME, 0), "text field handles home before emoji suffix delete");
+        Require(field.OnKeyDown(host, VK_RIGHT, 0), "text field handles right before emoji suffix delete");
+        Require(field.OnKeyDown(host, VK_DELETE, 0), "text field handles delete across an emoji suffix cluster");
+        Require(field.GetText() == L"AB", message);
+    };
+
+    verifyBackspace(MakeHeartVariationTextElement(), "text field backspace removes the variation-selector emoji text element");
+    verifyDelete(MakeHeartVariationTextElement(), "text field delete removes the variation-selector emoji text element");
+    verifyBackspace(MakeThumbsUpMediumSkinToneTextElement(), "text field backspace removes the skin-tone emoji text element");
+    verifyDelete(MakeThumbsUpMediumSkinToneTextElement(), "text field delete removes the skin-tone emoji text element");
+}
+
+void TestTextFieldEmojiShiftArrowSelectionExpandsByWholeTextElement()
+{
+    using namespace RedSalamander::DxUi;
+
+    const auto verifySelectionReplacement = [](const std::wstring& textElement, const char* message)
+    {
+        WindowHost host;
+        std::wstring text = L"A";
+        text += textElement;
+        text.push_back(L'B');
+        TextField field(text);
+        field.SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 28.0f));
+
+        Require(field.OnKeyDown(host, VK_LEFT, 0), "text field handles left before emoji shift-selection");
+        Require(field.OnKeyDown(host, VK_LEFT, MK_SHIFT), "text field handles shift-left across an emoji text element");
+        Require(field.OnChar(host, L'X', 0), "text field replaces shift-selected emoji text element");
+        Require(field.GetText() == L"AXB", message);
+    };
+
+    verifySelectionReplacement(MakeWomanTechnologistTextElement(), "text field shift-left selects a full ZWJ emoji text element for replacement");
+    verifySelectionReplacement(MakeHeartVariationTextElement(), "text field shift-left selects a full variation-selector emoji text element for replacement");
+    verifySelectionReplacement(MakeThumbsUpMediumSkinToneTextElement(), "text field shift-left selects a full skin-tone emoji text element for replacement");
+    verifySelectionReplacement(MakeUsFlagTextElement(), "text field shift-left selects a full regional-indicator flag text element for replacement");
 }
 
 void TestEditableComboBoxCtrlBackspaceDeletesPreviousWord()
@@ -1022,6 +1202,31 @@ void TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy()
     Require(! field.IsMasked(), "masked text field clears masked state");
 }
 
+void TestTextFieldCompactDensityShrinksDefaultVerticalPadding()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha");
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 200.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+
+    TextFieldDebugSingleLinePaintState standardPaint{};
+    Require(field->DebugGetSingleLinePaintState(window.Host(), standardPaint), "standard-density text field exposes paint state");
+    RequireFloatNear(standardPaint.textRect.top, 4.0f, 0.1f, "standard-density text field keeps the default top padding");
+    RequireFloatNear(standardPaint.textRect.bottom, 28.0f, 0.1f, "standard-density text field keeps the default bottom padding");
+
+    ThemePalette compactTheme = window.Host().GetTheme();
+    compactTheme.density      = Density::Compact;
+    window.Host().SetTheme(compactTheme);
+
+    TextFieldDebugSingleLinePaintState compactPaint{};
+    Require(field->DebugGetSingleLinePaintState(window.Host(), compactPaint), "compact-density text field exposes paint state");
+    RequireFloatNear(compactPaint.textRect.top, 2.0f, 0.1f, "compact-density text field shrinks the default top padding");
+    RequireFloatNear(compactPaint.textRect.bottom, 30.0f, 0.1f, "compact-density text field shrinks the default bottom padding");
+}
+
 void TestTextFieldLongSelectionPaintStaysInsideTextViewport()
 {
     using namespace RedSalamander::DxUi;
@@ -1041,6 +1246,58 @@ void TestTextFieldLongSelectionPaintStaysInsideTextViewport()
     Require(paint.horizontalScrollDip > 0.0f, "long selected text field scrolls horizontally to keep the initial caret visible");
     Require(paint.selectionPaintRect.left >= paint.textRect.left - 0.5f, "long selected text field clips the selection fill to the left text viewport edge");
     Require(paint.selectionPaintRect.right <= paint.textRect.right + 0.5f, "long selected text field clips the selection fill to the right text viewport edge");
+}
+
+void TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons()
+{
+    using namespace RedSalamander::DxUi;
+
+    const auto verify = [](TextField& field, WindowHost& host, const char* context) {
+        TextFieldDebugSingleLinePaintState paint{};
+        Require(field.DebugGetSingleLinePaintState(host, paint), context);
+        Require(paint.hasSelectionPaintRect, "mixed-BiDi selected text exposes a selection paint rect");
+        Require(paint.hasTrailingButtonRect, "mixed-BiDi selected text exposes trailing-button geometry");
+        Require(paint.selectionPaintRect.left >= paint.textRect.left - 0.5f, "mixed-BiDi selection starts inside the editable viewport");
+        Require(paint.selectionPaintRect.right <= paint.textRect.right + 0.5f, "mixed-BiDi selection ends inside the editable viewport");
+        Require(paint.textRect.right <= paint.trailingButtonRect.left - 0.5f, "editable viewport ends before the trailing button slot");
+        Require(paint.selectionPaintRect.right <= paint.trailingButtonRect.left - 0.5f, "mixed-BiDi selection fill does not paint under the trailing button");
+    };
+
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root = std::make_unique<Panel>();
+        root->SetFlowDirection(FlowDirection::RightToLeft);
+        auto* field = root->AddChild<TextField>(L"abc \x05D0\x05D1\x05D2 123 xyz");
+        field->SetBounds(D2D1::RectF(20.0f, 20.0f, 260.0f, 56.0f));
+        field->SetClearButtonEnabled(true);
+        field->SetSelectionRange(0u, field->GetText().size());
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native clear-button clipping test does not create a bridge child");
+        verify(*field, window.Host(), "mixed-BiDi clear-button text field exposes paint debug state");
+    }
+
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root = std::make_unique<Panel>();
+        root->SetFlowDirection(FlowDirection::RightToLeft);
+        auto* field = root->AddChild<TextField>(L"abc \x05D0\x05D1\x05D2 123 xyz");
+        field->SetBounds(D2D1::RectF(20.0f, 20.0f, 260.0f, 56.0f));
+        field->SetMasked(true);
+        field->SetPasswordRevealMode(PasswordRevealMode::Peek);
+        field->SetSelectionRange(0u, field->GetText().size());
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+        field->SetPasswordRevealState(PasswordRevealState::Visible);
+
+        Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native reveal-button clipping test does not create a bridge child");
+        verify(*field, window.Host(), "mixed-BiDi reveal-button text field exposes paint debug state");
+    }
 }
 
 void TestTextFieldSelectedEmojiUsesColorFontRendering()
@@ -1069,7 +1326,174 @@ void TestTextFieldSelectedEmojiUsesColorFontRendering()
     window.Host().SetFocusControl(field);
 
     const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "selected emoji text field color-font capture succeeds");
-    Require(CountWarmSaturatedPixels(capture) >= 24u, "selected emoji text field renders warm color-font pixels instead of monochrome glyphs");
+    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    EmitColorGlyphPixelCountForTest(L"textfield-selected", capture, warmPixels);
+    Require(warmPixels >= 24u, "selected emoji text field renders warm color-font pixels instead of monochrome glyphs");
+}
+
+void TestNativeTextFieldUnselectedEmojiUsesColorFontRendering()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    constexpr std::wstring_view kFireEmoji = L"\xD83D\xDD25";
+    std::wstring text                      = L"emoji ";
+    for (int index = 0; index < 10; ++index)
+    {
+        text.append(kFireEmoji);
+    }
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(text);
+    field->SetBounds(D2D1::RectF(20.0f, 20.0f, 480.0f, 64.0f));
+    field->SetClearButtonEnabled(false);
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    Require(window.Host().GetTextInputBackend() == TextInputBackend::Native, "native text field color-font test uses the native backend");
+    Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native text field color-font test does not create a bridge child");
+
+    const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native unselected emoji color-font capture succeeds");
+    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    EmitColorGlyphPixelCountForTest(L"native-textfield-unselected", capture, warmPixels);
+    Require(warmPixels >= 24u, "native unselected emoji text field renders warm color-font pixels");
+}
+
+void TestNativeTextFieldSelectedEmojiUsesColorFontRendering()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+    ThemePalette theme  = MakeDefaultThemePalette(true);
+    theme.selectionFill = D2D1::ColorF(0x005A9E, 1.0f);
+    theme.selectionText = D2D1::ColorF(0xFFFFFF, 1.0f);
+    window.Host().SetTheme(theme);
+
+    constexpr std::wstring_view kFireEmoji = L"\xD83D\xDD25";
+    std::wstring text                      = L"emoji ";
+    for (int index = 0; index < 10; ++index)
+    {
+        text.append(kFireEmoji);
+    }
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(text);
+    field->SetBounds(D2D1::RectF(20.0f, 20.0f, 480.0f, 64.0f));
+    field->SetClearButtonEnabled(false);
+    field->SetSelectionRange(0u, field->GetText().size());
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    Require(window.Host().GetTextInputBackend() == TextInputBackend::Native, "native selected emoji test uses the native backend");
+    Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native selected emoji test does not create a bridge child");
+
+    const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native selected emoji color-font capture succeeds");
+    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    EmitColorGlyphPixelCountForTest(L"native-textfield-selected", capture, warmPixels);
+    Require(warmPixels >= 24u, "native selected emoji text field renders warm color-font pixels");
+}
+
+void TestNativeMultilineTextFieldEmojiUsesColorFontRendering()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    constexpr std::wstring_view kFireEmoji = L"\xD83D\xDD25";
+    std::wstring text                      = L"emoji\n";
+    for (int index = 0; index < 10; ++index)
+    {
+        text.append(kFireEmoji);
+    }
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(text);
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 20.0f, 520.0f, 96.0f));
+    field->SetClearButtonEnabled(false);
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    Require(window.Host().GetTextInputBackend() == TextInputBackend::Native, "native multiline emoji test uses the native backend");
+    Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native multiline emoji test does not create a bridge child");
+
+    const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native multiline emoji color-font capture succeeds");
+    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    EmitColorGlyphPixelCountForTest(L"native-textfield-multiline", capture, warmPixels);
+    Require(warmPixels >= 24u, "native multiline emoji text field renders warm color-font pixels");
+}
+
+void TestNativeMixedBidiTextFieldEmojiUsesColorFontRendering()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    constexpr std::wstring_view kFireEmoji = L"\xD83D\xDD25";
+    std::wstring text                      = L"abc \x05D0\x05D1\x05D2 ";
+    for (int index = 0; index < 4; ++index)
+    {
+        text.append(kFireEmoji);
+    }
+    text.append(L" 123");
+
+    auto root = std::make_unique<Panel>();
+    root->SetFlowDirection(FlowDirection::RightToLeft);
+    auto* field = root->AddChild<TextField>(text);
+    field->SetBounds(D2D1::RectF(20.0f, 20.0f, 284.0f, 64.0f));
+    field->SetClearButtonEnabled(false);
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    Require(window.Host().GetTextInputBackend() == TextInputBackend::Native, "native mixed BiDi emoji test uses the native backend");
+    Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native mixed BiDi emoji test does not create a bridge child");
+
+    const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native mixed BiDi emoji color-font capture succeeds");
+    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    EmitColorGlyphPixelCountForTest(L"native-textfield-mixed-bidi", capture, warmPixels);
+    Require(warmPixels >= 24u, "native mixed BiDi emoji text field renders warm color-font pixels");
+}
+
+void TestNativeMaskedTextFieldEmojiSuppressesColorFontRendering()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    constexpr std::wstring_view kFireEmoji = L"\xD83D\xDD25";
+    std::wstring text;
+    for (int index = 0; index < 10; ++index)
+    {
+        text.append(kFireEmoji);
+    }
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(text);
+    field->SetBounds(D2D1::RectF(20.0f, 20.0f, 520.0f, 64.0f));
+    field->SetClearButtonEnabled(false);
+    field->SetMasked(true);
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    Require(window.Host().GetTextInputBackend() == TextInputBackend::Native, "native masked emoji test uses the native backend");
+    Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native masked emoji test does not create a bridge child");
+
+    const WindowHostBitmapCapture maskedCapture = CaptureAttachedTextFieldHostWindowBitmap(window, "native masked emoji capture succeeds");
+    const size_t maskedWarmPixels               = CountWarmSaturatedPixels(maskedCapture);
+    EmitColorGlyphPixelCountForTest(L"native-textfield-masked", maskedCapture, maskedWarmPixels);
+
+    field->SetMasked(false);
+    const WindowHostBitmapCapture unmaskedCapture = CaptureAttachedTextFieldHostWindowBitmap(window, "native unmasked emoji capture succeeds");
+    const size_t unmaskedWarmPixels               = CountWarmSaturatedPixels(unmaskedCapture);
+    EmitColorGlyphPixelCountForTest(L"native-textfield-unmasked", unmaskedCapture, unmaskedWarmPixels);
+    Require(unmaskedWarmPixels >= 24u, "native unmasked emoji text field restores warm color-font pixels");
+    Require(maskedWarmPixels + 24u <= unmaskedWarmPixels, "native masked emoji text field suppresses the color-glyph warm pixel signal");
 }
 
 void TestTextFieldClearButtonClickClearsTextWhenFocused()
@@ -1154,6 +1578,12 @@ void RunTextFieldTests()
     runTest("TestTextFieldMouseDragSelectionReplacesDraggedRange", TestTextFieldMouseDragSelectionReplacesDraggedRange);
     runTest("TestTextFieldSurrogatePairBackspaceDeletesWholeCodePoint", TestTextFieldSurrogatePairBackspaceDeletesWholeCodePoint);
     runTest("TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint", TestTextFieldSurrogatePairDeleteDeletesWholeCodePoint);
+    runTest("TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement", TestTextFieldEmojiZwJBackspaceDeletesWholeTextElement);
+    runTest("TestTextFieldEmojiZwJDeleteDeletesWholeTextElement", TestTextFieldEmojiZwJDeleteDeletesWholeTextElement);
+    runTest("TestTextFieldRegionalIndicatorFlagBackspaceDeletesWholeTextElement", TestTextFieldRegionalIndicatorFlagBackspaceDeletesWholeTextElement);
+    runTest("TestTextFieldRegionalIndicatorFlagDeleteDeletesWholeTextElement", TestTextFieldRegionalIndicatorFlagDeleteDeletesWholeTextElement);
+    runTest("TestTextFieldEmojiSuffixBackspaceAndDeleteDeletesWholeTextElement", TestTextFieldEmojiSuffixBackspaceAndDeleteDeletesWholeTextElement);
+    runTest("TestTextFieldEmojiShiftArrowSelectionExpandsByWholeTextElement", TestTextFieldEmojiShiftArrowSelectionExpandsByWholeTextElement);
     runTest("TestEditableComboBoxCtrlBackspaceDeletesPreviousWord", TestEditableComboBoxCtrlBackspaceDeletesPreviousWord);
     runTest("TestEditableComboBoxShiftArrowSelectionReplacesSelectedText", TestEditableComboBoxShiftArrowSelectionReplacesSelectedText);
     runTest("TestEditableComboBoxCtrlASelectionReplacesAllText", TestEditableComboBoxCtrlASelectionReplacesAllText);
@@ -1166,8 +1596,15 @@ void RunTextFieldTests()
     runTest("TestTextFieldSubmit", TestTextFieldSubmit);
     runTest("TestSingleLineTextFieldTabDoesNotInsertCharacter", TestSingleLineTextFieldTabDoesNotInsertCharacter);
     runTest("TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy", TestMaskedTextFieldPreservesSecretValueAndSuppressesCopy);
+    runTest("TestTextFieldCompactDensityShrinksDefaultVerticalPadding", TestTextFieldCompactDensityShrinksDefaultVerticalPadding);
     runTest("TestTextFieldLongSelectionPaintStaysInsideTextViewport", TestTextFieldLongSelectionPaintStaysInsideTextViewport);
+    runTest("TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons", TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons);
     runTest("TestTextFieldSelectedEmojiUsesColorFontRendering", TestTextFieldSelectedEmojiUsesColorFontRendering);
+    runTest("TestNativeTextFieldUnselectedEmojiUsesColorFontRendering", TestNativeTextFieldUnselectedEmojiUsesColorFontRendering);
+    runTest("TestNativeTextFieldSelectedEmojiUsesColorFontRendering", TestNativeTextFieldSelectedEmojiUsesColorFontRendering);
+    runTest("TestNativeMultilineTextFieldEmojiUsesColorFontRendering", TestNativeMultilineTextFieldEmojiUsesColorFontRendering);
+    runTest("TestNativeMixedBidiTextFieldEmojiUsesColorFontRendering", TestNativeMixedBidiTextFieldEmojiUsesColorFontRendering);
+    runTest("TestNativeMaskedTextFieldEmojiSuppressesColorFontRendering", TestNativeMaskedTextFieldEmojiSuppressesColorFontRendering);
     runTest("TestTextFieldClearButtonClickClearsTextWhenFocused", TestTextFieldClearButtonClickClearsTextWhenFocused);
     runTest("TestTextFieldClearButtonNotVisibleWhenReadOnly", TestTextFieldClearButtonNotVisibleWhenReadOnly);
 }

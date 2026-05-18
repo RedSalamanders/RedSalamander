@@ -360,54 +360,10 @@ inline void VerifyOrUpdateBaselineForTest(const char* context,
     }
 }
 
-inline size_t MapRichEditBridgeIndexToLfIndexForTest(std::wstring_view text, size_t bridgeIndex)
-{
-    size_t lfIndex       = 0u;
-    size_t richEditIndex = 0u;
-    while (lfIndex < text.size())
-    {
-        if (text[lfIndex] == L'\n')
-        {
-            if (bridgeIndex <= richEditIndex)
-            {
-                return lfIndex;
-            }
-            ++richEditIndex; // after CR, before LF still maps to the logical pre-newline position
-            if (bridgeIndex <= richEditIndex)
-            {
-                return lfIndex;
-            }
-            ++richEditIndex;
-            ++lfIndex;
-        }
-        else
-        {
-            if (bridgeIndex <= richEditIndex)
-            {
-                return lfIndex;
-            }
-            ++richEditIndex;
-            ++lfIndex;
-        }
-    }
-    return lfIndex;
-}
-
-inline bool BridgeCollapsedCaretMatchesVisibleIndexForTest(std::wstring_view text, size_t bridgeIndex, size_t visibleIndex)
-{
-    return bridgeIndex == visibleIndex || MapRichEditBridgeIndexToLfIndexForTest(text, bridgeIndex) == visibleIndex;
-}
-
-inline bool BridgeCollapsedCaretMatchesVisibleTrailingNewlineBoundaryForTest(std::wstring_view text, size_t bridgeIndex, size_t visibleIndex)
-{
-    const size_t mappedIndex = MapRichEditBridgeIndexToLfIndexForTest(text, bridgeIndex);
-    return bridgeIndex == visibleIndex || mappedIndex == visibleIndex || mappedIndex + 1u == visibleIndex;
-}
-
 // Clipboard listeners and sync providers can momentarily race the first WM_PASTE
-// observation on desktop test runs, so clipboard-driven bridge tests retry the
+// observation on desktop test runs, so clipboard-driven tests retry the
 // full interaction a few times instead of failing on the first transient miss.
-template <typename TAction> inline bool RetryClipboardSensitiveBridgeAction(TAction action)
+template <typename TAction> inline bool RetryClipboardSensitiveAction(TAction action)
 {
     for (int attempt = 0; attempt < 4; ++attempt)
     {
@@ -834,8 +790,8 @@ private:
 class ExposedTextField final : public RedSalamander::DxUi::TextField
 {
 public:
-    using RedSalamander::DxUi::TextField::ExportTextInputBridgeState;
-    using RedSalamander::DxUi::TextField::ImportTextInputBridgeState;
+    using RedSalamander::DxUi::TextField::ExportTextInputState;
+    using RedSalamander::DxUi::TextField::ImportTextInputState;
     using RedSalamander::DxUi::TextField::TextField;
 };
 
@@ -878,33 +834,6 @@ struct RecordingContextMenuInvocation
     return FindWindowExW(hostHwnd, nullptr, L"EDIT", nullptr);
 }
 
-[[nodiscard]] inline RECT ComputeExpectedBridgeRect(HWND hostHwnd, RedSalamander::DxUi::WindowHost& host, const D2D1_RECT_F& boundsDip)
-{
-    constexpr int kExpectedBridgeMinWidthPx  = 64;
-    constexpr int kExpectedBridgeMinHeightPx = 32;
-
-    POINT clientOrigin{};
-    Require(ClientToScreen(hostHwnd, &clientOrigin) != FALSE, "host client origin is available for text bridge rect");
-
-    const LONG left   = clientOrigin.x + static_cast<LONG>(std::lround(host.DipsToPixels(boundsDip.left)));
-    const LONG top    = clientOrigin.y + static_cast<LONG>(std::lround(host.DipsToPixels(boundsDip.top)));
-    const LONG width  = std::max<LONG>(kExpectedBridgeMinWidthPx, static_cast<LONG>(std::lround(host.DipsToPixels(boundsDip.right - boundsDip.left))));
-    const LONG height = std::max<LONG>(kExpectedBridgeMinHeightPx, static_cast<LONG>(std::lround(host.DipsToPixels(boundsDip.bottom - boundsDip.top))));
-    const LONG right  = left + width;
-    const LONG bottom = top + height;
-    return RECT{left, top, right, bottom};
-}
-
-[[nodiscard]] inline std::wstring ReadBridgeTextContent(HWND bridgeEdit)
-{
-    const int bridgeLength = GetWindowTextLengthW(bridgeEdit);
-    Require(bridgeLength >= 0, "can read the hidden bridge text length");
-    std::wstring bridgeText(static_cast<size_t>(bridgeLength) + 1u, L'\0');
-    const int copied = GetWindowTextW(bridgeEdit, bridgeText.data(), static_cast<int>(bridgeText.size()));
-    bridgeText.resize(static_cast<size_t>((std::max)(0, copied)));
-    return bridgeText;
-}
-
 constexpr std::wstring_view kLogicalNewlineClipboardTextForTest           = L"alpha\nbeta";
 constexpr size_t kLogicalNewlineClipboardSelectionStartForTest            = 2u;
 constexpr size_t kLogicalNewlineClipboardSelectionEndForTest              = 7u;
@@ -929,16 +858,16 @@ constexpr std::wstring_view kWrappedMultilinePasteResultForTest           = L"al
 
 inline void ImportLogicalNewlineClipboardSelectionForTest(RedSalamander::DxUi::WindowHost& host, ExposedTextField& field, const char* message)
 {
-    RedSalamander::DxUi::TextInputBridgeState state;
+    RedSalamander::DxUi::TextInputState state;
     state.text                 = field.GetText();
     state.caretIndex           = kLogicalNewlineClipboardSelectionEndForTest;
     state.selectionAnchorIndex = kLogicalNewlineClipboardSelectionStartForTest;
     state.firstVisibleLine     = 0u;
     state.multiline            = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), message);
+    Require(field.ImportTextInputState(host, state, false), message);
 }
 
-inline void RequireLogicalNewlineClipboardVisibleSelectionForTest(const RedSalamander::DxUi::TextInputBridgeState& state, const char* context)
+inline void RequireLogicalNewlineClipboardVisibleSelectionForTest(const RedSalamander::DxUi::TextInputState& state, const char* context)
 {
     Require(state.selectionAnchorIndex.has_value(), context);
     const size_t visibleSelectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -947,30 +876,18 @@ inline void RequireLogicalNewlineClipboardVisibleSelectionForTest(const RedSalam
             context);
 }
 
-inline void RequireLogicalNewlineClipboardBridgeSelectionForTest(HWND bridgeEdit, const char* message)
-{
-    DWORD selectionStart = 0u;
-    DWORD selectionEnd   = 0u;
-    static_cast<void>(SendMessageW(bridgeEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd)));
-    const size_t mappedSelectionStart = MapRichEditBridgeIndexToLfIndexForTest(kLogicalNewlineClipboardTextForTest, static_cast<size_t>(selectionStart));
-    const size_t mappedSelectionEnd   = MapRichEditBridgeIndexToLfIndexForTest(kLogicalNewlineClipboardTextForTest, static_cast<size_t>(selectionEnd));
-    const bool selectionEndIsBridgeAligned =
-        mappedSelectionEnd == kLogicalNewlineClipboardSelectionEndForTest || mappedSelectionEnd + 1u == kLogicalNewlineClipboardSelectionEndForTest;
-    Require(mappedSelectionStart == kLogicalNewlineClipboardSelectionStartForTest && selectionEndIsBridgeAligned, message);
-}
-
 inline void ImportWrappedMultilineClipboardSelectionForTest(RedSalamander::DxUi::WindowHost& host, ExposedTextField& field, const char* message)
 {
-    RedSalamander::DxUi::TextInputBridgeState state;
+    RedSalamander::DxUi::TextInputState state;
     state.text                 = field.GetText();
     state.caretIndex           = kWrappedMultilineClipboardSelectionEndForTest;
     state.selectionAnchorIndex = kWrappedMultilineClipboardSelectionStartForTest;
     state.firstVisibleLine     = 0u;
     state.multiline            = true;
-    Require(field.ImportTextInputBridgeState(host, state, false), message);
+    Require(field.ImportTextInputState(host, state, false), message);
 }
 
-inline void RequireWrappedMultilineClipboardVisibleSelectionForTest(const RedSalamander::DxUi::TextInputBridgeState& state, const char* context)
+inline void RequireWrappedMultilineClipboardVisibleSelectionForTest(const RedSalamander::DxUi::TextInputState& state, const char* context)
 {
     Require(state.selectionAnchorIndex.has_value(), context);
     const size_t visibleSelectionStart = (std::min)(state.selectionAnchorIndex.value(), state.caretIndex);
@@ -979,95 +896,25 @@ inline void RequireWrappedMultilineClipboardVisibleSelectionForTest(const RedSal
             context);
 }
 
-inline void RequireWrappedMultilineClipboardBridgeSelectionForTest(HWND bridgeEdit, const char* message)
-{
-    DWORD selectionStart = 0u;
-    DWORD selectionEnd   = 0u;
-    static_cast<void>(SendMessageW(bridgeEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd)));
-    Require(static_cast<size_t>(selectionStart) == kWrappedMultilineClipboardSelectionStartForTest &&
-                static_cast<size_t>(selectionEnd) == kWrappedMultilineClipboardSelectionEndForTest,
-            message);
-}
-
 [[nodiscard]] inline POINT ClientPointToScreenForTest(HWND hwnd, POINT point, const char* context)
 {
     Require(ClientToScreen(hwnd, &point) != FALSE, context);
     return point;
 }
 
-[[nodiscard]] inline RECT GetTextBridgeCaretClientRectForTest(HWND bridgeEdit)
+[[nodiscard]] inline std::optional<COMPOSITIONFORM> ReadTextInputCompositionFormForTest(HWND textInputHwnd)
 {
-    DWORD selectionStart = 0u;
-    DWORD selectionEnd   = 0u;
-    static_cast<void>(SendMessageW(bridgeEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd)));
-
-    std::array<wchar_t, 16> className{};
-    const int classLength = GetClassNameW(bridgeEdit, className.data(), static_cast<int>(className.size()));
-    const bool richEdit   = classLength > 0 && _wcsicmp(className.data(), MSFTEDIT_CLASS) == 0;
-
-    std::optional<POINT> caretPoint;
-    if (richEdit)
-    {
-        POINTL richEditPoint{};
-        if (SendMessageW(bridgeEdit, EM_POSFROMCHAR, reinterpret_cast<WPARAM>(&richEditPoint), static_cast<LPARAM>(selectionEnd)) != -1)
-        {
-            caretPoint = POINT{richEditPoint.x, richEditPoint.y};
-        }
-    }
-    else
-    {
-        const LRESULT position = SendMessageW(bridgeEdit, EM_POSFROMCHAR, static_cast<WPARAM>(selectionEnd), 0);
-        caretPoint             = POINT{GET_X_LPARAM(position), GET_Y_LPARAM(position)};
-    }
-
-    if (! caretPoint.has_value())
-    {
-        GUITHREADINFO guiThreadInfo{};
-        guiThreadInfo.cbSize = sizeof(guiThreadInfo);
-        Require(GetGUIThreadInfo(0, &guiThreadInfo) != FALSE && guiThreadInfo.hwndCaret != nullptr,
-                "text bridge test can read either EM_POSFROMCHAR or GUI-thread caret geometry");
-
-        RECT caretRect = guiThreadInfo.rcCaret;
-        if (guiThreadInfo.hwndCaret != bridgeEdit)
-        {
-            MapWindowPoints(guiThreadInfo.hwndCaret, bridgeEdit, reinterpret_cast<POINT*>(&caretRect), 2);
-        }
-
-        if (caretRect.right <= caretRect.left)
-        {
-            caretRect.right = caretRect.left + 1;
-        }
-        if (caretRect.bottom <= caretRect.top)
-        {
-            caretRect.bottom = caretRect.top + std::max(12L, static_cast<LONG>(GetSystemMetrics(SM_CYCURSOR)));
-        }
-
-        return caretRect;
-    }
-
-    RECT textRect{};
-    if (SendMessageW(bridgeEdit, EM_GETRECT, 0, reinterpret_cast<LPARAM>(&textRect)) == 0)
-    {
-        GetClientRect(bridgeEdit, &textRect);
-    }
-
-    const LONG caretHeight = std::max<LONG>(12, std::max(1L, textRect.bottom - textRect.top));
-    return RECT{caretPoint.value().x, caretPoint.value().y, caretPoint.value().x + 1, caretPoint.value().y + caretHeight};
-}
-
-[[nodiscard]] inline std::optional<COMPOSITIONFORM> ReadTextBridgeCompositionFormForTest(HWND bridgeEdit)
-{
-    if (! bridgeEdit)
+    if (! textInputHwnd)
     {
         return std::nullopt;
     }
 
-    HIMC inputContext = ImmGetContext(bridgeEdit);
+    HIMC inputContext = ImmGetContext(textInputHwnd);
     if (! inputContext)
     {
         return std::nullopt;
     }
-    const auto releaseContext = wil::scope_exit([&] { ImmReleaseContext(bridgeEdit, inputContext); });
+    const auto releaseContext = wil::scope_exit([&] { ImmReleaseContext(textInputHwnd, inputContext); });
 
     COMPOSITIONFORM compositionForm{};
     if (ImmGetCompositionWindow(inputContext, &compositionForm) == FALSE)
@@ -1078,19 +925,19 @@ inline void RequireWrappedMultilineClipboardBridgeSelectionForTest(HWND bridgeEd
     return compositionForm;
 }
 
-[[nodiscard]] inline std::optional<CANDIDATEFORM> ReadTextBridgeCandidateFormForTest(HWND bridgeEdit, DWORD index)
+[[nodiscard]] inline std::optional<CANDIDATEFORM> ReadTextInputCandidateFormForTest(HWND textInputHwnd, DWORD index)
 {
-    if (! bridgeEdit)
+    if (! textInputHwnd)
     {
         return std::nullopt;
     }
 
-    HIMC inputContext = ImmGetContext(bridgeEdit);
+    HIMC inputContext = ImmGetContext(textInputHwnd);
     if (! inputContext)
     {
         return std::nullopt;
     }
-    const auto releaseContext = wil::scope_exit([&] { ImmReleaseContext(bridgeEdit, inputContext); });
+    const auto releaseContext = wil::scope_exit([&] { ImmReleaseContext(textInputHwnd, inputContext); });
 
     CANDIDATEFORM candidateForm{};
     if (ImmGetCandidateWindow(inputContext, index, &candidateForm) == FALSE)

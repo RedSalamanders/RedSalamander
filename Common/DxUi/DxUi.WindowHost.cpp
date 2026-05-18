@@ -1,6 +1,7 @@
 #include "DxUi.Internal.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <cwctype>
@@ -38,7 +39,6 @@ namespace RedSalamander::DxUi
 namespace
 {
 constexpr UINT kModifierAlt              = 0x0100u;
-constexpr int kTextInputBridgeControlId  = 0x7A41;
 constexpr wchar_t kDxUiDiagnosticsProp[] = L"RedSalamander.Preferences.DxDiagnostics";
 constexpr uint64_t kTooltipFallbackShowDelayMs = 500u;
 constexpr uint64_t kTooltipMinShowDelayMs      = 100u;
@@ -411,6 +411,32 @@ void ReleaseSharedWindowHostAttachment(WindowHost* host, DWORD ownerThreadId) no
 [[nodiscard]] bool ModifiersContainAlt(UINT modifiers) noexcept
 {
     return (modifiers & kModifierAlt) != 0u;
+}
+
+[[nodiscard]] bool NativeImeCompositionOwnsKey(UINT virtualKey, UINT modifiers) noexcept
+{
+    if (ModifiersContainCtrl(modifiers) || ModifiersContainShift(modifiers) || ModifiersContainAlt(modifiers))
+    {
+        return false;
+    }
+
+    switch (virtualKey)
+    {
+        case VK_RETURN:
+        case VK_ESCAPE:
+        case VK_TAB:
+        case VK_UP:
+        case VK_DOWN:
+        case VK_LEFT:
+        case VK_RIGHT:
+        case VK_HOME:
+        case VK_END:
+        case VK_PRIOR:
+        case VK_NEXT:
+        case VK_BACK:
+        case VK_DELETE: return true;
+        default: return false;
+    }
 }
 
 [[nodiscard]] UINT ComputeModifierMask() noexcept
@@ -881,7 +907,6 @@ bool WindowHost::Attach(HWND hwnd, const AttachOptions& options) noexcept
     GetClientRect(hwnd, &client);
     _widthPx  = static_cast<UINT>(std::max(0L, client.right - client.left));
     _heightPx = static_cast<UINT>(std::max(0L, client.bottom - client.top));
-    DestroyTextInputBridge();
     return true;
 }
 
@@ -930,7 +955,6 @@ void WindowHost::Detach() noexcept
     _onTabBoundary  = {};
     _onEscape       = {};
     _onFocusChanged = {};
-    DestroyTextInputBridge();
     if (hadAttachment)
     {
         // Release the shared graphics bucket after this host's retained tree and device
@@ -1077,7 +1101,7 @@ bool WindowHost::SetSystemBackdrop(BackdropType type) noexcept
         return false;
     }
 
-    // DWMWA_SYSTEMBACKDROP_TYPE = 38 — available on Windows 11 22H2+
+    // DWMWA_SYSTEMBACKDROP_TYPE = 38 — available on the supported Windows 11 baseline.
     constexpr DWORD kDwmwaSystemBackdropType = 38;
     const auto value                         = static_cast<int>(type);
     const HRESULT hr                         = DwmSetWindowAttribute(_hwnd, kDwmwaSystemBackdropType, &value, sizeof(value));
@@ -1168,9 +1192,17 @@ void WindowHost::ResetInteractionState() noexcept
 void WindowHost::SetFocusControl(Control* control) noexcept
 {
     PruneStaleInteractionState();
-    if (control && _root && ! ControlBelongsToTree(_root.get(), control))
+    if (control && _root)
     {
-        return;
+        const ControlInteractionState requestedState = ResolveControlInteractionState(_root.get(), control);
+        if (! requestedState.inTree || ! requestedState.effectivelyInteractive)
+        {
+            return;
+        }
+    }
+    if (control && ! control->IsFocusable())
+    {
+        control = nullptr;
     }
     if (_focusedControl == control)
     {
@@ -1180,9 +1212,9 @@ void WindowHost::SetFocusControl(Control* control) noexcept
             _focusedControl->OnFocusChanged(*this, true);
             restoredFocus = true;
         }
-        if (_focusedControl && _focusedControl->SupportsTextInputBridge())
+        if (_focusedControl && _focusedControl->SupportsTextInput())
         {
-            ActivateTextInputBridge(_focusedControl);
+            ActivateTextInput(_focusedControl);
         }
         if (restoredFocus)
         {
@@ -1190,9 +1222,9 @@ void WindowHost::SetFocusControl(Control* control) noexcept
         }
         return;
     }
-    if (_focusedControl && _focusedControl->SupportsTextInputBridge())
+    if (_focusedControl && _focusedControl->SupportsTextInput())
     {
-        DeactivateTextInputBridge(false);
+        DeactivateTextInput(false);
     }
     if (_focusedControl)
     {
@@ -1203,9 +1235,9 @@ void WindowHost::SetFocusControl(Control* control) noexcept
     {
         _focusedControl->OnFocusChanged(*this, true);
     }
-    if (_focusedControl && _focusedControl->SupportsTextInputBridge())
+    if (_focusedControl && _focusedControl->SupportsTextInput())
     {
-        ActivateTextInputBridge(_focusedControl);
+        ActivateTextInput(_focusedControl);
     }
     else if (_hwnd && _focusedControl && GetFocus() != _hwnd)
     {
@@ -1220,18 +1252,18 @@ void WindowHost::SetFocusControl(Control* control) noexcept
         const uint64_t renderCount = 0;
         const uint64_t resizeCount = 0;
 #endif
-        Debug::Info(L"DxUi::WindowHost: focus-change hwnd={:#x} focus={} hovered={} captured={} bridge={} size={}x{} renderCount={} resizeCount={}",
+        Debug::Info(L"DxUi::WindowHost: focus-change hwnd={:#x} focus={} hovered={} captured={} textInput={} size={}x{} renderCount={} resizeCount={}",
                     reinterpret_cast<uintptr_t>(_hwnd),
                     static_cast<const void*>(_focusedControl),
                     static_cast<const void*>(_hoveredControl),
                     static_cast<const void*>(_capturedControl),
-                    HasActiveTextInputBridge() ? L"true" : L"false",
+                    HasActiveTextInput() ? L"true" : L"false",
                     _widthPx,
                     _heightPx,
                     renderCount,
                     resizeCount);
     }
-    Debug::Perf::Emit(L"DxUI::FocusChange", L"", 0u, _focusedControl ? 1u : 0u, HasActiveTextInputBridge() ? 1u : 0u);
+    Debug::Perf::Emit(L"DxUI::FocusChange", L"", 0u, _focusedControl ? 1u : 0u, HasActiveTextInput() ? 1u : 0u);
     if (_onFocusChanged)
     {
         _onFocusChanged(_focusedControl);
@@ -1264,6 +1296,56 @@ bool WindowHost::HandleMnemonic(wchar_t mnemonic) noexcept
     }
 
     return false;
+}
+
+void WindowHost::RecordNativeTextInputKeyToStateMetric(std::chrono::steady_clock::time_point inputStartedAt,
+                                                       const wchar_t* detail,
+                                                       uint64_t value0,
+                                                       uint64_t value1,
+                                                       bool armPaintMetric) noexcept
+{
+    Debug::Perf::Emit(L"dxui.textinput.key_to_state_us", detail, Debug::Perf::ElapsedUs(inputStartedAt), value0, value1, S_OK);
+    if (! armPaintMetric || ! Debug::Perf::IsCaptureEnabled())
+    {
+        return;
+    }
+
+    _pendingNativeTextInputPaintMetric = PendingNativeTextInputPaintMetric{inputStartedAt, detail ? detail : L"", value0, value1};
+}
+
+void WindowHost::EmitPendingNativeTextInputPaintMetric(HRESULT hr) noexcept
+{
+    if (! _pendingNativeTextInputPaintMetric.has_value())
+    {
+        return;
+    }
+
+    const PendingNativeTextInputPaintMetric metric = _pendingNativeTextInputPaintMetric.value();
+    _pendingNativeTextInputPaintMetric.reset();
+    Debug::Perf::Emit(L"dxui.textinput.key_to_paint_us",
+                      metric.detail ? metric.detail : L"",
+                      Debug::Perf::ElapsedUs(metric.inputStartedAt),
+                      metric.value0,
+                      metric.value1,
+                      hr);
+}
+
+bool WindowHost::RouteFocusedCharInput(wchar_t ch, UINT modifiers, const wchar_t* perfDetail) noexcept
+{
+    if (! _focusedControl)
+    {
+        return false;
+    }
+
+    Control* const charTarget = _focusedControl;
+    const auto inputStartedAt = std::chrono::steady_clock::now();
+    const bool controlHandled = charTarget->OnChar(*this, ch, modifiers);
+    if (controlHandled && charTarget == _focusedControl && charTarget->SupportsTextInput())
+    {
+        SyncNativeTextInputSession(charTarget);
+        RecordNativeTextInputKeyToStateMetric(inputStartedAt, perfDetail, static_cast<uint64_t>(ch), modifiers);
+    }
+    return controlHandled;
 }
 
 bool WindowHost::HandleTabNavigation(bool reverse) noexcept
@@ -1304,11 +1386,11 @@ void WindowHost::CaptureMouse(Control* control) noexcept
     }
     if (IsInteractionDiagnosticsEnabled(_hwnd))
     {
-        Debug::Info(L"DxUi::WindowHost: capture hwnd={:#x} target={} focus={} bridge={}",
+        Debug::Info(L"DxUi::WindowHost: capture hwnd={:#x} target={} focus={} textInput={}",
                     reinterpret_cast<uintptr_t>(_hwnd),
                     static_cast<const void*>(_capturedControl),
                     static_cast<const void*>(_focusedControl),
-                    HasActiveTextInputBridge() ? L"true" : L"false");
+                    HasActiveTextInput() ? L"true" : L"false");
     }
 }
 
@@ -1321,11 +1403,11 @@ void WindowHost::ReleaseMouseCapture() noexcept
     }
     if (IsInteractionDiagnosticsEnabled(_hwnd))
     {
-        Debug::Info(L"DxUi::WindowHost: release-capture hwnd={:#x} focus={} hovered={} bridge={}",
+        Debug::Info(L"DxUi::WindowHost: release-capture hwnd={:#x} focus={} hovered={} textInput={}",
                     reinterpret_cast<uintptr_t>(_hwnd),
                     static_cast<const void*>(_focusedControl),
                     static_cast<const void*>(_hoveredControl),
-                    HasActiveTextInputBridge() ? L"true" : L"false");
+                    HasActiveTextInput() ? L"true" : L"false");
     }
 }
 
@@ -1659,6 +1741,11 @@ uint64_t WindowHost::DebugGetResizeFailureCount() const noexcept
     return _debugResizeFailureCount;
 }
 
+uint64_t WindowHost::DebugGetSwapChainPrepareD2DFlushFailureCount() const noexcept
+{
+    return _debugSwapChainPrepareD2DFlushFailureCount;
+}
+
 uint64_t WindowHost::DebugGetPresentFailureCount() const noexcept
 {
     return _debugPresentFailureCount;
@@ -1754,11 +1841,6 @@ void WindowHost::OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggestedRect)
 
     _tooltipLayer.OnHostDpiChanged(*this);
 
-    if (_textInputBridgeControl)
-    {
-        UpdateTextInputBridgeBounds(_textInputBridgeControl, _textInputBridgeMultiline);
-    }
-
     if (hwnd && ((GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CHILD) == 0) && suggestedRect)
     {
         SetWindowPos(hwnd,
@@ -1838,81 +1920,17 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             }
             OnKillFocus(false);
             return 0;
+        case WM_ACTIVATE:
+            if (LOWORD(static_cast<DWORD_PTR>(wp)) != WA_INACTIVE) { break; }
+            handled = true;
+            OnKillFocus(false);
+            return 0;
+        case WM_ACTIVATEAPP:
+            if (wp != FALSE) { break; }
+            handled = true;
+            OnKillFocus(false);
+            return 0;
         case WM_MOUSEACTIVATE: handled = true; return MA_ACTIVATE;
-        case WM_COMMAND:
-            if (reinterpret_cast<HWND>(lp) == _textInputBridgeEdit.get() && LOWORD(wp) == static_cast<WORD>(kTextInputBridgeControlId))
-            {
-                handled = true;
-                HandleTextInputBridgeCommand(HIWORD(wp));
-                return 0;
-            }
-            break;
-        case WndMsg::kDxUiTextInputBridgeSync:
-            handled = true;
-            SyncFocusedControlFromTextInputBridge(wp != FALSE);
-            return 0;
-        case WndMsg::kDxUiTextInputBridgeSpecialKey:
-        {
-            handled = true;
-            SetInputModality(InputModality::Keyboard);
-            const UINT virtualKey = static_cast<UINT>(wp);
-            UINT modifiers        = static_cast<UINT>(LOWORD(lp));
-            const bool systemKey  = HIWORD(lp) != 0u;
-            if (systemKey && virtualKey != VK_F10 && virtualKey != VK_MENU)
-            {
-                modifiers |= kModifierAlt;
-            }
-
-            if (virtualKey == VK_TAB && _root)
-            {
-                static_cast<void>(HandleTabNavigation(ModifiersContainShift(modifiers)));
-                return 0;
-            }
-
-            const bool keyboardContextMenu =
-                (virtualKey == VK_APPS) || (virtualKey == VK_F10 && ModifiersContainShift(modifiers) && ! ModifiersContainCtrl(modifiers));
-            if (keyboardContextMenu && _focusedControl && _focusedControl->OnContextMenu(*this, true, D2D1::Point2F()))
-            {
-                return 0;
-            }
-
-            Control* const keyTarget = _focusedControl;
-            if (keyTarget && keyTarget->OnKeyDown(*this, virtualKey, modifiers))
-            {
-                if (keyTarget == _focusedControl && keyTarget == _textInputBridgeControl && ControlBelongsToTree(_root.get(), keyTarget))
-                {
-                    SyncTextInputBridge(keyTarget);
-                }
-                return 0;
-            }
-
-            if (! ModifiersContainAlt(modifiers) && ! ModifiersContainCtrl(modifiers))
-            {
-                if (Button* const defaultButton = ResolveTreeButton(_root, _defaultButton);
-                    virtualKey == VK_RETURN && defaultButton && defaultButton->Invoke(*this, false))
-                {
-                    return 0;
-                }
-                if (Button* const cancelButton = ResolveTreeButton(_root, _cancelButton);
-                    virtualKey == VK_ESCAPE && cancelButton && cancelButton->Invoke(*this, false))
-                {
-                    return 0;
-                }
-                if (virtualKey == VK_ESCAPE && _onEscape && _onEscape())
-                {
-                    return 0;
-                }
-            }
-            return 0;
-        }
-        case WndMsg::kDxUiTextInputBridgeBlur:
-            handled = true;
-            if (IsWindowOrDescendant(hwnd, reinterpret_cast<HWND>(wp)))
-            {
-                return 0;
-            }
-            OnKillFocus(true);
-            return 0;
         case WM_MOUSEMOVE:
         {
             handled = true;
@@ -2007,7 +2025,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             {
                 if (target->IsFocusable())
                 {
-                    if (target->SupportsTextInputBridge())
+                    if (target->SupportsTextInput())
                     {
                         SetFocusControl(target);
                     }
@@ -2076,11 +2094,35 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         }
         case WM_KEYDOWN:
         case WM_SYSKEYDOWN:
+        {
             handled = true;
             SetInputModality(InputModality::Keyboard);
             UpdateModifierStateForKey(static_cast<UINT>(wp), true, msg == WM_SYSKEYDOWN);
+            UINT nativeImeModifiers = GetModifierState();
+            if (msg == WM_SYSKEYDOWN && wp != VK_F10 && wp != VK_MENU)
+            {
+                nativeImeModifiers |= kModifierAlt;
+            }
+            if (_textInputBackend == TextInputBackend::Native && _nativeTextInputImeComposing && _focusedControl &&
+                _focusedControl == _nativeTextInputControl && _focusedControl->SupportsTextInput() &&
+                NativeImeCompositionOwnsKey(static_cast<UINT>(wp), nativeImeModifiers))
+            {
+                return 0;
+            }
             if (wp == VK_TAB && _root)
             {
+                Control* const keyTarget = _focusedControl;
+                const auto inputStartedAt = std::chrono::steady_clock::now();
+                const UINT modifiers = GetModifierState();
+                if (keyTarget && keyTarget->OnKeyDown(*this, static_cast<UINT>(wp), modifiers))
+                {
+                    if (_textInputBackend == TextInputBackend::Native && keyTarget == _focusedControl && keyTarget->SupportsTextInput())
+                    {
+                        SyncNativeTextInputSession(keyTarget);
+                        RecordNativeTextInputKeyToStateMetric(inputStartedAt, L"native-keydown", static_cast<uint64_t>(wp), modifiers);
+                    }
+                    return 0;
+                }
                 static_cast<void>(HandleTabNavigation(ModifiersContainShift(GetModifierState())));
                 return 0;
             }
@@ -2095,9 +2137,16 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
                 {
                     return 0;
                 }
-                const bool controlHandled = _focusedControl && _focusedControl->OnKeyDown(*this, static_cast<UINT>(wp), modifiers);
+                Control* const keyTarget = _focusedControl;
+                const auto inputStartedAt = std::chrono::steady_clock::now();
+                const bool controlHandled = keyTarget && keyTarget->OnKeyDown(*this, static_cast<UINT>(wp), modifiers);
                 if (controlHandled)
                 {
+                    if (_textInputBackend == TextInputBackend::Native && keyTarget == _focusedControl && keyTarget->SupportsTextInput())
+                    {
+                        SyncNativeTextInputSession(keyTarget);
+                        RecordNativeTextInputKeyToStateMetric(inputStartedAt, L"native-keydown", static_cast<uint64_t>(wp), modifiers);
+                    }
                     return 0;
                 }
                 if (msg == WM_KEYDOWN && ! ModifiersContainAlt(modifiers) && ! ModifiersContainCtrl(modifiers))
@@ -2119,20 +2168,72 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
                 }
             }
             return 0;
+        }
         case WM_KEYUP:
         case WM_SYSKEYUP:
             UpdateModifierStateForKey(static_cast<UINT>(wp), false, msg == WM_SYSKEYUP);
+            {
+                UINT modifiers = GetModifierState();
+                if (msg == WM_SYSKEYUP && wp != VK_F10 && wp != VK_MENU)
+                {
+                    modifiers |= kModifierAlt;
+                }
+                Control* const keyTarget = _focusedControl;
+                const auto inputStartedAt = std::chrono::steady_clock::now();
+                if (keyTarget && keyTarget->OnKeyUp(*this, static_cast<UINT>(wp), modifiers))
+                {
+                    handled = true;
+                    if (_textInputBackend == TextInputBackend::Native && keyTarget == _focusedControl && keyTarget->SupportsTextInput())
+                    {
+                        SyncNativeTextInputSession(keyTarget);
+                        RecordNativeTextInputKeyToStateMetric(inputStartedAt, L"native-keyup", static_cast<uint64_t>(wp), modifiers);
+                    }
+                    return 0;
+                }
+            }
             handled = false;
+            return 0;
+        case WM_GETTEXTLENGTH:
+        case WM_GETTEXT:
+        case WM_SETTEXT:
+        case EM_GETSEL:
+        case EM_SETSEL:
+        case EM_REPLACESEL:
+        case WM_COPY:
+        case WM_CUT:
+        case WM_PASTE:
+        case WM_CLEAR:
+        case WM_UNDO:
+        {
+            LRESULT result = 0;
+            handled        = HandleNativeTextInputEditMessage(msg, wp, lp, result);
+            if (handled)
+            {
+                return result;
+            }
+            handled = true;
+            return DefWindowProcW(hwnd, msg, wp, lp);
+        }
+        case WM_IME_STARTCOMPOSITION:
+        case WM_IME_COMPOSITION:
+        case WM_IME_ENDCOMPOSITION:
+            handled = HandleNativeTextInputImeMessage(msg, wp, lp);
             return 0;
         case WM_CHAR:
             handled = true;
             SetInputModality(InputModality::Keyboard);
-            if (_focusedControl)
-            {
-                _focusedControl->OnChar(*this, static_cast<wchar_t>(wp), GetModifierState());
-            }
+            static_cast<void>(RouteFocusedCharInput(static_cast<wchar_t>(wp), GetModifierState(), L"native-char"));
             return 0;
-        case WM_SYSCHAR: handled = HandleMnemonic(static_cast<wchar_t>(wp)); return 0;
+        case WM_SYSCHAR:
+            handled = true;
+            SetInputModality(InputModality::Keyboard);
+            if (_textInputBackend == TextInputBackend::Native && _focusedControl && _focusedControl->SupportsTextInput() &&
+                RouteFocusedCharInput(static_cast<wchar_t>(wp), GetModifierState() | kModifierAlt, L"native-syschar"))
+            {
+                return 0;
+            }
+            handled = HandleMnemonic(static_cast<wchar_t>(wp));
+            return 0;
         case WM_CAPTURECHANGED:
             handled = true;
             if (_capturedControl)
@@ -2542,10 +2643,12 @@ bool WindowHost::EnsureSizeDependentResources(const bool allowHidden) noexcept
 
 void WindowHost::PrepareForSwapChainResize() noexcept
 {
-    if (_d2dContext)
+    if (_d2dContext && _targetBitmap)
     {
+        // EndDraw has already submitted D2D work.  Flushing the D2D context
+        // after detaching the target leaves transient menu/preferences hosts in
+        // D2DERR_WRONG_STATE; the D3D flush below releases the swap-chain buffer.
         _d2dContext->SetTarget(nullptr);
-        _d2dContext->Flush(nullptr, nullptr);
     }
     _targetBitmap.reset();
     _brushCache.clear();
@@ -2559,7 +2662,7 @@ void WindowHost::PrepareForSwapChainResize() noexcept
 void WindowHost::DiscardSizeDependentResources(const std::wstring_view reason) noexcept
 {
     Debug::Warning(
-        L"DxUi::WindowHost: DiscardSizeDependentResources hwnd=0x{:X} reason={} size={}x{} swap={}x{} visible={} focused={} hovered={} captured={} bridge={}",
+        L"DxUi::WindowHost: DiscardSizeDependentResources hwnd=0x{:X} reason={} size={}x{} swap={}x{} visible={} focused={} hovered={} captured={} textInput={}",
         reinterpret_cast<uintptr_t>(_hwnd),
         reason.empty() ? L"(unspecified)" : reason,
         _widthPx,
@@ -2570,7 +2673,7 @@ void WindowHost::DiscardSizeDependentResources(const std::wstring_view reason) n
         static_cast<const void*>(_focusedControl),
         static_cast<const void*>(_hoveredControl),
         static_cast<const void*>(_capturedControl),
-        HasActiveTextInputBridge() ? L"true" : L"false");
+        HasActiveTextInput() ? L"true" : L"false");
     PrepareForSwapChainResize();
     _swapChain.reset();
     _swapChainWidthPx  = 0u;
@@ -2630,12 +2733,8 @@ void WindowHost::Render(const RECT* dirtyRectPx) noexcept
     if (! EnsureSizeDependentResources())
     {
         paintPerf.SetHr(E_FAIL);
+        EmitPendingNativeTextInputPaintMetric(E_FAIL);
         return;
-    }
-
-    if (_textInputBridgeControl)
-    {
-        UpdateTextInputBridgeBounds(_textInputBridgeControl, _textInputBridgeMultiline);
     }
 
     const bool isPartialDirty =
@@ -2719,13 +2818,17 @@ void WindowHost::Render(const RECT* dirtyRectPx) noexcept
 
     if (hrDraw == D2DERR_RECREATE_TARGET || hrPresent == DXGI_ERROR_DEVICE_REMOVED || hrPresent == DXGI_ERROR_DEVICE_RESET)
     {
-        paintPerf.SetHr(FAILED(hrDraw) ? hrDraw : hrPresent);
+        const HRESULT renderHr = FAILED(hrDraw) ? hrDraw : hrPresent;
+        paintPerf.SetHr(renderHr);
+        EmitPendingNativeTextInputPaintMetric(renderHr);
         DiscardSizeDependentResources(L"render-device-lost");
         DiscardDeviceResources();
         ResetSharedWindowHostGraphicsResources();
         return;
     }
-    paintPerf.SetHr(FAILED(hrDraw) ? hrDraw : hrPresent);
+    const HRESULT renderHr = FAILED(hrDraw) ? hrDraw : hrPresent;
+    paintPerf.SetHr(renderHr);
+    EmitPendingNativeTextInputPaintMetric(renderHr);
     if (FAILED(hrDraw))
     {
         Debug::Error(L"DxUi::WindowHost: EndDraw failed: 0x{:08X}", hrDraw);
@@ -2798,17 +2901,13 @@ void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* captur
     if (! EnsureSizeDependentResources())
     {
         paintPerf.SetHr(E_FAIL);
+        EmitPendingNativeTextInputPaintMetric(E_FAIL);
         return;
     }
 
 #if defined(ENABLE_TESTS)
     ++_debugRenderCount;
 #endif
-
-    if (_textInputBridgeControl)
-    {
-        UpdateTextInputBridgeBounds(_textInputBridgeControl, _textInputBridgeMultiline);
-    }
 
     // Determine whether rcPaint describes a partial dirty region.
     // FLIP_SEQUENTIAL preserves back buffer content between frames, so
@@ -2906,13 +3005,17 @@ void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* captur
 
     if (hrDraw == D2DERR_RECREATE_TARGET || hrPresent == DXGI_ERROR_DEVICE_REMOVED || hrPresent == DXGI_ERROR_DEVICE_RESET)
     {
-        paintPerf.SetHr(FAILED(hrDraw) ? hrDraw : hrPresent);
+        const HRESULT renderHr = FAILED(hrDraw) ? hrDraw : hrPresent;
+        paintPerf.SetHr(renderHr);
+        EmitPendingNativeTextInputPaintMetric(renderHr);
         DiscardSizeDependentResources(L"render-device-lost");
         DiscardDeviceResources();
         ResetSharedWindowHostGraphicsResources();
         return;
     }
-    paintPerf.SetHr(FAILED(hrDraw) ? hrDraw : (FAILED(hrCapture) ? hrCapture : hrPresent));
+    const HRESULT renderHr = FAILED(hrDraw) ? hrDraw : (FAILED(hrCapture) ? hrCapture : hrPresent);
+    paintPerf.SetHr(renderHr);
+    EmitPendingNativeTextInputPaintMetric(renderHr);
     if (FAILED(hrDraw))
     {
         Debug::Error(L"DxUi::WindowHost: EndDraw failed: 0x{:08X}", hrDraw);
@@ -2943,19 +3046,15 @@ void WindowHost::OnSize(UINT widthPx, UINT heightPx) noexcept
     {
         if (IsInteractionDiagnosticsEnabled(_hwnd))
         {
-            Debug::Info(L"DxUi::WindowHost: on-size-zero hwnd={:#x} size={}x{} focus={} bridge={} visible={}",
+            Debug::Info(L"DxUi::WindowHost: on-size-zero hwnd={:#x} size={}x{} focus={} textInput={} visible={}",
                         reinterpret_cast<uintptr_t>(_hwnd),
                         _widthPx,
                         _heightPx,
                         static_cast<const void*>(_focusedControl),
-                        HasActiveTextInputBridge() ? L"true" : L"false",
+                        HasActiveTextInput() ? L"true" : L"false",
                         (_hwnd && IsWindowVisible(_hwnd) != FALSE) ? L"true" : L"false");
         }
         DiscardSizeDependentResources(L"on-size-zero");
-    }
-    if (_textInputBridgeControl)
-    {
-        UpdateTextInputBridgeBounds(_textInputBridgeControl, _textInputBridgeMultiline);
     }
     if (IsSwapChainActiveHostWindow(_hwnd, _widthPx, _heightPx))
     {
@@ -2968,12 +3067,12 @@ void WindowHost::OnSetFocus() noexcept
     PruneStaleInteractionState();
     if (IsInteractionDiagnosticsEnabled(_hwnd))
     {
-        Debug::Info(L"DxUi::WindowHost: on-set-focus hwnd={:#x} focus={} hovered={} captured={} bridge={}",
+        Debug::Info(L"DxUi::WindowHost: on-set-focus hwnd={:#x} focus={} hovered={} captured={} textInput={}",
                     reinterpret_cast<uintptr_t>(_hwnd),
                     static_cast<const void*>(_focusedControl),
                     static_cast<const void*>(_hoveredControl),
                     static_cast<const void*>(_capturedControl),
-                    HasActiveTextInputBridge() ? L"true" : L"false");
+                    HasActiveTextInput() ? L"true" : L"false");
     }
     if (_focusedControl)
     {
@@ -2983,9 +3082,9 @@ void WindowHost::OnSetFocus() noexcept
             _focusedControl->OnFocusChanged(*this, true);
             restoredFocus = true;
         }
-        if (_focusedControl->SupportsTextInputBridge())
+        if (_focusedControl->SupportsTextInput())
         {
-            ActivateTextInputBridge(_focusedControl);
+            ActivateTextInput(_focusedControl);
         }
         if (restoredFocus)
         {
@@ -3002,7 +3101,7 @@ void WindowHost::OnSetFocus() noexcept
 
 void WindowHost::OnKillFocus(bool clearRetainedFocus) noexcept
 {
-    DeactivateTextInputBridge(false);
+    DeactivateTextInput(false);
     PruneStaleInteractionState();
     _modifierState = 0u;
     if (_focusedControl && ControlBelongsToTree(_root.get(), _focusedControl))
@@ -3018,12 +3117,12 @@ void WindowHost::OnKillFocus(bool clearRetainedFocus) noexcept
     }
     if (IsInteractionDiagnosticsEnabled(_hwnd))
     {
-        Debug::Info(L"DxUi::WindowHost: on-kill-focus hwnd={:#x} focus={} hovered={} captured={} bridge={}",
+        Debug::Info(L"DxUi::WindowHost: on-kill-focus hwnd={:#x} focus={} hovered={} captured={} textInput={}",
                     reinterpret_cast<uintptr_t>(_hwnd),
                     static_cast<const void*>(_focusedControl),
                     static_cast<const void*>(_hoveredControl),
                     static_cast<const void*>(_capturedControl),
-                    HasActiveTextInputBridge() ? L"true" : L"false");
+                    HasActiveTextInput() ? L"true" : L"false");
     }
     Invalidate();
 }
@@ -3042,7 +3141,7 @@ void WindowHost::PruneStaleInteractionState() noexcept
     bool prunedCapture = false;
     bool prunedHover   = false;
     bool prunedFocus   = false;
-    bool prunedBridge  = false;
+    bool prunedNativeTextInput = false;
 
     if (_capturedControl && ! classifyInteractionState(_capturedControl).effectivelyInteractive)
     {
@@ -3078,10 +3177,10 @@ void WindowHost::PruneStaleInteractionState() noexcept
         prunedFocus     = true;
     }
 
-    if (_textInputBridgeControl && ! classifyInteractionState(_textInputBridgeControl).effectivelyInteractive)
+    if (_nativeTextInputControl && ! classifyInteractionState(_nativeTextInputControl).effectivelyInteractive)
     {
-        DestroyTextInputBridge();
-        prunedBridge = true;
+        DeactivateNativeTextInputSession(false);
+        prunedNativeTextInput = true;
     }
 
     if (_pendingPointerDoubleClick.target && ! classifyInteractionState(_pendingPointerDoubleClick.target).effectivelyInteractive)
@@ -3089,19 +3188,19 @@ void WindowHost::PruneStaleInteractionState() noexcept
         ClearPendingPointerDoubleClick();
     }
 
-    if ((prunedCapture || prunedHover || prunedFocus || prunedBridge) && IsInteractionDiagnosticsEnabled(_hwnd))
+    if ((prunedCapture || prunedHover || prunedFocus || prunedNativeTextInput) && IsInteractionDiagnosticsEnabled(_hwnd))
     {
-        Debug::Info(L"DxUi::WindowHost: prune hwnd={:#x} capture={} hover={} focus={} bridge={} remainingFocus={} remainingHover={} remainingCapture={} "
-                    L"activeBridge={}",
+        Debug::Info(L"DxUi::WindowHost: prune hwnd={:#x} capture={} hover={} focus={} nativeTextInput={} remainingFocus={} remainingHover={} "
+                    L"remainingCapture={} activeTextInput={}",
                     reinterpret_cast<uintptr_t>(_hwnd),
                     prunedCapture ? L"true" : L"false",
                     prunedHover ? L"true" : L"false",
                     prunedFocus ? L"true" : L"false",
-                    prunedBridge ? L"true" : L"false",
+                    prunedNativeTextInput ? L"true" : L"false",
                     static_cast<const void*>(_focusedControl),
                     static_cast<const void*>(_hoveredControl),
                     static_cast<const void*>(_capturedControl),
-                    HasActiveTextInputBridge() ? L"true" : L"false");
+                    HasActiveTextInput() ? L"true" : L"false");
     }
 }
 
@@ -3109,8 +3208,7 @@ void WindowHost::ResetRootInteractionState() noexcept
 {
     ClearPendingPointerDoubleClick();
     ReleaseMouseCapture();
-    DeactivateTextInputBridge(true);
-    DestroyTextInputBridge();
+    DeactivateTextInput(true);
     _modifierState = 0u;
     if (_hoveredControl && ControlBelongsToTree(_root.get(), _hoveredControl))
     {

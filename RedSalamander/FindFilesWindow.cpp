@@ -2312,7 +2312,7 @@ void FindFilesWindow::PersistUiState(bool updateHistory) noexcept
         return;
     }
 
-    _dxHost.CommitFocusedTextInputBridge(false);
+    _dxHost.CommitFocusedTextInput();
     Common::Settings::SearchDialogSettings settings = _settings->search.value_or(Common::Settings::SearchDialogSettings{});
     settings.lastRoot                               = GetComboText(_rootCombo);
     settings.lastNamePattern                        = GetComboText(_nameCombo);
@@ -2374,7 +2374,7 @@ std::optional<SearchRequest> FindFilesWindow::BuildSearchRequest(const SearchTex
 {
     if (! textOverride)
     {
-        _dxHost.CommitFocusedTextInputBridge(false);
+        _dxHost.CommitFocusedTextInput();
     }
     std::wstring rootPath       = textOverride ? textOverride->rootPath : GetComboText(_rootCombo);
     std::wstring namePattern    = textOverride ? textOverride->namePattern : GetComboText(_nameCombo);
@@ -3567,15 +3567,15 @@ bool FindFilesWindow::DebugSetComboText(FindFilesDebugFocusTarget target, std::w
     }
 
     const std::wstring expectedText = text;
-    _dxHost.CommitFocusedTextInputBridge(false);
+    _dxHost.CommitFocusedTextInput();
     combo->SetText(std::move(text));
     SetFocus(_hWnd.get());
     _dxHost.SetFocusControl(combo);
-    _dxHost.SyncTextInputBridge(combo);
+    _dxHost.SyncTextInput(combo);
     UpdateActionButtons();
     PersistUiState(false);
     _dxHost.SetFocusControl(combo);
-    _dxHost.SyncTextInputBridge(combo);
+    _dxHost.SyncTextInput(combo);
     _debugLastSetComboTarget        = target;
     _debugLastSetComboRequestedText = expectedText;
     _debugLastSetComboObservedText  = GetComboText(combo);
@@ -3596,7 +3596,7 @@ bool FindFilesWindow::DebugSetComboText(FindFilesDebugFocusTarget target, std::w
 
 bool FindFilesWindow::DebugStartSearch(FindFilesDebugOperation operation) noexcept
 {
-    _dxHost.CommitFocusedTextInputBridge(false);
+    _dxHost.CommitFocusedTextInput();
 
     SearchTextOverride textOverride{
         .rootPath       = GetComboText(_rootCombo),

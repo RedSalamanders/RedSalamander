@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -106,6 +107,55 @@ struct Result
     }
 
     return previous;
+}
+
+[[nodiscard]] inline float ResolveNearestScrollStop(float targetOffsetDip,
+                                                    float maxHorizontalOffsetDip,
+                                                    std::span<const Column> columns) noexcept
+{
+    const float maxOffset = (std::max)(0.0f, maxHorizontalOffsetDip);
+    if (maxOffset <= 0.0f)
+    {
+        return 0.0f;
+    }
+
+    const float target = ClampScrollOffset(targetOffsetDip, maxOffset);
+    float nearest      = 0.0f;
+    float bestDistance = std::abs(target - nearest);
+
+    for (size_t columnIndex = 1u; columnIndex < columns.size(); ++columnIndex)
+    {
+        const float stop     = ClampScrollOffset(columns[columnIndex].leftDip, maxOffset);
+        const float distance = std::abs(target - stop);
+        if (distance < bestDistance)
+        {
+            nearest      = stop;
+            bestDistance = distance;
+        }
+    }
+
+    const float maxDistance = std::abs(target - maxOffset);
+    if (maxDistance < bestDistance)
+    {
+        nearest = maxOffset;
+    }
+
+    return nearest;
+}
+
+[[nodiscard]] inline std::optional<size_t> ResolveHitColumnIndex(float xDip, std::span<const Column> columns) noexcept
+{
+    for (size_t columnIndex = 0u; columnIndex < columns.size(); ++columnIndex)
+    {
+        const Column& column = columns[columnIndex];
+        const float leftDip  = columnIndex == 0u ? (std::min)(0.0f, column.leftDip) : column.leftDip;
+        if (xDip >= leftDip && xDip <= column.RightDip())
+        {
+            return columnIndex;
+        }
+    }
+
+    return std::nullopt;
 }
 
 [[nodiscard]] inline float ResolveTextWidth(const ItemTextMetrics& item, bool includeDetailsLine, bool includeMetadataLine) noexcept

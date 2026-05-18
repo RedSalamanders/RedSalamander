@@ -29,7 +29,6 @@
 
 namespace
 {
-constexpr wchar_t kFolderWindowDxHostClassName[] = L"RedSalamander.FolderWindow.DxHost";
 constexpr UINT_PTR kPreviewPaneRefreshTimerId    = 0x7250;
 
 [[nodiscard]] bool EnsureFolderWindowDxHostClass(HINSTANCE instance) noexcept
@@ -1382,6 +1381,27 @@ LRESULT FolderWindow::OnNotify(LPARAM data)
 
 LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
+    if (_hCommandLineHost && hwnd == _hCommandLineHost.get())
+    {
+        if (msg == WM_NCDESTROY)
+        {
+            handled = true;
+            _commandLineHost.ReleaseMouseCapture();
+            _commandLineHost.Detach();
+            _commandLineLabel = nullptr;
+            _commandLineField = nullptr;
+            _hCommandLineHost.release();
+            return 0;
+        }
+
+        const LRESULT result = _commandLineHost.HandleMessage(hwnd, msg, wp, lp, handled);
+        if (msg == WM_SIZE)
+        {
+            UpdateCommandLineHostLayout();
+        }
+        return handled ? result : 0;
+    }
+
     const auto dispatch = [&](Pane pane,
                               wil::unique_hwnd& expectedHwnd,
                               RedSalamander::DxUi::WindowHost& host,

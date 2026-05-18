@@ -3290,7 +3290,9 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     constexpr size_t kFetchChunkSize = 200u;
     HRESULT metaHr                   = S_OK;
     size_t repairFetchCount          = 0;
+    const size_t repairFetchBudget    = ResolveImapSummaryRepairFetchBudget(uids.size());
     size_t missingSummaryCount        = 0;
+    bool repairBudgetWarningLogged    = false;
 
     auto collectMissingSummaries = [&summaries](std::span<const uint64_t> requested) -> std::vector<uint64_t>
     {
@@ -3313,14 +3315,40 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
             return S_OK;
         }
 
+        auto tryConsumeRepairFetch = [&](std::wstring_view phase, size_t missingCount) -> bool
+        {
+            if (repairFetchCount < repairFetchBudget)
+            {
+                ++repairFetchCount;
+                return true;
+            }
+
+            if (! repairBudgetWarningLogged)
+            {
+                repairBudgetWarningLogged = true;
+                Debug::Warning(L"imap message summary repair budget exhausted: reason={:#x} mailbox='{}' server='{}' budget={} missing={} phase='{}'",
+                               reasonHr,
+                               mailboxName,
+                               Utf16FromUtf8(conn.host),
+                               repairFetchBudget,
+                               missingCount,
+                               phase);
+            }
+            return false;
+        };
+
         constexpr size_t kRepairBatchSize = 16u;
         HRESULT repairResult              = S_OK;
         const std::vector<ImapUidBatchRange> ranges = BuildImapUidBatchRanges(missingUids.size(), kRepairBatchSize);
         for (const ImapUidBatchRange& range : ranges)
         {
             const std::span<const uint64_t> batch(missingUids.data() + range.offset, range.count);
+            bool repairBudgetExhaustedInPass = false;
 
-            ++repairFetchCount;
+            if (! tryConsumeRepairFetch(L"batch", missingUids.size()))
+            {
+                break;
+            }
             const HRESULT batchHr = ImapFetchMessageSummaries(conn, serverMailboxPath, batch, summaries);
             if (FAILED(batchHr))
             {
@@ -3345,7 +3373,11 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
 
                 const uint64_t singleUid = uid;
                 const std::span<const uint64_t> one(&singleUid, 1);
-                ++repairFetchCount;
+                if (! tryConsumeRepairFetch(L"single", missingUids.size()))
+                {
+                    repairBudgetExhaustedInPass = true;
+                    break;
+                }
                 const HRESULT singleHr = ImapFetchMessageSummaries(conn, serverMailboxPath, one, summaries);
                 if (FAILED(singleHr))
                 {
@@ -3360,6 +3392,11 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
                                    Utf16FromUtf8(conn.host),
                                    uid);
                 }
+            }
+
+            if (repairBudgetExhaustedInPass)
+            {
+                break;
             }
         }
 

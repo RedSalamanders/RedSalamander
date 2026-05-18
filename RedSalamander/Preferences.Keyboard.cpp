@@ -117,6 +117,38 @@ constexpr size_t kScopeComboIndexFolderView  = 2u;
     return text;
 }
 
+[[nodiscard]] bool IsDefaultBindingForScope(ShortcutScope scope, const Common::Settings::ShortcutBinding& binding)
+{
+    switch (scope)
+    {
+        case ShortcutScope::FunctionBar: return ShortcutDefaults::IsDefaultFunctionBarBinding(binding);
+        case ShortcutScope::FolderView: return ShortcutDefaults::IsDefaultFolderViewBinding(binding);
+    }
+    return false;
+}
+
+[[nodiscard]] bool HasShortcutChord(const std::vector<Common::Settings::ShortcutBinding>& bindings, uint32_t vk, uint32_t modifiers) noexcept
+{
+    const uint32_t chordKey = ShortcutManager::MakeChordKey(vk, modifiers);
+    return std::any_of(bindings.begin(), bindings.end(), [=](const Common::Settings::ShortcutBinding& binding) noexcept {
+        return ShortcutManager::MakeChordKey(binding.vk, binding.modifiers) == chordKey;
+    });
+}
+
+void AddUnassignedShortcutIfMissing(std::vector<Common::Settings::ShortcutBinding>& bindings, uint32_t vk, uint32_t modifiers)
+{
+    if (HasShortcutChord(bindings, vk, modifiers))
+    {
+        return;
+    }
+
+    Common::Settings::ShortcutBinding binding;
+    binding.vk        = vk;
+    binding.modifiers = modifiers & 0x7u;
+    binding.commandId = ShortcutIds::kUnassignedCommandId;
+    bindings.push_back(std::move(binding));
+}
+
 void LogKeyboardDxState(const wchar_t* reason,
                         HWND pageHostWindow,
                         HWND hostWindow,
@@ -141,7 +173,7 @@ void LogKeyboardDxState(const wchar_t* reason,
                 dxState,
                 wrapperChildren,
                 host ? static_cast<const void*>(host->GetFocusControl()) : nullptr,
-                (host && host->HasActiveTextInputBridge()) ? L"true" : L"false",
+                (host && host->HasActiveTextInput()) ? L"true" : L"false",
                 GetDxHostDebugWidthPx(host),
                 GetDxHostDebugHeightPx(host),
                 GetDxHostDebugRenderCount(host),
@@ -2033,7 +2065,7 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
     for (size_t i = 0; i < shortcuts.functionBar.size(); ++i)
     {
         const auto& binding = shortcuts.functionBar[i];
-        if (binding.commandId.empty())
+        if (binding.commandId.empty() || ShortcutIds::IsUnassignedCommandId(binding.commandId))
         {
             continue;
         }
@@ -2043,7 +2075,7 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
     for (size_t i = 0; i < shortcuts.folderView.size(); ++i)
     {
         const auto& binding = shortcuts.folderView[i];
-        if (binding.commandId.empty())
+        if (binding.commandId.empty() || ShortcutIds::IsUnassignedCommandId(binding.commandId))
         {
             continue;
         }
@@ -2080,7 +2112,7 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 
     auto ensureCommand = [&](const std::wstring& commandId)
     {
-        if (commandId.empty())
+        if (commandId.empty() || ShortcutIds::IsUnassignedCommandId(commandId))
         {
             return;
         }
@@ -2397,7 +2429,7 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
         }
 
         const auto& binding = (*bindings)[i];
-        if (binding.commandId.empty())
+        if (binding.commandId.empty() || ShortcutIds::IsUnassignedCommandId(binding.commandId))
         {
             continue;
         }
@@ -2465,6 +2497,18 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
     }
 
     const uint32_t chordKey = ShortcutManager::MakeChordKey(vk, modifiers);
+    uint32_t previousTargetVk        = 0u;
+    uint32_t previousTargetModifiers = 0u;
+    bool preservePreviousDefaultChordAsUnassigned = false;
+    if (targetIndex != std::numeric_limits<size_t>::max())
+    {
+        const Common::Settings::ShortcutBinding& targetBinding = (*bindings)[targetIndex];
+        previousTargetVk                                      = targetBinding.vk;
+        previousTargetModifiers                               = targetBinding.modifiers;
+        preservePreviousDefaultChordAsUnassigned =
+            IsDefaultBindingForScope(state.keyboardCaptureScope, targetBinding) &&
+            ShortcutManager::MakeChordKey(previousTargetVk, previousTargetModifiers) != chordKey;
+    }
 
     std::vector<size_t> conflictIndices;
     for (size_t i = 0; i < bindings->size(); ++i)
@@ -2510,6 +2554,10 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
         (*bindings)[targetIndex].vk        = vk;
         (*bindings)[targetIndex].modifiers = modifiers;
         (*bindings)[targetIndex].commandId = state.keyboardCaptureCommandId;
+        if (preservePreviousDefaultChordAsUnassigned)
+        {
+            AddUnassignedShortcutIfMissing(*bindings, previousTargetVk, previousTargetModifiers);
+        }
     }
     else
     {
@@ -2632,7 +2680,15 @@ void KeyboardPane::RemoveSelectedShortcut(HWND host, PreferencesDialogState& sta
         return;
     }
 
-    bindings->erase(bindings->begin() + static_cast<ptrdiff_t>(bindingIndex));
+    Common::Settings::ShortcutBinding& binding = (*bindings)[bindingIndex];
+    if (IsDefaultBindingForScope(row.scope, binding))
+    {
+        binding.commandId = ShortcutIds::kUnassignedCommandId;
+    }
+    else
+    {
+        bindings->erase(bindings->begin() + static_cast<ptrdiff_t>(bindingIndex));
+    }
     SetDirty(GetParent(host), state);
     Refresh(host, state);
 }

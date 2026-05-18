@@ -49,8 +49,7 @@ constexpr UINT_PTR kRightNavigationId               = 1003;
 constexpr UINT_PTR kRightFolderViewId               = 1004;
 constexpr UINT_PTR kLeftStatusBarId                 = 1005;
 constexpr UINT_PTR kRightStatusBarId                = 1006;
-constexpr UINT_PTR kCommandLineLabelId              = 1007;
-constexpr UINT_PTR kCommandLineEditId               = 1008;
+constexpr UINT_PTR kCommandLineHostId               = 1007;
 constexpr UINT_PTR kLeftFilterBarId                 = 1009;
 constexpr UINT_PTR kRightFilterBarId                = 1010;
 constexpr UINT_PTR kLeftPreviewTabsId               = 1011;
@@ -58,6 +57,7 @@ constexpr UINT_PTR kRightPreviewTabsId              = 1012;
 constexpr UINT_PTR kLeftPreviewContentId            = 1013;
 constexpr UINT_PTR kRightPreviewContentId           = 1014;
 constexpr wchar_t kFolderWindowStatusBarClassName[] = L"RedSalamander.FolderWindow.StatusBar";
+constexpr wchar_t kFolderWindowDxHostClassName[]    = L"RedSalamander.FolderWindow.DxHost";
 
 constexpr wchar_t kStatusBarOwnerProp[]         = L"RedSalamander.StatusBar.Owner";
 constexpr wchar_t kStatusBarSelectionTextProp[] = L"RedSalamander.StatusBar.SelectionText";
@@ -65,8 +65,6 @@ constexpr wchar_t kStatusBarSecurityTextProp[]  = L"RedSalamander.StatusBar.Secu
 constexpr wchar_t kStatusBarSortTextProp[]      = L"RedSalamander.StatusBar.SortText";
 constexpr wchar_t kStatusBarFocusHueProp[]      = L"RedSalamander.StatusBar.FocusHue";
 constexpr wchar_t kStatusBarSortHotProp[]       = L"RedSalamander.StatusBar.SortHot";
-constexpr wchar_t kCommandLineEditOriginalWndProcProp[] = L"RS.FolderWindow.CommandLine.Edit.OriginalWndProc";
-constexpr wchar_t kCommandLineEditOwnerProp[]           = L"RS.FolderWindow.CommandLine.Edit.Owner";
 
 constexpr int kStatusBarPartSelection = 0;
 constexpr int kStatusBarPartSecurity  = 1;

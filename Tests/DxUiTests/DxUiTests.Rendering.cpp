@@ -1116,6 +1116,36 @@ void TestAttachedHostSameSizeRepaintDoesNotResizeSwapChain()
 #endif
 }
 
+void TestAttachedHostResizeDoesNotFlushD2DInWrongState()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root   = std::make_unique<Panel>();
+    auto* label = root->AddChild<Label>(L"resize");
+    label->SetBounds(D2D1::RectF(0.0f, 0.0f, 160.0f, 28.0f));
+    window.Host().SetRoot(std::move(root));
+
+    ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
+    window.PumpMessages();
+    RedrawWindow(window.Hwnd(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    window.PumpMessages();
+
+#ifdef _DEBUG
+    const uint64_t initialFlushFailureCount = window.Host().DebugGetSwapChainPrepareD2DFlushFailureCount();
+#endif
+
+    SetWindowPos(window.Hwnd(), nullptr, 0, 0, 420, 240, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    window.PumpMessages();
+    RedrawWindow(window.Hwnd(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    window.PumpMessages();
+
+#ifdef _DEBUG
+    Require(window.Host().DebugGetSwapChainPrepareD2DFlushFailureCount() == initialFlushFailureCount,
+            "attached host resize releases the D2D target without flushing in a wrong state");
+#endif
+}
+
 void TestAttachedHostRecoversAfterSimulatedDeviceLoss()
 {
     using namespace RedSalamander::DxUi;
@@ -1225,5 +1255,6 @@ void RunRenderingTests()
     runTest("TestAttachedComboBoxPopupScrollingStaysStable", TestAttachedComboBoxPopupScrollingStaysStable);
     runTest("TestAttachedComboBoxPopupLongRunScrollingStaysStable", TestAttachedComboBoxPopupLongRunScrollingStaysStable);
     runTest("TestAttachedHostSameSizeRepaintDoesNotResizeSwapChain", TestAttachedHostSameSizeRepaintDoesNotResizeSwapChain);
+    runTest("TestAttachedHostResizeDoesNotFlushD2DInWrongState", TestAttachedHostResizeDoesNotFlushD2DInWrongState);
     runTest("TestAttachedHostRecoversAfterSimulatedDeviceLoss", TestAttachedHostRecoversAfterSimulatedDeviceLoss);
 }

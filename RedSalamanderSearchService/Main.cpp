@@ -25,6 +25,7 @@
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
+#include "MinimumOsVersion.h"
 #include "SearchServiceBroker.h"
 #include "SqliteIndexStore.h"
 
@@ -3250,6 +3251,12 @@ void WINAPI ServiceMain(DWORD argc, wchar_t** argv) noexcept
 
 int wmain()
 {
+    if (! Common::MinimumOsVersion::EnsureCurrentWindowsVersionSupported(nullptr, Common::MinimumOsVersion::UnsupportedVersionNotification::None))
+    {
+        WriteConsoleText(std::format(L"{}\r\n", Common::MinimumOsVersion::kUnsupportedWindowsMessage), true);
+        return 1;
+    }
+
     const ParsedArguments parsed = ParseArguments();
     if (! parsed.errorMessage.empty())
     {

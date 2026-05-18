@@ -4451,8 +4451,8 @@ struct OwnedMenuSessionEscapeResult
                                                 SelfTest::Scale(3000ms),
                                                 &pastedSnapshot),
                   L"Ctrl+V/Paste command should replace the selected address-bar edit text while edit mode is active.");
-    state.Require(ReadWindowText(pastedSnapshot.currentEditBridgeHwnd) == pastedText,
-                  L"Ctrl+V/Paste command should keep the hidden address-bar text bridge synchronized with the visible edit text.");
+    state.Require(ReadWindowText(pastedSnapshot.currentEditInputHwnd) == pastedText,
+                  L"Ctrl+V/Paste command should keep the address-bar text input synchronized with the retained edit text.");
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_SELECTION_SELECT_ALL, 0), 0);
     PumpPendingMessages();
 
@@ -4476,8 +4476,34 @@ struct OwnedMenuSessionEscapeResult
                                                 SelfTest::Scale(3000ms),
                                                 &cutSnapshot),
                   L"Ctrl+X/Cut command should clear the selected address-bar edit text while edit mode is active.");
-    state.Require(ReadWindowText(cutSnapshot.currentEditBridgeHwnd).empty(),
-                  L"Ctrl+X/Cut command should keep the hidden address-bar text bridge synchronized after clearing the edit text.");
+    state.Require(ReadWindowText(cutSnapshot.currentEditInputHwnd).empty(),
+                  L"Ctrl+X/Cut command should keep the address-bar text input synchronized after clearing the retained edit text.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring invalidPathText = (root / L"missing-address-target").wstring();
+    state.Require(SetWindowTextW(cutSnapshot.currentEditInputHwnd, invalidPathText.c_str()) != FALSE,
+                  L"Failed to seed invalid address-bar edit text for validation feedback coverage.");
+    SendMessageW(cutSnapshot.currentEditInputHwnd,
+                 EM_SETSEL,
+                 static_cast<WPARAM>(invalidPathText.size()),
+                 static_cast<LPARAM>(invalidPathText.size()));
+    SendMessageW(cutSnapshot.currentEditInputHwnd, WM_KEYDOWN, VK_RETURN, 0);
+    SendMessageW(cutSnapshot.currentEditInputHwnd, WM_KEYUP, VK_RETURN, 0);
+    PumpPendingMessages();
+
+    NavigationViewDebugSnapshot invalidSnapshot{};
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return value.editMode && value.currentEditHostHwnd == editHost && value.currentEditText == invalidPathText &&
+               value.currentEditHelpText.find(invalidPathText) != std::wstring::npos;
+    },
+                                                SelfTest::Scale(3000ms),
+                                                &invalidSnapshot),
+                  L"Invalid address-bar path should keep edit mode open and expose validation feedback through the current edit HelpText snapshot.");
     if (! state.failure.empty())
     {
         return false;
@@ -9070,6 +9096,11 @@ struct OwnedMenuSessionEscapeResult
     state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available.");
     state.Require(snapshot.visible, L"Bring Current Directory should show the command-line input.");
     state.Require(snapshot.hasKeyboardFocus, L"Bring Current Directory should focus the command-line input.");
+    state.Require(snapshot.usesDxUiHost, L"Command-line input should render through a DxUi host.");
+    state.Require(snapshot.usesNativeTextInput, L"Command-line input should use the native DxUi text-input backend.");
+    state.Require(snapshot.visibleNativeChildControlCount == 0u,
+                  std::format(L"Command-line input should not expose visible native STATIC/EDIT controls; got {}.",
+                              snapshot.visibleNativeChildControlCount));
     state.Require(snapshot.pane == FolderWindow::Pane::Left, L"Command-line input should be associated with the focused left pane.");
     state.Require(snapshot.workingDirectory == root, L"Command-line working directory should be the focused pane folder.");
     const std::wstring quotedRoot = QuoteExpectedCommandLineText(root.wstring());

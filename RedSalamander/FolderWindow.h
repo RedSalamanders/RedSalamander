@@ -754,6 +754,7 @@ public:
         uint64_t thumbnailCacheHitCount = 0;
         uint64_t thumbnailShellSuccessCount = 0;
         uint64_t thumbnailWicSuccessCount = 0;
+        uint64_t thumbnailWicFactoryCreateCount = 0;
         uint64_t thumbnailDecodeFailureCount = 0;
         uint64_t thumbnailVisibleApplyCount = 0;
         uint64_t thumbnailVisibleItemCount = 0;
@@ -976,10 +977,13 @@ public:
     [[nodiscard]] bool DebugGetIncrementalSearchSnapshot(Pane pane, FolderView::IncrementalSearchDebugSnapshot& out) const noexcept;
     struct CommandLineDebugSnapshot
     {
-        bool visible          = false;
-        bool hasKeyboardFocus = false;
-        Pane pane             = Pane::Left;
-        HWND editHwnd         = nullptr;
+        bool visible                         = false;
+        bool hasKeyboardFocus                = false;
+        bool usesDxUiHost                    = false;
+        bool usesNativeTextInput             = false;
+        size_t visibleNativeChildControlCount = 0u;
+        Pane pane                             = Pane::Left;
+        HWND editHwnd                         = nullptr;
         std::wstring text;
         std::filesystem::path workingDirectory;
     };
@@ -1074,9 +1078,6 @@ private:
     LRESULT OnChangeCaseCompleted(LPARAM lp) noexcept;
     LRESULT OnChangeAttributesTaskUpdate(LPARAM lp) noexcept;
     LRESULT OnChangeAttributesCompleted(LPARAM lp) noexcept;
-    static LRESULT CALLBACK CommandLineEditWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-    LRESULT CommandLineEditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
-
     // File operations (internal implementation in FolderWindow.FileOperations.cpp)
     void EnsureFileOperations();
     HRESULT StartFileOperationFromFolderView(Pane pane, FolderView::FileOperationRequest request) noexcept;
@@ -1087,6 +1088,7 @@ private:
     // Layout
     void CalculateLayout();
     void AdjustChildWindows();
+    void UpdateCommandLineHostLayout() noexcept;
     void UpdatePaneStatusBar(Pane pane);
     void UpdatePaneFilterBar(Pane pane);
     void RefreshFilterBarHistoryItems(Pane pane) noexcept;
@@ -1495,8 +1497,10 @@ private:
     wil::unique_hbrush _splitterBrush;
     wil::unique_hbrush _splitterGripBrush;
     wil::unique_hbrush _splitterArrowHoverBrush;
-    wil::unique_hwnd _hCommandLineLabel;
-    wil::unique_hwnd _hCommandLineEdit;
+    wil::unique_hwnd _hCommandLineHost;
+    RedSalamander::DxUi::WindowHost _commandLineHost;
+    RedSalamander::DxUi::Label* _commandLineLabel = nullptr;
+    RedSalamander::DxUi::TextField* _commandLineField = nullptr;
     bool _commandLineVisible = false;
     Pane _commandLinePane    = Pane::Left;
     std::filesystem::path _commandLineWorkingDirectory;

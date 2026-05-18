@@ -13,45 +13,6 @@
 #include "PlugInterfaces/NavigationMenu.h"
 #include "resource.h"
 
-namespace
-{
-constexpr wchar_t kNavigationEditOriginalWndProcProp[] = L"RS.NavigationView.Edit.OriginalWndProc";
-constexpr wchar_t kNavigationEditOwnerProp[]           = L"RS.NavigationView.Edit.Owner";
-
-[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
-{
-    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, originalWndProcProp);
-}
-
-[[nodiscard]] bool InstallWndProcHook(HWND hwnd, WNDPROC wndProc, const wchar_t* originalWndProcProp) noexcept
-{
-    if (! hwnd || ! wndProc)
-    {
-        return false;
-    }
-
-    if (GetStoredWndProc(hwnd, originalWndProcProp))
-    {
-        return true;
-    }
-
-    const auto previous =
-        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(wndProc)));
-    if (! previous)
-    {
-        return false;
-    }
-
-    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(previous)))
-    {
-        static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previous)));
-        return false;
-    }
-
-    return true;
-}
-} // namespace
-
 ATOM NavigationView::RegisterFullPathPopupWndClass(HINSTANCE instance)
 {
     static ATOM atom = 0;
@@ -441,7 +402,7 @@ LRESULT NavigationView::OnFullPathPopupMouseWheel(HWND hwnd, int delta)
 
 LRESULT NavigationView::OnFullPathPopupCtlColorEdit(HWND hwnd, HDC hdc, HWND hwndControl)
 {
-    if (_fullPathPopupEdit && hwndControl == _fullPathPopupEdit->GetBridgeHwnd())
+    if (_fullPathPopupEdit && hwndControl == _fullPathPopupEdit->GetTextInputHwnd())
     {
         SetTextColor(hdc, ColorToCOLORREF(_theme.text));
         SetBkColor(hdc, _theme.gdiBackground);
@@ -759,8 +720,12 @@ void NavigationView::UpdateFullPathPopupWindow()
         x = std::max(static_cast<int>(work.left), static_cast<int>(work.right - winWidth));
     }
 
-    x = std::clamp(x, static_cast<int>(work.left), static_cast<int>(work.right - winWidth));
-    y = std::clamp(y, static_cast<int>(work.top), static_cast<int>(work.bottom - winHeight));
+    const int minX = static_cast<int>(work.left);
+    const int minY = static_cast<int>(work.top);
+    const int maxX = std::max(minX, static_cast<int>(work.right - winWidth));
+    const int maxY = std::max(minY, static_cast<int>(work.bottom - winHeight));
+    x = std::clamp(x, minX, maxX);
+    y = std::clamp(y, minY, maxY);
 
     if (! _fullPathPopup)
     {
@@ -1150,6 +1115,7 @@ void NavigationView::EnterFullPathPopupEditMode()
         }
 
         hostState->hwnd.reset(hwnd);
+        hostState->host.SetTextInputBackend(RedSalamander::DxUi::TextInputBackend::Native);
         hostState->host.SetTheme(MakeNavigationDxEditPalette(_appTheme, _theme));
 
         auto field       = std::make_unique<RedSalamander::DxUi::TextField>();
@@ -1159,13 +1125,6 @@ void NavigationView::EnterFullPathPopupEditMode()
         hostState->field->SetCaretColor(_theme.text);
         hostState->field->SetHorizontalTextPadding(2.0f, 2.0f);
         hostState->field->SetVerticalTextPadding(1.0f, 1.0f);
-        hostState->field->SetOnBlur([this]() noexcept
-        {
-            if (_fullPathPopupEditMode)
-            {
-                ExitFullPathPopupEditMode(false);
-            }
-        });
         hostState->host.SetRoot(std::move(field));
         _fullPathPopupEdit = std::move(hostState);
     }
@@ -1176,22 +1135,52 @@ void NavigationView::EnterFullPathPopupEditMode()
         return;
     }
 
+    _fullPathPopupEdit->field->SetOnTextChanged([this](std::wstring_view /*text*/)
+    {
+        if (_fullPathPopupEdit)
+        {
+            ClearEditValidationError(*_fullPathPopupEdit);
+        }
+    });
+    _fullPathPopupEdit->field->SetOnSubmitted([this]() { ExitFullPathPopupEditMode(true); });
+    _fullPathPopupEdit->field->SetOnBlur([this]() noexcept
+    {
+        if (_fullPathPopupEditMode)
+        {
+            ExitFullPathPopupEditMode(false);
+        }
+    });
+    _fullPathPopupEdit->host.SetOnEscape([this]() -> bool
+    {
+        _restoreFolderViewFocusAfterFullPathPopupClose = true;
+        ExitFullPathPopupEditMode(false);
+        return true;
+    });
+    _fullPathPopupEdit->host.SetOnTabBoundary([this](bool reverse) -> bool
+    {
+        ExitFullPathPopupEditMode(false);
+        if (_requestFolderViewFocusCallback)
+        {
+            _requestFolderViewFocusCallback();
+            return true;
+        }
+
+        if (_hWnd)
+        {
+            SetFocus(_hWnd.get());
+        }
+        MoveFocus(! reverse);
+        return true;
+    });
+
     _fullPathPopupEdit->field->SetText(_currentEditPath.value().native());
     _fullPathPopupEdit->field->SetSelectionRange(0u, _currentEditPath.value().native().size());
     UpdateFullPathPopupEditHostLayout();
     ApplyDxEditHostThemes();
     ShowWindow(_fullPathPopupEdit->hwnd.get(), SW_SHOW);
+    InstallEditHostHook(*_fullPathPopupEdit);
     _fullPathPopupEdit->host.SetFocusControl(_fullPathPopupEdit->field);
     SetFocus(_fullPathPopupEdit->hwnd.get());
-
-    if (const HWND bridge = _fullPathPopupEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
-    {
-        SetPropW(bridge, kNavigationEditOwnerProp, reinterpret_cast<HANDLE>(this));
-        if (! InstallWndProcHook(bridge, NavigationView::EditWndProc, kNavigationEditOriginalWndProcProp))
-        {
-            RemovePropW(bridge, kNavigationEditOwnerProp);
-        }
-    }
     InvalidateRect(_fullPathPopup.get(), nullptr, FALSE);
 }
 
@@ -1251,7 +1240,7 @@ void NavigationView::ExitFullPathPopupEditMode(bool accept)
         _fullPathPopupEditMode = false;
         const HWND focused     = GetFocus();
         if (focused && _fullPathPopupEdit->hwnd &&
-            (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetBridgeHwnd() ||
+            (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetTextInputHwnd() ||
              IsChild(_fullPathPopupEdit->hwnd.get(), focused) != FALSE))
         {
             SetFocus(_fullPathPopup.get());
@@ -1266,17 +1255,10 @@ void NavigationView::ExitFullPathPopupEditMode(bool accept)
     }
 
     const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, buffer);
-    const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_INVALID_PATH);
-
-    EDITBALLOONTIP tip{};
-    tip.cbStruct = sizeof(tip);
-    tip.pszTitle = title.c_str();
-    tip.pszText  = message.c_str();
-    tip.ttiIcon  = TTI_WARNING;
-    if (const HWND bridge = _fullPathPopupEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
+    ShowEditValidationError(*_fullPathPopupEdit, message);
+    if (const HWND inputHwnd = _fullPathPopupEdit->GetTextInputHwnd(); inputHwnd && IsWindow(inputHwnd) != FALSE)
     {
-        SendMessageW(bridge, EM_SHOWBALLOONTIP, 0, reinterpret_cast<LPARAM>(&tip));
-        SetFocus(bridge);
+        SetFocus(inputHwnd);
     }
     else if (_fullPathPopupEdit->hwnd)
     {

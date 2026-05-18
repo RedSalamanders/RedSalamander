@@ -632,7 +632,11 @@ void NavigationView::OnKillFocus(HWND newFocus)
         PostMessageW(GetParent(_hWnd.get()), WndMsg::kPaneFocusChanged, 0, 0);
     }
     if (_pathEdit && _pathEdit->hwnd &&
-        (newFocus == _pathEdit->hwnd.get() || newFocus == _pathEdit->GetBridgeHwnd() || IsChild(_pathEdit->hwnd.get(), newFocus) != FALSE))
+        (newFocus == _pathEdit->hwnd.get() || newFocus == _pathEdit->GetTextInputHwnd() || IsChild(_pathEdit->hwnd.get(), newFocus) != FALSE))
+    {
+        return;
+    }
+    if (IsEditValidationPopupWindow(newFocus))
     {
         return;
     }

@@ -13,6 +13,16 @@ struct ShortcutBinding;
 struct ShortcutsSettings;
 } // namespace Common::Settings
 
+namespace ShortcutIds
+{
+inline constexpr std::wstring_view kUnassignedCommandId = L"cmd/shortcut/unassigned";
+
+[[nodiscard]] constexpr bool IsUnassignedCommandId(std::wstring_view commandId) noexcept
+{
+    return commandId == kUnassignedCommandId;
+}
+} // namespace ShortcutIds
+
 class ShortcutManager
 {
 public:

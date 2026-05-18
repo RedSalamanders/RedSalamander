@@ -1,4 +1,5 @@
 #include "FolderViewInternal.h"
+#include "FolderViewSortPolicy.h"
 #include "StartupMetrics.h"
 #ifdef ENABLE_TESTS
 #include "SelfTestCommon.h"
@@ -1251,15 +1252,15 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
         return compareName(a, b);
     };
 
-    // Use parallel sorting for large directories (threshold: 1000 items)
-    constexpr size_t kParallelSortThreshold = 1000;
-    if (_items.size() >= kParallelSortThreshold)
+    // Parallel sorting has enough scheduling overhead that medium interactive folders are faster
+    // on the sequential path; keep parallelism for genuinely large directories.
+    if (FolderViewSortPolicy::ShouldUseParallelSort(_items.size()))
     {
-        std::stable_sort(std::execution::par, _items.begin(), _items.end(), compare);
+        std::sort(std::execution::par, _items.begin(), _items.end(), compare);
     }
     else
     {
-        std::stable_sort(_items.begin(), _items.end(), compare);
+        std::sort(_items.begin(), _items.end(), compare);
     }
 
     size_t newFocusedIndex = invalidIndex;

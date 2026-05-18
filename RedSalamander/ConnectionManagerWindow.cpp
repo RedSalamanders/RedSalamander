@@ -851,6 +851,9 @@ public:
     [[nodiscard]] bool DebugFocusTextField(TextField* edit) noexcept;
     [[nodiscard]] bool DebugSetTextFieldText(TextField* edit, std::wstring_view text) noexcept;
     [[nodiscard]] bool DebugGetTextFieldText(const TextField* edit, std::wstring& outText) const noexcept;
+    [[nodiscard]] bool DebugGetTextFieldCaretClientPoint(const TextField* edit, size_t caretIndex, POINT& outPoint) const noexcept;
+    [[nodiscard]] bool DebugGetTextFieldSelection(const TextField* edit, size_t& outStart, size_t& outEnd) const noexcept;
+    [[nodiscard]] bool DebugDoubleClickTextFieldAtCaretIndex(TextField* edit, size_t caretIndex) noexcept;
     [[nodiscard]] bool DebugSetUserText(std::wstring_view text) noexcept
     {
         return DebugSetTextFieldText(_editUser, text);
@@ -863,13 +866,25 @@ public:
     {
         return DebugGetTextFieldText(_editUser, outText);
     }
+    [[nodiscard]] bool DebugGetUserInputCaretClientPoint(size_t caretIndex, POINT& outPoint) const noexcept
+    {
+        return DebugGetTextFieldCaretClientPoint(_editUser, caretIndex, outPoint);
+    }
+    [[nodiscard]] bool DebugGetUserTextSelection(size_t& outStart, size_t& outEnd) const noexcept
+    {
+        return DebugGetTextFieldSelection(_editUser, outStart, outEnd);
+    }
+    [[nodiscard]] bool DebugDoubleClickUserTextAtCaretIndex(size_t caretIndex) noexcept
+    {
+        return DebugDoubleClickTextFieldAtCaretIndex(_editUser, caretIndex);
+    }
     [[nodiscard]] bool DebugGetSecretText(std::wstring& outText) const noexcept
     {
         return DebugGetTextFieldText(_editSecret, outText);
     }
-    [[nodiscard]] HWND DebugGetTextInputBridgeHandle() const noexcept
+    [[nodiscard]] HWND DebugGetTextInputHandle() const noexcept
     {
-        return _dxHost.GetTextInputBridgeHwnd();
+        return _dxHost.GetTextInputHwnd();
     }
     [[nodiscard]] Button* DebugGetCommandButton(UINT commandId) noexcept;
     [[nodiscard]] Toggle* DebugGetSavePasswordToggle() noexcept
@@ -2289,7 +2304,7 @@ void WindowImpl::OnShowSecretClicked() noexcept
         SetSecretMaskedAndUpdateButton(false);
         if (_dxHost.GetFocusControl() == _editSecret)
         {
-            _dxHost.SyncTextInputBridge(_editSecret);
+            _dxHost.SyncTextInput(_editSecret);
         }
         _dxHost.Invalidate();
         return;
@@ -3922,7 +3937,7 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     out.focusLabel.clear();
     const HWND nativeFocus  = GetFocus();
     const HWND hostHwnd     = _hwnd.get();
-    const HWND textEditHwnd = _dxHost.GetTextInputBridgeHwnd();
+    const HWND textEditHwnd = _dxHost.GetTextInputHwnd();
     out.nativeFocusIsHost   = nativeFocus && hostHwnd && nativeFocus == hostHwnd;
     out.nativeFocusIsTextEdit = nativeFocus && textEditHwnd && nativeFocus == textEditHwnd;
     out.nativeFocusInDialog =
@@ -4349,7 +4364,7 @@ bool WindowImpl::DebugFocusTextField(TextField* edit) noexcept
     }
 
     _dxHost.SetFocusControl(edit);
-    _dxHost.SyncTextInputBridge(edit);
+    _dxHost.SyncTextInput(edit);
     return _dxHost.GetFocusControl() == edit;
 }
 
@@ -4364,7 +4379,7 @@ bool WindowImpl::DebugSetTextFieldText(TextField* edit, std::wstring_view text) 
     edit->SetSelectionRange(text.size(), text.size());
     if (_dxHost.GetFocusControl() == edit)
     {
-        _dxHost.SyncTextInputBridge(edit);
+        _dxHost.SyncTextInput(edit);
     }
     return true;
 }
@@ -4378,6 +4393,88 @@ bool WindowImpl::DebugGetTextFieldText(const TextField* edit, std::wstring& outT
     }
 
     outText.assign(edit->GetText());
+    return true;
+}
+
+bool WindowImpl::DebugGetTextFieldCaretClientPoint(const TextField* edit, size_t caretIndex, POINT& outPoint) const noexcept
+{
+    outPoint = {};
+    if (! edit)
+    {
+        return false;
+    }
+
+    D2D1_RECT_F caretRectDip{};
+    if (! edit->DebugGetCaretRect(_dxHost, caretIndex, caretRectDip))
+    {
+        return false;
+    }
+
+    if (_editorPane)
+    {
+        for (const auto& child : _editorPane->GetChildren())
+        {
+            if (child.get() == edit)
+            {
+                const float scrollOffset = _editorPane->GetScrollOffset();
+                caretRectDip.top -= scrollOffset;
+                caretRectDip.bottom -= scrollOffset;
+                break;
+            }
+        }
+    }
+
+    outPoint.x = static_cast<LONG>(std::lround(_dxHost.DipsToPixels(caretRectDip.left))) + 2;
+    outPoint.y = static_cast<LONG>(std::lround(_dxHost.DipsToPixels((caretRectDip.top + caretRectDip.bottom) * 0.5f)));
+    RECT controlRect{};
+    if (DebugGetControlClientRect(edit, controlRect) && controlRect.right > controlRect.left + 4 && controlRect.bottom > controlRect.top + 4)
+    {
+        outPoint.x = std::clamp(outPoint.x, controlRect.left + 2, controlRect.right - 2);
+        outPoint.y = controlRect.top + ((controlRect.bottom - controlRect.top) / 2);
+    }
+    return true;
+}
+
+bool WindowImpl::DebugGetTextFieldSelection(const TextField* edit, size_t& outStart, size_t& outEnd) const noexcept
+{
+    outStart = 0u;
+    outEnd   = 0u;
+    if (! edit)
+    {
+        return false;
+    }
+
+    const std::optional<std::pair<size_t, size_t>> selection = edit->GetSelectionRange();
+    if (! selection.has_value())
+    {
+        return false;
+    }
+
+    outStart = selection->first;
+    outEnd   = selection->second;
+    return true;
+}
+
+bool WindowImpl::DebugDoubleClickTextFieldAtCaretIndex(TextField* edit, size_t caretIndex) noexcept
+{
+    if (! edit || ! DebugFocusTextField(edit))
+    {
+        return false;
+    }
+
+    POINT pointPx{};
+    if (! DebugGetTextFieldCaretClientPoint(edit, caretIndex, pointPx))
+    {
+        return false;
+    }
+
+    const D2D1_POINT_2F pointDip = _dxHost.PixelsToDipPoint(pointPx).AsD2D();
+    if (! edit->OnMouseDoubleClick(_dxHost, pointDip, false, 0u))
+    {
+        return false;
+    }
+
+    _dxHost.SyncTextInput(edit);
     return true;
 }
 
@@ -4564,9 +4661,9 @@ bool DebugGetSecretText(std::wstring& outText) noexcept
     return impl && impl->DebugGetSecretText(outText);
 }
 
-bool DebugGetTextInputBridgeHandle(HWND& outBridge) noexcept
+bool DebugGetTextInputHandle(HWND& outInput) noexcept
 {
-    outBridge       = nullptr;
+    outInput        = nullptr;
     const HWND hwnd = GetWindowHandle();
     if (! hwnd)
     {
@@ -4577,8 +4674,54 @@ bool DebugGetTextInputBridgeHandle(HWND& outBridge) noexcept
     {
         return false;
     }
-    outBridge = impl->DebugGetTextInputBridgeHandle();
-    return outBridge != nullptr;
+    outInput = impl->DebugGetTextInputHandle();
+    return outInput != nullptr;
+}
+
+bool DebugGetUserInputCaretClientPoint(size_t caretIndex, HWND& outHost, POINT& outPoint) noexcept
+{
+    outHost         = nullptr;
+    outPoint        = {};
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! impl)
+    {
+        return false;
+    }
+    outHost = hwnd;
+    return impl->DebugGetUserInputCaretClientPoint(caretIndex, outPoint);
+}
+
+bool DebugGetUserTextSelection(size_t& outStart, size_t& outEnd) noexcept
+{
+    outStart        = 0u;
+    outEnd          = 0u;
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! impl)
+    {
+        return false;
+    }
+    return impl->DebugGetUserTextSelection(outStart, outEnd);
+}
+
+bool DebugDoubleClickUserTextAtCaretIndex(size_t caretIndex) noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugDoubleClickUserTextAtCaretIndex(caretIndex);
 }
 
 bool DebugGetListHostHandle(HWND& outHost) noexcept
@@ -4881,9 +5024,24 @@ bool DebugGetConnectionManagerSecretText(std::wstring& outText) noexcept
     return RedSalamander::ConnectionManager::SingleCanvas::DebugGetSecretText(outText);
 }
 
-bool DebugGetConnectionManagerTextInputBridgeHandle(HWND& outBridge) noexcept
+bool DebugGetConnectionManagerTextInputHandle(HWND& outInput) noexcept
 {
-    return RedSalamander::ConnectionManager::SingleCanvas::DebugGetTextInputBridgeHandle(outBridge);
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugGetTextInputHandle(outInput);
+}
+
+bool DebugGetConnectionManagerUserInputCaretClientPoint(size_t caretIndex, HWND& outHost, POINT& outPoint) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugGetUserInputCaretClientPoint(caretIndex, outHost, outPoint);
+}
+
+bool DebugGetConnectionManagerUserTextSelection(size_t& outStart, size_t& outEnd) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugGetUserTextSelection(outStart, outEnd);
+}
+
+bool DebugDoubleClickConnectionManagerUserTextAtCaretIndex(size_t caretIndex) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugDoubleClickUserTextAtCaretIndex(caretIndex);
 }
 
 bool DebugGetConnectionManagerListHostHandle(HWND& outHost) noexcept

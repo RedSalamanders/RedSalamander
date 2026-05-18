@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "FolderViewColumnLayout.h"
+#include "FolderViewSortPolicy.h"
 
 #include <array>
 #include <vector>
@@ -98,6 +99,8 @@ public:
         Assert::AreEqual(156.0f, FolderViewColumnLayout::ResolveNextScrollStop(0.0f, 500.0f, columns), 0.01f);
         Assert::AreEqual(156.0f, FolderViewColumnLayout::ResolveNextScrollStop(18.0f, 500.0f, columns), 0.01f);
         Assert::AreEqual(474.0f, FolderViewColumnLayout::ResolveNextScrollStop(156.0f, 500.0f, columns), 0.01f);
+        Assert::AreEqual(156.0f, FolderViewColumnLayout::ResolveNearestScrollStop(220.0f, 500.0f, columns), 0.01f);
+        Assert::AreEqual(474.0f, FolderViewColumnLayout::ResolveNearestScrollStop(420.0f, 500.0f, columns), 0.01f);
     }
 
     TEST_METHOD(ScrollStops_FirstLeftRestoresInitialLeftGap)
@@ -112,6 +115,21 @@ public:
         Assert::AreEqual(0.0f, FolderViewColumnLayout::ResolvePreviousScrollStop(156.0f, 500.0f, columns), 0.01f);
         Assert::AreEqual(0.0f, FolderViewColumnLayout::ResolvePreviousScrollStop(18.0f, 500.0f, columns), 0.01f);
         Assert::AreEqual(156.0f, FolderViewColumnLayout::ResolvePreviousScrollStop(474.0f, 500.0f, columns), 0.01f);
+
+        const std::optional<size_t> leftGapHit = FolderViewColumnLayout::ResolveHitColumnIndex(1.0f, columns);
+        Assert::IsTrue(leftGapHit.has_value(), L"the leading gap should be treated as part of the first hit-test column");
+        Assert::AreEqual(static_cast<size_t>(0), leftGapHit.value(), L"left leading gap should hit column 0");
+        Assert::IsFalse(FolderViewColumnLayout::ResolveHitColumnIndex(146.0f, columns).has_value(), L"inter-column gaps should remain empty");
+    }
+
+    TEST_METHOD(SortPolicy_ParallelPathStartsAtLargeFolderThreshold)
+    {
+        Assert::IsFalse(FolderViewSortPolicy::ShouldUseParallelSort(FolderViewSortPolicy::kParallelSortThreshold - 1u),
+                        L"one item below the threshold should stay on the sequential sort path");
+        Assert::IsTrue(FolderViewSortPolicy::ShouldUseParallelSort(FolderViewSortPolicy::kParallelSortThreshold),
+                       L"the threshold item count should use the parallel sort path");
+        Assert::IsTrue(FolderViewSortPolicy::ShouldUseParallelSort(FolderViewSortPolicy::kParallelSortThreshold + 5000u),
+                       L"larger folders should keep using the parallel sort path");
     }
 };
 }

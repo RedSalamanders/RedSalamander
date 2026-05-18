@@ -929,7 +929,7 @@ bool HotPathsPane::DebugSetFirstPathText(std::wstring_view text) noexcept
     pathField->SetText(std::wstring(text));
     if (_pageHostDx)
     {
-        _pageHostDx->SyncTextInputBridge(pathField);
+        _pageHostDx->SyncTextInput(pathField);
     }
     return true;
 }

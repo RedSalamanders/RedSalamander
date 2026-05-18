@@ -1998,20 +1998,26 @@ void ViewerSpace::OnCreate(HWND hwnd)
     if (! _embeddedMode && _menuHandle)
     {
         _menuBarHost.SetTheme(_hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false));
-        _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
-        _menuBarHost.SetOnTabBoundary([hwnd](bool) noexcept
+        _menuBarHost.SetRefreshMenuStateCallback([this]
         {
-            if (hwnd && IsWindow(hwnd) != FALSE)
+            if (_hWnd)
             {
-                SetFocus(hwnd);
+                UpdateMenuState(_hWnd.get(), false);
+            }
+        });
+        _menuBarHost.SetOnTabBoundary([this](bool) noexcept
+        {
+            if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+            {
+                SetFocus(_hWnd.get());
             }
             return true;
         });
-        _menuBarHost.SetOnEscape([hwnd]() noexcept
+        _menuBarHost.SetOnEscape([this]() noexcept
         {
-            if (hwnd && IsWindow(hwnd) != FALSE)
+            if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
             {
-                SetFocus(hwnd);
+                SetFocus(_hWnd.get());
             }
             return true;
         });

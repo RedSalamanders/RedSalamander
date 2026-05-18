@@ -9,7 +9,7 @@ A minimal **Win32 desktop** C++ sample that:
 ## Build requirements
 
 - Visual Studio 2019/2022 (Desktop development with C++)
-- Windows 10/11 SDK installed (for C++/WinRT headers and `userconsentverifierinterop.h`)
+- Windows 11 24H2 SDK (10.0.26100.0) installed for C++/WinRT headers and `userconsentverifierinterop.h`
 
 ## How to run
 

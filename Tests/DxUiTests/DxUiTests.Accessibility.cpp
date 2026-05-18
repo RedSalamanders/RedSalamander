@@ -1,5 +1,9 @@
 #include "DxUiTestHelpers.h"
 
+#include <atomic>
+#include <chrono>
+#include <thread>
+
 namespace
 {
 
@@ -59,6 +63,99 @@ void TestAccessibilityRootRuntimeIdIncludesProviderSpecificValues()
     Require(secondValue != 0 || thirdValue != 0, "root runtime-id appends non-zero provider-specific identity values");
 }
 
+std::wstring ReadTextRangeText(ITextRangeProvider& range, int maxLength, const char* context)
+{
+    BSTR text = nullptr;
+    RequireSucceeded(range.GetText(maxLength, &text), context);
+    const auto freeText = wil::scope_exit([&] { SysFreeString(text); });
+    return std::wstring(text ? text : L"");
+}
+
+wil::com_ptr_nothrow<ITextRangeProvider> GetSingleTextRangeFromArray(SAFEARRAY* array, const char* context)
+{
+    Require(array != nullptr, context);
+
+    LONG lowerBound = 0;
+    LONG upperBound = -1;
+    RequireSucceeded(SafeArrayGetLBound(array, 1, &lowerBound), context);
+    RequireSucceeded(SafeArrayGetUBound(array, 1, &upperBound), context);
+    Require(lowerBound == upperBound, context);
+
+    IUnknown* rawUnknown = nullptr;
+    LONG index           = lowerBound;
+    RequireSucceeded(SafeArrayGetElement(array, &index, &rawUnknown), context);
+    wil::com_ptr_nothrow<IUnknown> unknown;
+    unknown.attach(rawUnknown);
+    Require(unknown != nullptr, context);
+
+    wil::com_ptr_nothrow<ITextRangeProvider> range;
+    RequireSucceeded(unknown.query_to(range.put()), context);
+    Require(range != nullptr, context);
+    return range;
+}
+
+std::vector<double> ReadDoubleArray(SAFEARRAY* array, const char* context)
+{
+    Require(array != nullptr, context);
+
+    LONG lowerBound = 0;
+    LONG upperBound = -1;
+    RequireSucceeded(SafeArrayGetLBound(array, 1, &lowerBound), context);
+    RequireSucceeded(SafeArrayGetUBound(array, 1, &upperBound), context);
+    Require(upperBound >= lowerBound, context);
+
+    std::vector<double> values(static_cast<size_t>(upperBound - lowerBound + 1));
+    for (LONG index = lowerBound; index <= upperBound; ++index)
+    {
+        double value = 0.0;
+        RequireSucceeded(SafeArrayGetElement(array, &index, &value), context);
+        values[static_cast<size_t>(index - lowerBound)] = value;
+    }
+    return values;
+}
+
+std::vector<size_t> ResolveVisualLineStarts(const RedSalamander::DxUi::WindowHost& host,
+                                            const RedSalamander::DxUi::TextField& field,
+                                            std::wstring_view text,
+                                            const char* context)
+{
+    std::vector<size_t> starts{0u};
+    std::optional<D2D1_RECT_F> lineRect = field.TryGetTextInputCaretRect(host, 0u);
+    Require(lineRect.has_value(), context);
+
+    for (size_t index = 1u; index <= text.size(); ++index)
+    {
+        const std::optional<D2D1_RECT_F> rect = field.TryGetTextInputCaretRect(host, index);
+        Require(rect.has_value(), context);
+        constexpr float kLineToleranceDip = 1.0f;
+        const bool sameVisualLine = std::fabs(rect->top - lineRect->top) <= kLineToleranceDip &&
+                                    std::fabs(rect->bottom - lineRect->bottom) <= kLineToleranceDip;
+        if (! sameVisualLine)
+        {
+            starts.push_back(index);
+            lineRect = rect;
+        }
+    }
+
+    return starts;
+}
+
+[[nodiscard]] RECT DipRectToScreenRect(AttachedHostWindow& window, const D2D1_RECT_F& rectDip)
+{
+    POINT points[2]{{static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.left))),
+                     static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.top)))},
+                    {static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.right))),
+                     static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.bottom)))}};
+    MapWindowPoints(window.Hwnd(), nullptr, points, 2);
+    return RECT{points[0].x, points[0].y, points[1].x, points[1].y};
+}
+
+[[nodiscard]] D2D1_RECT_F UnionRects(const D2D1_RECT_F& first, const D2D1_RECT_F& second) noexcept
+{
+    return D2D1::RectF(
+        (std::min)(first.left, second.left), (std::min)(first.top, second.top), (std::max)(first.right, second.right), (std::max)(first.bottom, second.bottom));
+}
+
 void TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns()
 {
     using namespace RedSalamander::DxUi;
@@ -76,6 +173,7 @@ void TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns()
     label->SetBounds(D2D1::RectF(0.0f, 100.0f, 120.0f, 124.0f));
     auto* field = root->AddChild<TextField>(L"alpha");
     field->SetBounds(D2D1::RectF(0.0f, 128.0f, 220.0f, 156.0f));
+    field->SetAccessibleHelpText(L"Type a local path");
     label->SetMnemonicTarget(field);
 
     auto* comboLabel = root->AddChild<Label>(L"Mode");
@@ -127,6 +225,8 @@ void TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns()
             "text field accessibility provider reports edit control type");
     Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_NamePropertyId, "text field exposes accessibility name") == L"Search",
             "text field accessibility provider uses its associated label as the accessible name");
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_HelpTextPropertyId, "text field exposes accessibility help text") == L"Type a local path",
+            "text field accessibility provider reports explicit help text");
     Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_ValueValuePropertyId, "text field exposes current value") == L"alpha",
             "text field accessibility provider reports the current value");
     Require(! ReadProviderBoolProperty(*fieldSimple.get(), UIA_ValueIsReadOnlyPropertyId, "text field exposes editable state"),
@@ -247,6 +347,1244 @@ void TestAccessibilityProviderReportsFocusedControl()
     RequireSucceeded(focusedProvider.query_to(focusedSimple.put()), "focused provider exposes IRawElementProviderSimple");
     Require(ReadProviderStringProperty(*focusedSimple.get(), UIA_ValueValuePropertyId, "focused text field exposes value") == L"alpha",
             "root provider focus lookup returns the focused text field provider");
+}
+
+void TestAccessibilityProviderMasksPasswordTextFieldValue()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"secret");
+    field->SetMasked(true);
+    field->SetAccessibleName(L"Password");
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "masked text field accessibility test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 16.0f, "masked text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "masked text field provider exposes IRawElementProviderSimple");
+    Require(ReadProviderLongProperty(*fieldSimple.get(), UIA_ControlTypePropertyId, "masked text field exposes edit control type") == UIA_EditControlTypeId,
+            "masked text field provider reports edit control type");
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_NamePropertyId, "masked text field exposes accessible name") == L"Password",
+            "masked text field provider does not use the secret value as its accessible name");
+    Require(ReadProviderBoolProperty(*fieldSimple.get(), UIA_IsPasswordPropertyId, "masked text field exposes password state"),
+            "masked text field provider reports IsPassword");
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_ValueValuePropertyId, "masked text field suppresses UIA value").empty(),
+            "masked text field provider does not expose the secret through ValuePattern");
+}
+
+void TestAccessibilityProviderExposesMaskedRevealButton()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"secret");
+    field->SetMasked(true);
+    field->SetAccessibleName(L"Password");
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "masked reveal accessibility test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> revealProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 206.0f, 16.0f, "masked reveal button provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> revealSimple;
+    RequireSucceeded(revealProvider.query_to(revealSimple.put()), "masked reveal button provider exposes IRawElementProviderSimple");
+    Require(ReadProviderLongProperty(*revealSimple.get(), UIA_ControlTypePropertyId, "masked reveal button exposes control type") == UIA_ButtonControlTypeId,
+            "masked reveal button provider reports button control type");
+    Require(ReadProviderStringProperty(*revealSimple.get(), UIA_NamePropertyId, "masked reveal button exposes accessible name") == L"Show password",
+            "masked reveal button provider reports the reveal affordance name");
+
+    wil::com_ptr_nothrow<IUnknown> invokePatternUnknown;
+    RequireSucceeded(revealSimple->GetPatternProvider(UIA_InvokePatternId, invokePatternUnknown.put()), "masked reveal button invoke pattern lookup succeeds");
+    Require(invokePatternUnknown != nullptr, "masked reveal button exposes InvokePattern");
+    wil::com_ptr_nothrow<IInvokeProvider> invokePattern;
+    RequireSucceeded(invokePatternUnknown.query_to(invokePattern.put()), "masked reveal button invoke pattern supports IInvokeProvider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider;
+    RequireSucceeded(revealProvider->Navigate(NavigateDirection_Parent, fieldProvider.put()), "masked reveal button navigates to parent field");
+    Require(fieldProvider != nullptr, "masked reveal button returns its owning field as parent");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "masked reveal parent provider exposes IRawElementProviderSimple");
+    Require(ReadProviderLongProperty(*fieldSimple.get(), UIA_ControlTypePropertyId, "masked reveal parent exposes edit type") == UIA_EditControlTypeId,
+            "masked reveal button parent is the edit field provider");
+
+    RequireSucceeded(invokePattern->Invoke(), "masked reveal button Invoke succeeds");
+    Require(field->GetPasswordRevealState() == PasswordRevealState::Visible, "masked reveal button Invoke reveals the field visually");
+    Require(ReadProviderStringProperty(*fieldSimple.get(), UIA_ValueValuePropertyId, "revealed masked text field still suppresses UIA value").empty(),
+            "masked text field provider still does not expose the secret after reveal Invoke");
+}
+
+void TestAccessibilityProviderExposesTextPatternForTextField()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root       = std::make_unique<Panel>();
+    auto* textLabel = root->AddChild<Label>(L"Query");
+    textLabel->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 24.0f));
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(0.0f, 28.0f, 260.0f, 60.0f));
+    field->SetSelectionRange(0u, 5u);
+    textLabel->SetMnemonicTarget(field);
+
+    auto* passwordLabel = root->AddChild<Label>(L"Password");
+    passwordLabel->SetBounds(D2D1::RectF(0.0f, 72.0f, 120.0f, 96.0f));
+    auto* maskedField = root->AddChild<TextField>(L"secret");
+    maskedField->SetMasked(true);
+    maskedField->SetBounds(D2D1::RectF(0.0f, 100.0f, 260.0f, 132.0f));
+    passwordLabel->SetMnemonicTarget(maskedField);
+
+    auto* multilineLabel = root->AddChild<Label>(L"Notes");
+    multilineLabel->SetBounds(D2D1::RectF(0.0f, 132.0f, 120.0f, 136.0f));
+    auto* multilineField = root->AddChild<TextField>(L"red\ngreen\nblue");
+    multilineField->SetMultiline(true);
+    multilineField->SetBounds(D2D1::RectF(0.0f, 136.0f, 260.0f, 168.0f));
+    multilineField->SetSelectionRange(0u, 3u);
+    multilineLabel->SetMnemonicTarget(multilineField);
+
+    std::wstring emojiText;
+    emojiText.reserve(7u);
+    emojiText.push_back(L'A');
+    emojiText.push_back(static_cast<wchar_t>(0xD83D));
+    emojiText.push_back(static_cast<wchar_t>(0xDC69));
+    emojiText.push_back(static_cast<wchar_t>(0x200D));
+    emojiText.push_back(static_cast<wchar_t>(0xD83D));
+    emojiText.push_back(static_cast<wchar_t>(0xDCBB));
+    emojiText.push_back(L'Z');
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "text pattern accessibility test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 44.0f, "text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "text field provider exposes IRawElementProviderSimple");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "text field TextPattern supports ITextProvider");
+
+    SupportedTextSelection supportedSelection = SupportedTextSelection_None;
+    RequireSucceeded(textPattern->get_SupportedTextSelection(&supportedSelection), "text field TextPattern reports supported selection mode");
+    Require(supportedSelection == SupportedTextSelection_Single, "text field TextPattern supports one selection range");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+    RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "text field TextPattern exposes a document range");
+    Require(documentRange != nullptr, "text field TextPattern returns a document range");
+    Require(ReadTextRangeText(*documentRange.get(), -1, "text field document range exposes text") == L"alpha beta",
+            "text field TextPattern document range returns the current value");
+    wil::com_ptr_nothrow<ITextRangeProvider> clonedDocumentRange;
+    RequireSucceeded(documentRange->Clone(clonedDocumentRange.put()), "text field TextPattern document range clones");
+    Require(clonedDocumentRange != nullptr, "text field TextPattern document range clone is returned");
+    BOOL sameRange = FALSE;
+    RequireSucceeded(documentRange->Compare(clonedDocumentRange.get(), &sameRange), "text field TextPattern cloned range compares");
+    Require(sameRange == TRUE, "text field TextPattern cloned range compares equal by content");
+    int endpointComparison = 0;
+    RequireSucceeded(documentRange->CompareEndpoints(
+                         TextPatternRangeEndpoint_Start, clonedDocumentRange.get(), TextPatternRangeEndpoint_End, &endpointComparison),
+                     "text field TextPattern endpoint comparison succeeds");
+    Require(endpointComparison < 0, "text field TextPattern start endpoint compares before document end");
+    wil::com_ptr_nothrow<ITextRangeProvider> wordRange;
+    RequireSucceeded(documentRange->Clone(wordRange.put()), "text field TextPattern document range clones for word movement");
+    Require(wordRange != nullptr, "text field TextPattern word movement range clone is returned");
+    int moved = 0;
+    RequireSucceeded(wordRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Word, 1, &moved),
+                     "text field TextPattern start endpoint moves by word");
+    Require(moved == 1, "text field TextPattern start endpoint reports moved words");
+    Require(ReadTextRangeText(*wordRange.get(), -1, "text field document range exposes moved-word text") == L"beta",
+            "text field TextPattern word endpoint movement narrows to the next word");
+    moved = 0;
+    RequireSucceeded(wordRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Word, -1, &moved),
+                     "text field TextPattern start endpoint moves backward by word");
+    Require(moved == -1, "text field TextPattern start endpoint reports moved words backward");
+    Require(ReadTextRangeText(*wordRange.get(), -1, "text field document range restores after moved-word text") == L"alpha beta",
+            "text field TextPattern word endpoint movement restores the document text");
+    const POINT rangePointScreen = window.Host().DipPointToScreenPoint(D2D1::Point2F(0.0f, 44.0f));
+    const UiaPoint rangePoint{static_cast<double>(rangePointScreen.x), static_cast<double>(rangePointScreen.y)};
+    wil::com_ptr_nothrow<ITextRangeProvider> pointRange;
+    RequireSucceeded(textPattern->RangeFromPoint(rangePoint, pointRange.put()), "text field TextPattern RangeFromPoint succeeds");
+    Require(pointRange != nullptr, "text field TextPattern RangeFromPoint returns a range");
+    Require(ReadTextRangeText(*pointRange.get(), -1, "text field RangeFromPoint range is collapsed").empty(),
+            "text field TextPattern RangeFromPoint returns a collapsed caret range");
+    moved = 0;
+    wil::com_ptr_nothrow<ITextRangeProvider> wordCaretRange;
+    RequireSucceeded(pointRange->Clone(wordCaretRange.put()), "text field RangeFromPoint range clones for word movement");
+    Require(wordCaretRange != nullptr, "text field RangeFromPoint word movement clone is returned");
+    RequireSucceeded(wordCaretRange->Move(TextUnit_Word, 1, &moved), "text field collapsed range moves forward by word");
+    Require(moved == 1, "text field collapsed range reports moved words");
+    RequireSucceeded(wordCaretRange->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1, &moved),
+                     "text field word-moved collapsed range expands by one character");
+    Require(ReadTextRangeText(*wordCaretRange.get(), -1, "text field word-moved collapsed range exposes text") == L"b",
+            "text field collapsed word movement lands at the next word");
+    moved = 0;
+    RequireSucceeded(pointRange->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1, &moved),
+                     "text field RangeFromPoint range endpoint expands by one character");
+    Require(moved == 1, "text field RangeFromPoint range reports one expanded character");
+    Require(ReadTextRangeText(*pointRange.get(), -1, "text field RangeFromPoint expanded range exposes text") == L"a",
+            "text field TextPattern RangeFromPoint maps the leading point to the first character");
+    moved = 0;
+    RequireSucceeded(documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 6, &moved),
+                     "text field TextPattern start endpoint moves by character");
+    Require(moved == 6, "text field TextPattern start endpoint reports moved characters");
+    Require(ReadTextRangeText(*documentRange.get(), -1, "text field document range exposes moved-start text") == L"beta",
+            "text field TextPattern start endpoint movement narrows the range");
+    moved = 0;
+    RequireSucceeded(documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, -2, &moved),
+                     "text field TextPattern end endpoint moves backward by character");
+    Require(moved == -2, "text field TextPattern end endpoint reports moved characters");
+    Require(ReadTextRangeText(*documentRange.get(), -1, "text field document range exposes moved-end text") == L"be",
+            "text field TextPattern end endpoint movement narrows the range from the end");
+
+    AttachedHostWindow emojiWindow;
+    auto emojiRoot = std::make_unique<Panel>();
+    auto* emojiField = emojiRoot->AddChild<TextField>(emojiText);
+    emojiField->SetBounds(D2D1::RectF(0.0f, 28.0f, 260.0f, 60.0f));
+    emojiWindow.Host().SetRoot(std::move(emojiRoot));
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> emojiRootProvider;
+    emojiRootProvider.attach(emojiWindow.Host().DebugCreateAccessibilityProvider());
+    Require(emojiRootProvider != nullptr, "emoji text pattern test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> emojiProvider = GetProviderAtDipPoint(
+        emojiWindow.Hwnd(), emojiWindow.Host(), *emojiRootProvider.get(), 40.0f, 44.0f, "emoji text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> emojiSimple;
+    RequireSucceeded(emojiProvider.query_to(emojiSimple.put()), "emoji text field provider exposes IRawElementProviderSimple");
+    wil::com_ptr_nothrow<IUnknown> emojiTextPatternUnknown;
+    RequireSucceeded(emojiSimple->GetPatternProvider(UIA_TextPatternId, emojiTextPatternUnknown.put()), "emoji text field TextPattern lookup succeeds");
+    Require(emojiTextPatternUnknown != nullptr, "emoji text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> emojiTextPattern;
+    RequireSucceeded(emojiTextPatternUnknown.query_to(emojiTextPattern.put()), "emoji text field TextPattern supports ITextProvider");
+    wil::com_ptr_nothrow<ITextRangeProvider> emojiDocumentRange;
+    RequireSucceeded(emojiTextPattern->get_DocumentRange(emojiDocumentRange.put()), "emoji text field TextPattern exposes a document range");
+    Require(emojiDocumentRange != nullptr, "emoji text field TextPattern returns a document range");
+    Require(ReadTextRangeText(*emojiDocumentRange.get(), -1, "emoji text field document range exposes text") == emojiText,
+            "emoji text field TextPattern document range returns the current value");
+    moved = 0;
+    RequireSucceeded(emojiDocumentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 2, &moved),
+                     "emoji text field TextPattern start endpoint moves by text elements");
+    Require(moved == 2, "emoji text field TextPattern start endpoint reports moved text elements");
+    Require(ReadTextRangeText(*emojiDocumentRange.get(), -1, "emoji text field document range exposes text-element moved text") ==
+                emojiText.substr(emojiText.size() - 1u),
+            "emoji text field TextPattern character movement treats the ZWJ emoji cluster as one text element");
+    moved = 0;
+    RequireSucceeded(emojiDocumentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -1, &moved),
+                     "emoji text field TextPattern start endpoint moves backward by text element");
+    Require(moved == -1, "emoji text field TextPattern start endpoint reports moved text element backward");
+    Require(ReadTextRangeText(*emojiDocumentRange.get(), -1, "emoji text field document range exposes backward text-element moved text") ==
+                emojiText.substr(1u),
+            "emoji text field TextPattern backward character movement restores the full ZWJ emoji cluster");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "text field TextPattern selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "text field TextPattern exposes one selection range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "text field selected range exposes text") == L"alpha",
+            "text field TextPattern selection range exposes the retained selection");
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedWordRange;
+    RequireSucceeded(selectedRange->Clone(selectedWordRange.put()), "text field selected range clones for word-range movement");
+    Require(selectedWordRange != nullptr, "text field selected word movement range clone is returned");
+    moved = 0;
+    RequireSucceeded(selectedWordRange->Move(TextUnit_Word, 1, &moved), "text field selected range moves by word");
+    Require(moved == 1, "text field selected range reports moved words");
+    Require(ReadTextRangeText(*selectedWordRange.get(), -1, "text field selected range exposes word-moved text") == L"beta",
+            "text field selected range word movement lands on the next word");
+    moved = 0;
+    RequireSucceeded(selectedRange->Move(TextUnit_Character, 1, &moved), "text field selected range moves by character");
+    Require(moved == 1, "text field selected range reports moved characters");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "text field selected range exposes moved text") == L"lpha ",
+            "text field selected range movement preserves range length");
+    RequireSucceeded(selectedRange->Select(), "text field selected range Select succeeds");
+    const std::optional<std::pair<size_t, size_t>> selectedAfterRangeSelect = field->GetSelectionRange();
+    Require(selectedAfterRangeSelect.has_value(), "text field selected range Select applies a retained selection");
+    Require(selectedAfterRangeSelect.value().first == 1u && selectedAfterRangeSelect.value().second == 6u,
+            "text field selected range Select applies the UIA range to the retained TextField");
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles), "text field selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "text field selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() >= 4u && selectedRectangleValues.size() % 4u == 0u,
+            "text field selected range returns complete bounding rectangle tuples");
+    Require(selectedRectangleValues[2] > 0.0 && selectedRectangleValues[3] > 0.0,
+            "text field selected range returns a non-empty bounding rectangle");
+
+    wil::com_ptr_nothrow<IUnknown> textEditPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextEditPatternId, textEditPatternUnknown.put()), "text field TextEditPattern lookup succeeds");
+    Require(textEditPatternUnknown != nullptr, "text field exposes TextEditPattern");
+    wil::com_ptr_nothrow<ITextEditProvider> textEditPattern;
+    RequireSucceeded(textEditPatternUnknown.query_to(textEditPattern.put()), "text field TextEditPattern supports ITextEditProvider");
+    wil::com_ptr_nothrow<ITextRangeProvider> activeComposition;
+    RequireSucceeded(textEditPattern->GetActiveComposition(activeComposition.put()), "inactive TextEditPattern active-composition lookup succeeds");
+    Require(activeComposition == nullptr, "inactive TextEditPattern has no active composition range");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> maskedProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 116.0f, "masked text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> maskedSimple;
+    RequireSucceeded(maskedProvider.query_to(maskedSimple.put()), "masked text field provider exposes IRawElementProviderSimple");
+    wil::com_ptr_nothrow<IUnknown> maskedTextPatternUnknown;
+    RequireSucceeded(maskedSimple->GetPatternProvider(UIA_TextPatternId, maskedTextPatternUnknown.put()), "masked text field TextPattern lookup succeeds");
+    Require(maskedTextPatternUnknown != nullptr, "masked text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> maskedTextPattern;
+    RequireSucceeded(maskedTextPatternUnknown.query_to(maskedTextPattern.put()), "masked text field TextPattern supports ITextProvider");
+    wil::com_ptr_nothrow<ITextRangeProvider> maskedDocumentRange;
+    RequireSucceeded(maskedTextPattern->get_DocumentRange(maskedDocumentRange.put()), "masked text field TextPattern exposes a document range");
+    Require(ReadTextRangeText(*maskedDocumentRange.get(), -1, "masked text field document range suppresses text").empty(),
+            "masked text field TextPattern does not expose the secret");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> multilineProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 148.0f, "multiline text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> multilineSimple;
+    RequireSucceeded(multilineProvider.query_to(multilineSimple.put()), "multiline text field provider exposes IRawElementProviderSimple");
+    wil::com_ptr_nothrow<IUnknown> multilineValuePatternUnknown;
+    RequireSucceeded(multilineSimple->GetPatternProvider(UIA_ValuePatternId, multilineValuePatternUnknown.put()),
+                     "multiline text field ValuePattern lookup succeeds");
+    Require(multilineValuePatternUnknown == nullptr, "multiline text field does not expose ValuePattern");
+    wil::com_ptr_nothrow<IUnknown> multilineTextPatternUnknown;
+    RequireSucceeded(
+        multilineSimple->GetPatternProvider(UIA_TextPatternId, multilineTextPatternUnknown.put()), "multiline text field TextPattern lookup succeeds");
+    Require(multilineTextPatternUnknown != nullptr, "multiline text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> multilineTextPattern;
+    RequireSucceeded(multilineTextPatternUnknown.query_to(multilineTextPattern.put()), "multiline text field TextPattern supports ITextProvider");
+    wil::com_ptr_nothrow<ITextRangeProvider> multilineDocumentRange;
+    RequireSucceeded(multilineTextPattern->get_DocumentRange(multilineDocumentRange.put()), "multiline text field TextPattern exposes a document range");
+    Require(multilineDocumentRange != nullptr, "multiline text field TextPattern returns a document range");
+    moved = 0;
+    RequireSucceeded(multilineDocumentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Line, 1, &moved),
+                     "multiline text field start endpoint moves by line");
+    Require(moved == 1, "multiline text field start endpoint reports moved lines");
+    Require(ReadTextRangeText(*multilineDocumentRange.get(), -1, "multiline text field document range exposes moved-line text") == L"green\nblue",
+            "multiline text field line endpoint movement narrows to the next logical line");
+    moved = 0;
+    RequireSucceeded(multilineDocumentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Line, -1, &moved),
+                     "multiline text field start endpoint moves backward by line");
+    Require(moved == -1, "multiline text field start endpoint reports moved lines backward");
+    Require(ReadTextRangeText(*multilineDocumentRange.get(), -1, "multiline text field document range restores after moved-line text") == L"red\ngreen\nblue",
+            "multiline text field line endpoint movement restores the document text");
+    SAFEARRAY* multilineSelectionRanges = nullptr;
+    RequireSucceeded(multilineTextPattern->GetSelection(&multilineSelectionRanges), "multiline text field TextPattern selection lookup succeeds");
+    const auto destroyMultilineSelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(multilineSelectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> multilineSelectedRange =
+        GetSingleTextRangeFromArray(multilineSelectionRanges, "multiline text field TextPattern exposes one selection range");
+    moved = 0;
+    RequireSucceeded(multilineSelectedRange->Move(TextUnit_Line, 1, &moved), "multiline selected range moves by line");
+    Require(moved == 1, "multiline selected range reports moved lines");
+    Require(ReadTextRangeText(*multilineSelectedRange.get(), -1, "multiline selected range exposes line-moved text") == L"green",
+            "multiline selected range line movement lands on the next logical line");
+}
+
+void TestAccessibilityTextFieldSimpleRangeBoundingRectanglesUseCaretGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta gamma");
+    field->SetBounds(D2D1::RectF(20.0f, 24.0f, 420.0f, 56.0f));
+    field->SetSelectionRange(6u, 10u);
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "simple range rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 80.0f, 40.0f, "simple text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "simple text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "simple text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "simple text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "simple text field TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "simple text field selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "simple text field exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "simple selected range exposes text") == L"beta",
+            "simple selected range preserves logical selected text");
+
+    D2D1_RECT_F startRectDip{};
+    D2D1_RECT_F endRectDip{};
+    Require(field->DebugGetCaretRect(window.Host(), 6u, startRectDip), "simple selected range measures the start caret");
+    Require(field->DebugGetCaretRect(window.Host(), 10u, endRectDip), "simple selected range measures the end caret");
+    const RECT expectedScreen = DipRectToScreenRect(window, UnionRects(startRectDip, endRectDip));
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles), "simple selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "simple selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() == 4u, "simple selected range returns one caret-geometry rectangle tuple");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[0]), static_cast<float>(expectedScreen.left), 1.0f,
+                     "simple selected range rectangle follows the native start caret x");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[1]), static_cast<float>(expectedScreen.top), 1.0f,
+                     "simple selected range rectangle follows the native caret top");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[2]), static_cast<float>(expectedScreen.right - expectedScreen.left), 1.0f,
+                     "simple selected range rectangle width follows native caret geometry");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[3]), static_cast<float>(expectedScreen.bottom - expectedScreen.top), 1.0f,
+                     "simple selected range rectangle height follows native caret geometry");
+}
+
+void TestAccessibilityTextFieldMultilineRangeFromPointUsesNativeHitTest()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"one\ntwo three\nfour");
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 18.0f, 280.0f, 112.0f));
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "multiline RangeFromPoint test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "multiline text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "multiline text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "multiline text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "multiline text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "multiline text field TextPattern supports ITextProvider");
+
+    D2D1_RECT_F caretRectDip{};
+    Require(field->DebugGetCaretRect(window.Host(), 8u, caretRectDip), "multiline RangeFromPoint test measures the target caret");
+    const POINT queryPoint = window.Host().DipPointToScreenPoint(D2D1::Point2F(caretRectDip.left, (caretRectDip.top + caretRectDip.bottom) * 0.5f));
+    const UiaPoint rangePoint{static_cast<double>(queryPoint.x), static_cast<double>(queryPoint.y)};
+
+    wil::com_ptr_nothrow<ITextRangeProvider> pointRange;
+    RequireSucceeded(textPattern->RangeFromPoint(rangePoint, pointRange.put()), "multiline text field RangeFromPoint succeeds");
+    Require(pointRange != nullptr, "multiline text field RangeFromPoint returns a range");
+    int moved = 0;
+    RequireSucceeded(pointRange->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1, &moved),
+                     "multiline RangeFromPoint caret range expands by one character");
+    Require(moved == 1, "multiline RangeFromPoint caret range reports one expanded character");
+    Require(ReadTextRangeText(*pointRange.get(), -1, "multiline RangeFromPoint expanded range exposes text") == L"t",
+            "multiline RangeFromPoint maps the second-line point to the native logical ACP");
+}
+
+void TestAccessibilityTextFieldMultilineSameLineRangeBoundingRectanglesUseCaretGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"one\ntwo three\nfour");
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 18.0f, 280.0f, 112.0f));
+    field->SetSelectionRange(4u, 13u);
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "multiline same-line rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "multiline same-line text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "multiline same-line text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(
+        fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "multiline same-line text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "multiline same-line text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "multiline same-line text field TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "multiline same-line text field selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "multiline same-line text field exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "multiline same-line selected range exposes text") == L"two three",
+            "multiline same-line selected range preserves logical selected text");
+
+    D2D1_RECT_F startRectDip{};
+    D2D1_RECT_F endRectDip{};
+    Require(field->DebugGetCaretRect(window.Host(), 4u, startRectDip), "multiline same-line selected range measures the start caret");
+    Require(field->DebugGetCaretRect(window.Host(), 13u, endRectDip), "multiline same-line selected range measures the end caret");
+    const RECT expectedScreen = DipRectToScreenRect(window, UnionRects(startRectDip, endRectDip));
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles),
+                     "multiline same-line selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "multiline same-line selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() == 4u, "multiline same-line selected range returns one caret-geometry rectangle tuple");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[0]), static_cast<float>(expectedScreen.left), 1.0f,
+                     "multiline same-line selected range rectangle follows the native start caret x");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[1]), static_cast<float>(expectedScreen.top), 1.0f,
+                     "multiline same-line selected range rectangle follows the native caret top");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[2]), static_cast<float>(expectedScreen.right - expectedScreen.left), 1.0f,
+                     "multiline same-line selected range rectangle width follows native caret geometry");
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[3]), static_cast<float>(expectedScreen.bottom - expectedScreen.top), 1.0f,
+                     "multiline same-line selected range rectangle height follows native caret geometry");
+}
+
+void TestAccessibilityTextFieldMultilineRangeBoundingRectanglesUseLineCaretGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"one\ntwo three\nfour");
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 18.0f, 280.0f, 112.0f));
+    field->SetSelectionRange(1u, 7u);
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "multiline cross-line rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "multiline cross-line text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "multiline cross-line text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(
+        fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "multiline cross-line text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "multiline cross-line text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "multiline cross-line text field TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "multiline cross-line text field selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "multiline cross-line text field exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "multiline cross-line selected range exposes text") == L"ne\ntwo",
+            "multiline cross-line selected range preserves logical selected text");
+
+    D2D1_RECT_F firstStartRectDip{};
+    D2D1_RECT_F firstEndRectDip{};
+    D2D1_RECT_F secondStartRectDip{};
+    D2D1_RECT_F secondEndRectDip{};
+    Require(field->DebugGetCaretRect(window.Host(), 1u, firstStartRectDip), "multiline cross-line selected range measures first-line start caret");
+    Require(field->DebugGetCaretRect(window.Host(), 3u, firstEndRectDip), "multiline cross-line selected range measures first-line end caret");
+    Require(field->DebugGetCaretRect(window.Host(), 4u, secondStartRectDip), "multiline cross-line selected range measures second-line start caret");
+    Require(field->DebugGetCaretRect(window.Host(), 7u, secondEndRectDip), "multiline cross-line selected range measures second-line end caret");
+    const std::array<RECT, 2> expectedScreenRects{
+        DipRectToScreenRect(window, UnionRects(firstStartRectDip, firstEndRectDip)),
+        DipRectToScreenRect(window, UnionRects(secondStartRectDip, secondEndRectDip)),
+    };
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles),
+                     "multiline cross-line selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "multiline cross-line selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() == 8u, "multiline cross-line selected range returns one rectangle tuple per logical line");
+    for (size_t rectIndex = 0u; rectIndex < expectedScreenRects.size(); ++rectIndex)
+    {
+        const size_t valueIndex = rectIndex * 4u;
+        const RECT& expected    = expectedScreenRects[rectIndex];
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex]), static_cast<float>(expected.left), 1.0f,
+                         "multiline cross-line selected range rectangle follows the native line start caret x");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 1u]), static_cast<float>(expected.top), 1.0f,
+                         "multiline cross-line selected range rectangle follows the native line caret top");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 2u]), static_cast<float>(expected.right - expected.left), 1.0f,
+                         "multiline cross-line selected range rectangle width follows native line caret geometry");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 3u]), static_cast<float>(expected.bottom - expected.top), 1.0f,
+                         "multiline cross-line selected range rectangle height follows native line caret geometry");
+    }
+}
+
+void TestAccessibilityTextFieldWrappedRangeBoundingRectanglesUseVisualLineGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    constexpr std::wstring_view kWrappedText = L"alpha beta gamma delta epsilon zeta eta theta";
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(std::wstring(kWrappedText));
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 18.0f, 150.0f, 140.0f));
+    field->SetSelectionRange(0u, kWrappedText.size());
+    window.Host().SetRoot(std::move(root));
+
+    TextFieldDebugMultilineState multilineState{};
+    Require(field->DebugGetMultilineState(window.Host(), multilineState), "wrapped selected range reads multiline debug state");
+    Require(multilineState.totalLineCount > 1u, "wrapped selected range fixture wraps onto multiple visual lines");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "wrapped rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "wrapped text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "wrapped text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "wrapped text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "wrapped text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "wrapped text field TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "wrapped text field selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "wrapped text field exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "wrapped selected range exposes text") == kWrappedText,
+            "wrapped selected range preserves the logical selected text");
+
+    D2D1_RECT_F firstCaretDip{};
+    D2D1_RECT_F lastCaretDip{};
+    Require(field->DebugGetCaretRect(window.Host(), 0u, firstCaretDip), "wrapped selected range measures the first caret");
+    Require(field->DebugGetCaretRect(window.Host(), kWrappedText.size(), lastCaretDip), "wrapped selected range measures the final caret");
+    const RECT firstCaretScreen = DipRectToScreenRect(window, firstCaretDip);
+    const RECT lastCaretScreen  = DipRectToScreenRect(window, lastCaretDip);
+    Require(firstCaretScreen.top != lastCaretScreen.top, "wrapped selected range starts and ends on different visual lines");
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles),
+                     "wrapped selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "wrapped selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() >= 8u, "wrapped selected range returns multiple rectangle tuples");
+    Require(selectedRectangleValues.size() % 4u == 0u, "wrapped selected range returns complete rectangle tuples");
+
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[1]), static_cast<float>(firstCaretScreen.top), 1.0f,
+                     "wrapped selected range first rectangle follows the first visual-line caret top");
+    const size_t lastTuple = selectedRectangleValues.size() - 4u;
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[lastTuple + 1u]), static_cast<float>(lastCaretScreen.top), 1.0f,
+                     "wrapped selected range last rectangle follows the final visual-line caret top");
+}
+
+void TestAccessibilityTextFieldWrappedCrossLineRangeBoundingRectanglesUseVisualLineGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    constexpr std::wstring_view kWrappedText = L"alpha beta gamma delta epsilon zeta\nomega";
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(std::wstring(kWrappedText));
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 18.0f, 150.0f, 150.0f));
+    field->SetSelectionRange(0u, kWrappedText.size());
+    window.Host().SetRoot(std::move(root));
+
+    TextFieldDebugMultilineState multilineState{};
+    Require(field->DebugGetMultilineState(window.Host(), multilineState), "wrapped cross-line range reads multiline debug state");
+    Require(multilineState.totalLineCount > 2u, "wrapped cross-line range fixture wraps one logical line and includes a newline");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "wrapped cross-line rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider = GetProviderAtDipPoint(
+        window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "wrapped cross-line text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "wrapped cross-line text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(
+        fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "wrapped cross-line text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "wrapped cross-line text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "wrapped cross-line text field TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "wrapped cross-line text field selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "wrapped cross-line text field exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "wrapped cross-line selected range exposes text") == kWrappedText,
+            "wrapped cross-line selected range preserves the logical selected text");
+
+    D2D1_RECT_F firstCaretDip{};
+    D2D1_RECT_F lastCaretDip{};
+    Require(field->DebugGetCaretRect(window.Host(), 0u, firstCaretDip), "wrapped cross-line selected range measures the first caret");
+    Require(field->DebugGetCaretRect(window.Host(), kWrappedText.size(), lastCaretDip), "wrapped cross-line selected range measures the final caret");
+    const RECT firstCaretScreen = DipRectToScreenRect(window, firstCaretDip);
+    const RECT lastCaretScreen  = DipRectToScreenRect(window, lastCaretDip);
+    Require(firstCaretScreen.top != lastCaretScreen.top, "wrapped cross-line selected range starts and ends on different visual lines");
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles),
+                     "wrapped cross-line selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "wrapped cross-line selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() >= 12u, "wrapped cross-line selected range returns visual-line tuples across the newline");
+    Require(selectedRectangleValues.size() % 4u == 0u, "wrapped cross-line selected range returns complete rectangle tuples");
+
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[1]), static_cast<float>(firstCaretScreen.top), 1.0f,
+                     "wrapped cross-line first rectangle follows the first visual-line caret top");
+    const size_t lastTuple = selectedRectangleValues.size() - 4u;
+    RequireFloatNear(static_cast<float>(selectedRectangleValues[lastTuple + 1u]), static_cast<float>(lastCaretScreen.top), 1.0f,
+                     "wrapped cross-line last rectangle follows the final visual-line caret top");
+}
+
+void TestAccessibilityTextFieldWrappedLineMovementUsesVisualLines()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    const std::wstring text = L"alpha beta gamma delta epsilon zeta";
+    auto root              = std::make_unique<Panel>();
+    auto* field            = root->AddChild<TextField>(text);
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 24.0f, 118.0f, 112.0f));
+    window.Host().SetRoot(std::move(root));
+
+    const std::vector<size_t> visualLineStarts =
+        ResolveVisualLineStarts(window.Host(), *field, text, "wrapped line movement test resolves native visual-line starts");
+    Require(visualLineStarts.size() >= 3u, "wrapped line movement fixture creates at least three visual lines");
+    const size_t secondLineStart = visualLineStarts[1];
+    const size_t thirdLineStart  = visualLineStarts[2];
+    Require(secondLineStart > 0u && secondLineStart < thirdLineStart && thirdLineStart < text.size(),
+            "wrapped line movement fixture exposes stable wrapped visual-line boundaries");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "wrapped line movement test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 40.0f, "wrapped line movement field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "wrapped line movement provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "wrapped line movement TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "wrapped line movement field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "wrapped line movement TextPattern supports ITextProvider");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+    RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "wrapped line movement document range lookup succeeds");
+    int moved = 0;
+    RequireSucceeded(documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Line, 1, &moved),
+                     "wrapped line movement start endpoint moves by visual line");
+    Require(moved == 1, "wrapped line movement endpoint reports one visual line");
+    Require(ReadTextRangeText(*documentRange.get(), -1, "wrapped line movement document range exposes moved text") == text.substr(secondLineStart),
+            "wrapped line movement endpoint lands on the second visual line");
+
+    field->SetSelectionRange(0u, secondLineStart);
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "wrapped line movement selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "wrapped line movement TextPattern exposes one selection range");
+    moved = 0;
+    RequireSucceeded(selectedRange->Move(TextUnit_Line, 1, &moved), "wrapped selected range moves by visual line");
+    Require(moved == 1, "wrapped selected range reports one visual line");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "wrapped selected range exposes moved visual-line text") ==
+                text.substr(secondLineStart, thirdLineStart - secondLineStart),
+            "wrapped selected range lands on the next visual line span");
+}
+
+void TestAccessibilityTextFieldSingleLineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root = std::make_unique<Panel>();
+    root->SetFlowDirection(FlowDirection::RightToLeft);
+    auto* field = root->AddChild<TextField>(L"abc \x05D0\x05D1\x05D2 123");
+    field->SetBounds(D2D1::RectF(20.0f, 24.0f, 380.0f, 56.0f));
+    field->SetSelectionRange(4u, 7u);
+    window.Host().SetRoot(std::move(root));
+
+    const std::optional<std::vector<D2D1_RECT_F>> expectedRectsDip = field->TryGetTextInputRangeRects(window.Host(), 4u, 7u);
+    Require(expectedRectsDip.has_value() && ! expectedRectsDip->empty(),
+            "single-line mixed-BiDi selected range has retained DirectWrite range geometry");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "single-line mixed-BiDi range rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 80.0f, 40.0f, "single-line mixed-BiDi text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "single-line mixed-BiDi text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()),
+                     "single-line mixed-BiDi text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "single-line mixed-BiDi text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "single-line mixed-BiDi text field TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "single-line mixed-BiDi text field selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "single-line mixed-BiDi text field exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "single-line mixed-BiDi selected range exposes text") == L"\x05D0\x05D1\x05D2",
+            "single-line mixed-BiDi selected range preserves logical UTF-16 selected text");
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles),
+                     "single-line mixed-BiDi selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "single-line mixed-BiDi selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() == expectedRectsDip->size() * 4u,
+            "single-line mixed-BiDi selected range returns the retained DirectWrite rectangle tuple count");
+    for (size_t rectIndex = 0u; rectIndex < expectedRectsDip->size(); ++rectIndex)
+    {
+        const RECT expected = DipRectToScreenRect(window, expectedRectsDip->at(rectIndex));
+        const size_t valueIndex = rectIndex * 4u;
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex]), static_cast<float>(expected.left), 1.0f,
+                         "single-line mixed-BiDi selected range rectangle uses DirectWrite left edge");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 1u]), static_cast<float>(expected.top), 1.0f,
+                         "single-line mixed-BiDi selected range rectangle uses DirectWrite top edge");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 2u]), static_cast<float>(expected.right - expected.left), 1.0f,
+                         "single-line mixed-BiDi selected range rectangle uses DirectWrite width");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 3u]), static_cast<float>(expected.bottom - expected.top), 1.0f,
+                         "single-line mixed-BiDi selected range rectangle uses DirectWrite height");
+    }
+}
+
+void TestAccessibilityTextFieldMultilineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root = std::make_unique<Panel>();
+    root->SetFlowDirection(FlowDirection::RightToLeft);
+    auto* field = root->AddChild<TextField>(L"latin \x05D0\x05D1\x05D2 span\nsecond line");
+    field->SetMultiline(true);
+    field->SetBounds(D2D1::RectF(20.0f, 24.0f, 300.0f, 112.0f));
+    field->SetSelectionRange(6u, 9u);
+    window.Host().SetRoot(std::move(root));
+
+    const std::optional<std::vector<D2D1_RECT_F>> expectedRectsDip = field->TryGetTextInputRangeRects(window.Host(), 6u, 9u);
+    Require(expectedRectsDip.has_value() && ! expectedRectsDip->empty(),
+            "multiline mixed-BiDi selected range has retained DirectWrite range geometry");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "multiline mixed-BiDi range rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider = GetProviderAtDipPoint(
+        window.Hwnd(), window.Host(), *rootProvider.get(), 80.0f, 40.0f, "multiline mixed-BiDi text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "multiline mixed-BiDi text field provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()),
+                     "multiline mixed-BiDi text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "multiline mixed-BiDi text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "multiline mixed-BiDi text field TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "multiline mixed-BiDi text field selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "multiline mixed-BiDi text field exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "multiline mixed-BiDi selected range exposes text") == L"\x05D0\x05D1\x05D2",
+            "multiline mixed-BiDi selected range preserves logical UTF-16 selected text");
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles),
+                     "multiline mixed-BiDi selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "multiline mixed-BiDi selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() == expectedRectsDip->size() * 4u,
+            "multiline mixed-BiDi selected range returns the retained DirectWrite rectangle tuple count");
+
+    for (size_t index = 0u; index < expectedRectsDip->size(); ++index)
+    {
+        const RECT expectedScreen = DipRectToScreenRect(window, expectedRectsDip.value()[index]);
+        const size_t valueIndex   = index * 4u;
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 0u]), static_cast<float>(expectedScreen.left), 1.0f,
+                         "multiline mixed-BiDi selected range rectangle uses DirectWrite left edge");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 1u]), static_cast<float>(expectedScreen.top), 1.0f,
+                         "multiline mixed-BiDi selected range rectangle uses DirectWrite top edge");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 2u]), static_cast<float>(expectedScreen.right - expectedScreen.left), 1.0f,
+                         "multiline mixed-BiDi selected range rectangle uses DirectWrite width");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 3u]), static_cast<float>(expectedScreen.bottom - expectedScreen.top), 1.0f,
+                         "multiline mixed-BiDi selected range rectangle uses DirectWrite height");
+    }
+}
+
+void TestAccessibilityEditableComboBoxSingleLineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root = std::make_unique<Panel>();
+    root->SetFlowDirection(FlowDirection::RightToLeft);
+    auto* combo = root->AddChild<ComboBox>();
+    combo->SetEditable(true);
+    combo->SetText(L"abc \x05D0\x05D1\x05D2 123");
+    combo->SetEditableSelectionRange(4u, 7u);
+    combo->SetBounds(D2D1::RectF(20.0f, 24.0f, 380.0f, 56.0f));
+    window.Host().SetRoot(std::move(root));
+
+    const std::optional<std::vector<D2D1_RECT_F>> expectedRectsDip = combo->TryGetTextInputRangeRects(window.Host(), 4u, 7u);
+    Require(expectedRectsDip.has_value() && ! expectedRectsDip->empty(),
+            "editable combo single-line mixed-BiDi selected range has retained DirectWrite range geometry");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "editable combo mixed-BiDi range rectangle test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> comboProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 80.0f, 40.0f, "editable combo mixed-BiDi provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> comboSimple;
+    RequireSucceeded(comboProvider.query_to(comboSimple.put()), "editable combo mixed-BiDi provider exposes simple provider");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(comboSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()),
+                     "editable combo mixed-BiDi TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "editable combo mixed-BiDi exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "editable combo mixed-BiDi TextPattern supports ITextProvider");
+
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "editable combo mixed-BiDi selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "editable combo mixed-BiDi exposes one selected range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "editable combo mixed-BiDi selected range exposes text") == L"\x05D0\x05D1\x05D2",
+            "editable combo mixed-BiDi selected range preserves logical UTF-16 selected text");
+
+    SAFEARRAY* selectedRectangles = nullptr;
+    RequireSucceeded(selectedRange->GetBoundingRectangles(&selectedRectangles),
+                     "editable combo mixed-BiDi selected range bounding rectangles lookup succeeds");
+    const auto destroySelectedRectangles = wil::scope_exit([&] { SafeArrayDestroy(selectedRectangles); });
+    const std::vector<double> selectedRectangleValues =
+        ReadDoubleArray(selectedRectangles, "editable combo mixed-BiDi selected range returns bounding rectangle values");
+    Require(selectedRectangleValues.size() == expectedRectsDip->size() * 4u,
+            "editable combo mixed-BiDi selected range returns the retained DirectWrite rectangle tuple count");
+
+    for (size_t rectIndex = 0u; rectIndex < expectedRectsDip->size(); ++rectIndex)
+    {
+        const RECT expected = DipRectToScreenRect(window, expectedRectsDip->at(rectIndex));
+        const size_t valueIndex = rectIndex * 4u;
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex]), static_cast<float>(expected.left), 1.0f,
+                         "editable combo mixed-BiDi selected range rectangle uses DirectWrite left edge");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 1u]), static_cast<float>(expected.top), 1.0f,
+                         "editable combo mixed-BiDi selected range rectangle uses DirectWrite top edge");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 2u]), static_cast<float>(expected.right - expected.left), 1.0f,
+                         "editable combo mixed-BiDi selected range rectangle uses DirectWrite width");
+        RequireFloatNear(static_cast<float>(selectedRectangleValues[valueIndex + 3u]), static_cast<float>(expected.bottom - expected.top), 1.0f,
+                         "editable combo mixed-BiDi selected range rectangle uses DirectWrite height");
+    }
+}
+
+void TestAccessibilityProviderExposesTextPatternForEditableComboBox()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root        = std::make_unique<Panel>();
+    auto* comboLabel = root->AddChild<Label>(L"Mode");
+    comboLabel->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 24.0f));
+    auto* combo = root->AddChild<ComboBox>();
+    combo->SetEditable(true);
+    combo->SetText(L"current");
+    combo->SetBounds(D2D1::RectF(0.0f, 28.0f, 260.0f, 60.0f));
+    comboLabel->SetMnemonicTarget(combo);
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "editable combo text pattern test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> comboProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 44.0f, "editable combo provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> comboSimple;
+    RequireSucceeded(comboProvider.query_to(comboSimple.put()), "editable combo provider exposes IRawElementProviderSimple");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(comboSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "editable combo TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "editable combo exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "editable combo TextPattern supports ITextProvider");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+    RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "editable combo TextPattern exposes a document range");
+    Require(documentRange != nullptr, "editable combo TextPattern returns a document range");
+    Require(ReadTextRangeText(*documentRange.get(), -1, "editable combo document range exposes text") == L"current",
+            "editable combo TextPattern document range returns editable text");
+
+    const D2D1_RECT_F editableTextRect = combo->DebugGetEditableTextRect();
+    const POINT rangePointScreen =
+        window.Host().DipPointToScreenPoint(D2D1::Point2F(editableTextRect.left + 1.0f, (editableTextRect.top + editableTextRect.bottom) * 0.5f));
+    const UiaPoint rangePoint{static_cast<double>(rangePointScreen.x), static_cast<double>(rangePointScreen.y)};
+    wil::com_ptr_nothrow<ITextRangeProvider> pointRange;
+    RequireSucceeded(textPattern->RangeFromPoint(rangePoint, pointRange.put()), "editable combo TextPattern RangeFromPoint succeeds");
+    Require(pointRange != nullptr, "editable combo TextPattern RangeFromPoint returns a range");
+    Require(ReadTextRangeText(*pointRange.get(), -1, "editable combo RangeFromPoint range is collapsed").empty(),
+            "editable combo TextPattern RangeFromPoint returns a collapsed caret range");
+    int moved = 0;
+    RequireSucceeded(pointRange->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, 1, &moved),
+                     "editable combo RangeFromPoint range endpoint expands by one character");
+    Require(moved == 1, "editable combo RangeFromPoint range reports one expanded character");
+    Require(ReadTextRangeText(*pointRange.get(), -1, "editable combo RangeFromPoint expanded range exposes text") == L"c",
+            "editable combo TextPattern RangeFromPoint maps the editable text point to the first character");
+
+    Require(combo->OnSelectAll(window.Host()), "editable combo can select all before UIA selection lookup");
+    SAFEARRAY* selectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&selectionRanges), "editable combo TextPattern selection lookup succeeds");
+    const auto destroySelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(selectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> selectedRange =
+        GetSingleTextRangeFromArray(selectionRanges, "editable combo TextPattern exposes one selection range");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "editable combo selected range exposes text") == L"current",
+            "editable combo TextPattern selection range exposes the retained editable selection");
+    moved = 0;
+    RequireSucceeded(selectedRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 2, &moved),
+                     "editable combo selected range start moves by character");
+    Require(moved == 2, "editable combo selected range start reports moved characters");
+    moved = 0;
+    RequireSucceeded(selectedRange->MoveEndpointByUnit(TextPatternRangeEndpoint_End, TextUnit_Character, -2, &moved),
+                     "editable combo selected range end moves backward by character");
+    Require(moved == -2, "editable combo selected range end reports moved characters");
+    Require(ReadTextRangeText(*selectedRange.get(), -1, "editable combo selected range exposes narrowed text") == L"rre",
+            "editable combo selected range endpoint movement narrows the range");
+    RequireSucceeded(selectedRange->Select(), "editable combo selected range Select succeeds");
+
+    SAFEARRAY* appliedSelectionRanges = nullptr;
+    RequireSucceeded(textPattern->GetSelection(&appliedSelectionRanges), "editable combo TextPattern selection lookup succeeds after Select");
+    const auto destroyAppliedSelectionRanges = wil::scope_exit([&] { SafeArrayDestroy(appliedSelectionRanges); });
+    wil::com_ptr_nothrow<ITextRangeProvider> appliedSelectedRange =
+        GetSingleTextRangeFromArray(appliedSelectionRanges, "editable combo TextPattern exposes one applied selection range");
+    Require(ReadTextRangeText(*appliedSelectedRange.get(), -1, "editable combo applied selected range exposes text") == L"rre",
+            "editable combo TextPattern Select applies the UIA range to retained editable selection");
+
+    wil::com_ptr_nothrow<IUnknown> textEditPatternUnknown;
+    RequireSucceeded(comboSimple->GetPatternProvider(UIA_TextEditPatternId, textEditPatternUnknown.put()), "editable combo TextEditPattern lookup succeeds");
+    Require(textEditPatternUnknown != nullptr, "editable combo exposes TextEditPattern");
+}
+
+void TestAccessibilityTextRangeSelectDispatchesToWindowThread()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(0.0f, 28.0f, 260.0f, 60.0f));
+    field->SetSelectionRange(0u, 5u);
+    window.Host().SetRoot(std::move(root));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "cross-thread text range test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 44.0f, "cross-thread text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "cross-thread text field provider exposes IRawElementProviderSimple");
+
+    wil::com_ptr_nothrow<IUnknown> textPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextPatternId, textPatternUnknown.put()), "cross-thread text field TextPattern lookup succeeds");
+    Require(textPatternUnknown != nullptr, "cross-thread text field exposes TextPattern");
+    wil::com_ptr_nothrow<ITextProvider> textPattern;
+    RequireSucceeded(textPatternUnknown.query_to(textPattern.put()), "cross-thread text field TextPattern supports ITextProvider");
+    wil::com_ptr_nothrow<ITextRangeProvider> documentRange;
+    RequireSucceeded(textPattern->get_DocumentRange(documentRange.put()), "cross-thread text field TextPattern exposes a document range");
+
+    int moved = 0;
+    RequireSucceeded(documentRange->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, 6, &moved),
+                     "cross-thread text range start endpoint moves to beta");
+    Require(moved == 6, "cross-thread text range start endpoint reports moved characters");
+
+    constexpr HRESULT kPendingSelect = E_PENDING;
+    std::atomic<bool> workerStarted{false};
+    std::atomic<HRESULT> selectResult{kPendingSelect};
+    std::thread worker(
+        [&]
+        {
+            workerStarted.store(true, std::memory_order_release);
+            selectResult.store(documentRange->Select(), std::memory_order_release);
+        });
+
+    const auto startDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);
+    while (! workerStarted.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < startDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    Require(workerStarted.load(std::memory_order_acquire), "cross-thread TextRange Select worker starts");
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    if (selectResult.load(std::memory_order_acquire) != kPendingSelect)
+    {
+        worker.join();
+        Require(false, "cross-thread TextRange Select waits for host window-thread dispatch");
+    }
+
+    const auto selectDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (selectResult.load(std::memory_order_acquire) == kPendingSelect && std::chrono::steady_clock::now() < selectDeadline)
+    {
+        window.PumpMessages();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const HRESULT result = selectResult.load(std::memory_order_acquire);
+    worker.join();
+    Require(result != kPendingSelect, "cross-thread TextRange Select completes after host window-thread dispatch");
+    RequireSucceeded(result, "cross-thread TextRange Select succeeds after dispatch");
+
+    const std::optional<std::pair<size_t, size_t>> selectedRange = field->GetSelectionRange();
+    Require(selectedRange.has_value(), "cross-thread TextRange Select applies a retained selection");
+    Require(selectedRange.value().first == 6u && selectedRange.value().second == 10u,
+            "cross-thread TextRange Select applies the range on the host window thread");
+}
+
+void TestAccessibilityProviderExposesNativeImeTextEditRanges()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+    field->SetSelectionRange(5u, 5u);
+    window.Host().SyncTextInput(field);
+
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_STARTCOMPOSITION, 0, 0));
+
+    NativeTextInputImePayload payload;
+    payload.hasCompositionString  = true;
+    payload.compositionString     = L"-ime";
+    payload.compositionAttributes = {ATTR_INPUT, ATTR_TARGET_CONVERTED, ATTR_TARGET_CONVERTED, ATTR_INPUT};
+    payload.hasCursorPosition     = true;
+    payload.cursorPosition        = 3u;
+    window.Host().DebugSetNativeTextInputImePayloadForTest(payload);
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, GCS_COMPSTR | GCS_COMPATTR | GCS_CURSORPOS));
+
+    wil::com_ptr_nothrow<IRawElementProviderFragmentRoot> rootProvider;
+    rootProvider.attach(window.Host().DebugCreateAccessibilityProvider());
+    Require(rootProvider != nullptr, "native ime TextEditPattern test creates a root provider");
+
+    wil::com_ptr_nothrow<IRawElementProviderFragment> fieldProvider =
+        GetProviderAtDipPoint(window.Hwnd(), window.Host(), *rootProvider.get(), 40.0f, 16.0f, "native ime text field provider is resolved by point");
+    wil::com_ptr_nothrow<IRawElementProviderSimple> fieldSimple;
+    RequireSucceeded(fieldProvider.query_to(fieldSimple.put()), "native ime text field provider exposes IRawElementProviderSimple");
+
+    wil::com_ptr_nothrow<IUnknown> textEditPatternUnknown;
+    RequireSucceeded(fieldSimple->GetPatternProvider(UIA_TextEditPatternId, textEditPatternUnknown.put()), "native ime TextEditPattern lookup succeeds");
+    Require(textEditPatternUnknown != nullptr, "native ime text field exposes TextEditPattern");
+    wil::com_ptr_nothrow<ITextEditProvider> textEditPattern;
+    RequireSucceeded(textEditPatternUnknown.query_to(textEditPattern.put()), "native ime TextEditPattern supports ITextEditProvider");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> activeComposition;
+    RequireSucceeded(textEditPattern->GetActiveComposition(activeComposition.put()), "native ime active-composition range lookup succeeds");
+    Require(activeComposition != nullptr, "native ime TextEditPattern exposes active composition range");
+    Require(ReadTextRangeText(*activeComposition.get(), -1, "native ime active-composition range exposes text") == L"-ime",
+            "native ime active-composition range returns the preview string");
+
+    wil::com_ptr_nothrow<ITextRangeProvider> conversionTarget;
+    RequireSucceeded(textEditPattern->GetConversionTarget(conversionTarget.put()), "native ime conversion-target range lookup succeeds");
+    Require(conversionTarget != nullptr, "native ime TextEditPattern exposes conversion target range");
+    Require(ReadTextRangeText(*conversionTarget.get(), -1, "native ime conversion-target range exposes text") == L"im",
+            "native ime conversion-target range returns the target-converted span");
+
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_ENDCOMPOSITION, 0, 0));
+}
+
+void TestAccessibilityNativeTextInputRaisesTextAndTextEditEventCounters()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha beta");
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+    window.Host().SetFocusControl(field);
+    window.Host().SyncTextInput(field);
+
+    const NativeTextInputEventCounters baselineCounters = window.Host().DebugGetNativeTextInputEventCounters();
+
+    field->SetTextAndNotify(L"alpha beta edited");
+    window.Host().SyncTextInput(field);
+
+    NativeTextInputEventCounters counters = window.Host().DebugGetNativeTextInputEventCounters();
+    Require(counters.uiaTextChangedCount == baselineCounters.uiaTextChangedCount + 1u,
+            "native text input raises a UIA TextPattern text-changed event for retained text mutations");
+
+    const NativeTextInputEventCounters afterTextCounters = counters;
+    field->SetSelectionRange(6u, 10u);
+    window.Host().SyncTextInput(field);
+    counters = window.Host().DebugGetNativeTextInputEventCounters();
+    Require(counters.uiaTextSelectionChangedCount == afterTextCounters.uiaTextSelectionChangedCount + 1u,
+            "native text input raises a UIA TextPattern selection-changed event for retained selection mutations");
+
+    const NativeTextInputEventCounters afterSelectionCounters = counters;
+    field->SetSelectionRange(3u, 3u);
+    window.Host().SyncTextInput(field);
+    counters = window.Host().DebugGetNativeTextInputEventCounters();
+    Require(counters.uiaActiveTextPositionChangedCount == afterSelectionCounters.uiaActiveTextPositionChangedCount + 1u,
+            "native text input raises a UIA active text position event for retained caret moves");
+
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_STARTCOMPOSITION, 0, 0));
+
+    NativeTextInputImePayload payload;
+    payload.hasCompositionString  = true;
+    payload.compositionString     = L"-ime";
+    payload.compositionAttributes = {ATTR_INPUT, ATTR_TARGET_CONVERTED, ATTR_TARGET_CONVERTED, ATTR_INPUT};
+    window.Host().DebugSetNativeTextInputImePayloadForTest(payload);
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, GCS_COMPSTR | GCS_COMPATTR));
+
+    counters = window.Host().DebugGetNativeTextInputEventCounters();
+    Require(counters.uiaTextEditTextChangedCount >= baselineCounters.uiaTextEditTextChangedCount + 1u,
+            "native IME composition raises a UIA TextEdit text-changed event");
+    Require(counters.uiaTextEditConversionTargetChangedCount == baselineCounters.uiaTextEditConversionTargetChangedCount + 1u,
+            "native IME target conversion raises a UIA TextEdit conversion-target-changed event");
+
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_ENDCOMPOSITION, 0, 0));
 }
 
 void TestAccessibilityProviderExposesTreeAndGridMetadata()
@@ -1306,6 +2644,23 @@ void RunAccessibilityTests()
     TestAccessibilityProviderExposesInvokeToggleAndLabeledValuePatterns();
     TestAccessibilityProviderExposesDirectSemanticRootControls();
     TestAccessibilityProviderReportsFocusedControl();
+    TestAccessibilityProviderMasksPasswordTextFieldValue();
+    TestAccessibilityProviderExposesMaskedRevealButton();
+    TestAccessibilityProviderExposesTextPatternForTextField();
+    TestAccessibilityTextFieldSimpleRangeBoundingRectanglesUseCaretGeometry();
+    TestAccessibilityTextFieldMultilineRangeFromPointUsesNativeHitTest();
+    TestAccessibilityTextFieldMultilineSameLineRangeBoundingRectanglesUseCaretGeometry();
+    TestAccessibilityTextFieldMultilineRangeBoundingRectanglesUseLineCaretGeometry();
+    TestAccessibilityTextFieldWrappedRangeBoundingRectanglesUseVisualLineGeometry();
+    TestAccessibilityTextFieldWrappedCrossLineRangeBoundingRectanglesUseVisualLineGeometry();
+    TestAccessibilityTextFieldWrappedLineMovementUsesVisualLines();
+    TestAccessibilityTextFieldSingleLineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry();
+    TestAccessibilityTextFieldMultilineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry();
+    TestAccessibilityEditableComboBoxSingleLineMixedBiDiRangeBoundingRectanglesUseDirectWriteGeometry();
+    TestAccessibilityProviderExposesTextPatternForEditableComboBox();
+    TestAccessibilityTextRangeSelectDispatchesToWindowThread();
+    TestAccessibilityProviderExposesNativeImeTextEditRanges();
+    TestAccessibilityNativeTextInputRaisesTextAndTextEditEventCounters();
     TestAccessibilityProviderExposesTreeAndGridMetadata();
     TestAccessibilityProviderExposesTreeItemSelectionAndExpandCollapsePatterns();
     TestAccessibilityProviderExposesGridRowSelectionPatterns();
