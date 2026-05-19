@@ -1,5 +1,6 @@
 #include "FolderViewInternal.h"
 
+#include "DxUi/DxUi.FrameRuntime.h"
 #include "DxUi/DxUi.Typography.h"
 #include "FluentIcons.h"
 #include "FolderViewThumbnailGeometry.h"
@@ -960,6 +961,13 @@ void FolderView::Render(const RECT& invalidRect)
     Debug::Perf::Scope framePerf(L"render.frame_us");
     framePerf.SetDetail(_itemsFolder.native());
 
+    RedSalamander::DxUi::FrameClock frameClock;
+    RedSalamander::DxUi::FrameStage frameStage = RedSalamander::DxUi::FrameStage::Idle;
+    const auto frameStartedAt                  = frameClock.Now();
+    uint64_t folderPresentUs                   = 0u;
+    bool folderPresentAttempted                = false;
+    HRESULT folderFrameHr                      = S_OK;
+
     if (_incrementalSearchLayoutEffectsDirty && (! _incrementalSearch.active || _incrementalSearch.query.empty()))
     {
         ClearIncrementalSearchLayoutEffects();
@@ -971,6 +979,17 @@ void FolderView::Render(const RECT& invalidRect)
     uint64_t layoutCreates     = 0;
     uint64_t dirtyAreaPx       = 0;
     const auto beginToEndStart = std::chrono::steady_clock::now();
+    const auto emitFolderFrameMetrics = wil::scope_exit([&]
+    {
+        PerfEmitDuration(
+            L"folder.frame.total_us", frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), dirtyAreaPx, itemsDrawn, folderFrameHr);
+        if (folderPresentAttempted)
+        {
+            PerfEmitDuration(L"folder.frame.present_us", folderPresentUs, dirtyAreaPx, itemsDrawn, folderFrameHr);
+        }
+        PerfEmitCounter(L"folder.frame.visible_work_count", itemsDrawn);
+        PerfEmitCounter(L"folder.frame.dirty_rect_area_px", dirtyAreaPx);
+    });
 
     RECT paintRect = invalidRect;
     if (paintRect.right <= paintRect.left || paintRect.bottom <= paintRect.top)
@@ -993,10 +1012,12 @@ void FolderView::Render(const RECT& invalidRect)
     HRESULT hr               = S_OK;
     const uint64_t nowTickMs = GetTickCount64();
     {
+        RedSalamander::DxUi::FrameStageScope renderScope(frameStage, RedSalamander::DxUi::FrameStage::Render);
         _d2dContext->BeginDraw();
         auto endDraw = wil::scope_exit([&]
         {
             hr = _d2dContext->EndDraw();
+            folderFrameHr = hr;
             PerfEmitDuration(L"render.begin_to_enddraw_us", PerfElapsedUs(beginToEndStart), dirtyAreaPx, itemsDrawn, hr);
         });
         _d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
@@ -1791,8 +1812,25 @@ void FolderView::Render(const RECT& invalidRect)
             }
         }
 
+        const bool canDrawIncrementalSearchIndicator =
+            _d2dContext && _incrementalSearchIndicatorBackgroundBrush && _incrementalSearchIndicatorBorderBrush &&
+            _incrementalSearchIndicatorTextBrush && _incrementalSearchIndicatorShadowBrush && _incrementalSearchIndicatorAccentBrush &&
+            std::clamp(_incrementalSearchIndicatorVisibility, 0.0f, 1.0f) > 0.001f && DipFromPx(_clientSize.cx) > 0.0f &&
+            DipFromPx(_clientSize.cy) > 0.0f;
+        bool hasErrorOverlay = false;
+        {
+            std::lock_guard lock(_errorOverlayMutex);
+            hasErrorOverlay = _errorOverlay.has_value();
+        }
+        const bool canDrawErrorOverlay =
+            hasErrorOverlay && _d2dContext && _dwriteFactory && _alertOverlay && DipFromPx(_clientSize.cx) > 0.0f && DipFromPx(_clientSize.cy) > 0.0f;
+
         DrawIncrementalSearchIndicator(nowTickMs);
         DrawErrorOverlay();
+        if (canDrawIncrementalSearchIndicator || canDrawErrorOverlay)
+        {
+            PerfEmitCounter(L"folder.frame.overlay_dirty_rect_area_px", dirtyAreaPx);
+        }
 
 #ifdef ENABLE_TESTS
         if (IsNameFilterActive())
@@ -1839,7 +1877,15 @@ void FolderView::Render(const RECT& invalidRect)
         params.pScrollRect      = nullptr;
         params.pScrollOffset    = nullptr;
         const auto presentStart = std::chrono::steady_clock::now();
-        const HRESULT hrPresent = _swapChain->Present1(1, 0, &params);
+        const auto folderPresentStartedAt = frameClock.Now();
+        HRESULT hrPresent = S_OK;
+        {
+            RedSalamander::DxUi::FrameStageScope presentScope(frameStage, RedSalamander::DxUi::FrameStage::Present);
+            hrPresent = _swapChain->Present1(1, 0, &params);
+        }
+        folderPresentUs        = frameClock.ElapsedUs(folderPresentStartedAt, frameClock.Now());
+        folderPresentAttempted = true;
+        folderFrameHr          = hrPresent;
         PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
 #ifdef ENABLE_TESTS
         if (IsNameFilterActive())
@@ -1855,11 +1901,20 @@ void FolderView::Render(const RECT& invalidRect)
             return;
         }
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
+        EmitPendingInputToPaintMetricAfterPresent();
     }
     else if (_swapChainLegacy)
     {
         const auto presentStart = std::chrono::steady_clock::now();
-        const HRESULT hrPresent = _swapChainLegacy->Present(1, 0);
+        const auto folderPresentStartedAt = frameClock.Now();
+        HRESULT hrPresent = S_OK;
+        {
+            RedSalamander::DxUi::FrameStageScope presentScope(frameStage, RedSalamander::DxUi::FrameStage::Present);
+            hrPresent = _swapChainLegacy->Present(1, 0);
+        }
+        folderPresentUs        = frameClock.ElapsedUs(folderPresentStartedAt, frameClock.Now());
+        folderPresentAttempted = true;
+        folderFrameHr          = hrPresent;
         PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
         if (FAILED(hrPresent))
         {
@@ -1869,6 +1924,7 @@ void FolderView::Render(const RECT& invalidRect)
             return;
         }
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
+        EmitPendingInputToPaintMetricAfterPresent();
     }
 }
 

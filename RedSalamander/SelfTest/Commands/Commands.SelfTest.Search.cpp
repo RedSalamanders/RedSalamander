@@ -133,6 +133,165 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     return flag.load(std::memory_order_acquire);
 }
 
+[[nodiscard]] std::vector<HWND> FindVisibleOwnedDxUiContextMenuWindowsForSearchTest(HWND ownerHwnd) noexcept
+{
+    std::vector<HWND> windows;
+    const HWND rootOwner = ownerHwnd ? GetAncestor(ownerHwnd, GA_ROOT) : nullptr;
+    for (HWND popup = FindWindowW(L"DxUi_ContextMenu", nullptr); popup != nullptr; popup = FindWindowExW(nullptr, popup, L"DxUi_ContextMenu", nullptr))
+    {
+        if (IsWindowVisible(popup) == FALSE)
+        {
+            continue;
+        }
+
+        if (ownerHwnd)
+        {
+            const HWND popupOwner = GetWindow(popup, GW_OWNER);
+            if (popupOwner != ownerHwnd && popupOwner != rootOwner)
+            {
+                continue;
+            }
+        }
+
+        windows.push_back(popup);
+    }
+    return windows;
+}
+
+[[nodiscard]] HWND FindVisibleOwnedDxUiContextMenuWindowForSearchTest(HWND ownerHwnd) noexcept
+{
+    std::vector<HWND> windows = FindVisibleOwnedDxUiContextMenuWindowsForSearchTest(ownerHwnd);
+    return windows.empty() ? nullptr : windows.front();
+}
+
+void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
+{
+    RECT findButtonRect{};
+    state.Require(DebugGetFindFilesWindowTargetClientRect(FindFilesDebugFocusTarget::FindButton, findButtonRect), L"Failed to capture Find split button rect.");
+    if (! state.failure.empty())
+    {
+        return;
+    }
+
+    const int clickX = std::max(findButtonRect.left, findButtonRect.right - 8);
+    const int clickY = findButtonRect.top + ((findButtonRect.bottom - findButtonRect.top) / 2);
+    SendMessageW(findWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
+    SendMessageW(findWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickX, clickY));
+}
+
+[[nodiscard]] bool InvokeFindSplitMenuItem(HWND findWindow,
+                                           HWND ownerWindow,
+                                           size_t itemIndex,
+                                           CaseState& state,
+                                           const std::function<void(const RedSalamander::DxUi::ContextMenuPopupDebugState&)>& validatePopup = {}) noexcept
+{
+    using namespace std::chrono_literals;
+
+    std::atomic<bool> sawPopup{false};
+    std::atomic<bool> stateReadable{false};
+    std::atomic<bool> itemInvoked{false};
+
+    std::jthread menuDriver([&](std::stop_token stopToken) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(4000ms);
+        while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < deadline)
+        {
+            const HWND popup = FindVisibleOwnedDxUiContextMenuWindowForSearchTest(ownerWindow);
+            if (popup && IsWindow(popup) != FALSE)
+            {
+                sawPopup.store(true, std::memory_order_release);
+                RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
+                if (RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState))
+                {
+                    stateReadable.store(true, std::memory_order_release);
+                    if (validatePopup)
+                    {
+                        validatePopup(popupState);
+                    }
+
+                    D2D1_RECT_F itemRectDip{};
+                    if (RedSalamander::DxUi::DebugGetContextMenuPopupItemRect(popup, itemIndex, itemRectDip))
+                    {
+                        const int clickX = static_cast<int>(std::lround((itemRectDip.left + itemRectDip.right) * 0.5f * static_cast<float>(popupState.dpi) /
+                                                                        static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
+                        const int clickY = static_cast<int>(std::lround((itemRectDip.top + itemRectDip.bottom) * 0.5f * static_cast<float>(popupState.dpi) /
+                                                                        static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
+                        SendMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
+                        SendMessageW(popup, WM_LBUTTONUP, 0, MAKELPARAM(clickX, clickY));
+                        itemInvoked.store(true, std::memory_order_release);
+                        if (IsWindow(popup) != FALSE)
+                        {
+                            PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+                            PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+                        }
+                        return;
+                    }
+                }
+
+                PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+                PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+                return;
+            }
+
+            std::this_thread::sleep_for(10ms);
+        }
+    });
+
+    SendFindSplitMenuClick(findWindow, state);
+    menuDriver.request_stop();
+    menuDriver.join();
+    state.Require(sawPopup.load(std::memory_order_acquire), L"Find split button did not open a DxUI action menu.");
+    state.Require(stateReadable.load(std::memory_order_acquire), L"Find split action menu did not expose readable debug state.");
+    state.Require(itemInvoked.load(std::memory_order_acquire), L"Find split action menu item was not invoked.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool ProbeFindSplitMenu(HWND findWindow,
+                                      HWND ownerWindow,
+                                      CaseState& state,
+                                      const std::function<void(const RedSalamander::DxUi::ContextMenuPopupDebugState&)>& validatePopup) noexcept
+{
+    using namespace std::chrono_literals;
+
+    std::atomic<bool> sawPopup{false};
+    std::atomic<bool> stateReadable{false};
+
+    std::jthread menuDriver([&](std::stop_token stopToken) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(4000ms);
+        while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < deadline)
+        {
+            const HWND popup = FindVisibleOwnedDxUiContextMenuWindowForSearchTest(ownerWindow);
+            if (popup && IsWindow(popup) != FALSE)
+            {
+                sawPopup.store(true, std::memory_order_release);
+                RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
+                if (RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState))
+                {
+                    stateReadable.store(true, std::memory_order_release);
+                    if (validatePopup)
+                    {
+                        validatePopup(popupState);
+                    }
+                }
+
+                PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+                PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+                return;
+            }
+
+            std::this_thread::sleep_for(10ms);
+        }
+    });
+
+    SendFindSplitMenuClick(findWindow, state);
+    menuDriver.request_stop();
+    menuDriver.join();
+    state.Require(sawPopup.load(std::memory_order_acquire), L"Find split button did not open a DxUI action menu.");
+    state.Require(stateReadable.load(std::memory_order_acquire), L"Find split action menu did not expose readable debug state.");
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool GetConfiguredLocalFileSystemForSelfTest(CaseState& state, std::string_view configurationJson, CreatedFileSystemInstance& created) noexcept
 {
     const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, created);
@@ -3216,9 +3375,6 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     sendTab(false, FindFilesDebugFocusTarget::PreferIndexCheck, L"Prefer index checkbox");
     sendTab(false, FindFilesDebugFocusTarget::WantSnippetsCheck, L"Include snippets checkbox");
     sendTab(false, FindFilesDebugFocusTarget::FindButton, L"Find button");
-    sendTab(false, FindFilesDebugFocusTarget::AppendButton, L"Append button");
-    sendTab(false, FindFilesDebugFocusTarget::IntersectButton, L"Intersect button");
-    sendTab(false, FindFilesDebugFocusTarget::SubtractButton, L"Subtract button");
     sendTab(false, FindFilesDebugFocusTarget::OpenButton, L"Open button");
     sendTab(false, FindFilesDebugFocusTarget::ParentButton, L"Open Parent button");
     sendTab(false, FindFilesDebugFocusTarget::ResultsGrid, L"results grid");
@@ -3227,9 +3383,6 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     sendTab(true, FindFilesDebugFocusTarget::ResultsGrid, L"reverse wrapped results grid");
     sendTab(true, FindFilesDebugFocusTarget::ParentButton, L"reverse Open Parent button");
     sendTab(true, FindFilesDebugFocusTarget::OpenButton, L"reverse Open button");
-    sendTab(true, FindFilesDebugFocusTarget::SubtractButton, L"reverse Subtract button");
-    sendTab(true, FindFilesDebugFocusTarget::IntersectButton, L"reverse Intersect button");
-    sendTab(true, FindFilesDebugFocusTarget::AppendButton, L"reverse Append button");
     sendTab(true, FindFilesDebugFocusTarget::FindButton, L"reverse Find button");
     sendTab(true, FindFilesDebugFocusTarget::WantSnippetsCheck, L"reverse Include snippets checkbox");
     sendTab(true, FindFilesDebugFocusTarget::PreferIndexCheck, L"reverse Prefer index checkbox");
@@ -3526,8 +3679,29 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
 
     FindFilesDebugSnapshot snapshot{};
     state.Require(DebugGetFindFilesWindowSnapshot(snapshot), L"Failed to capture idle Find snapshot for command-enablement test.");
-    state.Require(snapshot.findButtonEnabled && snapshot.appendButtonEnabled && snapshot.intersectButtonEnabled && snapshot.subtractButtonEnabled,
-                  L"Search command buttons should be enabled while the Find window is idle.");
+    state.Require(snapshot.findButtonEnabled && ! snapshot.appendButtonEnabled && ! snapshot.intersectButtonEnabled && ! snapshot.subtractButtonEnabled,
+                  L"Find should be enabled while idle, but result-set action menu options should stay disabled until the result list has items.");
+    std::atomic<bool> initialMenuShapeValid{false};
+    std::atomic<bool> initialSetOpsDisabled{false};
+    state.Require(ProbeFindSplitMenu(findWindow,
+                                     findWindow,
+                                     state,
+                                     [&](const RedSalamander::DxUi::ContextMenuPopupDebugState& popupState) noexcept
+    {
+        const bool shapeValid = popupState.itemTexts.size() == 4u && popupState.itemEnabled.size() == 4u &&
+                                popupState.itemTexts[0] == LoadStringResource(nullptr, IDS_FIND_ACTION_FIND) &&
+                                popupState.itemTexts[1] == LoadStringResource(nullptr, IDS_FIND_ACTION_REFINE_INTERSECT) &&
+                                popupState.itemTexts[2] == LoadStringResource(nullptr, IDS_FIND_ACTION_REFINE_SUBTRACT) &&
+                                popupState.itemTexts[3] == LoadStringResource(nullptr, IDS_FIND_ACTION_APPEND_TO_FOUND);
+        initialMenuShapeValid.store(shapeValid, std::memory_order_release);
+        initialSetOpsDisabled.store(shapeValid && popupState.itemEnabled[0] && ! popupState.itemEnabled[1] && ! popupState.itemEnabled[2] &&
+                                        ! popupState.itemEnabled[3],
+                                    std::memory_order_release);
+    }),
+                  L"Failed to probe initial Find split action menu.");
+    state.Require(initialMenuShapeValid.load(std::memory_order_acquire), L"Find split action menu should expose Find, Intersect, Subtract, and Append entries.");
+    state.Require(initialSetOpsDisabled.load(std::memory_order_acquire),
+                  L"Find split action menu should disable Append/Intersect/Subtract until the result list contains items.");
     state.Require(! snapshot.cancelButtonEnabled && ! snapshot.openButtonEnabled && ! snapshot.parentButtonEnabled,
                   L"Cancel/Open/Parent buttons should be disabled while idle with no selection.");
     state.Require(snapshot.rootComboEnabled && snapshot.nameComboEnabled && snapshot.nameModeComboEnabled && snapshot.contentComboEnabled &&
@@ -3581,6 +3755,19 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
                       SelfTest::Scale(3000ms),
                       &snapshot),
                   L"Selecting a Find result did not restore idle commands and enable Open/Parent.");
+    std::atomic<bool> populatedSetOpsEnabled{false};
+    state.Require(ProbeFindSplitMenu(findWindow,
+                                     findWindow,
+                                     state,
+                                     [&](const RedSalamander::DxUi::ContextMenuPopupDebugState& popupState) noexcept
+    {
+        populatedSetOpsEnabled.store(popupState.itemEnabled.size() == 4u && popupState.itemEnabled[0] && popupState.itemEnabled[1] &&
+                                         popupState.itemEnabled[2] && popupState.itemEnabled[3],
+                                     std::memory_order_release);
+    }),
+                  L"Failed to probe populated Find split action menu.");
+    state.Require(populatedSetOpsEnabled.load(std::memory_order_acquire),
+                  L"Find split action menu should enable Append/Intersect/Subtract after the result list contains items.");
     return state.failure.empty();
 }
 
@@ -3673,18 +3860,12 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     const auto containsPath = [](const FindFilesDebugSnapshot& snapshot, const std::filesystem::path& path) noexcept
     { return std::find(snapshot.fullPaths.begin(), snapshot.fullPaths.end(), path.native()) != snapshot.fullPaths.end(); };
 
-    const std::wstring findButtonText      = LoadStringResource(nullptr, IDS_FIND_ACTION_FIND);
-    const std::wstring appendButtonText    = LoadStringResource(nullptr, IDS_FIND_ACTION_APPEND);
-    const std::wstring intersectButtonText = LoadStringResource(nullptr, IDS_FIND_ACTION_INTERSECT);
-    const std::wstring subtractButtonText  = LoadStringResource(nullptr, IDS_FIND_ACTION_SUBTRACT);
-    const std::wstring cancelButtonText    = LoadStringResource(nullptr, IDS_BTN_CANCEL);
-    const std::wstring openButtonText      = LoadStringResource(nullptr, IDS_FIND_ACTION_OPEN);
-    const std::wstring parentButtonText    = LoadStringResource(nullptr, IDS_FIND_ACTION_PARENT);
+    const std::wstring findButtonText   = LoadStringResource(nullptr, IDS_FIND_ACTION_FIND);
+    const std::wstring cancelButtonText = LoadStringResource(nullptr, IDS_BTN_CANCEL);
+    const std::wstring openButtonText   = LoadStringResource(nullptr, IDS_FIND_ACTION_OPEN);
+    const std::wstring parentButtonText = LoadStringResource(nullptr, IDS_FIND_ACTION_PARENT);
 
     state.Require(! findButtonText.empty(), L"Failed to resolve Find button caption for action-buttons test.");
-    state.Require(! appendButtonText.empty(), L"Failed to resolve Append button caption for action-buttons test.");
-    state.Require(! intersectButtonText.empty(), L"Failed to resolve Intersect button caption for action-buttons test.");
-    state.Require(! subtractButtonText.empty(), L"Failed to resolve Subtract button caption for action-buttons test.");
     state.Require(! cancelButtonText.empty(), L"Failed to resolve Cancel button caption for action-buttons test.");
     state.Require(! openButtonText.empty(), L"Failed to resolve Open button caption for action-buttons test.");
     state.Require(! parentButtonText.empty(), L"Failed to resolve Open Parent button caption for action-buttons test.");
@@ -3708,20 +3889,20 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     state.Require(DebugSetFindFilesWindowOptions(false, true, false, true, false), L"Failed to configure root-level Find options for action-buttons test.");
     state.Require(DebugConfigureFindFilesWindow(
                       root.native(), L"*.jsonl", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
-                  L"Failed to configure initial Append search for action-buttons test.");
-    invokeButton(appendButtonText, L"Append button before initial append search");
+                  L"Failed to configure initial Find search for action-buttons test.");
+    invokeButton(findButtonText, L"Find button before initial search");
     state.Require(DebugWaitForFindFilesWindowIdle(static_cast<uint32_t>(SelfTest::Scale(10000ms).count())),
-                  L"Initial Append search did not become idle in action-buttons test.");
+                  L"Initial Find search did not become idle in action-buttons test.");
     state.Require(WaitForFindSnapshot([&](const FindFilesDebugSnapshot& value) noexcept
     { return value.resultCount == 1u && containsPath(value, root / L"alpha.jsonl"); },
                                       SelfTest::Scale(3000ms),
                                       &snapshot),
-                  L"Append button live UIA invoke did not add the expected initial result.");
+                  L"Find button live UIA invoke did not add the expected initial result.");
 
     state.Require(
         DebugConfigureFindFilesWindow(root.native(), L"*.txt", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
         L"Failed to configure second Append search for action-buttons test.");
-    invokeButton(appendButtonText, L"Append button before second append search");
+    state.Require(InvokeFindSplitMenuItem(findWindow, findWindow, 3u, state), L"Find split menu Append item did not invoke.");
     state.Require(DebugWaitForFindFilesWindowIdle(static_cast<uint32_t>(SelfTest::Scale(10000ms).count())),
                   L"Second Append search did not become idle in action-buttons test.");
     state.Require(WaitForFindSnapshot(
@@ -3737,7 +3918,7 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     state.Require(
         DebugConfigureFindFilesWindow(root.native(), L"a*", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
         L"Failed to configure Intersect search for action-buttons test.");
-    invokeButton(intersectButtonText, L"Intersect button before intersect search");
+    state.Require(InvokeFindSplitMenuItem(findWindow, findWindow, 1u, state), L"Find split menu Intersect item did not invoke.");
     state.Require(DebugWaitForFindFilesWindowIdle(static_cast<uint32_t>(SelfTest::Scale(10000ms).count())),
                   L"Intersect search did not become idle in action-buttons test.");
     state.Require(WaitForFindSnapshot(
@@ -3753,7 +3934,7 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     state.Require(DebugConfigureFindFilesWindow(
                       root.native(), L"*.jsonl", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
                   L"Failed to configure Subtract search for action-buttons test.");
-    invokeButton(subtractButtonText, L"Subtract button before subtract search");
+    state.Require(InvokeFindSplitMenuItem(findWindow, findWindow, 2u, state), L"Find split menu Subtract item did not invoke.");
     state.Require(DebugWaitForFindFilesWindowIdle(static_cast<uint32_t>(SelfTest::Scale(10000ms).count())),
                   L"Subtract search did not become idle in action-buttons test.");
     state.Require(WaitForFindSnapshot([&](const FindFilesDebugSnapshot& value) noexcept
@@ -10798,6 +10979,16 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     const float baselineHeaderHeight = std::max(0.0f, snapshot.firstResultHeaderRect.bottom - snapshot.firstResultHeaderRect.top);
     const float baselineRowHeight    = std::max(0.0f, snapshot.selectedResultRowRect.bottom - snapshot.selectedResultRowRect.top);
     const float baselineStatusHeight = snapshot.statusStripHeightDip;
+    const bool sawNestedPathText =
+        std::find(snapshot.resultPathTexts.begin(), snapshot.resultPathTexts.end(), std::wstring(L"sub")) != snapshot.resultPathTexts.end();
+    state.Require(sawNestedPathText, L"Recursive Find results should show the containing subfolder in the Path column.");
+    state.Require(baselineRowHeight <= 32.0f,
+                  std::format(L"Standard-density Find result rows without snippets should use shared compact grid metrics, but measured {:.2f} dip.",
+                              baselineRowHeight));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     AppTheme compactTheme              = standardTheme;
     compactTheme.compactMode           = true;
@@ -10831,6 +11022,9 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     state.Require(compactRowHeight + 0.5f < baselineRowHeight,
                   std::format(L"Find compact row height should shrink below the standard height; baseline {:.2f} dip vs compact {:.2f} dip.",
                               baselineRowHeight,
+                              compactRowHeight));
+    state.Require(compactRowHeight <= 26.0f,
+                  std::format(L"Compact-density Find result rows without snippets should stay near the shared grid compact row height, but measured {:.2f} dip.",
                               compactRowHeight));
     state.Require(compactSnapshot.statusStripHeightDip + 0.5f < baselineStatusHeight,
                   std::format(L"Find compact status strip height should shrink below the standard height; baseline {:.2f} dip vs compact {:.2f} dip.",
@@ -11127,6 +11321,135 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestPaneQuickSearchUsesVisualNamesWhenExtensionsHidden(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"quick_search_hidden_extensions_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create hidden-extension quick-search test root.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpha.txt", "alpha"), L"Failed to create alpha.txt for hidden-extension quick-search test.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpine.log", "alpine"), L"Failed to create alpine.log for hidden-extension quick-search test.");
+    state.Require(SelfTest::WriteTextFile(root / L"beta-alpha.txt", "beta"), L"Failed to create beta-alpha.txt for hidden-extension quick-search test.");
+    state.Require(SelfTest::WriteTextFile(root / L"gamma.txt", "gamma"), L"Failed to create gamma.txt for hidden-extension quick-search test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const bool leftExtensionsVisibleBefore                    = g_folderWindow.GetFileExtensionsVisible(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        g_folderWindow.SetFileExtensionsVisible(FolderWindow::Pane::Left, leftExtensionsVisibleBefore);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for hidden-extension quick-search test.");
+    g_folderWindow.SetFileExtensionsVisible(FolderWindow::Pane::Left, false);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for hidden-extension quick-search test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"alpine.log", L"beta-alpha.txt", L"gamma.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for hidden-extension quick-search test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"gamma.txt"),
+                  L"Failed to focus gamma.txt before hidden-extension quick-search test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Left folder view handle unavailable for hidden-extension quick-search test.");
+    if (! folderView)
+    {
+        return false;
+    }
+
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  L"Left folder view did not have stable focus before hidden-extension Quick Search activation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
+    PumpPendingMessages();
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'a'), 0);
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'l'), 0);
+    PumpPendingMessages();
+
+    FolderView::IncrementalSearchDebugSnapshot snapshot{};
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after typing with extensions hidden.");
+    state.Require(snapshot.active, L"Quick Search should remain active after typing with extensions hidden.");
+    state.Require(snapshot.query == L"al", std::format(L"Quick Search query should be 'al'; got '{}'.", snapshot.query));
+    state.Require(snapshot.focusedDisplayName == L"alpha",
+                  std::format(L"Quick Search snapshot should expose the visible focused label; got '{}'.", snapshot.focusedDisplayName));
+    state.Require(snapshot.matches.size() == 3u,
+                  std::format(L"Quick Search should expose three visible-name matches with extensions hidden; got {}.", snapshot.matches.size()));
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"alpha", 0u, 2u, true), L"Quick Search should expose visible prefix match alpha.");
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"alpine", 0u, 2u, true), L"Quick Search should expose visible prefix match alpine.");
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"beta-alpha", 5u, 2u, false),
+                  L"Quick Search should expose visible contained match beta-alpha.");
+
+    SendMessageW(folderView, WM_KEYDOWN, VK_ESCAPE, 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"gamma.txt"),
+                  L"Failed to refocus gamma.txt before hidden-extension Quick Search navigation check.");
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
+    PumpPendingMessages();
+    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L't'), 0);
+    PumpPendingMessages();
+
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available for hidden-extension extension-text query.");
+    state.Require(snapshot.active, L"Quick Search should remain active for hidden-extension extension-text query.");
+    state.Require(snapshot.query == L"t", std::format(L"Quick Search query should be 't'; got '{}'.", snapshot.query));
+    state.Require(snapshot.focusedDisplayName == L"beta-alpha",
+                  std::format(L"Quick Search should ignore hidden extension text while selecting the visible match; got '{}'.", snapshot.focusedDisplayName));
+    state.Require(snapshot.matches.size() == 1u,
+                  std::format(L"Quick Search should expose only one visible-name match for 't' with extensions hidden; got {}.", snapshot.matches.size()));
+    state.Require(QuickSearchSnapshotHasMatch(snapshot, L"beta-alpha", 2u, 1u, false),
+                  L"Quick Search should expose the visible contained match beta-alpha for 't'.");
+
+    SendMessageW(folderView, WM_KEYDOWN, VK_DOWN, 0);
+    PumpPendingMessages();
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after hidden-extension match navigation.");
+    state.Require(snapshot.focusedDisplayName == L"beta-alpha",
+                  std::format(L"Quick Search Down should stay on the only visible-name match instead of matching hidden extensions; got '{}'.",
+                              snapshot.focusedDisplayName));
+
+    SendMessageW(folderView, WM_KEYDOWN, VK_ESCAPE, 0);
+    PumpPendingMessages();
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunSearchCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -11147,6 +11470,9 @@ void RunSearchCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpt
         options, suite, L"cmd_pane_find_dialog_search_ops", [=](CaseState& state) noexcept { return TestFindDialogSearchOps(mainWindow, state); });
     SelfTest::RunCase(
         options, suite, L"cmd_pane_quickSearch_integrated_navigation", [=](CaseState& state) noexcept { return TestPaneQuickSearchIntegratedNavigation(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_quickSearch_uses_visual_names_when_extensions_hidden", [=](CaseState& state) noexcept {
+        return TestPaneQuickSearchUsesVisualNamesWhenExtensionsHidden(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_local_root_overrides_stale_context", [=](CaseState& state) noexcept {
         return TestFindDialogTypedLocalRootOverridesStaleContext(mainWindow, state);
     });

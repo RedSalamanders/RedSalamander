@@ -204,6 +204,12 @@ struct MonitorChromeSelfTestCheck final
     std::wstring detail;
 };
 
+struct MonitorChromeMetricPresence final
+{
+    std::wstring_view metric;
+    uint64_t count = 0;
+};
+
 struct MonitorChromeSelfTestContext final
 {
     bool enabled   = false;
@@ -220,6 +226,15 @@ struct MonitorChromeSelfTestContext final
 };
 
 MonitorChromeSelfTestContext g_monitorChromeSelfTest;
+
+constexpr std::array<std::wstring_view, 6> kRequiredMonitorFrameMetrics{{
+    L"monitor.frame.total_us",
+    L"monitor.frame.present_us",
+    L"monitor.frame.append_to_visible_us",
+    L"monitor.frame.tail_layout_us",
+    L"monitor.frame.mode",
+    L"monitor.etw.batch_drain_us",
+}};
 
 void SyncToolbarState() noexcept;
 void UpdateStatusBar();
@@ -983,6 +998,55 @@ std::wstring GetTimestampFolderNameLocal() noexcept
     return std::format(L"{0:04}-{1:02}-{2:02}_{3:02}{4:02}{5:02}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 }
 
+uint64_t CountMetricRowsInJsonl(std::string_view jsonl, std::wstring_view metric) noexcept
+{
+    const std::string metricUtf8 = Utf8FromWide(metric);
+    if (metricUtf8.empty())
+    {
+        return 0;
+    }
+
+    const std::string token = std::format("\"metric\":\"{}\"", metricUtf8);
+    uint64_t count          = 0;
+    size_t position         = 0;
+    while ((position = jsonl.find(token, position)) != std::string_view::npos)
+    {
+        ++count;
+        position += token.size();
+    }
+
+    return count;
+}
+
+std::vector<MonitorChromeMetricPresence> ReadMonitorFrameMetricPresence() noexcept
+{
+    std::vector<MonitorChromeMetricPresence> presence;
+    presence.reserve(kRequiredMonitorFrameMetrics.size());
+    for (const std::wstring_view metric : kRequiredMonitorFrameMetrics)
+    {
+        presence.push_back(MonitorChromeMetricPresence{metric, 0u});
+    }
+
+    if (g_monitorChromeSelfTest.perfPath.empty())
+    {
+        return presence;
+    }
+
+    std::ifstream input(g_monitorChromeSelfTest.perfPath, std::ios::binary);
+    if (! input)
+    {
+        return presence;
+    }
+
+    const std::string jsonl((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    for (MonitorChromeMetricPresence& metricPresence : presence)
+    {
+        metricPresence.count = CountMetricRowsInJsonl(jsonl, metricPresence.metric);
+    }
+
+    return presence;
+}
+
 std::filesystem::path GetDefaultMonitorPerfJsonlPath() noexcept
 {
     const std::filesystem::path repoRoot = TryFindRepoRoot();
@@ -1007,16 +1071,28 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
         return;
     }
 
-    g_monitorChromeSelfTest.completed = true;
-    g_monitorChromeSelfTest.exitCode  = passed ? 0 : 1;
+    const std::vector<MonitorChromeMetricPresence> metricPresence = ReadMonitorFrameMetricPresence();
+    const bool allRequiredMetricsPresent =
+        std::all_of(metricPresence.begin(), metricPresence.end(), [](const MonitorChromeMetricPresence& metric) noexcept { return metric.count > 0u; });
+    RecordMonitorChromeSelfTestCheck(L"required monitor frame metrics",
+                                     allRequiredMetricsPresent,
+                                     allRequiredMetricsPresent ? L"" : L"one or more required monitor frame metrics missing");
 
-    RecordMonitorChromeSelfTestCheck(L"overall", passed, summary);
+    const bool finalPassed = passed && allRequiredMetricsPresent;
+    const std::wstring finalSummary =
+        finalPassed ? std::wstring(summary)
+                    : (passed ? L"Monitor chrome selftest passed functionally, but required frame metrics were missing." : std::wstring(summary));
+
+    g_monitorChromeSelfTest.completed = true;
+    g_monitorChromeSelfTest.exitCode  = finalPassed ? 0 : 1;
+
+    RecordMonitorChromeSelfTestCheck(L"overall", finalPassed, finalSummary);
 
     std::string json;
     json += "{\n";
     json += std::format("  \"scenario\": \"{}\",\n", EscapeJsonWide(kMonitorScenarioName));
-    json += std::format("  \"status\": \"{}\",\n", passed ? "passed" : "failed");
-    json += std::format("  \"summary\": \"{}\",\n", EscapeJsonWide(summary));
+    json += std::format("  \"status\": \"{}\",\n", finalPassed ? "passed" : "failed");
+    json += std::format("  \"summary\": \"{}\",\n", EscapeJsonWide(finalSummary));
     json += std::format("  \"machineHash\": \"{}\",\n", EscapeJsonWide(g_monitorChromeSelfTest.machineHash));
     json += std::format("  \"runId\": \"{}\",\n", EscapeJsonWide(g_monitorChromeSelfTest.runId));
     json += "  \"checks\": [\n";
@@ -1029,7 +1105,21 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
                             EscapeJsonWide(check.detail),
                             (index + 1u) == g_monitorChromeSelfTest.checks.size() ? "" : ",");
     }
-    json += "  ]\n";
+    json += "  ],\n";
+    json += "  \"monitorFrameMetricPresence\": {\n";
+    json += std::format("    \"allPresent\": {},\n", allRequiredMetricsPresent ? "true" : "false");
+    json += "    \"metrics\": [\n";
+    for (size_t index = 0; index < metricPresence.size(); ++index)
+    {
+        const MonitorChromeMetricPresence& metric = metricPresence[index];
+        json += std::format("      {{\"metric\": \"{}\", \"present\": {}, \"count\": {}}}{}\n",
+                            EscapeJsonWide(metric.metric),
+                            metric.count > 0u ? "true" : "false",
+                            metric.count,
+                            (index + 1u) == metricPresence.size() ? "" : ",");
+    }
+    json += "    ]\n";
+    json += "  }\n";
     json += "}\n";
 
     WriteUtf8TextFile(g_monitorChromeSelfTest.resultsPath, json, false);
@@ -2334,6 +2424,12 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
 
     const auto scenarioStarted = std::chrono::steady_clock::now();
 
+    Common::Settings::UiSettings baselineUi = g_settings.ui.value_or(Common::Settings::UiSettings{});
+    baselineUi.compactMode                  = false;
+    baselineUi.reducedMotion                = Common::Settings::ReducedMotionMode::Off;
+    g_settings.ui                           = baselineUi;
+    ApplyMonitorTheme();
+
     AdjustLayout(hWnd);
     SyncToolbarState();
     UpdateStatusBar();
@@ -2477,6 +2573,10 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
         }
 
         UpdateStatusBar();
+        if (g_hColorView)
+        {
+            ::RedrawWindow(g_hColorView.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        }
         const size_t linesAfterBurst = g_colorView.GetTotalLineCount();
         const bool burstDrained      = linesAfterBurst >= linesBeforeBurst + kSelfTestEtwBurstCount;
         passed &= require(L"etw batch queue drained",
@@ -2958,7 +3058,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
     auto atom = RegisterClassExW(&wcex);
     if (! atom)
     {
-        // TODO: Handle error, e.g., log it or show a message box
+        Debug::ErrorWithLastError(L"RedSalamanderMonitor: RegisterClassExW failed");
         return std::nullopt;
     }
 
@@ -2980,7 +3080,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
                                           nullptr));
     if (! hWnd)
     {
-        // TODO: Handle error, e.g., log it or show a message box
+        Debug::ErrorWithLastError(L"RedSalamanderMonitor: CreateWindowExW failed");
         return std::nullopt;
     }
 

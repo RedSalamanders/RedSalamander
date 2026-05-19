@@ -38,11 +38,14 @@ If both name and content are enabled, a result must match both.
 The result list updates while the search is running.
 
 Actions:
-- **Find** replaces the current result set
+- **Find Now** replaces the current result set
+- The **Find Now** split-button menu offers **Append**, **Intersect**, and **Subtract** once the result list contains items
 - **Append** adds new matches
 - **Intersect** keeps only matches that are already in the result set
 - **Subtract** removes newly found matches from the current result set
 - **Cancel** stops the current search
+
+When recursive search finds matches below the root, the Path column shows the containing subfolder relative to the search root. Result rows use the shared grid density, so compact mode reduces the row spacing for one-line results.
 
 Double-click behavior:
 - file: open it with the normal host flow

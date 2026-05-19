@@ -23,6 +23,7 @@
 #include <windowsx.h>
 
 #include "DxUi.Typography.h"
+#include "DxUi.FrameRuntime.h"
 #include "Helpers.h"
 #include "Ui/AnimationDispatcher.h"
 #include "WindowMessages.h"
@@ -58,6 +59,44 @@ struct SharedWindowHostGraphicsResources
     uint64_t generation            = 1u;
     uint32_t attachedHostCount     = 0u;
 };
+
+struct WindowHostDirtyRectMetrics
+{
+    bool isPartialDirty = false;
+    uint64_t count      = 0u;
+    uint64_t areaPx     = 0u;
+};
+
+[[nodiscard]] WindowHostDirtyRectMetrics ResolveWindowHostDirtyRectMetrics(const RECT* dirtyRectPx, UINT widthPx, UINT heightPx) noexcept
+{
+    if (! dirtyRectPx || dirtyRectPx->left >= dirtyRectPx->right || dirtyRectPx->top >= dirtyRectPx->bottom)
+    {
+        return {};
+    }
+
+    const auto dirtyWidthPx  = static_cast<UINT>(dirtyRectPx->right - dirtyRectPx->left);
+    const auto dirtyHeightPx = static_cast<UINT>(dirtyRectPx->bottom - dirtyRectPx->top);
+    if (dirtyWidthPx >= widthPx && dirtyHeightPx >= heightPx)
+    {
+        return {};
+    }
+
+    return WindowHostDirtyRectMetrics{
+        .isPartialDirty = true,
+        .count          = 1u,
+        .areaPx         = static_cast<uint64_t>(dirtyWidthPx) * static_cast<uint64_t>(dirtyHeightPx),
+    };
+}
+
+void EmitWindowHostFrameMetrics(uint64_t totalUs, uint64_t updateUs, uint64_t renderUs, uint64_t presentUs, const WindowHostDirtyRectMetrics& dirtyMetrics) noexcept
+{
+    EmitFrameMetric(L"dxui.frame.total_us", totalUs);
+    EmitFrameMetric(L"dxui.frame.update_us", updateUs);
+    EmitFrameMetric(L"dxui.frame.render_us", renderUs);
+    EmitFrameMetric(L"dxui.frame.present_us", presentUs);
+    Debug::Perf::EmitValue(L"dxui.frame.dirty_rect_count", dirtyMetrics.count);
+    Debug::Perf::EmitValue(L"dxui.frame.dirty_rect_area_px", dirtyMetrics.areaPx);
+}
 
 [[nodiscard]] wchar_t NormalizeMnemonicChar(wchar_t ch) noexcept
 {
@@ -1756,6 +1795,11 @@ bool WindowHost::DebugHasActiveAnimationSubscription() const noexcept
     return _animationSubscriptionId != 0u;
 }
 
+bool WindowHost::DebugAnimationTickForTest(uint64_t nowTickMs) noexcept
+{
+    return OnAnimationTick(nowTickMs);
+}
+
 IRawElementProviderFragmentRoot* WindowHost::DebugCreateAccessibilityProvider() const noexcept
 {
     return _hwnd ? CreateWindowHostAccessibilityProvider(_hwnd) : nullptr;
@@ -2726,20 +2770,36 @@ void WindowHost::Render(const RECT* dirtyRectPx) noexcept
 #if defined(ENABLE_TESTS)
     Render(dirtyRectPx, nullptr);
 #else
+    FrameClock frameClock;
+    FrameStage frameStage       = FrameStage::Idle;
+    const auto frameStartedAt   = frameClock.Now();
+    uint64_t updateUs           = 0u;
+    uint64_t renderUs           = 0u;
+    uint64_t presentUs          = 0u;
+    const auto dirtyRectMetrics = ResolveWindowHostDirtyRectMetrics(dirtyRectPx, _widthPx, _heightPx);
+    const auto emitFrameMetrics = wil::scope_exit([&]
+    {
+        EmitWindowHostFrameMetrics(frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), updateUs, renderUs, presentUs, dirtyRectMetrics);
+    });
+
     Debug::Perf::Scope paintPerf(L"DxUI::Paint");
     paintPerf.SetValue0(_widthPx);
     paintPerf.SetValue1(_heightPx);
 
-    if (! EnsureSizeDependentResources())
     {
-        paintPerf.SetHr(E_FAIL);
-        EmitPendingNativeTextInputPaintMetric(E_FAIL);
-        return;
+        FrameStageScope updateScope(frameStage, FrameStage::Update);
+        const auto updateStartedAt = frameClock.Now();
+        if (! EnsureSizeDependentResources())
+        {
+            updateUs = frameClock.ElapsedUs(updateStartedAt, frameClock.Now());
+            paintPerf.SetHr(E_FAIL);
+            EmitPendingNativeTextInputPaintMetric(E_FAIL);
+            return;
+        }
+        updateUs = frameClock.ElapsedUs(updateStartedAt, frameClock.Now());
     }
 
-    const bool isPartialDirty =
-        dirtyRectPx != nullptr && dirtyRectPx->left < dirtyRectPx->right && dirtyRectPx->top < dirtyRectPx->bottom &&
-        (static_cast<UINT>(dirtyRectPx->right - dirtyRectPx->left) < _widthPx || static_cast<UINT>(dirtyRectPx->bottom - dirtyRectPx->top) < _heightPx);
+    const bool isPartialDirty = dirtyRectMetrics.isPartialDirty;
     paintPerf.SetDetail(isPartialDirty ? L"partial" : L"full");
 
     D2D1_RECT_F clipDip{};
@@ -2751,69 +2811,80 @@ void WindowHost::Render(const RECT* dirtyRectPx) noexcept
                               PixelsToDip(static_cast<float>(dirtyRectPx->bottom)));
     }
 
-    bool clipPushed = false;
-    _d2dContext->BeginDraw();
-    auto endDrawGuard = wil::scope_exit([&]
+    HRESULT hrDraw = S_OK;
     {
+        FrameStageScope renderScope(frameStage, FrameStage::Render);
+        const auto renderStartedAt = frameClock.Now();
+        bool clipPushed            = false;
+        _d2dContext->BeginDraw();
+        auto endDrawGuard = wil::scope_exit([&]
+        {
+            if (clipPushed)
+            {
+                _d2dContext->PopAxisAlignedClip();
+            }
+            _d2dContext->EndDraw(nullptr, nullptr);
+        });
+        _d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
+
+        if (isPartialDirty)
+        {
+            _d2dContext->PushAxisAlignedClip(clipDip, D2D1_ANTIALIAS_MODE_ALIASED);
+            clipPushed = true;
+        }
+
+        _d2dContext->Clear(_presentationMode == PresentationMode::CompositionSwapChain ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f) : _palette.windowBackground);
+        if (_root)
+        {
+            _root->Paint(*this);
+        }
+        if (_smokeOverlayVisible)
+        {
+            if (auto* brush = GetSolidBrush(_palette.smokeOverlay))
+            {
+                _d2dContext->FillRectangle(GetClientBoundsDip(), brush);
+            }
+        }
+        if (_root)
+        {
+            _root->PaintOverlay(*this);
+        }
+        if (_tooltipLayer.HasTooltip())
+        {
+            _tooltipLayer.Paint(*this);
+        }
+
         if (clipPushed)
         {
             _d2dContext->PopAxisAlignedClip();
+            clipPushed = false;
         }
-        _d2dContext->EndDraw(nullptr, nullptr);
-    });
-    _d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
 
-    if (isPartialDirty)
-    {
-        _d2dContext->PushAxisAlignedClip(clipDip, D2D1_ANTIALIAS_MODE_ALIASED);
-        clipPushed = true;
+        endDrawGuard.release();
+        hrDraw   = _d2dContext->EndDraw();
+        renderUs = frameClock.ElapsedUs(renderStartedAt, frameClock.Now());
     }
-
-    _d2dContext->Clear(_presentationMode == PresentationMode::CompositionSwapChain ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f) : _palette.windowBackground);
-    if (_root)
-    {
-        _root->Paint(*this);
-    }
-    if (_smokeOverlayVisible)
-    {
-        if (auto* brush = GetSolidBrush(_palette.smokeOverlay))
-        {
-            _d2dContext->FillRectangle(GetClientBoundsDip(), brush);
-        }
-    }
-    if (_root)
-    {
-        _root->PaintOverlay(*this);
-    }
-    if (_tooltipLayer.HasTooltip())
-    {
-        _tooltipLayer.Paint(*this);
-    }
-
-    if (clipPushed)
-    {
-        _d2dContext->PopAxisAlignedClip();
-        clipPushed = false;
-    }
-
-    endDrawGuard.release();
-    const HRESULT hrDraw = _d2dContext->EndDraw();
 
     HRESULT hrPresent = S_OK;
-    if (SUCCEEDED(hrDraw))
     {
-        if (isPartialDirty)
+        FrameStageScope presentScope(frameStage, FrameStage::Present);
+        const auto presentStartedAt = frameClock.Now();
+        if (SUCCEEDED(hrDraw))
         {
-            RECT dirtyRect = *dirtyRectPx;
-            DXGI_PRESENT_PARAMETERS params{};
-            params.DirtyRectsCount = 1;
-            params.pDirtyRects     = &dirtyRect;
-            hrPresent              = _swapChain->Present1(1u, 0u, &params);
+            if (isPartialDirty)
+            {
+                RECT dirtyRect = *dirtyRectPx;
+                DXGI_PRESENT_PARAMETERS params{};
+                params.DirtyRectsCount = 1;
+                params.pDirtyRects     = &dirtyRect;
+                hrPresent              = _swapChain->Present1(1u, 0u, &params);
+            }
+            else
+            {
+                hrPresent = _swapChain->Present(1u, 0u);
+            }
         }
-        else
-        {
-            hrPresent = _swapChain->Present(1u, 0u);
-        }
+        presentUs = frameClock.ElapsedUs(presentStartedAt, frameClock.Now());
     }
 
     if (hrDraw == D2DERR_RECREATE_TARGET || hrPresent == DXGI_ERROR_DEVICE_REMOVED || hrPresent == DXGI_ERROR_DEVICE_RESET)
@@ -2894,15 +2965,33 @@ bool WindowHost::CaptureCurrentBackBuffer(WindowHostBitmapCapture& out) noexcept
 
 void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* capture) noexcept
 {
+    FrameClock frameClock;
+    FrameStage frameStage       = FrameStage::Idle;
+    const auto frameStartedAt   = frameClock.Now();
+    uint64_t updateUs           = 0u;
+    uint64_t renderUs           = 0u;
+    uint64_t presentUs          = 0u;
+    const auto dirtyRectMetrics = ResolveWindowHostDirtyRectMetrics(dirtyRectPx, _widthPx, _heightPx);
+    const auto emitFrameMetrics = wil::scope_exit([&]
+    {
+        EmitWindowHostFrameMetrics(frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), updateUs, renderUs, presentUs, dirtyRectMetrics);
+    });
+
     Debug::Perf::Scope paintPerf(L"DxUI::Paint");
     paintPerf.SetValue0(_widthPx);
     paintPerf.SetValue1(_heightPx);
 
-    if (! EnsureSizeDependentResources())
     {
-        paintPerf.SetHr(E_FAIL);
-        EmitPendingNativeTextInputPaintMetric(E_FAIL);
-        return;
+        FrameStageScope updateScope(frameStage, FrameStage::Update);
+        const auto updateStartedAt = frameClock.Now();
+        if (! EnsureSizeDependentResources())
+        {
+            updateUs = frameClock.ElapsedUs(updateStartedAt, frameClock.Now());
+            paintPerf.SetHr(E_FAIL);
+            EmitPendingNativeTextInputPaintMetric(E_FAIL);
+            return;
+        }
+        updateUs = frameClock.ElapsedUs(updateStartedAt, frameClock.Now());
     }
 
 #if defined(ENABLE_TESTS)
@@ -2913,9 +3002,7 @@ void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* captur
     // FLIP_SEQUENTIAL preserves back buffer content between frames, so
     // clipping to the dirty rect and using Present1 with dirty-rect params
     // is safe: non-dirty regions retain previously-presented content.
-    const bool isPartialDirty =
-        dirtyRectPx != nullptr && dirtyRectPx->left < dirtyRectPx->right && dirtyRectPx->top < dirtyRectPx->bottom &&
-        (static_cast<UINT>(dirtyRectPx->right - dirtyRectPx->left) < _widthPx || static_cast<UINT>(dirtyRectPx->bottom - dirtyRectPx->top) < _heightPx);
+    const bool isPartialDirty = dirtyRectMetrics.isPartialDirty;
     paintPerf.SetDetail(isPartialDirty ? L"partial" : L"full");
 
     D2D1_RECT_F clipDip{};
@@ -2927,80 +3014,91 @@ void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* captur
                               PixelsToDip(static_cast<float>(dirtyRectPx->bottom)));
     }
 
-    bool clipPushed = false;
-    _d2dContext->BeginDraw();
-    auto endDrawGuard = wil::scope_exit([&]
+    HRESULT hrDraw    = S_OK;
+    HRESULT hrCapture = S_OK;
     {
+        FrameStageScope renderScope(frameStage, FrameStage::Render);
+        const auto renderStartedAt = frameClock.Now();
+        bool clipPushed            = false;
+        _d2dContext->BeginDraw();
+        auto endDrawGuard = wil::scope_exit([&]
+        {
+            if (clipPushed)
+            {
+                _d2dContext->PopAxisAlignedClip();
+            }
+            _d2dContext->EndDraw(nullptr, nullptr);
+        });
+        _d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
+
+        if (isPartialDirty)
+        {
+            _d2dContext->PushAxisAlignedClip(clipDip, D2D1_ANTIALIAS_MODE_ALIASED);
+            clipPushed = true;
+        }
+
+        _d2dContext->Clear(_presentationMode == PresentationMode::CompositionSwapChain ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f) : _palette.windowBackground);
+        if (_root)
+        {
+            _root->Paint(*this);
+        }
+        if (_smokeOverlayVisible)
+        {
+            if (auto* brush = GetSolidBrush(_palette.smokeOverlay))
+            {
+                _d2dContext->FillRectangle(GetClientBoundsDip(), brush);
+            }
+        }
+        if (_root)
+        {
+            _root->PaintOverlay(*this);
+        }
+        if (_tooltipLayer.HasTooltip())
+        {
+            _tooltipLayer.Paint(*this);
+        }
+
         if (clipPushed)
         {
             _d2dContext->PopAxisAlignedClip();
+            clipPushed = false;
         }
-        _d2dContext->EndDraw(nullptr, nullptr);
-    });
-    _d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
 
-    if (isPartialDirty)
-    {
-        _d2dContext->PushAxisAlignedClip(clipDip, D2D1_ANTIALIAS_MODE_ALIASED);
-        clipPushed = true;
-    }
+        endDrawGuard.release();
+        hrDraw = _d2dContext->EndDraw();
 
-    _d2dContext->Clear(_presentationMode == PresentationMode::CompositionSwapChain ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f) : _palette.windowBackground);
-    if (_root)
-    {
-        _root->Paint(*this);
-    }
-    if (_smokeOverlayVisible)
-    {
-        if (auto* brush = GetSolidBrush(_palette.smokeOverlay))
+        if (capture)
         {
-            _d2dContext->FillRectangle(GetClientBoundsDip(), brush);
+            if (! CaptureCurrentBackBuffer(*capture))
+            {
+                hrCapture = E_FAIL;
+            }
         }
-    }
-    if (_root)
-    {
-        _root->PaintOverlay(*this);
-    }
-    if (_tooltipLayer.HasTooltip())
-    {
-        _tooltipLayer.Paint(*this);
-    }
-
-    if (clipPushed)
-    {
-        _d2dContext->PopAxisAlignedClip();
-        clipPushed = false;
-    }
-
-    endDrawGuard.release();
-    const HRESULT hrDraw = _d2dContext->EndDraw();
-
-    HRESULT hrCapture = S_OK;
-    if (capture)
-    {
-        if (! CaptureCurrentBackBuffer(*capture))
-        {
-            hrCapture = E_FAIL;
-        }
+        renderUs = frameClock.ElapsedUs(renderStartedAt, frameClock.Now());
     }
 
     HRESULT hrPresent = S_OK;
-    if (SUCCEEDED(hrDraw))
     {
-        if (isPartialDirty)
+        FrameStageScope presentScope(frameStage, FrameStage::Present);
+        const auto presentStartedAt = frameClock.Now();
+        if (SUCCEEDED(hrDraw))
         {
-            // Tell the compositor only the dirty region changed, so it can
-            // skip recompositing the rest of the window.
-            RECT dirtyRect = *dirtyRectPx;
-            DXGI_PRESENT_PARAMETERS params{};
-            params.DirtyRectsCount = 1;
-            params.pDirtyRects     = &dirtyRect;
-            hrPresent              = _swapChain->Present1(1u, 0u, &params);
+            if (isPartialDirty)
+            {
+                // Tell the compositor only the dirty region changed, so it can
+                // skip recompositing the rest of the window.
+                RECT dirtyRect = *dirtyRectPx;
+                DXGI_PRESENT_PARAMETERS params{};
+                params.DirtyRectsCount = 1;
+                params.pDirtyRects     = &dirtyRect;
+                hrPresent              = _swapChain->Present1(1u, 0u, &params);
+            }
+            else
+            {
+                hrPresent = _swapChain->Present(1u, 0u);
+            }
         }
-        else
-        {
-            hrPresent = _swapChain->Present(1u, 0u);
-        }
+        presentUs = frameClock.ElapsedUs(presentStartedAt, frameClock.Now());
     }
 
     if (hrDraw == D2DERR_RECREATE_TARGET || hrPresent == DXGI_ERROR_DEVICE_REMOVED || hrPresent == DXGI_ERROR_DEVICE_RESET)
@@ -3355,6 +3453,11 @@ bool WindowHost::AnimationTickThunk(void* context, uint64_t nowTickMs) noexcept
 bool WindowHost::OnAnimationTick(uint64_t nowTickMs) noexcept
 {
     _lastAnimationTickMs = nowTickMs;
+    if (_hwnd && ! IsHostWindowEffectivelyVisible(_hwnd))
+    {
+        return true;
+    }
+
     if (! _root)
     {
         const bool tooltipTicking = _tooltipLayer.Tick(*this, nowTickMs);

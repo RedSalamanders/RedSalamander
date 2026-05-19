@@ -148,6 +148,9 @@ When filtering is active, the VisibleLine architecture provides:
 - Line metadata (time/pid/tid/type) and brushes are cached; display-row offsets are precomputed for quick gutter/hit-testing.
 - Mode transitions are explicit: menu toggle calls `SetAutoScroll()`, wheel/scrollbar scrolling up switches to SCROLL-BACK, and End/SB_BOTTOM switches to AUTO-SCROLL.
 - **Mode detection timing (current implementation)**: `WM_APP_ETW_BATCH` appends the whole batch first, then applies AUTO_SCROLL vs SCROLL_BACK invalidation/layout behavior once per batch.
+- **ColorTextView frame metrics**: monitor paint paths emit per-frame aggregate rows `monitor.frame.total_us`, `monitor.frame.present_us`, `monitor.frame.mode`, and `monitor.frame.tail_layout_us`. AUTO_SCROLL append visibility is measured with `monitor.frame.append_to_visible_us`. `monitor.frame.scrollback_slice_us` remains optional and is only expected for real SCROLL_BACK scenarios.
+- **ETW batch and scheduling metrics**: `monitor.etw.batch_drain_us` records UI-thread batch-drain cost. Paint scheduling is intentionally a no-op unless there is real pending work; measured Task 9 scheduling changes were not promoted as performance improvements.
+- **Monitor scheduling gate**: frame scheduling must preserve append order, avoid self-posting when no paint/append work is pending, and keep AUTO_SCROLL vs SCROLL_BACK behavior explicit. Any scheduling optimization requires same-machine `append_to_visible`, `batch_drain`, and frame metric evidence before being called an improvement.
 
 ## Known Issues and Fixes Applied
 
@@ -549,6 +552,7 @@ for (size_t visIdx = startVisIdx; visIdx <= endVisIdx; ++visIdx) {
 - No window discovery dependency - applications emit ETW events regardless of consumer presence.
 - Monitor surfaces ETW statistics in UI/status bar, logging write failures when they occur.
 - Default Debug / ASan Debug builds of `RedSalamanderMonitor` MUST NOT enable `ENABLE_TESTS` automatically. Monitor-specific test hooks are opt-in only, otherwise the monitor can surface its own test/perf ETW chatter and pollute the default live display.
+- Monitor chrome selftest coverage requires a test-enabled `RedSalamanderMonitor` build and must verify that `monitor.frame.total_us`, `monitor.frame.present_us`, `monitor.frame.append_to_visible_us`, `monitor.frame.tail_layout_us`, `monitor.frame.mode`, and `monitor.etw.batch_drain_us` are present. Test-enabled Debug and Release builds are produced with `RSBuildEnableTests=true`; Release `ClCompile` definitions must include `$(RSBuildTestDefinitions)` so the opt-in defines `ENABLE_TESTS` without enabling Monitor self diagnostics by default.
 - Invalid/dirty rectangle visualization MUST be opt-in only. Default Debug builds must not paint invalid rectangles in color; rebuilding with `RS_MONITOR_SHOW_INVALID_RECTS` enables that visual diagnostic. All brushes, palette state, and paint overlays for this diagnostic must stay behind the `RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED` contract.
 
 ### UX and robustness

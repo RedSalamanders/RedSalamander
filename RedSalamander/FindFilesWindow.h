@@ -131,6 +131,7 @@ struct FindFilesDebugSnapshot
     std::vector<std::wstring> resultColumnIds;
     std::vector<float> resultColumnWidthsDip;
     std::vector<std::wstring> fullPaths;
+    std::vector<std::wstring> resultPathTexts;
     std::wstring rootText;
     std::wstring namePatternText;
     std::wstring contentPatternText;

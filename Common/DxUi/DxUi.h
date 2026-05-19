@@ -292,6 +292,7 @@ struct ContextMenuPopupDebugState
     std::optional<size_t> keyboardIndex;
     std::vector<std::wstring> itemTexts;
     std::vector<MenuItemKind> itemKinds;
+    std::vector<bool> itemEnabled;
     std::vector<uint32_t> sliderValues;
     std::vector<uint32_t> sliderStopCounts;
     uint64_t rootPointerSwitchCount = 0;
@@ -1416,6 +1417,7 @@ public:
     void SetTooltipText(std::wstring tooltipText);
     [[nodiscard]] std::wstring_view GetTooltipText() const noexcept;
     void SetOnClick(std::function<void()> onClick);
+    void SetOnDropDownClick(std::function<void()> onDropDownClick);
     bool Invoke(WindowHost& host, bool focusSelf);
     [[nodiscard]] float DebugGetHoverAnimationProgress() const noexcept;
     [[nodiscard]] float DebugGetFocusAnimationProgress() const noexcept;
@@ -1450,14 +1452,20 @@ private:
 
     void UpdateInteractionTransition(WindowHost& host, InteractionTransitionState& transition, float target) noexcept;
     [[nodiscard]] bool AdvanceInteractionTransition(const WindowHost& host, InteractionTransitionState& transition, uint64_t nowTickMs) noexcept;
+    [[nodiscard]] bool IsDropDownInvocationPoint(D2D1_POINT_2F point) const noexcept;
+    [[nodiscard]] bool InvokeDropDown();
 
     static constexpr uint64_t _interactionAnimationDurationMs = 140u;
+    static constexpr float _dropDownChevronWidthDip           = 20.0f;
+    static constexpr float _splitDropDownWidthDip             = 32.0f;
     std::wstring _text;
     std::wstring _tooltipText;
     std::function<void()> _onClick;
+    std::function<void()> _onDropDownClick;
     InteractionTransitionState _hoverTransition{};
     InteractionTransitionState _focusTransition{};
     bool _pressed          = false;
+    bool _pressedDropDown  = false;
     bool _primary          = false;
     ButtonVariant _variant = ButtonVariant::Standard;
 };
@@ -3041,6 +3049,7 @@ public:
     [[nodiscard]] uint64_t DebugGetSwapChainPrepareD2DFlushFailureCount() const noexcept;
     [[nodiscard]] uint64_t DebugGetPresentFailureCount() const noexcept;
     [[nodiscard]] bool DebugHasActiveAnimationSubscription() const noexcept;
+    [[nodiscard]] bool DebugAnimationTickForTest(uint64_t nowTickMs) noexcept;
     [[nodiscard]] IRawElementProviderFragmentRoot* DebugCreateAccessibilityProvider() const noexcept;
     void DebugSimulateDeviceLoss() noexcept;
     [[nodiscard]] size_t DebugGetBrushCacheSize() const noexcept;

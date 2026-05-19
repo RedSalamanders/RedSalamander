@@ -65,6 +65,16 @@
     return std::format(L"({},{}-{},{} )", rect.left, rect.top, rect.right, rect.bottom);
 }
 
+void PumpLimitedPendingMessagesForPerf(size_t maxMessages) noexcept
+{
+    MSG msg{};
+    for (size_t messageCount = 0; messageCount < maxMessages && PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) != 0; ++messageCount)
+    {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+}
+
 [[nodiscard]] std::wstring DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane pane, HWND expectedNavigationView)
 {
     NavigationViewDebugSnapshot snapshot{};
@@ -14078,6 +14088,71 @@ struct FolderViewScrollStepPerfRecord
     float maxHorizontalOffsetDip = 0.0f;
 };
 
+struct FolderViewFrameMetricPresenceRecord
+{
+    std::wstring_view metric;
+    uint64_t count = 0;
+    bool present = false;
+};
+
+[[nodiscard]] std::uintmax_t FolderViewPerfMetricScanOffset() noexcept
+{
+    const std::filesystem::path perfMetricsPath = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    if (perfMetricsPath.empty() || ! SelfTest::PathExists(perfMetricsPath))
+    {
+        return 0;
+    }
+
+    std::error_code ec;
+    const std::uintmax_t size = std::filesystem::file_size(perfMetricsPath, ec);
+    return ec ? 0 : size;
+}
+
+[[nodiscard]] uint64_t FolderViewPerfMetricCountInRun(std::wstring_view metric, std::uintmax_t scanOffset) noexcept
+{
+    const std::filesystem::path perfMetricsPath = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    if (perfMetricsPath.empty() || ! SelfTest::PathExists(perfMetricsPath))
+    {
+        return 0;
+    }
+
+    std::error_code ec;
+    const std::uintmax_t fileSize = std::filesystem::file_size(perfMetricsPath, ec);
+    if (ec || scanOffset > fileSize)
+    {
+        return 0;
+    }
+
+    std::ifstream file(perfMetricsPath, std::ios::binary);
+    if (! file)
+    {
+        return 0;
+    }
+    file.seekg(static_cast<std::streamoff>(scanOffset), std::ios::beg);
+
+    const std::string needlePrefix{"\"metric\":\""};
+    std::string needle;
+    needle.reserve(needlePrefix.size() + metric.size() + 1u);
+    needle.append(needlePrefix);
+    for (const wchar_t ch : metric)
+    {
+        needle.push_back(static_cast<char>(ch));
+    }
+    needle.push_back('"');
+
+    std::string line;
+    uint64_t count = 0;
+    while (std::getline(file, line))
+    {
+        if (line.find(needle) != std::string::npos)
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
 void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollStepPerfRecord& record, std::wstring_view indent)
 {
     out.append(indent);
@@ -14099,6 +14174,70 @@ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollSte
     out.append(std::format(L"{}  \"maxHorizontalOffsetDip\": {:.3f}\n", indent, record.maxHorizontalOffsetDip));
     out.append(indent);
     out.append(L"}");
+}
+
+void AppendFolderViewFrameMetricPresenceJson(std::wstring& out,
+                                             const std::vector<FolderViewFrameMetricPresenceRecord>& records,
+                                             std::wstring_view indent)
+{
+    bool allPresent = true;
+    for (const FolderViewFrameMetricPresenceRecord& record : records)
+    {
+        allPresent = allPresent && record.present;
+    }
+
+    out.append(std::format(L"{}\"allPresent\": {},\n", indent, allPresent ? L"true" : L"false"));
+    out.append(indent);
+    out.append(L"\"metrics\": [\n");
+    for (size_t i = 0; i < records.size(); ++i)
+    {
+        const FolderViewFrameMetricPresenceRecord& record = records[i];
+        out.append(indent);
+        out.append(L"  {\n");
+        out.append(indent);
+        out.append(L"    \"name\": ");
+        AppendFolderViewColumnJsonString(out, record.metric);
+        out.append(L",\n");
+        out.append(std::format(L"{}    \"present\": {},\n", indent, record.present ? L"true" : L"false"));
+        out.append(std::format(L"{}    \"count\": {}\n", indent, record.count));
+        out.append(indent);
+        out.append(L"  }");
+        out.append(i + 1u < records.size() ? L",\n" : L"\n");
+    }
+    out.append(indent);
+    out.append(L"]");
+}
+
+void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out,
+                                               const std::vector<FolderViewFrameMetricPresenceRecord>& records,
+                                               std::wstring_view indent)
+{
+    bool allPresent = true;
+    for (const FolderViewFrameMetricPresenceRecord& record : records)
+    {
+        allPresent = allPresent && record.present;
+    }
+
+    out.append(std::format(L"{}\"allPresent\": {},\n", indent, allPresent ? L"true" : L"false"));
+    out.append(indent);
+    out.append(L"\"metrics\": [\n");
+    for (size_t i = 0; i < records.size(); ++i)
+    {
+        const FolderViewFrameMetricPresenceRecord& record = records[i];
+        out.append(indent);
+        out.append(L"  {\n");
+        out.append(indent);
+        out.append(L"    \"metric\": ");
+        AppendFolderViewColumnJsonString(out, record.metric);
+        out.append(L",\n");
+        out.append(std::format(L"{}    \"present\": {},\n", indent, record.present ? L"true" : L"false"));
+        out.append(std::format(L"{}    \"count\": {}\n", indent, record.count));
+        out.append(indent);
+        out.append(L"  }");
+        out.append(i + 1u < records.size() ? L",\n" : L"\n");
+    }
+    out.append(indent);
+    out.append(L"]");
 }
 
 [[nodiscard]] bool CreateFolderViewScrollRenderFixture(CaseState& state, const std::filesystem::path& root) noexcept
@@ -14124,6 +14263,239 @@ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollSte
     return state.failure.empty();
 }
 
+[[nodiscard]] bool CreateFolderViewOverlayPerfFixture(CaseState& state, const std::filesystem::path& root) noexcept
+{
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create overlay invalidation stress root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    constexpr size_t kItemCount = 180u;
+    for (size_t i = 0; i < kItemCount; ++i)
+    {
+        const bool directMatch = (i % 3u) == 0u;
+        const std::wstring name =
+            std::format(L"{}_{:03}_{}.txt",
+                        directMatch ? L"overlay_probe" : L"baseline_probe",
+                        i,
+                        RepeatForFolderViewColumnName(directMatch ? L'o' : L'b', 8u + (i % 5u)));
+        state.Require(SelfTest::WriteTextFile(root / name, "folder overlay invalidation stress"), std::format(L"Failed to create {}.", name));
+    }
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewPerfOverlayInvalidationStress(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid for overlay invalidation stress.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for overlay invalidation stress.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"folder_overlay_invalidation_stress_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(CreateFolderViewOverlayPerfFixture(state, root), L"Failed to create overlay invalidation stress fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const FolderView::DisplayMode displayBefore           = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
+    const FolderView::SortBy sortBefore                   = g_folderWindow.GetSortBy(FolderWindow::Pane::Left);
+    const FolderView::SortDirection directionBefore       = g_folderWindow.GetSortDirection(FolderWindow::Pane::Left);
+    const auto restoreState                               = wil::scope_exit([&]
+    {
+        const HWND currentFolderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+        if (currentFolderView && IsWindow(currentFolderView) != FALSE)
+        {
+            SendMessageW(currentFolderView, WM_KEYDOWN, VK_ESCAPE, 0);
+            SendMessageW(currentFolderView, WM_KEYUP, VK_ESCAPE, 0);
+        }
+        g_folderWindow.DebugHideOverlaySample(FolderWindow::Pane::Left);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, displayBefore);
+        g_folderWindow.SetSort(FolderWindow::Pane::Left, sortBefore, directionBefore);
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to switch left pane to local file system for overlay invalidation stress.");
+    g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Brief);
+    g_folderWindow.SetSort(FolderWindow::Pane::Left, FolderView::SortBy::Name, FolderView::SortDirection::Ascending);
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
+    std::atomic<uint32_t> enumerationCount{0};
+    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                       [&](const std::filesystem::path& folder) noexcept
+    {
+        if (OrdinalString::EqualsNoCasePath(folder, root))
+        {
+            enumerationCount.fetch_add(1u, std::memory_order_release);
+        }
+    });
+    const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(10000ms)),
+                  L"Overlay invalidation stress path did not load.");
+
+    const auto enumerationDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(10000ms);
+    while (std::chrono::steady_clock::now() < enumerationDeadline)
+    {
+        PumpPendingMessages();
+        if (enumerationCount.load(std::memory_order_acquire) > 0u && g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == 180u)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+
+    const size_t itemCount = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
+    state.Require(enumerationCount.load(std::memory_order_acquire) > 0u,
+                  L"Overlay invalidation stress enumeration did not complete before quick-search input.");
+    state.Require(itemCount == 180u, std::format(L"Overlay invalidation stress item count mismatch; expected=180 actual={}.", itemCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(folderView && IsWindow(folderView) != FALSE, L"Left FolderView handle unavailable for overlay invalidation stress.");
+    if (! folderView || IsWindow(folderView) == FALSE)
+    {
+        return false;
+    }
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const auto focusDiagnostics = [&]() {
+        return std::format(L"focus=0x{:X}, focusedFolderView=0x{:X}, focusedPane={}, expectedLeftFolderView=0x{:X}",
+                           reinterpret_cast<uintptr_t>(GetFocus()),
+                           reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                           g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left ? L"Left" : L"Right",
+                           reinterpret_cast<uintptr_t>(folderView));
+    };
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not have stable focus before overlay invalidation quick search; {}.",
+                              focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.CommandQuickSearch(FolderWindow::Pane::Left);
+
+    FolderView::IncrementalSearchDebugSnapshot searchSnapshot{};
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, searchSnapshot),
+                  L"Failed to capture incremental-search activation snapshot for overlay invalidation stress.");
+    state.Require(searchSnapshot.active && searchSnapshot.query.empty(),
+                  std::format(L"Overlay invalidation stress quick search did not activate cleanly; active={} query='{}'; {}.",
+                              searchSnapshot.active ? L"yes" : L"no",
+                              searchSnapshot.query,
+                              focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    InvalidateRect(folderView, nullptr, FALSE);
+    UpdateWindow(folderView);
+
+    constexpr std::wstring_view kQuickSearch = L"overlay";
+    for (const wchar_t ch : kQuickSearch)
+    {
+        SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(ch), 0);
+    }
+
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, searchSnapshot),
+                  L"Failed to capture incremental-search snapshot for overlay invalidation stress.");
+    state.Require(searchSnapshot.active && searchSnapshot.query == kQuickSearch,
+                  std::format(L"Overlay invalidation stress quick search did not capture the expected query; active={} query='{}'.",
+                              searchSnapshot.active ? L"yes" : L"no",
+                              searchSnapshot.query));
+    state.Require(! searchSnapshot.matches.empty(), L"Overlay invalidation stress quick search produced no visible matches.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.DebugShowOverlaySampleBusyWithCancel(FolderWindow::Pane::Left);
+    UpdateWindow(folderView);
+
+    const auto settleDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(320ms);
+    while (std::chrono::steady_clock::now() < settleDeadline)
+    {
+        PumpLimitedPendingMessagesForPerf(8u);
+        UpdateWindow(folderView);
+        std::this_thread::sleep_for(SelfTest::Scale(8ms));
+    }
+    PumpLimitedPendingMessagesForPerf(32u);
+    UpdateWindow(folderView);
+
+    const std::uintmax_t overlayMetricScanOffset = FolderViewPerfMetricScanOffset();
+    constexpr uint64_t kTargetOverlayFrames = 8u;
+    const auto overlayFrameDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1600ms);
+    while (std::chrono::steady_clock::now() < overlayFrameDeadline)
+    {
+        PumpLimitedPendingMessagesForPerf(8u);
+        UpdateWindow(folderView);
+        std::this_thread::sleep_for(SelfTest::Scale(8ms));
+    }
+
+    auto makeMetricPresence = [&](std::wstring_view metric) noexcept
+    {
+        const uint64_t count = FolderViewPerfMetricCountInRun(metric, overlayMetricScanOffset);
+        return FolderViewFrameMetricPresenceRecord{.metric = metric, .count = count, .present = count > 0};
+    };
+    std::vector<FolderViewFrameMetricPresenceRecord> overlayMetricPresence = {
+        makeMetricPresence(L"folder.frame.overlay_animation_count"),
+        makeMetricPresence(L"folder.frame.overlay_dirty_rect_area_px"),
+        makeMetricPresence(L"render.incremental_search_effect_updates"),
+    };
+    state.Require(overlayMetricPresence[0].count >= kTargetOverlayFrames,
+                  std::format(L"Overlay invalidation stress captured too few natural animation frames; expected>={} actual={}.",
+                              kTargetOverlayFrames,
+                              overlayMetricPresence[0].count));
+
+    std::wstring json;
+    json.append(L"{\n");
+    json.append(L"  \"case\": \"folderView_perf_overlay_invalidation_stress\",\n");
+    json.append(L"  \"root\": ");
+    AppendFolderViewColumnJsonString(json, root.native());
+    json.append(L",\n");
+    json.append(L"  \"itemCount\": 180,\n");
+    json.append(L"  \"query\": ");
+    AppendFolderViewColumnJsonString(json, searchSnapshot.query);
+    json.append(L",\n");
+    json.append(L"  \"folderOverlayMetricPresence\": {\n");
+    AppendFolderViewOverlayMetricPresenceJson(json, overlayMetricPresence, L"    ");
+    json.append(L"\n");
+    json.append(L"  }\n");
+    json.append(L"}\n");
+
+    const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"folderView_perf_overlay_invalidation_stress_metrics.json");
+    const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, json);
+    state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write overlay invalidation stress perf artifact.");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestFolderViewPerfScrollRenderStress(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -14141,6 +14513,7 @@ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollSte
         return false;
     }
 
+    const std::uintmax_t frameMetricScanOffset = FolderViewPerfMetricScanOffset();
     const std::filesystem::path root = suiteRoot / L"work" / (L"folder_scroll_render_stress_" + NewGuidText());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
@@ -14197,6 +14570,10 @@ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollSte
 
     std::vector<FolderViewScrollStepPerfRecord> records;
     records.reserve(kModes.size() * 8u);
+    const auto wheelWParam = [](int delta, UINT keyState = 0u) noexcept -> WPARAM
+    {
+        return MAKEWPARAM(static_cast<WORD>(keyState), static_cast<WORD>(delta));
+    };
 
     for (const FolderView::DisplayMode mode : kModes)
     {
@@ -14278,9 +14655,11 @@ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollSte
         state.Require(driveStep(WM_HSCROLL, SB_PAGERIGHT, L"h-page-right"), std::format(L"Scroll/render failed at h-page-right for {}.", modeName));
         state.Require(driveStep(WM_HSCROLL, SB_RIGHT, L"h-right"), std::format(L"Scroll/render failed at h-right for {}.", modeName));
         state.Require(driveStep(WM_HSCROLL, SB_PAGELEFT, L"h-page-left"), std::format(L"Scroll/render failed at h-page-left for {}.", modeName));
-        state.Require(driveStep(WM_VSCROLL, SB_LINEDOWN, L"v-line-down"), std::format(L"Scroll/render failed at v-line-down for {}.", modeName));
-        state.Require(driveStep(WM_VSCROLL, SB_PAGEDOWN, L"v-page-down"), std::format(L"Scroll/render failed at v-page-down for {}.", modeName));
-        state.Require(driveStep(WM_VSCROLL, SB_TOP, L"v-top"), std::format(L"Scroll/render failed at v-top for {}.", modeName));
+        state.Require(driveStep(WM_MOUSEWHEEL, wheelWParam(-WHEEL_DELTA), L"wheel-next"),
+                      std::format(L"Scroll/render failed at wheel-next for {}.", modeName));
+        state.Require(driveStep(WM_MOUSEHWHEEL, wheelWParam(WHEEL_DELTA), L"hwheel-next"),
+                      std::format(L"Scroll/render failed at hwheel-next for {}.", modeName));
+        state.Require(driveStep(WM_KEYDOWN, VK_NEXT, L"key-page-next"), std::format(L"Scroll/render failed at key-page-next for {}.", modeName));
         if (! state.failure.empty())
         {
             return false;
@@ -14292,6 +14671,19 @@ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollSte
     {
         return false;
     }
+
+    auto makeMetricPresence = [&](std::wstring_view metric) noexcept
+    {
+        const uint64_t count = FolderViewPerfMetricCountInRun(metric, frameMetricScanOffset);
+        return FolderViewFrameMetricPresenceRecord{.metric = metric, .count = count, .present = count > 0};
+    };
+    std::vector<FolderViewFrameMetricPresenceRecord> frameMetricPresence = {
+        makeMetricPresence(L"folder.frame.total_us"),
+        makeMetricPresence(L"folder.frame.present_us"),
+        makeMetricPresence(L"folder.frame.visible_work_count"),
+        makeMetricPresence(L"folder.frame.input_to_paint_us"),
+        makeMetricPresence(L"folder.frame.dirty_rect_area_px"),
+    };
 
     std::wstring json;
     json.append(L"{\n");
@@ -14307,7 +14699,11 @@ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollSte
         AppendFolderViewScrollStepJson(json, records[i], L"    ");
         json.append(i + 1u < records.size() ? L",\n" : L"\n");
     }
-    json.append(L"  ]\n");
+    json.append(L"  ],\n");
+    json.append(L"  \"folderFrameMetricPresence\": {\n");
+    AppendFolderViewFrameMetricPresenceJson(json, frameMetricPresence, L"    ");
+    json.append(L"\n");
+    json.append(L"  }\n");
     json.append(L"}\n");
 
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"folderView_perf_scroll_render_stress_metrics.json");
@@ -15698,6 +16094,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"folderView_perf_sort_toggle_stress", [=](CaseState& state) noexcept {
         return TestFolderViewPerfSortToggleStress(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"folderView_perf_overlay_invalidation_stress", [=](CaseState& state) noexcept {
+        return TestFolderViewPerfOverlayInvalidationStress(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"folderView_perf_scroll_render_stress", [=](CaseState& state) noexcept {
         return TestFolderViewPerfScrollRenderStress(mainWindow, state);

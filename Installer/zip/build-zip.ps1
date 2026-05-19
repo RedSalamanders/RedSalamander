@@ -125,7 +125,7 @@ GETTING STARTED
 
 RUNTIME REQUIREMENT
 -------------------
-RedSalamander requires Windows 11 24H2 (build 26100) or later.
+RedSalamander requires Windows 11 build 22000.2600 or later.
 
 This package includes the Microsoft Visual C++ runtime DLLs required for this
 CPU architecture.

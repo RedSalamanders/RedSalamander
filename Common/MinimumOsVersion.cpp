@@ -1,8 +1,13 @@
 #include "MinimumOsVersion.h"
 
+#pragma comment(lib, "Advapi32.lib")
+
 namespace
 {
 using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
+
+constexpr wchar_t kWindowsCurrentVersionSubKey[] = LR"(SOFTWARE\Microsoft\Windows NT\CurrentVersion)";
+constexpr wchar_t kWindowsUpdateBuildRevisionValue[] = L"UBR";
 
 [[nodiscard]] bool TryGetWindowsVersion(OSVERSIONINFOW& version) noexcept
 {
@@ -21,6 +26,28 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
     return rtlGetVersion != nullptr && rtlGetVersion(&version) == 0;
 }
 
+[[nodiscard]] bool TryGetWindowsBuildRevision(DWORD& revision) noexcept
+{
+    revision = 0u;
+
+    DWORD value = 0u;
+    DWORD size  = sizeof(value);
+    const LSTATUS status = ::RegGetValueW(HKEY_LOCAL_MACHINE,
+                                          kWindowsCurrentVersionSubKey,
+                                          kWindowsUpdateBuildRevisionValue,
+                                          RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY,
+                                          nullptr,
+                                          &value,
+                                          &size);
+    if (status != ERROR_SUCCESS || size != sizeof(value))
+    {
+        return false;
+    }
+
+    revision = value;
+    return true;
+}
+
 [[nodiscard]] bool IsAtLeastMinimumVersion(const OSVERSIONINFOW& version) noexcept
 {
     using namespace Common::MinimumOsVersion;
@@ -33,7 +60,13 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
     {
         return version.dwMinorVersion > kMinimumWindowsMinorVersion;
     }
-    return version.dwBuildNumber >= kMinimumWindowsBuildNumber;
+    if (version.dwBuildNumber != kMinimumWindowsBuildNumber)
+    {
+        return version.dwBuildNumber > kMinimumWindowsBuildNumber;
+    }
+
+    DWORD buildRevision = 0u;
+    return TryGetWindowsBuildRevision(buildRevision) && buildRevision >= kMinimumWindowsBuildRevision;
 }
 } // namespace
 

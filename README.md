@@ -54,7 +54,7 @@ Key engineering specs for the current search stack and self-test contract:
 
 - **Visual Studio 2026** with C++ toolset **v145** (Desktop development with C++)
 - **vcpkg** (manifest mode) for dependencies
-- **Windows 11 24H2 (build 26100) or later**
+- **Windows 11 build 22000.2600 or later**
 
 ### Quick Start
 
@@ -341,7 +341,7 @@ Then re-run `.\vcpkg-install.ps1`.
 - **Build System**: MSBuild / Visual Studio 2026 (v145)
 - **Package Manager**: vcpkg
 - **Graphics**: Direct2D, DirectWrite, Direct3D 11, DXGI
-- **Platform**: Windows 11 24H2 (build 26100) or later (Unicode UTF-16)
+- **Platform**: Windows 11 build 22000.2600 or later (Unicode UTF-16)
 
 ## ETW Tracing (RedSalamanderMonitor)
 

@@ -11,6 +11,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -49,9 +50,11 @@ extern FolderWindow g_folderWindow;
 namespace
 {
 using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::ButtonVariant;
 using RedSalamander::DxUi::Checkbox;
 using RedSalamander::DxUi::ComboBox;
 using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::ContextMenu;
 using RedSalamander::DxUi::Grid;
 using RedSalamander::DxUi::GridCellData;
 using RedSalamander::DxUi::GridColumnDesc;
@@ -61,6 +64,7 @@ using RedSalamander::DxUi::GridSortSpec;
 using RedSalamander::DxUi::IDxGridDelegate;
 using RedSalamander::DxUi::IDxGridModel;
 using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::MenuFlyoutItem;
 using RedSalamander::DxUi::Panel;
 using RedSalamander::DxUi::SortDirection;
 using RedSalamander::DxUi::StatusStrip;
@@ -243,6 +247,14 @@ enum ColumnIndex : int
     kColumnSnippet,
 };
 
+enum FindActionMenuCommand : int
+{
+    kFindActionMenuFind = 1,
+    kFindActionMenuIntersect,
+    kFindActionMenuSubtract,
+    kFindActionMenuAppend,
+};
+
 struct FindResultRecord
 {
     uint64_t arrivalOrdinal = 0u;
@@ -253,6 +265,7 @@ struct FindResultRecord
     std::wstring instanceContext;
     std::wstring fullPath;
     std::wstring relativePath;
+    std::wstring displayPath;
     std::wstring displayName;
     std::wstring previewText;
     unsigned long fileAttributes = 0;
@@ -429,6 +442,74 @@ struct ResultListMutation
     return relativePath.substr(0u, separatorIndex);
 }
 
+[[nodiscard]] bool IsPathSeparator(wchar_t ch) noexcept
+{
+    return ch == L'\\' || ch == L'/';
+}
+
+[[nodiscard]] std::wstring_view TrimTrailingPathSeparators(std::wstring_view path) noexcept
+{
+    size_t end = path.size();
+    while (end > 0u && IsPathSeparator(path[end - 1u]))
+    {
+        if (end == 3u && path[1u] == L':')
+        {
+            break;
+        }
+        --end;
+    }
+    return path.substr(0u, end);
+}
+
+[[nodiscard]] bool StartsWithNoCase(std::wstring_view text, std::wstring_view prefix) noexcept
+{
+    if (prefix.size() > text.size() || prefix.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
+    }
+
+    return ::CompareStringOrdinal(text.data(), static_cast<int>(prefix.size()), prefix.data(), static_cast<int>(prefix.size()), TRUE) == CSTR_EQUAL;
+}
+
+[[nodiscard]] std::wstring_view BuildRelativePathFromRoot(std::wstring_view rootPath, std::wstring_view fullPath) noexcept
+{
+    const std::wstring_view root = TrimTrailingPathSeparators(rootPath);
+    if (root.empty() || fullPath.empty() || ! StartsWithNoCase(fullPath, root))
+    {
+        return {};
+    }
+
+    if (fullPath.size() == root.size())
+    {
+        return {};
+    }
+
+    if (IsPathSeparator(root.back()))
+    {
+        return fullPath.substr(root.size());
+    }
+
+    if (! IsPathSeparator(fullPath[root.size()]))
+    {
+        return {};
+    }
+
+    return fullPath.substr(root.size() + 1u);
+}
+
+[[nodiscard]] std::wstring BuildResultDisplayPath(std::wstring_view relativePath, std::wstring_view rootPath, std::wstring_view fullPath)
+{
+    std::wstring_view folderPath = GetResultRelativeFolderPath(relativePath);
+    if (! folderPath.empty())
+    {
+        return std::wstring(folderPath);
+    }
+
+    const std::wstring_view fallbackRelativePath = BuildRelativePathFromRoot(rootPath, fullPath);
+    folderPath                                   = GetResultRelativeFolderPath(fallbackRelativePath);
+    return std::wstring(folderPath);
+}
+
 [[nodiscard]] std::wstring FormatFileSize(int64_t sizeBytes) noexcept;
 [[nodiscard]] std::wstring FormatFileTimeValue(int64_t fileTimeTicks) noexcept;
 [[nodiscard]] std::wstring FormatAttributes(unsigned long attributes) noexcept;
@@ -455,6 +536,11 @@ public:
 
         _showSnippet = showSnippet;
         RebuildColumns();
+    }
+
+    [[nodiscard]] bool ShowsSnippetColumn() const noexcept
+    {
+        return _showSnippet;
     }
 
     void ApplyColumnLayoutDefaults(std::span<const RedSalamander::DxUi::GridColumnLayoutEntry> layout) noexcept
@@ -508,7 +594,7 @@ public:
         switch (columnIndex)
         {
             case kColumnName: outCell.text = record.displayName; break;
-            case kColumnPath: outCell.text = GetResultRelativeFolderPath(record.relativePath); break;
+            case kColumnPath: outCell.text = record.displayPath; break;
             case kColumnSize:
                 outCell.text          = FormatFileSize(record.endOfFile);
                 outCell.textAlignment = DWRITE_TEXT_ALIGNMENT_TRAILING;
@@ -1056,6 +1142,7 @@ private:
     void BuildUi() noexcept;
     void Layout() noexcept;
     void ApplyTheme() noexcept;
+    void ApplyResultsGridMetrics() noexcept;
     void PopulateFromSettings() noexcept;
     void PopulateModeCombos() noexcept;
     void PopulateHistoryCombos() noexcept;
@@ -1063,6 +1150,7 @@ private:
     void ApplyResultsGridLayoutFromSettings() noexcept;
     void UpdateOptionDependencies() noexcept;
     void UpdateActionButtons() noexcept;
+    void ShowFindActionMenu(POINT screenPoint) noexcept;
     void PersistUiState(bool updateHistory) noexcept;
     struct SearchTextOverride final
     {
@@ -1384,6 +1472,7 @@ struct SearchCallbacks final : IFileSystemSearchCallback
         record.instanceContext = _request.context.instanceContext;
         record.fullPath        = CopySizedUtf16(match->fullPath, match->fullPathSize);
         record.relativePath    = CopySizedUtf16(match->relativePath, match->relativePathSize);
+        record.displayPath     = BuildResultDisplayPath(record.relativePath, _request.rootPath, record.fullPath);
         record.displayName     = CopySizedUtf16(match->displayName, match->displayNameSize);
         record.previewText     = CopySizedUtf16(match->previewText, match->previewTextSize);
         record.fileAttributes  = match->fileAttributes;
@@ -1891,12 +1980,27 @@ void FindFilesWindow::BuildUi() noexcept
 
     bindAction(_findButton, IDS_FIND_ACTION_FIND, SearchOperation::Find);
     _findButton->SetPrimary(true);
+    _findButton->SetVariant(ButtonVariant::Split);
+    _findButton->SetOnDropDownClick([this]
+    {
+        if (! _findButton)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F bounds = _findButton->GetBounds();
+        const POINT screenPoint  = _dxHost.DipPointToScreenPoint(D2D1::Point2F(bounds.left, bounds.bottom));
+        ShowFindActionMenu(screenPoint);
+    });
     _findButton->SetMnemonic(L'F');
     bindAction(_appendButton, IDS_FIND_ACTION_APPEND, SearchOperation::Append);
+    _appendButton->SetVisible(false);
     _appendButton->SetMnemonic(L'A');
     bindAction(_intersectButton, IDS_FIND_ACTION_INTERSECT, SearchOperation::Intersect);
+    _intersectButton->SetVisible(false);
     _intersectButton->SetMnemonic(L'I');
     bindAction(_subtractButton, IDS_FIND_ACTION_SUBTRACT, SearchOperation::Subtract);
+    _subtractButton->SetVisible(false);
     _subtractButton->SetMnemonic(L'S');
 
     _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
@@ -1923,9 +2027,7 @@ void FindFilesWindow::BuildUi() noexcept
     _resultsList->SetDelegate(this);
     _resultsList->SetModel(&_resultsModel);
     _resultsList->SetSelectionMode(GridSelectionMode::Single);
-    _resultsList->SetHeaderHeightDip(30.0f);
-    _resultsList->SetRowHeightDip(46.0f);
-    _resultsList->SetLineClamp(3u);
+    ApplyResultsGridMetrics();
 
     _resultsModel.SetRows(&_results);
     _dxHost.SetRoot(std::move(_rootStorage));
@@ -2058,6 +2160,20 @@ void FindFilesWindow::ApplyTheme() noexcept
     _dxHost.Invalidate();
 }
 
+void FindFilesWindow::ApplyResultsGridMetrics() noexcept
+{
+    if (! _resultsList)
+    {
+        return;
+    }
+
+    const bool compact      = _theme.compactMode;
+    const bool showSnippets = _resultsModel.ShowsSnippetColumn();
+    _resultsList->SetHeaderHeightDip(32.0f);
+    _resultsList->SetRowHeightDip(showSnippets ? 46.0f : 28.0f);
+    _resultsList->SetLineClamp(showSnippets ? (compact ? 2u : 3u) : 1u);
+}
+
 void FindFilesWindow::ApplyResultsGridLayoutFromSettings() noexcept
 {
     if (! _resultsList || ! _settings || ! _settings->search.has_value())
@@ -2111,6 +2227,7 @@ void FindFilesWindow::UpdateOptionDependencies() noexcept
     }
     if (_resultsList)
     {
+        ApplyResultsGridMetrics();
         _resultsList->SetSortSpec(_resultSortSpec);
         _resultsList->NotifyDataChanged();
         ApplyResultsGridLayoutFromSettings();
@@ -2121,6 +2238,7 @@ void FindFilesWindow::UpdateActionButtons() noexcept
 {
     const bool active       = _session.IsActive();
     const bool hasSelection = GetSelectedResultIndex().has_value();
+    const bool hasResults   = ! _results.empty();
 
     if (_findButton)
     {
@@ -2128,15 +2246,15 @@ void FindFilesWindow::UpdateActionButtons() noexcept
     }
     if (_appendButton)
     {
-        _appendButton->SetEnabled(! active);
+        _appendButton->SetEnabled(! active && hasResults);
     }
     if (_intersectButton)
     {
-        _intersectButton->SetEnabled(! active);
+        _intersectButton->SetEnabled(! active && hasResults);
     }
     if (_subtractButton)
     {
-        _subtractButton->SetEnabled(! active);
+        _subtractButton->SetEnabled(! active && hasResults);
     }
     if (_cancelButton)
     {
@@ -2174,6 +2292,53 @@ void FindFilesWindow::UpdateActionButtons() noexcept
     if (_contentModeCombo)
     {
         _contentModeCombo->SetEnabled(! active);
+    }
+}
+
+void FindFilesWindow::ShowFindActionMenu(POINT screenPoint) noexcept
+{
+    if (! _hWnd || _session.IsActive())
+    {
+        return;
+    }
+
+    const bool hasResults = ! _results.empty();
+    std::vector<MenuFlyoutItem> items;
+    items.reserve(4u);
+    items.push_back(MenuFlyoutItem{
+        .text      = LoadStringResource(nullptr, IDS_FIND_ACTION_FIND),
+        .enabled   = true,
+        .commandId = kFindActionMenuFind,
+    });
+    items.push_back(MenuFlyoutItem{
+        .text      = LoadStringResource(nullptr, IDS_FIND_ACTION_REFINE_INTERSECT),
+        .enabled   = hasResults,
+        .commandId = kFindActionMenuIntersect,
+    });
+    items.push_back(MenuFlyoutItem{
+        .text      = LoadStringResource(nullptr, IDS_FIND_ACTION_REFINE_SUBTRACT),
+        .enabled   = hasResults,
+        .commandId = kFindActionMenuSubtract,
+    });
+    items.push_back(MenuFlyoutItem{
+        .text      = LoadStringResource(nullptr, IDS_FIND_ACTION_APPEND_TO_FOUND),
+        .enabled   = hasResults,
+        .commandId = kFindActionMenuAppend,
+    });
+
+    const std::optional<int> command = ContextMenu::Show(_hWnd.get(), screenPoint, items, _dxHost.GetTheme());
+    if (! command.has_value())
+    {
+        return;
+    }
+
+    switch (command.value())
+    {
+        case kFindActionMenuFind: static_cast<void>(BeginSearch(SearchOperation::Find)); break;
+        case kFindActionMenuAppend: static_cast<void>(BeginSearch(SearchOperation::Append)); break;
+        case kFindActionMenuIntersect: static_cast<void>(BeginSearch(SearchOperation::Intersect)); break;
+        case kFindActionMenuSubtract: static_cast<void>(BeginSearch(SearchOperation::Subtract)); break;
+        default: break;
     }
 }
 
@@ -2228,6 +2393,7 @@ void FindFilesWindow::Layout() noexcept
     const float optionHeight = compact ? 22.0f : 24.0f;
     const float buttonHeight = compact ? 30.0f : 32.0f;
     const float buttonWidth  = compact ? 104.0f : 108.0f;
+    const float findButtonWidth = compact ? 118.0f : 124.0f;
     const float modeWidth    = compact ? 142.0f : 150.0f;
     const float statusHeight = compact ? 20.0f : 22.0f;
     const auto snapDip       = [this](float dip) noexcept { return _dxHost.PixelsToDip(std::round(_dxHost.DipsToPixels(dip))); };
@@ -2275,14 +2441,11 @@ void FindFilesWindow::Layout() noexcept
     y += optionHeight + gap;
 
     float buttonX = margin;
-    _findButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
-    buttonX += buttonWidth + gap;
-    _appendButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
-    buttonX += buttonWidth + gap;
-    _intersectButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
-    buttonX += buttonWidth + gap;
-    _subtractButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
-    buttonX += buttonWidth + gap;
+    _findButton->SetBounds(rect(buttonX, y, buttonX + findButtonWidth, y + buttonHeight));
+    buttonX += findButtonWidth + gap;
+    _appendButton->SetBounds(rect(buttonX, y, buttonX, y + buttonHeight));
+    _intersectButton->SetBounds(rect(buttonX, y, buttonX, y + buttonHeight));
+    _subtractButton->SetBounds(rect(buttonX, y, buttonX, y + buttonHeight));
     _cancelButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
     buttonX += buttonWidth + gap;
     _openButton->SetBounds(rect(buttonX, y, buttonX + buttonWidth, y + buttonHeight));
@@ -2293,9 +2456,7 @@ void FindFilesWindow::Layout() noexcept
     _statusText->SetBounds(rect(margin, y, right, y + statusHeight));
     y += statusHeight + gap;
 
-    _resultsList->SetHeaderHeightDip(compact ? 28.0f : 30.0f);
-    _resultsList->SetRowHeightDip(compact ? 42.0f : 46.0f);
-    _resultsList->SetLineClamp(compact ? 2u : 3u);
+    ApplyResultsGridMetrics();
     _resultsList->SetBounds(rect(margin, y, right, std::max(y + 120.0f, heightDip - margin)));
     _dxHost.Invalidate();
 }
@@ -2585,6 +2746,10 @@ ResultListMutation FindFilesWindow::AddOrUpdateVisibleResult(FindResultRecord re
     if (result.key.empty())
     {
         result.key = MakeResultKey(result.pluginId, result.instanceContext, result.fullPath);
+    }
+    if (result.displayPath.empty())
+    {
+        result.displayPath = BuildResultDisplayPath(result.relativePath, _lastSubmittedRootPath, result.fullPath);
     }
     result.stableRowId = MakeResultStableId(result);
 
@@ -3897,9 +4062,12 @@ bool FindFilesWindow::DebugGetSnapshot(FindFilesDebugSnapshot& out) noexcept
     }
     out.fullPaths.clear();
     out.fullPaths.reserve(_results.size());
+    out.resultPathTexts.clear();
+    out.resultPathTexts.reserve(_results.size());
     for (const auto& record : _results)
     {
         out.fullPaths.push_back(record.fullPath);
+        out.resultPathTexts.push_back(record.displayPath);
     }
 
     if (_hWnd)

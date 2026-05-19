@@ -95,6 +95,8 @@ The Find window supports four result-set operations:
 - `Intersect`: keep only items present in both sets.
 - `Subtract`: remove newly found items from the current result set.
 
+The visible Find action is a split button: its primary action runs `Find`, and its menu exposes `Find`, `Intersect`, `Subtract`, and `Append`. Set operations other than `Find` MUST remain disabled while the current result set is empty, and MUST become available once at least one result is present.
+
 ### Canonical result identity
 
 Result identity is frozen as:
@@ -107,6 +109,8 @@ This identity is used by the Find window for de-duplication and set algebra acro
 - Double-clicking a file opens it through the existing host open/view flow.
 - Double-clicking a directory navigates the pane to that directory.
 - The secondary parent action navigates to the parent directory and focuses the matched item when possible.
+- Recursive results MUST display the containing subfolder relative to the search root in the Path column, including when a backend reports only a leaf relative path but provides a full path under the requested root.
+- One-line result rows MUST use the shared grid density metrics and shrink when compact mode is active; snippet rows may remain taller to preserve preview readability.
 
 ## Execution Model
 
