@@ -30,6 +30,26 @@ void FolderView::OnMouseWheelMessage(UINT keyState, int delta)
     OnMouseWheel(delta, horizontal);
 }
 
+void FolderView::OnMeasuredMouseWheelMessage(UINT keyState, int delta)
+{
+    const auto inputStartedAt    = std::chrono::steady_clock::now();
+    const float scrollBefore     = _scrollOffset;
+    const float horizontalBefore = _horizontalOffset;
+    const size_t focusedBefore   = _focusedIndex;
+    OnMouseWheelMessage(keyState, delta);
+    RecordInputToPaintStartIfViewportOrFocusChanged(inputStartedAt, scrollBefore, horizontalBefore, focusedBefore);
+}
+
+void FolderView::OnMeasuredMouseHWheelMessage(int delta)
+{
+    const auto inputStartedAt    = std::chrono::steady_clock::now();
+    const float scrollBefore     = _scrollOffset;
+    const float horizontalBefore = _horizontalOffset;
+    const size_t focusedBefore   = _focusedIndex;
+    OnMouseWheel(delta, true);
+    RecordInputToPaintStartIfViewportOrFocusChanged(inputStartedAt, scrollBefore, horizontalBefore, focusedBefore);
+}
+
 void FolderView::OnMouseLeave()
 {
     if (_hoveredIndex != static_cast<size_t>(-1) && _hoveredIndex < _items.size())
@@ -63,6 +83,16 @@ void FolderView::OnKeyDownMessage(WPARAM key, LPARAM keyInfo)
     OnKeyDown(key, ctrl, shift, translatedSpaceCharMayFollow);
 }
 
+void FolderView::OnMeasuredKeyDownMessage(WPARAM key, LPARAM keyInfo)
+{
+    const auto inputStartedAt    = std::chrono::steady_clock::now();
+    const float scrollBefore     = _scrollOffset;
+    const float horizontalBefore = _horizontalOffset;
+    const size_t focusedBefore   = _focusedIndex;
+    OnKeyDownMessage(key, keyInfo);
+    RecordInputToPaintStartIfViewportOrFocusChanged(inputStartedAt, scrollBefore, horizontalBefore, focusedBefore);
+}
+
 bool FolderView::OnSysKeyDownMessage(WPARAM key, LPARAM keyInfo)
 {
     if (key != 'D' && key != VK_DOWN && key != VK_UP)
@@ -74,6 +104,21 @@ bool FolderView::OnSysKeyDownMessage(WPARAM key, LPARAM keyInfo)
     const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     const bool translatedSpaceCharMayFollow = key == VK_SPACE && keyInfo != 0;
     OnKeyDown(key, ctrl, shift, translatedSpaceCharMayFollow);
+    return true;
+}
+
+bool FolderView::OnMeasuredSysKeyDownMessage(WPARAM key, LPARAM keyInfo)
+{
+    const auto inputStartedAt    = std::chrono::steady_clock::now();
+    const float scrollBefore     = _scrollOffset;
+    const float horizontalBefore = _horizontalOffset;
+    const size_t focusedBefore   = _focusedIndex;
+    if (! OnSysKeyDownMessage(key, keyInfo))
+    {
+        return false;
+    }
+
+    RecordInputToPaintStartIfViewportOrFocusChanged(inputStartedAt, scrollBefore, horizontalBefore, focusedBefore);
     return true;
 }
 
@@ -168,6 +213,16 @@ void FolderView::OnHScrollMessage(UINT scrollRequest)
     QueueMissingVisibleThumbnails();
     BoostIconLoadingForVisibleRange();
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
+}
+
+void FolderView::OnMeasuredHScrollMessage(UINT scrollRequest)
+{
+    const auto inputStartedAt    = std::chrono::steady_clock::now();
+    const float scrollBefore     = _scrollOffset;
+    const float horizontalBefore = _horizontalOffset;
+    const size_t focusedBefore   = _focusedIndex;
+    OnHScrollMessage(scrollRequest);
+    RecordInputToPaintStartIfViewportOrFocusChanged(inputStartedAt, scrollBefore, horizontalBefore, focusedBefore);
 }
 
 void FolderView::OnCommandMessage(UINT commandId)
@@ -1211,7 +1266,7 @@ void FolderView::HandleIncrementalSearchNavigate(bool forward)
             index = (startIndex + itemCount - offset) % itemCount;
         }
 
-        if (! FindIncrementalSearchMatchOffset(_items[index].displayName).has_value())
+        if (! FindIncrementalSearchMatchOffset(GetVisualDisplayName(_items[index])).has_value())
         {
             continue;
         }
@@ -1326,7 +1381,7 @@ void FolderView::ClearIncrementalSearchLayoutEffects() noexcept
             continue;
         }
 
-        const std::wstring_view labelText = item.displayName;
+        const std::wstring_view labelText = GetVisualDisplayName(item);
         if (labelText.empty() || labelText.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
         {
             continue;
@@ -1469,7 +1524,7 @@ bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapsho
     const auto invalidIndex = static_cast<size_t>(-1);
     if (_focusedIndex != invalidIndex && _focusedIndex < _items.size())
     {
-        out.focusedDisplayName.assign(_items[_focusedIndex].displayName);
+        out.focusedDisplayName.assign(GetVisualDisplayName(_items[_focusedIndex]));
     }
 
     if (! _incrementalSearch.active || _incrementalSearch.query.empty())
@@ -1504,7 +1559,7 @@ bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapsho
         }
 
         IncrementalSearchDebugMatch match{};
-        match.displayName.assign(item.displayName);
+        match.displayName.assign(visualDisplayName);
         match.range.startPosition = matchOffset.value();
         match.range.length        = std::min(queryLength, textLength - match.range.startPosition);
         match.startsWith          = FolderViewIncrementalSearch::StartsWithNoCase(visualDisplayName, _incrementalSearch.query);

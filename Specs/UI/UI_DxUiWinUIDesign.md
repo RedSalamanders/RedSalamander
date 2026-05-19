@@ -283,7 +283,7 @@ Current DxUI timings (140ms button, 240ms tree expand) are close to WinUI. Forma
 
 **Reduced motion affects all controls:** Any control that defines an auto-hide behavior (scrollbar §3.7: 1500ms auto-hide delay) must remain permanently visible when `reducedMotion` is true. Any control with animated size changes (toggle switch knob, radio button inner dot) should transition instantly.
 
-**Easing implementation:** DxUI's `AnimationDispatcher` operates on 16ms ticks (~60fps). Implement cubic-bezier easing as a per-frame evaluation: given elapsed fraction `t` (0→1), evaluate the cubic polynomial using De Casteljau's algorithm or a pre-sampled lookup table (64 entries is sufficient). Expose as:
+**Easing implementation:** DxUI's `AnimationDispatcher` derives animation time from `DxUi::FrameClock`, uses an 8ms fallback timer cadence with an 8,333us synthetic 120Hz target, clamps large virtual callback-time hitches through `FrameBudget`, and emits `dxui.animation.tick_delta_us`, `dxui.animation.jitter_us`, `dxui.animation.active_count`, plus the legacy `dxui.animation.tick_gap_ms` / `dxui.animation.tick_overrun` diagnostics. Implement cubic-bezier easing as a per-frame evaluation: given elapsed fraction `t` (0->1), evaluate the cubic polynomial using De Casteljau's algorithm or a pre-sampled lookup table (64 entries is sufficient). Expose as:
 
 ```cpp
 float EvaluateEasing(EasingCurve curve, float t); // t in [0,1] → eased value
@@ -1084,11 +1084,16 @@ Several controls define both default and compact heights (Button: 32/24, Menu it
 
 ### Performance Verification
 
-- **Frame budget:** All control rendering must complete within **16ms** (60fps target). Measure via ETW TraceLogging events in `WindowHost::Paint()`.
+- **Frame runtime:** Shared DxUi frame timing lives in `Common/DxUi` as host-owned runtime state. It owns monotonic frame clocking, frame budget clamping, frame-stage telemetry helpers, animation scheduling policy, and debug render-stage guards. It must not own app swap chains, D2D/D3D/DXGI devices, dirty-region policy, or renderer-specific resources.
+- **Frame budget:** All control rendering must complete within **16ms** (60fps target). Measure via ETW TraceLogging events in `WindowHost::Paint()` and JSONL metrics emitted from the shared frame runtime.
+- **Frame-stage metrics:** DxUi hosts must emit per-frame aggregates, not per-control hot-path rows: `dxui.frame.total_us`, `dxui.frame.update_us`, `dxui.frame.render_us`, `dxui.frame.present_us`, `dxui.frame.dirty_rect_count`, and `dxui.frame.dirty_rect_area_px`. Scenario-level `DxUI::Paint` rows remain valid for compatibility.
+- **Debug render-stage guard:** Debug/test builds must detect layout or retained-tree mutation during a render stage. Capture-only render paths use the same guard as normal paint so tests cannot hide render-time mutation.
 - **Menu popup latency:** Context menu must appear within **100ms** of right-click. Measure from `WM_CONTEXTMENU` to first `Paint()` of the menu surface.
-- **Animation smoothness:** No frame drops during standard animations (hover transitions, tree expand). Monitor via `AnimationDispatcher` tick timing — flag any tick > 20ms.
+- **Animation smoothness:** No frame drops during standard animations (hover transitions, tree expand). Monitor via `AnimationDispatcher` tick timing: `dxui.animation.tick_delta_us`, `dxui.animation.jitter_us`, `dxui.animation.active_count`, plus the legacy `dxui.animation.tick_gap_ms` / `dxui.animation.tick_overrun` rows. The dispatcher keeps the existing subscription API and message-only-window timer fallback.
 - **Text layout caching:** `IDWriteTextLayout` objects must be cached and reused. Re-creation only on text change, font change, or DPI change. Verify via a layout-creation counter in debug builds.
 - **Add ETW TraceLogging events** for: `DxUI::Paint` (per-frame), component/window layout scopes, `DxUI::PopupShow`, and `DxUI::FocusChange`. Per-control `SetBounds` instrumentation and per-hit-test/per-pointer-move instrumentation are intentionally forbidden on hot paths because they can flood ETW/JSONL during first-layout, hover, and scroll interactions without explaining user-visible latency. Prefer scenario-level latency/counter metrics such as `preferences.page_host.*`, popup-open latency, paint duration, queue drain/coalescing counts, or explicitly thresholded slow-path diagnostics.
+- **Present policy:** Keep DXGI flip-sequential for current DxUi/FolderView/Monitor paths because dirty-rect and scroll-rect partial present are part of the measured rendering contract. Flip-discard and frame-latency waitable-object changes require same-machine evidence for device-loss, resize, occlusion, dirty-rect, and input-to-paint behavior before being enabled.
+- **Composition pilot:** Windows Composition is not enabled by default for DxUi chrome or renderer text/list surfaces. The 2026-05-19 pilot was rejected by gates; fresh evidence was limited to scheduler/test-harness coverage, not production jitter improvement. Any future pilot must remain overlay-only until measured and must not replace DirectWrite text or list virtualization.
 
 ### Functional Verification
 

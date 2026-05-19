@@ -38,6 +38,8 @@ using unique_safearray = std::unique_ptr<SAFEARRAY, safearray_deleter>;
 void ResolveAdornmentColors(const ThemePalette& theme, AdornmentTone tone, D2D1_COLOR_F& fill, D2D1_COLOR_F& text) noexcept;
 [[nodiscard]] bool RaiseWindowHostTextInputAutomationEvent(HWND hwnd, const Control* control, TextInputAutomationEventKind kind) noexcept;
 [[nodiscard]] ITextStoreACP* CreateNativeTextInputTextStore(WindowHost& host, Control& control) noexcept;
+[[nodiscard]] bool IsDxUiRenderStageActiveForDebug() noexcept;
+void EmitDxUiRenderMutationBlockedForDebug() noexcept;
 
 inline constexpr float kMenuItemHeightDip                  = 30.0f;
 inline constexpr float kMenuCompactItemHeightDip           = 24.0f;

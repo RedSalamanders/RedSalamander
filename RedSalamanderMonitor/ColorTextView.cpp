@@ -63,6 +63,12 @@ static constexpr size_t debugDirtyPaletteSize = sizeof(debugDirtyPalette) / size
 #endif
 
 // ===== Internal Helpers =====
+namespace
+{
+constexpr uint64_t kMonitorAutoScrollModeValue = 1u;
+constexpr uint64_t kMonitorScrollBackModeValue = 2u;
+}
+
 static inline bool IsKeyDown(int vk)
 {
     return (GetKeyState(vk) & 0x8000) != 0;
@@ -2027,6 +2033,48 @@ bool ColorTextView::ValidateDeviceState() const
     return isValid;
 }
 
+std::wstring_view ColorTextView::RenderModePerfDetail() const noexcept
+{
+    return _renderMode == RenderMode::AUTO_SCROLL ? L"AUTO_SCROLL" : L"SCROLL_BACK";
+}
+
+uint64_t ColorTextView::RenderModePerfValue() const noexcept
+{
+    return _renderMode == RenderMode::AUTO_SCROLL ? kMonitorAutoScrollModeValue : kMonitorScrollBackModeValue;
+}
+
+void ColorTextView::MarkAppendToVisiblePending()
+{
+    if (_renderMode != RenderMode::AUTO_SCROLL)
+    {
+        return;
+    }
+
+    if (! _pendingAppendToVisibleStartedAt.has_value())
+    {
+        _pendingAppendToVisibleStartedAt = _frameClock.Now();
+    }
+}
+
+void ColorTextView::EmitAppendToVisibleIfReady()
+{
+    if (! _pendingAppendToVisibleStartedAt.has_value())
+    {
+        return;
+    }
+
+    if (_renderMode != RenderMode::AUTO_SCROLL || ! _tailLayoutValid || ! _tailLayout)
+    {
+        _pendingAppendToVisibleStartedAt.reset();
+        return;
+    }
+
+    const RedSalamander::DxUi::FrameTimestamp appendVisibleAt = _frameClock.Now();
+    RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.append_to_visible_us",
+                                         _frameClock.ElapsedUs(_pendingAppendToVisibleStartedAt.value(), appendVisibleAt));
+    _pendingAppendToVisibleStartedAt.reset();
+}
+
 D2D1_RECT_F ColorTextView::GetViewRectDip() const
 {
     float width  = _clientDipW;
@@ -2323,6 +2371,14 @@ void ColorTextView::DrawScene(bool clearTarget)
     {
         // COLD PATH: Full virtualization mode (scroll-back through history)
         // TRACER_CTX(L"ScrollBackMode");
+        const bool emitScrollbackSliceMetric = _renderMode == RenderMode::SCROLL_BACK;
+        const RedSalamander::DxUi::FrameTimestamp scrollbackStarted = _frameClock.Now();
+        const auto emitScrollbackSliceMetricOnExit = wil::scope_exit([&] {
+            if (emitScrollbackSliceMetric)
+            {
+                RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.scrollback_slice_us", _frameClock.ElapsedUs(scrollbackStarted, _frameClock.Now()));
+            }
+        });
 
         auto [visStartLine, visEndLine] = GetVisibleLineRange();
         const bool sliceCoversView      = _textLayout && (_sliceFirstLine <= visStartLine) && (_sliceLastLine >= visEndLine);
@@ -2486,6 +2542,7 @@ void ColorTextView::DrawScene(bool clearTarget)
 void ColorTextView::OnPaint()
 {
     // TRACER;
+    const RedSalamander::DxUi::FrameTimestamp frameStarted = _frameClock.Now();
 
     PAINTSTRUCT ps{};
     // scope for BeginPaint/EndPaint
@@ -2603,6 +2660,7 @@ void ColorTextView::OnPaint()
     HRESULT hr = S_OK;
     if (partialEligible)
     {
+        RedSalamander::DxUi::FrameStageScope renderStage(_frameStage, RedSalamander::DxUi::FrameStage::Render);
         {
             _d2dCtx->BeginDraw();
             auto endDraw               = wil::scope_exit([&] { hr = _d2dCtx->EndDraw(); });
@@ -2694,6 +2752,7 @@ void ColorTextView::OnPaint()
         }
 
         {
+            RedSalamander::DxUi::FrameStageScope renderStage(_frameStage, RedSalamander::DxUi::FrameStage::Render);
             _d2dCtx->BeginDraw();
             auto endDraw = wil::scope_exit([&] { hr = _d2dCtx->EndDraw(); });
             DrawScene(true);
@@ -2746,7 +2805,13 @@ void ColorTextView::OnPaint()
     }
 
     const UINT syncInterval = _inSizeMove ? 0u : 1u;
-    const HRESULT presentHr = _swapChain->Present1(syncInterval, 0, &params);
+    const RedSalamander::DxUi::FrameTimestamp presentStarted = _frameClock.Now();
+    HRESULT presentHr                                        = S_OK;
+    {
+        RedSalamander::DxUi::FrameStageScope presentStage(_frameStage, RedSalamander::DxUi::FrameStage::Present);
+        presentHr = _swapChain->Present1(syncInterval, 0, &params);
+    }
+    const RedSalamander::DxUi::FrameTimestamp presentFinished = _frameClock.Now();
     if (FAILED(presentHr))
     {
         auto presentMsg = std::format("!!! Present1 failed: HRESULT = 0x{:08X}\n", presentHr);
@@ -2770,6 +2835,11 @@ void ColorTextView::OnPaint()
     _hasPendingScroll   = false;
     _pendingScrollDy    = 0;
     _pendingDirtyRect   = RECT{};
+
+    RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.present_us", _frameClock.ElapsedUs(presentStarted, presentFinished));
+    RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.total_us", _frameClock.ElapsedUs(frameStarted, presentFinished));
+    Debug::Perf::Emit(L"monitor.frame.mode", RenderModePerfDetail(), 0, RenderModePerfValue(), 0, S_OK);
+    EmitAppendToVisibleIfReady();
 }
 
 void ColorTextView::OnMouseWheel(short delta)
@@ -2938,6 +3008,7 @@ void ColorTextView::SwitchToScrollBackMode()
     // TRACER;
 
     _renderMode = RenderMode::SCROLL_BACK;
+    _pendingAppendToVisibleStartedAt.reset();
     _tailLayout.reset();
     _tailLayoutValid = false;
 
@@ -2969,6 +3040,11 @@ bool ColorTextView::ShouldUseAutoScrollMode() const
 void ColorTextView::RebuildTailLayout()
 {
     // TRACER;
+    const RedSalamander::DxUi::FrameTimestamp tailLayoutStarted = _frameClock.Now();
+    RedSalamander::DxUi::FrameStageScope layoutStage(_frameStage, RedSalamander::DxUi::FrameStage::Layout);
+    const auto emitTailLayoutMetric = wil::scope_exit([&] {
+        RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.tail_layout_us", _frameClock.ElapsedUs(tailLayoutStarted, _frameClock.Now()));
+    });
 
     if (! _dwriteFactory || ! _textFormat)
     {
@@ -5251,15 +5327,18 @@ LRESULT ColorTextView::OnAppLayoutReady(LayoutPacket* pkt)
 
 LRESULT ColorTextView::OnAppEtwBatch()
 {
+    const RedSalamander::DxUi::FrameTimestamp batchDrainStarted = _frameClock.Now();
     // Cap batch size to avoid blocking the UI thread for too long on mega-bursts.
     // The queue keeps overflow in place so producers do not contend with a front insert under the lock.
     constexpr size_t kMaxBatchSize = 200;
     std::vector<Document::InfoLineInput> batch;
+    size_t drainedCountForMetric = 0;
     size_t remainingAfterDrain = 0;
     {
         auto lock = _etwQueueCS.lock();
         const size_t drainCount = std::min(kMaxBatchSize, _etwEventQueue.size());
         batch.reserve(drainCount);
+        drainedCountForMetric = drainCount;
 
         for (size_t i = 0; i < drainCount; ++i)
         {
@@ -5280,6 +5359,10 @@ LRESULT ColorTextView::OnAppEtwBatch()
     {
         const size_t drainedCount = batch.size();
         const auto appendStarted  = std::chrono::steady_clock::now();
+        if (ShouldUseAutoScrollMode())
+        {
+            MarkAppendToVisiblePending();
+        }
         _document.AppendInfoLines(std::move(batch));
         Debug::Perf::EmitDurationUs(L"monitor.etw.document_append_batch_us",
                                     Debug::Perf::ElapsedUs(appendStarted),
@@ -5327,6 +5410,14 @@ LRESULT ColorTextView::OnAppEtwBatch()
         Invalidate();
     }
 
+    if (drainedCountForMetric != 0u)
+    {
+        Debug::Perf::EmitDurationUs(L"monitor.etw.batch_drain_us",
+                                    _frameClock.ElapsedUs(batchDrainStarted, _frameClock.Now()),
+                                    static_cast<uint64_t>(drainedCountForMetric),
+                                    static_cast<uint64_t>(remainingAfterDrain),
+                                    S_OK);
+    }
     return 0;
 }
 

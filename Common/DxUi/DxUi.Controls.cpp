@@ -12,6 +12,7 @@ namespace RedSalamander::DxUi
 namespace
 {
 constexpr GUID kD2DShadowEffectId = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0x69, 0x5D, 0x3E, 0x9A, 0x5B, 0x6B}};
+constexpr UINT kButtonModifierAlt = 0x0100u;
 
 [[nodiscard]] int TraceOptionalIndex(std::optional<size_t> value) noexcept
 {
@@ -1590,6 +1591,11 @@ void Button::SetOnClick(std::function<void()> onClick)
     _onClick = std::move(onClick);
 }
 
+void Button::SetOnDropDownClick(std::function<void()> onDropDownClick)
+{
+    _onDropDownClick = std::move(onDropDownClick);
+}
+
 bool Button::Invoke(WindowHost& host, bool focusSelf)
 {
     if (! IsEnabled() || ! IsVisible())
@@ -1655,20 +1661,18 @@ void Button::Paint(WindowHost& host) const
 
     if (_variant == ButtonVariant::DropDown)
     {
-        constexpr float chevronWidth = 20.0f;
-        const D2D1_RECT_F textRect   = D2D1::RectF(GetBounds().left + style.textOffsetXDip,
-                                                   GetBounds().top + style.textOffsetYDip,
-                                                   GetBounds().right - chevronWidth + style.textOffsetXDip,
-                                                   GetBounds().bottom + style.textOffsetYDip);
+        const D2D1_RECT_F textRect = D2D1::RectF(GetBounds().left + style.textOffsetXDip,
+                                                 GetBounds().top + style.textOffsetYDip,
+                                                 GetBounds().right - _dropDownChevronWidthDip + style.textOffsetXDip,
+                                                 GetBounds().bottom + style.textOffsetYDip);
         DrawCenteredText(
             host, _text, textRect, FontRole::Body, style.text, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, flowDirection);
-        const D2D1_RECT_F chevronRect = D2D1::RectF(GetBounds().right - chevronWidth, GetBounds().top, GetBounds().right, GetBounds().bottom);
+        const D2D1_RECT_F chevronRect = D2D1::RectF(GetBounds().right - _dropDownChevronWidthDip, GetBounds().top, GetBounds().right, GetBounds().bottom);
         DrawCenteredText(host, L"\xE70D", chevronRect, FontRole::Icon, style.text);
     }
     else if (_variant == ButtonVariant::Split)
     {
-        constexpr float splitWidth = 32.0f;
-        const float dividerX       = GetBounds().right - splitWidth;
+        const float dividerX       = GetBounds().right - _splitDropDownWidthDip;
         const D2D1_RECT_F textRect = D2D1::RectF(GetBounds().left + style.textOffsetXDip,
                                                  GetBounds().top + style.textOffsetYDip,
                                                  dividerX + style.textOffsetXDip,
@@ -1713,6 +1717,7 @@ bool Button::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton
 
     host.SetFocusControl(this);
     _pressed = true;
+    _pressedDropDown = IsDropDownInvocationPoint(point);
     Invalidate(host);
     return true;
 }
@@ -1725,9 +1730,15 @@ bool Button::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
     }
 
     const bool wasPressed = _pressed;
+    const bool invokeDropDown = _pressedDropDown && PointInRect(GetHitBounds(), point);
     _pressed              = false;
+    _pressedDropDown      = false;
     Invalidate(host);
     const std::function<void()> onClick = _onClick;
+    if (wasPressed && invokeDropDown && InvokeDropDown())
+    {
+        return true;
+    }
     if (wasPressed && PointInRect(GetHitBounds(), point) && onClick)
     {
         onClick();
@@ -1735,7 +1746,7 @@ bool Button::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
     return wasPressed;
 }
 
-bool Button::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
+bool Button::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
 {
     if (! IsEnabled())
     {
@@ -1745,6 +1756,10 @@ bool Button::OnKeyDown(WindowHost& host, UINT virtualKey, UINT /*modifiers*/)
     if (virtualKey == VK_SPACE || virtualKey == VK_RETURN)
     {
         return Invoke(host, false);
+    }
+    if ((virtualKey == VK_F4 || (virtualKey == VK_DOWN && (modifiers & kButtonModifierAlt) != 0u)) && InvokeDropDown())
+    {
+        return true;
     }
     return false;
 }
@@ -1787,6 +1802,7 @@ bool Button::OnMouseLeave(WindowHost& host)
     if (_pressed)
     {
         _pressed = false;
+        _pressedDropDown = false;
         Invalidate(host);
     }
     static_cast<void>(host.ClearTooltip());
@@ -1813,9 +1829,43 @@ void Button::OnCaptureLost(WindowHost& host)
     if (_pressed)
     {
         _pressed = false;
+        _pressedDropDown = false;
         Invalidate(host);
     }
     static_cast<void>(host.ClearTooltip());
+}
+
+bool Button::IsDropDownInvocationPoint(D2D1_POINT_2F point) const noexcept
+{
+    if (! _onDropDownClick)
+    {
+        return false;
+    }
+
+    const D2D1_RECT_F bounds = GetBounds();
+    if (_variant == ButtonVariant::DropDown)
+    {
+        return PointInRect(bounds, point);
+    }
+    if (_variant != ButtonVariant::Split)
+    {
+        return false;
+    }
+
+    const float dividerX = bounds.right - _splitDropDownWidthDip;
+    return point.x >= dividerX && PointInRect(bounds, point);
+}
+
+bool Button::InvokeDropDown()
+{
+    if (! IsEnabled() || ! IsVisible() || ! _onDropDownClick)
+    {
+        return false;
+    }
+
+    const std::function<void()> onDropDownClick = _onDropDownClick;
+    onDropDownClick();
+    return true;
 }
 
 void Button::OnFocusChanged(WindowHost& host, bool focused)

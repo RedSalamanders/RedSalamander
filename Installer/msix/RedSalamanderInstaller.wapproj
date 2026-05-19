@@ -23,7 +23,7 @@
     <ProjectGuid>{9A97489C-F552-4B8C-875A-199D3E5A1E3A}</ProjectGuid>
     <EntryPointProjectUniqueName>..\..\RedSalamander\RedSalamander.vcxproj</EntryPointProjectUniqueName>
     <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
-    <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
+    <TargetPlatformMinVersion>10.0.22000.2600</TargetPlatformMinVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
     <GenerateAppInstallerFile>false</GenerateAppInstallerFile>
     <AppxBundle>Never</AppxBundle>

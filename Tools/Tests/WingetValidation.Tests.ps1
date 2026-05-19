@@ -155,15 +155,25 @@ Describe 'Winget manifest template' {
         $directoryBuildProps = Get-Content -Path $directoryBuildPropsPath -Raw
         $zipScriptPath = Join-Path $repoRoot 'Installer\zip\build-zip.ps1'
         $zipScript = Get-Content -Path $zipScriptPath -Raw
+        $minimumOsHeaderPath = Join-Path $repoRoot 'Common\MinimumOsVersion.h'
+        $minimumOsHeader = Get-Content -Path $minimumOsHeaderPath -Raw
+        $minimumOsSourcePath = Join-Path $repoRoot 'Common\MinimumOsVersion.cpp'
+        $minimumOsSource = Get-Content -Path $minimumOsSourcePath -Raw
     }
 
-    It 'declares the dependency-free launcher as the portable alias target on the Windows 11 24H2 floor' {
-        $installerTemplate | Should Match '(?m)^MinimumOSVersion:\s+10\.0\.26100\.0\r?$'
+    It 'declares the dependency-free launcher as the portable alias target on the Windows 11 build 22000.2600 floor' {
+        $installerTemplate | Should Match '(?m)^MinimumOSVersion:\s+10\.0\.22000\.2600\r?$'
+        $installerTemplate | Should Not Match '10\.0\.26100\.0'
         $installerTemplate | Should Not Match '10\.0\.19041\.0'
-        $msixManifest | Should Match 'MinVersion="10\.0\.26100\.0"'
-        $msixProject | Should Match '<TargetPlatformMinVersion>10\.0\.26100\.0</TargetPlatformMinVersion>'
+        $msixManifest | Should Match 'MinVersion="10\.0\.22000\.2600"'
+        $msixProject | Should Match '<TargetPlatformMinVersion>10\.0\.22000\.2600</TargetPlatformMinVersion>'
         $directoryBuildProps | Should Match '<WindowsTargetPlatformVersion>10\.0\.26100\.0</WindowsTargetPlatformVersion>'
         $directoryBuildProps | Should Match 'NTDDI_VERSION=NTDDI_WIN11_GE'
+        $minimumOsHeader | Should Match 'kMinimumWindowsBuildNumber\s*=\s*22000'
+        $minimumOsHeader | Should Match 'kMinimumWindowsBuildRevision\s*=\s*2600'
+        $minimumOsSource | Should Match 'TryGetWindowsBuildRevision'
+        $minimumOsSource | Should Match 'CurrentVersion'
+        $zipScript | Should Match 'Windows 11 build 22000\.2600'
         [regex]::Matches($installerTemplate, '(?m)^NestedInstallerFiles:\r?$').Count | Should Be 1
         $installerTemplate | Should Match '(?ms)^NestedInstallerFiles:\s*\r?\n\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+PortableCommandAlias: RedSalamander'
     }
@@ -224,8 +234,10 @@ Describe 'RedLauncher project' {
         $launcherSource | Should Match 'RedSalamander\.exe'
         $launcherSource | Should Match 'CreateProcessW'
         $launcherSource | Should Match 'RtlGetVersion'
-        $launcherSource | Should Match 'kMinimumWindowsBuildNumber\s*=\s*26100'
-        $launcherSource | Should Match 'Windows 11 24H2'
+        $launcherSource | Should Match 'TryGetWindowsBuildRevision'
+        $launcherSource | Should Match 'kMinimumWindowsBuildNumber\s*=\s*22000'
+        $launcherSource | Should Match 'kMinimumWindowsBuildRevision\s*=\s*2600'
+        $launcherSource | Should Match 'Windows 11 build 22000\.2600'
         (Get-Content -Path $redSalamanderSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
         (Get-Content -Path $monitorSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'
         (Get-Content -Path $configureSourcePath -Raw) | Should Match 'EnsureCurrentWindowsVersionSupported'

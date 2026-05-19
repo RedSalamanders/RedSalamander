@@ -41,6 +41,7 @@
 #pragma comment(lib, "dxgi")
 
 #include "Document.h"
+#include "DxUi/DxUi.FrameRuntime.h"
 #include "Helpers.h"
 
 #pragma warning(push)
@@ -228,6 +229,10 @@ private:
     void RebuildMatches();
     bool ValidateDeviceState() const;
     void LogSystemInfo() const;
+    std::wstring_view RenderModePerfDetail() const noexcept;
+    uint64_t RenderModePerfValue() const noexcept;
+    void MarkAppendToVisiblePending();
+    void EmitAppendToVisibleIfReady();
     std::pair<size_t, size_t> GetVisibleLineRange() const;
     std::pair<UINT32, UINT32> GetVisibleTextRange() const;
     ID2D1SolidColorBrush* GetBrush(const D2D1_COLOR_F& color);
@@ -519,6 +524,9 @@ private:
     bool _hasPendingScroll   = false;
     LONG _pendingScrollDy    = 0;
     RECT _pendingDirtyRect{};
+    RedSalamander::DxUi::FrameClock _frameClock;
+    RedSalamander::DxUi::FrameStage _frameStage = RedSalamander::DxUi::FrameStage::Idle;
+    std::optional<RedSalamander::DxUi::FrameTimestamp> _pendingAppendToVisibleStartedAt;
 
     // Layout optimization
     bool _pendingScrollToBottom = false; // ensure bottom after next layout

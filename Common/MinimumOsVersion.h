@@ -16,9 +16,10 @@ namespace Common::MinimumOsVersion
 {
 inline constexpr DWORD kMinimumWindowsMajorVersion = 10u;
 inline constexpr DWORD kMinimumWindowsMinorVersion = 0u;
-inline constexpr DWORD kMinimumWindowsBuildNumber  = 26100u;
-inline constexpr wchar_t kMinimumWindowsDisplayName[] = L"Windows 11 24H2 (build 26100)";
-inline constexpr wchar_t kUnsupportedWindowsMessage[] = L"RedSalamander requires Windows 11 24H2 (build 26100) or later.";
+inline constexpr DWORD kMinimumWindowsBuildNumber   = 22000u;
+inline constexpr DWORD kMinimumWindowsBuildRevision = 2600u;
+inline constexpr wchar_t kMinimumWindowsDisplayName[] = L"Windows 11 build 22000.2600";
+inline constexpr wchar_t kUnsupportedWindowsMessage[] = L"RedSalamander requires Windows 11 build 22000.2600 or later.";
 
 enum class UnsupportedVersionNotification : unsigned char
 {

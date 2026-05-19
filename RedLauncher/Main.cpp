@@ -17,6 +17,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Shell32.lib")
 
 namespace
@@ -25,8 +26,11 @@ constexpr wchar_t kTargetExeName[] = L"RedSalamander.exe";
 constexpr wchar_t kErrorCaption[]  = L"RedSalamander Launcher";
 constexpr DWORD kMinimumWindowsMajorVersion = 10u;
 constexpr DWORD kMinimumWindowsMinorVersion = 0u;
-constexpr DWORD kMinimumWindowsBuildNumber  = 26100u;
-constexpr wchar_t kUnsupportedWindowsMessage[] = L"RedSalamander requires Windows 11 24H2 (build 26100) or later.";
+constexpr DWORD kMinimumWindowsBuildNumber   = 22000u;
+constexpr DWORD kMinimumWindowsBuildRevision = 2600u;
+constexpr wchar_t kUnsupportedWindowsMessage[] = L"RedSalamander requires Windows 11 build 22000.2600 or later.";
+constexpr wchar_t kWindowsCurrentVersionSubKey[] = LR"(SOFTWARE\Microsoft\Windows NT\CurrentVersion)";
+constexpr wchar_t kWindowsUpdateBuildRevisionValue[] = L"UBR";
 
 using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
 
@@ -47,6 +51,28 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
     return rtlGetVersion != nullptr && rtlGetVersion(&version) == 0;
 }
 
+[[nodiscard]] bool TryGetWindowsBuildRevision(DWORD& revision) noexcept
+{
+    revision = 0u;
+
+    DWORD value = 0u;
+    DWORD size  = sizeof(value);
+    const LSTATUS status = ::RegGetValueW(HKEY_LOCAL_MACHINE,
+                                          kWindowsCurrentVersionSubKey,
+                                          kWindowsUpdateBuildRevisionValue,
+                                          RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY,
+                                          nullptr,
+                                          &value,
+                                          &size);
+    if (status != ERROR_SUCCESS || size != sizeof(value))
+    {
+        return false;
+    }
+
+    revision = value;
+    return true;
+}
+
 [[nodiscard]] bool IsCurrentWindowsVersionSupported() noexcept
 {
     OSVERSIONINFOW version{};
@@ -62,7 +88,13 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
     {
         return version.dwMinorVersion > kMinimumWindowsMinorVersion;
     }
-    return version.dwBuildNumber >= kMinimumWindowsBuildNumber;
+    if (version.dwBuildNumber != kMinimumWindowsBuildNumber)
+    {
+        return version.dwBuildNumber > kMinimumWindowsBuildNumber;
+    }
+
+    DWORD buildRevision = 0u;
+    return TryGetWindowsBuildRevision(buildRevision) && buildRevision >= kMinimumWindowsBuildRevision;
 }
 
 [[nodiscard]] std::wstring StripLongPathPrefix(std::wstring path)

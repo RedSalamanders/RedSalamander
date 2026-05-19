@@ -39,6 +39,86 @@ Related documents:
 
 Current test-review evidence:
 
+- Frame performance closeout, Task 12 (2026-05-19, machine `4cb089111a23`,
+  branch `codex/dxui-frame-performance`) used per-command logs under
+  `Specs/TestRuns/local_scratch/frame_perf_closeout_20260519_165526/`.
+  Focused Debug validation:
+  - `.\build.ps1 -Configuration Debug` exited 0; build log
+    `.build/logs/msbuild-20260519_165527_622.log`; diagnostics 0 warnings,
+    0 errors.
+  - `.\.build\x64\Debug\DxUiTests.exe` exited 0; log
+    `Specs/TestRuns/local_scratch/frame_perf_closeout_20260519_165526/02_debug_dxuitests.log`;
+    output ended with `All DxUi tests passed`.
+  - `.\.build\x64\Debug\RedSalamander.exe --commands-selftest --selftest-case=folderView_perf_large_folder_baseline --selftest-timeout-multiplier=4`
+    exited 0; archive
+    `Specs/TestRuns/4cb089111a23/Commands/2026-05-19_165927/`.
+  - `.\.build\x64\Debug\RedSalamander.exe --commands-selftest --selftest-case=folderView_perf_scroll_render_stress --selftest-timeout-multiplier=4`
+    exited 0; archive
+    `Specs/TestRuns/4cb089111a23/Commands/2026-05-19_165933/`.
+  - `.\.build\x64\Debug\RedSalamander.exe --commands-selftest --selftest-case=folderView_perf_sort_toggle_stress --selftest-timeout-multiplier=4`
+    exited 0; archive
+    `Specs/TestRuns/4cb089111a23/Commands/2026-05-19_165945/`.
+  - `.\.build\x64\Debug\RedSalamander.exe --commands-selftest --selftest-case=folderView_perf_iconcache_contention --selftest-timeout-multiplier=4`
+    exited 0; archive
+    `Specs/TestRuns/4cb089111a23/Commands/2026-05-19_165950/`.
+  - `.\.build\x64\Debug\MonitorTest.exe` exited 0; log
+    `Specs/TestRuns/local_scratch/frame_perf_closeout_20260519_165526/07_debug_monitortest.log`;
+    no repo archive is expected for this entrypoint.
+  - `try { $env:RSBuildEnableTests='true'; .\build.ps1 -ProjectName RedSalamanderMonitor -Configuration Debug } finally { Remove-Item Env:RSBuildEnableTests -ErrorAction SilentlyContinue }`
+    exited 0; build log `.build/logs/msbuild-20260519_165815_580.log`;
+    diagnostics 0 warnings, 0 errors.
+  - `.\.build\x64\Debug\RedSalamanderMonitor.exe --chrome-selftest --perf`
+    exited 0 when run as a waited visible GUI process; archive
+    `Specs/TestRuns/4cb089111a23/Monitor/2026-05-19_170035/` passed and
+    contained required monitor frame metrics. A hidden-window wait is not a
+    valid chrome selftest mode; it failed visibility/render checks at
+    `Specs/TestRuns/4cb089111a23/Monitor/2026-05-19_165950/`.
+- Frame performance Release evidence from the same closeout:
+  - `.\build.ps1 -ProjectName RedSalamander -Configuration Release` exited 0;
+    build log `.build/logs/msbuild-20260519_170103_776.log`; diagnostics
+    0 warnings, 0 errors.
+  - The exact normal Release command
+    `.\.build\x64\Release\RedSalamander.exe --commands-selftest --selftest-case=folderView_perf_scroll_render_stress --selftest-timeout-multiplier=4`
+    exited 2 with no archive because normal Release `RedSalamander.exe` omits
+    `ENABLE_TESTS`.
+  - An explicit test-enabled Release rebuild for perf evidence,
+    `try { $env:RSBuildEnableTests='true'; .\build.ps1 -ProjectName RedSalamander -Configuration Release } finally { Remove-Item Env:RSBuildEnableTests -ErrorAction SilentlyContinue }`,
+    exited 0; build log `.build/logs/msbuild-20260519_170412_660.log`;
+    diagnostics 1 warning, 0 errors (`C4883` in
+    `FolderWindow.FileOperations.SelfTest.cpp`).
+  - After that test-enabled Release rebuild,
+    `.\.build\x64\Release\RedSalamander.exe --commands-selftest --selftest-case=folderView_perf_scroll_render_stress --selftest-timeout-multiplier=4`
+    exited 0; archive
+    `Specs/TestRuns/4cb089111a23/Commands/2026-05-19_170631/`.
+  - `try { $env:RSBuildEnableTests='true'; .\build.ps1 -ProjectName RedSalamanderMonitor -Configuration Release } finally { Remove-Item Env:RSBuildEnableTests -ErrorAction SilentlyContinue }`
+    exited 0; build log `.build/logs/msbuild-20260519_170241_261.log`;
+    diagnostics 0 warnings, 0 errors.
+  - `.\.build\x64\Release\RedSalamanderMonitor.exe --chrome-selftest --perf`
+    exited 1; archive
+    `Specs/TestRuns/4cb089111a23/Monitor/2026-05-19_170251/` failed with
+    `Monitor DxUI chrome selftest requires ENABLE_TESTS.` This was the red
+    evidence for the Release Monitor test-definition wiring fix.
+  - Follow-up fix `fix(monitor): enable release selftest opt-in` updated
+    Release x64/ARM64 Monitor `ClCompile` definitions to include
+    `$(RSBuildTestDefinitions)`. The rerun
+    `try { $env:RSBuildEnableTests='true'; .\build.ps1 -ProjectName RedSalamanderMonitor -Configuration Release } finally { Remove-Item Env:RSBuildEnableTests -ErrorAction SilentlyContinue }`
+    exited 0; build log `.build/logs/msbuild-20260519_171244_915.log`;
+    wrapper log
+    `Specs/TestRuns/local_scratch/frame_perf_release_monitor_fix_20260519_171500/01_release_monitor_test_enabled_build.log`;
+    diagnostics 0 warnings, 0 errors.
+  - After that fix,
+    `.\.build\x64\Release\RedSalamanderMonitor.exe --chrome-selftest --perf`
+    exited 0; wrapper log
+    `Specs/TestRuns/local_scratch/frame_perf_release_monitor_fix_20260519_171500/02_release_monitor_chrome_perf.log`;
+    archive `Specs/TestRuns/4cb089111a23/Monitor/2026-05-19_171308/`
+    passed with `monitorFrameMetricPresence.allPresent=true`.
+  - Controller rerun evidence after the same fix:
+    `try { $env:RSBuildEnableTests='true'; .\build.ps1 -ProjectName RedSalamanderMonitor -Configuration Release } finally { Remove-Item Env:RSBuildEnableTests -ErrorAction SilentlyContinue }`
+    exited 0; build log `.build/logs/msbuild-20260519_171503_045.log`;
+    diagnostics 0 warnings, 0 errors. The rerun
+    `.\.build\x64\Release\RedSalamanderMonitor.exe --chrome-selftest --perf`
+    exited 0; archive `Specs/TestRuns/4cb089111a23/Monitor/2026-05-19_171520/`
+    passed with `monitorFrameMetricPresence.allPresent=true`.
 - `.build/logs/msbuild-20260510_191142_208.log` — Debug x64 `RedConfigure`
   build after fixing the compact first-open Localization overlap and increasing
   the initial window size; build wrapper diagnostics: 0 warnings, 0 errors.

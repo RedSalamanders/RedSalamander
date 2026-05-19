@@ -159,6 +159,7 @@
     <ClCompile Include="DxUi.cpp" />
     <ClCompile Include="DxUi.ComboBox.cpp" />
     <ClCompile Include="DxUi.Controls.cpp" />
+    <ClCompile Include="DxUi.FrameRuntime.cpp" />
     <ClCompile Include="DxUi.Grid.cpp" />
     <ClCompile Include="DxUi.Menu.cpp" />
     <ClCompile Include="DxUi.NativeTextInput.cpp" />
@@ -170,6 +171,7 @@
     <ClCompile Include="DxUi.Typeahead.cpp" />
     <ClCompile Include="DxUi.Theme.cpp" />
     <ClCompile Include="DxUi.WindowHost.cpp" />
+    <ClInclude Include="DxUi.FrameRuntime.h" />
     <ClInclude Include="DxUi.h" />
     <ClInclude Include="DxUi.Internal.h" />
   </ItemGroup>

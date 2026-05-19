@@ -1,7 +1,303 @@
 #include "DxUiTestHelpers.h"
+#include "DxUi/DxUi.FrameRuntime.h"
+#include "Ui/AnimationDispatcher.h"
+
+#include <fstream>
+#include <limits>
+#include <string>
 
 namespace
 {
+[[nodiscard]] std::filesystem::path GetAnimationPerfJsonlPathFromEnvironment()
+{
+    const DWORD required = GetEnvironmentVariableW(L"REDSALAMANDER_PERF_JSONL_PATH", nullptr, 0u);
+    if (required == 0u)
+    {
+        return {};
+    }
+
+    std::wstring value(required, L'\0');
+    const DWORD copied = GetEnvironmentVariableW(L"REDSALAMANDER_PERF_JSONL_PATH", value.data(), required);
+    if (copied == 0u)
+    {
+        return {};
+    }
+
+    value.resize(copied);
+    return std::filesystem::path(value);
+}
+
+[[nodiscard]] uintmax_t GetAnimationFileSizeOrZero(const std::filesystem::path& path) noexcept
+{
+    std::error_code ec;
+    const uintmax_t size = std::filesystem::file_size(path, ec);
+    return ec ? 0u : size;
+}
+
+[[nodiscard]] std::string ReadAnimationPerfJsonlFromOffset(const std::filesystem::path& path, uintmax_t offset)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return {};
+    }
+
+    input.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+
+class ScopedAnimationPerfJsonl final
+{
+public:
+    ScopedAnimationPerfJsonl()
+    {
+        _path = GetAnimationPerfJsonlPathFromEnvironment();
+        if (! _path.empty())
+        {
+            return;
+        }
+
+        _path = FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"local_scratch" / L"dxui_animation_scheduler_testlocal_20260519.jsonl";
+        std::error_code ec;
+        std::filesystem::remove(_path, ec);
+        Debug::Perf::ConfigureJsonlOutput(_path, L"DxUiTests", L"Debug");
+        _ownsConfiguration = true;
+    }
+
+    ~ScopedAnimationPerfJsonl()
+    {
+        if (_ownsConfiguration)
+        {
+            Debug::Perf::ClearJsonlOutput();
+        }
+    }
+
+    ScopedAnimationPerfJsonl(const ScopedAnimationPerfJsonl&)            = delete;
+    ScopedAnimationPerfJsonl& operator=(const ScopedAnimationPerfJsonl&) = delete;
+    ScopedAnimationPerfJsonl(ScopedAnimationPerfJsonl&&)                 = delete;
+    ScopedAnimationPerfJsonl& operator=(ScopedAnimationPerfJsonl&&)      = delete;
+
+    [[nodiscard]] const std::filesystem::path& Path() const noexcept
+    {
+        return _path;
+    }
+
+private:
+    std::filesystem::path _path;
+    bool _ownsConfiguration = false;
+};
+
+void PumpAnimationMessagesForMs(uint64_t durationMs)
+{
+    const uint64_t deadline = GetTickCount64() + durationMs;
+    MSG msg{};
+    do
+    {
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) != FALSE)
+        {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        Sleep(1);
+    } while (GetTickCount64() < deadline);
+}
+
+struct AnimationTickCapture final
+{
+    std::vector<uint64_t> ticks;
+    size_t keepAliveTicks = 0;
+};
+
+bool CaptureAnimationTick(void* context, uint64_t nowTickMs) noexcept
+{
+    auto* capture = static_cast<AnimationTickCapture*>(context);
+    if (! capture)
+    {
+        return false;
+    }
+
+    capture->ticks.push_back(nowTickMs);
+    return capture->ticks.size() < capture->keepAliveTicks;
+}
+
+void TestFrameRuntimeClockIsMonotonic()
+{
+    using namespace RedSalamander::DxUi;
+
+    FrameClock clock;
+    const FrameTimestamp first  = clock.Now();
+    const FrameTimestamp second = clock.Now();
+    const uint64_t elapsedUs    = clock.ElapsedUs(first, second);
+
+    Require(second.qpc >= first.qpc, "frame runtime QPC timestamps are monotonic");
+    Require(elapsedUs < 10'000'000u, "frame runtime elapsed time stays bounded for adjacent monotonic timestamps");
+    Require(clock.ElapsedUs(second, first) == 0u, "frame runtime elapsed time clamps reversed timestamps to zero");
+}
+
+void TestFrameRuntimeClampsLargeDelta()
+{
+    using namespace RedSalamander::DxUi;
+
+    FrameClock clock;
+    FrameBudget budget;
+    budget.hitchClampUs = 50'000u;
+
+    Require(clock.SmoothDeltaUs(500'000u, budget) == budget.hitchClampUs, "frame runtime clamps large animation deltas to the hitch budget");
+    budget.hitchClampUs = 0u;
+    Require(clock.SmoothDeltaUs(500'000u, budget) == 500'000u, "frame runtime leaves large animation deltas unclamped when the budget clamp is disabled");
+}
+
+void TestAnimationDispatcherSchedulerPolicyUses120HzTargetAndClampsHitches()
+{
+    using RedSalamander::Ui::AnimationDispatcher;
+
+    AnimationDispatcher::GetInstance().Shutdown();
+    auto& dispatcher = AnimationDispatcher::GetInstance();
+
+    Require(dispatcher.DebugGetTargetFrameUsForTest() == 8'333u,
+            "animation dispatcher scheduler uses an 8,333 us target for synthetic 120 Hz animation pacing");
+    const auto hitchTiming = dispatcher.DebugComputeTimingForTest(250'000u);
+    Require(hitchTiming.callbackDeltaUs == dispatcher.DebugGetHitchClampUsForTest(),
+            "animation dispatcher scheduler clamps hitch deltas before interpolation");
+    Require(hitchTiming.legacyGapMs == 250u, "animation dispatcher legacy tick gap reports the raw elapsed timer delta");
+    Require(hitchTiming.legacyOverrun, "animation dispatcher legacy overrun uses the raw elapsed timer delta");
+}
+
+void TestAnimationDispatcherActiveSubscribersReceiveMonotonicHighResolutionTicks()
+{
+    using RedSalamander::Ui::AnimationDispatcher;
+
+    AnimationDispatcher::GetInstance().Shutdown();
+    ScopedAnimationPerfJsonl perfJsonl;
+    const std::filesystem::path& perfPath = perfJsonl.Path();
+    const uintmax_t startOffset           = GetAnimationFileSizeOrZero(perfPath);
+
+    AnimationTickCapture capture;
+    capture.keepAliveTicks = 3u;
+    const uint64_t subscriptionId = AnimationDispatcher::GetInstance().Subscribe(&CaptureAnimationTick, &capture);
+    Require(subscriptionId != 0u, "animation dispatcher accepts an active test subscriber");
+    PumpAnimationMessagesForMs(250u);
+
+    Require(capture.ticks.size() == 3u, "animation dispatcher active subscriber receives repeated ticks while it remains active");
+    for (size_t index = 1; index < capture.ticks.size(); ++index)
+    {
+        Require(capture.ticks[index] >= capture.ticks[index - 1u], "animation dispatcher tick timestamps are monotonic");
+    }
+
+    const std::string appendedMetrics = ReadAnimationPerfJsonlFromOffset(perfPath, startOffset);
+    Require(appendedMetrics.find("\"metric\":\"dxui.animation.tick_delta_us\"") != std::string::npos,
+            "animation dispatcher emits high-resolution tick delta metrics for active subscribers");
+    Require(appendedMetrics.find("\"metric\":\"dxui.animation.jitter_us\"") != std::string::npos,
+            "animation dispatcher emits high-resolution jitter metrics for active subscribers");
+    Require(appendedMetrics.find("\"metric\":\"dxui.animation.active_count\"") != std::string::npos,
+            "animation dispatcher emits active subscriber count metrics");
+}
+
+void TestAnimationDispatcherInactiveSubscriberStopsContinuousTicks()
+{
+    using RedSalamander::Ui::AnimationDispatcher;
+
+    AnimationDispatcher::GetInstance().Shutdown();
+
+    AnimationTickCapture capture;
+    capture.keepAliveTicks = 1u;
+    const uint64_t subscriptionId = AnimationDispatcher::GetInstance().Subscribe(&CaptureAnimationTick, &capture);
+    Require(subscriptionId != 0u, "animation dispatcher accepts a one-shot test subscriber");
+    PumpAnimationMessagesForMs(180u);
+
+    Require(capture.ticks.size() == 1u, "animation dispatcher stops continuous ticks after the subscriber returns inactive");
+}
+
+void TestFrameRuntimeElapsedUsHandlesLargeQpcDelta()
+{
+    using namespace RedSalamander::DxUi;
+
+    LARGE_INTEGER frequency{};
+    Require(QueryPerformanceFrequency(&frequency) != 0 && frequency.QuadPart > 0, "frame runtime large-delta test reads a positive QPC frequency");
+
+    constexpr uint64_t kMicrosecondsPerSecond = 1'000'000u;
+    constexpr uint64_t kMaxFrameTimestampQpc  = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    constexpr uint64_t kOverflowThresholdTicks =
+        (std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond) + 1u;
+
+    const uint64_t qpcFrequency     = static_cast<uint64_t>(frequency.QuadPart);
+    const uint64_t largeDeltaSeconds = (kOverflowThresholdTicks / qpcFrequency) + 1u;
+    Require(largeDeltaSeconds <= kMaxFrameTimestampQpc / qpcFrequency,
+            "frame runtime large-delta QPC value fits in FrameTimestamp");
+
+    const uint64_t largeDeltaQpc = qpcFrequency * largeDeltaSeconds;
+    Require(largeDeltaQpc >= kOverflowThresholdTicks,
+            "frame runtime large-delta test reaches the multiply-first overflow threshold");
+    Require(largeDeltaQpc > std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond,
+            "frame runtime large-delta test exercises the multiply-first overflow path");
+
+    const uint64_t wholeSeconds = largeDeltaQpc / qpcFrequency;
+    const uint64_t remainderQpc = largeDeltaQpc % qpcFrequency;
+    uint64_t expectedUs         = std::numeric_limits<uint64_t>::max();
+    if (wholeSeconds <= std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond)
+    {
+        const uint64_t quotientUs = wholeSeconds * kMicrosecondsPerSecond;
+        Require(remainderQpc <= std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond,
+                "frame runtime large-delta remainder microseconds fit in uint64_t");
+
+        const uint64_t remainderUs = (remainderQpc * kMicrosecondsPerSecond) / qpcFrequency;
+        Require(remainderUs <= std::numeric_limits<uint64_t>::max() - quotientUs,
+                "frame runtime large-delta expected microseconds fit in uint64_t");
+        expectedUs = quotientUs + remainderUs;
+    }
+
+    FrameClock clock;
+    Require(clock.ElapsedUs(FrameTimestamp{0}, FrameTimestamp{static_cast<int64_t>(largeDeltaQpc)}) == expectedUs,
+            "frame runtime elapsed microseconds handles large QPC deltas without overflow");
+}
+
+void TestFrameRuntimeElapsedUsHandlesWideCrossSignDelta()
+{
+    using namespace RedSalamander::DxUi;
+
+    LARGE_INTEGER frequency{};
+    Require(QueryPerformanceFrequency(&frequency) != 0 && frequency.QuadPart > 0,
+            "frame runtime cross-sign delta test reads a positive QPC frequency");
+
+    constexpr uint64_t kMicrosecondsPerSecond = 1'000'000u;
+    constexpr FrameTimestamp kStart{std::numeric_limits<int64_t>::min()};
+    constexpr FrameTimestamp kEnd{std::numeric_limits<int64_t>::max()};
+
+    const uint64_t deltaQpc     = static_cast<uint64_t>(kEnd.qpc) - static_cast<uint64_t>(kStart.qpc);
+    const uint64_t qpcFrequency = static_cast<uint64_t>(frequency.QuadPart);
+    const uint64_t wholeSeconds = deltaQpc / qpcFrequency;
+    const uint64_t remainderQpc = deltaQpc % qpcFrequency;
+
+    uint64_t expectedUs = std::numeric_limits<uint64_t>::max();
+    if (wholeSeconds <= std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond)
+    {
+        const uint64_t wholeUs = wholeSeconds * kMicrosecondsPerSecond;
+        Require(remainderQpc <= std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond,
+                "frame runtime cross-sign delta remainder microseconds fit in uint64_t");
+        const uint64_t remainderUs = (remainderQpc * kMicrosecondsPerSecond) / qpcFrequency;
+        Require(remainderUs <= std::numeric_limits<uint64_t>::max() - wholeUs,
+                "frame runtime cross-sign delta expected microseconds fit in uint64_t");
+        expectedUs = wholeUs + remainderUs;
+    }
+
+    FrameClock clock;
+    Require(clock.ElapsedUs(kStart, kEnd) == expectedUs,
+            "frame runtime elapsed microseconds handles wide cross-sign QPC deltas without signed overflow");
+}
+
+void TestFrameRuntimeReducedMotionPolicy()
+{
+    using namespace RedSalamander::DxUi;
+
+    MotionPolicy animatedPolicy;
+    Require(animatedPolicy.ShouldAnimate(), "frame runtime animates when reduced motion is disabled");
+    RequireFloatNear(animatedPolicy.ResolveProgress(0.25f, 1.0f), 0.25f, 0.0001f, "frame runtime preserves animated progress when reduced motion is disabled");
+
+    MotionPolicy reducedPolicy;
+    reducedPolicy.reducedMotion = true;
+    Require(! reducedPolicy.ShouldAnimate(), "frame runtime suppresses animation when reduced motion is enabled");
+    RequireFloatNear(reducedPolicy.ResolveProgress(0.25f, 1.0f), 1.0f, 0.0001f, "frame runtime snaps to target progress when reduced motion is enabled");
+}
 
 void TestButtonHoverAnimationRequestsTicksUntilSettled()
 {
@@ -759,6 +1055,14 @@ void TestPageHostReducedMotionSnapsTransition()
 
 void RunAnimationTests()
 {
+    TestFrameRuntimeClockIsMonotonic();
+    TestFrameRuntimeClampsLargeDelta();
+    TestAnimationDispatcherSchedulerPolicyUses120HzTargetAndClampsHitches();
+    TestAnimationDispatcherActiveSubscribersReceiveMonotonicHighResolutionTicks();
+    TestAnimationDispatcherInactiveSubscriberStopsContinuousTicks();
+    TestFrameRuntimeElapsedUsHandlesLargeQpcDelta();
+    TestFrameRuntimeElapsedUsHandlesWideCrossSignDelta();
+    TestFrameRuntimeReducedMotionPolicy();
     TestButtonHoverAnimationRequestsTicksUntilSettled();
     TestButtonReducedMotionSnapsInteractionAnimation();
     TestTextFieldTickTracksFocusedCaretAnimation();

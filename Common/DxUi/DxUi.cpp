@@ -19,6 +19,12 @@ void Control::SetBounds(const D2D1_RECT_F& bounds) noexcept
 {
     if (_bounds.left != bounds.left || _bounds.top != bounds.top || _bounds.right != bounds.right || _bounds.bottom != bounds.bottom)
     {
+        if (IsDxUiRenderStageActiveForDebug())
+        {
+            EmitDxUiRenderMutationBlockedForDebug();
+            return;
+        }
+
         _bounds = bounds;
         OnBoundsChanged();
         RequestInvalidate();

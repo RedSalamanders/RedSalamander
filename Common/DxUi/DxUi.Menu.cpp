@@ -3472,6 +3472,7 @@ bool DebugGetContextMenuPopupState(HWND hwnd, ContextMenuPopupDebugState& outSta
     outState.keyboardIndex         = popup->keyboardIndex;
     outState.itemTexts.reserve(popup->itemCount);
     outState.itemKinds.reserve(popup->itemCount);
+    outState.itemEnabled.reserve(popup->itemCount);
     outState.sliderValues.reserve(popup->itemCount);
     outState.sliderStopCounts.reserve(popup->itemCount);
     for (size_t itemIndex = 0; itemIndex < popup->itemCount; ++itemIndex)
@@ -3480,6 +3481,7 @@ bool DebugGetContextMenuPopupState(HWND hwnd, ContextMenuPopupDebugState& outSta
         static_cast<void>(DebugGetContextMenuItemDisplayText(popup->items[itemIndex], text));
         outState.itemTexts.push_back(std::move(text));
         outState.itemKinds.push_back(popup->items[itemIndex].kind);
+        outState.itemEnabled.push_back(popup->items[itemIndex].enabled);
         if (popup->items[itemIndex].kind == MenuItemKind::Slider)
         {
             outState.sliderValues.push_back(ClampSliderValue(popup->items[itemIndex]));

@@ -1,8 +1,11 @@
 #include "DxUi/DxUi.Typography.h"
 #include "DxUiTestHelpers.h"
 
+#include <array>
 #include <atomic>
+#include <fstream>
 #include <future>
+#include <string_view>
 #include <thread>
 
 namespace
@@ -70,6 +73,85 @@ RedSalamander::DxUi::WindowHostBitmapCapture CaptureAttachedHostWindowBitmapForW
 
     return (std::min)(maxPx - 1u, static_cast<UINT>((std::max)(0l, std::lround(static_cast<double>(dip) * static_cast<double>(dpi) / 96.0))));
 }
+
+[[nodiscard]] std::filesystem::path GetWindowHostPerfJsonlPathFromEnvironment()
+{
+    const DWORD required = GetEnvironmentVariableW(L"REDSALAMANDER_PERF_JSONL_PATH", nullptr, 0u);
+    if (required == 0u)
+    {
+        return {};
+    }
+
+    std::wstring value(required, L'\0');
+    const DWORD copied = GetEnvironmentVariableW(L"REDSALAMANDER_PERF_JSONL_PATH", value.data(), required);
+    if (copied == 0u)
+    {
+        return {};
+    }
+
+    value.resize(copied);
+    return std::filesystem::path(value);
+}
+
+[[nodiscard]] uintmax_t GetWindowHostFileSizeOrZero(const std::filesystem::path& path) noexcept
+{
+    std::error_code ec;
+    const uintmax_t size = std::filesystem::file_size(path, ec);
+    return ec ? 0u : size;
+}
+
+[[nodiscard]] std::string ReadWindowHostPerfJsonlFromOffset(const std::filesystem::path& path, uintmax_t offset)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return {};
+    }
+
+    input.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+
+class ScopedWindowHostPerfJsonl final
+{
+public:
+    ScopedWindowHostPerfJsonl()
+    {
+        _path = GetWindowHostPerfJsonlPathFromEnvironment();
+        if (! _path.empty())
+        {
+            return;
+        }
+
+        _path = FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"local_scratch" / L"dxui_windowhost_stage_metrics_testlocal_20260519.jsonl";
+        std::error_code ec;
+        std::filesystem::remove(_path, ec);
+        Debug::Perf::ConfigureJsonlOutput(_path, L"DxUiTests", L"Debug");
+        _ownsConfiguration = true;
+    }
+
+    ~ScopedWindowHostPerfJsonl()
+    {
+        if (_ownsConfiguration)
+        {
+            Debug::Perf::ClearJsonlOutput();
+        }
+    }
+
+    ScopedWindowHostPerfJsonl(const ScopedWindowHostPerfJsonl&)            = delete;
+    ScopedWindowHostPerfJsonl& operator=(const ScopedWindowHostPerfJsonl&) = delete;
+    ScopedWindowHostPerfJsonl(ScopedWindowHostPerfJsonl&&)                 = delete;
+    ScopedWindowHostPerfJsonl& operator=(ScopedWindowHostPerfJsonl&&)      = delete;
+
+    [[nodiscard]] const std::filesystem::path& Path() const noexcept
+    {
+        return _path;
+    }
+
+private:
+    std::filesystem::path _path;
+    bool _ownsConfiguration = false;
+};
 
 struct PostedPayloadDrainStressWindowState final
 {
@@ -184,6 +266,24 @@ public:
             dc->FillRectangle(D2D1::RectF(12.0f, 12.0f, 64.0f, 56.0f), brush);
         }
     }
+};
+
+class AnimationTickTraceControl final : public RedSalamander::DxUi::Control
+{
+public:
+    void Paint(RedSalamander::DxUi::WindowHost& /*host*/) const override
+    {
+    }
+
+    bool Tick(RedSalamander::DxUi::WindowHost& /*host*/, uint64_t nowTickMs) override
+    {
+        lastTickMs = nowTickMs;
+        ++tickCount;
+        return true;
+    }
+
+    uint64_t tickCount  = 0u;
+    uint64_t lastTickMs = 0u;
 };
 
 class OverlayHitRecordingControl final : public RedSalamander::DxUi::Control
@@ -304,6 +404,24 @@ private:
     bool& _sawAttachmentAlive;
 };
 
+class RenderLayoutMutationProbeControl final : public RedSalamander::DxUi::Control
+{
+public:
+    void Paint(RedSalamander::DxUi::WindowHost& /*host*/) const override
+    {
+        if (_attemptedMutation)
+        {
+            return;
+        }
+
+        _attemptedMutation = true;
+        const_cast<RenderLayoutMutationProbeControl*>(this)->SetBounds(D2D1::RectF(24.0f, 24.0f, 132.0f, 68.0f));
+    }
+
+private:
+    mutable bool _attemptedMutation = false;
+};
+
 void TestWindowHostKeyboardInputMarksFocusVisible()
 {
     using namespace RedSalamander::DxUi;
@@ -382,6 +500,90 @@ void TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed(
     Require(DebugGetAttachedWindowHostCount() == baselineAttachedHostCount, "detach removes host from the attached-host registry after order validation");
     Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == baselineOwnerAttachmentCount,
             "detach releases graphics attachment count after retained host resources are destroyed");
+}
+
+void TestWindowHostEmitsFrameStageMetricsForCaptureRender()
+{
+    using namespace RedSalamander::DxUi;
+
+    ScopedWindowHostPerfJsonl perfJsonl;
+    Require(! perfJsonl.Path().empty(), "window host stage metric test has a perf JSONL sink");
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* label  = root->AddChild<Label>(L"Frame telemetry");
+    label->SetBounds(D2D1::RectF(8.0f, 8.0f, 160.0f, 32.0f));
+    window.Host().SetRoot(std::move(root));
+    window.Host().Invalidate();
+
+    static_cast<void>(CaptureAttachedHostWindowBitmapForWindowHostSuite(window, "frame-stage metric warm-up capture succeeds"));
+
+    const uintmax_t metricOffset = GetWindowHostFileSizeOrZero(perfJsonl.Path());
+    WindowHostBitmapCapture capture;
+    Require(window.Host().DebugCaptureBitmap(capture), "frame-stage metric direct debug capture render succeeds");
+    Require(capture.widthPx > 0u && capture.heightPx > 0u && ! capture.bgraPixels.empty(), "frame-stage metric capture has pixels");
+
+    const std::string appendedMetrics = ReadWindowHostPerfJsonlFromOffset(perfJsonl.Path(), metricOffset);
+    constexpr std::array<std::string_view, 6> kExpectedMetrics = {{
+        "\"metric\":\"dxui.frame.total_us\"",
+        "\"metric\":\"dxui.frame.update_us\"",
+        "\"metric\":\"dxui.frame.render_us\"",
+        "\"metric\":\"dxui.frame.present_us\"",
+        "\"metric\":\"dxui.frame.dirty_rect_count\"",
+        "\"metric\":\"dxui.frame.dirty_rect_area_px\"",
+    }};
+    for (const std::string_view metric : kExpectedMetrics)
+    {
+        Require(appendedMetrics.find(metric) != std::string::npos, "window host capture render emits every frame-stage metric");
+    }
+
+    const auto findMetricLine = [&](std::string_view metric) noexcept -> std::string_view
+    {
+        const size_t metricPosition = appendedMetrics.find(metric);
+        if (metricPosition == std::string::npos)
+        {
+            return {};
+        }
+
+        const size_t lineStart = appendedMetrics.rfind('\n', metricPosition);
+        const size_t lineEnd   = appendedMetrics.find('\n', metricPosition);
+        const size_t start     = lineStart == std::string::npos ? 0u : lineStart + 1u;
+        const size_t end       = lineEnd == std::string::npos ? appendedMetrics.size() : lineEnd;
+        return std::string_view(appendedMetrics).substr(start, end - start);
+    };
+
+    const std::string_view dirtyCountLine = findMetricLine("\"metric\":\"dxui.frame.dirty_rect_count\"");
+    const std::string_view dirtyAreaLine  = findMetricLine("\"metric\":\"dxui.frame.dirty_rect_area_px\"");
+    Require(dirtyCountLine.find("\"value\":0") != std::string_view::npos, "full-frame capture reports zero dirty rect count");
+    Require(dirtyAreaLine.find("\"value\":0") != std::string_view::npos, "full-frame capture reports zero dirty rect area");
+}
+
+void TestWindowHostBlocksLayoutMutationDuringRender()
+{
+    using namespace RedSalamander::DxUi;
+
+    ScopedWindowHostPerfJsonl perfJsonl;
+    Require(! perfJsonl.Path().empty(), "window host render-mutation test has a perf JSONL sink");
+
+    AttachedHostWindow window;
+    auto root      = std::make_unique<Panel>();
+    auto* mutating = root->AddChild<RenderLayoutMutationProbeControl>();
+    const D2D1_RECT_F initialBounds = D2D1::RectF(8.0f, 8.0f, 96.0f, 40.0f);
+    mutating->SetBounds(initialBounds);
+    window.Host().SetRoot(std::move(root));
+    window.Host().Invalidate();
+
+    const uintmax_t metricOffset = GetWindowHostFileSizeOrZero(perfJsonl.Path());
+    static_cast<void>(CaptureAttachedHostWindowBitmapForWindowHostSuite(window, "render layout mutation capture succeeds"));
+
+    const D2D1_RECT_F finalBounds = mutating->GetBounds();
+    Require(finalBounds.left == initialBounds.left && finalBounds.top == initialBounds.top && finalBounds.right == initialBounds.right &&
+                finalBounds.bottom == initialBounds.bottom,
+            "render layout mutation keeps control bounds unchanged");
+
+    const std::string appendedMetrics = ReadWindowHostPerfJsonlFromOffset(perfJsonl.Path(), metricOffset);
+    Require(appendedMetrics.find("\"metric\":\"dxui.frame.render_layout_mutation_blocked\"") != std::string::npos,
+            "render layout mutation emits blocked counter");
 }
 
 void TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads()
@@ -2113,6 +2315,26 @@ void TestWindowHostUnknownMnemonicRemainsUnhandled()
     Require(host.GetFocusControl() == nullptr, "unknown mnemonic does not move focus");
 }
 
+void TestWindowHostHiddenAnimationTickKeepsSubscriptionForRestore()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root     = std::make_unique<Panel>();
+    auto* ticking = root->AddChild<AnimationTickTraceControl>();
+    window.Host().SetRoot(std::move(root));
+    window.Host().RequestAnimation();
+
+    Require(IsWindowVisible(window.Hwnd()) == FALSE, "attached host window starts hidden for hidden-animation test");
+    Require(window.Host().DebugHasActiveAnimationSubscription(), "hidden-animation test starts with an active subscription");
+    const uint64_t invalidatesBefore = window.Host().DebugGetInvalidateCount();
+
+    Require(window.Host().DebugAnimationTickForTest(123u), "hidden host animation tick keeps the subscription resumable");
+    Require(window.Host().DebugHasActiveAnimationSubscription(), "hidden host animation tick does not clear the subscription");
+    Require(ticking->tickCount == 0u, "hidden host animation tick skips root ticking while hidden");
+    Require(window.Host().DebugGetInvalidateCount() == invalidatesBefore, "hidden host animation tick skips invalidation while hidden");
+}
+
 } // namespace
 
 void RunWindowHostTests()
@@ -2130,6 +2352,8 @@ void RunWindowHostTests()
     runTest("TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount", TestWindowHostCrossThreadDetachReleasesOwnerThreadAttachmentCount);
     runTest("TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed",
             TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed);
+    runTest("TestWindowHostEmitsFrameStageMetricsForCaptureRender", TestWindowHostEmitsFrameStageMetricsForCaptureRender);
+    runTest("TestWindowHostBlocksLayoutMutationDuringRender", TestWindowHostBlocksLayoutMutationDuringRender);
     runTest("TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads", TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads);
     runTest("TestWindowHostMouseMoveUpdatesHoverTarget", TestWindowHostMouseMoveUpdatesHoverTarget);
     runTest("TestWindowHostTabTraversal", TestWindowHostTabTraversal);
@@ -2184,4 +2408,5 @@ void RunWindowHostTests()
     runTest("TestWindowHostMnemonicActivatesButton", TestWindowHostMnemonicActivatesButton);
     runTest("TestWindowHostLabelMnemonicTargetsField", TestWindowHostLabelMnemonicTargetsField);
     runTest("TestWindowHostUnknownMnemonicRemainsUnhandled", TestWindowHostUnknownMnemonicRemainsUnhandled);
+    runTest("TestWindowHostHiddenAnimationTickKeepsSubscriptionForRestore", TestWindowHostHiddenAnimationTickKeepsSubscriptionForRestore);
 }

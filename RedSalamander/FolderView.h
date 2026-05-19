@@ -5,6 +5,7 @@
 #include <Ole2.h>
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 
@@ -876,6 +877,7 @@ private:
     std::vector<size_t> _columnPrefixSums; // Prefix sums for O(1) hit testing: _columnPrefixSums[c] = sum of _columnCounts[0..c-1]
     float _scrollOffset     = 0.0f;
     float _horizontalOffset = 0.0f;
+    std::optional<std::chrono::steady_clock::time_point> _pendingInputToPaintStart;
     float _contentHeight    = 0.0f;
     float _contentWidth     = 0.0f;
 
@@ -983,6 +985,7 @@ private:
     mutable UINT_PTR _overlayTimer                           = 0;
     mutable UINT _overlayTimerIntervalMs                     = 0;
     mutable uint64_t _operationInfoOverlayAutoDismissDueTick = 0;
+    mutable std::optional<RECT> _lastOverlayInvalidationRectPx;
 
     struct PendingBusyOverlay
     {
@@ -1146,6 +1149,8 @@ private:
     void OnDeferredInit();
     void OnMouseWheel(int delta, bool horizontal);
     void OnMouseWheelMessage(UINT keyState, int delta);
+    void OnMeasuredMouseWheelMessage(UINT keyState, int delta);
+    void OnMeasuredMouseHWheelMessage(int delta);
     void OnLButtonDown(POINT pt, WPARAM keys);
     void OnLButtonDblClk(POINT pt, WPARAM keys);
     void OnLButtonUp(POINT pt);
@@ -1153,12 +1158,15 @@ private:
     void OnMouseLeave();
     void OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpaceCharMayFollow);
     void OnKeyDownMessage(WPARAM key, LPARAM keyInfo);
+    void OnMeasuredKeyDownMessage(WPARAM key, LPARAM keyInfo);
     void OnCharMessage(wchar_t character);
     bool OnSysKeyDownMessage(WPARAM key, LPARAM keyInfo);
+    bool OnMeasuredSysKeyDownMessage(WPARAM key, LPARAM keyInfo);
     LRESULT OnSetFocusMessage() noexcept;
     LRESULT OnKillFocusMessage() noexcept;
     void OnContextMenuMessage(HWND hwnd, LPARAM lParam);
     void OnHScrollMessage(UINT scrollRequest);
+    void OnMeasuredHScrollMessage(UINT scrollRequest);
     void OnCommandMessage(UINT commandId);
     void OnContextMenu(POINT screenPt);
 
@@ -1178,6 +1186,8 @@ private:
     void StopOverlayTimer() const;
     void StartOverlayAnimation() const noexcept;
     void StopOverlayAnimation() const noexcept;
+    RECT GetIncrementalSearchIndicatorInvalidationRectPx() const noexcept;
+    void InvalidateOverlayVisuals(bool forceFullClient) const noexcept;
     bool OnOverlayAnimationTick(uint64_t nowTickMs) const noexcept;
     bool UpdateIncrementalSearchIndicatorAnimation(uint64_t nowTickMs) const noexcept;
     void ScheduleBusyOverlay(uint64_t generation, const std::filesystem::path& folder);
@@ -1272,6 +1282,12 @@ private:
     D2D1_RECT_F OffsetRect(const D2D1_RECT_F& rect, float dx, float dy) const;
     static RECT ToPixelRect(const D2D1_RECT_F& rect, float dpi);
     static bool RectIntersects(const D2D1_RECT_F& rect, const RECT& pixelRect, float dpi);
+    void RecordPendingInputToPaintStart(std::chrono::steady_clock::time_point inputStartedAt) noexcept;
+    void RecordInputToPaintStartIfViewportOrFocusChanged(std::chrono::steady_clock::time_point inputStartedAt,
+                                                          float scrollBefore,
+                                                          float horizontalBefore,
+                                                          size_t focusedBefore) noexcept;
+    void EmitPendingInputToPaintMetricAfterPresent() noexcept;
 
     std::optional<size_t> HitTest(POINT clientPt) const;
     POINT ScreenToClientPoint(POINT screenPt) const;

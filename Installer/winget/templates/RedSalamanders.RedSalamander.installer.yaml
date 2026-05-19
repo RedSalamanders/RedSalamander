@@ -4,7 +4,7 @@ PackageIdentifier: RedSalamanders.RedSalamander
 PackageVersion: { VERSION }
 Platform:
   - Windows.Desktop
-MinimumOSVersion: 10.0.26100.0
+MinimumOSVersion: 10.0.22000.2600
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:

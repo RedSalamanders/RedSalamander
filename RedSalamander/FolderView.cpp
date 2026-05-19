@@ -70,6 +70,34 @@ FolderView::~FolderView()
     Destroy();
 }
 
+void FolderView::RecordPendingInputToPaintStart(std::chrono::steady_clock::time_point inputStartedAt) noexcept
+{
+    _pendingInputToPaintStart = inputStartedAt;
+}
+
+void FolderView::RecordInputToPaintStartIfViewportOrFocusChanged(std::chrono::steady_clock::time_point inputStartedAt,
+                                                                  float scrollBefore,
+                                                                  float horizontalBefore,
+                                                                  size_t focusedBefore) noexcept
+{
+    if (_scrollOffset != scrollBefore || _horizontalOffset != horizontalBefore || _focusedIndex != focusedBefore)
+    {
+        RecordPendingInputToPaintStart(inputStartedAt);
+    }
+}
+
+void FolderView::EmitPendingInputToPaintMetricAfterPresent() noexcept
+{
+    if (! _pendingInputToPaintStart.has_value())
+    {
+        return;
+    }
+
+    const auto inputStartedAt = _pendingInputToPaintStart.value();
+    _pendingInputToPaintStart.reset();
+    Debug::Perf::Emit(L"folder.frame.input_to_paint_us", L"", Debug::Perf::ElapsedUs(inputStartedAt), 0u, 0u, S_OK);
+}
+
 std::filesystem::path FolderView::GetItemFullPath(const FolderItem& item) const
 {
     if (_itemsFolder.empty())
@@ -551,20 +579,20 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_SIZE: OnSize(LOWORD(lParam), HIWORD(lParam)); return 0;
         case WM_ERASEBKGND: return 1;
         case WM_PAINT: OnPaint(); return 0;
-        case WM_MOUSEWHEEL: OnMouseWheelMessage(LOWORD(wParam), GET_WHEEL_DELTA_WPARAM(wParam)); return 0;
-        case WM_MOUSEHWHEEL: OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wParam), true); return 0;
+        case WM_MOUSEWHEEL: OnMeasuredMouseWheelMessage(LOWORD(wParam), GET_WHEEL_DELTA_WPARAM(wParam)); return 0;
+        case WM_MOUSEHWHEEL: OnMeasuredMouseHWheelMessage(GET_WHEEL_DELTA_WPARAM(wParam)); return 0;
         case WM_LBUTTONDOWN: OnLButtonDown({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_LBUTTONDBLCLK: OnLButtonDblClk({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_LBUTTONUP: OnLButtonUp({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}); return 0;
         case WM_MOUSEMOVE: OnMouseMove({GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)}, wParam); return 0;
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_TIMER: OnTimerMessage(static_cast<UINT_PTR>(wParam)); return 0;
-        case WM_KEYDOWN: OnKeyDownMessage(wParam, lParam); return 0;
+        case WM_KEYDOWN: OnMeasuredKeyDownMessage(wParam, lParam); return 0;
         case WM_CHAR: OnCharMessage(static_cast<wchar_t>(wParam)); return 0;
         case WM_SETFOCUS: return OnSetFocusMessage();
         case WM_KILLFOCUS: return OnKillFocusMessage();
         case WM_SYSKEYDOWN:
-            if (OnSysKeyDownMessage(wParam, lParam))
+            if (OnMeasuredSysKeyDownMessage(wParam, lParam))
             {
                 return 0;
             }
@@ -577,7 +605,7 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             break;
         case WM_GETDLGCODE: return DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTCHARS;
         case WM_CONTEXTMENU: OnContextMenuMessage(hwnd, lParam); return 0;
-        case WM_HSCROLL: OnHScrollMessage(LOWORD(wParam)); return 0;
+        case WM_HSCROLL: OnMeasuredHScrollMessage(LOWORD(wParam)); return 0;
         case WM_COMMAND: OnCommandMessage(LOWORD(wParam)); return 0;
     }
     return DefWindowProcW(hwnd, message, wParam, lParam);
