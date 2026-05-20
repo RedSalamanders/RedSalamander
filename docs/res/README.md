@@ -1,12 +1,39 @@
-# Screenshots (`Docs/res/`)
+# Screenshots (`docs/res/`)
 
-The user documentation in `Docs/` references screenshots in this folder.
+The user documentation in `docs/` references screenshots in this folder.
 
 Screenshots should be captured from the running application whenever possible. The current user guide intentionally uses multiple themes (Light, Dark, Rainbow, and High Contrast App) to illustrate the theme system.
 
 Current placeholders (1×1 PNG):
 
 - `placeholder.png` (template placeholder image)
+
+## Missing screenshot backlog
+
+The docs are now organized so missing images are tracked explicitly instead of being implied by prose. Capture these next when a running build is available:
+
+- `selection-mask.png`: Select / Unselect by mask dialog from the **Edit** menu.
+- `pane-filter.png`: pane filter dialog and the resulting Filter Bar summary.
+- `quick-search.png`: Quick Search active in a folder pane with highlighted matches.
+- `command-line.png`: pane command-line input after **Bring Current Directory/Filename to Command Line**.
+- `shortcuts-window.png`: **Help -> Display Shortcuts**.
+- `preferences-general.png`: Preferences -> General with display, language, compact mode, animation, and backdrop options visible.
+- `preferences-panes.png`: Preferences -> Panes with left/right display, sort, thumbnail size, hidden/system visibility, and history settings.
+- `preferences-editors.png`: Preferences -> Editors actions/associations.
+- `preferences-user-menu.png`: Preferences -> User Menu entry editor.
+- `preferences-mouse.png`: Preferences -> Mouse placeholder page.
+- `preferences-file-operations.png`: Preferences -> File Operations with pre-calculation, speed limit, and bridge buffer settings.
+- `preferences-compare-directories.png`: Preferences -> Compare Directories default options.
+- `preferences-hot-paths.png`: Preferences -> Hot Paths slot editor.
+- `preferences-advanced.png`: Preferences -> Advanced diagnostics, monitor, connections, and cache settings.
+- `preferences-plugin-child.png`: one plugin-specific child page under Preferences -> Plugins.
+- `find-files.png`: Find Files and Directories window with options and live or completed results.
+- `compare-options.png`: Compare Directories options panel.
+- `make-file-list.png`: Make File List options dialog.
+- `opened-files.png`: List of Opened Files dialog.
+- `shared-directories.png`: Shared Directories dialog.
+- `viewer-web-menu.png`: Web/JSON/Markdown viewer with a menu open, preferably **Tools**.
+- `viewer-text-diff.png`: Text viewer in diff side-by-side or inline mode.
 
 ## Capture guidelines
 
@@ -33,6 +60,8 @@ Current placeholders (1×1 PNG):
 - `preferences-viewers.png`: Preferences → Viewers (extension → viewer mapping).
 - `preferences-keyboard.png`: Preferences → Keyboard (shortcut bindings).
 - `preferences-themes.png`: Preferences → Themes (theme selection + edit controls).
+- `theme-controls-*.png`: generated DxUi control galleries, one file per built-in or shipped JSON5 theme. Regenerate with `.build\x64\Debug\DxUiTests.exe --suite=Gallery --gallery-output-directory=docs\res`.
+- `theme-button-states-after-fix.png`: generated DxUi button-state contrast audit across built-in and shipped JSON5 themes. Regenerate with `.build\x64\Debug\DxUiTests.exe --suite=ButtonContrast --button-audit-output=docs\res\theme-button-states-after-fix.png`.
 - `connections-manager.png`: Connection Manager dialog (profile list + editor pane).
 - `plugins.png`: Plugin Manager entry point (menu item or Preferences → Plugins root page).
 - `viewer-text.png`: Text viewer showing Text/Hex toggle and status bar.

@@ -53,9 +53,3 @@ Open **View → Preferences…** to configure:
 - Keyboard shortcuts
 
 ![Preferences dialog](res/preferences.png)
-
-## Not implemented yet
-
-Some menu items and shortcuts are present but intentionally show a “Not implemented” message.
-
-- See: [Planned / TODO features](Todo.md)

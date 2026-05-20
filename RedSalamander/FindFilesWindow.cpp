@@ -11,6 +11,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <format>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -32,6 +33,7 @@
 
 #include "DxUi/DxUi.h"
 #include "FileSystemPluginManager.h"
+#include "FluentIcons.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
 #include "HostServices.h"
@@ -57,6 +59,7 @@ using RedSalamander::DxUi::ComboBoxVariant;
 using RedSalamander::DxUi::ContextMenu;
 using RedSalamander::DxUi::Grid;
 using RedSalamander::DxUi::GridCellData;
+using RedSalamander::DxUi::GridCellKind;
 using RedSalamander::DxUi::GridColumnDesc;
 using RedSalamander::DxUi::GridRowStyle;
 using RedSalamander::DxUi::GridSelectionMode;
@@ -83,8 +86,11 @@ constexpr auto kProgressFlushMaxAge               = std::chrono::milliseconds(40
 constexpr UINT_PTR kStatusRefreshTimerId          = 1u;
 constexpr UINT_PTR kDeferredResultsRefreshTimerId = 2u;
 constexpr UINT kStatusRefreshTimerIntervalMs      = 250u;
-constexpr UINT kDeferredResultsRefreshDelayMs     = 25u;
-constexpr uint64_t kStatusStallThresholdMs        = 5000u;
+constexpr uint64_t kStatusStallThresholdMs            = 5000u;
+constexpr size_t kResultsDrainMaxMessages             = 8u;
+constexpr size_t kResultsDrainMaxRecords              = 256u;
+constexpr size_t kInteractiveResultsRefreshRecords    = 256u;
+constexpr uint64_t kInteractiveResultsRefreshMaxAgeMs = 100u;
 #ifdef ENABLE_TESTS
 constexpr UINT kFindFilesWindowDebugMessage = WM_APP + 0x74u;
 
@@ -510,6 +516,12 @@ struct ResultListMutation
     return std::wstring(folderPath);
 }
 
+[[nodiscard]] std::wstring BuildResultIconText(const FindResultRecord& record)
+{
+    const wchar_t glyph = (record.fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u ? FluentIcons::kFolder : FluentIcons::kDocument;
+    return std::wstring(1u, glyph);
+}
+
 [[nodiscard]] std::wstring FormatFileSize(int64_t sizeBytes) noexcept;
 [[nodiscard]] std::wstring FormatFileTimeValue(int64_t fileTimeTicks) noexcept;
 [[nodiscard]] std::wstring FormatAttributes(unsigned long attributes) noexcept;
@@ -593,7 +605,11 @@ public:
         const FindResultRecord& record = _rows->at(rowIndex);
         switch (columnIndex)
         {
-            case kColumnName: outCell.text = record.displayName; break;
+            case kColumnName:
+                outCell.kind     = GridCellKind::IconText;
+                outCell.iconText = BuildResultIconText(record);
+                outCell.text     = record.displayName;
+                break;
             case kColumnPath: outCell.text = record.displayPath; break;
             case kColumnSize:
                 outCell.text          = FormatFileSize(record.endOfFile);
@@ -919,6 +935,20 @@ void UpdateRecentValue(std::vector<std::wstring>& history, std::wstring value) n
     }
 }
 
+[[nodiscard]] std::wstring StripSingleLineControlCharacters(std::wstring_view text) noexcept
+{
+    std::wstring sanitized;
+    sanitized.reserve(text.size());
+    for (const wchar_t ch : text)
+    {
+        if (std::iswcntrl(static_cast<wint_t>(ch)) == 0)
+        {
+            sanitized.push_back(ch);
+        }
+    }
+    return sanitized;
+}
+
 [[nodiscard]] bool IsSearchUnsupported(HRESULT hr) noexcept
 {
     return hr == E_NOTIMPL || hr == HRESULT_FROM_WIN32(ERROR_CALL_NOT_IMPLEMENTED) || hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -1160,6 +1190,7 @@ private:
     };
 #ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugStartSearchWithTextOverride(FindFilesDebugOperation operation, SearchTextOverride textOverride) noexcept;
+    void DebugRecordIncrementalResultRefresh() noexcept;
 #endif
     [[nodiscard]] bool BeginSearch(SearchOperation operation, const SearchTextOverride* textOverride = nullptr) noexcept;
     void OnSearchStarted(SearchOperation operation, const SearchRequest& request) noexcept;
@@ -1282,13 +1313,16 @@ private:
     std::unordered_map<std::wstring, size_t> _resultIndexByKey;
     std::unordered_set<std::wstring> _deferredKeys;
     std::wstring _pendingSelectionFullPath;
-    bool _resultsRefreshPending       = false;
-    bool _resultsRefreshTimerArmed    = false;
-    bool _resultsRefreshFullRebuild   = false;
-    size_t _resultsRefreshBatchCount  = 0u;
-    size_t _resultsRefreshRecordCount = 0u;
+    bool _resultsRefreshPending              = false;
+    bool _resultsRefreshTimerArmed           = false;
+    bool _resultsRefreshFullRebuild          = false;
+    size_t _resultsRefreshBatchCount         = 0u;
+    size_t _resultsRefreshRecordCount        = 0u;
+    uint64_t _resultsRefreshFirstQueuedTickMs = 0u;
 #ifdef ENABLE_TESTS
-    uint32_t _debugResultListFullRebuildCount          = 0;
+    uint32_t _debugResultListFullRebuildCount           = 0;
+    uint32_t _debugIncrementalResultRefreshCount        = 0;
+    uint32_t _debugIncrementalVisibleResultRefreshCount = 0;
     float _debugResizeBeforeWidthDip                   = 0.0f;
     float _debugResizeTargetWidthDip                   = 0.0f;
     float _debugResizeObservedWidthDip                 = 0.0f;
@@ -2463,7 +2497,7 @@ void FindFilesWindow::Layout() noexcept
 
 std::wstring FindFilesWindow::GetComboText(const ComboBox* combo) const noexcept
 {
-    return combo ? std::wstring(combo->GetText()) : std::wstring{};
+    return combo ? StripSingleLineControlCharacters(combo->GetText()) : std::wstring{};
 }
 
 void FindFilesWindow::PersistUiState(bool updateHistory) noexcept
@@ -2540,6 +2574,9 @@ std::optional<SearchRequest> FindFilesWindow::BuildSearchRequest(const SearchTex
     std::wstring rootPath       = textOverride ? textOverride->rootPath : GetComboText(_rootCombo);
     std::wstring namePattern    = textOverride ? textOverride->namePattern : GetComboText(_nameCombo);
     std::wstring contentPattern = textOverride ? textOverride->contentPattern : GetComboText(_contentCombo);
+    rootPath                    = StripSingleLineControlCharacters(rootPath);
+    namePattern                 = StripSingleLineControlCharacters(namePattern);
+    contentPattern              = StripSingleLineControlCharacters(contentPattern);
     _lastBuiltRootPath          = rootPath;
     _lastBuiltNamePattern       = namePattern;
     _lastBuiltContentPattern    = contentPattern;
@@ -2716,12 +2753,13 @@ void FindFilesWindow::ClearResults() noexcept
 {
     _results.clear();
     _resultIndexByKey.clear();
-    _resultsRefreshTimerArmed  = false;
-    _resultsRefreshPending     = false;
-    _resultsRefreshFullRebuild = false;
-    _resultsRefreshBatchCount  = 0u;
-    _resultsRefreshRecordCount = 0u;
-    _nextResultOrdinal         = 1u;
+    _resultsRefreshTimerArmed        = false;
+    _resultsRefreshPending           = false;
+    _resultsRefreshFullRebuild       = false;
+    _resultsRefreshBatchCount        = 0u;
+    _resultsRefreshRecordCount       = 0u;
+    _resultsRefreshFirstQueuedTickMs = 0u;
+    _nextResultOrdinal               = 1u;
     if (_hWnd)
     {
         static_cast<void>(::KillTimer(_hWnd.get(), kDeferredResultsRefreshTimerId));
@@ -2984,9 +3022,6 @@ void FindFilesWindow::RefreshResultsView(bool fullRebuild) noexcept
             emitGridNotifyCount = true;
             _resultsList->NotifyDataChanged();
         }
-        // Keep the user-selected result-grid layout stable across late refreshes
-        // triggered by search completion or rerun bookkeeping.
-        ApplyResultsGridLayoutFromSettings();
         RestorePendingSelectionIfAvailable();
         gridUpdateUs = ElapsedUsSince(gridUpdateStartedAt);
     }
@@ -3045,6 +3080,10 @@ void FindFilesWindow::RestorePendingSelectionIfAvailable() noexcept
 
 void FindFilesWindow::ScheduleResultsRefresh(bool fullRebuild, size_t changedCount) noexcept
 {
+    if (_resultsRefreshBatchCount == 0u)
+    {
+        _resultsRefreshFirstQueuedTickMs = ::GetTickCount64();
+    }
     _resultsRefreshFullRebuild = _resultsRefreshFullRebuild || fullRebuild;
     _resultsRefreshBatchCount += 1u;
     _resultsRefreshRecordCount += changedCount;
@@ -3062,7 +3101,7 @@ void FindFilesWindow::ScheduleResultsRefresh(bool fullRebuild, size_t changedCou
         return;
     }
 
-    if (::SetTimer(_hWnd.get(), kDeferredResultsRefreshTimerId, kDeferredResultsRefreshDelayMs, nullptr) == 0)
+    if (::PostMessageW(_hWnd.get(), WndMsg::kFindSearchDeferredRefresh, 0, 0) == 0)
     {
         ApplyPendingResultsRefresh();
         return;
@@ -3083,15 +3122,12 @@ void FindFilesWindow::ApplyPendingResultsRefresh() noexcept
     const uint64_t batchCount  = static_cast<uint64_t>(_resultsRefreshBatchCount);
     const uint64_t recordCount = static_cast<uint64_t>(_resultsRefreshRecordCount);
 
-    if (_resultsRefreshTimerArmed && _hWnd)
-    {
-        static_cast<void>(::KillTimer(_hWnd.get(), kDeferredResultsRefreshTimerId));
-    }
-    _resultsRefreshTimerArmed  = false;
-    _resultsRefreshPending     = false;
-    _resultsRefreshFullRebuild = false;
-    _resultsRefreshBatchCount  = 0u;
-    _resultsRefreshRecordCount = 0u;
+    _resultsRefreshTimerArmed         = false;
+    _resultsRefreshPending            = false;
+    _resultsRefreshFullRebuild        = false;
+    _resultsRefreshBatchCount         = 0u;
+    _resultsRefreshRecordCount        = 0u;
+    _resultsRefreshFirstQueuedTickMs  = 0u;
 
     EmitPerfCount(L"find.ui.deferred_refresh_batch_count", batchCount);
     EmitPerfCount(L"find.ui.deferred_refresh_result_count", recordCount);
@@ -3386,6 +3422,10 @@ void FindFilesWindow::OnSearchStarted(SearchOperation operation, const SearchReq
     _lastServiceStatusHr         = S_OK;
     _hasServiceStatus            = false;
     _deferredKeys.clear();
+#ifdef ENABLE_TESTS
+    _debugIncrementalResultRefreshCount        = 0u;
+    _debugIncrementalVisibleResultRefreshCount = 0u;
+#endif
 
     if (operation == SearchOperation::Find)
     {
@@ -3450,12 +3490,58 @@ void FindFilesWindow::OnSearchResults(std::unique_ptr<FindSearchResultsPayload> 
 
     const Debug::Perf::Scope resultsPerf(L"find.ui.results_handler_ms");
     EmitPerfCount(L"find.ui.results_message_count");
-    EmitPerfCount(L"find.ui.results_message_batch_size", static_cast<uint64_t>(payload->results.size()));
     if (payload->enqueuedAt != SteadyClock::time_point{})
     {
         Debug::Perf::Emit(
             L"find.ui.results_to_visible_latency_ms", L"", ElapsedUsSince(payload->enqueuedAt), static_cast<uint64_t>(payload->results.size()), 0u, S_OK);
     }
+
+    uint64_t drainedResultsMessageCount = 0u;
+    uint64_t drainedResultsRecordCount  = 0u;
+    while (_hWnd && drainedResultsMessageCount < kResultsDrainMaxMessages && payload->results.size() < kResultsDrainMaxRecords)
+    {
+        MSG queuedMessage{};
+        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), 0, 0, PM_NOREMOVE))
+        {
+            break;
+        }
+        if (queuedMessage.message != WndMsg::kFindSearchResults)
+        {
+            break;
+        }
+        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), WndMsg::kFindSearchResults, WndMsg::kFindSearchResults, PM_REMOVE))
+        {
+            break;
+        }
+
+        auto newerPayload = TakeMessagePayload<FindSearchResultsPayload>(queuedMessage.lParam);
+        if (! newerPayload)
+        {
+            continue;
+        }
+        if (newerPayload->enqueuedAt != SteadyClock::time_point{})
+        {
+            Debug::Perf::Emit(L"find.ui.results_to_visible_latency_ms",
+                              L"",
+                              ElapsedUsSince(newerPayload->enqueuedAt),
+                              static_cast<uint64_t>(newerPayload->results.size()),
+                              0u,
+                              S_OK);
+        }
+
+        drainedResultsRecordCount += static_cast<uint64_t>(newerPayload->results.size());
+        payload->results.insert(payload->results.end(), std::make_move_iterator(newerPayload->results.begin()), std::make_move_iterator(newerPayload->results.end()));
+        ++drainedResultsMessageCount;
+    }
+    if (drainedResultsMessageCount != 0u)
+    {
+        EmitPerfCount(L"find.ui.results_messages_coalesced_count");
+        EmitPerfCount(L"find.ui.results_messages_drained", drainedResultsMessageCount);
+        EmitPerfCount(L"find.ui.results_records_drained", drainedResultsRecordCount);
+    }
+    EmitPerfCount(L"find.ui.results_message_batch_size", static_cast<uint64_t>(payload->results.size()));
+
+    _lastMatchedEntries += static_cast<uint64_t>(payload->results.size());
 
     if (_activeOperation == SearchOperation::Intersect || _activeOperation == SearchOperation::Subtract)
     {
@@ -3463,9 +3549,11 @@ void FindFilesWindow::OnSearchResults(std::unique_ptr<FindSearchResultsPayload> 
         {
             _deferredKeys.insert(record.key);
         }
+        RefreshStatusText();
         return;
     }
 
+    const size_t previousResultCount = _results.size();
     bool changed         = false;
     size_t insertedCount = 0u;
     size_t updatedCount  = 0u;
@@ -3479,6 +3567,7 @@ void FindFilesWindow::OnSearchResults(std::unique_ptr<FindSearchResultsPayload> 
 
     if (! changed)
     {
+        RefreshStatusText();
         return;
     }
 
@@ -3488,12 +3577,28 @@ void FindFilesWindow::OnSearchResults(std::unique_ptr<FindSearchResultsPayload> 
     if (_resultSortSpec.direction == SortDirection::None)
     {
         RefreshResultsView(false);
+#ifdef ENABLE_TESTS
+        DebugRecordIncrementalResultRefresh();
+#endif
     }
     else
     {
         // Coalesce sorted result refreshes so progress-driven micro-batches do not force repeated full rebuilds.
         ScheduleResultsRefresh(true, payload->results.size());
+        const bool firstVisibleBatch = previousResultCount == 0u;
+        const bool pendingBatchLarge = _resultsRefreshRecordCount >= kInteractiveResultsRefreshRecords;
+        const bool pendingBatchOld =
+            _resultsRefreshFirstQueuedTickMs != 0u && GetTickAgeMs(_resultsRefreshFirstQueuedTickMs) >= kInteractiveResultsRefreshMaxAgeMs;
+        if (firstVisibleBatch || pendingBatchLarge || pendingBatchOld)
+        {
+            EmitPerfCount(L"find.ui.deferred_refresh_forced_count");
+            ApplyPendingResultsRefresh();
+#ifdef ENABLE_TESTS
+            DebugRecordIncrementalResultRefresh();
+#endif
+        }
     }
+    RefreshStatusText();
 }
 
 void FindFilesWindow::OnSearchProgress(std::unique_ptr<FindSearchProgressPayload> payload) noexcept
@@ -3550,7 +3655,7 @@ void FindFilesWindow::OnSearchProgress(std::unique_ptr<FindSearchProgressPayload
     _lastScannedDirectories = payload->scannedDirectories;
     _lastScannedFiles       = payload->scannedFiles;
     _lastCandidateFiles     = payload->candidateFiles;
-    _lastMatchedEntries     = payload->matchedEntries;
+    _lastMatchedEntries     = std::max(_lastMatchedEntries, payload->matchedEntries);
     if (! payload->currentPath.empty())
     {
         _lastCurrentPath = payload->currentPath;
@@ -3644,6 +3749,24 @@ void FindFilesWindow::OnSearchComplete(std::unique_ptr<FindSearchCompletePayload
 }
 
 #ifdef ENABLE_TESTS
+void FindFilesWindow::DebugRecordIncrementalResultRefresh() noexcept
+{
+    if (_session.IsUiSettled() || _results.empty())
+    {
+        return;
+    }
+
+    ++_debugIncrementalResultRefreshCount;
+    if (_resultsList)
+    {
+        const auto metrics = _resultsList->GetVisibleWorkMetrics();
+        if (metrics.visibleRowCount != 0u)
+        {
+            ++_debugIncrementalVisibleResultRefreshCount;
+        }
+    }
+}
+
 bool FindFilesWindow::DebugConfigure(std::wstring rootPath,
                                      std::wstring namePattern,
                                      std::wstring contentPattern,
@@ -3731,7 +3854,8 @@ bool FindFilesWindow::DebugSetComboText(FindFilesDebugFocusTarget target, std::w
         return false;
     }
 
-    const std::wstring expectedText = text;
+    const std::wstring expectedText          = text;
+    const std::wstring expectedObservedText  = StripSingleLineControlCharacters(expectedText);
     _dxHost.CommitFocusedTextInput();
     combo->SetText(std::move(text));
     SetFocus(_hWnd.get());
@@ -3756,7 +3880,7 @@ bool FindFilesWindow::DebugSetComboText(FindFilesDebugFocusTarget target, std::w
     {
         _debugContentTextOverride = expectedText;
     }
-    return _debugLastSetComboObservedText == expectedText;
+    return _debugLastSetComboObservedText == expectedObservedText;
 }
 
 bool FindFilesWindow::DebugStartSearch(FindFilesDebugOperation operation) noexcept
@@ -3938,6 +4062,7 @@ bool FindFilesWindow::DebugGetSnapshot(FindFilesDebugSnapshot& out) noexcept
     out.searchActive            = _session.IsActive();
     out.usesDxUiHost            = _dxHost.GetHwnd() == _hWnd.get();
     out.findButtonEnabled       = _findButton ? _findButton->IsEnabled() : false;
+    out.findButtonPressed       = _findButton ? _findButton->DebugIsPressed() : false;
     out.appendButtonEnabled     = _appendButton ? _appendButton->IsEnabled() : false;
     out.intersectButtonEnabled  = _intersectButton ? _intersectButton->IsEnabled() : false;
     out.subtractButtonEnabled   = _subtractButton ? _subtractButton->IsEnabled() : false;
@@ -3999,15 +4124,17 @@ bool FindFilesWindow::DebugGetSnapshot(FindFilesDebugSnapshot& out) noexcept
     out.themeHighContrast              = _theme.highContrast;
     out.themeRainbow                   = _theme.menu.rainbowMode;
 #ifdef ENABLE_TESTS
-    out.resultListFullRebuildCount  = _debugResultListFullRebuildCount;
-    out.dxRenderCount               = _dxHost.DebugGetRenderCount();
-    out.resultGridPaintCount        = _resultsList ? _resultsList->DebugGetPaintCount() : 0u;
-    out.dxResizeCount               = _dxHost.DebugGetResizeCount();
-    out.dxResizeFailureCount        = _dxHost.DebugGetResizeFailureCount();
-    out.debugResizeBeforeWidthDip   = _debugResizeBeforeWidthDip;
-    out.debugResizeTargetWidthDip   = _debugResizeTargetWidthDip;
-    out.debugResizeObservedWidthDip = _debugResizeObservedWidthDip;
-    out.debugResizeSucceeded        = _debugResizeSucceeded;
+    out.resultListFullRebuildCount           = _debugResultListFullRebuildCount;
+    out.incrementalResultRefreshCount        = _debugIncrementalResultRefreshCount;
+    out.incrementalVisibleResultRefreshCount = _debugIncrementalVisibleResultRefreshCount;
+    out.dxRenderCount                        = _dxHost.DebugGetRenderCount();
+    out.resultGridPaintCount                 = _resultsList ? _resultsList->DebugGetPaintCount() : 0u;
+    out.dxResizeCount                        = _dxHost.DebugGetResizeCount();
+    out.dxResizeFailureCount                 = _dxHost.DebugGetResizeFailureCount();
+    out.debugResizeBeforeWidthDip            = _debugResizeBeforeWidthDip;
+    out.debugResizeTargetWidthDip            = _debugResizeTargetWidthDip;
+    out.debugResizeObservedWidthDip          = _debugResizeObservedWidthDip;
+    out.debugResizeSucceeded                 = _debugResizeSucceeded;
 #else
     out.resultListFullRebuildCount = 0;
 #endif
@@ -4019,6 +4146,7 @@ bool FindFilesWindow::DebugGetSnapshot(FindFilesDebugSnapshot& out) noexcept
         out.visibleResultRowCount          = metrics.visibleRowCount;
         out.visibleResultColumnCount       = metrics.visibleColumnCount;
         out.visibleResultCellCount         = metrics.visibleCellCount;
+        out.visibleResultIconCellCount     = metrics.visibleIconCellCount;
         out.resultListHasVerticalScrollbar = metrics.hasVerticalScrollbar;
         const auto layout                  = _resultsList->CaptureColumnLayout();
         out.resultColumnIds.reserve(layout.size());

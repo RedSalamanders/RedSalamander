@@ -23,12 +23,16 @@ void RunAccessibilityTests();
 void RunMenuTests();
 void RunNewControlTests();
 void RunGalleryGenerator(const std::filesystem::path& outputPath);
+void RunGalleryGeneratorPerTheme(const std::filesystem::path& outputDirectory);
+void RunButtonContrastAuditGenerator(const std::filesystem::path& outputPath);
 
 int wmain(int argc, wchar_t** argv)
 {
     std::optional<std::wstring> suiteFilter;
     std::optional<std::filesystem::path> perfJsonlPath;
     std::optional<std::filesystem::path> galleryOutputPath;
+    std::optional<std::filesystem::path> galleryOutputDirectory;
+    std::optional<std::filesystem::path> buttonAuditOutputPath;
     bool writeBaselines = false;
     for (int argIndex = 1; argIndex < argc; ++argIndex)
     {
@@ -36,6 +40,8 @@ int wmain(int argc, wchar_t** argv)
         constexpr std::wstring_view kSuitePrefix     = L"--suite=";
         constexpr std::wstring_view kPerfJsonlPrefix = L"--perf-jsonl=";
         constexpr std::wstring_view kGalleryPrefix   = L"--gallery-output=";
+        constexpr std::wstring_view kGalleryDirectoryPrefix = L"--gallery-output-directory=";
+        constexpr std::wstring_view kButtonAuditPrefix      = L"--button-audit-output=";
         if (arg.rfind(kSuitePrefix, 0) == 0)
         {
             if (arg.size() == kSuitePrefix.size())
@@ -69,6 +75,26 @@ int wmain(int argc, wchar_t** argv)
                 return 2;
             }
             galleryOutputPath = std::filesystem::path(arg.substr(kGalleryPrefix.size()));
+            continue;
+        }
+        if (arg.rfind(kGalleryDirectoryPrefix, 0) == 0)
+        {
+            if (arg.size() == kGalleryDirectoryPrefix.size())
+            {
+                std::wcerr << L"Missing output directory for --gallery-output-directory.\n";
+                return 2;
+            }
+            galleryOutputDirectory = std::filesystem::path(arg.substr(kGalleryDirectoryPrefix.size()));
+            continue;
+        }
+        if (arg.rfind(kButtonAuditPrefix, 0) == 0)
+        {
+            if (arg.size() == kButtonAuditPrefix.size())
+            {
+                std::wcerr << L"Missing output path for --button-audit-output.\n";
+                return 2;
+            }
+            buttonAuditOutputPath = std::filesystem::path(arg.substr(kButtonAuditPrefix.size()));
             continue;
         }
         if (! arg.empty() && arg[0] == L'-')
@@ -120,9 +146,26 @@ int wmain(int argc, wchar_t** argv)
         const std::filesystem::path outputPath =
             galleryOutputPath.value_or(FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"DxUiGallery" / L"DxUiControlGallery.png");
         std::cerr << "[START] Gallery\n" << std::flush;
-        RunGalleryGenerator(outputPath);
+        if (galleryOutputDirectory.has_value())
+        {
+            RunGalleryGeneratorPerTheme(galleryOutputDirectory.value());
+        }
+        else
+        {
+            RunGalleryGenerator(outputPath);
+        }
         RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
         std::cerr << "[DONE] Gallery\n" << std::flush;
+        ranAnySuite = true;
+    }
+    if (suiteFilter.has_value() && shouldRunSuite("ButtonContrast"))
+    {
+        const std::filesystem::path outputPath =
+            buttonAuditOutputPath.value_or(FindRepoRootForDxUiTests() / L"Specs" / L"TestRuns" / L"DxUiGallery" / L"DxUiButtonContrast.png");
+        std::cerr << "[START] ButtonContrast\n" << std::flush;
+        RunButtonContrastAuditGenerator(outputPath);
+        RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
+        std::cerr << "[DONE] ButtonContrast\n" << std::flush;
         ranAnySuite = true;
     }
     if (shouldRunSuite("Grid"))

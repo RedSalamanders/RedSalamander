@@ -29,6 +29,18 @@ Items are matched by **name** under the same **relative folder** (directory-orie
 - **Ignore patterns**: file and directory ignore pattern lists
 - **Display**: **Show Identical Items** (when off, only differences are shown)
 
+## Window commands
+
+The Compare Directories window has its own command surface:
+
+- **Options...** opens the compare options panel and saves accepted changes as the new default compare settings.
+- **Rescan** restarts the comparison using the current left/right roots; while scanning it changes to **Cancel**.
+- **Show Identical Items** toggles identical rows when they were retained by the scan.
+- **Restore Differences Selection** returns selection to the detected difference set.
+- **Invert Differences Selection** flips the current difference selection.
+- **Brief**, **Detailed**, and **Extra Detailed** change the result-pane display mode.
+- **Close** exits the compare window.
+
 If the main settings file changes while the **Options…** panel is open:
 
 - A clean options panel reloads from disk automatically.

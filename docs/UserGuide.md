@@ -48,8 +48,6 @@ The function bar at the bottom shows the main keyboard actions:
 - `F11` Connect
 - `F12` Disconnect
 
-Some menu entries are reserved for planned features and currently show a "Not implemented" message. See [Known Planned Features](#known-planned-features).
-
 ## Main Window
 
 The main window contains:
@@ -127,6 +125,20 @@ Default shortcuts:
 The status bars summarize the current folder and selection. They show details such as selected files, folders, bytes, timestamps, attributes, and sort state where available.
 
 The function bar shows the current `F1` through `F12` bindings. It updates when modifier keys are active and can be hidden from **View -> Function Bar**.
+
+### Finding Commands
+
+When a workflow is not visible in the first screen, check these command surfaces:
+
+- The **Left** and **Right** menus for pane-specific view, sort, history, filter, and layout commands.
+- The **Files** menu for open/view/edit, copy/move/delete, properties, security, archive, attribute, case, and ShellNew commands.
+- The **Edit** menu for selection masks, saved selections, hide/show-name filters, clipboard commands, and path-copy helpers.
+- The **Commands** menu for search, compare, occupied space, make file list, opened-files list, shared directories, connections, shell/command-line helpers, and File Explorer shortcuts.
+- The **Plugins** menu for plugin management and plugin-provided commands.
+- The **View** menu for theme, fullscreen, File Operations Failed Items, menu/function bar toggles, and Preferences.
+- `F1` / **Help -> Display Shortcuts** for the shortcut list that matches the current command set.
+
+See [Main Window & Panes](MainWindow.md) for the full menu-by-menu map.
 
 ## Navigation
 
@@ -368,8 +380,6 @@ Preferences pages cover:
 - **Hot Paths**: ten bookmark slots.
 - **Advanced**: lower-level diagnostics and storage settings.
 
-Some placeholder preference pages are intentionally present for future features; see [Known Planned Features](#known-planned-features).
-
 ## Themes
 
 Themes can be switched quickly from **View -> Theme** or managed in **Preferences -> Themes**.
@@ -557,12 +567,3 @@ Use these first checks:
 - If a theme preview looks wrong, cancel Preferences to restore the prior theme or switch through **View -> Theme**.
 
 More detail: [Troubleshooting / Reset](Troubleshooting.md)
-
-## Known Planned Features
-
-The menus intentionally expose some future commands. Current planned or placeholder items include:
-
-- Mouse preference page.
-- Select/unselect same name.
-
-More detail: [Planned / TODO features](Todo.md)

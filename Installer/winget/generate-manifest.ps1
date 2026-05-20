@@ -108,4 +108,4 @@ Write-Host "`nNext steps:" -ForegroundColor Cyan
 Write-Host "  1. Review the manifest files in $OutputDir" -ForegroundColor Gray
 Write-Host "  2. Validate with: winget validate --manifest $OutputDir" -ForegroundColor Gray
 Write-Host "  3. Test install with: winget install --manifest $OutputDir" -ForegroundColor Gray
-Write-Host "  4. Submit to winget-pkgs repository (see Docs/WingetIntegration.md)" -ForegroundColor Gray
+Write-Host "  4. Submit to winget-pkgs repository (see docs/WingetIntegration.md)" -ForegroundColor Gray

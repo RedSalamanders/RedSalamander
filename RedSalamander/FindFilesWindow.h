@@ -71,6 +71,7 @@ struct FindFilesDebugSnapshot
     bool searchActive                = false;
     bool usesDxUiHost                = false;
     bool findButtonEnabled           = false;
+    bool findButtonPressed           = false;
     bool appendButtonEnabled         = false;
     bool intersectButtonEnabled      = false;
     bool subtractButtonEnabled       = false;
@@ -104,9 +105,12 @@ struct FindFilesDebugSnapshot
     uint32_t phase                                    = 0u;
     bool hasServiceStatus                             = false;
     uint32_t resultListFullRebuildCount               = 0;
+    uint32_t incrementalResultRefreshCount            = 0;
+    uint32_t incrementalVisibleResultRefreshCount     = 0;
     size_t visibleResultRowCount                      = 0u;
     size_t visibleResultColumnCount                   = 0u;
     size_t visibleResultCellCount                     = 0u;
+    uint64_t visibleResultIconCellCount               = 0u;
     bool resultListHasVerticalScrollbar               = false;
     bool themeCompactMode                             = false;
     bool themeDark                                    = false;

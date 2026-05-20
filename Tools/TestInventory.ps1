@@ -174,10 +174,12 @@ function Get-RSTestInventory {
 
     $standaloneNames = @(
         'DxUiTests',
+        'FileSystemCurlTests',
         'ViewerPETests',
         'ViewerSqliteTests',
         'MonitorTest',
-        'LocalizationTests'
+        'LocalizationTests',
+        'RedConfigureTests'
     )
 
     return [pscustomobject]@{

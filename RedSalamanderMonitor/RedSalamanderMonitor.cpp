@@ -107,6 +107,11 @@ constexpr wchar_t kAppId[]                            = L"RedSalamanderMonitor";
 constexpr wchar_t kWindowId[]                         = L"MonitorWindow";
 constexpr wchar_t kDxHostClassName[]                  = L"RedSalamanderMonitor.DxHost";
 constexpr std::wstring_view kMonitorChromeSelfTestArg = L"--chrome-selftest";
+constexpr std::wstring_view kMonitorScrollbackSelfTestArg = L"--monitor-scrollback-selftest";
+constexpr std::wstring_view kMonitorEtwBurstModePrefix = L"--monitor-etw-burst-mode=";
+constexpr std::wstring_view kMonitorEtwBurstCountPrefix = L"--monitor-etw-burst-count=";
+constexpr std::wstring_view kMonitorEtwBurstSizePrefix = L"--monitor-etw-burst-size=";
+constexpr std::wstring_view kMonitorEtwBurstLatencyMode = L"latency";
 constexpr std::wstring_view kMonitorAreaName          = L"Monitor";
 constexpr std::wstring_view kMonitorScenarioName      = L"monitor.chrome.dxui_toolbar_statusstrip";
 constexpr UINT kMsgRunMonitorChromeSelfTest           = WM_APP + 0x61C;
@@ -127,6 +132,10 @@ constexpr wchar_t kMonitorHelpText[] = L"RedSalamanderMonitor\r\n"
                                        L"  --etw                           Enable RedSalamanderMonitor self Info/Perf/Debug ETW diagnostics.\r\n"
                                        L"  --perf                          Write RedSalamanderMonitor perf metrics to the default JSONL path.\r\n"
                                        L"  --perf=PATH                     Write RedSalamanderMonitor perf metrics to a custom JSONL path.\r\n"
+                                       L"  --monitor-scrollback-selftest    Run monitor selftest scrollback frame scenario.\r\n"
+                                       L"  --monitor-etw-burst-mode=latency Run monitor selftest ETW latency burst scenario.\r\n"
+                                       L"  --monitor-etw-burst-count=N      Set latency burst sample count.\r\n"
+                                       L"  --monitor-etw-burst-size=N       Set latency burst payload characters.\r\n"
                                        L"\r\n";
 
 HMENU g_viewThemeMenu = nullptr;
@@ -210,6 +219,28 @@ struct MonitorChromeMetricPresence final
     uint64_t count = 0;
 };
 
+struct MonitorChromeMetricSummary final
+{
+    std::wstring_view metric;
+    uint64_t count = 0;
+    uint64_t p50 = 0;
+    uint64_t p95 = 0;
+    uint64_t p99 = 0;
+    uint64_t max = 0;
+};
+
+struct MonitorEtwBurstOptions final
+{
+    bool latencyMode = false;
+    size_t count = 60u;
+    size_t payloadChars = 260u;
+};
+
+struct MonitorScrollbackSelfTestOptions final
+{
+    bool enabled = false;
+};
+
 struct MonitorChromeSelfTestContext final
 {
     bool enabled   = false;
@@ -226,6 +257,8 @@ struct MonitorChromeSelfTestContext final
 };
 
 MonitorChromeSelfTestContext g_monitorChromeSelfTest;
+MonitorEtwBurstOptions g_monitorEtwBurstOptions;
+MonitorScrollbackSelfTestOptions g_monitorScrollbackSelfTestOptions;
 
 constexpr std::array<std::wstring_view, 6> kRequiredMonitorFrameMetrics{{
     L"monitor.frame.total_us",
@@ -234,6 +267,38 @@ constexpr std::array<std::wstring_view, 6> kRequiredMonitorFrameMetrics{{
     L"monitor.frame.tail_layout_us",
     L"monitor.frame.mode",
     L"monitor.etw.batch_drain_us",
+}};
+
+constexpr std::array<std::wstring_view, 8> kRequiredMonitorEtwBurstLatencyMetrics{{
+    L"monitor.etw.batch_drain_us",
+    L"monitor.etw.selftest_burst_drain_us",
+    L"monitor.frame.append_to_visible_us",
+    L"monitor.frame.total_us",
+    L"monitor.frame.present_us",
+    L"monitor.frame.tail_layout_us",
+    L"monitor.etw.queue_depth",
+    L"monitor.etw.batch_repost_count",
+}};
+
+constexpr std::array<std::wstring_view, 4> kSummarizedMonitorEtwBurstLatencyMetrics{{
+    L"monitor.frame.append_to_visible_us",
+    L"monitor.etw.batch_drain_us",
+    L"monitor.frame.total_us",
+    L"monitor.frame.present_us",
+}};
+
+constexpr std::array<std::wstring_view, 4> kRequiredMonitorScrollbackMetrics{{
+    L"monitor.frame.scrollback_slice_us",
+    L"monitor.frame.mode",
+    L"monitor.frame.total_us",
+    L"monitor.frame.present_us",
+}};
+
+constexpr std::array<std::wstring_view, 4> kSummarizedMonitorScrollbackMetrics{{
+    L"monitor.frame.scrollback_slice_us",
+    L"monitor.frame.mode",
+    L"monitor.frame.total_us",
+    L"monitor.frame.present_us",
 }};
 
 void SyncToolbarState() noexcept;
@@ -617,6 +682,70 @@ bool TryGetCommandLineArgValue(std::wstring_view prefix, std::wstring& value) no
     }
 
     return false;
+}
+
+std::optional<size_t> TryParseSizeT(std::wstring_view value) noexcept
+{
+    if (value.empty())
+    {
+        return std::nullopt;
+    }
+
+    uint64_t parsed = 0u;
+    for (const wchar_t ch : value)
+    {
+        if (ch < L'0' || ch > L'9')
+        {
+            return std::nullopt;
+        }
+
+        const uint64_t digit = static_cast<uint64_t>(ch - L'0');
+        if (parsed > ((std::numeric_limits<uint64_t>::max)() - digit) / 10u)
+        {
+            return std::nullopt;
+        }
+        parsed = (parsed * 10u) + digit;
+    }
+
+    if (parsed > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<size_t>(parsed);
+}
+
+MonitorEtwBurstOptions ReadMonitorEtwBurstOptions() noexcept
+{
+    MonitorEtwBurstOptions options;
+
+    std::wstring mode;
+    if (! TryGetCommandLineArgValue(kMonitorEtwBurstModePrefix, mode) || mode != kMonitorEtwBurstLatencyMode)
+    {
+        options.latencyMode = false;
+        return options;
+    }
+
+    options.latencyMode = true;
+
+    std::wstring value;
+    if (TryGetCommandLineArgValue(kMonitorEtwBurstCountPrefix, value))
+    {
+        if (const std::optional<size_t> parsed = TryParseSizeT(value); parsed.has_value())
+        {
+            options.count = std::clamp(parsed.value(), size_t{1u}, size_t{2'000u});
+        }
+    }
+
+    if (TryGetCommandLineArgValue(kMonitorEtwBurstSizePrefix, value))
+    {
+        if (const std::optional<size_t> parsed = TryParseSizeT(value); parsed.has_value())
+        {
+            options.payloadChars = std::clamp(parsed.value(), size_t{1u}, size_t{8'192u});
+        }
+    }
+
+    return options;
 }
 
 void WriteMonitorHelpText(HINSTANCE hInstance) noexcept
@@ -1018,33 +1147,150 @@ uint64_t CountMetricRowsInJsonl(std::string_view jsonl, std::wstring_view metric
     return count;
 }
 
-std::vector<MonitorChromeMetricPresence> ReadMonitorFrameMetricPresence() noexcept
+std::optional<uint64_t> TryReadUnsignedJsonField(std::string_view row, std::string_view fieldName) noexcept
 {
-    std::vector<MonitorChromeMetricPresence> presence;
-    presence.reserve(kRequiredMonitorFrameMetrics.size());
-    for (const std::wstring_view metric : kRequiredMonitorFrameMetrics)
+    const std::string token = std::format("\"{}\":", fieldName);
+    const size_t tokenOffset = row.find(token);
+    if (tokenOffset == std::string_view::npos)
     {
-        presence.push_back(MonitorChromeMetricPresence{metric, 0u});
+        return std::nullopt;
     }
 
+    size_t position = tokenOffset + token.size();
+    while (position < row.size() && row[position] == ' ')
+    {
+        ++position;
+    }
+
+    if (position == row.size() || row[position] < '0' || row[position] > '9')
+    {
+        return std::nullopt;
+    }
+
+    uint64_t value = 0u;
+    while (position < row.size() && row[position] >= '0' && row[position] <= '9')
+    {
+        const uint64_t digit = static_cast<uint64_t>(row[position] - '0');
+        if (value > ((std::numeric_limits<uint64_t>::max)() - digit) / 10u)
+        {
+            return std::nullopt;
+        }
+        value = (value * 10u) + digit;
+        ++position;
+    }
+
+    return value;
+}
+
+std::vector<uint64_t> ReadMetricValuesInJsonl(std::string_view jsonl, std::wstring_view metric) noexcept
+{
+    std::vector<uint64_t> values;
+    const std::string metricUtf8 = Utf8FromWide(metric);
+    if (metricUtf8.empty())
+    {
+        return values;
+    }
+
+    const std::string token = std::format("\"metric\":\"{}\"", metricUtf8);
+    size_t rowStart = 0u;
+    while (rowStart < jsonl.size())
+    {
+        const size_t rowEnd = jsonl.find('\n', rowStart);
+        const std::string_view row = rowEnd == std::string_view::npos ? jsonl.substr(rowStart) : jsonl.substr(rowStart, rowEnd - rowStart);
+        if (row.find(token) != std::string_view::npos)
+        {
+            if (const std::optional<uint64_t> value = TryReadUnsignedJsonField(row, "value"); value.has_value())
+            {
+                values.push_back(value.value());
+            }
+        }
+
+        if (rowEnd == std::string_view::npos)
+        {
+            break;
+        }
+        rowStart = rowEnd + 1u;
+    }
+
+    return values;
+}
+
+uint64_t NearestRankPercentile(std::span<const uint64_t> sortedValues, uint64_t percentile) noexcept
+{
+    if (sortedValues.empty())
+    {
+        return 0u;
+    }
+
+    const uint64_t count = static_cast<uint64_t>(sortedValues.size());
+    const uint64_t rank = (count * percentile + 99u) / 100u;
+    const size_t index = static_cast<size_t>((std::max)(uint64_t{1u}, rank) - 1u);
+    return sortedValues[(std::min)(index, sortedValues.size() - 1u)];
+}
+
+MonitorChromeMetricSummary BuildMetricSummary(std::string_view jsonl, std::wstring_view metric) noexcept
+{
+    MonitorChromeMetricSummary summary{.metric = metric};
+    std::vector<uint64_t> values = ReadMetricValuesInJsonl(jsonl, metric);
+    if (values.empty())
+    {
+        return summary;
+    }
+
+    std::sort(values.begin(), values.end());
+    summary.count = static_cast<uint64_t>(values.size());
+    summary.p50 = NearestRankPercentile(values, 50u);
+    summary.p95 = NearestRankPercentile(values, 95u);
+    summary.p99 = NearestRankPercentile(values, 99u);
+    summary.max = values.back();
+    return summary;
+}
+
+std::string ReadMonitorPerfJsonl() noexcept
+{
     if (g_monitorChromeSelfTest.perfPath.empty())
     {
-        return presence;
+        return {};
     }
 
     std::ifstream input(g_monitorChromeSelfTest.perfPath, std::ios::binary);
     if (! input)
     {
-        return presence;
+        return {};
     }
 
-    const std::string jsonl((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    for (MonitorChromeMetricPresence& metricPresence : presence)
+    return std::string((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+}
+
+template <size_t Count>
+std::vector<MonitorChromeMetricPresence> BuildMetricPresence(std::string_view jsonl, const std::array<std::wstring_view, Count>& metrics)
+{
+    std::vector<MonitorChromeMetricPresence> presence;
+    presence.reserve(metrics.size());
+    for (const std::wstring_view metric : metrics)
     {
-        metricPresence.count = CountMetricRowsInJsonl(jsonl, metricPresence.metric);
+        presence.push_back(MonitorChromeMetricPresence{metric, CountMetricRowsInJsonl(jsonl, metric)});
     }
 
     return presence;
+}
+
+template <size_t Count>
+std::vector<MonitorChromeMetricSummary> BuildMetricSummaries(std::string_view jsonl, const std::array<std::wstring_view, Count>& metrics)
+{
+    std::vector<MonitorChromeMetricSummary> summaries;
+    summaries.reserve(metrics.size());
+    for (const std::wstring_view metric : metrics)
+    {
+        summaries.push_back(BuildMetricSummary(jsonl, metric));
+    }
+
+    return summaries;
+}
+
+bool AreAllMetricsPresent(std::span<const MonitorChromeMetricPresence> metricPresence) noexcept
+{
+    return std::all_of(metricPresence.begin(), metricPresence.end(), [](const MonitorChromeMetricPresence& metric) noexcept { return metric.count > 0u; });
 }
 
 std::filesystem::path GetDefaultMonitorPerfJsonlPath() noexcept
@@ -1071,17 +1317,45 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
         return;
     }
 
-    const std::vector<MonitorChromeMetricPresence> metricPresence = ReadMonitorFrameMetricPresence();
-    const bool allRequiredMetricsPresent =
-        std::all_of(metricPresence.begin(), metricPresence.end(), [](const MonitorChromeMetricPresence& metric) noexcept { return metric.count > 0u; });
+    const std::string perfJsonl = ReadMonitorPerfJsonl();
+    const std::vector<MonitorChromeMetricPresence> metricPresence = BuildMetricPresence(perfJsonl, kRequiredMonitorFrameMetrics);
+    const bool allRequiredMetricsPresent = AreAllMetricsPresent(metricPresence);
+    const std::vector<MonitorChromeMetricPresence> burstMetricPresence =
+        g_monitorEtwBurstOptions.latencyMode ? BuildMetricPresence(perfJsonl, kRequiredMonitorEtwBurstLatencyMetrics) : std::vector<MonitorChromeMetricPresence>{};
+    const bool allBurstMetricsPresent = ! g_monitorEtwBurstOptions.latencyMode || AreAllMetricsPresent(burstMetricPresence);
+    const std::vector<MonitorChromeMetricSummary> burstMetricSummaries =
+        g_monitorEtwBurstOptions.latencyMode ? BuildMetricSummaries(perfJsonl, kSummarizedMonitorEtwBurstLatencyMetrics) : std::vector<MonitorChromeMetricSummary>{};
+    const std::vector<MonitorChromeMetricPresence> scrollbackMetricPresence =
+        g_monitorScrollbackSelfTestOptions.enabled ? BuildMetricPresence(perfJsonl, kRequiredMonitorScrollbackMetrics) : std::vector<MonitorChromeMetricPresence>{};
+    const bool allScrollbackMetricsPresent = ! g_monitorScrollbackSelfTestOptions.enabled || AreAllMetricsPresent(scrollbackMetricPresence);
+    const std::vector<MonitorChromeMetricSummary> scrollbackMetricSummaries =
+        g_monitorScrollbackSelfTestOptions.enabled ? BuildMetricSummaries(perfJsonl, kSummarizedMonitorScrollbackMetrics) : std::vector<MonitorChromeMetricSummary>{};
+
     RecordMonitorChromeSelfTestCheck(L"required monitor frame metrics",
                                      allRequiredMetricsPresent,
                                      allRequiredMetricsPresent ? L"" : L"one or more required monitor frame metrics missing");
+    if (g_monitorEtwBurstOptions.latencyMode)
+    {
+        RecordMonitorChromeSelfTestCheck(L"monitor etw burst latency metrics",
+                                         allBurstMetricsPresent,
+                                         allBurstMetricsPresent ? L"" : L"one or more etw burst latency metrics missing");
+    }
+    if (g_monitorScrollbackSelfTestOptions.enabled)
+    {
+        RecordMonitorChromeSelfTestCheck(L"monitor scrollback frame metrics",
+                                         allScrollbackMetricsPresent,
+                                         allScrollbackMetricsPresent ? L"" : L"one or more scrollback frame metrics missing");
+    }
 
-    const bool finalPassed = passed && allRequiredMetricsPresent;
+    const bool finalPassed = passed && allRequiredMetricsPresent && allBurstMetricsPresent && allScrollbackMetricsPresent;
     const std::wstring finalSummary =
         finalPassed ? std::wstring(summary)
-                    : (passed ? L"Monitor chrome selftest passed functionally, but required frame metrics were missing." : std::wstring(summary));
+                    : (passed && ! allRequiredMetricsPresent
+                           ? L"Monitor chrome selftest passed functionally, but required frame metrics were missing."
+                           : (passed && ! allBurstMetricsPresent ? L"Monitor chrome selftest passed functionally, but ETW burst latency metrics were missing."
+                                                                 : (passed && ! allScrollbackMetricsPresent
+                                                                        ? L"Monitor chrome selftest passed functionally, but scrollback frame metrics were missing."
+                                                                        : std::wstring(summary))));
 
     g_monitorChromeSelfTest.completed = true;
     g_monitorChromeSelfTest.exitCode  = finalPassed ? 0 : 1;
@@ -1117,6 +1391,70 @@ void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexc
                             metric.count > 0u ? "true" : "false",
                             metric.count,
                             (index + 1u) == metricPresence.size() ? "" : ",");
+    }
+    json += "    ]\n";
+    json += "  },\n";
+    json += "  \"monitorEtwBurstLatency\": {\n";
+    json += std::format("    \"enabled\": {},\n", g_monitorEtwBurstOptions.latencyMode ? "true" : "false");
+    json += std::format("    \"count\": {},\n", static_cast<uint64_t>(g_monitorEtwBurstOptions.count));
+    json += std::format("    \"payloadChars\": {},\n", static_cast<uint64_t>(g_monitorEtwBurstOptions.payloadChars));
+    json += "    \"metricPresence\": {\n";
+    json += std::format("      \"allPresent\": {},\n", allBurstMetricsPresent ? "true" : "false");
+    json += "      \"metrics\": [\n";
+    for (size_t index = 0; index < burstMetricPresence.size(); ++index)
+    {
+        const MonitorChromeMetricPresence& metric = burstMetricPresence[index];
+        json += std::format("        {{\"metric\": \"{}\", \"present\": {}, \"count\": {}}}{}\n",
+                            EscapeJsonWide(metric.metric),
+                            metric.count > 0u ? "true" : "false",
+                            metric.count,
+                            (index + 1u) == burstMetricPresence.size() ? "" : ",");
+    }
+    json += "      ]\n";
+    json += "    },\n";
+    json += "    \"metricSummary\": [\n";
+    for (size_t index = 0; index < burstMetricSummaries.size(); ++index)
+    {
+        const MonitorChromeMetricSummary& metric = burstMetricSummaries[index];
+        json += std::format("      {{\"metric\": \"{}\", \"count\": {}, \"p50\": {}, \"p95\": {}, \"p99\": {}, \"max\": {}}}{}\n",
+                            EscapeJsonWide(metric.metric),
+                            metric.count,
+                            metric.p50,
+                            metric.p95,
+                            metric.p99,
+                            metric.max,
+                            (index + 1u) == burstMetricSummaries.size() ? "" : ",");
+    }
+    json += "    ]\n";
+    json += "  },\n";
+    json += "  \"monitorScrollbackSelfTest\": {\n";
+    json += std::format("    \"enabled\": {},\n", g_monitorScrollbackSelfTestOptions.enabled ? "true" : "false");
+    json += "    \"metricPresence\": {\n";
+    json += std::format("      \"allPresent\": {},\n", allScrollbackMetricsPresent ? "true" : "false");
+    json += "      \"metrics\": [\n";
+    for (size_t index = 0; index < scrollbackMetricPresence.size(); ++index)
+    {
+        const MonitorChromeMetricPresence& metric = scrollbackMetricPresence[index];
+        json += std::format("        {{\"metric\": \"{}\", \"present\": {}, \"count\": {}}}{}\n",
+                            EscapeJsonWide(metric.metric),
+                            metric.count > 0u ? "true" : "false",
+                            metric.count,
+                            (index + 1u) == scrollbackMetricPresence.size() ? "" : ",");
+    }
+    json += "      ]\n";
+    json += "    },\n";
+    json += "    \"metricSummary\": [\n";
+    for (size_t index = 0; index < scrollbackMetricSummaries.size(); ++index)
+    {
+        const MonitorChromeMetricSummary& metric = scrollbackMetricSummaries[index];
+        json += std::format("      {{\"metric\": \"{}\", \"count\": {}, \"p50\": {}, \"p95\": {}, \"p99\": {}, \"max\": {}}}{}\n",
+                            EscapeJsonWide(metric.metric),
+                            metric.count,
+                            metric.p50,
+                            metric.p95,
+                            metric.p99,
+                            metric.max,
+                            (index + 1u) == scrollbackMetricSummaries.size() ? "" : ",");
     }
     json += "    ]\n";
     json += "  }\n";
@@ -2401,6 +2739,43 @@ void UpdateStatusBar()
     ::RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
 }
 
+#if defined(ENABLE_TESTS)
+std::wstring BuildMonitorEtwBurstMessage(size_t index, size_t payloadChars)
+{
+    std::wstring message = std::format(L"Monitor selftest ETW batch event {}", index);
+    if (message.size() < payloadChars)
+    {
+        message.append(payloadChars - message.size(), L'x');
+    }
+    return message;
+}
+
+bool PumpMonitorColorViewUntilLineCount(size_t targetLineCount, int maxPumpCount) noexcept
+{
+    MSG msg{};
+    for (int pump = 0; pump < maxPumpCount && g_colorView.GetTotalLineCount() < targetLineCount; ++pump)
+    {
+        while (::PeekMessageW(&msg, g_hColorView.get(), 0, 0, PM_REMOVE))
+        {
+            ::TranslateMessage(&msg);
+            ::DispatchMessageW(&msg);
+        }
+        if (g_colorView.GetTotalLineCount() >= targetLineCount)
+        {
+            break;
+        }
+        ::Sleep(1);
+    }
+
+    if (g_hColorView)
+    {
+        ::RedrawWindow(g_hColorView.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    }
+
+    return g_colorView.GetTotalLineCount() >= targetLineCount;
+}
+#endif
+
 LRESULT RunMonitorChromeSelfTest(HWND hWnd)
 {
 #if ! defined(ENABLE_TESTS)
@@ -2547,46 +2922,126 @@ LRESULT RunMonitorChromeSelfTest(HWND hWnd)
                                     g_filterMask,
                                     S_OK);
 
-        constexpr size_t kSelfTestEtwBurstCount = 260u;
-        const size_t linesBeforeBurst           = g_colorView.GetTotalLineCount();
-        const auto etwBurstStarted              = std::chrono::steady_clock::now();
-        for (size_t i = 0; i < kSelfTestEtwBurstCount; ++i)
+        constexpr size_t kDefaultSelfTestEtwBurstCount = 260u;
+        const size_t etwBurstCount = g_monitorEtwBurstOptions.latencyMode ? g_monitorEtwBurstOptions.count : kDefaultSelfTestEtwBurstCount;
+        const size_t payloadChars = g_monitorEtwBurstOptions.latencyMode ? g_monitorEtwBurstOptions.payloadChars : 0u;
+        const size_t linesBeforeBurst = g_colorView.GetTotalLineCount();
+        const auto etwBurstStarted = std::chrono::steady_clock::now();
+        if (g_monitorEtwBurstOptions.latencyMode)
         {
-            Debug::InfoParam info{};
-            info.processID = ::GetCurrentProcessId();
-            info.threadID  = ::GetCurrentThreadId();
-            info.type      = (i % 2u) == 0u ? Debug::InfoParam::Type::Warning : Debug::InfoParam::Type::Error;
-            g_colorView.QueueEtwEvent(info, std::format(L"Monitor selftest ETW batch event {}", i));
-        }
-
-        MSG msg{};
-        for (int pump = 0; pump < 64 && g_colorView.GetTotalLineCount() < linesBeforeBurst + kSelfTestEtwBurstCount; ++pump)
-        {
-            while (::PeekMessageW(&msg, g_hColorView.get(), 0, 0, PM_REMOVE))
+            for (size_t i = 0; i < etwBurstCount; ++i)
             {
-                ::TranslateMessage(&msg);
-                ::DispatchMessageW(&msg);
+                Debug::InfoParam info{};
+                info.processID = ::GetCurrentProcessId();
+                info.threadID  = ::GetCurrentThreadId();
+                info.type      = (i % 2u) == 0u ? Debug::InfoParam::Type::Warning : Debug::InfoParam::Type::Error;
+                g_colorView.QueueEtwEvent(info, BuildMonitorEtwBurstMessage(i, payloadChars));
+                const size_t targetLineCount = linesBeforeBurst + i + 1u;
+                passed &= require(L"etw latency sample drained",
+                                  PumpMonitorColorViewUntilLineCount(targetLineCount, 64),
+                                  std::format(L"sample={} target={}", i, targetLineCount));
             }
-            if (g_colorView.GetTotalLineCount() >= linesBeforeBurst + kSelfTestEtwBurstCount)
-                break;
-            ::Sleep(1);
+        }
+        else
+        {
+            for (size_t i = 0; i < etwBurstCount; ++i)
+            {
+                Debug::InfoParam info{};
+                info.processID = ::GetCurrentProcessId();
+                info.threadID  = ::GetCurrentThreadId();
+                info.type      = (i % 2u) == 0u ? Debug::InfoParam::Type::Warning : Debug::InfoParam::Type::Error;
+                g_colorView.QueueEtwEvent(info, std::format(L"Monitor selftest ETW batch event {}", i));
+            }
+
+            MSG msg{};
+            for (int pump = 0; pump < 64 && g_colorView.GetTotalLineCount() < linesBeforeBurst + etwBurstCount; ++pump)
+            {
+                while (::PeekMessageW(&msg, g_hColorView.get(), 0, 0, PM_REMOVE))
+                {
+                    ::TranslateMessage(&msg);
+                    ::DispatchMessageW(&msg);
+                }
+                if (g_colorView.GetTotalLineCount() >= linesBeforeBurst + etwBurstCount)
+                    break;
+                ::Sleep(1);
+            }
+
+            if (g_hColorView)
+            {
+                ::RedrawWindow(g_hColorView.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+            }
         }
 
         UpdateStatusBar();
-        if (g_hColorView)
-        {
-            ::RedrawWindow(g_hColorView.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-        }
         const size_t linesAfterBurst = g_colorView.GetTotalLineCount();
-        const bool burstDrained      = linesAfterBurst >= linesBeforeBurst + kSelfTestEtwBurstCount;
+        const bool burstDrained      = linesAfterBurst >= linesBeforeBurst + etwBurstCount;
         passed &= require(L"etw batch queue drained",
                           burstDrained,
-                          std::format(L"before={} after={} expectedDelta={}", linesBeforeBurst, linesAfterBurst, kSelfTestEtwBurstCount));
+                          std::format(L"before={} after={} expectedDelta={}", linesBeforeBurst, linesAfterBurst, etwBurstCount));
         Debug::Perf::EmitDurationUs(L"monitor.etw.selftest_burst_drain_us",
                                     Debug::Perf::ElapsedUs(etwBurstStarted),
-                                    static_cast<uint64_t>(kSelfTestEtwBurstCount),
+                                    static_cast<uint64_t>(etwBurstCount),
                                     static_cast<uint64_t>(linesAfterBurst - linesBeforeBurst),
                                     burstDrained ? S_OK : E_FAIL);
+
+        if (g_monitorScrollbackSelfTestOptions.enabled)
+        {
+            constexpr size_t kScrollbackTargetLineCount = 320u;
+            if (g_colorView.GetTotalLineCount() < kScrollbackTargetLineCount)
+            {
+                const size_t linesBeforeFill = g_colorView.GetTotalLineCount();
+                const auto fillStarted       = std::chrono::steady_clock::now();
+                const size_t fillCount       = kScrollbackTargetLineCount - linesBeforeFill;
+                for (size_t i = 0; i < fillCount; ++i)
+                {
+                    Debug::InfoParam info{};
+                    info.processID = ::GetCurrentProcessId();
+                    info.threadID  = ::GetCurrentThreadId();
+                    info.type      = Debug::InfoParam::Type::Perf;
+                    g_colorView.QueueEtwEvent(info, std::format(L"Monitor scrollback selftest fill event {}", i));
+                }
+
+                const bool fillDrained = PumpMonitorColorViewUntilLineCount(kScrollbackTargetLineCount, 96);
+                passed &= require(L"scrollback fill queue drained",
+                                  fillDrained,
+                                  std::format(L"before={} after={} target={}",
+                                              linesBeforeFill,
+                                              g_colorView.GetTotalLineCount(),
+                                              kScrollbackTargetLineCount));
+                Debug::Perf::EmitDurationUs(L"monitor.etw.selftest_scrollback_fill_us",
+                                            Debug::Perf::ElapsedUs(fillStarted),
+                                            static_cast<uint64_t>(fillCount),
+                                            static_cast<uint64_t>(g_colorView.GetTotalLineCount() - linesBeforeFill),
+                                            fillDrained ? S_OK : E_FAIL);
+            }
+
+            if (! g_colorView.GetAutoScroll())
+            {
+                ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_OPTION_AUTO_SCROLL, 0), 0);
+            }
+
+            passed &= require(L"scrollback starts from auto-scroll", g_colorView.GetAutoScroll());
+
+            const auto scrollbackStarted = std::chrono::steady_clock::now();
+            ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_OPTION_AUTO_SCROLL, 0), 0);
+            passed &= require(L"scrollback disables auto-scroll via command", ! g_colorView.GetAutoScroll());
+
+            if (g_hColorView)
+            {
+                ::SendMessageW(g_hColorView.get(), WM_VSCROLL, MAKEWPARAM(SB_PAGEUP, 0), 0);
+                ::RedrawWindow(g_hColorView.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+            }
+
+            passed &= require(L"scrollback renders after page-up input", ! g_colorView.GetAutoScroll());
+
+            ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_OPTION_AUTO_SCROLL, 0), 0);
+            passed &= require(L"scrollback restores auto-scroll via command", g_colorView.GetAutoScroll());
+            Debug::Perf::EmitDurationUs(L"monitor.selftest.scrollback_frame_us",
+                                        Debug::Perf::ElapsedUs(scrollbackStarted),
+                                        static_cast<uint64_t>(g_colorView.GetTotalLineCount()),
+                                        g_colorView.GetAutoScroll() ? 1u : 0u,
+                                        g_colorView.GetAutoScroll() ? S_OK : E_FAIL);
+        }
     }
 
     Debug::Perf::EmitValue(L"monitor.ui.toolbar_render_count", g_toolbarDxHost.DebugGetRenderCount(), S_OK);
@@ -2809,6 +3264,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     wil::unique_handle instanceMutex;
     DWORD mutexCreationError        = ERROR_SUCCESS;
     g_monitorChromeSelfTest.enabled = HasCommandLineArg(kMonitorChromeSelfTestArg);
+    g_monitorEtwBurstOptions        = ReadMonitorEtwBurstOptions();
+    g_monitorScrollbackSelfTestOptions.enabled = HasCommandLineArg(kMonitorScrollbackSelfTestArg);
 
     const auto tryCreateInstanceMutex = [&]() -> bool
     {

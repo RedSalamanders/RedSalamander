@@ -5332,11 +5332,13 @@ LRESULT ColorTextView::OnAppEtwBatch()
     // The queue keeps overflow in place so producers do not contend with a front insert under the lock.
     constexpr size_t kMaxBatchSize = 200;
     std::vector<Document::InfoLineInput> batch;
+    size_t queueDepthAtDrain = 0;
     size_t drainedCountForMetric = 0;
     size_t remainingAfterDrain = 0;
     {
         auto lock = _etwQueueCS.lock();
         const size_t drainCount = std::min(kMaxBatchSize, _etwEventQueue.size());
+        queueDepthAtDrain = _etwEventQueue.size();
         batch.reserve(drainCount);
         drainedCountForMetric = drainCount;
 
@@ -5350,7 +5352,8 @@ LRESULT ColorTextView::OnAppEtwBatch()
         remainingAfterDrain = _etwEventQueue.size();
     }
 
-    if (remainingAfterDrain > 0 && _hWnd)
+    const bool repostRequested = remainingAfterDrain > 0 && _hWnd;
+    if (repostRequested)
     {
         PostMessage(_hWnd, WndMsg::kColorTextViewEtwBatch, 0, 0);
     }
@@ -5417,6 +5420,8 @@ LRESULT ColorTextView::OnAppEtwBatch()
                                     static_cast<uint64_t>(drainedCountForMetric),
                                     static_cast<uint64_t>(remainingAfterDrain),
                                     S_OK);
+        Debug::Perf::EmitValue(L"monitor.etw.queue_depth", static_cast<uint64_t>(queueDepthAtDrain), S_OK);
+        Debug::Perf::EmitValue(L"monitor.etw.batch_repost_count", repostRequested ? 1u : 0u, S_OK);
     }
     return 0;
 }

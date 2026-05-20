@@ -13,10 +13,11 @@ Current runner-native inventory as of 2026-05-18:
   cleanup.
 - PerformanceTests2: 12 CppUnitTest `TEST_METHOD`s.
 - FileSystemCurlTests: 8 standalone helper cases.
+- RedConfigureTests: 22 standalone model/parser/session cases.
 - MonitorTest: 3 ETW burst scenarios plus 3 fast guards
   (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
   `--document-model-selftest`).
-- Tooling scripts: 82 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
+- Tooling scripts: 81 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
   synthetic vcpkg merge cases.
 
 `RedSalamander.exe --selftest-list-cases` emits the authoritative in-product
@@ -27,7 +28,7 @@ equivalent to runner-listed cases.
 
 Current source-derived fallback counts:
 
-- Commands: 604 static `SelfTest::RunCase` call-site registrations.
+- Commands: 610 static `SelfTest::RunCase` call-site registrations.
 - CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
 - FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
 
@@ -119,6 +120,59 @@ Current test-review evidence:
     `.\.build\x64\Release\RedSalamanderMonitor.exe --chrome-selftest --perf`
     exited 0; archive `Specs/TestRuns/4cb089111a23/Monitor/2026-05-19_171520/`
     passed with `monitorFrameMetricPresence.allPresent=true`.
+- Frame-performance ARM64 Release build validation from 2026-05-20:
+  - `.\build.ps1 -ProjectName DxUiTests -Configuration Release -Platform ARM64`
+    exited 0; build log `.build/logs/msbuild-20260520_211504_073.log`;
+    diagnostics 0 warnings, 0 errors.
+  - `.\build.ps1 -ProjectName RedSalamander -Configuration Release -Platform ARM64`
+    exited 0; build log `.build/logs/msbuild-20260520_211647_017.log`;
+    diagnostics 26 warnings, 0 errors. Warnings were existing Release ARM64
+    padding warnings plus Monitor C5245 test-helper warnings when the monitor is
+    compiled without `ENABLE_TESTS`.
+  - `try { $env:RSBuildEnableTests='true'; .\build.ps1 -ProjectName RedSalamanderMonitor -Configuration Release -Platform ARM64 } finally { Remove-Item Env:RSBuildEnableTests -ErrorAction SilentlyContinue }`
+    exited 0; build log `.build/logs/msbuild-20260520_211828_344.log`;
+    diagnostics 0 warnings, 0 errors.
+  - ARM64 executable selftests were not run locally because this machine is
+    `PROCESSOR_ARCHITECTURE=AMD64` on an AMD Ryzen 9 9950X3D
+    (`Win32_Processor.Architecture=9`), which does not provide native ARM64
+    process execution. The ARM64 evidence for this pass is build-only.
+- Frame-performance remaining-work closeout from 2026-05-20:
+  - After restoring the repo's x64 vcpkg triplet state,
+    `.\build.ps1 -Configuration Debug` exited 0; build log
+    `.build/logs/msbuild-20260520_212049_103.log`; diagnostics
+    0 warnings, 0 errors. The restore was needed because the prior ARM64
+    validation left the install root without x64 headers such as `wil/com.h`.
+  - `.\build.ps1 -ProjectName DxUiTests -Configuration Debug` exited 0; build
+    log `.build/logs/msbuild-20260520_212944_364.log`; diagnostics
+    0 warnings, 0 errors. The full `.\.build\x64\Debug\DxUiTests.exe`
+    run exited 0 and printed `All DxUi tests passed.`
+  - `folderView_perf_overlay_invalidation_stress` exited 0; archive
+    `Specs/TestRuns/4cb089111a23/Commands/2026-05-20_213228/`;
+    `commands_results.json` reports 1 passed, 0 failed, 0 skipped.
+  - `folderView_perf_scroll_render_stress` exited 0; archive
+    `Specs/TestRuns/4cb089111a23/Commands/2026-05-20_213241/`;
+    `commands_results.json` reports 1 passed, 0 failed, 0 skipped.
+  - Test-enabled `RedSalamanderMonitor` Debug build exited 0; build log
+    `.build/logs/msbuild-20260520_213246_343.log`; diagnostics
+    0 warnings, 0 errors. Default chrome selftest archive
+    `Specs/TestRuns/4cb089111a23/Monitor/2026-05-20_213256/` passed with
+    `monitorFrameMetricPresence.allPresent=true` and
+    `monitorScrollbackSelfTest.enabled=false`.
+  - Monitor ETW latency archive
+    `Specs/TestRuns/4cb089111a23/Monitor/2026-05-20_213301/` passed with
+    `monitorEtwBurstLatency.metricPresence.allPresent=true`; p95 rows were
+    `append_to_visible=22,501us`, `batch_drain=1,214us`,
+    `frame.total=18,746us`, and `present=4,622us`.
+  - Monitor scrollback archive
+    `Specs/TestRuns/4cb089111a23/Monitor/2026-05-20_213308/` passed with
+    `monitorScrollbackSelfTest.metricPresence.allPresent=true`; p95 rows were
+    `scrollback_slice=35,844us`, `frame.total=128,975us`, and
+    `present=867us`.
+  - Cleanup included hiding Monitor selftest-only helpers behind
+    `ENABLE_TESTS`, stabilizing the overlapping-popup menu test so the full
+    DxUi suite is not order-sensitive to OS cursor movement, and removing the
+    stale disposable baseline worktree
+    `C:\Users\eric\.config\superpowers\worktrees\RedSalamander\dxui-overlay-baseline-limitedpump`.
 - `.build/logs/msbuild-20260510_191142_208.log` — Debug x64 `RedConfigure`
   build after fixing the compact first-open Localization overlap and increasing
   the initial window size; build wrapper diagnostics: 0 warnings, 0 errors.
@@ -1184,6 +1238,7 @@ the sink requests a synchronous read lock from the text-change callback.
 | **DxUiTests** | ~50+ | DxUi color parsing, theme rendering, control creation, HSL/RGB conversion, submenu cascade hover timing, single-line text selection clipping, compact TextField density default vertical-padding coverage with explicit-padding override semantics, native RTL/mixed-BiDi selection clipping outside visible clear/reveal trailing buttons, selected TextField emoji color-font rendering, native TextField selected/unselected/multiline/mixed-BiDi and editable ComboBox emoji color-font rendering without a hidden bridge child plus color-glyph pixel-count perf rows, native masked emoji color-font suppression and unmask restore, TextField/native extended emoji text-element deletion and Shift+Arrow selection for ZWJ sequences, variation selectors, skin-tone modifiers, and regional-indicator flags, native emoji copy/cut/paste selection replacement, clipboard round-trip, and undo/redo coverage for grinning face, woman technologist, rainbow flag, skin-tone modifier, and regional-indicator flag text elements, native pointer hit-test snapping over extended emoji text elements for TextField and editable ComboBox, native masked exact-policy one-dot-per-text-element state for extended emoji, native concealed-policy privacy display ranges with same-bucket edit stability plus full-reset/refocus epoch regeneration, hidden concealed pointer end-snap plus keyboard edit/paste/undo/redo coverage, secret render/display-dot/reveal-toggle perf rows, native masked reveal-button pointer and keyboard press-and-hold peek without clearing the secret, keyboard release/blur remask, Tab traversal through the reveal affordance, reveal-button UIA Button/Invoke provider coverage with masked value/text non-disclosure after Invoke, explicit `PasswordRevealMode::Hidden` no-affordance coverage, and explicit `PasswordRevealMode::Visible` persistent plaintext/copy coverage across blur/read-only/disabled transitions, native host text-input keyboard routing, native text-input backend focus/session/caret scaffolding, backend-neutral `SupportsTextInput()` consumer coverage for `TextField` and editable `ComboBox`, native editable-combo session/typing coverage without a hidden bridge child, native editable ComboBox Ctrl+A/C/X/V/Z/Y, Shift+Insert, Shift+Delete, normalized paste, Alt+Down popup-open, Escape popup-close, retained selection, and native-session plus backend-neutral `TextInputState` sync coverage, native inherited flow-direction session state and focused inherited-flow refresh, shared single-line DirectWrite reading-direction-aware visible layout/caret/hit-test/selection-paint plumbing for `TextField` and editable `ComboBox` plus TSF point/extents and UIA RangeFromPoint fallback with `dxui.textinput.bidi_hit_test_us` / `dxui.textinput.bidi_caret_rect_us` perf rows, native key-to-state and key-to-paint perf rows from a deterministic typed-and-rendered native TextField scenario, native edit-transaction and undo-depth perf rows for direct edits, undo, and redo, native no-op delete transaction suppression plus once-per-mutation text-change notifications, native pointer caret-placement state sync, native host-HWND single-line double-click, synthesized repeated-click word selection, third-click select-all, drag-selection replacement over punctuation-delimited text, mixed-BiDi drag selection across Latin/Hebrew script boundaries in both LTR and RTL visual directions with logical UTF-16 clipboard order, native mixed-BiDi pointer hit-test matrix coverage for pixel-rounded leading/middle/trailing DirectWrite visual spans in both LTR and RTL flow directions, native BiDi scenario matrix coverage for pure LTR, pure RTL, Arabic plus Latin digits, surrogate pairs inside RTL text, and path-like RTL host text, native BiDi keyboard logical-boundary coverage for Home/End, Ctrl+End, Shift+Home/End, logical Left/Right, Backspace, and Delete in an RTL host, and native mixed-BiDi edit transaction coverage for logical-order copy/cut/paste, undo/redo selection restoration, Ctrl+Backspace, and Ctrl+Delete around mixed-script word/separator boundaries, native surrogate-pair and extended emoji backspace/delete state sync, native Ctrl+Backspace/Ctrl+Delete word-deletion state sync, native root-reset teardown, native focused-field bounds-change caret refresh, native Tab/default/cancel/context-menu/WM_SYSCHAR routing including attached logical/wrapped multiline `VK_APPS` and `Shift+F10` context-menu keys through the host HWND without a hidden bridge child, native IME start/end composition-state lifecycle, no-payload IME suppression without active composition, read-only IME composition suppression, composition-over-selection range tracking, composition-owned Return/Escape/Tab routing, NavigationView edit-suggest active-composition Down-arrow ownership, host-owned IMM32 composition/candidate window placement at the native caret, moved-field, multiline/wrapped caret-line and focused-control move anchoring, editable ComboBox move, programmatic `TextField` and editable `ComboBox` caret movement, focused `TextField` padding-change and editable `ComboBox` density-change reanchoring, multiline-scroll, and DPI IME reanchoring, native IME result commit, active composition preview with retained composition/conversion-target underline paint geometry for `TextField` and editable `ComboBox`, preview-then-result commit against the original multiline/wrapped IME base anchor, cancel restore, masked UIA `IsPassword`, ValuePattern, and TextPattern non-disclosure, explicit UIA HelpText exposure from retained controls, UIA TextPattern/TextEditPattern document/selection ranges, TextRange clone/endpoint comparison, RangeFromPoint leading-edge caret mapping plus multiline native hit-test mapping, text-element-aware character-unit endpoint/range movement over ZWJ emoji clusters, word-unit endpoint/collapsed/noncollapsed range movement, logical line endpoint/selected-range movement for newline-delimited multiline `TextField` content, multiline TextField non-exposure of ValuePattern, host-thread-dispatched TextField/editable ComboBox range `Select()`, and non-empty selected-range bounding rectangles plus simple LTR same-visual-line, newline-delimited multiline caret-geometry, wrapped multiline visual-line, and single-line plus multiline mixed-BiDi DirectWrite selected-range rectangles for `TextField`, UIA TextPattern/TextEditPattern document ranges plus RangeFromPoint and retained selection for editable `ComboBox`, `dxui.uia.text_range_us` perf rows, native IME TextEdit active-composition/conversion-target ranges, direct native TSF `ITextStoreACP` / `ITextStoreACP2` lock/text/end-ACP/selection/basic geometry/point-to-ACP/mutation/mixed-BiDi text-viewport point/extents/same-line and wrapped multiline text extent/multiline and wrapped point-to-ACP mapping/SetText replacement/query-only insert metadata/layout-unavailable/store-originated and retained-external sink notification plus UnadviseSink identity, read-write edit-transaction, and reentrant-lock rejection coverage and logical UTF-16 emoji range selection/replacement for focused `TextField`, direct native TSF retained selection and insert-at-selection mutation coverage for focused editable `ComboBox`, native single-line and multiline clipboard/undo routing, native host edit-message routing including no-selection `WM_CLEAR`, native masked-hidden clipboard suppression, native masked-revealed copy/cut mutation plus remask on blur/read-only/disable, before Escape cancel, on window deactivation, and on reveal-button capture loss, native read-only mutation suppression, NavigationView native DxUi host-backed address/full-path edit routing without a bridge subclass, NavigationView invalid-path retained HelpText validation feedback, FolderView incremental-search helper behavior, inactive-pane visual-state helpers, and empty-folder placeholder layout metrics |
 | **DxUiTests / NativeTextInput** | 114 | Includes native `TextField` and editable `ComboBox` active IME composition/conversion-target inline underline paint geometry derived from retained range rectangles, programmatic retained caret movement reanchoring active IMM32 composition/candidate forms, focused `TextField` padding-change and editable `ComboBox` density-change reanchoring of active IMM32 composition/candidate forms, focused read-only and masked state cache refresh while a native session is active, editable `ComboBox` active IME composition/candidate reanchoring after focused bounds changes without creating a hidden bridge child, native multiline/wrapped multiline IME composition/candidate anchoring across logical/visual caret lines and focused-control bounds changes on the host HWND, native host-HWND focus-loss native-session teardown/regain while retaining logical text focus, native multiline/wrapped Return default-button suppression plus Tab/Shift+Tab traversal and Escape cancel routing, native multiline/wrapped host-HWND character and Return replacement state sync, editable `ComboBox` exact-match selection plus delete/word-delete command sync coverage on the native host HWND, native single-line tab-character suppression plus partial-selection paste state sync, native Win32 edit-message protocol coverage for `WM_GETTEXT`, `WM_SETTEXT`, `EM_GETSEL`, `EM_SETSEL`, and `EM_REPLACESEL`, native multiline/wrapped multiline IME composition-owned Return/Escape/Tab routing, modified navigation-key routing during active IME composition, host/app deactivation teardown of active IME composition, native IME preview/result commit followed by `WM_IME_ENDCOMPOSITION`, and native IME result-only versus continuing-composition host-key routing coverage. |
 | **FileSystemCurlTests** | 8 | IMAP leaf naming/UID parsing, RFC2047 subject decoding, mailbox `STATUS` parsing, single-message Properties command-count model, listing summary repair batching, and bounded per-listing repair fetch budget coverage. |
+| **RedConfigureTests** | 22 | RedConfigure page definitions, workspace discovery, theme JSON5 parsing/export/validation, SettingsStore parser parity, RC string/menu/dialog parsing, placeholder validation, translation view search/filter/sort, RC writer/merge, theme catalog and preview model behavior, session export, and BOM-less UTF-16 RC loading. |
 | **DxUiTests / Accessibility** | 27 | Includes editable `ComboBox` single-line mixed-BiDi DirectWrite selected-range rectangle coverage through UIA `TextPattern::GetSelection()` / `TextRange::GetBoundingRectangles()`, preserving logical UTF-16 selected text while comparing screen rectangles against retained `ComboBox::TryGetTextInputRangeRects(...)` geometry. |
 | **DxUiTests / ReadOnly** | 24 | Focused read-only multiline/wrapped text-field coverage, including attached native/default-host cases with no bridge opt-in host wrapper that prove host `WM_COPY` copies logical and wrapped multiline text, no-selection host `WM_COPY` is a clipboard no-op, no-selection host `WM_CUT`/`WM_CLEAR` leave clipboard/text/caret unchanged, copy shortcuts preserve full selection, no-selection copy/cut shortcuts leave clipboard/text/caret unchanged, undo/redo no-ops preserve full selection, Ctrl+Backspace/Ctrl+Delete no-ops keep native caret state stable, Ctrl+Arrow word navigation syncs native caret state, and `WM_CUT`, `WM_PASTE`, `WM_CLEAR`, and `WM_CHAR` are suppressed without creating a hidden bridge child. |
 | **LocalizationTests** | ~5 | Resource owner registration, satellite string/menu/dialog lookup, localized dialog templates with executable-owned custom child classes, fallback to embedded resources, and persisted `ui.language` roundtrips |

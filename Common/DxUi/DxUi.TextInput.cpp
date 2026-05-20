@@ -1534,7 +1534,8 @@ void TextField::Paint(WindowHost& host) const
                                                             std::max(1.0f, textRect.bottom - textRect.top),
                                                             readingDirection,
                                                             std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip));
-            const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, textRect.right - 1.0f);
+            const float caretMaxX   = std::max(textRect.left, textRect.right - 1.0f);
+            const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, caretMaxX);
             caretRect               = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
         }
         if (auto* dc = host.GetDeviceContext())
@@ -2557,7 +2558,8 @@ std::optional<D2D1_RECT_F> TextField::GetTextInputCaretRect(const WindowHost& ho
                                                     std::max(1.0f, textRect.bottom - textRect.top),
                                                     readingDirection,
                                                     std::max(1.0f, textRect.right - textRect.left + _horizontalScrollDip));
-    const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, textRect.right - 1.0f);
+    const float caretMaxX   = std::max(textRect.left, textRect.right - 1.0f);
+    const float caretX      = std::clamp(textRect.left + caretOffset - _horizontalScrollDip, textRect.left, caretMaxX);
     const D2D1_RECT_F result = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
     if (perfEnabled && ShouldEmitSingleLineBiDiTextMetric(displayText, readingDirection))
     {

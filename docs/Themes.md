@@ -4,6 +4,56 @@ RedSalamander is theme-aware across the main chrome, panes, navigation bars, fil
 
 ![Themes in Preferences](res/preferences-themes.png)
 
+## Control galleries
+
+The generated control galleries show the shared DxUi controls rendered under each built-in theme and each shipped `Specs/Themes/*.theme.json5` theme.
+
+### Button State Contrast
+
+The button contrast audit shows standard and primary buttons across idle, hover, pressed, keyboard-focus, and disabled states. Enabled text is marked against WCAG normal-text thresholds; disabled controls are shown but marked exempt.
+
+![Button state contrast audit](res/theme-button-states-after-fix.png)
+
+### Light
+
+![Light controls](res/theme-controls-light.png)
+
+### Dark
+
+![Dark controls](res/theme-controls-dark.png)
+
+### Rainbow
+
+![Rainbow controls](res/theme-controls-rainbow.png)
+
+### High Contrast
+
+![High Contrast controls](res/theme-controls-high-contrast.png)
+
+### Forest Mist
+
+![Forest Mist controls](res/theme-controls-forest-mist.png)
+
+### Neon Tokyo
+
+![Neon Tokyo controls](res/theme-controls-neon-tokyo.png)
+
+### Paper & Ink
+
+![Paper & Ink controls](res/theme-controls-paper-ink.png)
+
+### Retro Terminal
+
+![Retro Terminal controls](res/theme-controls-retro-terminal.png)
+
+### Solar Flare
+
+![Solar Flare controls](res/theme-controls-solar-flare.png)
+
+### Ugly
+
+![Ugly controls](res/theme-controls-ugly.png)
+
 ## Quick theme switching
 
 Use **View → Theme**:
