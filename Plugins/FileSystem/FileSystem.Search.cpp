@@ -37,6 +37,7 @@ constexpr size_t kMaxRegexGroupDepth                         = 20u;
 constexpr unsigned long kParallelScanThreshold = 500u;
 // Number of entries per chunk dispatched to a threadpool worker.
 constexpr unsigned long kParallelScanChunkSize = 128u;
+constexpr size_t kParallelDirectoryResultFlushMatches = 32u;
 
 // ---------------------------------------------------------------------------
 // Regex compilation cache (bounded LRU)
@@ -473,6 +474,43 @@ void AccumulateParallelNameOnlyEntry(const SearchRuntime& runtime, SearchEntryMe
     result.matches.push_back(std::move(match));
 }
 
+[[nodiscard]] bool HasQueuedParallelDirectoryResultWork(const ParallelDirectoryResult& result) noexcept
+{
+    return SUCCEEDED(result.status) && ! result.matches.empty();
+}
+
+void QueueParallelDirectoryResultChunk(ParallelDirectoryWalkState& state, ParallelDirectoryResult& result) noexcept
+{
+    if (result.filesScanned != 0u)
+    {
+        state.scannedFiles.fetch_add(result.filesScanned, std::memory_order_acq_rel);
+        result.filesScanned = 0u;
+    }
+    if (result.warningFlags != FILESYSTEM_SEARCH_WARNING_NONE)
+    {
+        state.warningFlags.fetch_or(result.warningFlags, std::memory_order_acq_rel);
+    }
+    if (! HasQueuedParallelDirectoryResultWork(result))
+    {
+        return;
+    }
+
+    ParallelDirectoryResult queued{};
+    queued.fullPath      = result.fullPath;
+    queued.matches       = std::move(result.matches);
+    queued.warningFlags  = result.warningFlags;
+    queued.status        = result.status;
+    result.matches.clear();
+    result.warningFlags  = FILESYSTEM_SEARCH_WARNING_NONE;
+    result.status        = S_OK;
+
+    {
+        std::lock_guard lock(state.mutex);
+        state.completedResults.push_back(std::move(queued));
+    }
+    state.cv.notify_all();
+}
+
 void BuildParallelDirectoryResult(SearchRuntime& runtime,
                                   ParallelDirectoryWalkState& state,
                                   const ParallelDirectoryFrame& frame,
@@ -552,13 +590,13 @@ void BuildParallelDirectoryResult(SearchRuntime& runtime,
         }
 
         AccumulateParallelNameOnlyEntry(runtime, std::move(metadata), result);
+        if (result.matches.size() >= kParallelDirectoryResultFlushMatches)
+        {
+            QueueParallelDirectoryResultChunk(state, result);
+        }
     }
 
-    state.scannedFiles.fetch_add(result.filesScanned, std::memory_order_acq_rel);
-    if (result.warningFlags != FILESYSTEM_SEARCH_WARNING_NONE)
-    {
-        state.warningFlags.fetch_or(result.warningFlags, std::memory_order_acq_rel);
-    }
+    QueueParallelDirectoryResultChunk(state, result);
 }
 
 void CALLBACK ParallelDirectoryWalkWorkerCallback(PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
@@ -642,7 +680,10 @@ void CALLBACK ParallelDirectoryWalkWorkerCallback(PTP_CALLBACK_INSTANCE /*instan
                 state.cancelFlag.store(true, std::memory_order_release);
             }
 
-            state.completedResults.push_back(std::move(result));
+            if (HasQueuedParallelDirectoryResultWork(result))
+            {
+                state.completedResults.push_back(std::move(result));
+            }
         }
 
         state.cv.notify_all();
@@ -2354,7 +2395,8 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
         // Parallel path: dispatch evaluation to the threadpool when the directory
         // is large enough that the per-chunk overhead is worth the parallelism.
         const auto entryCount = static_cast<unsigned long>(allEntries.size());
-        if (entryCount >= kParallelScanThreshold)
+        const bool contentSearchEnabled = runtime.query->contentMode != FILESYSTEM_SEARCH_CONTENT_DISABLED;
+        if (contentSearchEnabled && entryCount >= kParallelScanThreshold)
         {
             hr = ParallelEvaluateEntries(runtime, allEntries);
             if (FAILED(hr))

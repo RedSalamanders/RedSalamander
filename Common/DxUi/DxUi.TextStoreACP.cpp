@@ -711,7 +711,8 @@ public:
         const float endOffset    = MeasureCaretOffsetDip(_host, state.text, FontRole::Body, range.end, heightDip, readingDirection, layoutWidth);
         D2D1_RECT_F rectDip      = bounds;
         rectDip.left             = std::clamp(bounds.left + (std::min)(startOffset, endOffset), bounds.left, bounds.right);
-        rectDip.right            = std::clamp(bounds.left + (std::max)(startOffset, endOffset), rectDip.left + 1.0f, bounds.right);
+        const float minRight     = (std::min)(rectDip.left + 1.0f, bounds.right);
+        rectDip.right            = std::clamp(bounds.left + (std::max)(startOffset, endOffset), minRight, bounds.right);
 
         *prc       = DipRectToScreenRect(*_host, rectDip);
         *pfClipped = FALSE;

@@ -26,6 +26,7 @@ inline constexpr wchar_t kCut               = L'\uE8C6';
 inline constexpr wchar_t kDelete            = L'\uE74D';
 inline constexpr wchar_t kRename            = L'\uE8AC';
 inline constexpr wchar_t kOpenFile          = L'\uE8E5';
+inline constexpr wchar_t kFolder            = L'\uE8B7';
 inline constexpr wchar_t kInfo              = L'\uE946';
 inline constexpr wchar_t kCalendar          = L'\uE787';
 inline constexpr wchar_t kHardDrive         = L'\uEDA2';

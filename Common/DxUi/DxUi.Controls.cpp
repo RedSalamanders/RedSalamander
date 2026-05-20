@@ -1612,6 +1612,11 @@ bool Button::Invoke(WindowHost& host, bool focusSelf)
         host.SetFocusControl(this);
     }
 
+    if (_variant == ButtonVariant::DropDown && _onDropDownClick)
+    {
+        return InvokeDropDown(host);
+    }
+
     Invalidate(host);
     const std::function<void()> onClick = _onClick;
     if (onClick)
@@ -1729,17 +1734,22 @@ bool Button::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         return false;
     }
 
-    const bool wasPressed = _pressed;
-    const bool invokeDropDown = _pressedDropDown && PointInRect(GetHitBounds(), point);
-    _pressed              = false;
-    _pressedDropDown      = false;
-    Invalidate(host);
+    const bool wasPressed     = _pressed;
+    const bool hitButton      = PointInRect(GetHitBounds(), point);
+    const bool invokeDropDown = _pressedDropDown && hitButton;
     const std::function<void()> onClick = _onClick;
-    if (wasPressed && invokeDropDown && InvokeDropDown())
+    _pressed                           = false;
+    _pressedDropDown                   = false;
+    if (wasPressed)
+    {
+        Invalidate(host);
+        host.ReleaseMouseCapture();
+    }
+    if (wasPressed && invokeDropDown && InvokeDropDown(host))
     {
         return true;
     }
-    if (wasPressed && PointInRect(GetHitBounds(), point) && onClick)
+    if (wasPressed && hitButton && onClick)
     {
         onClick();
     }
@@ -1757,7 +1767,7 @@ bool Button::OnKeyDown(WindowHost& host, UINT virtualKey, UINT modifiers)
     {
         return Invoke(host, false);
     }
-    if ((virtualKey == VK_F4 || (virtualKey == VK_DOWN && (modifiers & kButtonModifierAlt) != 0u)) && InvokeDropDown())
+    if ((virtualKey == VK_F4 || (virtualKey == VK_DOWN && (modifiers & kButtonModifierAlt) != 0u)) && InvokeDropDown(host))
     {
         return true;
     }
@@ -1811,13 +1821,20 @@ bool Button::OnMouseLeave(WindowHost& host)
 
 bool Button::IsPressed() const noexcept
 {
-    return _pressed;
+    return _pressed || _dropDownOpen;
 }
 
 std::wstring_view Button::GetText() const noexcept
 {
     return _text;
 }
+
+#if defined(ENABLE_TESTS)
+bool Button::DebugIsPressed() const noexcept
+{
+    return IsPressed();
+}
+#endif
 
 void Button::SetPressed(bool pressed) noexcept
 {
@@ -1856,15 +1873,22 @@ bool Button::IsDropDownInvocationPoint(D2D1_POINT_2F point) const noexcept
     return point.x >= dividerX && PointInRect(bounds, point);
 }
 
-bool Button::InvokeDropDown()
+bool Button::InvokeDropDown(WindowHost& host)
 {
     if (! IsEnabled() || ! IsVisible() || ! _onDropDownClick)
     {
         return false;
     }
 
+    _pressed      = true;
+    _dropDownOpen = true;
+    Invalidate(host);
     const std::function<void()> onDropDownClick = _onDropDownClick;
     onDropDownClick();
+    _dropDownOpen    = false;
+    _pressed         = false;
+    _pressedDropDown = false;
+    Invalidate(host);
     return true;
 }
 

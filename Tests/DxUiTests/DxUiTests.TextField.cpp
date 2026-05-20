@@ -231,6 +231,27 @@ void TestTextFieldCaretOverrideLeavesFocusBorderUnchanged()
     RequireColorNear(disabled.caret, overrideCaret, "caret override replaces the disabled caret color");
 }
 
+void TestTextInputCaretRectsTolerateSubDipTextViewport()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root   = std::make_unique<Panel>();
+    auto* field = root->AddChild<TextField>(L"alpha");
+    auto* combo = root->AddChild<ComboBox>();
+    field->SetBounds(D2D1::RectF(0.0f, 0.0f, 16.5f, 28.0f));
+    combo->SetEditable(true);
+    combo->SetBounds(D2D1::RectF(0.0f, 36.0f, 46.5f, 64.0f));
+    combo->SetText(L"beta");
+    host.SetRoot(std::move(root));
+
+    D2D1_RECT_F fieldCaret = D2D1::RectF();
+    Require(field->DebugGetCaretRect(host, 2u, fieldCaret), "narrow text field caret rect remains measurable");
+
+    const std::optional<D2D1_RECT_F> comboCaret = combo->TryGetTextInputCaretRect(host, 2u);
+    Require(comboCaret.has_value(), "narrow editable combo caret rect remains measurable");
+}
+
 void TestWindowHostSpaceAndReturnToggleFocusedNonEditableComboWithoutDefaultButtonFallback()
 {
     using namespace RedSalamander::DxUi;
@@ -994,10 +1015,14 @@ void TestEditableComboBoxCtrlBackspaceDeletesPreviousWord()
     ComboBox combo;
     combo.SetEditable(true);
     combo.SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
-    combo.SetText(L"alpha beta");
+    combo.SetText(L"C:\\alpha\\beta\\gamma");
 
     Require(combo.OnKeyDown(host, VK_BACK, MK_CONTROL), "editable combo handles ctrl+backspace");
-    Require(combo.GetText() == L"alpha ", "editable combo ctrl+backspace deletes the previous word");
+    Require(combo.GetText() == L"C:\\alpha\\beta\\", "editable combo ctrl+backspace deletes the previous path segment");
+    Require(! combo.OnChar(host, static_cast<wchar_t>(0x7F), MK_CONTROL), "editable combo ignores translated ctrl+backspace DEL character");
+    Require(combo.GetText() == L"C:\\alpha\\beta\\", "editable combo ctrl+backspace must not leave an invisible DEL character");
+    Require(combo.OnKeyDown(host, VK_BACK, MK_CONTROL), "editable combo handles a repeated ctrl+backspace");
+    Require(combo.GetText() == L"C:\\alpha\\", "editable combo repeated ctrl+backspace deletes the next previous path segment");
 }
 
 void TestEditableComboBoxShiftArrowSelectionReplacesSelectedText()
@@ -1547,6 +1572,7 @@ void RunTextFieldTests()
     runTest("TestTextFieldHighContrastFocusStaysVisibleWithoutKeyboardFocus", TestTextFieldHighContrastFocusStaysVisibleWithoutKeyboardFocus);
     runTest("TestTextFieldHighContrastDisabledBorderStaysVisible", TestTextFieldHighContrastDisabledBorderStaysVisible);
     runTest("TestTextFieldCaretOverrideLeavesFocusBorderUnchanged", TestTextFieldCaretOverrideLeavesFocusBorderUnchanged);
+    runTest("TestTextInputCaretRectsTolerateSubDipTextViewport", TestTextInputCaretRectsTolerateSubDipTextViewport);
     runTest("TestTextFieldUsesViewerDerivedInputChrome", TestTextFieldUsesViewerDerivedInputChrome);
     runTest("TestWindowHostSpaceAndReturnToggleFocusedNonEditableComboWithoutDefaultButtonFallback",
             TestWindowHostSpaceAndReturnToggleFocusedNonEditableComboWithoutDefaultButtonFallback);

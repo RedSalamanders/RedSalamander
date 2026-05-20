@@ -1546,7 +1546,6 @@ void TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot()
             return;
         }
 
-        SetCursorPos(popupItemScreenPoint.x, popupItemScreenPoint.y);
         PostMessageW(viewPopupHwnd,
                      WM_MOUSEMOVE,
                      0,

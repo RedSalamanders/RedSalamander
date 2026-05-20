@@ -1421,6 +1421,9 @@ public:
     bool Invoke(WindowHost& host, bool focusSelf);
     [[nodiscard]] float DebugGetHoverAnimationProgress() const noexcept;
     [[nodiscard]] float DebugGetFocusAnimationProgress() const noexcept;
+#if defined(ENABLE_TESTS)
+    [[nodiscard]] bool DebugIsPressed() const noexcept;
+#endif
 
     void Paint(WindowHost& host) const override;
     bool Tick(WindowHost& host, uint64_t nowTickMs) override;
@@ -1453,7 +1456,7 @@ private:
     void UpdateInteractionTransition(WindowHost& host, InteractionTransitionState& transition, float target) noexcept;
     [[nodiscard]] bool AdvanceInteractionTransition(const WindowHost& host, InteractionTransitionState& transition, uint64_t nowTickMs) noexcept;
     [[nodiscard]] bool IsDropDownInvocationPoint(D2D1_POINT_2F point) const noexcept;
-    [[nodiscard]] bool InvokeDropDown();
+    [[nodiscard]] bool InvokeDropDown(WindowHost& host);
 
     static constexpr uint64_t _interactionAnimationDurationMs = 140u;
     static constexpr float _dropDownChevronWidthDip           = 20.0f;
@@ -1466,6 +1469,7 @@ private:
     InteractionTransitionState _focusTransition{};
     bool _pressed          = false;
     bool _pressedDropDown  = false;
+    bool _dropDownOpen     = false;
     bool _primary          = false;
     ButtonVariant _variant = ButtonVariant::Standard;
 };

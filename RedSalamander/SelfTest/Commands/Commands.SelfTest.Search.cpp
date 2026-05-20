@@ -216,9 +216,9 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
                                                                         static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
                         const int clickY = static_cast<int>(std::lround((itemRectDip.top + itemRectDip.bottom) * 0.5f * static_cast<float>(popupState.dpi) /
                                                                         static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
-                        SendMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
-                        SendMessageW(popup, WM_LBUTTONUP, 0, MAKELPARAM(clickX, clickY));
-                        itemInvoked.store(true, std::memory_order_release);
+                        const BOOL postedDown = PostMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
+                        const BOOL postedUp   = PostMessageW(popup, WM_LBUTTONUP, 0, MAKELPARAM(clickX, clickY));
+                        itemInvoked.store(postedDown != FALSE && postedUp != FALSE, std::memory_order_release);
                         if (IsWindow(popup) != FALSE)
                         {
                             PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
@@ -255,6 +255,7 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
 
     std::atomic<bool> sawPopup{false};
     std::atomic<bool> stateReadable{false};
+    std::atomic<bool> ownerButtonPressed{false};
 
     std::jthread menuDriver([&](std::stop_token stopToken) noexcept
     {
@@ -269,6 +270,11 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
                 if (RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState))
                 {
                     stateReadable.store(true, std::memory_order_release);
+                    FindFilesDebugSnapshot snapshot{};
+                    if (DebugGetFindFilesWindowSnapshot(snapshot))
+                    {
+                        ownerButtonPressed.store(snapshot.findButtonPressed, std::memory_order_release);
+                    }
                     if (validatePopup)
                     {
                         validatePopup(popupState);
@@ -289,6 +295,118 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
     menuDriver.join();
     state.Require(sawPopup.load(std::memory_order_acquire), L"Find split button did not open a DxUI action menu.");
     state.Require(stateReadable.load(std::memory_order_acquire), L"Find split action menu did not expose readable debug state.");
+    state.Require(ownerButtonPressed.load(std::memory_order_acquire), L"Find split button should stay highlighted while its action menu is open.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool ProbeFindSplitMenuStationaryHover(HWND findWindow, HWND ownerWindow, size_t itemIndex, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    POINT originalCursor{};
+    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
+    const auto cursorRestore = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            static_cast<void>(SetCursorPos(originalCursor.x, originalCursor.y));
+        }
+    });
+
+    std::optional<POINT> itemScreenCenter;
+    std::jthread firstOpenDriver([&](std::stop_token stopToken) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(4000ms);
+        while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < deadline)
+        {
+            const HWND popup = FindVisibleOwnedDxUiContextMenuWindowForSearchTest(ownerWindow);
+            if (popup && IsWindow(popup) != FALSE)
+            {
+                RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
+                D2D1_RECT_F itemRectDip{};
+                if (RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState) &&
+                    RedSalamander::DxUi::DebugGetContextMenuPopupItemRect(popup, itemIndex, itemRectDip))
+                {
+                    POINT point{static_cast<LONG>(std::lround((itemRectDip.left + itemRectDip.right) * 0.5f *
+                                                              static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+                                static_cast<LONG>(std::lround((itemRectDip.top + itemRectDip.bottom) * 0.5f *
+                                                              static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI)))};
+                    if (ClientToScreen(popup, &point) != FALSE)
+                    {
+                        itemScreenCenter = point;
+                    }
+                }
+
+                PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+                PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+                return;
+            }
+
+            std::this_thread::sleep_for(10ms);
+        }
+    });
+
+    SendFindSplitMenuClick(findWindow, state);
+    firstOpenDriver.request_stop();
+    firstOpenDriver.join();
+    state.Require(itemScreenCenter.has_value(), L"Find split action menu did not expose an item center for stationary-hover validation.");
+    if (! itemScreenCenter.has_value())
+    {
+        return false;
+    }
+
+    static_cast<void>(SetCursorPos(itemScreenCenter->x, itemScreenCenter->y));
+
+    std::atomic<bool> hoverObserved{false};
+    std::jthread secondOpenDriver([&](std::stop_token stopToken) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(4000ms);
+        while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < deadline)
+        {
+            const HWND popup = FindVisibleOwnedDxUiContextMenuWindowForSearchTest(ownerWindow);
+            if (popup && IsWindow(popup) != FALSE)
+            {
+                RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
+                D2D1_RECT_F itemRectDip{};
+                if (RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState) &&
+                    RedSalamander::DxUi::DebugGetContextMenuPopupItemRect(popup, itemIndex, itemRectDip))
+                {
+                    const int clientX = static_cast<int>(std::lround((itemRectDip.left + itemRectDip.right) * 0.5f *
+                                                                     static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
+                    const int clientY = static_cast<int>(std::lround((itemRectDip.top + itemRectDip.bottom) * 0.5f *
+                                                                     static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
+                    PostMessageW(popup, WM_MOUSEMOVE, 0, MAKELPARAM(clientX, clientY));
+                }
+
+                const auto hoverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1000ms);
+                while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < hoverDeadline)
+                {
+                    RedSalamander::DxUi::ContextMenuPopupDebugState hoverState{};
+                    RedSalamander::DxUi::ContextMenuPopupItemPaintDebugState paintState{};
+                    if (RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, hoverState) &&
+                        hoverState.hoveredIndex == std::optional<size_t>{itemIndex} &&
+                        RedSalamander::DxUi::DebugGetContextMenuPopupItemPaint(popup, itemIndex, paintState) && paintState.usesHighlightFill)
+                    {
+                        hoverObserved.store(true, std::memory_order_release);
+                        break;
+                    }
+
+                    std::this_thread::sleep_for(10ms);
+                }
+
+                PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+                PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+                return;
+            }
+
+            std::this_thread::sleep_for(10ms);
+        }
+    });
+
+    SendFindSplitMenuClick(findWindow, state);
+    secondOpenDriver.request_stop();
+    secondOpenDriver.join();
+    state.Require(hoverObserved.load(std::memory_order_acquire), L"Find split action menu did not highlight the item under a stationary pointer.");
     return state.failure.empty();
 }
 
@@ -986,6 +1104,28 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
     requireIdle(L"Subtract");
     requireSnapshotCount(0u, L"Subtract", {});
 
+    std::wstring wildcardAllWithTranslatedControl = L"*";
+    wildcardAllWithTranslatedControl.push_back(static_cast<wchar_t>(0x7F));
+    state.Require(DebugConfigureFindFilesWindow(root.native(),
+                                                std::move(wildcardAllWithTranslatedControl),
+                                                L"",
+                                                Common::Settings::SearchNameMode::Wildcard,
+                                                Common::Settings::SearchContentMode::Disabled),
+                  L"Failed to configure Find window for wildcard-all search with a translated control character.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Find), L"Failed to start wildcard-all Find operation.");
+    requireIdle(L"wildcard-all Find");
+    requireSnapshotCount(4u, L"wildcard-all Find", {root / L"a.jsonl", root / L"b.txt", sub / L"c.jsonl", sub / L"d.txt"});
+
+    FindFilesDebugSnapshot wildcardAllSnapshot{};
+    state.Require(DebugGetFindFilesWindowSnapshot(wildcardAllSnapshot), L"Failed to capture wildcard-all Find snapshot.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(wildcardAllSnapshot.namePatternText == L"*",
+                  std::format(L"Find dialog should sanitize translated control characters from wildcard-all patterns; got length {}.",
+                              wildcardAllSnapshot.namePatternText.size()));
+
     state.Require(DebugConfigureFindFilesWindow(
                       root.native(), L"", L"needle", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::TextLiteral),
                   L"Failed to configure Find window for content search.");
@@ -1193,32 +1333,39 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
     ec.clear();
 
     state.Require(SelfTest::EnsureDirectory(sub), L"Failed to create incremental-update test subdirectory.");
-    constexpr size_t kRootMatchCount = 80u;
-    constexpr size_t kSubMatchCount  = 80u;
+    constexpr size_t kRootMatchCount = 640u;
+    constexpr size_t kSubMatchCount  = 640u;
     for (size_t index = 0; index < kRootMatchCount; ++index)
     {
-        const std::filesystem::path filePath = root / std::format(L"root_{:03}.jsonl", index);
+        const std::filesystem::path filePath = root / std::format(L"root_{:04}.txt", index);
         state.Require(SelfTest::WriteTextFile(filePath, "{\"message\":\"root\"}\n"), std::format(L"Failed to create '{}'.", filePath.filename().native()));
     }
     for (size_t index = 0; index < kSubMatchCount; ++index)
     {
-        const std::filesystem::path filePath = sub / std::format(L"sub_{:03}.jsonl", index);
+        const std::filesystem::path filePath = sub / std::format(L"sub_{:04}.txt", index);
         state.Require(SelfTest::WriteTextFile(filePath, "{\"message\":\"sub\"}\n"), std::format(L"Failed to create '{}'.", filePath.filename().native()));
     }
-    state.Require(SelfTest::WriteTextFile(root / L"ignore.txt", L"ignore"), L"Failed to create ignore.txt.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    FindFilesPaneContext staleContext{};
-    staleContext.pluginId        = L"builtin/file-system-onedrive-business";
-    staleContext.pluginShortId   = L"onedrive";
-    staleContext.instanceContext = L"@stale";
-    staleContext.rootPluginPath  = std::filesystem::path(L"onedrive://@stale");
+    CreatedFileSystemInstance created{};
+    state.Require(GetConfiguredLocalFileSystemForSelfTest(state, R"({"searchBackendPreference":"scan","searchMaxDirectoryWalkers":4})", created),
+                  L"Failed to create scan-only local filesystem for incremental-update test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FindFilesPaneContext context{};
+    context.fileSystem     = created.fileSystem;
+    context.pluginId       = L"builtin/file-system";
+    context.pluginShortId  = L"file";
+    context.rootPluginPath = root;
 
     const AppTheme theme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-large-incremental");
-    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(staleContext)), L"Failed to open Find window for incremental-update test.");
+    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for incremental-update test.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for incremental-update test.");
@@ -1228,11 +1375,12 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
     }
 
     state.Require(! IsOwnedBy(findWindow, mainWindow), L"Find window should be an independent top-level window in incremental-update test.");
-    state.Require(DebugSetFindFilesWindowOptions(true, true, false, true, false), L"Failed to configure Find options for incremental-update test.");
-    state.Require(DebugConfigureFindFilesWindow(
-                      root.native(), L"*.jsonl", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
+    state.Require(DebugSetFindFilesWindowOptions(true, true, false, false, false), L"Failed to configure Find options for incremental-update test.");
+    state.Require(DebugConfigureFindFilesWindow(root.native(), L"*", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
                   L"Failed to configure Find window for incremental-update test.");
     state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Find), L"Failed to start Find search for incremental-update test.");
+
+    constexpr size_t kExpectedMatches = kRootMatchCount + kSubMatchCount;
     state.Require(DebugWaitForFindFilesWindowIdle(static_cast<uint32_t>(SelfTest::Scale(15000ms).count())),
                   L"Find window did not become idle for incremental-update test.");
 
@@ -1243,11 +1391,14 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
         return false;
     }
 
-    constexpr size_t kExpectedMatches = kRootMatchCount + kSubMatchCount;
     state.Require(snapshot.lastStatusHint == S_OK,
                   std::format(L"Expected incremental-update search to succeed, got 0x{:08X}.", static_cast<unsigned long>(snapshot.lastStatusHint)));
     state.Require(snapshot.resultCount == kExpectedMatches,
                   std::format(L"Expected {} incremental-update results, got {}.", kExpectedMatches, snapshot.resultCount));
+    state.Require(snapshot.incrementalResultRefreshCount != 0u,
+                  L"Wildcard Find search did not apply any result-batch refresh before the Find UI settled.");
+    state.Require(snapshot.incrementalVisibleResultRefreshCount != 0u,
+                  L"Wildcard Find search did not expose a visible result batch before the Find UI settled.");
     state.Require(snapshot.resultListFullRebuildCount == 0u,
                   std::format(L"Append-only Find search should not rebuild the whole results list, got {} rebuild(s).", snapshot.resultListFullRebuildCount));
 
@@ -3445,6 +3596,10 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
         PumpPendingMessages();
 
         HWND target = GetFocus();
+        if (! target || IsWindow(target) == FALSE)
+        {
+            target = GetFindFilesWindowHandle();
+        }
         state.Require(target != nullptr && IsWindow(target) != FALSE, L"Focused keyboard target is invalid for editable-combo keyboard editing test.");
         if (target && IsWindow(target) != FALSE)
         {
@@ -3509,6 +3664,8 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
     waitForRootText(L"C:\\alpha\\beta\\gamma", L"preparing Ctrl+Backspace");
     sendCtrlKey(target, VK_BACK, 0x7Fu);
     waitForRootText(L"C:\\alpha\\beta\\", L"Ctrl+Backspace");
+    sendCtrlKey(target, VK_BACK, 0x7Fu);
+    waitForRootText(L"C:\\alpha\\", L"repeated Ctrl+Backspace");
     if (! state.failure.empty())
     {
         return false;
@@ -3702,6 +3859,8 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
     state.Require(initialMenuShapeValid.load(std::memory_order_acquire), L"Find split action menu should expose Find, Intersect, Subtract, and Append entries.");
     state.Require(initialSetOpsDisabled.load(std::memory_order_acquire),
                   L"Find split action menu should disable Append/Intersect/Subtract until the result list contains items.");
+    state.Require(ProbeFindSplitMenuStationaryHover(findWindow, findWindow, 0u, state),
+                  L"Find split action menu should highlight the item under a stationary pointer.");
     state.Require(! snapshot.cancelButtonEnabled && ! snapshot.openButtonEnabled && ! snapshot.parentButtonEnabled,
                   L"Cancel/Open/Parent buttons should be disabled while idle with no selection.");
     state.Require(snapshot.rootComboEnabled && snapshot.nameComboEnabled && snapshot.nameModeComboEnabled && snapshot.contentComboEnabled &&
@@ -4198,6 +4357,11 @@ void SendFindSplitMenuClick(HWND findWindow, CaseState& state) noexcept
                       snapshot.resultColumnIds[1] == L"path" && snapshot.dxResizeFailureCount == 0u && containsPath(snapshot, selectedPath),
                   std::format(L"Find window did not expose the expected baseline results-grid state before header reorder validation. {}",
                               DescribeFindSnapshotBrief(snapshot)));
+    const bool sawNestedPathText =
+        std::find(snapshot.resultPathTexts.begin(), snapshot.resultPathTexts.end(), std::wstring(L"sub")) != snapshot.resultPathTexts.end();
+    state.Require(sawNestedPathText, L"Recursive Find results should show the containing subfolder in the Path column.");
+    state.Require(snapshot.visibleResultIconCellCount >= snapshot.visibleResultRowCount && snapshot.visibleResultRowCount > 0u,
+                  L"Find results should render a file/folder icon cell for each visible row.");
     if (! state.failure.empty())
     {
         return false;

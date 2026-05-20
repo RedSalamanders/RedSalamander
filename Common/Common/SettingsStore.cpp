@@ -3555,6 +3555,62 @@ const char* SearchContentModeToString(Common::Settings::SearchContentMode mode) 
     return "disabled";
 }
 
+constexpr size_t kMaxSearchHistoryItems = 10u;
+
+[[nodiscard]] std::wstring StripSearchSingleLineControlCharacters(std::wstring_view text)
+{
+    std::wstring sanitized;
+    sanitized.reserve(text.size());
+    for (const wchar_t ch : text)
+    {
+        if (std::iswcntrl(static_cast<wint_t>(ch)) == 0)
+        {
+            sanitized.push_back(ch);
+        }
+    }
+    return sanitized;
+}
+
+void SanitizeSearchHistory(std::vector<std::wstring>& history)
+{
+    std::vector<std::wstring> sanitized;
+    sanitized.reserve(std::min(history.size(), kMaxSearchHistoryItems));
+    for (const std::wstring& rawEntry : history)
+    {
+        std::wstring entry = StripSearchSingleLineControlCharacters(rawEntry);
+        if (entry.empty())
+        {
+            continue;
+        }
+
+        const bool duplicate =
+            std::any_of(sanitized.begin(), sanitized.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, entry); });
+        if (duplicate)
+        {
+            continue;
+        }
+
+        sanitized.push_back(std::move(entry));
+        if (sanitized.size() >= kMaxSearchHistoryItems)
+        {
+            break;
+        }
+    }
+
+    history = std::move(sanitized);
+}
+
+void SanitizeSearchDialogSettings(Common::Settings::SearchDialogSettings& settings)
+{
+    SanitizeSearchHistory(settings.recentRoots);
+    SanitizeSearchHistory(settings.recentNamePatterns);
+    SanitizeSearchHistory(settings.recentContentPatterns);
+
+    settings.lastRoot           = StripSearchSingleLineControlCharacters(settings.lastRoot);
+    settings.lastNamePattern    = StripSearchSingleLineControlCharacters(settings.lastNamePattern);
+    settings.lastContentPattern = StripSearchSingleLineControlCharacters(settings.lastContentPattern);
+}
+
 void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
 {
     yyjson_val* search = yyjson_obj_get(root, "search");
@@ -3565,8 +3621,7 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
 
     Common::Settings::SearchDialogSettings settings;
 
-    constexpr size_t kMaxHistoryItems = 10u;
-    auto parseHistory                 = [&](const char* key, std::vector<std::wstring>& dest)
+    auto parseHistory = [&](const char* key, std::vector<std::wstring>& dest)
     {
         yyjson_val* arr = yyjson_obj_get(search, key);
         if (! arr || ! yyjson_is_arr(arr))
@@ -3575,8 +3630,8 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
         }
 
         const size_t count = yyjson_arr_size(arr);
-        dest.reserve(std::min(count, kMaxHistoryItems));
-        for (size_t i = 0; i < count && dest.size() < kMaxHistoryItems; ++i)
+        dest.reserve(std::min(count, kMaxSearchHistoryItems));
+        for (size_t i = 0; i < count && dest.size() < kMaxSearchHistoryItems; ++i)
         {
             yyjson_val* value = yyjson_arr_get(arr, i);
             if (! value || ! yyjson_is_str(value))
@@ -3591,7 +3646,15 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
             }
 
             std::wstring text = Utf16FromUtf8(utf8);
-            if (! text.empty())
+            text              = StripSearchSingleLineControlCharacters(text);
+            if (text.empty())
+            {
+                continue;
+            }
+
+            const bool duplicate =
+                std::any_of(dest.begin(), dest.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, text); });
+            if (! duplicate)
             {
                 dest.push_back(std::move(text));
             }
@@ -3604,15 +3667,15 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
 
     if (const auto lastRoot = GetString(search, "lastRoot"))
     {
-        settings.lastRoot = Utf16FromUtf8(lastRoot.value());
+        settings.lastRoot = StripSearchSingleLineControlCharacters(Utf16FromUtf8(lastRoot.value()));
     }
     if (const auto lastNamePattern = GetString(search, "lastNamePattern"))
     {
-        settings.lastNamePattern = Utf16FromUtf8(lastNamePattern.value());
+        settings.lastNamePattern = StripSearchSingleLineControlCharacters(Utf16FromUtf8(lastNamePattern.value()));
     }
     if (const auto lastContentPattern = GetString(search, "lastContentPattern"))
     {
-        settings.lastContentPattern = Utf16FromUtf8(lastContentPattern.value());
+        settings.lastContentPattern = StripSearchSingleLineControlCharacters(Utf16FromUtf8(lastContentPattern.value()));
     }
 
     GetBool(search, "recursive", settings.recursive);
@@ -3680,6 +3743,8 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
             settings.resultsGridLayout.push_back(std::move(layoutEntry));
         }
     }
+
+    SanitizeSearchDialogSettings(settings);
 
     const Common::Settings::SearchDialogSettings defaults{};
     const bool hasNonDefault = ! settings.recentRoots.empty() || ! settings.recentNamePatterns.empty() || ! settings.recentContentPatterns.empty() ||
@@ -6786,7 +6851,8 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
 
     if (settings.search)
     {
-        const auto& search = settings.search.value();
+        Common::Settings::SearchDialogSettings search = settings.search.value();
+        SanitizeSearchDialogSettings(search);
 
         const bool wroteSearch = ! search.recentRoots.empty() || ! search.recentNamePatterns.empty() || ! search.recentContentPatterns.empty() ||
                                  ! search.lastRoot.empty() || ! search.lastNamePattern.empty() || ! search.lastContentPattern.empty() || ! search.recursive ||
@@ -6803,8 +6869,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             }
             yyjson_mut_obj_add_val(doc, root, "search", searchObj);
 
-            constexpr size_t kMaxHistoryItems = 10u;
-            auto writeHistory                 = [&](const char* key, const std::vector<std::wstring>& history) -> HRESULT
+            auto writeHistory = [&](const char* key, const std::vector<std::wstring>& history) -> HRESULT
             {
                 if (history.empty())
                 {
@@ -6831,7 +6896,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         return hr;
                     }
                     ++added;
-                    if (added >= kMaxHistoryItems)
+                    if (added >= kMaxSearchHistoryItems)
                     {
                         break;
                     }

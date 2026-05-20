@@ -3,13 +3,17 @@
 #include "SettingsStore.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <format>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -1285,6 +1289,451 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
 
     return stitched;
 }
+
+[[nodiscard]] std::wstring MakeThemeGalleryFileSlug(std::wstring_view name)
+{
+    std::wstring slug;
+    bool pendingSeparator = false;
+    for (wchar_t ch : name)
+    {
+        if (ch >= L'A' && ch <= L'Z')
+        {
+            ch = static_cast<wchar_t>(L'a' + (ch - L'A'));
+        }
+
+        if ((ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9'))
+        {
+            if (pendingSeparator && ! slug.empty())
+            {
+                slug.push_back(L'-');
+            }
+            slug.push_back(ch);
+            pendingSeparator = false;
+            continue;
+        }
+
+        pendingSeparator = ! slug.empty();
+    }
+
+    return slug.empty() ? L"theme" : slug;
+}
+
+[[nodiscard]] std::filesystem::path MakeThemeGalleryOutputPath(const std::filesystem::path& outputDirectory,
+                                                               const GalleryTheme& theme,
+                                                               std::unordered_map<std::wstring, size_t>& slugCounts)
+{
+    const std::wstring slug = MakeThemeGalleryFileSlug(theme.name);
+    const size_t count = ++slugCounts[slug];
+
+    std::wstring fileName = L"theme-controls-" + slug;
+    if (count > 1u)
+    {
+        fileName += L"-" + std::to_wstring(count);
+    }
+    fileName += L".png";
+    return outputDirectory / fileName;
+}
+
+constexpr float kButtonAuditWidthDip       = 1680.0f;
+constexpr float kButtonAuditMarginDip      = 24.0f;
+constexpr float kButtonAuditHeaderHeightDip = 96.0f;
+constexpr float kButtonAuditThemeGapDip    = 18.0f;
+constexpr float kButtonAuditStateGapDip    = 10.0f;
+constexpr float kButtonAuditRowLabelDip    = 112.0f;
+constexpr float kButtonAuditTileHeightDip  = 96.0f;
+constexpr float kButtonAuditSectionHeaderDip = 48.0f;
+
+struct ButtonAuditState
+{
+    std::wstring_view name;
+    bool enabled       = true;
+    bool hovered       = false;
+    bool pressed       = false;
+    bool focused       = false;
+    bool keyboardFocus = false;
+    float hoverStrength = 0.0f;
+    float focusStrength = 0.0f;
+};
+
+struct ButtonAuditVariant
+{
+    std::wstring_view name;
+    std::wstring_view buttonText;
+    bool primary = false;
+};
+
+enum class ButtonAuditQuality : uint8_t
+{
+    Exempt,
+    Fail,
+    Aa,
+    Aaa,
+};
+
+struct ButtonAuditMeasurement
+{
+    ButtonVisualStyle style{};
+    double ratio = 1.0;
+    ButtonAuditQuality quality = ButtonAuditQuality::Fail;
+};
+
+struct ButtonAuditThemeSummary
+{
+    std::wstring name;
+    double minimumEnabledRatio = std::numeric_limits<double>::max();
+    size_t enabledCount = 0u;
+    size_t aaPassCount  = 0u;
+    size_t aaaPassCount = 0u;
+};
+
+constexpr std::array<ButtonAuditState, 5> kButtonAuditStates = {{
+    ButtonAuditState{.name = L"Idle", .enabled = true},
+    ButtonAuditState{.name = L"Hover", .enabled = true, .hovered = true, .hoverStrength = 1.0f},
+    ButtonAuditState{.name = L"Pressed", .enabled = true, .pressed = true},
+    ButtonAuditState{.name = L"Keyboard focus", .enabled = true, .focused = true, .keyboardFocus = true, .focusStrength = 1.0f},
+    ButtonAuditState{.name = L"Disabled", .enabled = false},
+}};
+
+constexpr std::array<ButtonAuditVariant, 2> kButtonAuditVariants = {{
+    ButtonAuditVariant{.name = L"Standard", .buttonText = L"Button", .primary = false},
+    ButtonAuditVariant{.name = L"Primary", .buttonText = L"Primary", .primary = true},
+}};
+
+[[nodiscard]] float ButtonAuditSectionHeightDip() noexcept
+{
+    return kButtonAuditSectionHeaderDip + (static_cast<float>(kButtonAuditVariants.size()) * kButtonAuditTileHeightDip) +
+           (static_cast<float>(kButtonAuditVariants.size() - 1u) * kButtonAuditStateGapDip) + (kButtonAuditMarginDip * 1.25f);
+}
+
+[[nodiscard]] D2D1_COLOR_F CompositeColorForAudit(const D2D1_COLOR_F& foreground, const D2D1_COLOR_F& background) noexcept
+{
+    const float alpha        = ClampUnit(foreground.a);
+    const float inverseAlpha = 1.0f - alpha;
+    return D2D1::ColorF((foreground.r * alpha) + (background.r * inverseAlpha),
+                        (foreground.g * alpha) + (background.g * inverseAlpha),
+                        (foreground.b * alpha) + (background.b * inverseAlpha),
+                        alpha + (background.a * inverseAlpha));
+}
+
+[[nodiscard]] double LinearizeSrgbForAudit(float value) noexcept
+{
+    const double channel = static_cast<double>(ClampUnit(value));
+    return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
+}
+
+[[nodiscard]] double RelativeLuminanceForAudit(const D2D1_COLOR_F& color) noexcept
+{
+    return (0.2126 * LinearizeSrgbForAudit(color.r)) + (0.7152 * LinearizeSrgbForAudit(color.g)) + (0.0722 * LinearizeSrgbForAudit(color.b));
+}
+
+[[nodiscard]] double ContrastRatioForAudit(const D2D1_COLOR_F& foreground, const D2D1_COLOR_F& background) noexcept
+{
+    const double foregroundLuminance = RelativeLuminanceForAudit(foreground);
+    const double backgroundLuminance = RelativeLuminanceForAudit(background);
+    const double lighter             = std::max(foregroundLuminance, backgroundLuminance);
+    const double darker              = std::min(foregroundLuminance, backgroundLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+[[nodiscard]] D2D1_COLOR_F ChooseTextForAudit(const D2D1_COLOR_F& fill) noexcept
+{
+    const D2D1_COLOR_F white = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
+    const D2D1_COLOR_F black = D2D1::ColorF(0.02f, 0.02f, 0.02f, 1.0f);
+    return ContrastRatioForAudit(white, fill) >= ContrastRatioForAudit(black, fill) ? white : black;
+}
+
+[[nodiscard]] std::wstring FormatContrastRatioForAudit(double ratio)
+{
+    return std::format(L"{:.1f}:1", ratio);
+}
+
+[[nodiscard]] ButtonAuditQuality ResolveButtonAuditQuality(double ratio, bool enabled) noexcept
+{
+    if (! enabled)
+    {
+        return ButtonAuditQuality::Exempt;
+    }
+    if (ratio >= 7.0)
+    {
+        return ButtonAuditQuality::Aaa;
+    }
+    if (ratio >= 4.5)
+    {
+        return ButtonAuditQuality::Aa;
+    }
+    return ButtonAuditQuality::Fail;
+}
+
+[[nodiscard]] std::wstring_view ButtonAuditQualityLabel(ButtonAuditQuality quality) noexcept
+{
+    switch (quality)
+    {
+        case ButtonAuditQuality::Aaa: return L"AAA";
+        case ButtonAuditQuality::Aa: return L"AA";
+        case ButtonAuditQuality::Exempt: return L"Exempt";
+        case ButtonAuditQuality::Fail:
+        default: return L"Fail";
+    }
+}
+
+[[nodiscard]] D2D1_COLOR_F ButtonAuditQualityFill(ButtonAuditQuality quality, bool dark) noexcept
+{
+    switch (quality)
+    {
+        case ButtonAuditQuality::Aaa: return dark ? D2D1::ColorF(0.18f, 0.58f, 0.28f, 1.0f) : D2D1::ColorF(0.70f, 0.93f, 0.76f, 1.0f);
+        case ButtonAuditQuality::Aa: return dark ? D2D1::ColorF(0.30f, 0.48f, 0.18f, 1.0f) : D2D1::ColorF(0.83f, 0.92f, 0.66f, 1.0f);
+        case ButtonAuditQuality::Exempt: return dark ? D2D1::ColorF(0.32f, 0.32f, 0.32f, 1.0f) : D2D1::ColorF(0.86f, 0.86f, 0.86f, 1.0f);
+        case ButtonAuditQuality::Fail:
+        default: return dark ? D2D1::ColorF(0.68f, 0.14f, 0.16f, 1.0f) : D2D1::ColorF(1.0f, 0.72f, 0.72f, 1.0f);
+    }
+}
+
+[[nodiscard]] ButtonAuditMeasurement MeasureButtonForAudit(const ThemePalette& theme,
+                                                           const ButtonAuditVariant& variant,
+                                                           const ButtonAuditState& state,
+                                                           const D2D1_COLOR_F& tileBackground) noexcept
+{
+    ButtonAuditMeasurement measurement;
+    measurement.style = ResolveButtonVisualStyle(theme,
+                                                 state.enabled,
+                                                 state.hovered,
+                                                 state.pressed,
+                                                 state.focused,
+                                                 state.keyboardFocus,
+                                                 variant.primary,
+                                                 state.hoverStrength,
+                                                 state.focusStrength);
+    const D2D1_COLOR_F effectiveFill = CompositeColorForAudit(measurement.style.fill, tileBackground);
+    const D2D1_COLOR_F effectiveText = CompositeColorForAudit(measurement.style.text, effectiveFill);
+    measurement.ratio                = ContrastRatioForAudit(effectiveText, effectiveFill);
+    measurement.quality              = ResolveButtonAuditQuality(measurement.ratio, state.enabled);
+    return measurement;
+}
+
+[[nodiscard]] ButtonAuditThemeSummary SummarizeButtonAuditTheme(const GalleryTheme& theme)
+{
+    ButtonAuditThemeSummary summary{.name = theme.name};
+    const D2D1_COLOR_F tileBackground = theme.palette.surfaceBackground;
+    for (const ButtonAuditVariant& variant : kButtonAuditVariants)
+    {
+        for (const ButtonAuditState& state : kButtonAuditStates)
+        {
+            const ButtonAuditMeasurement measurement = MeasureButtonForAudit(theme.palette, variant, state, tileBackground);
+            if (! state.enabled)
+            {
+                continue;
+            }
+
+            ++summary.enabledCount;
+            summary.minimumEnabledRatio = std::min(summary.minimumEnabledRatio, measurement.ratio);
+            if (measurement.quality == ButtonAuditQuality::Aa || measurement.quality == ButtonAuditQuality::Aaa)
+            {
+                ++summary.aaPassCount;
+            }
+            if (measurement.quality == ButtonAuditQuality::Aaa)
+            {
+                ++summary.aaaPassCount;
+            }
+        }
+    }
+
+    if (summary.enabledCount == 0u)
+    {
+        summary.minimumEnabledRatio = 0.0;
+    }
+    return summary;
+}
+
+void DrawAuditText(WindowHost& host, std::wstring_view text, const D2D1_RECT_F& rect, FontRole role, const D2D1_COLOR_F& color)
+{
+    if (auto* brush = host.GetSolidBrush(color))
+    {
+        host.GetDeviceContext()->DrawTextW(text.data(), static_cast<UINT32>(text.size()), host.GetTextFormat(role), rect, brush, kTextDrawOptions);
+    }
+}
+
+void DrawAuditBadge(WindowHost& host,
+                    const D2D1_RECT_F& rect,
+                    std::wstring_view text,
+                    const D2D1_COLOR_F& fill,
+                    FontRole role = FontRole::Small)
+{
+    DrawRoundedRect(host, rect, fill, D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f), 4.0f);
+    DrawCenteredText(host, text, rect, role, ChooseTextForAudit(fill));
+}
+
+class ButtonContrastAuditControl final : public Control
+{
+public:
+    explicit ButtonContrastAuditControl(std::vector<GalleryTheme> themes, bool showHeader) : _themes(std::move(themes)), _showHeader(showHeader) {}
+
+    void Paint(WindowHost& host) const override
+    {
+        const D2D1_RECT_F bounds = GetBounds();
+        FillRectangle(host, bounds, D2D1::ColorF(0.96f, 0.96f, 0.96f, 1.0f));
+
+        float y = 0.0f;
+        if (_showHeader)
+        {
+            DrawAuditText(host,
+                          L"Button state contrast audit",
+                          D2D1::RectF(kButtonAuditMarginDip, 12.0f, bounds.right - kButtonAuditMarginDip, 56.0f),
+                          FontRole::TitleLarge,
+                          D2D1::ColorF(0.04f, 0.04f, 0.04f, 1.0f));
+            DrawAuditText(host,
+                          L"Enabled text uses WCAG normal-text thresholds: AA >= 4.5:1, AAA >= 7:1. Disabled controls are shown with contrast but marked exempt.",
+                          D2D1::RectF(kButtonAuditMarginDip, 62.0f, bounds.right - kButtonAuditMarginDip, 88.0f),
+                          FontRole::Small,
+                          D2D1::ColorF(0.22f, 0.22f, 0.22f, 1.0f));
+            y = kButtonAuditHeaderHeightDip + kButtonAuditMarginDip;
+        }
+
+        for (const GalleryTheme& theme : _themes)
+        {
+            PaintThemeSection(host, theme, y, bounds.right);
+            y += ButtonAuditSectionHeightDip() + kButtonAuditThemeGapDip;
+        }
+    }
+
+private:
+    static void FillRectangle(WindowHost& host, const D2D1_RECT_F& rect, const D2D1_COLOR_F& color)
+    {
+        if (auto* brush = host.GetSolidBrush(color))
+        {
+            host.GetDeviceContext()->FillRectangle(rect, brush);
+        }
+    }
+
+    static void DrawRectangle(WindowHost& host, const D2D1_RECT_F& rect, const D2D1_COLOR_F& color, float widthDip = 1.0f)
+    {
+        if (auto* brush = host.GetSolidBrush(color))
+        {
+            host.GetDeviceContext()->DrawRectangle(rect, brush, widthDip);
+        }
+    }
+
+    static void PaintButtonTile(WindowHost& host,
+                                const GalleryTheme& theme,
+                                const ButtonAuditVariant& variant,
+                                const ButtonAuditState& state,
+                                const D2D1_RECT_F& tileRect)
+    {
+        const D2D1_COLOR_F tileFill = theme.palette.surfaceBackground;
+        DrawRoundedRect(host, tileRect, tileFill, theme.palette.borderDefault, 5.0f);
+        DrawAuditText(host,
+                      state.name,
+                      D2D1::RectF(tileRect.left + 10.0f, tileRect.top + 8.0f, tileRect.right - 10.0f, tileRect.top + 28.0f),
+                      FontRole::Small,
+                      theme.palette.subduedText);
+
+        const ButtonAuditMeasurement measurement = MeasureButtonForAudit(theme.palette, variant, state, tileFill);
+        const D2D1_RECT_F buttonRect =
+            D2D1::RectF(tileRect.left + 12.0f, tileRect.top + 34.0f, tileRect.right - 12.0f, tileRect.top + 68.0f);
+        const D2D1_COLOR_F transparent = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+        DrawRoundedRect(host, buttonRect, measurement.style.fill, measurement.style.showBorder ? measurement.style.border : transparent, 4.0f);
+        if (measurement.style.showFocus)
+        {
+            PaintFocusRing(host, buttonRect, 4.0f);
+        }
+
+        const D2D1_RECT_F textRect = D2D1::RectF(buttonRect.left + measurement.style.textOffsetXDip,
+                                                 buttonRect.top + measurement.style.textOffsetYDip,
+                                                 buttonRect.right + measurement.style.textOffsetXDip,
+                                                 buttonRect.bottom + measurement.style.textOffsetYDip);
+        DrawCenteredText(host, variant.buttonText, textRect, FontRole::Body, measurement.style.text);
+
+        const D2D1_COLOR_F badgeFill = ButtonAuditQualityFill(measurement.quality, theme.palette.dark);
+        const D2D1_RECT_F badgeRect  = D2D1::RectF(tileRect.left + 10.0f, tileRect.bottom - 24.0f, tileRect.left + 74.0f, tileRect.bottom - 6.0f);
+        DrawAuditBadge(host, badgeRect, ButtonAuditQualityLabel(measurement.quality), badgeFill);
+
+        DrawAuditText(host,
+                      FormatContrastRatioForAudit(measurement.ratio),
+                      D2D1::RectF(badgeRect.right + 8.0f, tileRect.bottom - 25.0f, tileRect.right - 8.0f, tileRect.bottom - 4.0f),
+                      FontRole::Small,
+                      theme.palette.text);
+    }
+
+    static void PaintThemeSection(WindowHost& host, const GalleryTheme& theme, float y, float widthDip)
+    {
+        const float sectionHeight = ButtonAuditSectionHeightDip();
+        const D2D1_RECT_F sectionRect =
+            D2D1::RectF(kButtonAuditMarginDip, y, std::max(kButtonAuditMarginDip + 1.0f, widthDip - kButtonAuditMarginDip), y + sectionHeight);
+        DrawRoundedRect(host, sectionRect, theme.palette.windowBackground, theme.palette.borderDefault, 6.0f);
+
+        const ButtonAuditThemeSummary summary = SummarizeButtonAuditTheme(theme);
+        const bool allAa = summary.enabledCount > 0u && summary.aaPassCount == summary.enabledCount;
+        const bool allAaa = summary.enabledCount > 0u && summary.aaaPassCount == summary.enabledCount;
+        const ButtonAuditQuality summaryQuality = allAaa ? ButtonAuditQuality::Aaa : (allAa ? ButtonAuditQuality::Aa : ButtonAuditQuality::Fail);
+        const std::wstring summaryText =
+            std::format(L"{} {}/{} enabled  min {}", allAa ? L"Good" : L"Review", summary.aaPassCount, summary.enabledCount, FormatContrastRatioForAudit(summary.minimumEnabledRatio));
+
+        DrawAuditText(host,
+                      theme.name,
+                      D2D1::RectF(sectionRect.left + 16.0f, sectionRect.top + 12.0f, sectionRect.left + 360.0f, sectionRect.top + 40.0f),
+                      FontRole::Header,
+                      theme.palette.text);
+        DrawAuditBadge(host,
+                       D2D1::RectF(sectionRect.right - 310.0f, sectionRect.top + 12.0f, sectionRect.right - 188.0f, sectionRect.top + 36.0f),
+                       ButtonAuditQualityLabel(summaryQuality),
+                       ButtonAuditQualityFill(summaryQuality, theme.palette.dark),
+                       FontRole::BodyStrong);
+        DrawAuditText(host,
+                      summaryText,
+                      D2D1::RectF(sectionRect.right - 178.0f, sectionRect.top + 13.0f, sectionRect.right - 16.0f, sectionRect.top + 38.0f),
+                      FontRole::Small,
+                      theme.palette.subduedText);
+
+        const float availableWidth =
+            (sectionRect.right - sectionRect.left) - (kButtonAuditMarginDip * 2.0f) - kButtonAuditRowLabelDip -
+            (kButtonAuditStateGapDip * static_cast<float>(kButtonAuditStates.size() - 1u));
+        const float tileWidth = availableWidth / static_cast<float>(kButtonAuditStates.size());
+        const float rowsTop   = sectionRect.top + kButtonAuditSectionHeaderDip;
+
+        for (size_t variantIndex = 0u; variantIndex < kButtonAuditVariants.size(); ++variantIndex)
+        {
+            const ButtonAuditVariant& variant = kButtonAuditVariants[variantIndex];
+            const float rowTop = rowsTop + (static_cast<float>(variantIndex) * (kButtonAuditTileHeightDip + kButtonAuditStateGapDip));
+            DrawAuditText(host,
+                          variant.name,
+                          D2D1::RectF(sectionRect.left + 16.0f, rowTop + 34.0f, sectionRect.left + 16.0f + kButtonAuditRowLabelDip, rowTop + 58.0f),
+                          FontRole::BodyStrong,
+                          theme.palette.text);
+
+            float x = sectionRect.left + kButtonAuditMarginDip + kButtonAuditRowLabelDip;
+            for (const ButtonAuditState& state : kButtonAuditStates)
+            {
+                const D2D1_RECT_F tileRect = D2D1::RectF(x, rowTop, x + tileWidth, rowTop + kButtonAuditTileHeightDip);
+                PaintButtonTile(host, theme, variant, state, tileRect);
+                x += tileWidth + kButtonAuditStateGapDip;
+            }
+        }
+
+        DrawRectangle(host, sectionRect, theme.palette.borderDefault);
+    }
+
+    std::vector<GalleryTheme> _themes;
+    bool _showHeader = true;
+};
+
+[[nodiscard]] WindowHostBitmapCapture CaptureButtonContrastAuditSlice(std::vector<GalleryTheme> themes, bool showHeader, float heightDip)
+{
+    AttachedHostWindow window;
+    ResizeClientArea(window.Hwnd(), static_cast<UINT>(std::ceil(kButtonAuditWidthDip)), static_cast<UINT>(std::ceil(heightDip)));
+    ThemePalette hostTheme  = MakeDefaultThemePalette(false);
+    hostTheme.reducedMotion = true;
+    window.Host().SetTheme(hostTheme);
+    window.Host().SetRoot(std::make_unique<ButtonContrastAuditControl>(std::move(themes), showHeader));
+
+    ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
+    window.PumpMessages();
+    RedrawWindow(window.Hwnd(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    window.PumpMessages();
+
+    WindowHostBitmapCapture capture;
+    Require(window.Host().DebugCaptureBitmap(capture), "button contrast audit bitmap slice capture succeeds");
+    Require(capture.widthPx > 0u && capture.heightPx > 0u && ! capture.bgraPixels.empty(), "button contrast audit slice capture is non-empty");
+    return capture;
+}
 } // namespace
 
 void RunGalleryGenerator(const std::filesystem::path& outputPath)
@@ -1311,4 +1760,73 @@ void RunGalleryGenerator(const std::filesystem::path& outputPath)
     Require(std::filesystem::exists(absoluteOutput, ec) && ! ec, "gallery PNG exists after writing");
 
     std::wcout << L"Gallery image written: " << absoluteOutput.wstring() << L'\n';
+}
+
+void RunGalleryGeneratorPerTheme(const std::filesystem::path& outputDirectory)
+{
+    const std::vector<GalleryTheme> themes = BuildGalleryThemes();
+    Require(! themes.empty(), "gallery theme list is non-empty");
+
+    std::error_code ec;
+    const std::filesystem::path absoluteOutputDirectory = std::filesystem::absolute(outputDirectory, ec);
+    Require(! ec, "gallery output directory resolves to an absolute path");
+    ec.clear();
+    std::filesystem::create_directories(absoluteOutputDirectory, ec);
+    Require(! ec, "gallery output directory is created");
+
+    std::unordered_map<std::wstring, size_t> slugCounts;
+    for (const GalleryTheme& theme : themes)
+    {
+        std::wcerr << L"  [GALLERY] Rendering " << theme.name << L'\n' << std::flush;
+        WindowHostBitmapCapture capture = CaptureThemeSection(theme);
+        const std::filesystem::path outputPath = MakeThemeGalleryOutputPath(absoluteOutputDirectory, theme, slugCounts);
+
+        ec.clear();
+        std::filesystem::remove(outputPath, ec);
+        Require(SaveWindowHostBitmapCaptureAsPngForTest(outputPath, capture), "gallery theme PNG is written");
+        ec.clear();
+        Require(std::filesystem::exists(outputPath, ec) && ! ec, "gallery theme PNG exists after writing");
+
+        std::wcout << L"Gallery theme image written: " << outputPath.wstring() << L'\n';
+    }
+}
+
+void RunButtonContrastAuditGenerator(const std::filesystem::path& outputPath)
+{
+    std::vector<GalleryTheme> themes = BuildGalleryThemes();
+    Require(! themes.empty(), "button contrast audit theme list is non-empty");
+
+    std::vector<ButtonAuditThemeSummary> summaries;
+    summaries.reserve(themes.size());
+    for (const GalleryTheme& theme : themes)
+    {
+        summaries.push_back(SummarizeButtonAuditTheme(theme));
+    }
+
+    std::vector<WindowHostBitmapCapture> captures;
+    captures.reserve(themes.size() + 1u);
+    captures.push_back(CaptureButtonContrastAuditSlice({}, true, kButtonAuditHeaderHeightDip + kButtonAuditMarginDip));
+    for (const GalleryTheme& theme : themes)
+    {
+        captures.push_back(CaptureButtonContrastAuditSlice({theme}, false, ButtonAuditSectionHeightDip() + kButtonAuditThemeGapDip));
+    }
+
+    WindowHostBitmapCapture capture = StitchSections(captures);
+
+    std::error_code ec;
+    const std::filesystem::path absoluteOutput = std::filesystem::absolute(outputPath, ec);
+    Require(! ec, "button contrast audit output path resolves to an absolute path");
+    ec.clear();
+    std::filesystem::remove(absoluteOutput, ec);
+    Require(SaveWindowHostBitmapCaptureAsPngForTest(absoluteOutput, capture), "button contrast audit PNG is written");
+    ec.clear();
+    Require(std::filesystem::exists(absoluteOutput, ec) && ! ec, "button contrast audit PNG exists after writing");
+
+    std::wcout << L"Button contrast audit image written: " << absoluteOutput.wstring() << L'\n';
+    for (const ButtonAuditThemeSummary& summary : summaries)
+    {
+        const bool allAa = summary.enabledCount > 0u && summary.aaPassCount == summary.enabledCount;
+        std::wcout << L"  " << summary.name << L": " << (allAa ? L"GOOD" : L"REVIEW") << L" " << summary.aaPassCount << L"/"
+                   << summary.enabledCount << L" enabled AA, min " << FormatContrastRatioForAudit(summary.minimumEnabledRatio) << L'\n';
+    }
 }

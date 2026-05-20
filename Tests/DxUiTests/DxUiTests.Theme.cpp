@@ -754,6 +754,27 @@ void TestPrimaryButtonVisualStyleUsesAccentChrome()
     RequireColorNear(disabled.text, theme.disabledText, "disabled primary button uses disabled text color");
 }
 
+void TestPrimaryButtonVisualStyleFallsBackToReadableText()
+{
+    using namespace RedSalamander::DxUi;
+
+    ThemePalette theme = MakeDefaultThemePalette(false);
+    theme.buttonFill   = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
+    theme.selectionFill = D2D1::ColorF(0.58f, 0.78f, 0.92f, 1.0f);
+    theme.selectionText = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
+    theme.text          = D2D1::ColorF(0.02f, 0.02f, 0.02f, 1.0f);
+
+    const ButtonVisualStyle idle    = ResolveButtonVisualStyle(theme, true, false, false, false, false, true);
+    const ButtonVisualStyle hovered = ResolveButtonVisualStyle(theme, true, true, false, false, false, true);
+    const ButtonVisualStyle pressed = ResolveButtonVisualStyle(theme, true, false, true, false, false, true);
+    const ButtonVisualStyle focused = ResolveButtonVisualStyle(theme, true, false, false, true, true, true);
+
+    RequireColorNear(idle.text, theme.text, "low-contrast primary idle state falls back to readable palette text");
+    RequireColorNear(hovered.text, theme.text, "low-contrast primary hover state falls back to readable palette text");
+    RequireColorNear(pressed.text, theme.text, "low-contrast primary pressed state falls back to readable palette text");
+    RequireColorNear(focused.text, theme.text, "low-contrast primary focus state falls back to readable palette text");
+}
+
 void TestButtonHighContrastFocusRingStaysVisibleWithoutKeyboardFocus()
 {
     using namespace RedSalamander::DxUi;
@@ -2401,6 +2422,7 @@ void RunThemeTests()
     TestTreeBadgeVisualStyleUsesHighContrastAdornmentChrome();
     TestButtonVisualStyleMatchesPreferencesFlatChrome();
     TestPrimaryButtonVisualStyleUsesAccentChrome();
+    TestPrimaryButtonVisualStyleFallsBackToReadableText();
     TestButtonHighContrastFocusRingStaysVisibleWithoutKeyboardFocus();
     TestButtonHighContrastDisabledBorderStaysVisible();
     TestButtonVisualStyleInterpolatesHoverAndFocusStrength();

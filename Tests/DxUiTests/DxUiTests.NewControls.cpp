@@ -147,6 +147,108 @@ void TestHyperlinkButtonClickInvokesCallback()
     Require(clickCount == 1u, "hyperlink button click invokes callback");
 }
 
+void TestDropDownButtonKeyboardActivationInvokesDropDownCallback()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>(L"Options");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 28.0f));
+    button->SetVariant(ButtonVariant::DropDown);
+
+    size_t dropDownOpenCount = 0u;
+    button->SetOnDropDownClick([&] { ++dropDownOpenCount; });
+
+    host.SetRoot(std::move(root));
+
+    Require(button->OnKeyDown(host, VK_RETURN, 0), "drop-down button handles Enter activation");
+    Require(dropDownOpenCount == 1u, "drop-down button Enter activation opens the drop-down callback");
+    Require(button->OnKeyDown(host, VK_SPACE, 0), "drop-down button handles Space activation");
+    Require(dropDownOpenCount == 2u, "drop-down button Space activation opens the drop-down callback");
+}
+
+void TestDropDownButtonMnemonicInvokesDropDownCallback()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>(L"Options");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 28.0f));
+    button->SetVariant(ButtonVariant::DropDown);
+
+    size_t dropDownOpenCount = 0u;
+    button->SetOnDropDownClick([&] { ++dropDownOpenCount; });
+
+    host.SetRoot(std::move(root));
+
+    Require(button->OnMnemonic(host), "drop-down button mnemonic is handled");
+    Require(dropDownOpenCount == 1u, "drop-down button mnemonic opens the drop-down callback");
+    Require(host.GetFocusControl() == button, "drop-down button mnemonic keeps focus on the button");
+}
+
+void TestButtonMouseClickReleasesHostCaptureBeforeCallback()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>(L"Open");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 28.0f));
+
+    bool callbackInvoked                   = false;
+    bool callbackObservedHostStillCaptured = false;
+    button->SetOnClick([&]
+    {
+        callbackInvoked                   = true;
+        callbackObservedHostStillCaptured = GetCapture() == window.Hwnd();
+    });
+    window.Host().SetRoot(std::move(root));
+
+    bool handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(48, 14), handled));
+    Require(handled, "button capture handoff test handles the pointer down");
+    Require(GetCapture() == window.Hwnd(), "button capture handoff test captures the host during pointer down");
+
+    handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(48, 14), handled));
+    Require(handled, "button capture handoff test handles the pointer up");
+    Require(callbackInvoked, "button capture handoff test invokes the click callback");
+    Require(! callbackObservedHostStillCaptured, "button releases host capture before invoking the click callback");
+}
+
+void TestSplitButtonDropDownMouseClickReleasesHostCaptureBeforeCallback()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>(L"Open");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 28.0f));
+    button->SetVariant(ButtonVariant::Split);
+
+    bool callbackInvoked                   = false;
+    bool callbackObservedHostStillCaptured = false;
+    button->SetOnDropDownClick([&]
+    {
+        callbackInvoked                   = true;
+        callbackObservedHostStillCaptured = GetCapture() == window.Hwnd();
+    });
+    window.Host().SetRoot(std::move(root));
+
+    bool handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(108, 14), handled));
+    Require(handled, "split-button capture handoff test handles the pointer down");
+    Require(GetCapture() == window.Hwnd(), "split-button capture handoff test captures the host during pointer down");
+
+    handled = false;
+    static_cast<void>(window.Host().HandleMessage(window.Hwnd(), WM_LBUTTONUP, 0, MAKELPARAM(108, 14), handled));
+    Require(handled, "split-button capture handoff test handles the pointer up");
+    Require(callbackInvoked, "split-button capture handoff test invokes the drop-down callback");
+    Require(! callbackObservedHostStillCaptured, "split button releases host capture before invoking the drop-down callback");
+}
+
 void TestButtonMouseLeaveClearsPressedState()
 {
     using namespace RedSalamander::DxUi;
@@ -1142,6 +1244,10 @@ void RunNewControlTests()
     TestButtonVariantRoundtripsAllValues();
     TestButtonVariantPaintPathsHandleMissingDeviceContext();
     TestHyperlinkButtonClickInvokesCallback();
+    TestDropDownButtonKeyboardActivationInvokesDropDownCallback();
+    TestDropDownButtonMnemonicInvokesDropDownCallback();
+    TestButtonMouseClickReleasesHostCaptureBeforeCallback();
+    TestSplitButtonDropDownMouseClickReleasesHostCaptureBeforeCallback();
     TestButtonMouseLeaveClearsPressedState();
 
     // Checkbox indeterminate

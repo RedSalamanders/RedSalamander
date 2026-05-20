@@ -31,7 +31,7 @@ Describe 'Test inventory helper' {
     It 'counts the in-product self-test surfaces from source' {
         $inventory = Get-RSTestInventory -RepoRoot $repoRoot
 
-        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 604 -Message 'Commands static RunCase count drifted.'
+        Assert-RSEqual -Actual $inventory.SelfTests.Commands.RunCaseRegistrations -Expected 610 -Message 'Commands static RunCase count drifted.'
         Assert-RSEqual -Actual $inventory.SelfTests.CompareDirectories.RunCaseRegistrations -Expected 141 -Message 'CompareDirectories static RunCase count drifted.'
         Assert-RSEqual -Actual $inventory.SelfTests.FileOperations.ActivePhases -Expected 73 -Message 'FileOperations active phase count drifted.'
     }
@@ -41,7 +41,7 @@ Describe 'Test inventory helper' {
 
         Assert-RSEqual -Actual $inventory.Standalone.PerformanceTests2.TestMethods -Expected 12 -Message 'PerformanceTests2 method count drifted.'
         Assert-RSEqual -Actual $inventory.Standalone.DxUiTests.NativeTextInputCases -Expected 114 -Message 'NativeTextInput method count drifted.'
-        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 82 -Message 'Tools Pester test count drifted.'
+        Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.Cases -Expected 81 -Message 'Tools Pester test count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.ToolsPester.RequiresBuildToolchainCases -Expected 1 -Message 'Build-toolchain Pester count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeSynthetic.Cases -Expected 5 -Message 'Synthetic vcpkg merge count drifted.'
         Assert-RSEqual -Actual $inventory.Scripts.VcpkgMergeLockValidation.Cases -Expected 3 -Message 'Lock-validation vcpkg count drifted.'
@@ -52,9 +52,9 @@ Describe 'Test inventory helper' {
         $json = ConvertTo-RSTestInventoryJson -Inventory $inventory
         $roundTrip = $json | ConvertFrom-Json
 
-        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 604 -Message 'JSON manifest should include Commands count.'
+        Assert-RSEqual -Actual $roundTrip.selfTests.commands.runCaseRegistrations -Expected 610 -Message 'JSON manifest should include Commands count.'
         Assert-RSEqual -Actual $roundTrip.standalone.dxUiTests.nativeTextInputCases -Expected 114 -Message 'JSON manifest should include NativeTextInput count.'
-        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 82 -Message 'JSON manifest should include Tools Pester count.'
+        Assert-RSEqual -Actual $roundTrip.scripts.toolsPester.cases -Expected 81 -Message 'JSON manifest should include Tools Pester count.'
     }
 
     It 'guards FileOperations Step enum values against phase-order drift' {

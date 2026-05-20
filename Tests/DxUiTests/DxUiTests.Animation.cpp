@@ -5,6 +5,7 @@
 #include <fstream>
 #include <limits>
 #include <string>
+#include <string_view>
 
 namespace
 {
@@ -44,6 +45,23 @@ namespace
 
     input.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
     return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+
+[[nodiscard]] size_t CountAnimationMetricRows(std::string_view jsonl, std::string_view metric) noexcept
+{
+    size_t count     = 0u;
+    size_t searchPos = 0u;
+    while (searchPos < jsonl.size())
+    {
+        const size_t position = jsonl.find(metric, searchPos);
+        if (position == std::string_view::npos)
+        {
+            break;
+        }
+        ++count;
+        searchPos = position + metric.size();
+    }
+    return count;
 }
 
 class ScopedAnimationPerfJsonl final
@@ -1028,6 +1046,82 @@ void TestPageHostConnectedAnimationInterpolatesSharedElementRect()
             "page host connected animation interpolates the shared element's bottom edge");
 }
 
+void TestPageHostConnectedOverlayAnimationEmitsCompositionGateMetrics()
+{
+    using namespace RedSalamander::DxUi;
+
+    RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
+
+    ScopedAnimationPerfJsonl perfJsonl;
+    Require(! perfJsonl.Path().empty(), "connected overlay animation gate has a perf JSONL sink");
+
+    const D2D1_RECT_F sourceHeroBounds = D2D1::RectF(20.0f, 52.0f, 116.0f, 88.0f);
+    const D2D1_RECT_F targetHeroBounds = D2D1::RectF(184.0f, 120.0f, 296.0f, 156.0f);
+
+    std::string appendedMetrics;
+    {
+        AttachedHostWindow window;
+        ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
+        window.PumpMessages();
+
+        ThemePalette theme  = window.Host().GetTheme();
+        theme.reducedMotion = false;
+        window.Host().SetTheme(theme);
+
+        auto root      = std::make_unique<Panel>();
+        auto* pageHost = root->AddChild<PageHost>();
+        pageHost->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 200.0f));
+        window.Host().SetRoot(std::move(root));
+
+        pageHost->SetPage(MakeAnimatedPage(L"First", sourceHeroBounds, L"hero"));
+
+        WindowHostBitmapCapture warmCapture;
+        Require(window.Host().DebugCaptureBitmap(warmCapture), "connected overlay animation gate warm capture succeeds");
+        Require(warmCapture.widthPx > 0u && warmCapture.heightPx > 0u && ! warmCapture.bgraPixels.empty(),
+                "connected overlay animation gate warm capture has pixels");
+
+        const uintmax_t metricOffset = GetAnimationFileSizeOrZero(perfJsonl.Path());
+        pageHost->SetPage(MakeAnimatedPage(L"Second", targetHeroBounds, L"hero"), L"hero");
+        Debug::Perf::Emit(L"dxui.animation.allowed_surface", L"lightweight_overlay_transform", 0u, 1u, 0u, S_OK);
+
+        Require(pageHost->HasActiveTransition(), "connected overlay animation gate starts a transition");
+        Require(pageHost->DebugGetTransitionState(0u).hasConnectedAnimation, "connected overlay animation gate uses connected overlay surface");
+
+        for (int sample = 0; sample < 10 && pageHost->HasActiveTransition(); ++sample)
+        {
+            PumpAnimationMessagesForMs(18u);
+            window.PumpMessages();
+
+            WindowHostBitmapCapture capture;
+            Require(window.Host().DebugCaptureBitmap(capture), "connected overlay animation gate capture succeeds");
+            Require(capture.widthPx > 0u && capture.heightPx > 0u && ! capture.bgraPixels.empty(),
+                    "connected overlay animation gate capture has pixels");
+        }
+
+        appendedMetrics = ReadAnimationPerfJsonlFromOffset(perfJsonl.Path(), metricOffset);
+    }
+
+    constexpr std::array<std::string_view, 6> kExpectedMetrics = {{
+        "\"metric\":\"dxui.animation.tick_delta_us\"",
+        "\"metric\":\"dxui.animation.jitter_us\"",
+        "\"metric\":\"dxui.frame.total_us\"",
+        "\"metric\":\"dxui.frame.render_us\"",
+        "\"metric\":\"dxui.frame.present_us\"",
+        "\"metric\":\"dxui.animation.allowed_surface\"",
+    }};
+    for (const std::string_view metric : kExpectedMetrics)
+    {
+        Require(appendedMetrics.find(metric) != std::string::npos, "connected overlay animation gate emits required metric");
+    }
+
+    Require(CountAnimationMetricRows(appendedMetrics, "\"metric\":\"dxui.animation.connected_overlay.paint\"") > 0u,
+            "connected overlay animation gate paints the allowed overlay transform surface");
+    Require(CountAnimationMetricRows(appendedMetrics, "\"metric\":\"dxui.animation.jitter_us\"") >= 2u,
+            "connected overlay animation gate records multiple animation jitter samples");
+
+    RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
+}
+
 void TestPageHostReducedMotionSnapsTransition()
 {
     using namespace RedSalamander::DxUi;
@@ -1086,5 +1180,6 @@ void RunAnimationTests()
     TestEasingCurvesStayBoundedAndMonotonic();
     TestPageHostPageTransitionAnimatesAndSettles();
     TestPageHostConnectedAnimationInterpolatesSharedElementRect();
+    TestPageHostConnectedOverlayAnimationEmitsCompositionGateMetrics();
     TestPageHostReducedMotionSnapsTransition();
 }

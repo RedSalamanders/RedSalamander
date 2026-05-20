@@ -381,9 +381,25 @@ if (-not $SkipBuild) {
     }
 
     $buildArgs = Get-RSBuildScriptArguments -Suite $Suite -Configuration $Configuration -Platform $Platform
-    & $buildScript @buildArgs
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "BUILD FAILED (exit code $LASTEXITCODE)" -ForegroundColor Red
+    $buildEnvironmentOverrides = Get-RSBuildEnvironmentOverrides -Suite $Suite
+    $previousBuildEnvironment = @{}
+    foreach ($key in @($buildEnvironmentOverrides.Keys)) {
+        $previousBuildEnvironment[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+        [Environment]::SetEnvironmentVariable($key, [string]$buildEnvironmentOverrides[$key], 'Process')
+    }
+
+    $buildExitCode = 1
+    try {
+        & $buildScript @buildArgs
+        $buildExitCode = $LASTEXITCODE
+    } finally {
+        foreach ($key in @($buildEnvironmentOverrides.Keys)) {
+            [Environment]::SetEnvironmentVariable($key, $previousBuildEnvironment[$key], 'Process')
+        }
+    }
+
+    if ($buildExitCode -ne 0) {
+        Write-Host "BUILD FAILED (exit code $buildExitCode)" -ForegroundColor Red
         exit 1
     }
     Write-Host "Build succeeded." -ForegroundColor Green

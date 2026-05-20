@@ -37,6 +37,22 @@ Configure this in **Preferences -> Viewers**:
 - **Actions** define internal viewer-plugin actions and external viewer programs.
 - The page can test a sample file path and show the resolved action plus the rule that chose it.
 
+## Viewer menu map
+
+Standalone viewers use normal menus in addition to shortcuts and tool controls. This is the quickest way to discover viewer behavior without memorizing every shortcut.
+
+| Viewer | Menus | Important commands |
+| --- | --- | --- |
+| Text / Hex / Diff | File, Search, View, Encoding | Open, Save As, Refresh, Other Files, Find, Text/Hex, diff side-by-side/inline, diff hunk navigation, line numbers, wrap, Go to offset, encoding and character-set selection. |
+| Image / RAW | File, Other Files, View | Refresh, Export, next/previous/first/last image, fit/actual size, zoom, rotate, flip, reset orientation, brightness/contrast/gamma, grayscale, negative, RAW vs thumbnail source, Exif overlay. |
+| PE | File, View | Export as Text, Export as Markdown, Refresh, Other Files, Go to Top, Go to Bottom. |
+| Web / JSON / Markdown | File, Search, View, Tools | Save As, Refresh, Other Files, Find, zoom, DevTools when enabled, Copy URL, Open in Browser, JSON expand/collapse, Markdown source toggle. |
+| SQLite | Window controls | Table selector, paged preview, custom read-only query, Run Query, Table Preview, status strip. |
+| VLC | Playback controls | Play/pause/stop, seek, volume, snapshot, configured VLC/runtime settings. |
+| Space | Window controls | Rescan, navigate up, cancel active scan, close when idle. |
+
+Viewer windows follow the same focus rule: menu commands and combo selections return focus to the main viewer surface where practical, so keyboard browsing can continue after using a command.
+
 ## Text / Hex / Diff Viewer (`builtin/viewer-text`)
 
 ![Text viewer showing a generated log file](res/viewer-text.png)

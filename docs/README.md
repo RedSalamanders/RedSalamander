@@ -9,6 +9,9 @@ RedSalamander is a Windows dual-pane file manager with:
 
 ![RedSalamander main window](res/main-window.png)
 
+This folder is intentionally named `docs` so it can be used directly as the
+GitHub Pages source folder.
+
 ## Start here
 
 - [Complete User Guide](UserGuide.md)
@@ -28,11 +31,18 @@ RedSalamander is a Windows dual-pane file manager with:
 - [Themes](Themes.md)
 - [Settings File & Advanced Configuration](SettingsFile.md)
 
+## Developers
+
+- [Developer Guide](DeveloperGuide.md)
+- [DxUi Technical Guide](DxUi.md)
+- [Documentation Coverage Map](DocumentationMap.md)
+- [Screenshot Inventory](res/README.md)
+- [Winget Integration](WingetIntegration.md)
+- [RedSalamanderMonitor (ETW/log viewer)](Monitor.md)
+
 ## Specific topics
 
 - [Remote File Systems (FTP/SFTP/SCP/IMAP)](RemoteFileSystems.md)
 - [Cloud Drives (Google Drive / OneDrive / SharePoint)](CloudDrives.md)
 - [S3 / S3 Table](S3AndS3Table.md)
-- [RedSalamanderMonitor (ETW/log viewer)](Monitor.md)
 - [Troubleshooting / Reset](Troubleshooting.md)
-- [Planned / TODO features](Todo.md)

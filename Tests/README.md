@@ -14,7 +14,8 @@ scripts, and ETW diagnostics. Counts below are current as of 2026-05-18.
 | Viewer Plugin Tests | 2 | 17 | Standalone harness |
 | File-System Plugin Tests | 1 | 8 | Standalone harness |
 | Monitor/ETW Tests | 1 | 3 burst scenarios + 3 fast guards | Standalone harness |
-| Tooling Script Tests | 1 folder + vcpkg scripts | 82 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
+| RedConfigure Tests | 1 | 22 | Standalone harness |
+| Tooling Script Tests | 1 folder + vcpkg scripts | 81 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
 
 Related specifications:
 - `Specs/Testing/Testing_SelfTests.md` — result contract
@@ -33,6 +34,8 @@ Related specifications:
 .\.build\x64\Debug\RedSalamander.exe --selftest-list-cases  # Runner-native self-test case inventory
 .\build.ps1 -ProjectName FileSystemCurlTests
 .\.build\x64\Debug\FileSystemCurlTests.exe
+.\build.ps1 -ProjectName RedConfigureTests
+.\.build\x64\Debug\RedConfigureTests.exe
 ```
 
 ---
@@ -42,7 +45,7 @@ Related specifications:
 **Flag:** `--commands-selftest`
 **Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` + 12 `.cpp` family files
 **Inventory:** `RedSalamander.exe --selftest-list-cases --commands-selftest`
-lists 633 cases. The source fallback scan reports 604 static
+lists 633 cases. The source fallback scan reports 610 static
 `SelfTest::RunCase` call sites because some helper call sites generate multiple
 declared cases.
 
@@ -191,14 +194,20 @@ Focused deterministic coverage for `Plugins\FileSystemCurl\` helpers that do not
 
 The executable also supports `--perf` for a lightweight deterministic probe of IMAP leaf parsing, subject decoding, leaf building, `STATUS` parsing, repair batch planning, and the message Properties command-count model.
 
-## 8. Monitor / ETW Tests — 3 burst scenarios plus fast guards
+## 8. RedConfigure Tests — 22 tests
+
+**Project:** `Tests\RedConfigureTests\`  •  **Run:** `.\.build\x64\Debug\RedConfigureTests.exe`
+
+Focused deterministic coverage for RedConfigure page definitions, workspace discovery, theme JSON5 parsing/export/validation, RC parsing/writing, placeholder validation, translation table search/filter/sort, theme preview models, and session export/loading behavior.
+
+## 9. Monitor / ETW Tests — 3 burst scenarios plus fast guards
 
 **Project:** `Tests\MonitorTest\`  •  **Run:** `.\.build\x64\Debug\MonitorTest.exe`
 
 Generates 150,000+ ETW trace messages across 3 burst scenarios to validate TraceLogging transport.
 Fast targeted guards include `--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and `--document-model-selftest`.
 
-## 9. Tooling Script Tests
+## 10. Tooling Script Tests
 
 **Run locally/full:** `Invoke-Pester .\Tools\Tests`
 

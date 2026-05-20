@@ -97,9 +97,7 @@ When an operation starts, RedSalamander creates a **task** and shows it in the F
 
 - Pre-calculation (“pre-calc”) may run first to compute totals (bytes/items). You can **Skip** pre-calc.
 - Tasks can be **Paused** and **Canceled**.
-- Execution mode can be:
-  - **Wait** (sequential queue)
-- **Parallel** (multiple tasks run concurrently)
+- Execution mode can be **Wait** (sequential queue) or **Parallel** (multiple tasks run concurrently).
 - Copy/Move tasks support a per-task **Speed Limit**.
 
 ## Defaults and settings
@@ -183,10 +181,3 @@ Pack writes deterministic stored ZIP entries, preserves selected empty directori
 
 - Dragging items **between panes** queues a task and uses the same progress UI as `F5`/`F6`.
 - Dragging to external apps (Explorer, editors, …) uses standard Windows drop formats when possible.
-
-## Not implemented yet
-
-- Additional "copy path as text" helpers beyond **Copy Path and File Name**
-- Some same-name selection helpers
-
-See: [Planned / TODO features](Todo.md)

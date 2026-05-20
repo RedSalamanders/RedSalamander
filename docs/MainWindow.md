@@ -107,11 +107,80 @@ Toggle:
 
 - **View → Function Bar**
 
+Default unmodified function keys:
+
+| Key | Command | Behavior |
+| --- | --- | --- |
+| `F1` | Display Shortcuts | Opens the shortcut/help window for the current command set. |
+| `F2` | Rename | Renames the focused item. |
+| `F3` | View | Opens the primary viewer association for the focused file. |
+| `F4` | Edit | Opens the editor association for the focused file. |
+| `F5` | Copy | Copies the selection to the other pane. |
+| `F6` | Move/Rename | Moves the selection to the other pane, or renames when the command context requires it. |
+| `F7` | Make Directory | Creates a folder in the focused pane. |
+| `F8` | Delete | Deletes the selection using the Recycle Bin when supported. |
+| `F9` | User Menu | Opens configured external commands. |
+| `F10` | Pane Menu | Opens the pane/main menu from the keyboard. |
+| `F11` | Connect | Connects a network drive from local `file:` panes. |
+| `F12` | Disconnect | Disconnects a network drive from local `file:` panes. |
+
 ## Menu bar
 
 Toggle:
 
 - **View → Menu Bar**
+
+## Command surface map
+
+RedSalamander exposes most behavior in more than one place: menu bar, context menu, function bar, and configurable keyboard shortcuts. The command names below are the user-facing menu surfaces to check when a feature appears to be missing.
+
+### Left and Right menus
+
+The **Left** and **Right** menus target a named pane, even when the other pane has focus.
+
+- **Change Drive** opens the named pane's drive/plugin/known-folder menu.
+- **Go to** includes Back, Forward, Parent Directory, Root Directory, Path from Other Panel, and Hot Paths.
+- **Display modes** switch between Brief, Detailed, Extra Detailed, Thumbnails, and Preview Pane.
+- **Sort by** supports None, Name, Extension, Time, Size, and Attributes.
+- **Show** toggles Hidden Files, System Files, File Extensions, Filter Bar, Navigation Bar, and Status Bar.
+- **Maximize/Restore Pane**, **Swap Panes**, **Refresh**, and **Filter** control the pane layout and current folder view.
+
+### Files menu
+
+The **Files** menu operates on the focused pane selection or focused item.
+
+- Opening: Open/Execute, View, View Width, Alternate View, View With, Edit, Alternate Edit, Edit With, and Edit New File.
+- File operations: Copy, Move/Rename, Delete, Move to Recycle Bin, Permanent Delete, Pack, Unpack, and New Folder.
+- Inspection: Properties, Context Menu, Context Menu for the current directory, Security, Change Attributes, and Change Case.
+- Creation: **New** lists Windows ShellNew templates for local folders when templates are available.
+
+### Edit menu
+
+The **Edit** menu covers clipboard and selection workflows.
+
+- Clipboard: Cut, Copy, Paste, Paste Shortcut.
+- Text path helpers: Copy Path and Name, Copy Name, Copy Path, and Copy UNC Path and Name.
+- Selection: Select, Unselect, Invert Selection, Select All, Unselect All, Restore Selection, Select Next, and Select + Calculate Directory Size + Next.
+- Advanced selection: Save Selection, Load Selection, Select/Unselect Same Extensions, Select/Unselect Same Names, Hide Selected Names, Hide Unselected Names, Show Hidden Names, and jump to previous/next selected name.
+
+### Commands menu
+
+The **Commands** menu contains multi-step tools and integration commands.
+
+- Navigation and search: Change Directory, Find Files and Directories, Show Folders History, Quick Search, and Hot Paths through the Change Drive menu.
+- Comparison and reporting: Compare Directories, Calculate Occupied Space, Make File List, List of Opened Files, and Shared Directories.
+- Shell and external integration: Connect/Disconnect Network Drive, Connections Manager, Command Shell, Bring Current Directory/Filename to Command Line, Pane Menu, Reread Associations, User Menu, and Open File Explorer for the current folder or known folders.
+- Link handling: Go to Shortcut or Link Target follows local `.lnk`, local `file:` `.url`, junction, mount point, and directory symlink targets where pane navigation can represent the target.
+
+### Plugins, View, and Help menus
+
+- **Plugins** opens Plugin Manager and lists plugin-provided dynamic commands.
+- **View** switches theme, fullscreen, menu/function bars, File Operations Failed Items, pane focus, and Preferences.
+- **Help** opens the shortcut display, external documentation, and About dialog.
+
+### Context menus
+
+The folder-view context menu mirrors the most common item commands: Open, Open With/View With, View Space for folders, Delete, Move, Rename, Copy, Paste, and Properties. Additional entries can come from the active file-system plugin or Windows shell integration.
 
 ## Useful commands
 

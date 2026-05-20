@@ -120,6 +120,38 @@ constexpr UINT kDxUiNoDataStringId    = 1305u;
 {
     return D2D1::ColorF(color.r, color.g, color.b, color.a * ClampUnit(factor));
 }
+
+[[nodiscard]] double RelativeLuminance(const D2D1_COLOR_F& color) noexcept
+{
+    return (0.2126 * static_cast<double>(SrgbToLinear(ClampUnit(color.r)))) + (0.7152 * static_cast<double>(SrgbToLinear(ClampUnit(color.g)))) +
+           (0.0722 * static_cast<double>(SrgbToLinear(ClampUnit(color.b))));
+}
+
+[[nodiscard]] double ContrastRatio(const D2D1_COLOR_F& foreground, const D2D1_COLOR_F& background) noexcept
+{
+    const double foregroundLuminance = RelativeLuminance(foreground);
+    const double backgroundLuminance = RelativeLuminance(background);
+    const double lighter             = std::max(foregroundLuminance, backgroundLuminance);
+    const double darker              = std::min(foregroundLuminance, backgroundLuminance);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+[[nodiscard]] D2D1_COLOR_F ResolvePrimaryButtonTextColor(const ThemePalette& theme, const D2D1_COLOR_F& fill) noexcept
+{
+    constexpr double kMinimumNormalTextContrast = 4.5;
+    if (ContrastRatio(theme.selectionText, fill) >= kMinimumNormalTextContrast)
+    {
+        return theme.selectionText;
+    }
+    if (ContrastRatio(theme.text, fill) >= kMinimumNormalTextContrast)
+    {
+        return theme.text;
+    }
+
+    const D2D1_COLOR_F black = D2D1::ColorF(0.02f, 0.02f, 0.02f, 1.0f);
+    const D2D1_COLOR_F white = D2D1::ColorF(0.98f, 0.98f, 0.98f, 1.0f);
+    return ContrastRatio(white, fill) >= ContrastRatio(black, fill) ? white : black;
+}
 } // namespace
 
 D2D1_COLOR_F BlendColor(const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
@@ -309,7 +341,7 @@ ButtonVisualStyle ResolveButtonVisualStyle(const ThemePalette& theme,
             style.showBorder = hoverAmount > 0.0f || focusAmount > 0.0f;
         }
 
-        style.text      = theme.selectionText;
+        style.text      = ResolvePrimaryButtonTextColor(theme, style.fill);
         style.focus     = ScaleAlpha(BlendColor(style.fill, theme.focusStroke, theme.dark ? 0.44f : 0.34f), focusAmount);
         style.showFocus = focusAmount > 0.0f;
         return style;

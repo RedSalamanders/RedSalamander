@@ -613,7 +613,7 @@ Right menu is identical to Left menu, except:
 ##### External Help (`cmd/app/externalHelp`)
 
 - Invoking the command MUST open the external RedSalamander documentation URL in the default browser:
-  `https://github.com/RedSalamanders/RedSalamander/tree/main/Docs#readme`
+  `https://github.com/RedSalamanders/RedSalamander/tree/main/docs#readme`
 - The command has no default keyboard shortcut.
 
 ### Command details (Implemented)

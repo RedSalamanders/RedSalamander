@@ -444,6 +444,101 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
             state.Require(std::fabs(actualEntry.widthDip - expectedEntry.widthDip) <= 0.01f, L"Search results-grid layout widthDip did not round-trip.");
         }
     }
+
+    const auto appendHiddenControl = [](std::wstring value)
+    {
+        value.push_back(static_cast<wchar_t>(0x7F));
+        return value;
+    };
+    const auto containsControl = [](std::wstring_view text)
+    {
+        return std::any_of(text.begin(), text.end(), [](const wchar_t ch) noexcept { return std::iswcntrl(static_cast<wint_t>(ch)) != 0; });
+    };
+    const auto searchContainsControl = [&](const Common::Settings::SearchDialogSettings& value)
+    {
+        const auto historyContainsControl = [&](const std::vector<std::wstring>& history)
+        {
+            return std::any_of(history.begin(), history.end(), [&](const std::wstring& entry) { return containsControl(entry); });
+        };
+
+        return historyContainsControl(value.recentRoots) || historyContainsControl(value.recentNamePatterns) ||
+               historyContainsControl(value.recentContentPatterns) || containsControl(value.lastRoot) || containsControl(value.lastNamePattern) ||
+               containsControl(value.lastContentPattern);
+    };
+
+    Common::Settings::Settings dirtySettings{};
+    Common::Settings::SearchDialogSettings dirtySearch{};
+    dirtySearch.recentRoots           = {appendHiddenControl(L"C:\\dirty-root"), std::wstring(1, static_cast<wchar_t>(0x7F)),
+                                         appendHiddenControl(L"C:\\DIRTY-ROOT"), appendHiddenControl(L"D:\\dirty-root")};
+    dirtySearch.recentNamePatterns    = {appendHiddenControl(L"*"), std::wstring(1, static_cast<wchar_t>(0x7F)), appendHiddenControl(L"*.txt")};
+    dirtySearch.recentContentPatterns = {appendHiddenControl(L"needle"), std::wstring(1, static_cast<wchar_t>(0x7F))};
+    dirtySearch.lastRoot              = appendHiddenControl(L"C:\\dirty-root");
+    dirtySearch.lastNamePattern       = appendHiddenControl(L"*");
+    dirtySearch.lastContentPattern    = appendHiddenControl(L"needle");
+    dirtySettings.search              = dirtySearch;
+
+    const HRESULT dirtySaveHr = Common::Settings::SaveSettings(kTestAppId, dirtySettings);
+    state.Require(SUCCEEDED(dirtySaveHr), L"Failed to save dirty search settings for sanitization test.");
+    if (FAILED(dirtySaveHr))
+    {
+        return false;
+    }
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kTestAppId);
+    std::ifstream rawSettingsInput(settingsPath, std::ios::binary);
+    state.Require(static_cast<bool>(rawSettingsInput), L"Failed to open saved settings for hidden-control verification.");
+    if (rawSettingsInput)
+    {
+        const std::string rawSettings((std::istreambuf_iterator<char>(rawSettingsInput)), std::istreambuf_iterator<char>());
+        state.Require(rawSettings.find('\x7F') == std::string::npos && rawSettings.find("\\u007f") == std::string::npos &&
+                          rawSettings.find("\\u007F") == std::string::npos,
+                      L"Saved search settings must not contain hidden control characters.");
+    }
+
+    Common::Settings::Settings sanitizedLoaded{};
+    const HRESULT sanitizedLoadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, sanitizedLoaded);
+    state.Require(sanitizedLoadHr == S_OK, L"Failed to load sanitized search settings.");
+    state.Require(sanitizedLoaded.search.has_value(), L"Sanitized search settings block missing after save.");
+    if (FAILED(sanitizedLoadHr) || ! sanitizedLoaded.search.has_value())
+    {
+        return false;
+    }
+
+    const Common::Settings::SearchDialogSettings& sanitizedActual = sanitizedLoaded.search.value();
+    const std::vector<std::wstring> expectedSanitizedRoots{L"C:\\dirty-root", L"D:\\dirty-root"};
+    const std::vector<std::wstring> expectedSanitizedNamePatterns{L"*", L"*.txt"};
+    const std::vector<std::wstring> expectedSanitizedContentPatterns{L"needle"};
+    state.Require(! searchContainsControl(sanitizedActual), L"Loaded saved search settings retained hidden control characters.");
+    state.Require(sanitizedActual.recentRoots == expectedSanitizedRoots, L"Search recent roots were not sanitized before save.");
+    state.Require(sanitizedActual.recentNamePatterns == expectedSanitizedNamePatterns, L"Search recent name patterns were not sanitized before save.");
+    state.Require(sanitizedActual.recentContentPatterns == expectedSanitizedContentPatterns, L"Search recent content patterns were not sanitized before save.");
+    state.Require(sanitizedActual.lastRoot == L"C:\\dirty-root", L"Search last root was not sanitized before save.");
+    state.Require(sanitizedActual.lastNamePattern == L"*", L"Search last name pattern was not sanitized before save.");
+    state.Require(sanitizedActual.lastContentPattern == L"needle", L"Search last content pattern was not sanitized before save.");
+
+    constexpr std::string_view kDirtySearchJson =
+        R"({"schemaVersion":16,"search":{"recentRoots":["C:\\raw-root\u007f","\u007f","C:\\RAW-ROOT\u007f","D:\\raw-root"],"recentNamePatterns":["*\u007f"],"recentContentPatterns":["needle\u007f"],"lastRoot":"C:\\raw-root\u007f","lastNamePattern":"*\u007f","lastContentPattern":"needle\u007f","recursive":true}})";
+    state.Require(SelfTest::WriteTextFile(settingsPath, kDirtySearchJson), L"Failed to write dirty search settings fixture.");
+
+    Common::Settings::Settings migratedLoaded{};
+    const HRESULT migratedLoadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, migratedLoaded);
+    state.Require(migratedLoadHr == S_OK, L"Failed to load dirty search settings fixture.");
+    state.Require(migratedLoaded.search.has_value(), L"Migrated search settings block missing.");
+    if (FAILED(migratedLoadHr) || ! migratedLoaded.search.has_value())
+    {
+        return false;
+    }
+
+    const Common::Settings::SearchDialogSettings& migratedActual = migratedLoaded.search.value();
+    const std::vector<std::wstring> expectedMigratedRoots{L"C:\\raw-root", L"D:\\raw-root"};
+    state.Require(! searchContainsControl(migratedActual), L"Dirty search settings fixture retained hidden control characters after load.");
+    state.Require(migratedActual.recentRoots == expectedMigratedRoots, L"Dirty search recent roots were not sanitized on load.");
+    state.Require(migratedActual.recentNamePatterns == std::vector<std::wstring>{L"*"}, L"Dirty search recent name patterns were not sanitized on load.");
+    state.Require(migratedActual.recentContentPatterns == std::vector<std::wstring>{L"needle"},
+                  L"Dirty search recent content patterns were not sanitized on load.");
+    state.Require(migratedActual.lastRoot == L"C:\\raw-root", L"Dirty search last root was not sanitized on load.");
+    state.Require(migratedActual.lastNamePattern == L"*", L"Dirty search last name pattern was not sanitized on load.");
+    state.Require(migratedActual.lastContentPattern == L"needle", L"Dirty search last content pattern was not sanitized on load.");
     return state.failure.empty();
 }
 

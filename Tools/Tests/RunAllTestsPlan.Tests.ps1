@@ -86,10 +86,13 @@ Describe 'Run-AllTests plan helper' {
                 'Commands',
                 'FileOperations',
                 'DxUiTests',
+                'FileSystemCurlTests',
                 'ViewerPETests',
                 'ViewerSqliteTests',
                 'MonitorTest',
                 'LocalizationTests',
+                'RedConfigureTests',
+                'RedSalamanderMonitorEtwLatency',
                 'PerformanceTests2',
                 'ToolsPesterTests',
                 'VcpkgMergeSynthetic'
@@ -99,6 +102,14 @@ Describe 'Run-AllTests plan helper' {
         $performance = $plan | Where-Object { $_.Name -eq 'PerformanceTests2' } | Select-Object -First 1
         Assert-RSEqual -Actual $performance.Kind -Expected 'CppUnitTest' -Message 'PerformanceTests2 should run through vstest.'
         Assert-RSEqual -Actual ($performance.Path -like '*\.build\x64\Debug\PerformanceTests2.dll') -Expected $true -Message 'PerformanceTests2 should target the built DLL.'
+
+        $monitorLatency = $plan | Where-Object { $_.Name -eq 'RedSalamanderMonitorEtwLatency' } | Select-Object -First 1
+        Assert-RSEqual -Actual $monitorLatency.Kind -Expected 'Executable' -Message 'Monitor ETW latency drill should run as a focused executable test.'
+        Assert-RSEqual -Actual ($monitorLatency.Path -like '*\.build\x64\Debug\RedSalamanderMonitor.exe') -Expected $true -Message 'Monitor ETW latency drill should target the built monitor executable.'
+        Assert-RSSequenceEqual `
+            -Actual @($monitorLatency.Arguments) `
+            -Expected @('--chrome-selftest', '--perf', '--monitor-etw-burst-mode=latency', '--monitor-etw-burst-count=60', '--monitor-etw-burst-size=260') `
+            -Message 'Monitor ETW latency drill should replay the scenario-gated perf command.'
 
         $pester = $plan | Where-Object { $_.Name -eq 'ToolsPesterTests' } | Select-Object -First 1
         Assert-RSEqual -Actual $pester.Kind -Expected 'Pester' -Message 'Tools tests should run through Pester.'
@@ -124,6 +135,12 @@ Describe 'Run-AllTests plan helper' {
         Assert-RSEqual -Actual $fullBuild['Configuration'] -Expected 'Debug' -Message 'Suite Full should pass the requested configuration.'
         Assert-RSEqual -Actual $fullBuild['Platform'] -Expected 'x64' -Message 'Suite Full should pass the requested platform.'
         Assert-RSEqual -Actual $fullBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite Full should build the solution so standalone tests and CppUnitTest DLLs exist.'
+
+        $allEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'All'
+        Assert-RSEqual -Actual $allEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite All should not force monitor-specific test hooks.'
+
+        $fullEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'Full'
+        Assert-RSEqual -Actual $fullEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite Full should build Monitor with selftest hooks for executable monitor drills.'
     }
 
     It 'uses the native self-test root override when locating runner artifacts' {
@@ -151,7 +168,7 @@ Describe 'Run-AllTests plan helper' {
             -FailFast `
             -CaseFilter 'OneCase'
 
-        foreach ($entry in @($plan | Where-Object { $_.Kind -ne 'SelfTest' })) {
+        foreach ($entry in @($plan | Where-Object { $_.Kind -ne 'SelfTest' -and $_.Name -ne 'RedSalamanderMonitorEtwLatency' })) {
             $argumentText = @($entry.Arguments) -join ' '
             if ($argumentText -match 'selftest') {
                 throw "$($entry.Name) should not receive self-test-only arguments, but got '$argumentText'."

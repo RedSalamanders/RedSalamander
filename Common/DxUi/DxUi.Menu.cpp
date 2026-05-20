@@ -2714,6 +2714,8 @@ void RunMenuModalLoop(MenuController& controller)
 
     bool ignoreInitialLeftButtonUp  = controller.sessionCallbacks.ignoreInitialLeftButtonUp || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
     bool ignoreInitialRightButtonUp = controller.sessionCallbacks.ignoreInitialRightButtonUp || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+    bool leftButtonDownInPopup      = false;
+    bool rightButtonDownInPopup     = false;
     DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-initial-up-filter left={} right={} asyncLeft={} asyncRight={}",
                 ignoreInitialLeftButtonUp ? L"true" : L"false",
                 ignoreInitialRightButtonUp ? L"true" : L"false",
@@ -2721,6 +2723,18 @@ void RunMenuModalLoop(MenuController& controller)
                 (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0 ? L"down" : L"up");
     POINT lastMouseScreenPoint{};
     bool hasLastMouseScreenPoint = GetCursorPos(&lastMouseScreenPoint) != FALSE;
+    if (hasLastMouseScreenPoint)
+    {
+        for (auto it = controller.popups.rbegin(); it != controller.popups.rend(); ++it)
+        {
+            const RECT wr = (*it)->GetInteractiveScreenRect();
+            if (PtInRect(&wr, lastMouseScreenPoint))
+            {
+                HandleMenuMouseMove(controller, *(*it), lastMouseScreenPoint);
+                break;
+            }
+        }
+    }
 
     MSG msg;
     while (controller.running)
@@ -2856,7 +2870,9 @@ void RunMenuModalLoop(MenuController& controller)
                     mouseMoved ? L"true" : L"false",
                     TracePopupIndex(controller, targetPopup),
                     controller.popups.size());
-                if (! mouseMoved)
+                const bool initializeStationaryPopupHover =
+                    ! mouseMoved && targetPopup && ! targetPopup->hoveredIndex.has_value() && ! targetPopup->keyboardIndex.has_value();
+                if (! mouseMoved && ! initializeStationaryPopupHover)
                 {
                     continue;
                 }
@@ -3003,6 +3019,15 @@ void RunMenuModalLoop(MenuController& controller)
                 }
                 if (msg.message == WM_LBUTTONDOWN)
                 {
+                    leftButtonDownInPopup = true;
+                }
+                else
+                {
+                    rightButtonDownInPopup = true;
+                }
+                HandleMenuMouseMove(controller, *targetPopup, screenPt);
+                if (msg.message == WM_LBUTTONDOWN)
+                {
                     RECT wr{};
                     GetWindowRect(targetPopup->hwnd, &wr);
                     const D2D1_POINT_2F pointDip = D2D1::Point2F(targetPopup->PixelToDip(static_cast<float>(screenPt.x - wr.left)),
@@ -3032,15 +3057,24 @@ void RunMenuModalLoop(MenuController& controller)
 
             if (msg.message == WM_LBUTTONUP || msg.message == WM_RBUTTONUP)
             {
-                if (msg.message == WM_LBUTTONUP && ignoreInitialLeftButtonUp)
+                const bool buttonDownInPopup = msg.message == WM_LBUTTONUP ? leftButtonDownInPopup : rightButtonDownInPopup;
+                if (msg.message == WM_LBUTTONUP && ignoreInitialLeftButtonUp && ! buttonDownInPopup)
                 {
                     ignoreInitialLeftButtonUp = false;
                     continue;
                 }
-                if (msg.message == WM_RBUTTONUP && ignoreInitialRightButtonUp)
+                if (msg.message == WM_RBUTTONUP && ignoreInitialRightButtonUp && ! buttonDownInPopup)
                 {
                     ignoreInitialRightButtonUp = false;
                     continue;
+                }
+                if (msg.message == WM_LBUTTONUP)
+                {
+                    leftButtonDownInPopup = false;
+                }
+                else
+                {
+                    rightButtonDownInPopup = false;
                 }
 
                 if (targetPopup && targetPopup->draggingScrollbarThumb)
@@ -3049,9 +3083,28 @@ void RunMenuModalLoop(MenuController& controller)
                     continue;
                 }
 
-                if (targetPopup && targetPopup->hoveredIndex.has_value())
+                std::optional<size_t> targetIndex = targetPopup ? targetPopup->hoveredIndex : std::nullopt;
+                if (targetPopup && ! targetIndex.has_value())
                 {
-                    const size_t idx = targetPopup->hoveredIndex.value();
+                    RECT wr{};
+                    if (GetWindowRect(targetPopup->hwnd, &wr) != FALSE)
+                    {
+                        const D2D1_POINT_2F pointDip =
+                            D2D1::Point2F(targetPopup->PixelToDip(static_cast<float>(screenPt.x - wr.left)),
+                                          targetPopup->PixelToDip(static_cast<float>(screenPt.y - wr.top)));
+                        targetIndex = HitTestMenuItem(*targetPopup, pointDip);
+                        if (targetIndex != targetPopup->hoveredIndex)
+                        {
+                            targetPopup->hoveredIndex = targetIndex;
+                            targetPopup->keyboardIndex.reset();
+                            InvalidateRect(targetPopup->hwnd, nullptr, FALSE);
+                        }
+                    }
+                }
+
+                if (targetPopup && targetIndex.has_value())
+                {
+                    const size_t idx = targetIndex.value();
                     const auto& item = targetPopup->items[idx];
                     if (item.kind == MenuItemKind::Slider && item.enabled)
                     {

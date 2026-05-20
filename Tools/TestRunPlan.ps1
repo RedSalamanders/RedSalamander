@@ -129,6 +129,22 @@ function Get-RSBuildScriptArguments {
     return $arguments
 }
 
+function Get-RSBuildEnvironmentOverrides {
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'Full')]
+        [string]$Suite
+    )
+
+    if ($Suite -eq 'Full') {
+        return @{
+            RSBuildEnableTests = 'true'
+        }
+    }
+
+    return @{}
+}
+
 function Test-RSSelfTestResultCoverage {
     param(
         [string[]]$ExpectedCaseNames = @(),
@@ -387,13 +403,26 @@ function Get-RSTestRunPlan {
     }
 
     if ($Suite -eq 'Full') {
-        foreach ($exeName in @('DxUiTests', 'ViewerPETests', 'ViewerSqliteTests', 'MonitorTest', 'LocalizationTests')) {
+        foreach ($exeName in @('DxUiTests', 'FileSystemCurlTests', 'ViewerPETests', 'ViewerSqliteTests', 'MonitorTest', 'LocalizationTests', 'RedConfigureTests')) {
             $plan += New-RSTestRunPlanEntry `
                 -Name $exeName `
                 -Kind 'Executable' `
                 -Path (Join-Path $buildOutputDir "$exeName.exe") `
                 -WorkingDirectory $buildOutputDir
         }
+
+        $plan += New-RSTestRunPlanEntry `
+            -Name 'RedSalamanderMonitorEtwLatency' `
+            -Kind 'Executable' `
+            -Path (Join-Path $buildOutputDir 'RedSalamanderMonitor.exe') `
+            -Arguments @(
+                '--chrome-selftest',
+                '--perf',
+                '--monitor-etw-burst-mode=latency',
+                '--monitor-etw-burst-count=60',
+                '--monitor-etw-burst-size=260'
+            ) `
+            -WorkingDirectory $RepoRoot
 
         $plan += New-RSTestRunPlanEntry `
             -Name 'PerformanceTests2' `
