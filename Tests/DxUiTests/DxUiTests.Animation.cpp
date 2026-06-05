@@ -1,5 +1,5 @@
-#include "DxUiTestHelpers.h"
 #include "DxUi/DxUi.FrameRuntime.h"
+#include "DxUiTestHelpers.h"
 #include "Ui/AnimationDispatcher.h"
 
 #include <fstream>
@@ -175,8 +175,7 @@ void TestAnimationDispatcherSchedulerPolicyUses120HzTargetAndClampsHitches()
     Require(dispatcher.DebugGetTargetFrameUsForTest() == 8'333u,
             "animation dispatcher scheduler uses an 8,333 us target for synthetic 120 Hz animation pacing");
     const auto hitchTiming = dispatcher.DebugComputeTimingForTest(250'000u);
-    Require(hitchTiming.callbackDeltaUs == dispatcher.DebugGetHitchClampUsForTest(),
-            "animation dispatcher scheduler clamps hitch deltas before interpolation");
+    Require(hitchTiming.callbackDeltaUs == dispatcher.DebugGetHitchClampUsForTest(), "animation dispatcher scheduler clamps hitch deltas before interpolation");
     Require(hitchTiming.legacyGapMs == 250u, "animation dispatcher legacy tick gap reports the raw elapsed timer delta");
     Require(hitchTiming.legacyOverrun, "animation dispatcher legacy overrun uses the raw elapsed timer delta");
 }
@@ -191,7 +190,7 @@ void TestAnimationDispatcherActiveSubscribersReceiveMonotonicHighResolutionTicks
     const uintmax_t startOffset           = GetAnimationFileSizeOrZero(perfPath);
 
     AnimationTickCapture capture;
-    capture.keepAliveTicks = 3u;
+    capture.keepAliveTicks        = 3u;
     const uint64_t subscriptionId = AnimationDispatcher::GetInstance().Subscribe(&CaptureAnimationTick, &capture);
     Require(subscriptionId != 0u, "animation dispatcher accepts an active test subscriber");
     PumpAnimationMessagesForMs(250u);
@@ -218,7 +217,7 @@ void TestAnimationDispatcherInactiveSubscriberStopsContinuousTicks()
     AnimationDispatcher::GetInstance().Shutdown();
 
     AnimationTickCapture capture;
-    capture.keepAliveTicks = 1u;
+    capture.keepAliveTicks        = 1u;
     const uint64_t subscriptionId = AnimationDispatcher::GetInstance().Subscribe(&CaptureAnimationTick, &capture);
     Require(subscriptionId != 0u, "animation dispatcher accepts a one-shot test subscriber");
     PumpAnimationMessagesForMs(180u);
@@ -233,19 +232,16 @@ void TestFrameRuntimeElapsedUsHandlesLargeQpcDelta()
     LARGE_INTEGER frequency{};
     Require(QueryPerformanceFrequency(&frequency) != 0 && frequency.QuadPart > 0, "frame runtime large-delta test reads a positive QPC frequency");
 
-    constexpr uint64_t kMicrosecondsPerSecond = 1'000'000u;
-    constexpr uint64_t kMaxFrameTimestampQpc  = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
-    constexpr uint64_t kOverflowThresholdTicks =
-        (std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond) + 1u;
+    constexpr uint64_t kMicrosecondsPerSecond  = 1'000'000u;
+    constexpr uint64_t kMaxFrameTimestampQpc   = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    constexpr uint64_t kOverflowThresholdTicks = (std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond) + 1u;
 
-    const uint64_t qpcFrequency     = static_cast<uint64_t>(frequency.QuadPart);
+    const uint64_t qpcFrequency      = static_cast<uint64_t>(frequency.QuadPart);
     const uint64_t largeDeltaSeconds = (kOverflowThresholdTicks / qpcFrequency) + 1u;
-    Require(largeDeltaSeconds <= kMaxFrameTimestampQpc / qpcFrequency,
-            "frame runtime large-delta QPC value fits in FrameTimestamp");
+    Require(largeDeltaSeconds <= kMaxFrameTimestampQpc / qpcFrequency, "frame runtime large-delta QPC value fits in FrameTimestamp");
 
     const uint64_t largeDeltaQpc = qpcFrequency * largeDeltaSeconds;
-    Require(largeDeltaQpc >= kOverflowThresholdTicks,
-            "frame runtime large-delta test reaches the multiply-first overflow threshold");
+    Require(largeDeltaQpc >= kOverflowThresholdTicks, "frame runtime large-delta test reaches the multiply-first overflow threshold");
     Require(largeDeltaQpc > std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond,
             "frame runtime large-delta test exercises the multiply-first overflow path");
 
@@ -259,8 +255,7 @@ void TestFrameRuntimeElapsedUsHandlesLargeQpcDelta()
                 "frame runtime large-delta remainder microseconds fit in uint64_t");
 
         const uint64_t remainderUs = (remainderQpc * kMicrosecondsPerSecond) / qpcFrequency;
-        Require(remainderUs <= std::numeric_limits<uint64_t>::max() - quotientUs,
-                "frame runtime large-delta expected microseconds fit in uint64_t");
+        Require(remainderUs <= std::numeric_limits<uint64_t>::max() - quotientUs, "frame runtime large-delta expected microseconds fit in uint64_t");
         expectedUs = quotientUs + remainderUs;
     }
 
@@ -274,8 +269,7 @@ void TestFrameRuntimeElapsedUsHandlesWideCrossSignDelta()
     using namespace RedSalamander::DxUi;
 
     LARGE_INTEGER frequency{};
-    Require(QueryPerformanceFrequency(&frequency) != 0 && frequency.QuadPart > 0,
-            "frame runtime cross-sign delta test reads a positive QPC frequency");
+    Require(QueryPerformanceFrequency(&frequency) != 0 && frequency.QuadPart > 0, "frame runtime cross-sign delta test reads a positive QPC frequency");
 
     constexpr uint64_t kMicrosecondsPerSecond = 1'000'000u;
     constexpr FrameTimestamp kStart{std::numeric_limits<int64_t>::min()};
@@ -293,14 +287,12 @@ void TestFrameRuntimeElapsedUsHandlesWideCrossSignDelta()
         Require(remainderQpc <= std::numeric_limits<uint64_t>::max() / kMicrosecondsPerSecond,
                 "frame runtime cross-sign delta remainder microseconds fit in uint64_t");
         const uint64_t remainderUs = (remainderQpc * kMicrosecondsPerSecond) / qpcFrequency;
-        Require(remainderUs <= std::numeric_limits<uint64_t>::max() - wholeUs,
-                "frame runtime cross-sign delta expected microseconds fit in uint64_t");
+        Require(remainderUs <= std::numeric_limits<uint64_t>::max() - wholeUs, "frame runtime cross-sign delta expected microseconds fit in uint64_t");
         expectedUs = wholeUs + remainderUs;
     }
 
     FrameClock clock;
-    Require(clock.ElapsedUs(kStart, kEnd) == expectedUs,
-            "frame runtime elapsed microseconds handles wide cross-sign QPC deltas without signed overflow");
+    Require(clock.ElapsedUs(kStart, kEnd) == expectedUs, "frame runtime elapsed microseconds handles wide cross-sign QPC deltas without signed overflow");
 }
 
 void TestFrameRuntimeReducedMotionPolicy()
@@ -1094,8 +1086,7 @@ void TestPageHostConnectedOverlayAnimationEmitsCompositionGateMetrics()
 
             WindowHostBitmapCapture capture;
             Require(window.Host().DebugCaptureBitmap(capture), "connected overlay animation gate capture succeeds");
-            Require(capture.widthPx > 0u && capture.heightPx > 0u && ! capture.bgraPixels.empty(),
-                    "connected overlay animation gate capture has pixels");
+            Require(capture.widthPx > 0u && capture.heightPx > 0u && ! capture.bgraPixels.empty(), "connected overlay animation gate capture has pixels");
         }
 
         appendedMetrics = ReadAnimationPerfJsonlFromOffset(perfJsonl.Path(), metricOffset);

@@ -185,6 +185,8 @@ COLORREF ColorToCOLORREF(const D2D1::ColorF& color) noexcept;
 D2D1::ColorF GetSystemAccentColor() noexcept;
 D2D1::ColorF ColorFromHSV(float hueDegrees, float saturation, float value, float alpha = 1.0f) noexcept;
 uint32_t StableHash32(std::wstring_view text) noexcept;
+uint32_t AppendStableHash32(uint32_t hash, std::wstring_view text) noexcept;
+uint32_t FolderItemStableHash32(std::wstring_view folderText, std::wstring_view displayName) noexcept;
 
 COLORREF RainbowMenuSelectionColor(std::wstring_view seed, bool darkBase) noexcept;
 COLORREF ChooseContrastingTextColor(COLORREF background) noexcept;

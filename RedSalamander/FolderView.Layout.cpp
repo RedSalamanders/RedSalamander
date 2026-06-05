@@ -311,8 +311,8 @@ void FolderView::LayoutItems()
         .items                = columnTextMetrics,
     });
 
-    _columnLayout = std::move(columnLayout.columns);
-    _tileWidthDip = columnLayout.maxColumnWidthDip;
+    _columnLayout  = std::move(columnLayout.columns);
+    _tileWidthDip  = columnLayout.maxColumnWidthDip;
     _rowsPerColumn = std::max(1, columnLayout.rowsPerColumn);
     _columns       = static_cast<int>(_columnLayout.size());
     if (_columns < 1)
@@ -337,8 +337,8 @@ void FolderView::LayoutItems()
     }
     _columnPrefixSums.push_back(prefixSum); // Sentinel for bounds checking
 
-    float maxBottom = 0.0f;
-    float maxRight  = 0.0f;
+    float maxBottom       = 0.0f;
+    float maxRight        = 0.0f;
     const float rowStride = _tileHeightDip + rowSpacingDip;
 
     for (int columnIndex = 0; columnIndex < static_cast<int>(_columnLayout.size()); ++columnIndex)
@@ -414,7 +414,7 @@ void FolderView::UpdateItemTextLayouts()
 
     const bool includeDetailsLine =
         _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
-    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine        = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
     const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
     const float constrainedMetadataHeight = std::max(_metadataLineHeightDip, 1.0f);
@@ -442,7 +442,7 @@ void FolderView::UpdateItemTextLayouts()
 
     for (size_t i = rangeStart; i < rangeEnd; ++i)
     {
-        auto& item = _items[i];
+        auto& item                   = _items[i];
         const float constrainedWidth = std::max(GetItemTextLayoutWidth(item), 1.0f);
 
         if (item.displayName.empty())
@@ -739,7 +739,7 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
 
     const bool includeDetailsLine =
         _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
-    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine        = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const float constrainedWidth          = std::max(labelWidth, 1.0f);
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
     const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
@@ -749,12 +749,8 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
     if (! item.labelLayout)
     {
         wil::com_ptr<IDWriteTextLayout> layout;
-        HRESULT hr = _dwriteFactory->CreateTextLayout(labelText.data(),
-                                                      static_cast<UINT32>(labelText.length()),
-                                                      _labelFormat.get(),
-                                                      constrainedWidth,
-                                                      constrainedHeight,
-                                                      layout.addressof());
+        HRESULT hr = _dwriteFactory->CreateTextLayout(
+            labelText.data(), static_cast<UINT32>(labelText.length()), _labelFormat.get(), constrainedWidth, constrainedHeight, layout.addressof());
         if (SUCCEEDED(hr))
         {
             ConfigureLabelLayout(layout.get(), _ellipsisSign.get());
@@ -919,7 +915,7 @@ void FolderView::ProcessIdleLayoutBatch()
 
     const bool includeDetailsLine =
         _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
-    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine        = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
     const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
     const float constrainedMetadataHeight = std::max(_metadataLineHeightDip, 1.0f);

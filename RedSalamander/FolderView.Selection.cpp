@@ -1217,7 +1217,7 @@ std::wstring_view FolderView::DebugGetEmptyFolderFunMessage() const noexcept
 
 bool FolderView::DebugGetColumnLayoutSnapshot(DebugColumnLayoutSnapshot& out) const
 {
-    out = DebugColumnLayoutSnapshot{};
+    out                        = DebugColumnLayoutSnapshot{};
     out.displayMode            = static_cast<uint8_t>(_displayMode);
     out.rowsPerColumn          = _rowsPerColumn;
     out.horizontalOffsetDip    = _horizontalOffset;
@@ -1237,29 +1237,30 @@ bool FolderView::DebugGetColumnLayoutSnapshot(DebugColumnLayoutSnapshot& out) co
     for (size_t columnIndex = 0; columnIndex < (_columnLayout.empty() ? _columnCounts.size() : _columnLayout.size()); ++columnIndex)
     {
         const bool hasColumnLayout = columnIndex < _columnLayout.size();
-        const size_t startIndex    = hasColumnLayout ? std::min(_columnLayout[columnIndex].startIndex, _items.size()) :
-                                                       (columnIndex < _columnPrefixSums.size() ? std::min(_columnPrefixSums[columnIndex], _items.size()) :
-                                                                                                 std::min(runningStart, _items.size()));
+        const size_t startIndex    = hasColumnLayout ? std::min(_columnLayout[columnIndex].startIndex, _items.size())
+                                                     : (columnIndex < _columnPrefixSums.size() ? std::min(_columnPrefixSums[columnIndex], _items.size())
+                                                                                               : std::min(runningStart, _items.size()));
         const size_t itemCount     = hasColumnLayout ? _columnLayout[columnIndex].itemCount : static_cast<size_t>(std::max(0, _columnCounts[columnIndex]));
-        const size_t endIndex  = std::min(startIndex + itemCount, _items.size());
+        const size_t endIndex      = std::min(startIndex + itemCount, _items.size());
 
         DebugColumnLayoutEntry entry{};
         entry.startIndex = startIndex;
         entry.itemCount  = endIndex - startIndex;
-        entry.leftDip    = hasColumnLayout ? _columnLayout[columnIndex].leftDip : kColumnSpacingDip + (static_cast<float>(columnIndex) * (_tileWidthDip + kColumnSpacingDip));
-        entry.widthDip   = hasColumnLayout ? _columnLayout[columnIndex].widthDip : _tileWidthDip;
-        entry.rightDip   = entry.leftDip + entry.widthDip;
+        entry.leftDip =
+            hasColumnLayout ? _columnLayout[columnIndex].leftDip : kColumnSpacingDip + (static_cast<float>(columnIndex) * (_tileWidthDip + kColumnSpacingDip));
+        entry.widthDip = hasColumnLayout ? _columnLayout[columnIndex].widthDip : _tileWidthDip;
+        entry.rightDip = entry.leftDip + entry.widthDip;
 
         for (size_t itemIndex = startIndex; itemIndex < endIndex; ++itemIndex)
         {
             const FolderItem& item = _items[itemIndex];
-            const float labelWidth = item.labelMetrics.widthIncludingTrailingWhitespace > 0.0f ? item.labelMetrics.widthIncludingTrailingWhitespace :
-                                                                                                 item.labelMetrics.width;
-            const float detailsWidth = item.detailsMetrics.widthIncludingTrailingWhitespace > 0.0f ? item.detailsMetrics.widthIncludingTrailingWhitespace :
-                                                                                                      item.detailsMetrics.width;
-            const float metadataWidth = item.metadataMetrics.widthIncludingTrailingWhitespace > 0.0f ? item.metadataMetrics.widthIncludingTrailingWhitespace :
-                                                                                                        item.metadataMetrics.width;
-            const float itemWidth = std::max(labelWidth, std::max(detailsWidth, metadataWidth));
+            const float labelWidth =
+                item.labelMetrics.widthIncludingTrailingWhitespace > 0.0f ? item.labelMetrics.widthIncludingTrailingWhitespace : item.labelMetrics.width;
+            const float detailsWidth =
+                item.detailsMetrics.widthIncludingTrailingWhitespace > 0.0f ? item.detailsMetrics.widthIncludingTrailingWhitespace : item.detailsMetrics.width;
+            const float metadataWidth = item.metadataMetrics.widthIncludingTrailingWhitespace > 0.0f ? item.metadataMetrics.widthIncludingTrailingWhitespace
+                                                                                                     : item.metadataMetrics.width;
+            const float itemWidth     = std::max(labelWidth, std::max(detailsWidth, metadataWidth));
             if (itemWidth >= entry.widestObservedWidthDip)
             {
                 entry.widestObservedWidthDip = itemWidth;

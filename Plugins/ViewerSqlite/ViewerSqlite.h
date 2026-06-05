@@ -134,7 +134,7 @@ private:
     ViewerSqliteEngine::Config _config{};
     std::string _configurationJson;
 
-    bool _loading  = false;
+    bool _loading = false;
 
     wil::com_ptr<IHostAlerts> _hostAlerts;
     wil::com_ptr<IFileSystem> _fileSystem;

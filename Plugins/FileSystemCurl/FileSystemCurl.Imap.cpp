@@ -2205,9 +2205,12 @@ struct ImapHeaderFields
 
         std::string response;
         const auto fetchStarted = std::chrono::steady_clock::now();
-        HRESULT hr = CurlPerformImapCustomRequest(conn, mailboxPath, requestText, response);
-        Debug::Perf::EmitDurationUs(
-            L"filesystem.imap.fetch_summaries_us", Debug::Perf::ElapsedUs(fetchStarted), static_cast<uint64_t>(endIndex - startIndex), static_cast<uint64_t>(uidSetText.size()), hr);
+        HRESULT hr              = CurlPerformImapCustomRequest(conn, mailboxPath, requestText, response);
+        Debug::Perf::EmitDurationUs(L"filesystem.imap.fetch_summaries_us",
+                                    Debug::Perf::ElapsedUs(fetchStarted),
+                                    static_cast<uint64_t>(endIndex - startIndex),
+                                    static_cast<uint64_t>(uidSetText.size()),
+                                    hr);
         if (FAILED(hr))
         {
             return hr;
@@ -2220,7 +2223,7 @@ struct ImapHeaderFields
         size_t fetchBlocksParsed     = 0;
 
         const auto parseStarted = std::chrono::steady_clock::now();
-        size_t parsePos = 0;
+        size_t parsePos         = 0;
         while (true)
         {
             const size_t msgStart = FindImapUntaggedFetchLine(response, parsePos);
@@ -2414,12 +2417,11 @@ struct ImapHeaderFields
 
             parsePos = nextPos;
         }
-        Debug::Perf::EmitDurationUs(
-            L"filesystem.imap.summary_parse_us",
-            Debug::Perf::ElapsedUs(parseStarted),
-            static_cast<uint64_t>(fetchBlocksParsed),
-            static_cast<uint64_t>(fetchParseFailures + missingUidCount + envelopeParseFailures),
-            hr);
+        Debug::Perf::EmitDurationUs(L"filesystem.imap.summary_parse_us",
+                                    Debug::Perf::ElapsedUs(parseStarted),
+                                    static_cast<uint64_t>(fetchBlocksParsed),
+                                    static_cast<uint64_t>(fetchParseFailures + missingUidCount + envelopeParseFailures),
+                                    hr);
 
         size_t missingRequested = 0;
         std::array<uint64_t, 5> missingSamples{};
@@ -3256,7 +3258,7 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
 
     std::vector<uint64_t> uids;
     auto listUidsStarted = std::chrono::steady_clock::now();
-    hr = ImapListMessageUids(conn, mailboxName, delimiter, uids);
+    hr                   = ImapListMessageUids(conn, mailboxName, delimiter, uids);
     Debug::Perf::EmitDurationUs(L"filesystem.imap.list_uids_us", Debug::Perf::ElapsedUs(listUidsStarted), static_cast<uint64_t>(uids.size()), 0u, hr);
     if (FAILED(hr))
     {
@@ -3290,9 +3292,9 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     constexpr size_t kFetchChunkSize = 200u;
     HRESULT metaHr                   = S_OK;
     size_t repairFetchCount          = 0;
-    const size_t repairFetchBudget    = ResolveImapSummaryRepairFetchBudget(uids.size());
-    size_t missingSummaryCount        = 0;
-    bool repairBudgetWarningLogged    = false;
+    const size_t repairFetchBudget   = ResolveImapSummaryRepairFetchBudget(uids.size());
+    size_t missingSummaryCount       = 0;
+    bool repairBudgetWarningLogged   = false;
 
     auto collectMissingSummaries = [&summaries](std::span<const uint64_t> requested) -> std::vector<uint64_t>
     {
@@ -3337,8 +3339,8 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
             return false;
         };
 
-        constexpr size_t kRepairBatchSize = 16u;
-        HRESULT repairResult              = S_OK;
+        constexpr size_t kRepairBatchSize           = 16u;
+        HRESULT repairResult                        = S_OK;
         const std::vector<ImapUidBatchRange> ranges = BuildImapUidBatchRanges(missingUids.size(), kRepairBatchSize);
         for (const ImapUidBatchRange& range : ranges)
         {
@@ -3491,8 +3493,11 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         }
         entries.push_back(std::move(entry));
     }
-    Debug::Perf::EmitDurationUs(
-        L"filesystem.imap.build_fileinfo_us", Debug::Perf::ElapsedUs(buildStarted), static_cast<uint64_t>(entries.size()), static_cast<uint64_t>(summaries.size()), metaHr);
+    Debug::Perf::EmitDurationUs(L"filesystem.imap.build_fileinfo_us",
+                                Debug::Perf::ElapsedUs(buildStarted),
+                                static_cast<uint64_t>(entries.size()),
+                                static_cast<uint64_t>(summaries.size()),
+                                metaHr);
     perf.SetValue0(static_cast<uint64_t>(entries.size()));
     perf.SetValue1(static_cast<uint64_t>(uids.size()));
     perf.SetHr(metaHr);

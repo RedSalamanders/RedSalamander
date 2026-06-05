@@ -31,6 +31,7 @@ using unique_safearray = std::unique_ptr<SAFEARRAY, safearray_deleter>;
 [[nodiscard]] std::wstring_view LoadDxUiString(UINT resourceId, std::wstring_view fallback) noexcept;
 [[nodiscard]] D2D1_COLOR_F RainbowTint(std::wstring_view seed, bool dark) noexcept;
 [[nodiscard]] D2D1_COLOR_F RainbowMenuSelectionTint(std::wstring_view seed, bool dark) noexcept;
+[[nodiscard]] D2D1_COLOR_F RainbowFolderViewSelectionTint(uint32_t stableHash32, bool dark) noexcept;
 [[nodiscard]] D2D1_COLOR_F ChooseContrastingTextColor(const D2D1_COLOR_F& background) noexcept;
 [[nodiscard]] std::wstring_view GetCheckboxCheckGlyph(const WindowHost& host) noexcept;
 [[nodiscard]] FontRole GetCheckboxCheckFontRole(const WindowHost& host) noexcept;
@@ -277,30 +278,29 @@ constexpr uint64_t kTypeaheadResetMs = 1000u;
 [[nodiscard]] float MeasureSingleLineTextWidthDip(const WindowHost* host,
                                                   std::wstring_view text,
                                                   FontRole role,
-                                                  float heightDip = 24.0f,
+                                                  float heightDip                           = 24.0f,
                                                   DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
-[[nodiscard]] wil::com_ptr<IDWriteTextLayout> CreateSingleLineTextLayout(const WindowHost* host,
-                                                                         std::wstring_view text,
-                                                                         FontRole role,
-                                                                         float widthDip,
-                                                                         float heightDip,
-                                                                         DWRITE_READING_DIRECTION readingDirection =
-                                                                             DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
+[[nodiscard]] wil::com_ptr<IDWriteTextLayout> CreateSingleLineTextLayout(
+    const WindowHost* host,
+    std::wstring_view text,
+    FontRole role,
+    float widthDip,
+    float heightDip,
+    DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
 [[nodiscard]] float MeasureCaretOffsetDip(const WindowHost* host,
                                           std::wstring_view text,
                                           FontRole role,
                                           size_t caretIndex,
                                           float heightDip,
                                           DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT,
-                                          float layoutWidthDip = 0.0f) noexcept;
-[[nodiscard]] size_t HitTestCaretIndexDip(
-    const WindowHost* host,
-    std::wstring_view text,
-    FontRole role,
-    const D2D1_RECT_F& textRect,
-    float scrollDip,
-    D2D1_POINT_2F point,
-    DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
+                                          float layoutWidthDip                      = 0.0f) noexcept;
+[[nodiscard]] size_t HitTestCaretIndexDip(const WindowHost* host,
+                                          std::wstring_view text,
+                                          FontRole role,
+                                          const D2D1_RECT_F& textRect,
+                                          float scrollDip,
+                                          D2D1_POINT_2F point,
+                                          DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
 
 void DrawSingleLineTextClipped(WindowHost& host,
                                std::wstring_view text,
@@ -325,14 +325,14 @@ void ArmSingleLineSelectionClickSequence(SingleLineSelectionClickSequence& seque
 [[nodiscard]] int GetWordSelectionClass(wchar_t value) noexcept;
 void SelectSingleLineWordAt(std::wstring_view text, size_t hitIndex, size_t& caretIndex, std::optional<size_t>& anchorIndex) noexcept;
 
-[[nodiscard]] std::optional<D2D1_RECT_F> ComputeSingleLineSelectionPaintRect(const WindowHost& host,
-                                                                             std::wstring_view text,
-                                                                             const D2D1_RECT_F& rect,
-                                                                             FontRole role,
-                                                                             float scrollDip,
-                                                                             std::optional<std::pair<size_t, size_t>> selectionRange,
-                                                                             DWRITE_READING_DIRECTION readingDirection =
-                                                                                 DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
+[[nodiscard]] std::optional<D2D1_RECT_F> ComputeSingleLineSelectionPaintRect(
+    const WindowHost& host,
+    std::wstring_view text,
+    const D2D1_RECT_F& rect,
+    FontRole role,
+    float scrollDip,
+    std::optional<std::pair<size_t, size_t>> selectionRange,
+    DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
 void DrawSingleLineSelection(WindowHost& host,
                              std::wstring_view text,
                              const D2D1_RECT_F& rect,
@@ -344,8 +344,9 @@ void DrawSingleLineSelection(WindowHost& host,
                              std::optional<std::pair<size_t, size_t>> selectionRange,
                              DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT) noexcept;
 
-[[nodiscard]] std::optional<std::pair<size_t, size_t>> ResolveNativeTextInputOptionalRange(
-    const NativeTextInputState& state, std::optional<size_t> startIndex, std::optional<size_t> endIndex) noexcept;
+[[nodiscard]] std::optional<std::pair<size_t, size_t>> ResolveNativeTextInputOptionalRange(const NativeTextInputState& state,
+                                                                                           std::optional<size_t> startIndex,
+                                                                                           std::optional<size_t> endIndex) noexcept;
 [[nodiscard]] std::vector<D2D1_RECT_F> BuildTextInputUnderlineRects(
     const WindowHost& host, const Control& control, std::pair<size_t, size_t> range, float bottomInsetDip, float thicknessDip);
 [[nodiscard]] std::vector<D2D1_RECT_F> BuildNativeCompositionUnderlineRects(const WindowHost& host, const Control& control, bool conversionTarget);

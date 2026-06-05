@@ -105,8 +105,8 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
 
     const float textSizeDip = static_cast<float>(MulDiv(13, static_cast<int>(std::max<UINT>(USER_DEFAULT_SCREEN_DPI, dpi)), USER_DEFAULT_SCREEN_DPI));
     wil::com_ptr<IDWriteTextFormat> format;
-    const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
-        dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(textSizeDip), format.put(), L"");
+    const HRESULT hr =
+        RedSalamander::DxUi::Typography::CreateTextFormat(dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(textSizeDip), format.put(), L"");
     if (FAILED(hr) || ! format)
     {
         return {};
@@ -118,8 +118,10 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
     return format;
 }
 
-[[nodiscard]] wil::com_ptr<IDWriteTextFormat> CreateValidationPopupIconTextFormat(
-    IDWriteFactory* dwriteFactory, UINT dpi, bool& usesFluentIcon, wchar_t& iconGlyph) noexcept
+[[nodiscard]] wil::com_ptr<IDWriteTextFormat> CreateValidationPopupIconTextFormat(IDWriteFactory* dwriteFactory,
+                                                                                  UINT dpi,
+                                                                                  bool& usesFluentIcon,
+                                                                                  wchar_t& iconGlyph) noexcept
 {
     usesFluentIcon = false;
     iconGlyph      = FluentIcons::kFallbackWarning;
@@ -128,19 +130,17 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
         return {};
     }
 
-    const float iconSizeDip = static_cast<float>(MulDiv(kValidationPopupIconSizeDip,
-                                                        static_cast<int>(std::max<UINT>(USER_DEFAULT_SCREEN_DPI, dpi)),
-                                                        USER_DEFAULT_SCREEN_DPI));
-    usesFluentIcon          = RedSalamander::DxUi::Typography::IsFontFamilyAvailable(
-        dwriteFactory, RedSalamander::DxUi::Typography::kSegoeFluentIconsFamily);
-    iconGlyph = usesFluentIcon ? FluentIcons::kWarning : FluentIcons::kFallbackWarning;
+    const float iconSizeDip =
+        static_cast<float>(MulDiv(kValidationPopupIconSizeDip, static_cast<int>(std::max<UINT>(USER_DEFAULT_SCREEN_DPI, dpi)), USER_DEFAULT_SCREEN_DPI));
+    usesFluentIcon = RedSalamander::DxUi::Typography::IsFontFamilyAvailable(dwriteFactory, RedSalamander::DxUi::Typography::kSegoeFluentIconsFamily);
+    iconGlyph      = usesFluentIcon ? FluentIcons::kWarning : FluentIcons::kFallbackWarning;
 
     wil::com_ptr<IDWriteTextFormat> format;
     const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
         dwriteFactory,
-        usesFluentIcon ? RedSalamander::DxUi::Typography::MakeUiIconSpec(iconSizeDip)
-                       : RedSalamander::DxUi::Typography::TypographySpec{
-                             .familyName = L"Segoe UI Symbol", .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = iconSizeDip},
+        usesFluentIcon
+            ? RedSalamander::DxUi::Typography::MakeUiIconSpec(iconSizeDip)
+            : RedSalamander::DxUi::Typography::TypographySpec{.familyName = L"Segoe UI Symbol", .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = iconSizeDip},
         format.put(),
         L"");
     if (FAILED(hr) || ! format)
@@ -178,6 +178,61 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
 
     region.release();
     return true;
+}
+
+[[nodiscard]] bool IsForwardableEditHostMouseActivateMessage(UINT msg) noexcept
+{
+    switch (msg)
+    {
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_RBUTTONDBLCLK:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
+        case WM_MBUTTONDBLCLK:
+        case WM_XBUTTONDOWN:
+        case WM_XBUTTONUP:
+        case WM_XBUTTONDBLCLK: return true;
+        default: return false;
+    }
+}
+
+[[nodiscard]] WPARAM BuildForwardedMouseKeyState(UINT msg) noexcept
+{
+    WPARAM state = 0;
+    if ((GetKeyState(VK_CONTROL) & 0x8000) != 0)
+    {
+        state |= MK_CONTROL;
+    }
+    if ((GetKeyState(VK_SHIFT) & 0x8000) != 0)
+    {
+        state |= MK_SHIFT;
+    }
+    if ((GetKeyState(VK_LBUTTON) & 0x8000) != 0 || msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK)
+    {
+        state |= MK_LBUTTON;
+    }
+    if ((GetKeyState(VK_RBUTTON) & 0x8000) != 0 || msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK)
+    {
+        state |= MK_RBUTTON;
+    }
+    if ((GetKeyState(VK_MBUTTON) & 0x8000) != 0 || msg == WM_MBUTTONDOWN || msg == WM_MBUTTONDBLCLK)
+    {
+        state |= MK_MBUTTON;
+    }
+    if ((GetKeyState(VK_XBUTTON1) & 0x8000) != 0)
+    {
+        state |= MK_XBUTTON1;
+    }
+    if ((GetKeyState(VK_XBUTTON2) & 0x8000) != 0)
+    {
+        state |= MK_XBUTTON2;
+    }
+    return state;
 }
 } // namespace
 
@@ -275,9 +330,7 @@ LRESULT NavigationView::EditValidationPopupWndProc(HWND hwnd, UINT msg, WPARAM w
     {
         case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
         case WM_ERASEBKGND: return 1;
-        case WM_PAINT:
-            PaintEditValidationPopup(hwnd);
-            return 0;
+        case WM_PAINT: PaintEditValidationPopup(hwnd); return 0;
         case WM_NCDESTROY:
             if (_editValidationPopup.get() == hwnd)
             {
@@ -571,8 +624,8 @@ void NavigationView::EnterEditMode()
     });
     _pathEdit->field->SetOnPreviewKeyDown([this](RedSalamander::DxUi::WindowHost& /*host*/, UINT virtualKey, UINT modifiers) -> bool
     {
-        if ((virtualKey != VK_DOWN && virtualKey != VK_UP) || (modifiers & (MK_CONTROL | MK_SHIFT | kDxUiModifierAlt)) != 0u ||
-            ! _editSuggestPopup || _editSuggestItems.empty())
+        if ((virtualKey != VK_DOWN && virtualKey != VK_UP) || (modifiers & (MK_CONTROL | MK_SHIFT | kDxUiModifierAlt)) != 0u || ! _editSuggestPopup ||
+            _editSuggestItems.empty())
         {
             return false;
         }
@@ -791,7 +844,8 @@ void NavigationView::ExitEditMode(bool accept)
         _pathEdit->host.SetOnTabBoundary({});
 
         const HWND focused = GetFocus();
-        if (focused && (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetTextInputHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE) && _hWnd)
+        if (focused && (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetTextInputHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE) &&
+            _hWnd)
         {
             SetFocus(_hWnd.get());
         }
@@ -1521,8 +1575,8 @@ void NavigationView::UpdateEditSuggestPopupWindow()
     const int minY = static_cast<int>(work.top);
     const int maxX = std::max(minX, static_cast<int>(work.right - winWidth));
     const int maxY = std::max(minY, static_cast<int>(work.bottom - winHeight));
-    x = std::clamp(x, minX, maxX);
-    y = std::clamp(y, minY, maxY);
+    x              = std::clamp(x, minX, maxX);
+    y              = std::clamp(y, minY, maxY);
 
     if (! _editSuggestPopup)
     {
@@ -1836,12 +1890,7 @@ bool NavigationView::TryHandleEditClipboardCommand(UINT commandId) noexcept
         return false;
     }
 
-    const HWND focused = GetFocus();
-    if (! focused || (focused != _pathEdit->hwnd.get() && focused != _pathEdit->GetTextInputHwnd() && IsChild(_pathEdit->hwnd.get(), focused) == FALSE))
-    {
-        return false;
-    }
-
+    SetFocus(_pathEdit->hwnd.get());
     _pathEdit->host.SetFocusControl(_pathEdit->field);
     const auto syncTextInput = [this]() noexcept { _pathEdit->host.SyncTextInput(_pathEdit->field); };
 
@@ -1852,7 +1901,7 @@ bool NavigationView::TryHandleEditClipboardCommand(UINT commandId) noexcept
             syncTextInput();
             return true;
         case IDM_PANE_CLIPBOARD_COPY:
-            static_cast<void>(_pathEdit->field->OnKeyDown(_pathEdit->host, 'C', MK_CONTROL));
+            static_cast<void>(_pathEdit->field->OnCopy(_pathEdit->host));
             syncTextInput();
             return true;
         case IDM_PANE_CLIPBOARD_CUT:
@@ -2343,8 +2392,8 @@ void NavigationView::UpdateEditValidationPopupWindow(NavigationDxTextHost& textH
     {
         return;
     }
-    bool usesFluentIcon = false;
-    wchar_t iconGlyph   = L'\0';
+    bool usesFluentIcon                        = false;
+    wchar_t iconGlyph                          = L'\0';
     wil::com_ptr<IDWriteTextFormat> iconFormat = CreateValidationPopupIconTextFormat(_dwriteFactory.get(), _dpi, usesFluentIcon, iconGlyph);
 
     RECT anchorRect{};
@@ -2380,7 +2429,7 @@ void NavigationView::UpdateEditValidationPopupWindow(NavigationDxTextHost& textH
     int popupWidthPx = std::min(maxWidthPx, std::max(minWidthPx, DipsToPixelsInt(kValidationPopupPreferredWidthDip, _dpi)));
     popupWidthPx     = std::max(1, popupWidthPx);
 
-    int textHeightPx       = DipsToPixelsInt(16, _dpi);
+    int textHeightPx = DipsToPixelsInt(16, _dpi);
     wil::com_ptr<IDWriteTextLayout> layout;
     const float textWidthDip = static_cast<float>(std::max(1, popupWidthPx - (paddingXPx * 2) - iconSizePx - iconGapPx));
     if (SUCCEEDED(_dwriteFactory->CreateTextLayout(_editValidationMessage.c_str(),
@@ -2422,8 +2471,7 @@ void NavigationView::UpdateEditValidationPopupWindow(NavigationDxTextHost& textH
     const DWORD exStyle = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
     if (! _editValidationPopup)
     {
-        HWND popup =
-            CreateWindowExW(exStyle, kValidationPopupClassName, L"", style, x, y, popupWidthPx, popupHeightPx, _hWnd.get(), nullptr, _hInstance, this);
+        HWND popup = CreateWindowExW(exStyle, kValidationPopupClassName, L"", style, x, y, popupWidthPx, popupHeightPx, _hWnd.get(), nullptr, _hInstance, this);
         if (! popup)
         {
             _editValidationPopupScreenRect = {};
@@ -2453,10 +2501,10 @@ void NavigationView::CloseEditValidationPopup() noexcept
         _editValidationPopup.reset();
     }
     _editValidationMessage.clear();
-    _editValidationPopupScreenRect = {};
-    _editValidationPopupRoundedRegion = false;
+    _editValidationPopupScreenRect     = {};
+    _editValidationPopupRoundedRegion  = false;
     _editValidationPopupIconUsesFluent = false;
-    _editValidationPopupIconGlyph = L'\0';
+    _editValidationPopupIconGlyph      = L'\0';
 }
 
 bool NavigationView::IsEditValidationPopupWindow(HWND hwnd) const noexcept
@@ -2480,8 +2528,8 @@ void NavigationView::PaintEditValidationPopup(HWND hwnd) noexcept
     {
         return;
     }
-    bool usesFluentIcon = false;
-    wchar_t iconGlyph   = L'\0';
+    bool usesFluentIcon                        = false;
+    wchar_t iconGlyph                          = L'\0';
     wil::com_ptr<IDWriteTextFormat> iconFormat = CreateValidationPopupIconTextFormat(_dwriteFactory.get(), _dpi, usesFluentIcon, iconGlyph);
 
     RECT clientRect{};
@@ -2493,9 +2541,9 @@ void NavigationView::PaintEditValidationPopup(HWND hwnd) noexcept
     const UINT32 width  = static_cast<UINT32>(std::max<LONG>(1, clientRect.right - clientRect.left));
     const UINT32 height = static_cast<UINT32>(std::max<LONG>(1, clientRect.bottom - clientRect.top));
 
-    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties();
-    props.dpiX                          = 96.0f;
-    props.dpiY                          = 96.0f;
+    D2D1_RENDER_TARGET_PROPERTIES props                = D2D1::RenderTargetProperties();
+    props.dpiX                                         = 96.0f;
+    props.dpiY                                         = 96.0f;
     const D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(hwnd, D2D1::SizeU(width, height));
 
     wil::com_ptr<ID2D1HwndRenderTarget> target;
@@ -2518,37 +2566,31 @@ void NavigationView::PaintEditValidationPopup(HWND hwnd) noexcept
     target->BeginDraw();
     auto endDraw = wil::scope_exit([&] { static_cast<void>(target->EndDraw()); });
 
-    const float widthDip             = static_cast<float>(width);
-    const float heightDip            = static_cast<float>(height);
-    const D2D1_RECT_F borderRect      = D2D1::RectF(0.5f, 0.5f, std::max(0.5f, widthDip - 0.5f), std::max(0.5f, heightDip - 0.5f));
-    const float cornerRadiusDip       = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupCornerRadiusDip, _dpi)));
-    const D2D1_ROUNDED_RECT rounded   = D2D1::RoundedRect(borderRect, cornerRadiusDip, cornerRadiusDip);
-    const float paddingXDip           = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupPaddingXDip, _dpi)));
-    const float paddingYDip           = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupPaddingYDip, _dpi)));
-    const float iconSizeDip           = iconFormat ? static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupIconSizeDip, _dpi))) : 0.0f;
-    const float iconGapDip            = iconFormat ? static_cast<float>(std::max(0, DipsToPixelsInt(kValidationPopupIconGapDip, _dpi))) : 0.0f;
-    const float textLeftDip           = paddingXDip + (iconFormat ? iconSizeDip + iconGapDip : 0.0f);
-    const D2D1_RECT_F textRect        = D2D1::RectF(textLeftDip,
-                                                    paddingYDip,
-                                                    std::max(textLeftDip, widthDip - paddingXDip),
-                                                    std::max(paddingYDip, heightDip - paddingYDip));
+    const float widthDip            = static_cast<float>(width);
+    const float heightDip           = static_cast<float>(height);
+    const D2D1_RECT_F borderRect    = D2D1::RectF(0.5f, 0.5f, std::max(0.5f, widthDip - 0.5f), std::max(0.5f, heightDip - 0.5f));
+    const float cornerRadiusDip     = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupCornerRadiusDip, _dpi)));
+    const D2D1_ROUNDED_RECT rounded = D2D1::RoundedRect(borderRect, cornerRadiusDip, cornerRadiusDip);
+    const float paddingXDip         = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupPaddingXDip, _dpi)));
+    const float paddingYDip         = static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupPaddingYDip, _dpi)));
+    const float iconSizeDip         = iconFormat ? static_cast<float>(std::max(1, DipsToPixelsInt(kValidationPopupIconSizeDip, _dpi))) : 0.0f;
+    const float iconGapDip          = iconFormat ? static_cast<float>(std::max(0, DipsToPixelsInt(kValidationPopupIconGapDip, _dpi))) : 0.0f;
+    const float textLeftDip         = paddingXDip + (iconFormat ? iconSizeDip + iconGapDip : 0.0f);
+    const D2D1_RECT_F textRect =
+        D2D1::RectF(textLeftDip, paddingYDip, std::max(textLeftDip, widthDip - paddingXDip), std::max(paddingYDip, heightDip - paddingYDip));
 
     target->FillRoundedRectangle(rounded, backgroundBrush.get());
     target->DrawRoundedRectangle(rounded, borderBrush.get(), 1.0f);
     if (iconFormat && iconGlyph != L'\0')
     {
-        const float iconTopDip      = std::max(paddingYDip, (heightDip - iconSizeDip) * 0.5f);
-        const D2D1_RECT_F iconRect  = D2D1::RectF(paddingXDip, iconTopDip, paddingXDip + iconSizeDip, iconTopDip + iconSizeDip);
-        const wchar_t iconText[2]   = {iconGlyph, L'\0'};
+        const float iconTopDip     = std::max(paddingYDip, (heightDip - iconSizeDip) * 0.5f);
+        const D2D1_RECT_F iconRect = D2D1::RectF(paddingXDip, iconTopDip, paddingXDip + iconSizeDip, iconTopDip + iconSizeDip);
+        const wchar_t iconText[2]  = {iconGlyph, L'\0'};
         target->DrawTextW(iconText, 1u, iconFormat.get(), iconRect, textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_NO_SNAP, DWRITE_MEASURING_MODE_NATURAL);
     }
     constexpr auto textOptions = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-    target->DrawTextW(_editValidationMessage.c_str(),
-                      ClampTextLengthForDWrite(_editValidationMessage),
-                      validationFormat.get(),
-                      textRect,
-                      textBrush.get(),
-                      textOptions);
+    target->DrawTextW(
+        _editValidationMessage.c_str(), ClampTextLengthForDWrite(_editValidationMessage), validationFormat.get(), textRect, textBrush.get(), textOptions);
 }
 
 LRESULT NavigationView::HandleEditSubclassGetTextLength(HWND editHwnd) const noexcept
@@ -2567,7 +2609,7 @@ LRESULT NavigationView::HandleEditSubclassGetText(HWND editHwnd, WPARAM maxChars
 
     const NavigationDxTextHost* textHost = ResolveEditTextHost(editHwnd);
     const std::wstring_view text         = (textHost && textHost->field) ? textHost->field->GetText() : std::wstring_view{};
-    const size_t copyCount              = std::min(text.size(), static_cast<size_t>(maxChars - 1u));
+    const size_t copyCount               = std::min(text.size(), static_cast<size_t>(maxChars - 1u));
     if (copyCount > 0u)
     {
         std::copy_n(text.data(), copyCount, output);
@@ -2660,6 +2702,169 @@ LRESULT NavigationView::HandleEditSubclassReplaceSelection(HWND editHwnd, LPARAM
     return TRUE;
 }
 
+bool NavigationView::IsEditTextHostPointerInputActive(HWND hwnd) const noexcept
+{
+    const NavigationDxTextHost* textHost = ResolveEditTextHost(hwnd);
+    if (! textHost || ! textHost->hwnd)
+    {
+        return false;
+    }
+
+    const bool pathEditHost     = _pathEdit.get() == textHost;
+    const bool fullPathEditHost = _fullPathPopupEdit.get() == textHost;
+    const bool editModeActive   = (pathEditHost && _editMode) || (fullPathEditHost && _fullPathPopupEditMode);
+    if (! editModeActive)
+    {
+        return false;
+    }
+
+    const HWND focused = GetFocus();
+    if (! focused)
+    {
+        return true;
+    }
+
+    const HWND hostHwnd  = textHost->hwnd.get();
+    const HWND inputHwnd = textHost->GetTextInputHwnd();
+    if (focused == _hWnd.get() || focused == hostHwnd || focused == inputHwnd || IsChild(hostHwnd, focused) != FALSE)
+    {
+        return true;
+    }
+
+    return IsEditValidationPopupWindow(focused);
+}
+
+LRESULT NavigationView::ForwardEditTextHostPointerMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    if (! _hWnd)
+    {
+        return 0;
+    }
+
+    LPARAM forwardedLParam = lp;
+    switch (msg)
+    {
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_RBUTTONDBLCLK:
+        {
+            POINT pt{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            if (MapWindowPoints(hwnd, _hWnd.get(), &pt, 1u) != 0)
+            {
+                forwardedLParam = MAKELPARAM(pt.x, pt.y);
+            }
+            break;
+        }
+        default: break;
+    }
+
+    return SendMessageW(_hWnd.get(), msg, wp, forwardedLParam);
+}
+
+LRESULT NavigationView::ForwardEditTextHostPointerMessageFromScreen(UINT msg, WPARAM wp, LPARAM screenPointLParam) noexcept
+{
+    if (! _hWnd)
+    {
+        return 0;
+    }
+
+    POINT pt{GET_X_LPARAM(screenPointLParam), GET_Y_LPARAM(screenPointLParam)};
+    if (ScreenToClient(_hWnd.get(), &pt) == FALSE)
+    {
+        return 0;
+    }
+
+    return SendMessageW(_hWnd.get(), msg, wp, MAKELPARAM(pt.x, pt.y));
+}
+
+bool NavigationView::TryRetireInactiveEditTextHostForPointer(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) noexcept
+{
+    switch (msg)
+    {
+        case WM_NCHITTEST:
+        case WM_MOUSEACTIVATE:
+        case WM_SETCURSOR:
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_RBUTTONDBLCLK: break;
+        default: return false;
+    }
+
+    if (IsEditTextHostPointerInputActive(hwnd))
+    {
+        return false;
+    }
+
+    NavigationDxTextHost* textHost = ResolveEditTextHost(hwnd);
+    if (! textHost || ! textHost->hwnd)
+    {
+        return false;
+    }
+
+    TraceNavigationViewMenuDiagnostics(L"navigation.edit-host-retire",
+                                       L"host={:#x} msg=0x{:x} editMode={} fullPathEditMode={} focus={:#x} active={:#x} foreground={:#x}",
+                                       reinterpret_cast<uintptr_t>(textHost->hwnd.get()),
+                                       msg,
+                                       _editMode ? 1 : 0,
+                                       _fullPathPopupEditMode ? 1 : 0,
+                                       reinterpret_cast<uintptr_t>(GetFocus()),
+                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                                       reinterpret_cast<uintptr_t>(GetForegroundWindow()));
+
+    if (_pathEdit.get() == textHost && _editMode)
+    {
+        ExitEditMode(false);
+    }
+    else if (_fullPathPopupEdit.get() == textHost && _fullPathPopupEditMode)
+    {
+        ExitFullPathPopupEditMode(false);
+    }
+    else
+    {
+        ShowWindow(textHost->hwnd.get(), SW_HIDE);
+    }
+
+    switch (msg)
+    {
+        case WM_NCHITTEST:
+            result = HTTRANSPARENT;
+            return true;
+        case WM_MOUSEACTIVATE:
+        {
+            const UINT mouseMessage = HIWORD(lp);
+            if (IsForwardableEditHostMouseActivateMessage(mouseMessage))
+            {
+                const LPARAM screenPoint = static_cast<LPARAM>(GetMessagePos());
+                TraceNavigationViewMenuDiagnostics(L"navigation.edit-host-forward-activate",
+                                                   L"host={:#x} mouseMessage=0x{:x} screen=({}, {})",
+                                                   reinterpret_cast<uintptr_t>(textHost->hwnd.get()),
+                                                   mouseMessage,
+                                                   GET_X_LPARAM(screenPoint),
+                                                   GET_Y_LPARAM(screenPoint));
+                static_cast<void>(ForwardEditTextHostPointerMessageFromScreen(mouseMessage, BuildForwardedMouseKeyState(mouseMessage), screenPoint));
+                result = MA_NOACTIVATEANDEAT;
+                return true;
+            }
+            result = MA_NOACTIVATE;
+            return true;
+        }
+        case WM_SETCURSOR:
+            result = _hWnd ? SendMessageW(_hWnd.get(), WM_SETCURSOR, reinterpret_cast<WPARAM>(_hWnd.get()), lp) : TRUE;
+            return true;
+        default:
+            result = ForwardEditTextHostPointerMessage(hwnd, msg, wp, lp);
+            return true;
+    }
+}
+
 namespace
 {
 void NotifyPaneFocusChangedForEdit(const NavigationView* self) noexcept
@@ -2682,6 +2887,82 @@ void NotifyPaneFocusChangedForEdit(const NavigationView* self) noexcept
 LRESULT CALLBACK NavigationView::EditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     auto* self = reinterpret_cast<NavigationView*>(GetPropW(hwnd, kNavigationEditOwnerProp));
+    LRESULT inactiveEditHostResult = 0;
+    if (self && self->TryRetireInactiveEditTextHostForPointer(hwnd, msg, wp, lp, inactiveEditHostResult))
+    {
+        return inactiveEditHostResult;
+    }
+
+    switch (msg)
+    {
+        case WM_MOUSEMOVE:
+            if (self)
+            {
+                self->TraceNavigationInputState(L"edit-host.mouse-move");
+            }
+            TraceNavigationViewMenuDiagnostics(L"navigation.edit-host-message",
+                                               L"hwnd={:#x} msg=WM_MOUSEMOVE pt=({}, {}) focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+                                               reinterpret_cast<uintptr_t>(hwnd),
+                                               GET_X_LPARAM(lp),
+                                               GET_Y_LPARAM(lp),
+                                               reinterpret_cast<uintptr_t>(GetFocus()),
+                                               reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                                               reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                                               reinterpret_cast<uintptr_t>(GetCapture()));
+            break;
+        case WM_LBUTTONDOWN:
+            if (self)
+            {
+                self->TraceNavigationInputState(L"edit-host.lbutton-down");
+            }
+            TraceNavigationViewMenuDiagnostics(L"navigation.edit-host-message",
+                                               L"hwnd={:#x} msg=WM_LBUTTONDOWN pt=({}, {}) focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+                                               reinterpret_cast<uintptr_t>(hwnd),
+                                               GET_X_LPARAM(lp),
+                                               GET_Y_LPARAM(lp),
+                                               reinterpret_cast<uintptr_t>(GetFocus()),
+                                               reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                                               reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                                               reinterpret_cast<uintptr_t>(GetCapture()));
+            break;
+        case WM_SETFOCUS:
+            if (self)
+            {
+                self->TraceNavigationInputState(L"edit-host.set-focus");
+            }
+            TraceNavigationViewMenuDiagnostics(L"navigation.edit-host-message",
+                                               L"hwnd={:#x} msg=WM_SETFOCUS oldFocus={:#x} focus={:#x} active={:#x}",
+                                               reinterpret_cast<uintptr_t>(hwnd),
+                                               reinterpret_cast<uintptr_t>(reinterpret_cast<HWND>(wp)),
+                                               reinterpret_cast<uintptr_t>(GetFocus()),
+                                               reinterpret_cast<uintptr_t>(GetActiveWindow()));
+            break;
+        case WM_KILLFOCUS:
+            if (self)
+            {
+                self->TraceNavigationInputState(L"edit-host.kill-focus");
+            }
+            TraceNavigationViewMenuDiagnostics(L"navigation.edit-host-message",
+                                               L"hwnd={:#x} msg=WM_KILLFOCUS newFocus={:#x} focus={:#x} active={:#x}",
+                                               reinterpret_cast<uintptr_t>(hwnd),
+                                               reinterpret_cast<uintptr_t>(reinterpret_cast<HWND>(wp)),
+                                               reinterpret_cast<uintptr_t>(GetFocus()),
+                                               reinterpret_cast<uintptr_t>(GetActiveWindow()));
+            break;
+        case WM_CAPTURECHANGED:
+            if (self)
+            {
+                self->TraceNavigationInputState(L"edit-host.capture-changed");
+            }
+            TraceNavigationViewMenuDiagnostics(L"navigation.edit-host-message",
+                                               L"hwnd={:#x} msg=WM_CAPTURECHANGED newCapture={:#x} focus={:#x} active={:#x}",
+                                               reinterpret_cast<uintptr_t>(hwnd),
+                                               reinterpret_cast<uintptr_t>(reinterpret_cast<HWND>(lp)),
+                                               reinterpret_cast<uintptr_t>(GetFocus()),
+                                               reinterpret_cast<uintptr_t>(GetActiveWindow()));
+            break;
+        default: break;
+    }
 
     switch (msg)
     {

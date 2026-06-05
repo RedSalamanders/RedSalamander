@@ -361,7 +361,6 @@ private:
     wil::com_ptr<IDWriteTextFormat> _uiTextFormat;
     wil::com_ptr<IDWriteTextFormat> _uiTextFormatRight;
     wil::com_ptr<ID2D1Bitmap> _imageBitmap;
-
 };
 
 inline constexpr UINT kAsyncOpenCompleteMessage   = WndMsg::kViewerImgRawAsyncOpenComplete;

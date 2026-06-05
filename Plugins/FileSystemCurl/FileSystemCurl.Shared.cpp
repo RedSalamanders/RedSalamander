@@ -638,8 +638,7 @@ namespace FileSystemCurlInternal
 
 [[nodiscard]] bool TryParseMonthToken(std::string_view token, unsigned int& month) noexcept
 {
-    static constexpr std::array<std::string_view, 12> kMonths = {{
-        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"}};
+    static constexpr std::array<std::string_view, 12> kMonths = {{"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"}};
 
     for (size_t index = 0; index < kMonths.size(); ++index)
     {
@@ -715,8 +714,7 @@ namespace FileSystemCurlInternal
 
     unsigned int hour   = 0;
     unsigned int minute = 0;
-    if (! TryParseUnsignedInRange(timeOrYearToken.substr(0, colon), 0, 23, hour) ||
-        ! TryParseUnsignedInRange(timeOrYearToken.substr(colon + 1), 0, 59, minute))
+    if (! TryParseUnsignedInRange(timeOrYearToken.substr(0, colon), 0, 23, hour) || ! TryParseUnsignedInRange(timeOrYearToken.substr(colon + 1), 0, 59, minute))
     {
         return false;
     }
@@ -754,8 +752,7 @@ namespace FileSystemCurlInternal
     unsigned int month     = 0;
     unsigned int day       = 0;
     unsigned int shortYear = 0;
-    if (! TryParseUnsignedInRange(dateToken.substr(0, 2), 1, 12, month) ||
-        ! TryParseUnsignedInRange(dateToken.substr(3, 2), 1, 31, day) ||
+    if (! TryParseUnsignedInRange(dateToken.substr(0, 2), 1, 12, month) || ! TryParseUnsignedInRange(dateToken.substr(3, 2), 1, 31, day) ||
         ! TryParseUnsignedInRange(dateToken.substr(6, 2), 0, 99, shortYear))
     {
         return false;
@@ -770,7 +767,7 @@ namespace FileSystemCurlInternal
     }
 
     const std::string_view clock = timeToken.substr(0, timeToken.size() - 2);
-    const size_t colon          = clock.find(':');
+    const size_t colon           = clock.find(':');
     if (colon == std::string_view::npos)
     {
         return false;
@@ -853,7 +850,7 @@ namespace FileSystemCurlInternal
     static_cast<void>(nextToken(pos)); // links
     static_cast<void>(nextToken(pos)); // owner
     static_cast<void>(nextToken(pos)); // group
-    const auto sizeTok = nextToken(pos);
+    const auto sizeTok       = nextToken(pos);
     const auto monthTok      = nextToken(pos);
     const auto dayTok        = nextToken(pos);
     const auto timeOrYearTok = nextToken(pos);
@@ -887,10 +884,10 @@ namespace FileSystemCurlInternal
         std::from_chars(sv.data(), sv.data() + sv.size(), sizeBytes);
     }
 
-    out            = {};
-    out.attributes = (type == 'd') ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
-    out.sizeBytes  = sizeBytes;
-    out.name       = Utf16FromUtf8(namePart);
+    out                  = {};
+    out.attributes       = (type == 'd') ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
+    out.sizeBytes        = sizeBytes;
+    out.name             = Utf16FromUtf8(namePart);
     __int64 modifiedTime = 0;
     if (TryParseUnixListTimestamp(monthTok.value(), dayTok.value(), timeOrYearTok.value(), modifiedTime))
     {
@@ -928,7 +925,7 @@ namespace FileSystemCurlInternal
         return line.substr(start, pos - start);
     };
 
-    size_t pos = 0;
+    size_t pos         = 0;
     const auto dateTok = nextToken(pos);
     const auto timeTok = nextToken(pos);
     if (! dateTok.has_value() || ! timeTok.has_value())
@@ -972,7 +969,7 @@ namespace FileSystemCurlInternal
         out.sizeBytes  = parsed;
     }
 
-    out.name = Utf16FromUtf8(namePart);
+    out.name             = Utf16FromUtf8(namePart);
     __int64 modifiedTime = 0;
     if (TryParseDosListTimestamp(dateTok.value(), timeTok.value(), modifiedTime))
     {

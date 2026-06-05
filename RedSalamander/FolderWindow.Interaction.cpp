@@ -1,5 +1,7 @@
 #include "FolderWindowInternal.h"
 
+#include <windowsx.h>
+
 LRESULT FolderWindow::OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg)
 {
     if (! _hWnd)
@@ -7,10 +9,10 @@ LRESULT FolderWindow::OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg
         return 0;
     }
 
-    POINT pt{};
-    if (GetCursorPos(&pt))
+    const LPARAM messagePos = static_cast<LPARAM>(GetMessagePos());
+    POINT pt{GET_X_LPARAM(messagePos), GET_Y_LPARAM(messagePos)};
+    if (ScreenToClient(_hWnd.get(), &pt) != FALSE)
     {
-        ScreenToClient(_hWnd.get(), &pt);
         if (OnSetCursor(pt))
         {
             return TRUE;

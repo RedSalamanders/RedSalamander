@@ -161,7 +161,7 @@ Describe 'Winget manifest template' {
         $minimumOsSource = Get-Content -Path $minimumOsSourcePath -Raw
     }
 
-    It 'declares the dependency-free launcher as the portable alias target on the Windows 11 build 22000.2600 floor' {
+    It 'declares the dependency-free launcher aliases as portable alias targets on the Windows 11 build 22000.2600 floor' {
         $installerTemplate | Should Match '(?m)^MinimumOSVersion:\s+10\.0\.22000\.2600\r?$'
         $installerTemplate | Should Not Match '10\.0\.26100\.0'
         $installerTemplate | Should Not Match '10\.0\.19041\.0'
@@ -175,15 +175,19 @@ Describe 'Winget manifest template' {
         $minimumOsSource | Should Match 'CurrentVersion'
         $zipScript | Should Match 'Windows 11 build 22000\.2600'
         [regex]::Matches($installerTemplate, '(?m)^NestedInstallerFiles:\r?$').Count | Should Be 1
-        $installerTemplate | Should Match '(?ms)^NestedInstallerFiles:\s*\r?\n\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+PortableCommandAlias: RedSalamander'
+        [regex]::Matches($installerTemplate, '(?m)^\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+PortableCommandAlias: RedSalamander\r?$').Count | Should Be 1
+        [regex]::Matches($installerTemplate, '(?m)^\s+- RelativeFilePath: red\.exe\r?\n\s+PortableCommandAlias: red\r?$').Count | Should Be 1
+        $installerTemplate | Should Match '(?ms)^Commands:\s*\r?\n\s+- RedSalamander\r?\n\s+- red\r?\n'
     }
 
-    It 'marks RedLauncher.exe as the launch file in installation metadata' {
+    It 'marks the launcher executables as launch files in installation metadata' {
         $installerTemplate | Should Match '(?ms)^InstallationMetadata:\s*\r?\n\s+Files:\s*\r?\n\s+- RelativeFilePath: RedLauncher\.exe\r?\n\s+FileType: launch\r?\n\s+DisplayName: RedSalamander'
+        $installerTemplate | Should Match '(?ms)^InstallationMetadata:.*\r?\n\s+- RelativeFilePath: red\.exe\r?\n\s+FileType: launch\r?\n\s+DisplayName: red'
     }
 
-    It 'copies RedLauncher.exe into the portable ZIP root' {
+    It 'copies RedLauncher.exe and its red.exe alias into the portable ZIP root' {
         $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "RedLauncher\.exe"\) \$TempDir'
+        $zipScript | Should Match 'Copy-Item \(Join-Path \$BuildOutputDir "red\.exe"\) \$TempDir'
         $zipScript | Should Not Match 'RedLauncherConsole\.exe'
     }
 }
@@ -220,6 +224,9 @@ Describe 'RedLauncher project' {
         $launcherProject | Should Not Match 'REDLAUNCHER_CONSOLE'
         $launcherProject | Should Match '<RuntimeLibrary>MultiThreaded</RuntimeLibrary>'
         $launcherProject | Should Match '<RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>'
+        $launcherProject | Should Match '<Target Name="CopyRedLauncherAlias"'
+        $launcherProject | Should Match 'SourceFiles="\$\(TargetPath\)"'
+        $launcherProject | Should Match 'DestinationFiles="\$\(OutDir\)red\.exe"'
         $launcherProject | Should Not Match '<ProjectReference'
         $launcherProject | Should Not Match 'Common\.vcxproj'
         $solution | Should Not Match 'RedLauncherConsole'

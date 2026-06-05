@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "AppTheme.h"
+#include "DxUi/DxUi.PointerInput.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
 #include <Windows.h>
@@ -77,6 +78,7 @@ struct NavigationViewDebugSnapshot
     NavigationViewDebugDropdownKind dropdownKind = NavigationViewDebugDropdownKind::None;
     UINT dpi                                     = USER_DEFAULT_SCREEN_DPI;
     bool editMode                                = false;
+    bool embeddedDestinationMode                 = false;
     bool historyDropdownVisible                  = false;
     bool editSuggestPopupVisible                 = false;
     bool fullPathPopupVisible                    = false;
@@ -84,6 +86,11 @@ struct NavigationViewDebugSnapshot
     bool pathEllipsisVisible                     = false;
     bool showMenuSection                         = false;
     bool showDiskInfoSection                     = false;
+    bool menuButtonHovered                       = false;
+    bool historyButtonHovered                    = false;
+    bool diskInfoHovered                         = false;
+    int hoveredSegmentIndex                      = -1;
+    int hoveredSeparatorIndex                    = -1;
     bool menuIconBitmapLoaded                    = false;
     size_t visibleChildWindowCount               = 0u;
     size_t historyCount                          = 0u;
@@ -116,19 +123,20 @@ struct NavigationViewDebugSnapshot
     RECT currentEditValidationPopupScreenRect    = {};
     bool currentEditValidationPopupRoundedRegion = false;
     bool currentEditValidationPopupUsesFluentIcon = false;
-    wchar_t currentEditValidationPopupIconGlyph  = L'\0';
-    bool currentEditHasActiveComposition         = false;
-    size_t currentEditCompositionStart           = 0u;
-    size_t currentEditCompositionEnd             = 0u;
-    size_t currentEditSelectionStart             = 0u;
-    size_t currentEditSelectionEnd               = 0u;
-    bool currentEditHasSelection                 = false;
+    wchar_t currentEditValidationPopupIconGlyph   = L'\0';
+    bool currentEditHasActiveComposition          = false;
+    size_t currentEditCompositionStart            = 0u;
+    size_t currentEditCompositionEnd              = 0u;
+    size_t currentEditSelectionStart              = 0u;
+    size_t currentEditSelectionEnd                = 0u;
+    bool currentEditHasSelection                  = false;
     std::wstring currentPathText;
     std::wstring pathAncestorTargetText;
     std::wstring fullPathPopupAncestorTargetText;
     std::wstring currentEditText;
     std::wstring currentEditHelpText;
 };
+
 #endif
 
 class NavigationView : public INavigationMenuCallback
@@ -181,6 +189,7 @@ public:
 
     void SetTheme(const AppTheme& theme);
     void SetPaneFocused(bool focused) noexcept;
+    void SetEmbeddedDestinationMode(bool embedded) noexcept;
 
     HRESULT STDMETHODCALLTYPE NavigationMenuRequestNavigate(const wchar_t* path, void* cookie) noexcept override;
 
@@ -207,14 +216,14 @@ public:
 #endif
 
 private:
-    static constexpr wchar_t kClassName[]              = L"RedSalamander.NavigationView";
-    static constexpr wchar_t kDxHostClassName[]        = L"RedSalamander.NavigationView.DxHost";
-    static constexpr wchar_t kFullPathPopupClassName[] = L"RedSalamander.FullPathPopup";
-    static constexpr wchar_t kSuggestPopupClassName[]  = L"RedSalamander.SuggestPopup";
+    static constexpr wchar_t kClassName[]                = L"RedSalamander.NavigationView";
+    static constexpr wchar_t kDxHostClassName[]          = L"RedSalamander.NavigationView.DxHost";
+    static constexpr wchar_t kFullPathPopupClassName[]   = L"RedSalamander.FullPathPopup";
+    static constexpr wchar_t kSuggestPopupClassName[]    = L"RedSalamander.SuggestPopup";
     static constexpr wchar_t kValidationPopupClassName[] = L"RedSalamander.NavigationValidationPopup";
-    static constexpr int kDriveSectionWidth            = 28; // Menu button
-    static constexpr int kDiskInfoSectionWidth         = 70; // Disk info
-    static constexpr int kHistoryButtonWidth           = 24; // History dropdown
+    static constexpr int kDriveSectionWidth              = 28; // Menu button
+    static constexpr int kDiskInfoSectionWidth           = 70; // Disk info
+    static constexpr int kHistoryButtonWidth             = 24; // History dropdown
 
     void RequestPathChange(const std::filesystem::path& path);
     void RequestOwnerPaneFocus() const noexcept;
@@ -255,6 +264,7 @@ private:
 
     static LRESULT CALLBACK WndProcThunk(HWND hWindow, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+    [[nodiscard]] bool ShouldAcceptPointerEvent(const RedSalamander::DxUi::PointerInputEvent& event) const noexcept;
     static ATOM RegisterDxHostWndClass(HINSTANCE instance);
     static LRESULT CALLBACK DxHostWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
@@ -278,6 +288,9 @@ private:
     void OnSize(UINT width, UINT height);
     void OnCommand(UINT id, HWND hwndCtl, UINT codeNotify);
     LRESULT OnCtlColorEdit(HDC hdc, HWND hwndControl);
+    void OnLButtonDown(const RedSalamander::DxUi::PointerInputEvent& event);
+    void OnLButtonDblClk(const RedSalamander::DxUi::PointerInputEvent& event);
+    void OnMouseMove(const RedSalamander::DxUi::PointerInputEvent& event);
     void OnLButtonDown(POINT pt);
     void OnLButtonDblClk(POINT pt);
     void OnMouseMove(POINT pt);
@@ -382,6 +395,10 @@ private:
     [[nodiscard]] NavigationDxTextHost* ResolveEditTextHost(HWND hwnd) noexcept;
     [[nodiscard]] const NavigationDxTextHost* ResolveEditTextHost(HWND hwnd) const noexcept;
     void InstallEditHostHook(NavigationDxTextHost& textHost) noexcept;
+    [[nodiscard]] bool IsEditTextHostPointerInputActive(HWND hwnd) const noexcept;
+    [[nodiscard]] bool TryRetireInactiveEditTextHostForPointer(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, LRESULT& result) noexcept;
+    [[nodiscard]] LRESULT ForwardEditTextHostPointerMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    [[nodiscard]] LRESULT ForwardEditTextHostPointerMessageFromScreen(UINT msg, WPARAM wp, LPARAM screenPointLParam) noexcept;
     void ReplaceEditTextSelection(NavigationDxTextHost& textHost, std::wstring_view replacement) noexcept;
     void ShowEditValidationError(NavigationDxTextHost& textHost, const std::wstring& message) noexcept;
     void ClearEditValidationError(NavigationDxTextHost& textHost) noexcept;
@@ -414,7 +431,14 @@ private:
                                 std::vector<std::wstring>&& insertItems);
 
     // Disk info
-    void UpdateDiskInfo();
+    struct DriveInfoQuery;
+    struct DriveInfoResultPayload;
+    void ResetDiskInfoState() noexcept;
+    void UpdateDiskInfo(bool resetState = true);
+    void EnsureDriveInfoWorker();
+    void StopDriveInfoWorker();
+    void DriveInfoWorker(std::stop_token stopToken);
+    LRESULT OnDriveInfoLoaded(std::unique_ptr<DriveInfoResultPayload> payload) noexcept;
 
     // Animation Helpers
     void StartSeparatorAnimation(size_t separatorIndex, float targetAngle);
@@ -423,22 +447,24 @@ private:
     void StopSeparatorAnimation() noexcept;
     void OnFullPathPopupExitMenuLoop(HWND popupHwnd, bool isShortcut);
     void UpdateHoverTimerState() noexcept;
+    void ClearHoverState(std::wstring_view source, bool renderChanges) noexcept;
+    void TraceNavigationInputState(std::wstring_view eventName, std::optional<POINT> clientPoint = std::nullopt) const noexcept;
 
     // State
     wil::unique_hwnd _hWnd;
-    HINSTANCE _hInstance                = nullptr;
-    UINT _dpi                           = USER_DEFAULT_SCREEN_DPI;
-    SIZE _clientSize                    = {0, 0};
-    RenderMode _renderMode              = RenderMode::Breadcrumb;
-    bool _editMode                      = false;
-    bool _trackingMouse                 = false;
-    bool _inMenuLoop                    = false;
-    bool _menuButtonPressed             = false; // Track if menu is open
-    bool _menuButtonHovered             = false; // Track if Section 1 is hovered
-    bool _historyButtonHovered          = false; // Track if history button is hovered
-    bool _diskInfoHovered               = false; // Track if Section 3 is hovered
-    int _hoveredSegmentIndex            = -1;    // Track which segment is hovered (-1 = none)
-    int _hoveredSeparatorIndex          = -1;    // Track which separator is hovered (-1 = none)
+    HINSTANCE _hInstance       = nullptr;
+    UINT _dpi                  = USER_DEFAULT_SCREEN_DPI;
+    SIZE _clientSize           = {0, 0};
+    RenderMode _renderMode     = RenderMode::Breadcrumb;
+    bool _editMode             = false;
+    bool _trackingMouse        = false;
+    bool _inMenuLoop           = false;
+    bool _menuButtonPressed    = false; // Track if menu is open
+    bool _menuButtonHovered    = false; // Track if Section 1 is hovered
+    bool _historyButtonHovered = false; // Track if history button is hovered
+    bool _diskInfoHovered      = false; // Track if Section 3 is hovered
+    int _hoveredSegmentIndex   = -1;    // Track which segment is hovered (-1 = none)
+    int _hoveredSeparatorIndex = -1;    // Track which separator is hovered (-1 = none)
 
     struct EditSuggestItem
     {
@@ -451,12 +477,12 @@ private:
     wil::unique_hwnd _editSuggestPopup;
     wil::unique_hwnd _editValidationPopup;
     std::wstring _editValidationMessage;
-    RECT _editValidationPopupScreenRect = {};
-    bool _editValidationPopupRoundedRegion = false;
+    RECT _editValidationPopupScreenRect     = {};
+    bool _editValidationPopupRoundedRegion  = false;
     bool _editValidationPopupIconUsesFluent = false;
-    wchar_t _editValidationPopupIconGlyph = L'\0';
-    SIZE _editSuggestPopupClientSize = {0, 0};
-    int _editSuggestPopupRowHeightPx = 0;
+    wchar_t _editValidationPopupIconGlyph   = L'\0';
+    SIZE _editSuggestPopupClientSize        = {0, 0};
+    int _editSuggestPopupRowHeightPx        = 0;
     std::vector<EditSuggestItem> _editSuggestItems;
     uint64_t _editSuggestAdditionalRequestId = 0;
     std::vector<EditSuggestItem> _editSuggestAdditionalItems;
@@ -516,6 +542,38 @@ private:
     std::optional<SiblingPrefetchQuery> _siblingPrefetchPendingQuery;
     std::jthread _siblingPrefetchThread;
     std::atomic<uint64_t> _siblingPrefetchRequestId = 0;
+
+    struct DriveInfoQuery
+    {
+        uint64_t requestId = 0;
+        wil::com_ptr<IDriveInfo> driveInfo;
+        std::wstring pathText;
+    };
+
+    struct DriveInfoResultPayload
+    {
+        uint64_t requestId = 0;
+        HRESULT hr         = S_FALSE;
+        std::wstring pathText;
+        std::wstring driveDisplayName;
+        std::wstring volumeLabel;
+        std::wstring fileSystem;
+        uint64_t freeBytes  = 0;
+        uint64_t totalBytes = 0;
+        uint64_t usedBytes  = 0;
+        bool hasDisplayName = false;
+        bool hasVolumeLabel = false;
+        bool hasFileSystem  = false;
+        bool hasTotalBytes  = false;
+        bool hasFreeBytes   = false;
+        bool hasUsedBytes   = false;
+    };
+
+    std::mutex _driveInfoMutex;
+    std::condition_variable _driveInfoCv;
+    std::optional<DriveInfoQuery> _driveInfoPendingQuery;
+    std::jthread _driveInfoThread;
+    std::atomic<uint64_t> _driveInfoRequestId = 0;
 
     int _activeSeparatorIndex            = -1; // Track which separator has menu open
     int _menuOpenForSeparator            = -1; // Track which separator's menu is currently displayed
@@ -688,6 +746,7 @@ private:
     int _navDropdownSelectedIndex = -1;
 
     bool _paneFocused = false;
+    bool _embeddedDestinationMode = false;
 
     // Direct2D resources (Section 2)
     wil::com_ptr<ID2D1Factory1> _d2dFactory;

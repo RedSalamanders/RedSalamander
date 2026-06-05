@@ -757,8 +757,8 @@ bool Tree::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
         {
             const size_t visibleRows =
                 (std::max<size_t>)(1u, static_cast<size_t>(std::floor((std::max)(1.0f, GetContentRect().bottom - GetContentRect().top) / _rowHeightDip)));
-            _verticalScrollDip +=
-                point.y < GetVerticalThumbHitRect().top ? -(_rowHeightDip * static_cast<float>(visibleRows)) : (_rowHeightDip * static_cast<float>(visibleRows));
+            _verticalScrollDip += point.y < GetVerticalThumbHitRect().top ? -(_rowHeightDip * static_cast<float>(visibleRows))
+                                                                          : (_rowHeightDip * static_cast<float>(visibleRows));
             ClampScrollOffset();
             SyncScrollbarAnimation(host);
         }

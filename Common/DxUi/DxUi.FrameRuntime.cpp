@@ -61,7 +61,7 @@ thread_local FrameStage g_currentDebugFrameStage = FrameStage::Idle;
         }
 
         const bool numeratorCarry = addNumerator >= denominator - addNumerator;
-        addNumerator             = numeratorCarry ? addNumerator - (denominator - addNumerator) : addNumerator + addNumerator;
+        addNumerator              = numeratorCarry ? addNumerator - (denominator - addNumerator) : addNumerator + addNumerator;
         if (addQuotient > (std::numeric_limits<uint64_t>::max() - (numeratorCarry ? 1u : 0u)) / 2u)
         {
             return std::numeric_limits<uint64_t>::max();
@@ -139,13 +139,13 @@ FrameStageScope::FrameStageScope(FrameStage& currentStage, FrameStage nextStage)
       _previousStage(currentStage),
       _previousDebugStage(g_currentDebugFrameStage)
 {
-    _currentStage = nextStage;
+    _currentStage            = nextStage;
     g_currentDebugFrameStage = nextStage;
 }
 
 FrameStageScope::~FrameStageScope() noexcept
 {
-    _currentStage = _previousStage;
+    _currentStage            = _previousStage;
     g_currentDebugFrameStage = _previousDebugStage;
 }
 

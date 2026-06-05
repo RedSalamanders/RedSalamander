@@ -56,8 +56,7 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 void UnhookFileComboHostWindow(HWND hwnd) noexcept
 {
-    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(
-        hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 [[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
@@ -841,8 +840,8 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
             }
 
             const HWND hwnd = _hWnd.get();
-            _otherIndex  = selectedIndex;
-            _currentPath = _otherFiles[_otherIndex];
+            _otherIndex     = selectedIndex;
+            _currentPath    = _otherFiles[_otherIndex];
             StartAsyncParse(hwnd, _fileSystem, _currentPath);
             UpdateMenuState(hwnd);
             if (! _embeddedMode)
@@ -850,7 +849,8 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
                 SetFocus(hwnd);
             }
         });
-        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this]() noexcept
+        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost,
+                                                                       [this]() noexcept
         {
             if (_hWnd)
             {
@@ -2731,7 +2731,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
     const std::filesystem::path focused(context->focusedPath);
     const std::wstring fileName = focused.filename().wstring();
 
-    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const bool embeddedMode   = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
     {
@@ -2771,8 +2771,8 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
             h = std::max(1, static_cast<int>(ownerRect.bottom - ownerRect.top));
         }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(
-            embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(embeddedMode ? nullptr
+                                                                                          : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
         const DWORD style =
             embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VSCROLL);
         const std::wstring initialTitle = embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERPE_NAME) : _metaName);

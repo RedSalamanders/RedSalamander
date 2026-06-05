@@ -258,7 +258,7 @@ SelfTest::RunCase(options,
         }
     };
 
-    runPreferenceCase("auto", FALSE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, true, false);
+    runPreferenceCase("auto", FALSE, FILESYSTEM_SEARCH_BACKEND_SCAN, false, false, false);
     runPreferenceCase("service", TRUE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, true, false);
     runPreferenceCase("local-index", TRUE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, false, false);
     runPreferenceCase("scan", TRUE, FILESYSTEM_SEARCH_BACKEND_SCAN, false, false, false);
@@ -2499,8 +2499,7 @@ SelfTest::RunCase(options,
     state.Require(QuerySqliteSingleInt64(sqlitePath, "SELECT state FROM volumes LIMIT 1;", mirroredState, sqliteError), sqliteError);
     const uint32_t expectedMirroredState =
         CanProveDirectSqliteCurrentness(importStats) ? SqliteIndexStore::kVolumeStateReady : SqliteIndexStore::kVolumeStateCurrentnessUnproven;
-    state.Require(mirroredState == expectedMirroredState,
-                  std::format(L"Expected mirrored volume state {}, got {}.", expectedMirroredState, mirroredState));
+    state.Require(mirroredState == expectedMirroredState, std::format(L"Expected mirrored volume state {}, got {}.", expectedMirroredState, mirroredState));
 
     uint64_t alphaSizeBytes = 0u;
     state.Require(QuerySqliteSingleInt64(sqlitePath, "SELECT size_bytes FROM entries WHERE name = 'alpha.txt' LIMIT 1;", alphaSizeBytes, sqliteError),
@@ -3473,9 +3472,9 @@ SelfTest::RunCase(options,
     }
     else
     {
-        state.Require(afterFirstWindow.writeAheadLogBytes == 0u,
-                      std::format(L"First idle maintenance window should keep an eagerly checkpointed WAL empty, got {}.",
-                                  afterFirstWindow.writeAheadLogBytes));
+        state.Require(
+            afterFirstWindow.writeAheadLogBytes == 0u,
+            std::format(L"First idle maintenance window should keep an eagerly checkpointed WAL empty, got {}.", afterFirstWindow.writeAheadLogBytes));
     }
 
     std::vector<std::wstring> afterFirstNames;
@@ -3694,10 +3693,8 @@ SelfTest::RunCase(options,
 
     state.Require(status.persistentStoreInspectionSucceeded, L"SQLite service status should keep reporting successful inspection after query.");
     state.Require(status.readyForQueryCutover, L"SQLite service status should keep an empty store ready for future query cutover.");
-    state.Require(status.indexedVolumeCount == 0u,
-                  std::format(L"Expected zero mirrored volumes before warmup/rebuild, got {}.", status.indexedVolumeCount));
-    state.Require(status.indexedEntryCount == 0u,
-                  std::format(L"Expected zero mirrored entries before warmup/rebuild, got {}.", status.indexedEntryCount));
+    state.Require(status.indexedVolumeCount == 0u, std::format(L"Expected zero mirrored volumes before warmup/rebuild, got {}.", status.indexedVolumeCount));
+    state.Require(status.indexedEntryCount == 0u, std::format(L"Expected zero mirrored entries before warmup/rebuild, got {}.", status.indexedEntryCount));
     state.Require(status.legacyImportVolumeCount == 0u,
                   std::format(L"Expected zero legacy-import volumes after query, got {}.", status.legacyImportVolumeCount));
 
@@ -4787,8 +4784,7 @@ SelfTest::RunCase(options,
     SqliteIndexStore::StoreInfo bootstrapInfo{};
     HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
     state.Require(SUCCEEDED(hr),
-                  std::format(L"SqliteIndexStore::EnsureBootstrap for SQLite service prefilter test failed. hr=0x{:08X}",
-                              static_cast<unsigned long>(hr)));
+                  std::format(L"SqliteIndexStore::EnsureBootstrap for SQLite service prefilter test failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;
@@ -4848,8 +4844,7 @@ SelfTest::RunCase(options,
     SqliteIndexStore::ReplaceVolumeResult replaceResult{};
     hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), replaceRequest, &replaceResult);
     state.Require(SUCCEEDED(hr),
-                  std::format(L"SqliteIndexStore::ReplaceVolume for SQLite service prefilter test failed. hr=0x{:08X}",
-                              static_cast<unsigned long>(hr)));
+                  std::format(L"SqliteIndexStore::ReplaceVolume for SQLite service prefilter test failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
         return false;

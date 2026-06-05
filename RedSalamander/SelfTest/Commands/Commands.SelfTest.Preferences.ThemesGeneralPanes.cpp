@@ -580,12 +580,10 @@ namespace
     }
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes grid UIA selection test.");
-    state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
-                  L"Failed to select the Preferences Themes category for Themes grid UIA selection test.");
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes), L"Failed to select the Preferences Themes category for Themes grid UIA selection test.");
     PumpPendingMessages();
-    SelfTest::AppendSuiteTrace(kSuite,
-                               std::format(L"Preferences Themes grid UIA selection after category select: {}",
-                                           DescribePreferencesThemesGridSelectionSetupForSelfTest({})));
+    SelfTest::AppendSuiteTrace(
+        kSuite, std::format(L"Preferences Themes grid UIA selection after category select: {}", DescribePreferencesThemesGridSelectionSetupForSelfTest({})));
 
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
@@ -621,9 +619,8 @@ namespace
     {
         return false;
     }
-    SelfTest::AppendSuiteTrace(kSuite,
-                               std::format(L"Preferences Themes grid UIA selection page ready: {}",
-                                           DescribePreferencesThemesGridSelectionSetupForSelfTest(snapshot)));
+    SelfTest::AppendSuiteTrace(
+        kSuite, std::format(L"Preferences Themes grid UIA selection page ready: {}", DescribePreferencesThemesGridSelectionSetupForSelfTest(snapshot)));
 
     state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_THEMES),
                   L"Preferences page title did not switch to Themes before UIA selection validation.");
@@ -2418,31 +2415,30 @@ namespace
 
 [[nodiscard]] std::wstring FormatGeneralThemeCycleSnapshot(const PreferencesDebugSnapshot& value, const AppTheme& expectedTheme)
 {
-    return std::format(
-        L"expected(dark={}, highContrast={}, rainbow={}), actual(category={}, dark={}, highContrast={}, rainbow={}, visiblePageChildren={}, "
-        L"renderedPageDxHosts={}, pageResizeFailures={}, pageRenderTotal={}, pageScroll={}/{}, generalFocus={}, shellFocus={}, "
-        L"shellResizeFailures={}, shellRenderedHosts={}, visibleDialogChildren={}, pageTitle='{}', primaryBackdrop={}, toolBackdrop={})",
-        expectedTheme.dark,
-        expectedTheme.highContrast,
-        expectedTheme.menu.rainbowMode,
-        static_cast<int>(value.currentCategory),
-        value.themeDark,
-        value.themeHighContrast,
-        value.themeRainbow,
-        value.visibleCurrentPageChildWindowCount,
-        value.currentPageRenderedDxHostCount,
-        value.currentPageDxHostResizeFailureCount,
-        value.currentPageDxHostRenderCountTotal,
-        value.pageScrollY,
-        value.pageScrollMaxY,
-        GeneralFocusTargetName(value.generalFocusTarget),
-        static_cast<int>(value.shellFocusTarget),
-        value.shellDxHostResizeFailureCount,
-        value.visibleShellRenderedDxHostCount,
-        value.visibleChildWindowCount,
-        value.pageTitle,
-        static_cast<int>(value.themePrimaryBackdrop),
-        static_cast<int>(value.themeToolBackdrop));
+    return std::format(L"expected(dark={}, highContrast={}, rainbow={}), actual(category={}, dark={}, highContrast={}, rainbow={}, visiblePageChildren={}, "
+                       L"renderedPageDxHosts={}, pageResizeFailures={}, pageRenderTotal={}, pageScroll={}/{}, generalFocus={}, shellFocus={}, "
+                       L"shellResizeFailures={}, shellRenderedHosts={}, visibleDialogChildren={}, pageTitle='{}', primaryBackdrop={}, toolBackdrop={})",
+                       expectedTheme.dark,
+                       expectedTheme.highContrast,
+                       expectedTheme.menu.rainbowMode,
+                       static_cast<int>(value.currentCategory),
+                       value.themeDark,
+                       value.themeHighContrast,
+                       value.themeRainbow,
+                       value.visibleCurrentPageChildWindowCount,
+                       value.currentPageRenderedDxHostCount,
+                       value.currentPageDxHostResizeFailureCount,
+                       value.currentPageDxHostRenderCountTotal,
+                       value.pageScrollY,
+                       value.pageScrollMaxY,
+                       GeneralFocusTargetName(value.generalFocusTarget),
+                       static_cast<int>(value.shellFocusTarget),
+                       value.shellDxHostResizeFailureCount,
+                       value.visibleShellRenderedDxHostCount,
+                       value.visibleChildWindowCount,
+                       value.pageTitle,
+                       static_cast<int>(value.themePrimaryBackdrop),
+                       static_cast<int>(value.themeToolBackdrop));
 }
 
 [[nodiscard]] bool TestPreferencesDialogGeneralTabTraversalLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
@@ -2576,16 +2572,17 @@ namespace
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
             snapshot);
-        state.Require(reachedTarget,
-                      std::format(L"Preferences General {} focus target not reached during tab traversal (expected={}, actual={}, category={}, childWindows={}, "
-                                  L"renderedDxHosts={}, resizeFailures={}).",
-                                  label,
-                                  GeneralFocusTargetName(expectedTarget),
-                                  GeneralFocusTargetName(snapshot.generalFocusTarget),
-                                  static_cast<unsigned int>(snapshot.currentCategory),
-                                  snapshot.visibleCurrentPageChildWindowCount,
-                                  snapshot.currentPageRenderedDxHostCount,
-                                  snapshot.currentPageDxHostResizeFailureCount));
+        state.Require(
+            reachedTarget,
+            std::format(L"Preferences General {} focus target not reached during tab traversal (expected={}, actual={}, category={}, childWindows={}, "
+                        L"renderedDxHosts={}, resizeFailures={}).",
+                        label,
+                        GeneralFocusTargetName(expectedTarget),
+                        GeneralFocusTargetName(snapshot.generalFocusTarget),
+                        static_cast<unsigned int>(snapshot.currentCategory),
+                        snapshot.visibleCurrentPageChildWindowCount,
+                        snapshot.currentPageRenderedDxHostCount,
+                        snapshot.currentPageDxHostResizeFailureCount));
     };
 
     sendTab(false, PreferencesGeneralDebugFocusTarget::FunctionBarToggle, L"function-bar toggle");
@@ -3775,16 +3772,15 @@ namespace
         UpdatePreferencesWindowsTheme(theme);
         const bool themeSettled = waitForSnapshot(
             [&](const PreferencesDebugSnapshot& value) noexcept
-            {
-                return value.currentCategory == kPrefCategoryGeneral && value.themeDark == theme.dark && value.themeHighContrast == theme.highContrast &&
-                       value.themeRainbow == theme.menu.rainbowMode && value.currentPageDxHostResizeFailureCount == 0u &&
-                       value.visibleCurrentPageChildWindowCount <= 1u;
-            },
+        {
+            return value.currentCategory == kPrefCategoryGeneral && value.themeDark == theme.dark && value.themeHighContrast == theme.highContrast &&
+                   value.themeRainbow == theme.menu.rainbowMode && value.currentPageDxHostResizeFailureCount == 0u &&
+                   value.visibleCurrentPageChildWindowCount <= 1u;
+        },
             snapshot);
-        state.Require(themeSettled,
-                      std::format(L"Preferences General page did not settle after the {} theme update: {}.",
-                                  label,
-                                  FormatGeneralThemeCycleSnapshot(snapshot, theme)));
+        state.Require(
+            themeSettled,
+            std::format(L"Preferences General page did not settle after the {} theme update: {}.", label, FormatGeneralThemeCycleSnapshot(snapshot, theme)));
         if (! state.failure.empty())
         {
             return;

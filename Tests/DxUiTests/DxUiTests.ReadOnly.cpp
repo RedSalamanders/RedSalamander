@@ -45,8 +45,7 @@ void TestReadOnlyMultilineTextFieldSuppressesMutationAndKeepsNavigation()
     state.readOnly             = true;
     state.selectionAnchorIndex = 0u;
     state.caretIndex           = 5u;
-    Require(field.ImportTextInputState(host, state, false),
-            "read-only multiline text field imports a visible selection before mutation suppression checks");
+    Require(field.ImportTextInputState(host, state, false), "read-only multiline text field imports a visible selection before mutation suppression checks");
     Require(! field.OnKeyDown(host, 'X', MK_CONTROL), "read-only multiline text field suppresses ctrl+x");
     Require(! field.OnKeyDown(host, VK_DELETE, MK_SHIFT), "read-only multiline text field suppresses shift+delete");
     Require(field.GetText() == originalText, "read-only multiline cut shortcuts leave the visible text unchanged");
@@ -138,8 +137,7 @@ void TestAttachedReadOnlyMultilineNativeHostSuppressesMutatingMessages()
             return false;
         }
 
-        Require(window.Host().TryReadTextInputState(field, state),
-                "native read-only multiline host exposes backend-neutral state after no-op mutations");
+        Require(window.Host().TryReadTextInputState(field, state), "native read-only multiline host exposes backend-neutral state after no-op mutations");
         return state.readOnly && state.text == L"alpha\nbeta\ncharlie" && state.selectionAnchorIndex.has_value() &&
                (std::min)(state.selectionAnchorIndex.value(), state.caretIndex) == 0u &&
                (std::max)(state.selectionAnchorIndex.value(), state.caretIndex) == state.text.size();
@@ -348,8 +346,7 @@ void TestAttachedReadOnlyMultilineNativeHostCopyShortcutsPreserveSelectionAndTex
         Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native attached read-only multiline copy-shortcut test does not create a bridge child");
         Require(window.Host().HasActiveTextInput(), "native attached read-only multiline copy-shortcut test exposes active text input");
         Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native attached read-only multiline copy-shortcut test uses the host input hwnd");
-        Require(window.Host().TryReadTextInputState(field, state),
-                "native attached read-only multiline host exports backend-neutral full-selection state");
+        Require(window.Host().TryReadTextInputState(field, state), "native attached read-only multiline host exports backend-neutral full-selection state");
         Require(state.selectionAnchorIndex.has_value(), "native attached read-only multiline ctrl+a keeps a retained full selection");
 
         if (! SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"))
@@ -422,8 +419,7 @@ void TestAttachedReadOnlyMultilineNativeHostUndoRedoLeaveTextAndSelectionUnchang
 
     Require(field->GetText() == L"alpha\nbeta\ncharlie", "attached read-only multiline undo/redo leaves the visible text unchanged");
 
-    Require(window.Host().TryReadTextInputState(field, state),
-            "native read-only multiline host exports backend-neutral state after undo/redo no-op checks");
+    Require(window.Host().TryReadTextInputState(field, state), "native read-only multiline host exports backend-neutral state after undo/redo no-op checks");
     Require(state.readOnly, "attached read-only multiline undo/redo keeps the exported state marked read-only");
     Require(state.selectionAnchorIndex.has_value(), "attached read-only multiline undo/redo preserves the visible full-range selection");
     Require((std::min)(state.selectionAnchorIndex.value(), state.caretIndex) == 0u,
@@ -454,15 +450,13 @@ void TestAttachedReadOnlyMultilineNativeHostCopyWithoutSelectionLeavesClipboardU
         state.multiline  = true;
         state.readOnly   = true;
         state.caretIndex = 5u;
-        Require(field->ImportTextInputState(window.Host(), state, false),
-                "attached read-only multiline no-selection copy test imports a collapsed caret");
+        Require(field->ImportTextInputState(window.Host(), state, false), "attached read-only multiline no-selection copy test imports a collapsed caret");
         window.Host().SyncTextInput(field);
 
         Require(field->ExportTextInputState(state), "attached read-only multiline text field exports state before no-selection copy checks");
         Require(! state.selectionAnchorIndex.has_value(), "attached read-only multiline no-selection copy test starts with a collapsed visible caret");
 
-        Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr,
-                "native attached read-only multiline no-selection copy test does not create a bridge child");
+        Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native attached read-only multiline no-selection copy test does not create a bridge child");
         Require(window.Host().HasActiveTextInput(), "native attached read-only multiline no-selection copy test exposes active text input");
         Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native attached read-only multiline no-selection copy test uses the host input hwnd");
         Require(window.Host().TryReadTextInputState(field, state),
@@ -541,8 +535,7 @@ void TestAttachedReadOnlyMultilineNativeHostCutAndClearWithoutSelectionLeaveClip
         state.multiline  = true;
         state.readOnly   = true;
         state.caretIndex = 5u;
-        Require(field->ImportTextInputState(window.Host(), state, false),
-                "attached read-only multiline no-selection cut/clear test imports a collapsed caret");
+        Require(field->ImportTextInputState(window.Host(), state, false), "attached read-only multiline no-selection cut/clear test imports a collapsed caret");
         window.Host().SyncTextInput(field);
 
         Require(field->ExportTextInputState(state), "attached read-only multiline text field exports state before no-selection cut/clear checks");
@@ -921,8 +914,7 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostSuppressesMutatingMessages()
         Require(window.Host().HasActiveTextInput(), "native read-only wrapped multiline host exposes active text input");
         Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native read-only wrapped multiline host is the Win32 input target");
         Require(window.Host().TryReadTextInputState(field, state), "native read-only wrapped multiline host exposes backend-neutral starting state");
-        Require(state.text == kWrappedMultilineClipboardTextForTest && state.readOnly,
-                "backend-neutral wrapped read-only state mirrors the retained text");
+        Require(state.text == kWrappedMultilineClipboardTextForTest && state.readOnly, "backend-neutral wrapped read-only state mirrors the retained text");
 
         Require(field->OnSelectAll(window.Host()), "attached read-only wrapped multiline text field select-all prepares native host copy");
         window.Host().SyncTextInput(field);
@@ -1071,11 +1063,9 @@ void TestReadOnlyWrappedMultilineTextFieldCopyCutShortcutsWithoutSelectionLeaveC
         state.multiline  = true;
         state.readOnly   = true;
         state.caretIndex = 7u;
-        Require(field->ImportTextInputState(window.Host(), state, false),
-                "read-only wrapped multiline no-selection copy/cut test imports a collapsed caret");
+        Require(field->ImportTextInputState(window.Host(), state, false), "read-only wrapped multiline no-selection copy/cut test imports a collapsed caret");
         window.Host().SyncTextInput(field);
-        Require(window.Host().TryReadTextInputState(field, state),
-                "native read-only wrapped multiline host exports state before no-selection copy/cut checks");
+        Require(window.Host().TryReadTextInputState(field, state), "native read-only wrapped multiline host exports state before no-selection copy/cut checks");
         Require(! state.selectionAnchorIndex.has_value(), "read-only wrapped multiline no-selection copy/cut test starts with a collapsed visible caret");
 
         if (! SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"))
@@ -1136,8 +1126,7 @@ void TestReadOnlyWrappedMultilineTextFieldCopyCutShortcutsWithoutSelectionLeaveC
 
         Require(field->GetText() == kWrappedMultilineClipboardTextForTest,
                 "read-only wrapped multiline no-selection copy/cut shortcuts leave the visible text unchanged");
-        Require(window.Host().TryReadTextInputState(field, state),
-                "native read-only wrapped multiline host exports state after no-selection copy/cut checks");
+        Require(window.Host().TryReadTextInputState(field, state), "native read-only wrapped multiline host exports state after no-selection copy/cut checks");
         Require(state.readOnly, "read-only wrapped multiline no-selection copy/cut keeps the exported state marked read-only");
         Require(! state.selectionAnchorIndex.has_value(), "read-only wrapped multiline no-selection copy/cut keeps the visible caret collapsed");
         Require(state.caretIndex == 7u, "read-only wrapped multiline no-selection copy/cut keeps the native caret at the imported index");
@@ -1171,8 +1160,7 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostCopyShortcutsPreserveSelectio
                 "native attached read-only wrapped multiline copy-shortcut test does not create a bridge child");
         Require(window.Host().HasActiveTextInput(), "native attached read-only wrapped multiline copy-shortcut test exposes active text input");
         Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native attached read-only wrapped multiline copy-shortcut test uses the host input hwnd");
-        Require(window.Host().TryReadTextInputState(field, state),
-                "native attached read-only wrapped multiline host exports state after ctrl+a");
+        Require(window.Host().TryReadTextInputState(field, state), "native attached read-only wrapped multiline host exports state after ctrl+a");
         Require(state.readOnly, "attached read-only wrapped multiline ctrl+a keeps the exported state marked read-only");
         Require(state.selectionAnchorIndex.has_value(), "attached read-only wrapped multiline ctrl+a creates a visible full-range selection");
         Require((std::min)(state.selectionAnchorIndex.value(), state.caretIndex) == 0u,
@@ -1213,8 +1201,7 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostCopyShortcutsPreserveSelectio
 
         Require(field->GetText() == kWrappedMultilineClipboardTextForTest,
                 "attached read-only wrapped multiline copy shortcuts leave the visible text unchanged");
-        Require(window.Host().TryReadTextInputState(field, state),
-                "native attached read-only wrapped multiline host exports state after ctrl+insert");
+        Require(window.Host().TryReadTextInputState(field, state), "native attached read-only wrapped multiline host exports state after ctrl+insert");
         Require(state.readOnly, "attached read-only wrapped multiline copy shortcuts keep the exported state marked read-only");
         Require(state.selectionAnchorIndex.has_value(), "attached read-only wrapped multiline copy shortcuts preserve the visible full-range selection");
         return true;
@@ -1243,8 +1230,7 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostUndoRedoLeaveTextAndSelection
     Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native read-only wrapped multiline undo/redo no-op test does not create a bridge child");
     Require(window.Host().HasActiveTextInput(), "native read-only wrapped multiline undo/redo test exposes active text input");
     Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native read-only wrapped multiline undo/redo test uses the host input hwnd");
-    Require(window.Host().TryReadTextInputState(field, state),
-            "native read-only wrapped multiline host exports state before undo/redo no-op checks");
+    Require(window.Host().TryReadTextInputState(field, state), "native read-only wrapped multiline host exports state before undo/redo no-op checks");
     Require(state.selectionAnchorIndex.has_value(), "attached read-only wrapped multiline undo/redo no-op test starts from a visible full-range selection");
 
     static_cast<void>(SendMessageW(window.Hwnd(), WM_UNDO, 0, 0));
@@ -1252,8 +1238,7 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostUndoRedoLeaveTextAndSelection
 
     Require(field->GetText() == kWrappedMultilineClipboardTextForTest, "attached read-only wrapped multiline undo/redo leaves the visible text unchanged");
 
-    Require(window.Host().TryReadTextInputState(field, state),
-            "native read-only wrapped multiline host exports state after undo/redo no-op checks");
+    Require(window.Host().TryReadTextInputState(field, state), "native read-only wrapped multiline host exports state after undo/redo no-op checks");
     Require(state.readOnly, "attached read-only wrapped multiline undo/redo keeps the exported state marked read-only");
     Require(state.selectionAnchorIndex.has_value(), "attached read-only wrapped multiline undo/redo preserves the visible full-range selection");
     Require((std::min)(state.selectionAnchorIndex.value(), state.caretIndex) == 0u,
@@ -1291,7 +1276,8 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostCopyWithoutSelectionLeavesCli
         Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr,
                 "native attached read-only wrapped multiline no-selection copy test does not create a bridge child");
         Require(window.Host().HasActiveTextInput(), "native attached read-only wrapped multiline no-selection copy test exposes active text input");
-        Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native attached read-only wrapped multiline no-selection copy test uses the host input hwnd");
+        Require(window.Host().GetTextInputHwnd() == window.Hwnd(),
+                "native attached read-only wrapped multiline no-selection copy test uses the host input hwnd");
         Require(window.Host().TryReadTextInputState(field, state),
                 "native attached read-only wrapped multiline host exports state before no-selection copy checks");
         Require(! state.selectionAnchorIndex.has_value(), "attached read-only wrapped multiline no-selection copy test starts with a collapsed visible caret");
@@ -1376,7 +1362,8 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostCutAndClearWithoutSelectionLe
         Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr,
                 "native attached read-only wrapped multiline no-selection cut/clear test does not create a bridge child");
         Require(window.Host().HasActiveTextInput(), "native attached read-only wrapped multiline no-selection cut/clear test exposes active text input");
-        Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native attached read-only wrapped multiline no-selection cut/clear test uses the host input hwnd");
+        Require(window.Host().GetTextInputHwnd() == window.Hwnd(),
+                "native attached read-only wrapped multiline no-selection cut/clear test uses the host input hwnd");
         Require(window.Host().TryReadTextInputState(field, state),
                 "native attached read-only wrapped multiline host exports state before no-selection cut/clear checks");
         Require(! state.selectionAnchorIndex.has_value(),
@@ -1555,7 +1542,6 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostCtrlBackspaceDeleteWithoutSel
         Require(state.caretIndex == 12u,
                 virtualKey == VK_BACK ? "attached read-only wrapped multiline ctrl+backspace leaves the visible caret at the same position"
                                       : "attached read-only wrapped multiline ctrl+delete leaves the visible caret at the same position");
-
     };
 
     verifyNoOp(VK_BACK);
@@ -1630,8 +1616,7 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostCtrlArrowKeepsCaretAligned()
     Require(field->ImportTextInputState(window.Host(), state, false),
             "attached read-only wrapped multiline text field imports starting caret state for ctrl+left sync test");
     window.Host().SyncTextInput(field);
-    Require(window.Host().TryReadTextInputState(field, state),
-            "native read-only wrapped multiline host exports starting state for ctrl+arrow sync");
+    Require(window.Host().TryReadTextInputState(field, state), "native read-only wrapped multiline host exports starting state for ctrl+arrow sync");
     Require(! state.selectionAnchorIndex.has_value(), "attached read-only wrapped multiline ctrl+arrow sync starts with the visible caret collapsed");
     const size_t originalCaretIndex = state.caretIndex;
 
@@ -1651,8 +1636,7 @@ void TestAttachedReadOnlyWrappedMultilineNativeHostCtrlArrowKeepsCaretAligned()
     Require(field->ImportTextInputState(window.Host(), state, false),
             "attached read-only wrapped multiline text field reimports starting caret state for ctrl+right sync test");
     window.Host().SyncTextInput(field);
-    Require(window.Host().TryReadTextInputState(field, state),
-            "native read-only wrapped multiline host exports starting state for wrapped ctrl+right sync");
+    Require(window.Host().TryReadTextInputState(field, state), "native read-only wrapped multiline host exports starting state for wrapped ctrl+right sync");
     Require(! state.selectionAnchorIndex.has_value(), "attached read-only wrapped multiline ctrl+right sync restarts with the visible caret collapsed");
     const size_t ctrlRightStartIndex = state.caretIndex;
 

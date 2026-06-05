@@ -316,7 +316,8 @@ bool TestUiLanguageSettings() noexcept
     {
         const std::wstring appId = UniqueSettingsAppId(L"InvalidLanguage");
         Common::Settings::Settings loaded;
-        if (LoadSettingsForJson(appId, R"({"schemaVersion":16,"ui":{"language":"..\\bad"}})", loaded, success, L"settings JSON with invalid language is written"))
+        if (LoadSettingsForJson(
+                appId, R"({"schemaVersion":16,"ui":{"language":"..\\bad"}})", loaded, success, L"settings JSON with invalid language is written"))
         {
             Check(loaded.ui.has_value(), L"invalid language loads ui settings", success);
             Check(loaded.ui.value().language == L"system", L"invalid ui.language loads as system", success);

@@ -239,19 +239,11 @@ inline void TrimNativeMenuFlyoutSeparators(std::vector<MenuFlyoutItem>& items) n
         return screenPoint;
     }
 
-    if (GetCursorPos(&screenPoint) == FALSE)
-    {
-        screenPoint = {};
-    }
-    return screenPoint;
+    return {};
 }
 
 [[nodiscard]] inline std::optional<int> ShowNativeHMenuContextMenu(
-    HWND ownerHwnd,
-    POINT screenPoint,
-    HMENU menu,
-    const ThemePalette& theme,
-    const ContextMenuSessionCallbacks& sessionCallbacks = {}) noexcept
+    HWND ownerHwnd, POINT screenPoint, HMENU menu, const ThemePalette& theme, const ContextMenuSessionCallbacks& sessionCallbacks = {}) noexcept
 {
     const std::vector<MenuFlyoutItem> flyoutItems = ConvertNativeHMenuToFlyoutItems(menu);
     if (flyoutItems.empty())
@@ -262,13 +254,12 @@ inline void TrimNativeMenuFlyoutSeparators(std::vector<MenuFlyoutItem>& items) n
     return ContextMenu::Show(ownerHwnd, screenPoint, flyoutItems, theme, sessionCallbacks);
 }
 
-[[nodiscard]] inline std::optional<int> ShowNativeHMenuContextMenu(
-    HWND ownerHwnd,
-    POINT screenPoint,
-    HMENU menu,
-    const ThemePalette& theme,
-    const NativeMenuFlyoutOptions& options,
-    const ContextMenuSessionCallbacks& sessionCallbacks = {}) noexcept
+[[nodiscard]] inline std::optional<int> ShowNativeHMenuContextMenu(HWND ownerHwnd,
+                                                                   POINT screenPoint,
+                                                                   HMENU menu,
+                                                                   const ThemePalette& theme,
+                                                                   const NativeMenuFlyoutOptions& options,
+                                                                   const ContextMenuSessionCallbacks& sessionCallbacks = {}) noexcept
 {
     const std::vector<MenuFlyoutItem> flyoutItems = ConvertNativeHMenuToFlyoutItems(menu, options);
     if (flyoutItems.empty())

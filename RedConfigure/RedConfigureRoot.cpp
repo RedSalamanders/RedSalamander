@@ -55,7 +55,7 @@ using RedSalamander::DxUi::TextField;
 using RedSalamander::DxUi::ThemePalette;
 using RedSalamander::DxUi::WindowHost;
 
-constexpr float kThemePreviewContentHeightDip = 560.0f;
+constexpr float kThemePreviewContentHeightDip                      = 560.0f;
 constexpr std::array<std::wstring_view, 26> kThemePreviewColorKeys = {{
     L"app.accent",
     L"window.background",
@@ -210,13 +210,13 @@ BOOL CALLBACK CollectLocaleNameProc(LPWSTR localeName, DWORD, LPARAM userData) n
 class RedConfigureRoot final : public Panel, public RedConfigureRootController, public IDxGridDelegate
 {
 public:
-    RedConfigureRoot(HINSTANCE instance, RedConfigure::RedConfigureSession& session, std::filesystem::path initialRoot) :
-        _instance(instance),
-        _session(session),
-        _workspaceRoot(std::move(initialRoot)),
-        _inventoryModel(instance, session),
-        _translationModel(instance, session),
-        _themeColorModel(instance, session)
+    RedConfigureRoot(HINSTANCE instance, RedConfigure::RedConfigureSession& session, std::filesystem::path initialRoot)
+        : _instance(instance),
+          _session(session),
+          _workspaceRoot(std::move(initialRoot)),
+          _inventoryModel(instance, session),
+          _translationModel(instance, session),
+          _themeColorModel(instance, session)
     {
         BuildControls();
         SetPage(0u);
@@ -229,7 +229,7 @@ public:
 
     void ReloadWorkspaceFromFields()
     {
-        _workspaceRoot = RedConfigure::ResolveWorkspaceRootForLaunchPath(std::filesystem::path(std::wstring(_workspaceRootField->GetText())));
+        _workspaceRoot       = RedConfigure::ResolveWorkspaceRootForLaunchPath(std::filesystem::path(std::wstring(_workspaceRootField->GetText())));
         std::wstring culture = _cultureCombo ? std::wstring(_cultureCombo->GetSelectedValue()) : std::wstring(_session.GetCultureName());
         if (culture.empty())
         {
@@ -250,7 +250,8 @@ public:
             }
         }
         _lastLoadSucceeded = SUCCEEDED(hr);
-        _statusLabel->SetText(LoadAppString(_instance, _lastLoadSucceeded ? IDS_REDCONFIGURE_STATUS_WORKSPACE_READY : IDS_REDCONFIGURE_STATUS_WORKSPACE_FAILED));
+        _statusLabel->SetText(
+            LoadAppString(_instance, _lastLoadSucceeded ? IDS_REDCONFIGURE_STATUS_WORKSPACE_READY : IDS_REDCONFIGURE_STATUS_WORKSPACE_FAILED));
         SyncFromSession();
     }
 
@@ -294,11 +295,13 @@ public:
         }
     }
 
-    void OnGridSelectionChanged() override {}
+    void OnGridSelectionChanged() override
+    {
+    }
 
     void OnGridSortRequested(const GridSortSpec& sortSpec) override
     {
-        _translationViewOptions.sortColumn = ColumnFromGridSort(sortSpec.columnIndex);
+        _translationViewOptions.sortColumn    = ColumnFromGridSort(sortSpec.columnIndex);
         _translationViewOptions.sortDirection = SortDirectionFromGrid(sortSpec.direction);
         RebuildTranslationView(true);
     }
@@ -368,14 +371,14 @@ private:
             }
             ReloadWorkspaceFromFields();
         });
-        _reloadButton       = AddChild<Button>(LoadAppString(_instance, IDS_REDCONFIGURE_BUTTON_RELOAD));
+        _reloadButton = AddChild<Button>(LoadAppString(_instance, IDS_REDCONFIGURE_BUTTON_RELOAD));
         _reloadButton->SetPrimary(true);
         _reloadButton->SetOnClick([this] { ReloadWorkspaceFromFields(); });
-        _ownerCountLabel       = AddChild<Label>();
-        _themeFileCountLabel   = AddChild<Label>();
-        _scanErrorCountLabel   = AddChild<Label>();
-        _ownerSelectorLabel    = AddChild<Label>(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_ACTIVE_OWNER));
-        _ownerCombo            = AddChild<ComboBox>();
+        _ownerCountLabel     = AddChild<Label>();
+        _themeFileCountLabel = AddChild<Label>();
+        _scanErrorCountLabel = AddChild<Label>();
+        _ownerSelectorLabel  = AddChild<Label>(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_ACTIVE_OWNER));
+        _ownerCombo          = AddChild<ComboBox>();
         _ownerCombo->SetOnSelectionChanged([this](size_t selectedIndex)
         {
             if (_syncing)
@@ -388,8 +391,8 @@ private:
                 SyncFromSession();
             }
         });
-        _activeOwnerLabel      = AddChild<Label>();
-        _translationCountLabel = AddChild<Label>();
+        _activeOwnerLabel        = AddChild<Label>();
+        _translationCountLabel   = AddChild<Label>();
         _localizationSearchLabel = AddChild<Label>(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_SEARCH));
         _localizationSearchField = AddChild<TextField>();
         _localizationSearchField->SetOnTextChanged([this](std::wstring_view text)
@@ -426,9 +429,9 @@ private:
             {
                 return;
             }
-            _translationViewOptions.statusFilter = selectedIndex == 1u ? RedConfigure::LocalizationStatusFilter::Ok
-                                                     : selectedIndex == 2u ? RedConfigure::LocalizationStatusFilter::Problems
-                                                                          : RedConfigure::LocalizationStatusFilter::All;
+            _translationViewOptions.statusFilter = selectedIndex == 1u   ? RedConfigure::LocalizationStatusFilter::Ok
+                                                   : selectedIndex == 2u ? RedConfigure::LocalizationStatusFilter::Problems
+                                                                         : RedConfigure::LocalizationStatusFilter::All;
             RebuildTranslationView(true);
         });
 
@@ -520,9 +523,9 @@ private:
         _previousColorLabel = AddChild<Label>();
         _previousColorLabel->SetFontRole(FontRole::Small);
         _previousColorSwatch = AddChild<ColorSwatch>();
-        _colorValueLabel = AddChild<Label>(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_COLOR_VALUE));
-        _colorSwatch     = AddChild<ColorSwatch>();
-        _colorValueCombo = AddChild<ComboBox>();
+        _colorValueLabel     = AddChild<Label>(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_COLOR_VALUE));
+        _colorSwatch         = AddChild<ColorSwatch>();
+        _colorValueCombo     = AddChild<ComboBox>();
         _colorValueCombo->SetEditable(true);
         _colorValueCombo->SetAutoOpenOnTextInput(true);
         _colorValueCombo->SetMaxVisibleItems(8u);
@@ -592,8 +595,7 @@ private:
                                       std::to_wstring(_session.GetThemeCatalog().themes.size()));
         _scanErrorCountLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_SCAN_ERRORS) + L": " +
                                       std::to_wstring(_session.GetWorkspace().errors.size()));
-        _activeOwnerLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_ACTIVE_OWNER) + L": " +
-                                   std::wstring(_session.GetActiveResourceOwnerName()));
+        _activeOwnerLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_ACTIVE_OWNER) + L": " + std::wstring(_session.GetActiveResourceOwnerName()));
         _translationCountLabel->SetText(LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_TRANSLATION_COUNT) + L": " +
                                         std::to_wstring(_session.GetTranslations().size()));
         SyncScopeLabel();
@@ -622,8 +624,7 @@ private:
         _translationModel.SetViewRows(_translationViewRows);
         _translationGrid->NotifyDataChanged();
         const size_t totalTranslations = _session.GetTranslations().size();
-        std::wstring countText = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_TRANSLATION_COUNT) + L": " +
-                                 std::to_wstring(_translationViewRows.size());
+        std::wstring countText = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_TRANSLATION_COUNT) + L": " + std::to_wstring(_translationViewRows.size());
         if (_translationViewRows.size() != totalTranslations)
         {
             countText += L" / " + std::to_wstring(totalTranslations);
@@ -661,7 +662,7 @@ private:
 
     void SyncThemeLibraryLabels()
     {
-        const auto& catalog = _session.GetThemeCatalog();
+        const auto& catalog   = _session.GetThemeCatalog();
         std::wstring nameText = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_THEME_NAME) + L": ";
         std::wstring pathText = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_THEME_PATH) + L": ";
         if (! catalog.themes.empty())
@@ -922,8 +923,8 @@ private:
             return;
         }
 
-        const std::wstring previousKey = (!_activeThemeColorKey.empty() && _activeThemeColorKey != key) ? _activeThemeColorKey : _previousThemeColorKey;
-        _syncing = true;
+        const std::wstring previousKey      = (! _activeThemeColorKey.empty() && _activeThemeColorKey != key) ? _activeThemeColorKey : _previousThemeColorKey;
+        _syncing                            = true;
         const std::optional<uint32_t> color = _session.GetThemePreviewModel().GetEffectiveColor(key);
         const std::wstring authoredText     = _session.GetThemePreviewModel().GetAuthoredColorText(key);
         const std::vector<std::wstring> suggestions = RedConfigure::BuildThemeColorSuggestions(key, previousKey, color);
@@ -1142,18 +1143,14 @@ private:
         std::wstring text = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_SCOPE) + L": ";
         if (_selectedPage == 0u)
         {
-            text += LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_RESOURCE_OWNERS) + L" " +
-                    std::to_wstring(_session.GetWorkspace().resourceOwners.size());
-            text += L" | " + LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_THEME_FILES) + L" " +
-                    std::to_wstring(_session.GetThemeCatalog().themes.size());
-            text += L" | " + LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_SCAN_ERRORS) + L" " +
-                    std::to_wstring(_session.GetWorkspace().errors.size());
+            text += LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_RESOURCE_OWNERS) + L" " + std::to_wstring(_session.GetWorkspace().resourceOwners.size());
+            text += L" | " + LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_THEME_FILES) + L" " + std::to_wstring(_session.GetThemeCatalog().themes.size());
+            text += L" | " + LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_SCAN_ERRORS) + L" " + std::to_wstring(_session.GetWorkspace().errors.size());
         }
         else
         {
             text += LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_CULTURE) + L" " + std::wstring(_session.GetCultureName());
-            text += L" | " + LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_ACTIVE_OWNER) + L" " +
-                    std::wstring(_session.GetActiveResourceOwnerName());
+            text += L" | " + LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_ACTIVE_OWNER) + L" " + std::wstring(_session.GetActiveResourceOwnerName());
             text += L" | " + LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_THEME_NAME) + L" " + _session.GetThemePreviewModel().GetTheme().name;
         }
         _scopeLabel->SetText(std::move(text));
@@ -1167,15 +1164,15 @@ private:
     void ExportLocalization()
     {
         const std::filesystem::path path = _session.GetDefaultLocalizationExportPath();
-        const HRESULT hr                = _session.ExportLocalization(path);
-        _statusLabel->SetText(LoadAppString(_instance, SUCCEEDED(hr) ? IDS_REDCONFIGURE_STATUS_EXPORT_RC_DONE : IDS_REDCONFIGURE_STATUS_EXPORT_FAILED) +
-                              L": " + path.wstring());
+        const HRESULT hr                 = _session.ExportLocalization(path);
+        _statusLabel->SetText(LoadAppString(_instance, SUCCEEDED(hr) ? IDS_REDCONFIGURE_STATUS_EXPORT_RC_DONE : IDS_REDCONFIGURE_STATUS_EXPORT_FAILED) + L": " +
+                              path.wstring());
     }
 
     void ExportTheme()
     {
         const std::filesystem::path path = _session.GetDefaultThemeExportPath();
-        const HRESULT hr                = _session.ExportTheme(path);
+        const HRESULT hr                 = _session.ExportTheme(path);
         _statusLabel->SetText(LoadAppString(_instance, SUCCEEDED(hr) ? IDS_REDCONFIGURE_STATUS_EXPORT_THEME_DONE : IDS_REDCONFIGURE_STATUS_EXPORT_FAILED) +
                               L": " + path.wstring());
     }
@@ -1194,19 +1191,37 @@ private:
         };
 
         Control* workspaceControls[] = {_workspaceRootLabel, _workspaceRootField, _reloadButton, _ownerCountLabel, _themeFileCountLabel, _scanErrorCountLabel};
-        Control* localizationControls[] = {_cultureLabel, _cultureCombo, _ownerSelectorLabel, _ownerCombo, _translationCountLabel, _activeOwnerLabel,
-                                           _localizationSearchLabel, _localizationSearchField, _localizationIdFilterLabel,
-                                           _localizationIdFilterField, _localizationStatusFilterLabel, _localizationStatusFilterCombo,
-                                           _translationGrid, _sourceTextLabel, _sourceTextField, _targetTextLabel, _targetTextField,
-                                           _validationLabel};
+        Control* localizationControls[]  = {_cultureLabel,
+                                            _cultureCombo,
+                                            _ownerSelectorLabel,
+                                            _ownerCombo,
+                                            _translationCountLabel,
+                                            _activeOwnerLabel,
+                                            _localizationSearchLabel,
+                                            _localizationSearchField,
+                                            _localizationIdFilterLabel,
+                                            _localizationIdFilterField,
+                                            _localizationStatusFilterLabel,
+                                            _localizationStatusFilterCombo,
+                                            _translationGrid,
+                                            _sourceTextLabel,
+                                            _sourceTextField,
+                                            _targetTextLabel,
+                                            _targetTextField,
+                                            _validationLabel};
         Control* themeDesignerControls[] = {
-            _themeSelectorLabel, _themeCombo, _themeNameLabel, _themePathLabel, _themeErrorLabel, _colorKeyFilterLabel, _colorKeyFilterField,
-            _colorKeyLabel, _themeColorGrid, _colorValueLabel,
-            _previousColorLabel, _previousColorSwatch, _colorSwatch, _colorValueCombo, _themeColorStatusLabel, _themeExpressionHelpLabel,
-            _darkenGroupButton, _blendAccentGroupButton, _resetColorButton, _themePreviewScroll, _themePreview};
-        Control* exportControls[] = {
-            _defaultRcPathLabel, _defaultThemePathLabel, _exportRcButton, _exportThemeButton, _rcPreviewLabel, _rcPreviewField,
-            _themeJsonPreviewLabel, _themeJsonPreviewField};
+            _themeSelectorLabel,  _themeCombo,         _themeNameLabel,        _themePathLabel,           _themeErrorLabel,    _colorKeyFilterLabel,
+            _colorKeyFilterField, _colorKeyLabel,      _themeColorGrid,        _colorValueLabel,          _previousColorLabel, _previousColorSwatch,
+            _colorSwatch,         _colorValueCombo,    _themeColorStatusLabel, _themeExpressionHelpLabel, _darkenGroupButton,  _blendAccentGroupButton,
+            _resetColorButton,    _themePreviewScroll, _themePreview};
+        Control* exportControls[] = {_defaultRcPathLabel,
+                                     _defaultThemePathLabel,
+                                     _exportRcButton,
+                                     _exportThemeButton,
+                                     _rcPreviewLabel,
+                                     _rcPreviewField,
+                                     _themeJsonPreviewLabel,
+                                     _themeJsonPreviewField};
 
         setVisible(workspaceControls, false);
         setVisible(localizationControls, false);
@@ -1287,13 +1302,13 @@ private:
 
     void LayoutLocalizationWorkbenchPage(float left, float top, float right, float bottom) noexcept
     {
-        const float rowH        = 32.0f;
-        const float rowGap      = 12.0f;
-        const float labelW      = 112.0f;
-        const float contentW    = std::max(0.0f, right - left);
-        const bool compact      = contentW < 760.0f;
-        const float fieldGap    = 10.0f;
-        float y                 = top;
+        const float rowH     = 32.0f;
+        const float rowGap   = 12.0f;
+        const float labelW   = 112.0f;
+        const float contentW = std::max(0.0f, right - left);
+        const bool compact   = contentW < 760.0f;
+        const float fieldGap = 10.0f;
+        float y              = top;
 
         if (compact)
         {
@@ -1346,23 +1361,23 @@ private:
             y += rowH + 12.0f;
         }
 
-        const float gridTop       = y;
-        const float validationH   = 24.0f;
-        const float labelH        = 24.0f;
-        const float minGridH      = 84.0f;
-        const float maxEditorH    = compact ? 96.0f : 150.0f;
-        const float availableH    = std::max(0.0f, bottom - gridTop);
-        float editorFieldH        = std::clamp(availableH * 0.28f, 54.0f, maxEditorH);
-        float gridH               = availableH - editorFieldH - labelH - validationH - 34.0f;
+        const float gridTop     = y;
+        const float validationH = 24.0f;
+        const float labelH      = 24.0f;
+        const float minGridH    = 84.0f;
+        const float maxEditorH  = compact ? 96.0f : 150.0f;
+        const float availableH  = std::max(0.0f, bottom - gridTop);
+        float editorFieldH      = std::clamp(availableH * 0.28f, 54.0f, maxEditorH);
+        float gridH             = availableH - editorFieldH - labelH - validationH - 34.0f;
         if (gridH < minGridH)
         {
             gridH        = std::min(minGridH, std::max(32.0f, availableH * 0.46f));
             editorFieldH = std::max(42.0f, availableH - gridH - labelH - validationH - 34.0f);
         }
 
-        const float gridBottom = std::min(bottom, gridTop + gridH);
-        const float editorTop  = gridBottom + 10.0f;
-        const float fieldTop   = editorTop + labelH + 4.0f;
+        const float gridBottom    = std::min(bottom, gridTop + gridH);
+        const float editorTop     = gridBottom + 10.0f;
+        const float fieldTop      = editorTop + labelH + 4.0f;
         const float validationTop = std::max(fieldTop + 20.0f, bottom - validationH);
         const float fieldBottom   = std::max(fieldTop + 20.0f, validationTop - 8.0f);
         const float editorHalfW   = std::max(100.0f, (right - left - fieldGap) / 2.0f);
@@ -1410,10 +1425,9 @@ private:
         _themePathLabel->SetBounds(D2D1::RectF(left, top + 68.0f, right, top + 92.0f));
         _themeErrorLabel->SetBounds(D2D1::RectF(left, top + 94.0f, right, top + 118.0f));
 
-        const bool sideBySide = contentW >= 820.0f;
-        const float editorTop = top + 128.0f;
-        const float editorRight =
-            sideBySide ? std::min(left + 460.0f, left + std::max(390.0f, contentW * 0.46f)) : right;
+        const bool sideBySide   = contentW >= 820.0f;
+        const float editorTop   = top + 128.0f;
+        const float editorRight = sideBySide ? std::min(left + 460.0f, left + std::max(390.0f, contentW * 0.46f)) : right;
         const float previewLeft = sideBySide ? editorRight + 18.0f : left;
         float previewTop        = sideBySide ? editorTop : bottom;
 
@@ -1469,9 +1483,9 @@ private:
         _defaultThemePathLabel->SetBounds(D2D1::RectF(left + 170.0f, top, right, top + 42.0f));
         _exportThemeButton->SetBounds(D2D1::RectF(left + 170.0f, top + 48.0f, left + 310.0f, top + 80.0f));
 
-        const float previewTop = top + 108.0f;
-        const float gap        = 12.0f;
-        const float mid        = left + ((right - left - gap) / 2.0f);
+        const float previewTop  = top + 108.0f;
+        const float gap         = 12.0f;
+        const float mid         = left + ((right - left - gap) / 2.0f);
         const float fieldBottom = std::max(previewTop + 58.0f, GetBounds().bottom - 18.0f);
         _rcPreviewLabel->SetBounds(D2D1::RectF(left, previewTop, mid, previewTop + 24.0f));
         _rcPreviewField->SetBounds(D2D1::RectF(left, previewTop + 28.0f, mid, fieldBottom));
@@ -1485,9 +1499,9 @@ private:
     InventoryGridModel _inventoryModel;
     TranslationGridModel _translationModel;
     ThemeColorGridModel _themeColorModel;
-    bool _syncing           = false;
-    bool _lastLoadSucceeded = false;
-    size_t _selectedPage    = 0u;
+    bool _syncing               = false;
+    bool _lastLoadSucceeded     = false;
+    size_t _selectedPage        = 0u;
     size_t _selectedTranslation = 0u;
     RedConfigure::LocalizationViewOptions _translationViewOptions;
     std::vector<size_t> _translationViewRows;
@@ -1502,72 +1516,71 @@ private:
     Label* _scopeLabel       = nullptr;
     Label* _statusLabel      = nullptr;
 
-    Label* _workspaceRootLabel = nullptr;
-    TextField* _workspaceRootField = nullptr;
-    Label* _cultureLabel          = nullptr;
-    ComboBox* _cultureCombo       = nullptr;
-    Button* _reloadButton         = nullptr;
-    Label* _ownerCountLabel       = nullptr;
-    Label* _themeFileCountLabel   = nullptr;
-    Label* _scanErrorCountLabel   = nullptr;
-    Label* _ownerSelectorLabel    = nullptr;
-    ComboBox* _ownerCombo         = nullptr;
-    Label* _activeOwnerLabel      = nullptr;
-    Label* _translationCountLabel = nullptr;
-    Label* _localizationSearchLabel = nullptr;
-    TextField* _localizationSearchField = nullptr;
-    Label* _localizationIdFilterLabel = nullptr;
-    TextField* _localizationIdFilterField = nullptr;
-    Label* _localizationStatusFilterLabel = nullptr;
+    Label* _workspaceRootLabel               = nullptr;
+    TextField* _workspaceRootField           = nullptr;
+    Label* _cultureLabel                     = nullptr;
+    ComboBox* _cultureCombo                  = nullptr;
+    Button* _reloadButton                    = nullptr;
+    Label* _ownerCountLabel                  = nullptr;
+    Label* _themeFileCountLabel              = nullptr;
+    Label* _scanErrorCountLabel              = nullptr;
+    Label* _ownerSelectorLabel               = nullptr;
+    ComboBox* _ownerCombo                    = nullptr;
+    Label* _activeOwnerLabel                 = nullptr;
+    Label* _translationCountLabel            = nullptr;
+    Label* _localizationSearchLabel          = nullptr;
+    TextField* _localizationSearchField      = nullptr;
+    Label* _localizationIdFilterLabel        = nullptr;
+    TextField* _localizationIdFilterField    = nullptr;
+    Label* _localizationStatusFilterLabel    = nullptr;
     ComboBox* _localizationStatusFilterCombo = nullptr;
 
-    Grid* _inventoryGrid       = nullptr;
-    Grid* _translationGrid     = nullptr;
-    Label* _sourceTextLabel    = nullptr;
+    Grid* _inventoryGrid        = nullptr;
+    Grid* _translationGrid      = nullptr;
+    Label* _sourceTextLabel     = nullptr;
     TextField* _sourceTextField = nullptr;
-    Label* _targetTextLabel    = nullptr;
+    Label* _targetTextLabel     = nullptr;
     TextField* _targetTextField = nullptr;
-    Label* _validationLabel    = nullptr;
-    Button* _exportRcButton    = nullptr;
+    Label* _validationLabel     = nullptr;
+    Button* _exportRcButton     = nullptr;
 
     Label* _themeSelectorLabel = nullptr;
     ComboBox* _themeCombo      = nullptr;
-    Label* _themeNameLabel  = nullptr;
-    Label* _themePathLabel  = nullptr;
-    Label* _themeErrorLabel = nullptr;
+    Label* _themeNameLabel     = nullptr;
+    Label* _themePathLabel     = nullptr;
+    Label* _themeErrorLabel    = nullptr;
 
-    Label* _colorKeyFilterLabel       = nullptr;
-    TextField* _colorKeyFilterField   = nullptr;
-    Label* _colorKeyLabel            = nullptr;
-    ComboBox* _colorKeyCombo         = nullptr;
-    Grid* _themeColorGrid            = nullptr;
-    Label* _previousColorLabel       = nullptr;
-    ColorSwatch* _previousColorSwatch = nullptr;
-    Label* _colorValueLabel          = nullptr;
-    ColorSwatch* _colorSwatch        = nullptr;
-    ComboBox* _colorValueCombo       = nullptr;
-    Label* _themeColorStatusLabel    = nullptr;
-    Label* _themeExpressionHelpLabel = nullptr;
-    Button* _darkenGroupButton       = nullptr;
-    Button* _blendAccentGroupButton  = nullptr;
-    Button* _resetColorButton        = nullptr;
-    ScrollPanel* _themePreviewScroll = nullptr;
+    Label* _colorKeyFilterLabel        = nullptr;
+    TextField* _colorKeyFilterField    = nullptr;
+    Label* _colorKeyLabel              = nullptr;
+    ComboBox* _colorKeyCombo           = nullptr;
+    Grid* _themeColorGrid              = nullptr;
+    Label* _previousColorLabel         = nullptr;
+    ColorSwatch* _previousColorSwatch  = nullptr;
+    Label* _colorValueLabel            = nullptr;
+    ColorSwatch* _colorSwatch          = nullptr;
+    ComboBox* _colorValueCombo         = nullptr;
+    Label* _themeColorStatusLabel      = nullptr;
+    Label* _themeExpressionHelpLabel   = nullptr;
+    Button* _darkenGroupButton         = nullptr;
+    Button* _blendAccentGroupButton    = nullptr;
+    Button* _resetColorButton          = nullptr;
+    ScrollPanel* _themePreviewScroll   = nullptr;
     ThemeExampleControl* _themePreview = nullptr;
-    Button* _exportThemeButton       = nullptr;
+    Button* _exportThemeButton         = nullptr;
 
-    Label* _defaultRcPathLabel    = nullptr;
-    Label* _defaultThemePathLabel = nullptr;
-    Label* _rcPreviewLabel        = nullptr;
-    TextField* _rcPreviewField    = nullptr;
-    Label* _themeJsonPreviewLabel = nullptr;
+    Label* _defaultRcPathLabel        = nullptr;
+    Label* _defaultThemePathLabel     = nullptr;
+    Label* _rcPreviewLabel            = nullptr;
+    TextField* _rcPreviewField        = nullptr;
+    Label* _themeJsonPreviewLabel     = nullptr;
     TextField* _themeJsonPreviewField = nullptr;
 };
 
-
 RedConfigureRootCreateResult CreateRedConfigureRoot(HINSTANCE instance, RedConfigureSession& session, std::filesystem::path initialRoot)
 {
-    auto root = std::make_unique<RedConfigureRoot>(instance, session, std::move(initialRoot));
-    auto* controller = static_cast<RedConfigureRootController*>(root.get());
+    auto root                      = std::make_unique<RedConfigureRoot>(instance, session, std::move(initialRoot));
+    auto* controller               = static_cast<RedConfigureRootController*>(root.get());
     std::unique_ptr<Panel> control = std::move(root);
     RedConfigureRootCreateResult result;
     result.control    = std::move(control);

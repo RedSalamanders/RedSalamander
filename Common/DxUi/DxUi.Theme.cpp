@@ -223,6 +223,11 @@ D2D1_COLOR_F RainbowMenuSelectionTint(std::wstring_view seed, bool dark) noexcep
     return ColorFromHsv(static_cast<float>(hash % 360u), 0.90f, dark ? 0.82f : 0.92f, 1.0f);
 }
 
+D2D1_COLOR_F RainbowFolderViewSelectionTint(uint32_t stableHash32, bool dark) noexcept
+{
+    return ColorFromHsv(static_cast<float>(stableHash32 % 360u), 0.85f, dark ? 0.75f : 0.90f, 1.0f);
+}
+
 D2D1_COLOR_F ChooseContrastingTextColor(const D2D1_COLOR_F& background) noexcept
 {
     const float luminance = background.r * 0.2126f + background.g * 0.7152f + background.b * 0.0722f;

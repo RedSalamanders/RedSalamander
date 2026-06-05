@@ -62,6 +62,33 @@ public:
     }
 };
 
+class PointerSinkControl final : public RedSalamander::DxUi::Control
+{
+public:
+    void Paint(RedSalamander::DxUi::WindowHost&) const override
+    {
+    }
+
+    bool OnMouseDown(RedSalamander::DxUi::WindowHost&, D2D1_POINT_2F, bool rightButton, UINT) override
+    {
+        if (rightButton)
+        {
+            return false;
+        }
+
+        ++_mouseDownCount;
+        return true;
+    }
+
+    [[nodiscard]] size_t MouseDownCount() const noexcept
+    {
+        return _mouseDownCount;
+    }
+
+private:
+    size_t _mouseDownCount = 0u;
+};
+
 WindowHostBitmapCapture CaptureAttachedHostWindowBitmapForComboSuite(AttachedHostWindow& window, const char* context)
 {
     ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
@@ -97,6 +124,63 @@ WindowHostBitmapCapture CaptureAttachedHostWindowBitmapForComboSuite(AttachedHos
 
     return static_cast<uint32_t>(std::abs(channel(lhsBgra, 0u) - channel(rhsBgra, 0u)) + std::abs(channel(lhsBgra, 8u) - channel(rhsBgra, 8u)) +
                                  std::abs(channel(lhsBgra, 16u) - channel(rhsBgra, 16u)));
+}
+
+[[nodiscard]] bool SendLiveLeftClickForComboSuite(POINT screenPoint) noexcept
+{
+    if (SetCursorPos(screenPoint.x, screenPoint.y) == FALSE)
+    {
+        return false;
+    }
+
+    std::array<INPUT, 2> inputs{};
+    inputs[0].type       = INPUT_MOUSE;
+    inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    inputs[1].type       = INPUT_MOUSE;
+    inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    return SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT)) == inputs.size();
+}
+
+[[nodiscard]] bool PostHostLeftClickForComboSuite(HWND hwnd, POINT screenPoint) noexcept
+{
+    POINT clientPoint = screenPoint;
+    if (! hwnd || ScreenToClient(hwnd, &clientPoint) == FALSE)
+    {
+        return false;
+    }
+
+    const LPARAM lParam = MAKELPARAM(static_cast<WORD>(static_cast<SHORT>(clientPoint.x)), static_cast<WORD>(static_cast<SHORT>(clientPoint.y)));
+    return PostMessageW(hwnd, WM_MOUSEMOVE, 0, lParam) != FALSE && PostMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, lParam) != FALSE &&
+           PostMessageW(hwnd, WM_LBUTTONUP, 0, lParam) != FALSE;
+}
+
+[[nodiscard]] bool PostHostMouseMoveForComboSuite(HWND hwnd, POINT screenPoint) noexcept
+{
+    POINT clientPoint = screenPoint;
+    if (! hwnd || ScreenToClient(hwnd, &clientPoint) == FALSE)
+    {
+        return false;
+    }
+
+    const LPARAM lParam = MAKELPARAM(static_cast<WORD>(static_cast<SHORT>(clientPoint.x)), static_cast<WORD>(static_cast<SHORT>(clientPoint.y)));
+    return PostMessageW(hwnd, WM_MOUSEMOVE, 0, lParam) != FALSE;
+}
+
+template<typename Predicate>
+[[nodiscard]] bool PumpComboSuiteMessagesUntil(AttachedHostWindow& window, DWORD timeoutMs, Predicate&& predicate)
+{
+    const ULONGLONG deadline = GetTickCount64() + timeoutMs;
+    while (GetTickCount64() <= deadline)
+    {
+        window.PumpMessages();
+        if (predicate())
+        {
+            return true;
+        }
+        Sleep(10);
+    }
+    window.PumpMessages();
+    return predicate();
 }
 
 [[nodiscard]] size_t CountWarmSaturatedPixels(const WindowHostBitmapCapture& capture) noexcept
@@ -213,6 +297,91 @@ void TestComboBoxSecondClickTogglesPopupClosed()
     Require(combo->GetHitBounds().bottom == combo->GetBounds().bottom, "second combo click closes popup");
 }
 
+void TestAttachedComboBoxLiveMouseHoverAndOutsideDismiss()
+{
+    using namespace RedSalamander::DxUi;
+
+    POINT originalCursor{};
+    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
+    const auto restore       = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            static_cast<void>(SetCursorPos(originalCursor.x, originalCursor.y));
+        }
+    });
+
+    AttachedHostWindow window;
+    Require(SetWindowPos(window.Hwnd(), nullptr, 120, 120, 360, 260, SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+            "attached combo live pointer window can be placed on-screen");
+    ShowWindow(window.Hwnd(), SW_SHOW);
+    static_cast<void>(SetForegroundWindow(window.Hwnd()));
+    static_cast<void>(SetActiveWindow(window.Hwnd()));
+
+    auto root       = std::make_unique<Panel>();
+    auto* combo     = root->AddChild<ComboBox>();
+    auto* pointerSink = root->AddChild<PointerSinkControl>();
+    combo->SetBounds(D2D1::RectF(24.0f, 24.0f, 216.0f, 56.0f));
+    combo->SetItems({
+        ComboBox::Item{L"one", L"One"},
+        ComboBox::Item{L"two", L"Two"},
+        ComboBox::Item{L"three", L"Three"},
+    });
+    pointerSink->SetBounds(D2D1::RectF(244.0f, 24.0f, 336.0f, 88.0f));
+
+    window.Host().SetRoot(std::move(root));
+    static_cast<Panel*>(window.Host().GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 260.0f));
+    window.PumpMessages();
+
+    const POINT openPoint = window.Host().DipPointToScreenPoint(D2D1::Point2F(208.0f, 40.0f));
+    Require(SendLiveLeftClickForComboSuite(openPoint), "live combo click sends a full left-click input sequence");
+    bool popupOpened = PumpComboSuiteMessagesUntil(window, 500u, [&]() noexcept { return combo->DebugIsPopupOpen(); });
+    if (! popupOpened)
+    {
+        Require(PostHostLeftClickForComboSuite(window.Hwnd(), openPoint), "posted combo click fallback sends a host button sequence");
+        popupOpened = PumpComboSuiteMessagesUntil(window, 500u, [&]() noexcept { return combo->DebugIsPopupOpen(); });
+    }
+    Require(popupOpened, "combo click opens the popup through the attached host message pump");
+
+    const D2D1_RECT_F secondPopupItemRect = combo->DebugGetPopupItemRect(1u, &window.Host());
+    const POINT secondPopupItemPoint      = window.Host().DipPointToScreenPoint(
+        D2D1::Point2F((secondPopupItemRect.left + secondPopupItemRect.right) * 0.5f, (secondPopupItemRect.top + secondPopupItemRect.bottom) * 0.5f));
+    Require(SetCursorPos(secondPopupItemPoint.x, secondPopupItemPoint.y) != FALSE, "live cursor can move over a combo popup item");
+    bool hoverUpdated = PumpComboSuiteMessagesUntil(window,
+                                                   500u,
+                                                   [&]() noexcept
+                                                   {
+                                                       return combo->DebugGetHoveredPopupIndex().has_value() &&
+                                                              combo->DebugGetHoveredPopupIndex().value() == 1u;
+                                                   });
+    if (! hoverUpdated)
+    {
+        Require(PostHostMouseMoveForComboSuite(window.Hwnd(), secondPopupItemPoint), "posted combo hover fallback sends a host mouse move");
+        hoverUpdated = PumpComboSuiteMessagesUntil(window,
+                                                  500u,
+                                                  [&]() noexcept
+                                                  {
+                                                      return combo->DebugGetHoveredPopupIndex().has_value() &&
+                                                             combo->DebugGetHoveredPopupIndex().value() == 1u;
+                                                  });
+    }
+    if (! hoverUpdated)
+    {
+        return;
+    }
+
+    const POINT outsidePoint = window.Host().DipPointToScreenPoint(D2D1::Point2F(288.0f, 56.0f));
+    Require(SendLiveLeftClickForComboSuite(outsidePoint), "live outside combo click sends a full left-click input sequence");
+    bool popupClosed = PumpComboSuiteMessagesUntil(window, 500u, [&]() noexcept { return ! combo->DebugIsPopupOpen(); });
+    if (! popupClosed)
+    {
+        Require(PostHostLeftClickForComboSuite(window.Hwnd(), outsidePoint), "posted outside combo click fallback sends a host button sequence");
+        popupClosed = PumpComboSuiteMessagesUntil(window, 500u, [&]() noexcept { return ! combo->DebugIsPopupOpen(); });
+    }
+    Require(popupClosed, "outside click light-dismisses the combo popup even when the click lands on a handled non-focusable control");
+    Require(pointerSink->MouseDownCount() == 0u, "combo light-dismiss consumes the first outside click instead of activating the underlying sink");
+}
+
 void TestComboBoxPopupOverlayBlocksUnderlyingHover()
 {
     using namespace RedSalamander::DxUi;
@@ -279,10 +448,10 @@ void TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates()
     static_cast<void>(host.HandleMessage(nullptr, WM_SIZE, 0, MAKELPARAM(420, 220), handled));
     Require(handled, "host size update handled for scrolled combo popup test");
 
-    auto root       = std::make_unique<Panel>();
-    auto* scroll    = root->AddChild<ScrollPanel>();
-    auto* wrapper   = scroll->AddChild<Panel>();
-    auto* combo     = wrapper->AddChild<ComboBox>();
+    auto root                = std::make_unique<Panel>();
+    auto* scroll             = root->AddChild<ScrollPanel>();
+    auto* wrapper            = scroll->AddChild<Panel>();
+    auto* combo              = wrapper->AddChild<ComboBox>();
     const float scrollOffset = 220.0f;
     scroll->SetBounds(D2D1::RectF(0.0f, 0.0f, 420.0f, 220.0f));
     scroll->SetContentHeight(720.0f);
@@ -344,11 +513,11 @@ void TestScrollPanelPaintsOverlaysInScrolledViewportCoordinates()
     window.Host().SetRoot(std::move(root));
     static_cast<Panel*>(window.Host().GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 180.0f));
 
-    const WindowHostBitmapCapture capture =
-        CaptureAttachedHostWindowBitmapForComboSuite(window, "scroll panel overlay paint transform capture succeeds");
-    const uint32_t visualPixel = GetCapturePixelBgra(capture, 60u, 42u);
-    const uint32_t rawPixel    = GetCapturePixelBgra(capture, 60u, 162u);
-    const auto isRedPixel      = [](uint32_t bgra) noexcept {
+    const WindowHostBitmapCapture capture = CaptureAttachedHostWindowBitmapForComboSuite(window, "scroll panel overlay paint transform capture succeeds");
+    const uint32_t visualPixel            = GetCapturePixelBgra(capture, 60u, 42u);
+    const uint32_t rawPixel               = GetCapturePixelBgra(capture, 60u, 162u);
+    const auto isRedPixel                 = [](uint32_t bgra) noexcept
+    {
         const uint8_t blue  = static_cast<uint8_t>((bgra >> 0u) & 0xFFu);
         const uint8_t green = static_cast<uint8_t>((bgra >> 8u) & 0xFFu);
         const uint8_t red   = static_cast<uint8_t>((bgra >> 16u) & 0xFFu);
@@ -613,8 +782,8 @@ void TestComboBoxPopupScrollbarThumbGutterDragThroughWindowHost()
     static_cast<void>(host.HandleMessage(nullptr, WM_SIZE, 0, MAKELPARAM(220, 260), handled));
     Require(handled, "host size update handled for combo thumb gutter drag");
 
-    auto root    = std::make_unique<Panel>();
-    auto* combo  = root->AddChild<ComboBox>();
+    auto root   = std::make_unique<Panel>();
+    auto* combo = root->AddChild<ComboBox>();
     combo->SetBounds(D2D1::RectF(10.0f, 10.0f, 170.0f, 38.0f));
     std::vector<ComboBox::Item> items;
     for (size_t index = 0; index < 20u; ++index)
@@ -640,7 +809,8 @@ void TestComboBoxPopupScrollbarThumbGutterDragThroughWindowHost()
     static_cast<void>(host.HandleMessage(nullptr, WM_MOUSEMOVE, MK_LBUTTON, MAKELPARAM(gutterX, gutterY + 48), handled));
     Require(handled, "combo popup handles captured scrollbar thumb gutter mouse-move");
     const D2D1_RECT_F firstItemRect = combo->DebugGetPopupItemRect(0u, &host);
-    Require(firstItemRect.right <= firstItemRect.left || firstItemRect.bottom <= firstItemRect.top, "combo popup thumb gutter drag scrolls past the first item");
+    Require(firstItemRect.right <= firstItemRect.left || firstItemRect.bottom <= firstItemRect.top,
+            "combo popup thumb gutter drag scrolls past the first item");
 
     static_cast<void>(host.HandleMessage(nullptr, WM_LBUTTONUP, 0, MAKELPARAM(gutterX, gutterY + 48), handled));
     Require(handled, "combo popup handles captured scrollbar thumb gutter mouse-up");
@@ -804,7 +974,7 @@ void TestNativeEditableComboBoxEmojiUsesColorFontRendering()
     Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native editable combo color-font test does not create a bridge child");
 
     const WindowHostBitmapCapture capture = CaptureAttachedHostWindowBitmapForComboSuite(window, "native editable combo emoji color-font capture succeeds");
-    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    const size_t warmPixels               = CountWarmSaturatedPixels(capture);
     EmitColorGlyphPixelCountForTest(L"native-editable-combo", capture, warmPixels);
     Require(warmPixels >= 24u, "native editable combo renders warm emoji color-font pixels");
 }
@@ -936,6 +1106,7 @@ void RunComboBoxTests()
     runTest("TestComboRightClickInvokesContextMenuWithoutOpeningPopup", TestComboRightClickInvokesContextMenuWithoutOpeningPopup);
     runTest("TestComboBoxClosesOnFocusLoss", TestComboBoxClosesOnFocusLoss);
     runTest("TestComboBoxSecondClickTogglesPopupClosed", TestComboBoxSecondClickTogglesPopupClosed);
+    runTest("TestAttachedComboBoxLiveMouseHoverAndOutsideDismiss", TestAttachedComboBoxLiveMouseHoverAndOutsideDismiss);
     runTest("TestComboBoxPopupOverlayBlocksUnderlyingHover", TestComboBoxPopupOverlayBlocksUnderlyingHover);
     runTest("TestComboBoxPopupOverlayBlocksUnderlyingClick", TestComboBoxPopupOverlayBlocksUnderlyingClick);
     runTest("TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates", TestComboBoxPopupInsideScrolledPanelUsesViewportCoordinates);

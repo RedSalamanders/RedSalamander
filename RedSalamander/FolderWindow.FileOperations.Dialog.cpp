@@ -119,7 +119,7 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         // Keep the popup visible even if it was behind other windows. Avoid stealing focus.
         const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
         SetWindowPos(existingPopup, HWND_TOP, targetX, targetY, 0, 0, flags);
-        const uint64_t positionUs          = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
+        const uint64_t positionUs = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
 
         if (! IsWindow(existingPopup))
         {
@@ -226,7 +226,7 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
     const UINT flags                 = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
     const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
     SetWindowPos(popup, HWND_TOP, targetX, targetY, 0, 0, flags);
-    const uint64_t positionUs      = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
+    const uint64_t positionUs = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
     if (! IsWindow(popup))
     {
         if (capturePerf)

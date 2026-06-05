@@ -36,7 +36,7 @@ constexpr size_t kMaxRegexGroupDepth                         = 20u;
 // Below this threshold, single-threaded evaluation is used to avoid threadpool overhead.
 constexpr unsigned long kParallelScanThreshold = 500u;
 // Number of entries per chunk dispatched to a threadpool worker.
-constexpr unsigned long kParallelScanChunkSize = 128u;
+constexpr unsigned long kParallelScanChunkSize        = 128u;
 constexpr size_t kParallelDirectoryResultFlushMatches = 32u;
 
 // ---------------------------------------------------------------------------
@@ -496,13 +496,13 @@ void QueueParallelDirectoryResultChunk(ParallelDirectoryWalkState& state, Parall
     }
 
     ParallelDirectoryResult queued{};
-    queued.fullPath      = result.fullPath;
-    queued.matches       = std::move(result.matches);
-    queued.warningFlags  = result.warningFlags;
-    queued.status        = result.status;
+    queued.fullPath     = result.fullPath;
+    queued.matches      = std::move(result.matches);
+    queued.warningFlags = result.warningFlags;
+    queued.status       = result.status;
     result.matches.clear();
-    result.warningFlags  = FILESYSTEM_SEARCH_WARNING_NONE;
-    result.status        = S_OK;
+    result.warningFlags = FILESYSTEM_SEARCH_WARNING_NONE;
+    result.status       = S_OK;
 
     {
         std::lock_guard lock(state.mutex);
@@ -908,16 +908,22 @@ HRESULT SearchDirectoryTreeParallelNameOnly(SearchRuntime& runtime) noexcept
                                                          bool preferServiceBackend) noexcept
 {
     SearchBackendSelection selection{};
+    if ((flags & FILESYSTEM_SEARCH_FORCE_SCAN) != 0)
+    {
+        selection.backend = FILESYSTEM_SEARCH_BACKEND_SCAN;
+        return selection;
+    }
+
     const bool preferIndexHint = (flags & FILESYSTEM_SEARCH_PREFER_INDEX) != 0;
 
     switch (preference)
     {
         case FileSystemSearchBackendPreference::Auto:
-            if (preferServiceBackend)
+            if (preferIndexHint && preferServiceBackend)
             {
                 selection.backend = FILESYSTEM_SEARCH_BACKEND_SERVICE;
             }
-            else if (support.indexable)
+            else if (preferIndexHint && support.indexable)
             {
                 selection.backend = FILESYSTEM_SEARCH_BACKEND_INDEX;
             }
@@ -2394,7 +2400,7 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
 
         // Parallel path: dispatch evaluation to the threadpool when the directory
         // is large enough that the per-chunk overhead is worth the parallelism.
-        const auto entryCount = static_cast<unsigned long>(allEntries.size());
+        const auto entryCount           = static_cast<unsigned long>(allEntries.size());
         const bool contentSearchEnabled = runtime.query->contentMode != FILESYSTEM_SEARCH_CONTENT_DISABLED;
         if (contentSearchEnabled && entryCount >= kParallelScanThreshold)
         {
@@ -2543,15 +2549,16 @@ HRESULT STDMETHODCALLTYPE FileSystem::Search(const FileSystemSearchQuery* query,
             }
         }
 
-        const bool preferServiceBackend =
-            indexSupport.indexable &&
-            (backendPreference == FileSystemSearchBackendPreference::Auto || backendPreference == FileSystemSearchBackendPreference::Service) &&
-            ! serviceTemporarilyUnavailable;
+        const bool preferIndexRequested               = (query->flags & FILESYSTEM_SEARCH_PREFER_INDEX) != 0;
+        const bool autoIndexedBackendAllowed          = backendPreference == FileSystemSearchBackendPreference::Auto && preferIndexRequested;
+        const bool preferServiceBackend               = indexSupport.indexable &&
+                                                        (autoIndexedBackendAllowed || backendPreference == FileSystemSearchBackendPreference::Service) &&
+                                                        ! serviceTemporarilyUnavailable;
         const SearchBackendSelection backendSelection = SelectSearchBackend(backendPreference, query->flags, indexSupport, preferServiceBackend);
         runtime.backend                               = backendSelection.backend;
         runtime.warningFlags |= backendSelection.warningFlags;
         if (serviceTemporarilyUnavailable && indexSupport.indexable &&
-            (backendPreference == FileSystemSearchBackendPreference::Auto || backendPreference == FileSystemSearchBackendPreference::Service))
+            (autoIndexedBackendAllowed || backendPreference == FileSystemSearchBackendPreference::Service))
         {
             runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE;
         }

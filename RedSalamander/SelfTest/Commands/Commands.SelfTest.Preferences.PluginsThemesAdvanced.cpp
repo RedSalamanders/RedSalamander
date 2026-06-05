@@ -62,8 +62,7 @@ namespace
     };
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Plugins deferred-search test.");
-    state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins),
-                  L"Failed to select the Preferences Plugins category for Plugins deferred-search test.");
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryPlugins), L"Failed to select the Preferences Plugins category for Plugins deferred-search test.");
     PumpPendingMessages();
 
     PreferencesDebugSnapshot snapshot{};
@@ -2117,8 +2116,7 @@ namespace
     };
 
     state.Require(SetFocus(categoryTreeHost) == categoryTreeHost, L"Failed to focus the Preferences category host for Themes deferred-search test.");
-    state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
-                  L"Failed to select the Preferences Themes category for Themes deferred-search test.");
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes), L"Failed to select the Preferences Themes category for Themes deferred-search test.");
     PumpPendingMessages();
 
     PreferencesDebugSnapshot snapshot{};
@@ -4862,7 +4860,7 @@ namespace
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPreferencesDialogAdvancedTabTraversalLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestPreferencesDialogAdvancedSettingsFileLinkOpensCurrentSettingsFile(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -4872,16 +4870,278 @@ namespace
         return false;
     }
 
-    const Common::Settings::Settings baselineSettings = g_settings;
-    const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
+    if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
+    {
+        PostMessageW(existing, WM_CLOSE, 0, 0);
+        state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
+                      L"Existing Preferences window did not close before Advanced settings-file link validation.");
+    }
 
-    Common::Settings::Settings seededSettings = baselineSettings;
-    seededSettings.monitor                    = Common::Settings::MonitorSettings{};
-    seededSettings.monitor->filter.preset     = Common::Settings::MonitorFilterPreset::Custom;
-    seededSettings.monitor->filter.mask       = static_cast<uint32_t>(MonitorFilterBit::Text) | static_cast<uint32_t>(MonitorFilterBit::Error) |
-                                                static_cast<uint32_t>(MonitorFilterBit::Warning) | static_cast<uint32_t>(MonitorFilterBit::Info) |
-                                                static_cast<uint32_t>(MonitorFilterBit::Perf) | static_cast<uint32_t>(MonitorFilterBit::Debug);
-    g_settings                                = seededSettings;
+    const auto resetCapture = wil::scope_exit([]() noexcept
+    {
+        DebugSetPreferencesSettingsFileOpenCapture(false);
+        DebugClearPreferencesLastSettingsFileOpen();
+    });
+
+    const auto waitForPreferencesWindow = [&]() noexcept
+    { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
+
+    const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            outSnapshot = {};
+            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        outSnapshot = {};
+        return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
+    };
+
+    auto prefs = HWND{};
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
+    prefs = waitForPreferencesWindow();
+    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Advanced settings-file link validation.");
+    if (! prefs || IsWindow(prefs) == FALSE)
+    {
+        return false;
+    }
+
+    const auto closeWindow = wil::scope_exit([&]() noexcept
+    {
+        if (IsWindow(prefs) != FALSE)
+        {
+            PostMessageW(prefs, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)));
+        }
+    });
+
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryAdvanced),
+                  L"Preferences did not accept debug selection of the Advanced page for settings-file link validation.");
+
+    PreferencesDebugSnapshot snapshot{};
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.currentCategory == kPrefCategoryAdvanced && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+               value.currentPageDxHostResizeFailureCount == 0u;
+    },
+                      snapshot),
+                  L"Preferences Advanced page did not settle before settings-file link validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND activePage = DebugGetPreferencesActivePageHandle();
+    state.Require(activePage != nullptr && IsWindow(activePage) != FALSE,
+                  L"Failed to resolve the active Preferences Advanced page surface during settings-file link validation.");
+    if (! activePage || IsWindow(activePage) == FALSE)
+    {
+        return false;
+    }
+
+    state.Require(DebugDragPreferencesPageHostDxScrollbarThumb(4096, 10),
+                  L"Preferences Advanced page did not expose a draggable page-host scrollbar for the bottom settings-file link.");
+    PumpPendingMessages();
+
+    DebugClearPreferencesLastSettingsFileOpen();
+    DebugSetPreferencesSettingsFileOpenCapture(true);
+
+    const std::wstring linkText = LoadStringResource(nullptr, IDS_PREFS_ADV_OPEN_SETTINGS_FILE_LINK);
+    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, linkText),
+                  L"Preferences Advanced page did not expose the settings-file link as an invokable button.");
+
+    const auto waitForCapturedOpen = [&](std::filesystem::path& outPath, HRESULT& outHr) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (DebugGetPreferencesLastSettingsFileOpen(outPath, outHr))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        return DebugGetPreferencesLastSettingsFileOpen(outPath, outHr);
+    };
+
+    std::filesystem::path openedPath;
+    HRESULT openHr = S_FALSE;
+    state.Require(waitForCapturedOpen(openedPath, openHr),
+                  L"Preferences Advanced settings-file link did not reach the captured open-file command path.");
+    state.Require(openHr == S_OK,
+                  std::format(L"Preferences Advanced settings-file link reported unexpected HRESULT 0x{:08X}.",
+                              static_cast<unsigned long>(openHr)));
+
+    const std::filesystem::path expectedPath = Common::Settings::GetSettingsPath(L"RedSalamander");
+    state.Require(openedPath == expectedPath,
+                  std::format(L"Preferences Advanced settings-file link opened '{}' instead of '{}'.",
+                              openedPath.wstring(),
+                              expectedPath.wstring()));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPreferencesDialogMonitorSettingsFileLinkOpensMonitorSettingsFile(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    ScopedSettingsArtifactBackup monitorSettingsBackup;
+    state.Require(monitorSettingsBackup.Capture(kPreferencesMonitorAppId),
+                  L"Failed to back up the monitor settings artifacts before Monitor settings-file link validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
+    {
+        PostMessageW(existing, WM_CLOSE, 0, 0);
+        state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
+                      L"Existing Preferences window did not close before Monitor settings-file link validation.");
+    }
+
+    const auto resetCapture = wil::scope_exit([]() noexcept
+    {
+        DebugSetPreferencesSettingsFileOpenCapture(false);
+        DebugClearPreferencesLastSettingsFileOpen();
+    });
+
+    const auto waitForPreferencesWindow = [&]() noexcept
+    { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
+
+    const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            outSnapshot = {};
+            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        outSnapshot = {};
+        return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
+    };
+
+    auto prefs = HWND{};
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
+    prefs = waitForPreferencesWindow();
+    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Monitor settings-file link validation.");
+    if (! prefs || IsWindow(prefs) == FALSE)
+    {
+        return false;
+    }
+
+    const auto closeWindow = wil::scope_exit([&]() noexcept
+    {
+        if (IsWindow(prefs) != FALSE)
+        {
+            PostMessageW(prefs, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)));
+        }
+    });
+
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryMonitor),
+                  L"Preferences did not accept debug selection of the Monitor page for settings-file link validation.");
+
+    PreferencesDebugSnapshot snapshot{};
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
+    {
+        return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+               value.currentPageDxHostResizeFailureCount == 0u && value.monitorSettingsFileCardLast;
+    },
+                      snapshot),
+                  L"Preferences Monitor page did not settle with the settings-file link as the final card before settings-file link validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND activePage = DebugGetPreferencesActivePageHandle();
+    state.Require(activePage != nullptr && IsWindow(activePage) != FALSE,
+                  L"Failed to resolve the active Preferences Monitor page surface during settings-file link validation.");
+    if (! activePage || IsWindow(activePage) == FALSE)
+    {
+        return false;
+    }
+
+    static_cast<void>(DebugDragPreferencesPageHostDxScrollbarThumb(4096, 10));
+    PumpPendingMessages();
+
+    DebugClearPreferencesLastSettingsFileOpen();
+    DebugSetPreferencesSettingsFileOpenCapture(true);
+
+    const std::wstring linkText = LoadStringResource(nullptr, IDS_PREFS_MONITOR_OPEN_SETTINGS_FILE_LINK);
+    state.Require(InvokeVisibleDescendantByName(activePage, UIA_ButtonControlTypeId, linkText),
+                  L"Preferences Monitor page did not expose the settings-file link as an invokable button.");
+
+    const auto waitForCapturedOpen = [&](std::filesystem::path& outPath, HRESULT& outHr) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (DebugGetPreferencesLastSettingsFileOpen(outPath, outHr))
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        return DebugGetPreferencesLastSettingsFileOpen(outPath, outHr);
+    };
+
+    std::filesystem::path openedPath;
+    HRESULT openHr = S_FALSE;
+    state.Require(waitForCapturedOpen(openedPath, openHr),
+                  L"Preferences Monitor settings-file link did not reach the captured open-file command path.");
+    state.Require(openHr == S_OK,
+                  std::format(L"Preferences Monitor settings-file link reported unexpected HRESULT 0x{:08X}.",
+                              static_cast<unsigned long>(openHr)));
+
+    const std::filesystem::path expectedPath = Common::Settings::GetSettingsPath(kPreferencesMonitorAppId);
+    state.Require(openedPath == expectedPath,
+                  std::format(L"Preferences Monitor settings-file link opened '{}' instead of '{}'.",
+                              openedPath.wstring(),
+                              expectedPath.wstring()));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPreferencesDialogAdvancedTabTraversalLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
 
     if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
@@ -4980,8 +5240,6 @@ namespace
                   L"Failed to collect UI Automation pattern statistics for the Advanced page before tab-traversal validation.");
     if (initialPatternStats.has_value())
     {
-        state.Require(initialPatternStats->comboBoxControlCount > 0u,
-                      L"Preferences Advanced page should expose visible DX combo descendants before tab traversal.");
         state.Require(initialPatternStats->togglePatternCount > 0u,
                       L"Preferences Advanced page should expose visible DX toggle descendants before tab traversal.");
         state.Require(initialPatternStats->valuePatternCount > 0u,
@@ -5008,32 +5266,17 @@ namespace
     {
         switch (target)
         {
-        case PreferencesAdvancedDebugFocusTarget::None:
-            return L"None";
-        case PreferencesAdvancedDebugFocusTarget::BypassHelloToggle:
-            return L"BypassHelloToggle";
-        case PreferencesAdvancedDebugFocusTarget::AllowInsecureTlsAutomationToggle:
-            return L"AllowInsecureTlsAutomationToggle";
-        case PreferencesAdvancedDebugFocusTarget::HelloTimeoutEdit:
-            return L"HelloTimeoutEdit";
-        case PreferencesAdvancedDebugFocusTarget::ToolbarToggle:
-            return L"ToolbarToggle";
-        case PreferencesAdvancedDebugFocusTarget::LineNumbersToggle:
-            return L"LineNumbersToggle";
-        case PreferencesAdvancedDebugFocusTarget::AlwaysOnTopToggle:
-            return L"AlwaysOnTopToggle";
-        case PreferencesAdvancedDebugFocusTarget::ShowIdsToggle:
-            return L"ShowIdsToggle";
-        case PreferencesAdvancedDebugFocusTarget::AutoScrollToggle:
-            return L"AutoScrollToggle";
-        case PreferencesAdvancedDebugFocusTarget::FilterPresetCombo:
-            return L"FilterPresetCombo";
-        case PreferencesAdvancedDebugFocusTarget::FilterMaskEdit:
-            return L"FilterMaskEdit";
-        case PreferencesAdvancedDebugFocusTarget::FilterTextToggle:
-            return L"FilterTextToggle";
-        case PreferencesAdvancedDebugFocusTarget::DiagnosticsDebugToggle:
-            return L"DiagnosticsDebugToggle";
+            case PreferencesAdvancedDebugFocusTarget::None: return L"None";
+            case PreferencesAdvancedDebugFocusTarget::BypassHelloToggle: return L"BypassHelloToggle";
+            case PreferencesAdvancedDebugFocusTarget::AllowInsecureTlsAutomationToggle: return L"AllowInsecureTlsAutomationToggle";
+            case PreferencesAdvancedDebugFocusTarget::HelloTimeoutEdit: return L"HelloTimeoutEdit";
+            case PreferencesAdvancedDebugFocusTarget::CacheMaxBytesEdit: return L"CacheMaxBytesEdit";
+            case PreferencesAdvancedDebugFocusTarget::CacheMaxWatchersEdit: return L"CacheMaxWatchersEdit";
+            case PreferencesAdvancedDebugFocusTarget::CacheMruWatchedEdit: return L"CacheMruWatchedEdit";
+            case PreferencesAdvancedDebugFocusTarget::FileOpsMaxDiagnosticsLogFilesEdit: return L"FileOpsMaxDiagnosticsLogFilesEdit";
+            case PreferencesAdvancedDebugFocusTarget::DiagnosticsInfoToggle: return L"DiagnosticsInfoToggle";
+            case PreferencesAdvancedDebugFocusTarget::DiagnosticsDebugToggle: return L"DiagnosticsDebugToggle";
+            case PreferencesAdvancedDebugFocusTarget::OpenSettingsFileLink: return L"OpenSettingsFileLink";
         }
 
         return L"Unknown";
@@ -5114,26 +5357,24 @@ namespace
 
     sendTab(false, PreferencesAdvancedDebugFocusTarget::AllowInsecureTlsAutomationToggle, L"Allow insecure TLS automation toggle");
     sendTab(false, PreferencesAdvancedDebugFocusTarget::HelloTimeoutEdit, L"Hello timeout field");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::ToolbarToggle, L"Toolbar toggle");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::LineNumbersToggle, L"Line numbers toggle");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::AlwaysOnTopToggle, L"Always on top toggle");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::ShowIdsToggle, L"Show IDs toggle");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::AutoScrollToggle, L"Auto-scroll toggle");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::FilterPresetCombo, L"Filter preset combo");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::FilterMaskEdit, L"Filter mask field");
-    sendTab(false, PreferencesAdvancedDebugFocusTarget::FilterTextToggle, L"Filter Text toggle");
+    sendTab(false, PreferencesAdvancedDebugFocusTarget::CacheMaxBytesEdit, L"cache max bytes field");
+    sendTab(false, PreferencesAdvancedDebugFocusTarget::CacheMaxWatchersEdit, L"cache max watchers field");
+    sendTab(false, PreferencesAdvancedDebugFocusTarget::CacheMruWatchedEdit, L"cache MRU watched field");
+    sendTab(false, PreferencesAdvancedDebugFocusTarget::FileOpsMaxDiagnosticsLogFilesEdit, L"diagnostics max log files field");
+    sendTab(false, PreferencesAdvancedDebugFocusTarget::DiagnosticsInfoToggle, L"diagnostics info toggle");
+    sendTab(false, PreferencesAdvancedDebugFocusTarget::DiagnosticsDebugToggle, L"diagnostics debug toggle");
+    sendTab(false, PreferencesAdvancedDebugFocusTarget::OpenSettingsFileLink, L"settings-file link");
 
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::FilterMaskEdit, L"reverse Filter mask field");
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::FilterPresetCombo, L"reverse Filter preset combo");
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::AutoScrollToggle, L"reverse Auto-scroll toggle");
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::ShowIdsToggle, L"reverse Show IDs toggle");
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::AlwaysOnTopToggle, L"reverse Always on top toggle");
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::LineNumbersToggle, L"reverse Line numbers toggle");
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::ToolbarToggle, L"reverse Toolbar toggle");
+    sendTab(true, PreferencesAdvancedDebugFocusTarget::DiagnosticsDebugToggle, L"reverse diagnostics debug toggle");
+    sendTab(true, PreferencesAdvancedDebugFocusTarget::DiagnosticsInfoToggle, L"reverse diagnostics info toggle");
+    sendTab(true, PreferencesAdvancedDebugFocusTarget::FileOpsMaxDiagnosticsLogFilesEdit, L"reverse diagnostics max log files field");
+    sendTab(true, PreferencesAdvancedDebugFocusTarget::CacheMruWatchedEdit, L"reverse cache MRU watched field");
+    sendTab(true, PreferencesAdvancedDebugFocusTarget::CacheMaxWatchersEdit, L"reverse cache max watchers field");
+    sendTab(true, PreferencesAdvancedDebugFocusTarget::CacheMaxBytesEdit, L"reverse cache max bytes field");
     sendTab(true, PreferencesAdvancedDebugFocusTarget::HelloTimeoutEdit, L"reverse Hello timeout field");
     sendTab(true, PreferencesAdvancedDebugFocusTarget::AllowInsecureTlsAutomationToggle, L"reverse Allow insecure TLS automation toggle");
     sendTab(true, PreferencesAdvancedDebugFocusTarget::BypassHelloToggle, L"reverse Bypass Hello toggle");
-    sendTab(true, PreferencesAdvancedDebugFocusTarget::DiagnosticsDebugToggle, L"reverse wrapped diagnostics debug toggle");
+    sendTab(true, PreferencesAdvancedDebugFocusTarget::OpenSettingsFileLink, L"reverse wrapped settings-file link");
     sendTab(false, PreferencesAdvancedDebugFocusTarget::BypassHelloToggle, L"wrapped Bypass Hello toggle");
 
     return state.failure.empty();

@@ -13,12 +13,17 @@
 #include "LocalizationManager.h"
 #include "PlugInterfaces/Factory.h"
 #include "SettingsStore.h"
+#ifdef ENABLE_TESTS
+#include "SelfTest/Common/SelfTestCommon.h"
+#endif
 
 namespace
 {
 using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t* pluginId, void**);
 using EnumeratePluginsFunc             = HRESULT(__stdcall*)(REFIID, const PluginMetaData** metaData, unsigned int* count);
 using GetConfigurationSchemaExportFunc = HRESULT(__stdcall*)(REFIID, const wchar_t* pluginId, const char** schemaJsonUtf8);
+using PluginShutdownExportFunc         = void(__stdcall*)();
+using PluginRetainModuleUntilProcessExitExportFunc = BOOL(__stdcall*)();
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -189,11 +194,7 @@ void ViewerPluginManager::Shutdown(Common::Settings::Settings& /*settings*/) noe
         return;
     }
 
-    for (PluginEntry& entry : _plugins)
-    {
-        Unload(entry);
-    }
-
+    UnloadAll(ModuleUnloadMode::ProcessShutdown);
     _plugins.clear();
     _exeDir.clear();
     _initialized = false;
@@ -269,7 +270,6 @@ HRESULT ViewerPluginManager::DisablePlugin(std::wstring_view pluginId, Common::S
         settings.plugins.disabledPluginIds.push_back(entry->id);
     }
 
-    Unload(*entry);
     return S_OK;
 }
 
@@ -617,6 +617,7 @@ const ViewerPluginManager::PluginEntry* ViewerPluginManager::FindPluginById(std:
 
 HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noexcept
 {
+    UnloadAll(ModuleUnloadMode::FreeLibrary);
     _plugins.clear();
 
     if (_exeDir.empty())
@@ -731,7 +732,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
         if (conflict)
         {
             entry.loadable = false;
-            Unload(entry);
+            Unload(entry, ModuleUnloadMode::FreeLibrary);
             return;
         }
 
@@ -740,7 +741,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
 
         if (entry.disabled)
         {
-            Unload(entry);
+            Unload(entry, ModuleUnloadMode::FreeLibrary);
         }
 
         _plugins.push_back(std::move(entry));
@@ -1053,12 +1054,79 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
     return S_OK;
 }
 
-void ViewerPluginManager::Unload(PluginEntry& entry) noexcept
+void ViewerPluginManager::UnloadAll(ModuleUnloadMode mode) noexcept
+{
+    for (auto it = _plugins.rbegin(); it != _plugins.rend(); ++it)
+    {
+        PluginEntry& entry = *it;
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload begin id='{}' path='{}'",
+                                                  entry.id,
+                                                  entry.path.wstring()));
+#endif
+        Unload(entry, mode);
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::UnloadAll: unload complete id='{}'", entry.id));
+#endif
+    }
+}
+
+void ViewerPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept
 {
     if (entry.module)
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: plugin shutdown begin id='{}'", entry.id));
+#endif
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
+        if (const auto pluginShutdown = reinterpret_cast<PluginShutdownExportFunc>(GetProcAddress(entry.module.get(), "RedSalamanderPluginShutdown"));
+            pluginShutdown != nullptr)
+        {
+            pluginShutdown();
+        }
+#pragma warning(pop)
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: plugin shutdown complete id='{}'", entry.id));
+#endif
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: unregister resources begin id='{}'", entry.id));
+#endif
         Localization::UnregisterResourceOwner(entry.module.get());
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: unregister resources complete id='{}'", entry.id));
+#endif
     }
-    entry.module.reset();
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: module reset begin id='{}'", entry.id));
+#endif
+    bool retainModuleUntilProcessExit = false;
+    if (mode == ModuleUnloadMode::ProcessShutdown && entry.module)
+    {
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
+        if (const auto retainModule = reinterpret_cast<PluginRetainModuleUntilProcessExitExportFunc>(
+                GetProcAddress(entry.module.get(), "RedSalamanderPluginRetainModuleUntilProcessExit"));
+            retainModule != nullptr)
+        {
+            retainModuleUntilProcessExit = retainModule() != FALSE;
+        }
+#pragma warning(pop)
+    }
+
+    if (retainModuleUntilProcessExit && entry.module)
+    {
+        // At process shutdown, graphics-backed viewer DLLs can enter driver teardown
+        // from FreeLibrary while driver worker threads are still alive. Run the
+        // plugin quiet point above, then let OS process exit detach the module.
+        static_cast<void>(entry.module.release());
+    }
+    else
+    {
+        entry.module.reset();
+    }
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: module reset complete id='{}'", entry.id));
+#endif
     entry.createFactory = nullptr;
 }

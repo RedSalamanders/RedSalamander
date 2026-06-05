@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cwctype>
+#include <format>
 #include <limits>
+#include <new>
+#include <string>
+#include <utility>
 
 #include "Helpers.h"
 
@@ -13,6 +17,65 @@ namespace
 {
 constexpr GUID kD2DShadowEffectId = {0xC67EA361, 0x1863, 0x4e69, {0x89, 0xDB, 0x69, 0x5D, 0x3E, 0x9A, 0x5B, 0x6B}};
 constexpr UINT kButtonModifierAlt = 0x0100u;
+
+[[nodiscard]] std::wstring TraceLimitedText(std::wstring_view value)
+{
+    constexpr size_t kMaxTraceTextChars = 80u;
+    std::wstring text;
+    text.reserve((std::min)(value.size(), kMaxTraceTextChars + 3u));
+    for (const wchar_t ch : value)
+    {
+        if (text.size() >= kMaxTraceTextChars)
+        {
+            text.append(L"...");
+            break;
+        }
+        text.push_back((ch == L'\r' || ch == L'\n' || ch == L'\t') ? L' ' : ch);
+    }
+    return text;
+}
+
+[[nodiscard]] std::wstring TraceRect(const D2D1_RECT_F& rect)
+{
+    return std::format(L"({:.1f},{:.1f},{:.1f},{:.1f})", rect.left, rect.top, rect.right, rect.bottom);
+}
+
+[[nodiscard]] const wchar_t* TraceButtonVariantName(ButtonVariant variant) noexcept
+{
+    switch (variant)
+    {
+        case ButtonVariant::Standard: return L"Standard";
+        case ButtonVariant::DropDown: return L"DropDown";
+        case ButtonVariant::Split: return L"Split";
+        case ButtonVariant::Hyperlink: return L"Hyperlink";
+        case ButtonVariant::IconOnly: return L"IconOnly";
+        case ButtonVariant::Repeat: return L"Repeat";
+        default: return L"Unknown";
+    }
+}
+
+template <typename... Args>
+void TraceButtonDiagnostics(std::wstring_view eventName, std::wformat_string<Args...> format, Args&&... args) noexcept
+{
+    if (! IsContextMenuDiagnosticsEnabled())
+    {
+        return;
+    }
+
+    try
+    {
+        TraceContextMenuDiagnostics(eventName, std::format(format, std::forward<Args>(args)...));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::format_error&)
+    {
+        // Button tracing is diagnostic only; formatting failure must not disturb input dispatch.
+        TraceContextMenuDiagnostics(eventName, L"formatting failed");
+    }
+}
 
 [[nodiscard]] int TraceOptionalIndex(std::optional<size_t> value) noexcept
 {
@@ -495,12 +558,11 @@ void DrawTopRoundedAttachedRect(WindowHost& host,
         return;
     }
 
-    const D2D1_RECT_F fillRect =
-        SnapRectToPixel(host, D2D1::RectF(rect.left, rect.top, rect.right, rect.bottom + (std::max)(0.0f, fillBottomExtensionDip)));
+    const D2D1_RECT_F fillRect   = SnapRectToPixel(host, D2D1::RectF(rect.left, rect.top, rect.right, rect.bottom + (std::max)(0.0f, fillBottomExtensionDip)));
     const D2D1_RECT_F strokeRect = SnapRectToPixel(host, rect);
     const float width            = (std::max)(0.0f, fillRect.right - fillRect.left);
     const float height           = (std::max)(0.0f, fillRect.bottom - fillRect.top);
-    const float radius            = std::clamp(radiusDip, 0.0f, (std::min)(width * 0.5f, height));
+    const float radius           = std::clamp(radiusDip, 0.0f, (std::min)(width * 0.5f, height));
     if (width <= 0.0f || height <= 0.0f)
     {
         return;
@@ -530,17 +592,11 @@ void DrawTopRoundedAttachedRect(WindowHost& host,
 
     sink->BeginFigure(D2D1::Point2F(fillRect.left, fillRect.bottom), D2D1_FIGURE_BEGIN_FILLED);
     sink->AddLine(D2D1::Point2F(fillRect.left, fillRect.top + radius));
-    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(fillRect.left + radius, fillRect.top),
-                                  D2D1::SizeF(radius, radius),
-                                  0.0f,
-                                  D2D1_SWEEP_DIRECTION_CLOCKWISE,
-                                  D2D1_ARC_SIZE_SMALL));
+    sink->AddArc(D2D1::ArcSegment(
+        D2D1::Point2F(fillRect.left + radius, fillRect.top), D2D1::SizeF(radius, radius), 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
     sink->AddLine(D2D1::Point2F(fillRect.right - radius, fillRect.top));
-    sink->AddArc(D2D1::ArcSegment(D2D1::Point2F(fillRect.right, fillRect.top + radius),
-                                  D2D1::SizeF(radius, radius),
-                                  0.0f,
-                                  D2D1_SWEEP_DIRECTION_CLOCKWISE,
-                                  D2D1_ARC_SIZE_SMALL));
+    sink->AddArc(D2D1::ArcSegment(
+        D2D1::Point2F(fillRect.right, fillRect.top + radius), D2D1::SizeF(radius, radius), 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
     sink->AddLine(D2D1::Point2F(fillRect.right, fillRect.bottom));
     sink->AddLine(D2D1::Point2F(fillRect.left, fillRect.bottom));
     sink->EndFigure(D2D1_FIGURE_END_CLOSED);
@@ -572,21 +628,14 @@ void DrawTopRoundedAttachedRect(WindowHost& host,
         return;
     }
 
-    const float strokeBottom =
-        std::clamp(SnapDipToPixel(host, rect.bottom - (std::max)(0.0f, strokeBottomInsetDip)), strokeRect.top + radius, fillRect.bottom);
+    const float strokeBottom = std::clamp(SnapDipToPixel(host, rect.bottom - (std::max)(0.0f, strokeBottomInsetDip)), strokeRect.top + radius, fillRect.bottom);
     strokeSink->BeginFigure(D2D1::Point2F(strokeRect.left, strokeBottom), D2D1_FIGURE_BEGIN_HOLLOW);
     strokeSink->AddLine(D2D1::Point2F(strokeRect.left, strokeRect.top + radius));
-    strokeSink->AddArc(D2D1::ArcSegment(D2D1::Point2F(strokeRect.left + radius, strokeRect.top),
-                                        D2D1::SizeF(radius, radius),
-                                        0.0f,
-                                        D2D1_SWEEP_DIRECTION_CLOCKWISE,
-                                        D2D1_ARC_SIZE_SMALL));
+    strokeSink->AddArc(D2D1::ArcSegment(
+        D2D1::Point2F(strokeRect.left + radius, strokeRect.top), D2D1::SizeF(radius, radius), 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
     strokeSink->AddLine(D2D1::Point2F(strokeRect.right - radius, strokeRect.top));
-    strokeSink->AddArc(D2D1::ArcSegment(D2D1::Point2F(strokeRect.right, strokeRect.top + radius),
-                                        D2D1::SizeF(radius, radius),
-                                        0.0f,
-                                        D2D1_SWEEP_DIRECTION_CLOCKWISE,
-                                        D2D1_ARC_SIZE_SMALL));
+    strokeSink->AddArc(D2D1::ArcSegment(
+        D2D1::Point2F(strokeRect.right, strokeRect.top + radius), D2D1::SizeF(radius, radius), 0.0f, D2D1_SWEEP_DIRECTION_CLOCKWISE, D2D1_ARC_SIZE_SMALL));
     strokeSink->AddLine(D2D1::Point2F(strokeRect.right, strokeBottom));
     strokeSink->EndFigure(D2D1_FIGURE_END_OPEN);
     if (FAILED(strokeSink->Close()))
@@ -1598,6 +1647,16 @@ void Button::SetOnDropDownClick(std::function<void()> onDropDownClick)
 
 bool Button::Invoke(WindowHost& host, bool focusSelf)
 {
+    TraceButtonDiagnostics(L"dxui.button.invoke",
+                           L"hwnd={:#x} text=\"{}\" variant={} focusSelf={} enabled={} visible={} hasClick={} hasDropDown={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           focusSelf ? 1 : 0,
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0,
+                           _onClick ? 1 : 0,
+                           _onDropDownClick ? 1 : 0);
     if (! IsEnabled() || ! IsVisible())
     {
         return false;
@@ -1653,7 +1712,16 @@ void Button::Paint(WindowHost& host) const
         if (IsHovered() && IsEnabled())
         {
             const D2D1_RECT_F b = GetBounds();
-            DrawLineWithColor(host, D2D1::Point2F(b.left + 4.0f, b.bottom - 3.0f), D2D1::Point2F(b.right - 4.0f, b.bottom - 3.0f), fg, 1.0f);
+            const float widthDip     = (std::max)(0.0f, b.right - b.left);
+            const float heightDip    = (std::max)(1.0f, b.bottom - b.top);
+            const float availableDip = (std::max)(0.0f, widthDip - 8.0f);
+            const float textWidthDip =
+                MeasureSingleLineTextWidthDip(&host, _text, FontRole::Body, heightDip, ResolveReadingDirection(flowDirection));
+            const float underlineWidthDip = (std::clamp)(textWidthDip, 0.0f, availableDip);
+            const float underlineLeftDip  = b.left + ((widthDip - underlineWidthDip) * 0.5f);
+            const float underlineRightDip = underlineLeftDip + underlineWidthDip;
+            const float underlineYDip     = SnapDipToPixel(host, b.bottom - 3.0f);
+            DrawLineWithColor(host, D2D1::Point2F(underlineLeftDip, underlineYDip), D2D1::Point2F(underlineRightDip, underlineYDip), fg, 1.0f);
         }
         return;
     }
@@ -1705,6 +1773,25 @@ void Button::Paint(WindowHost& host) const
 
 bool Button::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT /*modifiers*/)
 {
+    const bool dropDownPoint = IsDropDownInvocationPoint(point);
+    TraceButtonDiagnostics(L"dxui.button.mouse-down",
+                           L"hwnd={:#x} text=\"{}\" variant={} point=({:.1f},{:.1f}) bounds={} hit={} rightButton={} enabled={} visible={} "
+                           L"pressedBefore={} pressedDropDownBefore={} dropDownPoint={} hasClick={} hasDropDown={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           point.x,
+                           point.y,
+                           TraceRect(GetBounds()),
+                           TraceRect(GetHitBounds()),
+                           rightButton ? 1 : 0,
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0,
+                           _pressed ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           dropDownPoint ? 1 : 0,
+                           _onClick ? 1 : 0,
+                           _onDropDownClick ? 1 : 0);
     if (! IsEnabled())
     {
         return false;
@@ -1722,24 +1809,53 @@ bool Button::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton
 
     host.SetFocusControl(this);
     _pressed = true;
-    _pressedDropDown = IsDropDownInvocationPoint(point);
+    _pressedDropDown = dropDownPoint;
     Invalidate(host);
     return true;
 }
 
 bool Button::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT /*modifiers*/)
 {
+    const bool wasPressedBeforeReturn = _pressed;
+    const bool hitBeforeReturn        = PointInRect(GetHitBounds(), point);
+    TraceButtonDiagnostics(L"dxui.button.mouse-up-enter",
+                           L"hwnd={:#x} text=\"{}\" variant={} point=({:.1f},{:.1f}) bounds={} hit={} rightButton={} enabled={} visible={} "
+                           L"pressedBefore={} pressedDropDownBefore={} hasClick={} hasDropDown={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           point.x,
+                           point.y,
+                           TraceRect(GetBounds()),
+                           hitBeforeReturn ? 1 : 0,
+                           rightButton ? 1 : 0,
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0,
+                           wasPressedBeforeReturn ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           _onClick ? 1 : 0,
+                           _onDropDownClick ? 1 : 0);
     if (rightButton || ! IsEnabled())
     {
         return false;
     }
 
-    const bool wasPressed     = _pressed;
-    const bool hitButton      = PointInRect(GetHitBounds(), point);
-    const bool invokeDropDown = _pressedDropDown && hitButton;
+    const bool wasPressed               = _pressed;
+    const bool hitButton                = PointInRect(GetHitBounds(), point);
+    const bool invokeDropDown           = _pressedDropDown && hitButton;
     const std::function<void()> onClick = _onClick;
     _pressed                           = false;
     _pressedDropDown                   = false;
+    TraceButtonDiagnostics(L"dxui.button.mouse-up-dispatch",
+                           L"hwnd={:#x} text=\"{}\" variant={} wasPressed={} hitButton={} invokeDropDown={} hasClick={} hasDropDown={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           wasPressed ? 1 : 0,
+                           hitButton ? 1 : 0,
+                           invokeDropDown ? 1 : 0,
+                           onClick ? 1 : 0,
+                           _onDropDownClick ? 1 : 0);
     if (wasPressed)
     {
         Invalidate(host);
@@ -1811,7 +1927,7 @@ bool Button::OnMouseLeave(WindowHost& host)
     const bool handled = Control::OnMouseLeave(host);
     if (_pressed)
     {
-        _pressed = false;
+        _pressed         = false;
         _pressedDropDown = false;
         Invalidate(host);
     }
@@ -1841,11 +1957,16 @@ void Button::SetPressed(bool pressed) noexcept
     _pressed = pressed;
 }
 
+void Button::SetPressedVisual(bool pressed) noexcept
+{
+    SetPressed(pressed);
+}
+
 void Button::OnCaptureLost(WindowHost& host)
 {
     if (_pressed)
     {
-        _pressed = false;
+        _pressed         = false;
         _pressedDropDown = false;
         Invalidate(host);
     }
@@ -1875,6 +1996,17 @@ bool Button::IsDropDownInvocationPoint(D2D1_POINT_2F point) const noexcept
 
 bool Button::InvokeDropDown(WindowHost& host)
 {
+    TraceButtonDiagnostics(L"dxui.button.dropdown-invoke",
+                           L"hwnd={:#x} text=\"{}\" variant={} enabled={} visible={} hasDropDown={} pressedBefore={} pressedDropDownBefore={} openBefore={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0,
+                           _onDropDownClick ? 1 : 0,
+                           _pressed ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           _dropDownOpen ? 1 : 0);
     if (! IsEnabled() || ! IsVisible() || ! _onDropDownClick)
     {
         return false;
@@ -1884,7 +2016,16 @@ bool Button::InvokeDropDown(WindowHost& host)
     _dropDownOpen = true;
     Invalidate(host);
     const std::function<void()> onDropDownClick = _onDropDownClick;
+    const std::weak_ptr<int> lifetime           = GetLifetimeToken();
     onDropDownClick();
+    TraceButtonDiagnostics(L"dxui.button.dropdown-return",
+                           L"hwnd={:#x} text=\"{}\" variant={} pressed={} pressedDropDown={} open={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           _pressed ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           _dropDownOpen ? 1 : 0);
     _dropDownOpen    = false;
     _pressed         = false;
     _pressedDropDown = false;
@@ -3209,18 +3350,19 @@ bool MenuBar::ActivateItem(WindowHost& host, size_t index, bool keyboardInvocati
     _selectedIndex             = index;
     const D2D1_RECT_F itemRect = GetItemRect(host, index);
     const POINT screenPoint    = host.DipPointToScreenPoint(D2D1::Point2F(itemRect.left, itemRect.bottom));
-    Debug::Info(L"DxUi::MenuTrace MenuBar activate hwnd={:#x} capture={:#x} index={} keyboard={} anchor=({}, {}) itemRectDip=({:.1f},{:.1f},{:.1f},{:.1f}) label='{}'",
-                reinterpret_cast<uintptr_t>(host.GetHwnd()),
-                reinterpret_cast<uintptr_t>(GetCapture()),
-                index,
-                keyboardInvocation ? L"true" : L"false",
-                screenPoint.x,
-                screenPoint.y,
-                itemRect.left,
-                itemRect.top,
-                itemRect.right,
-                itemRect.bottom,
-                std::wstring_view{_items[index].text});
+    Debug::Info(
+        L"DxUi::MenuTrace MenuBar activate hwnd={:#x} capture={:#x} index={} keyboard={} anchor=({}, {}) itemRectDip=({:.1f},{:.1f},{:.1f},{:.1f}) label='{}'",
+        reinterpret_cast<uintptr_t>(host.GetHwnd()),
+        reinterpret_cast<uintptr_t>(GetCapture()),
+        index,
+        keyboardInvocation ? L"true" : L"false",
+        screenPoint.x,
+        screenPoint.y,
+        itemRect.left,
+        itemRect.top,
+        itemRect.right,
+        itemRect.bottom,
+        std::wstring_view{_items[index].text});
     _onOpenItem(index, screenPoint, keyboardInvocation);
     RequestInvalidate();
     return true;
@@ -3368,7 +3510,7 @@ bool MenuBar::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton,
     const std::optional<size_t> hit     = HitTestItem(host, MakePointDip(point));
     const std::optional<size_t> pressed = _pressedIndex;
     TraceMenuBarPointerEvent(L"mouse-up", host, point, hit, pressed, _selectedIndex, _items.size());
-    _pressedIndex                       = std::nullopt;
+    _pressedIndex = std::nullopt;
     InvalidateIfInteractive(host);
 
     if (! pressed.has_value() || hit != pressed)
@@ -3849,8 +3991,7 @@ bool TabControl::HasHeaderDividerPaintSegment() const noexcept
     if (_selectedIndex.has_value() && _selectedIndex.value() < _tabs.size())
     {
         const D2D1_RECT_F selectedTabRect = GetTabRect(_selectedIndex.value());
-        return hasVisibleSegment(dividerRect.left, selectedTabRect.left) ||
-               hasVisibleSegment(selectedTabRect.right, dividerRect.right);
+        return hasVisibleSegment(dividerRect.left, selectedTabRect.left) || hasVisibleSegment(selectedTabRect.right, dividerRect.right);
     }
 
     return hasVisibleSegment(dividerRect.left, dividerRect.right);
@@ -4217,7 +4358,7 @@ void TabControl::PaintHeaderDivider(WindowHost& host) const noexcept
         return;
     }
 
-    const auto& theme           = host.GetTheme();
+    const auto& theme          = host.GetTheme();
     const D2D1_COLOR_F divider = theme.highContrast ? theme.border : theme.borderStrong;
     const float dividerY       = SnapDipToPixel(host, dividerRect.top);
     const auto drawSegment     = [&](const float fromX, const float toX) noexcept
@@ -4281,11 +4422,18 @@ void TabControl::Paint(WindowHost& host) const
             drawHeaderSeparatorSegment(contentRect.left, contentRect.right);
         }
 
-        DrawLineWithColor(host, D2D1::Point2F(contentRect.left, contentRect.top), D2D1::Point2F(contentRect.left, contentRect.bottom), theme.borderDefault, 1.0f);
         DrawLineWithColor(
-            host, D2D1::Point2F(contentRect.right - 1.0f, contentRect.top), D2D1::Point2F(contentRect.right - 1.0f, contentRect.bottom), theme.borderDefault, 1.0f);
-        DrawLineWithColor(
-            host, D2D1::Point2F(contentRect.left, contentRect.bottom - 1.0f), D2D1::Point2F(contentRect.right, contentRect.bottom - 1.0f), theme.borderDefault, 1.0f);
+            host, D2D1::Point2F(contentRect.left, contentRect.top), D2D1::Point2F(contentRect.left, contentRect.bottom), theme.borderDefault, 1.0f);
+        DrawLineWithColor(host,
+                          D2D1::Point2F(contentRect.right - 1.0f, contentRect.top),
+                          D2D1::Point2F(contentRect.right - 1.0f, contentRect.bottom),
+                          theme.borderDefault,
+                          1.0f);
+        DrawLineWithColor(host,
+                          D2D1::Point2F(contentRect.left, contentRect.bottom - 1.0f),
+                          D2D1::Point2F(contentRect.right, contentRect.bottom - 1.0f),
+                          theme.borderDefault,
+                          1.0f);
     }
 
     if (NeedsOverflowButtons())
@@ -4318,12 +4466,12 @@ void TabControl::Paint(WindowHost& host) const
     dc->PushAxisAlignedClip(clipRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     for (size_t index = 0u; index < _tabs.size(); ++index)
     {
-        const D2D1_RECT_F tabRect = GetTabRect(index);
-        const bool selected       = _selectedIndex.has_value() && _selectedIndex.value() == index;
-        const bool hovered        = _hoveredTabIndex.has_value() && _hoveredTabIndex.value() == index;
-        const bool closeVisible   = IsCloseButtonVisible(index);
-        const D2D1_COLOR_F fill   = selected ? theme.cardBackground : (hovered ? theme.headerHovered : theme.windowBackground);
-        const D2D1_COLOR_F transparent = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+        const D2D1_RECT_F tabRect         = GetTabRect(index);
+        const bool selected               = _selectedIndex.has_value() && _selectedIndex.value() == index;
+        const bool hovered                = _hoveredTabIndex.has_value() && _hoveredTabIndex.value() == index;
+        const bool closeVisible           = IsCloseButtonVisible(index);
+        const D2D1_COLOR_F fill           = selected ? theme.cardBackground : (hovered ? theme.headerHovered : theme.windowBackground);
+        const D2D1_COLOR_F transparent    = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
         const D2D1_RECT_F attachedTabRect = D2D1::RectF(tabRect.left, tabRect.top, tabRect.right, tabRect.bottom);
         if (selected)
         {
@@ -4422,7 +4570,7 @@ bool TabControl::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightBu
 
 bool TabControl::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/)
 {
-    const HeaderHitInfo hit               = HitTestHeader(point);
+    const HeaderHitInfo hit = HitTestHeader(point);
     const std::optional<size_t> nextHover =
         (hit.part == HeaderPart::Tab || hit.part == HeaderPart::CloseButton) ? std::optional<size_t>{hit.index} : std::nullopt;
     bool tooltipChanged = false;
@@ -4658,6 +4806,22 @@ void StatusStrip::SetFontRole(FontRole fontRole) noexcept
     RequestInvalidate();
 }
 
+void StatusStrip::SetBlendWithWindowBackground(bool blend) noexcept
+{
+    if (_blendWithWindowBackground == blend)
+    {
+        return;
+    }
+
+    _blendWithWindowBackground = blend;
+    RequestInvalidate();
+}
+
+bool StatusStrip::GetBlendWithWindowBackground() const noexcept
+{
+    return _blendWithWindowBackground;
+}
+
 void StatusStrip::SetSections(std::vector<Section> sections)
 {
     _sections = std::move(sections);
@@ -4688,6 +4852,79 @@ std::wstring_view StatusStrip::GetSectionText(size_t index) const noexcept
     return _sections[index].text;
 }
 
+DWRITE_TEXT_ALIGNMENT StatusStrip::GetSectionAlignment(size_t index) const noexcept
+{
+    if (index >= _sections.size())
+    {
+        return DWRITE_TEXT_ALIGNMENT_LEADING;
+    }
+
+    return _sections[index].alignment;
+}
+
+bool StatusStrip::GetSectionLeadingEllipsis(size_t index) const noexcept
+{
+    return index < _sections.size() && _sections[index].leadingEllipsis;
+}
+
+std::wstring StatusStrip::ElideLeadingForWidth(const WindowHost* host, std::wstring_view text, FontRole fontRole, float widthDip, float heightDip) noexcept
+{
+    if (text.empty())
+    {
+        return {};
+    }
+
+    if (widthDip <= 0.5f)
+    {
+        return L"...";
+    }
+
+    if (MeasureSingleLineTextWidthDip(host, text, fontRole, heightDip) <= (widthDip + 0.5f))
+    {
+        return std::wstring(text);
+    }
+
+    constexpr std::wstring_view kEllipsis = L"...";
+    if (MeasureSingleLineTextWidthDip(host, kEllipsis, fontRole, heightDip) > widthDip)
+    {
+        return std::wstring(kEllipsis);
+    }
+
+    size_t low = 0u;
+    size_t high = text.size();
+    while (low < high)
+    {
+        const size_t candidateSuffixLength = low + ((high - low + 1u) / 2u);
+        const size_t suffixStart = text.size() - candidateSuffixLength;
+        std::wstring candidate(kEllipsis);
+        candidate.append(text.substr(suffixStart));
+
+        if (MeasureSingleLineTextWidthDip(host, candidate, fontRole, heightDip) <= (widthDip + 0.5f))
+        {
+            low = candidateSuffixLength;
+        }
+        else
+        {
+            high = candidateSuffixLength - 1u;
+        }
+    }
+
+    size_t suffixStart = text.size() - low;
+    while (suffixStart < text.size() && IsUtf16TrailSurrogate(text[suffixStart]))
+    {
+        ++suffixStart;
+    }
+
+    std::wstring result(kEllipsis);
+    result.append(text.substr(suffixStart));
+    return result;
+}
+
+std::wstring StatusStrip::DebugElideLeadingForWidth(const WindowHost* host, std::wstring_view text, FontRole fontRole, float widthDip, float heightDip) noexcept
+{
+    return ElideLeadingForWidth(host, text, fontRole, widthDip, heightDip);
+}
+
 void StatusStrip::Paint(WindowHost& host) const
 {
     const auto& theme             = host.GetTheme();
@@ -4696,8 +4933,8 @@ void StatusStrip::Paint(WindowHost& host) const
     const float textInsetRightDip = theme.density == Density::Compact ? 3.0f : 4.0f;
     const float separatorInset    = theme.density == Density::Compact ? 3.0f : 4.0f;
 
-    // 22 DIP height (spec §3.10), subtle background
-    if (host.GetDeviceContext())
+    // 22 DIP height (spec §3.10), subtle background unless embedded as inline status text.
+    if (host.GetDeviceContext() && ! _blendWithWindowBackground)
     {
         FillRectangleWithColor(host, bounds, theme.cardBackground);
         // Top border
@@ -4745,12 +4982,20 @@ void StatusStrip::Paint(WindowHost& host) const
 
         if (! section.text.empty())
         {
+            std::wstring elidedText;
+            std::wstring_view text = section.text;
+            if (section.leadingEllipsis)
+            {
+                elidedText = ElideLeadingForWidth(&host, section.text, _fontRole, std::max(0.0f, textRect.right - textRect.left), textRect.bottom - textRect.top);
+                text       = elidedText;
+            }
+
             DrawCenteredText(host,
-                             section.text,
+                             text,
                              textRect,
                              _fontRole,
                              theme.text,
-                             DWRITE_TEXT_ALIGNMENT_LEADING,
+                             section.alignment,
                              DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
                              false,
                              GetFlowDirection());
@@ -4759,7 +5004,7 @@ void StatusStrip::Paint(WindowHost& host) const
         xPos += sectionWidth;
 
         // Separator between sections
-        if (i + 1 < _sections.size())
+        if (i + 1 < _sections.size() && ! _blendWithWindowBackground)
         {
             if (host.GetDeviceContext())
             {
@@ -5040,7 +5285,7 @@ void ScrollPanel::ClearChildren() noexcept
 void ScrollPanel::SetContentHeight(float heightDip) noexcept
 {
     const float previousOffset = _scrollOffsetDip;
-    _contentHeightDip = (std::max)(0.0f, heightDip);
+    _contentHeightDip          = (std::max)(0.0f, heightDip);
     ClampScrollOffset();
     RequestInvalidate();
     NotifyScrollChanged(previousOffset);
@@ -5433,7 +5678,7 @@ bool ScrollPanel::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightB
             else
             {
                 // Page scroll: jump toward click
-                const float pageStep = (GetBounds().bottom - GetBounds().top) * 0.8f;
+                const float pageStep       = (GetBounds().bottom - GetBounds().top) * 0.8f;
                 const float previousOffset = _scrollOffsetDip;
                 _scrollOffsetDip += (point.y < thumb.top) ? -pageStep : pageStep;
                 ClampScrollOffset();
@@ -5504,8 +5749,8 @@ bool ScrollPanel::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifi
         if (available > 0.0f)
         {
             const float previousOffset = _scrollOffsetDip;
-            const float thumbTop = (std::clamp)(point.y - _dragThumbOffsetDip, track.top, track.bottom - thumbHeight);
-            _scrollOffsetDip     = ((thumbTop - track.top) / available) * GetScrollableExtent();
+            const float thumbTop       = (std::clamp)(point.y - _dragThumbOffsetDip, track.top, track.bottom - thumbHeight);
+            _scrollOffsetDip           = ((thumbTop - track.top) / available) * GetScrollableExtent();
             ClampScrollOffset();
             NotifyScrollChanged(previousOffset);
         }
@@ -5641,7 +5886,7 @@ bool ScrollPanel::OnMouseWheel([[maybe_unused]] WindowHost& host, D2D1_POINT_2F 
         return false;
     }
 
-    const float steps = wheelDelta / static_cast<float>(WHEEL_DELTA);
+    const float steps          = wheelDelta / static_cast<float>(WHEEL_DELTA);
     const float previousOffset = _scrollOffsetDip;
     _scrollOffsetDip -= steps * _scrollStepDip;
     ClampScrollOffset();
@@ -5696,8 +5941,8 @@ bool TooltipLayer::SetTooltip(std::wstring text, const D2D1_POINT_2F& originDip)
         return false;
     }
 
-    _text          = std::move(text);
-    _originDip     = originDip;
+    _text      = std::move(text);
+    _originDip = originDip;
     _pendingText.clear();
     _showScheduled = false;
     _showTickMs    = 0u;
@@ -5733,10 +5978,10 @@ bool TooltipLayer::SetTooltipDelayed(std::wstring text, const D2D1_POINT_2F& ori
 
     _pendingText      = std::move(text);
     _pendingOriginDip = originDip;
-    _showScheduled   = true;
-    _showTickMs      = nextShowTickMs;
-    _hideScheduled   = false;
-    _hideTickMs      = 0u;
+    _showScheduled    = true;
+    _showTickMs       = nextShowTickMs;
+    _hideScheduled    = false;
+    _hideTickMs       = 0u;
 
     bool changed = true;
     if (IsVisible() || ! _text.empty())
@@ -5832,7 +6077,7 @@ bool TooltipLayer::Tick(WindowHost& host, uint64_t nowTickMs)
             return true;
         }
 
-        std::wstring text = std::move(_pendingText);
+        std::wstring text             = std::move(_pendingText);
         const D2D1_POINT_2F originDip = _pendingOriginDip;
         _pendingText.clear();
         _showScheduled = false;

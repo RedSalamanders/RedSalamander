@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <string_view>
 
@@ -129,15 +130,31 @@ enum class PreferencesAdvancedDebugFocusTarget : uint8_t
     BypassHelloToggle,
     AllowInsecureTlsAutomationToggle,
     HelloTimeoutEdit,
+    CacheMaxBytesEdit,
+    CacheMaxWatchersEdit,
+    CacheMruWatchedEdit,
+    FileOpsMaxDiagnosticsLogFilesEdit,
+    DiagnosticsInfoToggle,
+    DiagnosticsDebugToggle,
+    OpenSettingsFileLink,
+};
+
+enum class PreferencesMonitorDebugFocusTarget : uint8_t
+{
+    None = 0u,
     ToolbarToggle,
     LineNumbersToggle,
     AlwaysOnTopToggle,
     ShowIdsToggle,
     AutoScrollToggle,
     FilterPresetCombo,
-    FilterMaskEdit,
     FilterTextToggle,
-    DiagnosticsDebugToggle,
+    FilterErrorToggle,
+    FilterWarningToggle,
+    FilterInfoToggle,
+    FilterPerfToggle,
+    FilterDebugToggle,
+    OpenSettingsFileLink,
 };
 
 enum class PreferencesCompareDirectoriesDebugFocusTarget : uint8_t
@@ -200,22 +217,22 @@ enum class PreferencesShellDebugFocusTarget : uint8_t
 
 struct PreferencesGridPointerDebugState
 {
-    uint64_t headerResizeDownCount                    = 0u;
-    uint64_t resizeMoveCount                          = 0u;
-    bool resizeActive                                 = false;
-    float lastResizeDeltaDip                          = 0.0f;
-    float lastResizeWidthDip                          = 0.0f;
-    bool pressedHeaderActive                          = false;
-    size_t pressedHeaderColumn                        = 0u;
-    bool reorderActive                                = false;
-    size_t reorderColumn                              = 0u;
-    size_t reorderTargetDisplayIndex                  = 0u;
-    uint64_t headerReorderStartCount                  = 0u;
-    uint64_t headerReorderCommitCount                 = 0u;
-    uint64_t headerReorderNoOpCount                   = 0u;
-    size_t lastHeaderReorderColumn                    = 0u;
-    size_t lastHeaderReorderFromDisplayIndex          = 0u;
-    size_t lastHeaderReorderRawTargetDisplayIndex     = 0u;
+    uint64_t headerResizeDownCount                       = 0u;
+    uint64_t resizeMoveCount                             = 0u;
+    bool resizeActive                                    = false;
+    float lastResizeDeltaDip                             = 0.0f;
+    float lastResizeWidthDip                             = 0.0f;
+    bool pressedHeaderActive                             = false;
+    size_t pressedHeaderColumn                           = 0u;
+    bool reorderActive                                   = false;
+    size_t reorderColumn                                 = 0u;
+    size_t reorderTargetDisplayIndex                     = 0u;
+    uint64_t headerReorderStartCount                     = 0u;
+    uint64_t headerReorderCommitCount                    = 0u;
+    uint64_t headerReorderNoOpCount                      = 0u;
+    size_t lastHeaderReorderColumn                       = 0u;
+    size_t lastHeaderReorderFromDisplayIndex             = 0u;
+    size_t lastHeaderReorderRawTargetDisplayIndex        = 0u;
     size_t lastHeaderReorderNormalizedTargetDisplayIndex = 0u;
 };
 
@@ -238,20 +255,20 @@ struct PreferencesKeyboardDebugSnapshot
 
 struct PreferencesDebugSnapshot
 {
-    bool categoryTreeUsesDxUiHost         = false;
-    bool shellUsesDxUiHost                = false;
-    bool pageHostUsesDxUiHost             = false;
+    bool categoryTreeUsesDxUiHost             = false;
+    bool shellUsesDxUiHost                    = false;
+    bool pageHostUsesDxUiHost                 = false;
     bool pageHostDxContentRootUsesScrollPanel = false;
     bool pageHostDxInternalScrollbarEnabled   = false;
-    size_t themesListRowCount             = 0u;
-    size_t themesListVisibleRowCount      = 0u;
-    size_t themesListVisibleColumnCount   = 0u;
-    size_t themesListVisibleCellCount     = 0u;
-    bool themesListHasVerticalScrollbar   = false;
-    float themesListVerticalScrollDip     = 0.0f;
-    uint64_t themesListRenderCount        = 0u;
-    uint64_t themesListResizeCount        = 0u;
-    uint64_t themesListResizeFailureCount = 0u;
+    size_t themesListRowCount                 = 0u;
+    size_t themesListVisibleRowCount          = 0u;
+    size_t themesListVisibleColumnCount       = 0u;
+    size_t themesListVisibleCellCount         = 0u;
+    bool themesListHasVerticalScrollbar       = false;
+    float themesListVerticalScrollDip         = 0.0f;
+    uint64_t themesListRenderCount            = 0u;
+    uint64_t themesListResizeCount            = 0u;
+    uint64_t themesListResizeFailureCount     = 0u;
     std::wstring themesSearchText;
     std::wstring themesSelectedThemeIdText;
     std::wstring themesSelectedColorKeyText;
@@ -261,6 +278,8 @@ struct PreferencesDebugSnapshot
     PreferencesPanesDebugFocusTarget panesFocusTarget                           = PreferencesPanesDebugFocusTarget::None;
     PreferencesHotPathsDebugFocusTarget hotPathsFocusTarget                     = PreferencesHotPathsDebugFocusTarget::None;
     PreferencesAdvancedDebugFocusTarget advancedFocusTarget                     = PreferencesAdvancedDebugFocusTarget::None;
+    PreferencesMonitorDebugFocusTarget monitorFocusTarget                       = PreferencesMonitorDebugFocusTarget::None;
+    bool monitorSettingsFileCardLast                                            = false;
     PreferencesCompareDirectoriesDebugFocusTarget compareDirectoriesFocusTarget = PreferencesCompareDirectoriesDebugFocusTarget::None;
     PreferencesFileOperationsDebugFocusTarget fileOperationsFocusTarget         = PreferencesFileOperationsDebugFocusTarget::None;
     PreferencesThemesDebugFocusTarget themesFocusTarget                         = PreferencesThemesDebugFocusTarget::None;
@@ -300,29 +319,29 @@ struct PreferencesDebugSnapshot
     std::wstring viewersSearchText;
     std::wstring viewersSelectedExtensionText;
     PreferencesViewersDebugFocusTarget viewersFocusTarget = PreferencesViewersDebugFocusTarget::None;
-    size_t editorsActionCount                            = 0u;
-    size_t editorsAssociationRowCount                    = 0u;
-    size_t editorsAssociationVisibleRowCount             = 0u;
-    size_t editorsAssociationVisibleColumnCount          = 0u;
-    size_t editorsAssociationVisibleCellCount            = 0u;
-    bool editorsAssociationHasVerticalScrollbar          = false;
-    float editorsAssociationVerticalScrollDip            = 0.0f;
-    size_t editorsActionRowCount                         = 0u;
+    size_t editorsActionCount                             = 0u;
+    size_t editorsAssociationRowCount                     = 0u;
+    size_t editorsAssociationVisibleRowCount              = 0u;
+    size_t editorsAssociationVisibleColumnCount           = 0u;
+    size_t editorsAssociationVisibleCellCount             = 0u;
+    bool editorsAssociationHasVerticalScrollbar           = false;
+    float editorsAssociationVerticalScrollDip             = 0.0f;
+    size_t editorsActionRowCount                          = 0u;
     std::wstring editorsPrimaryActionIdText;
     std::wstring editorsAlternateActionIdText;
     std::wstring editorsEditNewActionIdText;
     std::wstring editorsPreviewActionIdText;
     std::wstring editorsPreviewReasonText;
-    size_t userMenuActionCount                           = 0u;
-    size_t keyboardListRowCount                           = 0u;
-    size_t keyboardListVisibleRowCount                    = 0u;
-    size_t keyboardListVisibleColumnCount                 = 0u;
-    size_t keyboardListVisibleCellCount                   = 0u;
-    bool keyboardListHasVerticalScrollbar                 = false;
-    float keyboardListVerticalScrollDip                   = 0.0f;
-    uint64_t keyboardListRenderCount                      = 0u;
-    uint64_t keyboardListResizeCount                      = 0u;
-    uint64_t keyboardListResizeFailureCount               = 0u;
+    size_t userMenuActionCount              = 0u;
+    size_t keyboardListRowCount             = 0u;
+    size_t keyboardListVisibleRowCount      = 0u;
+    size_t keyboardListVisibleColumnCount   = 0u;
+    size_t keyboardListVisibleCellCount     = 0u;
+    bool keyboardListHasVerticalScrollbar   = false;
+    float keyboardListVerticalScrollDip     = 0.0f;
+    uint64_t keyboardListRenderCount        = 0u;
+    uint64_t keyboardListResizeCount        = 0u;
+    uint64_t keyboardListResizeFailureCount = 0u;
     std::wstring keyboardSearchText;
     std::wstring keyboardHintText;
     std::wstring keyboardListColumnLayoutText;
@@ -398,59 +417,59 @@ struct PreferencesDebugSnapshot
     RECT shellOkButtonBoundsPx{};
     RECT shellCancelButtonBoundsPx{};
     RECT shellApplyButtonBoundsPx{};
-    bool shellFooterButtonsInsideHost                     = false;
-    bool shellFooterButtonsInsideClip                     = false;
-    bool shellOkButtonInteriorSampled                     = false;
-    bool shellOkButtonInteriorLooksPainted                = false;
-    uint32_t shellOkButtonInteriorBgra                    = 0u;
-    bool shellFooterBackgroundSampled                     = false;
-    bool shellFooterBackgroundLooksThemed                 = false;
-    uint32_t shellFooterBackgroundBgra                    = 0u;
+    bool shellFooterButtonsInsideHost      = false;
+    bool shellFooterButtonsInsideClip      = false;
+    bool shellOkButtonInteriorSampled      = false;
+    bool shellOkButtonInteriorLooksPainted = false;
+    uint32_t shellOkButtonInteriorBgra     = 0u;
+    bool shellFooterBackgroundSampled      = false;
+    bool shellFooterBackgroundLooksThemed  = false;
+    uint32_t shellFooterBackgroundBgra     = 0u;
     RECT pageHostDxScrollbarThumbHitRectPx{};
-    bool pageHostDxHostAttachedToPageHost                 = false;
-    bool pageHostDxThumbCenterHitAnyControl               = false;
-    bool pageHostDxThumbCenterHitScrollPanel              = false;
-    int pageHostRightmostCardRightPx                      = 0;
-    int pageHostScrollbarTrackLeftPx                      = 0;
-    int pageHostCardToScrollbarGapPx                      = 0;
+    bool pageHostDxHostAttachedToPageHost                = false;
+    bool pageHostDxThumbCenterHitAnyControl              = false;
+    bool pageHostDxThumbCenterHitScrollPanel             = false;
+    int pageHostRightmostCardRightPx                     = 0;
+    int pageHostScrollbarTrackLeftPx                     = 0;
+    int pageHostCardToScrollbarGapPx                     = 0;
     int pageHostDxScrollOffsetPx                         = 0;
-    int pageScrollY                                       = 0;
-    int pageScrollMaxY                                    = 0;
-    bool pageHostLastWheelRouteSeen                       = false;
-    bool pageHostLastWheelRouteForwarded                  = false;
-    bool pageHostLastWheelRouteTargetWasPageHost          = false;
-    bool pageHostLastWheelRouteTargetWasCategoryTree      = false;
-    bool pageHostLastWheelRouteTargetHadVerticalScroll    = false;
-    bool pageHostLastWheelWindowFromPointWasPageHost      = false;
-    bool pageHostLastWheelWindowFromPointWasCategoryTree  = false;
-    bool pageHostLastWheelWndProcSeen                     = false;
-    bool pageHostLastWheelDxHandled                       = false;
-    bool pageHostLastWheelFallbackCalled                  = false;
-    bool pageHostLastWheelFallbackHandled                 = false;
-    int pageHostLastWheelDelta                            = 0;
-    int pageHostLastWheelClientX                          = 0;
-    int pageHostLastWheelClientY                          = 0;
-    int pageHostLastWheelBeforeY                          = 0;
-    int pageHostLastWheelBeforeMaxY                       = 0;
-    int pageHostLastWheelAfterY                           = 0;
-    int pageHostLastWheelAfterMaxY                        = 0;
-    uint64_t pageHostScrollRequestCount                   = 0u;
-    uint64_t pageHostScrollCoalescedRequestCount          = 0u;
-    uint64_t pageHostScrollApplyCount                     = 0u;
-    uint64_t pageHostScrollMovedChildCountTotal           = 0u;
-    uint64_t pageHostDxScrollMovedControlCountTotal       = 0u;
-    uint64_t pageHostDxScrollLastMovedControlCount        = 0u;
-    uint64_t pageHostScrollLastApplyUs                    = 0u;
-    bool pageHostScrollApplyPending                       = false;
-    size_t visibleLegacyTreeViewCount                     = 0u;
-    size_t visibleLegacyShellStaticCount                  = 0u;
-    size_t visibleLegacyFooterButtonCount                 = 0u;
-    size_t createdLegacyPluginsListBridgeCount            = 0u;
-    size_t createdLegacyPluginsButtonBridgeCount          = 0u;
-    size_t createdLegacyPluginsInputBridgeCount           = 0u;
-    size_t createdLegacyPluginsConfigStaticBridgeCount    = 0u;
-    size_t createdLegacyPluginsConfigInputBridgeCount     = 0u;
-    PrefCategory currentCategory                          = static_cast<PrefCategory>(0);
+    int pageScrollY                                      = 0;
+    int pageScrollMaxY                                   = 0;
+    bool pageHostLastWheelRouteSeen                      = false;
+    bool pageHostLastWheelRouteForwarded                 = false;
+    bool pageHostLastWheelRouteTargetWasPageHost         = false;
+    bool pageHostLastWheelRouteTargetWasCategoryTree     = false;
+    bool pageHostLastWheelRouteTargetHadVerticalScroll   = false;
+    bool pageHostLastWheelWindowFromPointWasPageHost     = false;
+    bool pageHostLastWheelWindowFromPointWasCategoryTree = false;
+    bool pageHostLastWheelWndProcSeen                    = false;
+    bool pageHostLastWheelDxHandled                      = false;
+    bool pageHostLastWheelFallbackCalled                 = false;
+    bool pageHostLastWheelFallbackHandled                = false;
+    int pageHostLastWheelDelta                           = 0;
+    int pageHostLastWheelClientX                         = 0;
+    int pageHostLastWheelClientY                         = 0;
+    int pageHostLastWheelBeforeY                         = 0;
+    int pageHostLastWheelBeforeMaxY                      = 0;
+    int pageHostLastWheelAfterY                          = 0;
+    int pageHostLastWheelAfterMaxY                       = 0;
+    uint64_t pageHostScrollRequestCount                  = 0u;
+    uint64_t pageHostScrollCoalescedRequestCount         = 0u;
+    uint64_t pageHostScrollApplyCount                    = 0u;
+    uint64_t pageHostScrollMovedChildCountTotal          = 0u;
+    uint64_t pageHostDxScrollMovedControlCountTotal      = 0u;
+    uint64_t pageHostDxScrollLastMovedControlCount       = 0u;
+    uint64_t pageHostScrollLastApplyUs                   = 0u;
+    bool pageHostScrollApplyPending                      = false;
+    size_t visibleLegacyTreeViewCount                    = 0u;
+    size_t visibleLegacyShellStaticCount                 = 0u;
+    size_t visibleLegacyFooterButtonCount                = 0u;
+    size_t createdLegacyPluginsListBridgeCount           = 0u;
+    size_t createdLegacyPluginsButtonBridgeCount         = 0u;
+    size_t createdLegacyPluginsInputBridgeCount          = 0u;
+    size_t createdLegacyPluginsConfigStaticBridgeCount   = 0u;
+    size_t createdLegacyPluginsConfigInputBridgeCount    = 0u;
+    PrefCategory currentCategory                         = static_cast<PrefCategory>(0);
     std::wstring pageTitle;
     std::wstring pageDescription;
 };
@@ -527,6 +546,11 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugGetPreferencesHotPathsOpenPrefsToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesAdvancedBypassHelloToggle() noexcept;
 [[nodiscard]] bool DebugSelectPreferencesAdvancedFilterPreset(std::wstring_view displayText) noexcept;
+[[nodiscard]] bool DebugFocusPreferencesMonitorToolbarToggle() noexcept;
+[[nodiscard]] bool DebugSelectPreferencesMonitorFilterPreset(std::wstring_view displayText) noexcept;
+void DebugSetPreferencesSettingsFileOpenCapture(bool capture) noexcept;
+void DebugClearPreferencesLastSettingsFileOpen() noexcept;
+[[nodiscard]] bool DebugGetPreferencesLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesFileOperationsPreCalcEnabledToggle() noexcept;
 [[nodiscard]] bool DebugGetPreferencesFileOperationsPreCalcEnabledToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugSelectPreferencesFileOperationsBandwidthPreset(std::wstring_view displayText) noexcept;

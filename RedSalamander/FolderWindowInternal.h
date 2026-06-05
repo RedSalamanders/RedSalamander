@@ -66,16 +66,16 @@ constexpr wchar_t kStatusBarSortTextProp[]      = L"RedSalamander.StatusBar.Sort
 constexpr wchar_t kStatusBarFocusHueProp[]      = L"RedSalamander.StatusBar.FocusHue";
 constexpr wchar_t kStatusBarSortHotProp[]       = L"RedSalamander.StatusBar.SortHot";
 
-constexpr int kStatusBarPartSelection = 0;
-constexpr int kStatusBarPartSecurity  = 1;
-constexpr int kStatusBarPartSort      = 2;
+constexpr int kStatusBarPartSelection          = 0;
+constexpr int kStatusBarPartSecurity           = 1;
+constexpr int kStatusBarPartSort               = 2;
 constexpr UINT kStatusBarSortClickNotification = 0x7251;
 
 struct FolderWindowNotifyHeader
 {
-    HWND hwndFrom = nullptr;
+    HWND hwndFrom   = nullptr;
     UINT_PTR idFrom = 0;
-    UINT code = 0;
+    UINT code       = 0;
 };
 
 struct StatusBarSortClickNotification

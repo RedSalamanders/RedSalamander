@@ -39,7 +39,8 @@ The left tree contains:
 - **File Operations**: host-wide defaults for pre-calculation, default copy/move speed limit, and cross-filesystem bridge buffering.
 - **Compare Directories**: default options used by the Compare Directories window.
 - **Hot Paths**: bookmark folder paths for quick access (`Ctrl+1`..`Ctrl+0`).
-- **Advanced**: expert settings such as diagnostics, monitor filters, and cache limits.
+- **Monitor**: RedSalamanderMonitor display and event-filter defaults.
+- **Advanced**: expert settings such as diagnostics and cache limits.
 
 Tip: Plugins also appear as child nodes under **Plugins** when a plugin exposes configurable fields.
 
@@ -136,8 +137,15 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 - **Windows Hello for Connections** controls automation bypass, insecure TLS automation allowance, and the Hello reuse timeout.
 - **File Operations** controls diagnostics retention and Info/Debug verbosity.
-- **Monitor** controls toolbar, line numbers, always-on-top, ids, auto-scroll, filter preset, and message-type filters.
 - **Cache** controls directory-info cache size, watcher count, and recently watched folder retention.
+- **Open settings file** opens the current user's main JSON settings file with the default JSON editor.
+
+### Monitor
+
+- **Display** controls RedSalamanderMonitor toolbar, line numbers, always-on-top, ids, and auto-scroll defaults.
+- **Filter** appears as one card before the settings-file link and controls the RedSalamanderMonitor filter preset plus the Text, Error, Warning, Info, Perf, and Debug message-type toggles. There is no numeric mask field in Preferences; choose **Custom** and use the toggles for custom combinations.
+- **Open monitor settings file** is the final card and opens the current user's RedSalamanderMonitor JSON settings file with the default JSON editor.
+- Apply or OK saves Monitor page changes to the `RedSalamanderMonitor` settings file, not the main RedSalamander settings file.
 
 ## Common workflows
 
@@ -193,10 +201,11 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 - Tune the cross-filesystem bridge buffer size used when the host copies between different file-system implementations.
 - Use **Plugins → File System** for plugin-owned concurrency, recycle-bin batching, and search-walker settings; those are not duplicated on the File Operations page.
 
-### Hot Paths and Advanced
+### Hot Paths, Monitor, and Advanced
 
 - **Hot Paths** lets you edit the label, target path, and **Show in Change Drive menu** flag for each of the 10 slots.
-- **Advanced** exposes file-operations diagnostics, monitor defaults, and cache-related settings.
+- **Monitor** exposes RedSalamanderMonitor display/filter defaults and a link to the monitor JSON settings file.
+- **Advanced** exposes file-operations diagnostics, cache-related settings, and a link to the current main JSON settings file.
 - Some rarely used settings still remain JSON-only; see [Settings File & Advanced Configuration](SettingsFile.md).
 
 ## Screenshots (key pages)

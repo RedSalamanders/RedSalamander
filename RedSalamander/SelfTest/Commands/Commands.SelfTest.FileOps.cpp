@@ -52,9 +52,8 @@
     }
 
     const AppTheme previousTheme = g_folderWindow.GetTheme();
-    const auto restoreTheme     = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(previousTheme); });
-    const AppTheme backdropTheme =
-        MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"fileops-issues-backdrop-selftest");
+    const auto restoreTheme      = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(previousTheme); });
+    const AppTheme backdropTheme = MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"fileops-issues-backdrop-selftest");
     g_folderWindow.ApplyTheme(backdropTheme);
     const Common::WindowBackdrop::Kind expectedToolBackdropKind =
         Common::WindowBackdrop::Resolve(Common::Settings::WindowBackdropMode::Acrylic, Common::WindowBackdrop::Target::Tool, false);
@@ -3570,12 +3569,11 @@
     state.Require(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(pane, 120),
                   L"Issues pane did not accept top reset before long-run scrolling validation.");
     RedrawWindow(pane, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
-    state.Require(waitForSnapshot([](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept
-    { return value.visibleWork.verticalScrollDip <= 0.5f; },
-                                  SelfTest::Scale(3000ms),
-                                  snapshot),
-                  std::format(L"Issues pane did not reset to the top before long-run scrolling validation; scrollDip={}.",
-                              snapshot.visibleWork.verticalScrollDip));
+    state.Require(
+        waitForSnapshot([](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept { return value.visibleWork.verticalScrollDip <= 0.5f; },
+                        SelfTest::Scale(3000ms),
+                        snapshot),
+        std::format(L"Issues pane did not reset to the top before long-run scrolling validation; scrollDip={}.", snapshot.visibleWork.verticalScrollDip));
     if (! state.failure.empty())
     {
         return false;
@@ -4453,9 +4451,8 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
     }
 
     const AppTheme previousTheme = g_folderWindow.GetTheme();
-    const auto restoreTheme     = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(previousTheme); });
-    const AppTheme backdropTheme =
-        MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"fileops-speedlimit-backdrop-selftest");
+    const auto restoreTheme      = wil::scope_exit([&]() noexcept { g_folderWindow.ApplyTheme(previousTheme); });
+    const AppTheme backdropTheme = MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"fileops-speedlimit-backdrop-selftest");
     g_folderWindow.ApplyTheme(backdropTheme);
     const Common::WindowBackdrop::Kind expectedToolBackdropKind =
         Common::WindowBackdrop::Resolve(Common::Settings::WindowBackdropMode::Acrylic, Common::WindowBackdrop::Target::Tool, false);

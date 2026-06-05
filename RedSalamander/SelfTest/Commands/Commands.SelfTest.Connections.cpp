@@ -1726,7 +1726,10 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     state.Require(DebugFocusConnectionManagerUserInput(), L"Failed to focus the Connection Manager User text field.");
     state.Require(WaitForConnectionManagerSnapshot(
                       [](const ConnectionManagerDebugSnapshot& value) noexcept
-    { return value.focusKind == ConnectionManagerDebugFocusKind::Edit && NormalizeDxVisibleLabel(value.focusLabel) == LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_USER); },
+    {
+        return value.focusKind == ConnectionManagerDebugFocusKind::Edit &&
+               NormalizeDxVisibleLabel(value.focusLabel) == LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_USER);
+    },
                       snapshot,
                       SelfTest::Scale(3000ms)),
                   L"Connection Manager did not move focus to the User text field before double-click validation.");
@@ -1756,8 +1759,7 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
 
     std::wstring actualText;
     state.Require(DebugGetConnectionManagerUserText(actualText), L"Failed to read the Connection Manager User text after double-click replacement.");
-    state.Require(actualText == L"alpha X gamma",
-                  std::format(L"Connection Manager User double-click replacement produced '{}'.", actualText));
+    state.Require(actualText == L"alpha X gamma", std::format(L"Connection Manager User double-click replacement produced '{}'.", actualText));
 
     SelfTest::AppendSelfTestTrace(L"ConnectionManager text-doubleclick: complete");
     return state.failure.empty();
@@ -1805,7 +1807,10 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     state.Require(DebugFocusConnectionManagerSecretInput(), L"Failed to focus the Connection Manager secret field.");
     state.Require(WaitForConnectionManagerSnapshot(
                       [](const ConnectionManagerDebugSnapshot& value) noexcept
-    { return value.focusKind == ConnectionManagerDebugFocusKind::Edit && NormalizeDxVisibleLabel(value.focusLabel) == LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_PASSWORD); },
+    {
+        return value.focusKind == ConnectionManagerDebugFocusKind::Edit &&
+               NormalizeDxVisibleLabel(value.focusLabel) == LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_PASSWORD);
+    },
                       snapshot,
                       SelfTest::Scale(3000ms)),
                   L"Connection Manager did not move focus to the secret text field before native typing.");
@@ -2487,14 +2492,13 @@ enum class ConnectionManagerCloseAction
     using namespace std::chrono_literals;
     SelfTest::AppendSelfTestTrace(L"ConnectionManager saved-secret-reveal: begin");
 
-    const auto originalConnections = g_settings.connections;
+    const auto originalConnections              = g_settings.connections;
     Common::Settings::ConnectionProfile profile = MakeSelfTestConnectionProfile(L"SelfTest Saved Secret");
-    profile.userName            = L"selftest-user";
-    profile.savePassword        = true;
-    profile.requireWindowsHello = true;
-    const std::wstring savedSecret = L"stored-selftest-password";
-    const std::wstring targetName =
-        RedSalamander::Connections::BuildCredentialTargetName(profile.id, RedSalamander::Connections::SecretKind::Password);
+    profile.userName                            = L"selftest-user";
+    profile.savePassword                        = true;
+    profile.requireWindowsHello                 = true;
+    const std::wstring savedSecret              = L"stored-selftest-password";
+    const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile.id, RedSalamander::Connections::SecretKind::Password);
 
     const auto restoreState = wil::scope_exit([&]() noexcept
     {
@@ -2514,22 +2518,18 @@ enum class ConnectionManagerCloseAction
     });
 
     const auto previousVerifier = RedSalamander::Security::SetWindowsHelloTestVerifier(&ConnectionManagerSecretRevealHelloVerifier);
-    const auto restoreVerifier = wil::scope_exit([&]() noexcept
-    {
-        static_cast<void>(RedSalamander::Security::SetWindowsHelloTestVerifier(previousVerifier));
-    });
+    const auto restoreVerifier = wil::scope_exit([&]() noexcept { static_cast<void>(RedSalamander::Security::SetWindowsHelloTestVerifier(previousVerifier)); });
     g_connectionManagerSecretRevealHelloCallCount.store(0u, std::memory_order_relaxed);
 
     EnsureRuntimeConnectionsForSelfTest();
-    g_settings.connections->bypassWindowsHello                  = false;
-    g_settings.connections->windowsHelloReauthTimeoutMinute     = 0u;
-    g_settings.connections->allowInsecureTlsInAutomation        = originalConnections ? originalConnections->allowInsecureTlsInAutomation : false;
+    g_settings.connections->bypassWindowsHello              = false;
+    g_settings.connections->windowsHelloReauthTimeoutMinute = 0u;
+    g_settings.connections->allowInsecureTlsInAutomation    = originalConnections ? originalConnections->allowInsecureTlsInAutomation : false;
     ReplaceRuntimeConnectionsForSelfTest(profile);
 
     const HRESULT saveSecretHr = RedSalamander::Connections::SaveGenericCredential(targetName, profile.userName, savedSecret);
     state.Require(SUCCEEDED(saveSecretHr),
-                  std::format(L"Failed to seed the saved Connection Manager password credential (hr=0x{:08X}).",
-                              static_cast<unsigned long>(saveSecretHr)));
+                  std::format(L"Failed to seed the saved Connection Manager password credential (hr=0x{:08X}).", static_cast<unsigned long>(saveSecretHr)));
     if (! state.failure.empty())
     {
         return false;
@@ -2562,22 +2562,20 @@ enum class ConnectionManagerCloseAction
                   L"Connection Manager connection list should not expose a horizontal scrollbar for its single-column profile list.");
     state.Require(snapshot.secretStoredPlaceholderVisible,
                   L"Connection Manager should show a protected placeholder when the selected profile has a saved password.");
-    state.Require(snapshot.secretStoredPlaceholderLength >= 8u && snapshot.secretStoredPlaceholderLength <= 14u,
-                  std::format(L"Saved-password placeholder should use a non-secret display length in [8..14], got {}.",
-                              snapshot.secretStoredPlaceholderLength));
+    state.Require(
+        snapshot.secretStoredPlaceholderLength >= 8u && snapshot.secretStoredPlaceholderLength <= 14u,
+        std::format(L"Saved-password placeholder should use a non-secret display length in [8..14], got {}.", snapshot.secretStoredPlaceholderLength));
     state.Require(snapshot.secretMasked, L"Saved-password placeholder should start masked.");
 
     std::wstring secretFieldText;
     state.Require(DebugGetConnectionManagerSecretText(secretFieldText), L"Failed to read the saved-secret password field before reveal.");
     state.Require(secretFieldText.empty(), L"Saved-password placeholder should not expose the real secret as editable text before reveal.");
 
-    state.Require(DebugScrollConnectionManagerCommandButtonIntoView(IDC_CONNECTION_SHOW_SECRET),
-                  L"Failed to scroll the saved-password Show button into view.");
+    state.Require(DebugScrollConnectionManagerCommandButtonIntoView(IDC_CONNECTION_SHOW_SECRET), L"Failed to scroll the saved-password Show button into view.");
     state.Require(ClickConnectionManagerCommandButton(IDC_CONNECTION_SHOW_SECRET), L"Failed to click Show for the saved-password placeholder.");
-    const bool revealed = WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
-    { return ! value.secretMasked && ! value.secretStoredPlaceholderVisible; },
-                                                           snapshot,
-                                                           SelfTest::Scale(3000ms));
+    const bool revealed = WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept {
+        return ! value.secretMasked && ! value.secretStoredPlaceholderVisible;
+    }, snapshot, SelfTest::Scale(3000ms));
     std::wstring revealFieldText;
     static_cast<void>(DebugGetConnectionManagerSecretText(revealFieldText));
     HWND showHost = nullptr;
@@ -2585,7 +2583,8 @@ enum class ConnectionManagerCloseAction
     std::wstring showLabel;
     static_cast<void>(DebugGetConnectionManagerCommandButtonHostAndClientRect(IDC_CONNECTION_SHOW_SECRET, showHost, showRect, showLabel));
     state.Require(revealed,
-                  std::format(L"Connection Manager did not reveal the saved password after Show (masked={}, placeholder={}, placeholderLen={}, showVisible={}, showEnabled={}, helloCalls={}, fieldLen={}, showRect=[{},{},{},{}], showLabel='{}').",
+                  std::format(L"Connection Manager did not reveal the saved password after Show (masked={}, placeholder={}, placeholderLen={}, showVisible={}, "
+                              L"showEnabled={}, helloCalls={}, fieldLen={}, showRect=[{},{},{},{}], showLabel='{}').",
                               snapshot.secretMasked,
                               snapshot.secretStoredPlaceholderVisible,
                               snapshot.secretStoredPlaceholderLength,
@@ -2601,10 +2600,9 @@ enum class ConnectionManagerCloseAction
 
     std::wstring revealedSecret;
     state.Require(DebugGetConnectionManagerSecretText(revealedSecret), L"Failed to read the saved password after reveal.");
-    state.Require(revealedSecret == savedSecret,
-                  std::format(L"Connection Manager revealed the wrong saved secret length; expected {} chars, got {}.",
-                              savedSecret.size(),
-                              revealedSecret.size()));
+    state.Require(
+        revealedSecret == savedSecret,
+        std::format(L"Connection Manager revealed the wrong saved secret length; expected {} chars, got {}.", savedSecret.size(), revealedSecret.size()));
     state.Require(g_connectionManagerSecretRevealHelloCallCount.load(std::memory_order_relaxed) >= 1u,
                   L"Revealing a saved password should require Windows Hello verification.");
 
@@ -3156,8 +3154,7 @@ enum class ConnectionManagerCloseAction
         return DebugGetConnectionManagerDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    const AppTheme backdropTheme =
-        MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"connection-manager-backdrop-selftest");
+    const AppTheme backdropTheme = MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"connection-manager-backdrop-selftest");
     UpdateConnectionManagerWindowsTheme(backdropTheme);
 
     ConnectionManagerDebugSnapshot snapshot{};
@@ -3411,34 +3408,34 @@ enum class ConnectionManagerCloseAction
 
         ConnectionManagerDebugSnapshot preStepSnapshot{};
         static_cast<void>(DebugGetConnectionManagerDialogSnapshot(preStepSnapshot));
-        SelfTest::AppendSelfTestTrace(std::format(
-            L"ConnectionManager tab traversal: step='{}' reverse={} expectedKind='{}' expectedLabel='{}' preKind='{}' preLabel='{}' "
-            L"preModifiers=0x{:X} preFocusPresent={} preFocusVisible={} preFocusEnabled={} preFocusFocusable={} "
-            L"preNativeInDialog={} preNativeHost={} preNativeText={} "
-            L"newV/E/F={}/{}/{} renameV/E/F={}/{}/{} removeV/E/F={}/{}/{}",
-            stepLabel,
-            reverse ? 1 : 0,
-            DescribeConnectionManagerFocusKind(expectedKind),
-            expectedLabel,
-            DescribeConnectionManagerFocusKind(preStepSnapshot.focusKind),
-            preStepSnapshot.focusLabel,
-            preStepSnapshot.dxModifierState,
-            preStepSnapshot.focusControlPresent,
-            preStepSnapshot.focusControlVisible,
-            preStepSnapshot.focusControlEnabled,
-            preStepSnapshot.focusControlFocusable,
-            preStepSnapshot.nativeFocusInDialog,
-            preStepSnapshot.nativeFocusIsHost,
-            preStepSnapshot.nativeFocusIsTextEdit,
-            preStepSnapshot.newButtonVisible,
-            preStepSnapshot.newButtonEnabled,
-            preStepSnapshot.newButtonFocusable,
-            preStepSnapshot.renameButtonVisible,
-            preStepSnapshot.renameButtonEnabled,
-            preStepSnapshot.renameButtonFocusable,
-            preStepSnapshot.removeButtonVisible,
-            preStepSnapshot.removeButtonEnabled,
-            preStepSnapshot.removeButtonFocusable));
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"ConnectionManager tab traversal: step='{}' reverse={} expectedKind='{}' expectedLabel='{}' preKind='{}' preLabel='{}' "
+                        L"preModifiers=0x{:X} preFocusPresent={} preFocusVisible={} preFocusEnabled={} preFocusFocusable={} "
+                        L"preNativeInDialog={} preNativeHost={} preNativeText={} "
+                        L"newV/E/F={}/{}/{} renameV/E/F={}/{}/{} removeV/E/F={}/{}/{}",
+                        stepLabel,
+                        reverse ? 1 : 0,
+                        DescribeConnectionManagerFocusKind(expectedKind),
+                        expectedLabel,
+                        DescribeConnectionManagerFocusKind(preStepSnapshot.focusKind),
+                        preStepSnapshot.focusLabel,
+                        preStepSnapshot.dxModifierState,
+                        preStepSnapshot.focusControlPresent,
+                        preStepSnapshot.focusControlVisible,
+                        preStepSnapshot.focusControlEnabled,
+                        preStepSnapshot.focusControlFocusable,
+                        preStepSnapshot.nativeFocusInDialog,
+                        preStepSnapshot.nativeFocusIsHost,
+                        preStepSnapshot.nativeFocusIsTextEdit,
+                        preStepSnapshot.newButtonVisible,
+                        preStepSnapshot.newButtonEnabled,
+                        preStepSnapshot.newButtonFocusable,
+                        preStepSnapshot.renameButtonVisible,
+                        preStepSnapshot.renameButtonEnabled,
+                        preStepSnapshot.renameButtonFocusable,
+                        preStepSnapshot.removeButtonVisible,
+                        preStepSnapshot.removeButtonEnabled,
+                        preStepSnapshot.removeButtonFocusable));
         HWND target = GetFocus();
         if (! target || (target != dialog && IsChild(dialog, target) == FALSE))
         {
@@ -3470,22 +3467,22 @@ enum class ConnectionManagerCloseAction
                 return value.focusKind == expectedKind && (expectedLabel.empty() || value.focusLabel == expectedLabel) && matchesStableDialogState(value);
             }, stepSnapshot);
         }
-        SelfTest::AppendSelfTestTrace(std::format(
-            L"ConnectionManager tab traversal: result step='{}' routed={} postKind='{}' postLabel='{}' postModifiers=0x{:X} "
-            L"postFocusPresent={} postFocusVisible={} postFocusEnabled={} postFocusFocusable={} "
-            L"postNativeInDialog={} postNativeHost={} postNativeText={}",
-            stepLabel,
-            routedTab,
-            DescribeConnectionManagerFocusKind(stepSnapshot.focusKind),
-            stepSnapshot.focusLabel,
-            stepSnapshot.dxModifierState,
-            stepSnapshot.focusControlPresent,
-            stepSnapshot.focusControlVisible,
-            stepSnapshot.focusControlEnabled,
-            stepSnapshot.focusControlFocusable,
-            stepSnapshot.nativeFocusInDialog,
-            stepSnapshot.nativeFocusIsHost,
-            stepSnapshot.nativeFocusIsTextEdit));
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"ConnectionManager tab traversal: result step='{}' routed={} postKind='{}' postLabel='{}' postModifiers=0x{:X} "
+                        L"postFocusPresent={} postFocusVisible={} postFocusEnabled={} postFocusFocusable={} "
+                        L"postNativeInDialog={} postNativeHost={} postNativeText={}",
+                        stepLabel,
+                        routedTab,
+                        DescribeConnectionManagerFocusKind(stepSnapshot.focusKind),
+                        stepSnapshot.focusLabel,
+                        stepSnapshot.dxModifierState,
+                        stepSnapshot.focusControlPresent,
+                        stepSnapshot.focusControlVisible,
+                        stepSnapshot.focusControlEnabled,
+                        stepSnapshot.focusControlFocusable,
+                        stepSnapshot.nativeFocusInDialog,
+                        stepSnapshot.nativeFocusIsHost,
+                        stepSnapshot.nativeFocusIsTextEdit));
         state.Require(reached,
                       std::format(L"Connection Manager did not move focus to {} during keyboard traversal validation. actualKind='{}' actualLabel='{}' "
                                   L"selectedRow={} pluginId='{}' currentName='{}' dxListHosts={} dxFormInputs={} dxFormActions={} resizeFailures={} "
@@ -3534,9 +3531,7 @@ enum class ConnectionManagerCloseAction
 
     const auto requireTabStep =
         [&](bool reverse, ConnectionManagerDebugFocusKind expectedKind, std::wstring_view expectedLabel, std::wstring_view stepLabel) noexcept
-    {
-        return sendTab(reverse, expectedKind, expectedLabel, stepLabel);
-    };
+    { return sendTab(reverse, expectedKind, expectedLabel, stepLabel); };
 
     if (! requireTabStep(false, ConnectionManagerDebugFocusKind::CommandButton, newText, L"the New action button"))
     {
@@ -3901,7 +3896,8 @@ enum class ConnectionManagerCloseAction
         return value.selectedListIndex == expectedRow && value.currentPluginId == alternatePluginId && value.currentNameText == baselineName &&
                value.visibleDxFormInputHostCount > 0u && value.visibleDxFormActionButtonHostCount > 0u && value.visibleLegacyFormInputCount == 0u &&
                value.visibleLegacyFormActionButtonCount == 0u && value.layoutCardsDoNotOverlap && value.minVisibleCardGapDip >= 7.0f &&
-               value.layoutSectionTitlesOutsideCards && value.layoutEditorKeepsRightGap && value.layoutTextFieldsAvoidClipping && value.dxListResizeFailureCount == 0u;
+               value.layoutSectionTitlesOutsideCards && value.layoutEditorKeepsRightGap && value.layoutTextFieldsAvoidClipping &&
+               value.dxListResizeFailureCount == 0u;
     },
                       snapshot),
                   std::format(L"Connection Manager did not stay stable after protocol churn to '{}'.", alternatePluginId));
@@ -3918,7 +3914,8 @@ enum class ConnectionManagerCloseAction
         return value.selectedListIndex == expectedRow && value.currentPluginId == baselinePluginId && value.currentNameText == baselineName &&
                value.visibleDxFormInputHostCount > 0u && value.visibleDxFormActionButtonHostCount > 0u && value.visibleLegacyFormInputCount == 0u &&
                value.visibleLegacyFormActionButtonCount == 0u && value.layoutCardsDoNotOverlap && value.minVisibleCardGapDip >= 7.0f &&
-               value.layoutSectionTitlesOutsideCards && value.layoutEditorKeepsRightGap && value.layoutTextFieldsAvoidClipping && value.dxListResizeFailureCount == 0u;
+               value.layoutSectionTitlesOutsideCards && value.layoutEditorKeepsRightGap && value.layoutTextFieldsAvoidClipping &&
+               value.dxListResizeFailureCount == 0u;
     },
                       snapshot),
                   std::format(L"Connection Manager did not restore the baseline protocol '{}' after focused churn.", baselinePluginId));
@@ -4026,10 +4023,10 @@ template <typename Predicate>
                                                     L"clean Connection Manager layout geometry",
                                                     [](const ConnectionManagerDebugSnapshot& snapshot) noexcept
     {
-        return snapshot.usesDxUiFormInputs && snapshot.usesDxUiList && snapshot.visibleDxFormInputHostCount > 0u &&
-               snapshot.visibleDxListHostCount > 0u && snapshot.layoutListButtonsMirrorTopGap && snapshot.layoutCardsDoNotOverlap &&
-               snapshot.minVisibleCardGapDip >= 7.0f && snapshot.layoutSectionTitlesOutsideCards && snapshot.layoutEditorKeepsRightGap &&
-               snapshot.layoutTextFieldsAvoidClipping && snapshot.dxListResizeFailureCount == 0u;
+        return snapshot.usesDxUiFormInputs && snapshot.usesDxUiList && snapshot.visibleDxFormInputHostCount > 0u && snapshot.visibleDxListHostCount > 0u &&
+               snapshot.layoutListButtonsMirrorTopGap && snapshot.layoutCardsDoNotOverlap && snapshot.minVisibleCardGapDip >= 7.0f &&
+               snapshot.layoutSectionTitlesOutsideCards && snapshot.layoutEditorKeepsRightGap && snapshot.layoutTextFieldsAvoidClipping &&
+               snapshot.dxListResizeFailureCount == 0u;
     });
 }
 
@@ -4772,11 +4769,8 @@ template <typename Predicate>
             return;
         }
 
-        const auto baselineStats = RunUiaTaskWithMessagePump(L"credential prompt baseline pattern stats",
-                                                             [prompt = workerResult.prompt]() noexcept
-        {
-            return CollectVisibleUiaDescendantPatternStats(prompt);
-        });
+        const auto baselineStats = RunUiaTaskWithMessagePump(
+            L"credential prompt baseline pattern stats", [prompt = workerResult.prompt]() noexcept { return CollectVisibleUiaDescendantPatternStats(prompt); });
         state.Require(baselineStats.has_value(), L"Failed to collect credential prompt UIA pattern stats before theme-cycle validation.");
         if (! baselineStats.has_value())
         {
@@ -4792,9 +4786,7 @@ template <typename Predicate>
             return;
         }
 
-        const auto baselineValueState = RunUiaTaskWithMessagePump(L"credential prompt baseline edit value state",
-                                                                  [prompt = workerResult.prompt]() noexcept
-        {
+        const auto baselineValueState = RunUiaTaskWithMessagePump(L"credential prompt baseline edit value state", [prompt = workerResult.prompt]() noexcept {
             return CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId);
         });
         state.Require(baselineValueState.has_value(), L"Credential prompt should expose a visible editable DX field before theme-cycle validation.");
@@ -4807,9 +4799,7 @@ template <typename Predicate>
                       L"Credential prompt visible DX field should expose a stable accessible name before theme-cycle validation.");
         if (state.failure.empty())
         {
-            const auto baselineToggleState = RunUiaTaskWithMessagePump(L"credential prompt baseline toggle state",
-                                                                       [prompt = workerResult.prompt]() noexcept
-            {
+            const auto baselineToggleState = RunUiaTaskWithMessagePump(L"credential prompt baseline toggle state", [prompt = workerResult.prompt]() noexcept {
                 return CollectVisibleDescendantTogglePatternState(prompt);
             });
             state.Require(baselineToggleState.has_value(), L"Credential prompt should expose a visible DX toggle before theme-cycle validation.");
@@ -4820,9 +4810,7 @@ template <typename Predicate>
             state.Require(! baselineToggleState->name.empty(),
                           L"Credential prompt visible DX toggle should expose a stable accessible name before theme-cycle validation.");
 
-            const auto baselineButtonState = RunUiaTaskWithMessagePump(L"credential prompt baseline button state",
-                                                                       [prompt = workerResult.prompt]() noexcept
-            {
+            const auto baselineButtonState = RunUiaTaskWithMessagePump(L"credential prompt baseline button state", [prompt = workerResult.prompt]() noexcept {
                 return CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
             });
             state.Require(baselineButtonState.has_value(), L"Credential prompt should expose a visible DX command button before theme-cycle validation.");
@@ -4861,11 +4849,9 @@ template <typename Predicate>
                     return;
                 }
 
-                const auto stats = RunUiaTaskWithMessagePump(std::format(L"credential prompt {} pattern stats", label),
-                                                             [prompt = workerResult.prompt]() noexcept
-                {
-                    return CollectVisibleUiaDescendantPatternStats(prompt);
-                });
+                const auto stats =
+                    RunUiaTaskWithMessagePump(std::format(L"credential prompt {} pattern stats", label),
+                                              [prompt = workerResult.prompt]() noexcept { return CollectVisibleUiaDescendantPatternStats(prompt); });
                 state.Require(stats.has_value(), std::format(L"Failed to collect credential prompt UIA pattern stats after the {} theme update.", label));
                 if (stats.has_value())
                 {
@@ -4881,9 +4867,7 @@ template <typename Predicate>
 
                 const auto valueState = RunUiaTaskWithMessagePump(std::format(L"credential prompt {} edit value state", label),
                                                                   [prompt = workerResult.prompt, baselineValueName]() noexcept
-                {
-                    return CollectVisibleDescendantValuePatternStateByName(prompt, UIA_EditControlTypeId, baselineValueName);
-                });
+                { return CollectVisibleDescendantValuePatternStateByName(prompt, UIA_EditControlTypeId, baselineValueName); });
                 state.Require(valueState.has_value(), std::format(L"Credential prompt visible DX field disappeared after the {} theme update.", label));
                 if (valueState.has_value())
                 {
@@ -4895,11 +4879,9 @@ template <typename Predicate>
                                   std::format(L"Credential prompt visible DX field value changed unexpectedly after the {} theme update.", label));
                 }
 
-                const auto toggleState = RunUiaTaskWithMessagePump(std::format(L"credential prompt {} toggle state", label),
-                                                                   [prompt = workerResult.prompt]() noexcept
-                {
-                    return CollectVisibleDescendantTogglePatternState(prompt);
-                });
+                const auto toggleState =
+                    RunUiaTaskWithMessagePump(std::format(L"credential prompt {} toggle state", label),
+                                              [prompt = workerResult.prompt]() noexcept { return CollectVisibleDescendantTogglePatternState(prompt); });
                 state.Require(toggleState.has_value(), std::format(L"Credential prompt visible DX toggle disappeared after the {} theme update.", label));
                 if (toggleState.has_value())
                 {
@@ -4911,9 +4893,7 @@ template <typename Predicate>
 
                 const auto buttonState = RunUiaTaskWithMessagePump(std::format(L"credential prompt {} button state", label),
                                                                    [prompt = workerResult.prompt]() noexcept
-                {
-                    return CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
-                });
+                { return CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId); });
                 state.Require(buttonState.has_value(),
                               std::format(L"Credential prompt visible DX command button disappeared after the {} theme update.", label));
                 if (buttonState.has_value())
@@ -4932,15 +4912,13 @@ template <typename Predicate>
             requireTheme(L"dark", ResolveAppTheme(ThemeMode::Dark, L"conn-prompt-theme-cycle-dark"), false, false);
             requireTheme(L"light", ResolveAppTheme(ThemeMode::Light, L"conn-prompt-theme-cycle-light"), false, false);
             requireTheme(L"rainbow", ResolveAppTheme(ThemeMode::Rainbow, L"conn-prompt-theme-cycle-rainbow"), true, false);
-            requireTheme(
-                L"acrylic-backdrop",
-                MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"conn-prompt-theme-cycle-acrylic-backdrop"),
-                false,
-                false);
+            requireTheme(L"acrylic-backdrop",
+                         MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode::Acrylic, L"conn-prompt-theme-cycle-acrylic-backdrop"),
+                         false,
+                         false);
             state.Require(WaitForAppliedBackdropKind(
                               workerResult.prompt,
-                              Common::WindowBackdrop::Resolve(
-                                  Common::Settings::WindowBackdropMode::Acrylic, Common::WindowBackdrop::Target::Tool, false),
+                              Common::WindowBackdrop::Resolve(Common::Settings::WindowBackdropMode::Acrylic, Common::WindowBackdrop::Target::Tool, false),
                               L"Connection credential prompt",
                               state),
                           L"Credential prompt did not apply the selected Acrylic tool-window backdrop.");
@@ -5037,13 +5015,11 @@ template <typename Predicate>
 
             workerResult.ownedByMainWindow       = IsOwnedBy(workerResult.prompt, mainWindow);
             workerResult.capturedInitialSnapshot = DebugGetConnectionCredentialPromptSnapshot(workerResult.initialSnapshot);
-            workerResult.uiaPatternStats = RunUiaTaskWithMessagePump(L"credential prompt validation pattern stats",
-                                                                     [prompt = workerResult.prompt]() noexcept
-            {
+            workerResult.uiaPatternStats = RunUiaTaskWithMessagePump(L"credential prompt validation pattern stats", [prompt = workerResult.prompt]() noexcept {
                 return CollectVisibleUiaDescendantPatternStats(prompt);
             });
-            workerResult.confirmed               = DebugConfirmConnectionCredentialPrompt();
-            workerResult.sawUserValidation       = WaitForConnectionCredentialPromptSnapshot(
+            workerResult.confirmed       = DebugConfirmConnectionCredentialPrompt();
+            workerResult.sawUserValidation = WaitForConnectionCredentialPromptSnapshot(
                 [&](const ConnectionCredentialPromptDebugSnapshot& snapshot) noexcept
             {
                 const std::wstring expected = LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_PROMPT_USER_REQUIRED);
@@ -5253,10 +5229,8 @@ template <typename Predicate>
         {
             PumpPendingMessages();
             if (const auto stats = RunUiaTaskWithMessagePump(L"credential prompt long-run pattern stats",
-                                                             [prompt]() noexcept
-            {
-                return CollectVisibleUiaDescendantPatternStats(prompt);
-            }); stats.has_value() && stats->visibleElementCount > 0u && stats->valuePatternCount > 0u && stats->togglePatternCount > 0u &&
+                                                             [prompt]() noexcept { return CollectVisibleUiaDescendantPatternStats(prompt); });
+                stats.has_value() && stats->visibleElementCount > 0u && stats->valuePatternCount > 0u && stats->togglePatternCount > 0u &&
                 stats->buttonControlCount > 0u)
             {
                 return stats;
@@ -5264,10 +5238,7 @@ template <typename Predicate>
             std::this_thread::sleep_for(20ms);
         }
         return RunUiaTaskWithMessagePump(L"credential prompt long-run final pattern stats",
-                                         [prompt]() noexcept
-        {
-            return CollectVisibleUiaDescendantPatternStats(prompt);
-        });
+                                         [prompt]() noexcept { return CollectVisibleUiaDescendantPatternStats(prompt); });
     };
 
     const auto waitForValueState = [](HWND prompt) noexcept -> std::optional<UiaValuePatternState>
@@ -5276,11 +5247,9 @@ template <typename Predicate>
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
-            if (const auto valueState = RunUiaTaskWithMessagePump(L"credential prompt long-run value state",
-                                                                  [prompt]() noexcept
-            {
-                return CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId);
-            });
+            if (const auto valueState =
+                    RunUiaTaskWithMessagePump(L"credential prompt long-run value state",
+                                              [prompt]() noexcept { return CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId); });
                 valueState.has_value() && ! valueState->name.empty())
             {
                 return valueState;
@@ -5288,10 +5257,7 @@ template <typename Predicate>
             std::this_thread::sleep_for(20ms);
         }
         return RunUiaTaskWithMessagePump(L"credential prompt long-run final value state",
-                                         [prompt]() noexcept
-        {
-            return CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId);
-        });
+                                         [prompt]() noexcept { return CollectVisibleDescendantValuePatternState(prompt, UIA_EditControlTypeId); });
     };
 
     const auto waitForToggleState = [](HWND prompt) noexcept -> std::optional<UiaTogglePatternState>
@@ -5301,20 +5267,15 @@ template <typename Predicate>
         {
             PumpPendingMessages();
             if (const auto toggleState = RunUiaTaskWithMessagePump(L"credential prompt long-run toggle state",
-                                                                   [prompt]() noexcept
-            {
-                return CollectVisibleDescendantTogglePatternState(prompt);
-            }); toggleState.has_value() && ! toggleState->name.empty())
+                                                                   [prompt]() noexcept { return CollectVisibleDescendantTogglePatternState(prompt); });
+                toggleState.has_value() && ! toggleState->name.empty())
             {
                 return toggleState;
             }
             std::this_thread::sleep_for(20ms);
         }
         return RunUiaTaskWithMessagePump(L"credential prompt long-run final toggle state",
-                                         [prompt]() noexcept
-        {
-            return CollectVisibleDescendantTogglePatternState(prompt);
-        });
+                                         [prompt]() noexcept { return CollectVisibleDescendantTogglePatternState(prompt); });
     };
 
     const auto waitForButtonState = [](HWND prompt) noexcept -> std::optional<UiaNamedElementState>
@@ -5323,11 +5284,9 @@ template <typename Predicate>
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
-            if (const auto buttonState = RunUiaTaskWithMessagePump(L"credential prompt long-run button state",
-                                                                   [prompt]() noexcept
-            {
-                return CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
-            });
+            if (const auto buttonState =
+                    RunUiaTaskWithMessagePump(L"credential prompt long-run button state",
+                                              [prompt]() noexcept { return CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId); });
                 buttonState.has_value() && ! buttonState->name.empty())
             {
                 return buttonState;
@@ -5335,10 +5294,7 @@ template <typename Predicate>
             std::this_thread::sleep_for(20ms);
         }
         return RunUiaTaskWithMessagePump(L"credential prompt long-run final button state",
-                                         [prompt]() noexcept
-        {
-            return CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId);
-        });
+                                         [prompt]() noexcept { return CollectVisibleDescendantNamedElementState(prompt, UIA_ButtonControlTypeId); });
     };
 
     constexpr size_t kCycles = 12u;

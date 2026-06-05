@@ -1,6 +1,6 @@
 # Preferences Dialog Specification
 
-Last updated: 2026-05-11
+Last updated: 2026-06-05
 
 ## Purpose
 
@@ -28,6 +28,7 @@ This specification applies to:
 - `RedSalamander/Preferences.FileOperations.cpp`
 - `RedSalamander/Preferences.CompareDirectories.cpp`
 - `RedSalamander/Preferences.HotPaths.cpp`
+- `RedSalamander/Preferences.Monitor.cpp`
 - `RedSalamander/Preferences.Advanced.cpp`
 
 Related specs:
@@ -69,7 +70,8 @@ Root item order is:
 10. File Operations
 11. Compare Directories
 12. Hot Paths
-13. Advanced
+13. Monitor
+14. Advanced
 
 Additional navigation rules:
 
@@ -101,6 +103,7 @@ The live narrowed direct-host scope includes:
 - `FileOperations`
 - `CompareDirectories`
 - `HotPaths`
+- `Monitor`
 - `Advanced`
 
 Per-page rules:
@@ -115,6 +118,10 @@ Per-page rules:
 - The File Operations page MUST NOT duplicate plugin-owned concurrency, recycle-bin batching, or search-walker controls; it instead shows a note that those settings live under `Preferences -> Plugins -> File System`.
 - The Compare Directories page edits the same persisted defaults described in `Specs/Core/Core_CompareDirectories.md`.
 - The Hot Paths page edits the persisted hot-path definitions and their menu-visibility flag.
+- The Monitor page edits RedSalamanderMonitor display/filter defaults only. It MUST load from and save to settings app id `RedSalamanderMonitor`, and MUST NOT persist those values under the main `RedSalamander` settings file.
+- The Monitor page MUST group the filter preset and the Text, Error, Warning, Info, Perf, and Debug message-type toggles into one card before the settings-file card. The card MUST NOT expose a numeric filter mask edit; custom masks are edited through the message-type toggles. The toggles remain enabled only when the preset is `Custom`.
+- The Monitor page MUST include a final hyperlink-style command card that opens the current user's RedSalamanderMonitor settings JSON file, resolved as `Common::Settings::GetSettingsPath(L"RedSalamanderMonitor")`. If the file is missing, invoking the command MAY create it with the current monitor settings before opening it. Invoking it MUST NOT mark Preferences dirty.
+- The Advanced page MUST include a bottom hyperlink-style command that opens the current user's main settings JSON file with the shell default editor, resolved as `Common::Settings::GetSettingsPath(appId)`. If the file is missing, invoking the command MAY create it with the current main settings before opening it. Invoking it MUST NOT mark Preferences dirty.
 
 ### Viewers And Editors Page Contract
 
@@ -201,6 +208,8 @@ Normative behavior:
 - After persistence, the host MUST notify the running app so live settings-dependent surfaces update coherently.
 - The `General -> Display` controls edit `ui.language` in `workingSettings`.
 - The `General -> DxUI` controls edit `ui.compactMode`, `ui.reducedMotion`, and `ui.windowBackdrop` in `workingSettings`.
+- The Monitor page controls edit `workingMonitorSettings` and persist through the `RedSalamanderMonitor` settings/schema path.
+- The Advanced and Monitor settings-file links are command affordances, not persisted settings, and MUST NOT require schema metadata.
 - Plugin child pages use plugin-provided configuration schema and current configuration payload as the source of truth for rendered fields.
 - Plugin fields marked `x-ui-hidden: true` MUST remain JSON-only advanced settings and MUST NOT be rendered in the embedded editor.
 

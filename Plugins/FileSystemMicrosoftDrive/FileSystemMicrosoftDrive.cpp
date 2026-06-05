@@ -2955,11 +2955,7 @@ void AddPropertiesFieldWide(yyjson_mut_doc* doc, yyjson_mut_val* fields, std::st
     return fields;
 }
 
-void AddJsonScalarFields(yyjson_mut_doc* doc,
-                         yyjson_mut_val* fields,
-                         yyjson_val* value,
-                         std::string_view prefix,
-                         size_t depth) noexcept
+void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val* value, std::string_view prefix, size_t depth) noexcept
 {
     if (! doc || ! fields || ! value || depth > 3u)
     {

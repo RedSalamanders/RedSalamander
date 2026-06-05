@@ -27,14 +27,8 @@ public:
     void Destroy(PreferencesDialogState& state) noexcept;
     void InitializePage(HWND parent, PreferencesDialogState& state) noexcept;
     void Refresh(HWND host, PreferencesDialogState& state) noexcept;
-    void LayoutPage(HWND host,
-                    PreferencesDialogState& state,
-                    int x,
-                    int& y,
-                    int width,
-                    int margin,
-                    int gapY,
-                    const PreferencesTypographyContext& typography) noexcept;
+    void LayoutPage(
+        HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept;
     [[nodiscard]] bool HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept;
 
     void OnGridSortRequested(const RedSalamander::DxUi::GridSortSpec& sortSpec) override;
@@ -111,67 +105,67 @@ private:
     [[nodiscard]] PrefCategory Category() const noexcept;
     [[nodiscard]] const wchar_t* MetricFamilyText() const noexcept;
 
-    FileActionPreferencesFamily _family = FileActionPreferencesFamily::Viewers;
-    RedSalamander::DxUi::WindowHost* _pageHost = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
-    RedSalamander::DxUi::TabControl* _tabs = nullptr;
+    FileActionPreferencesFamily _family           = FileActionPreferencesFamily::Viewers;
+    RedSalamander::DxUi::WindowHost* _pageHost    = nullptr;
+    RedSalamander::DxUi::Panel* _pageContentRoot  = nullptr;
+    RedSalamander::DxUi::TabControl* _tabs        = nullptr;
     RedSalamander::DxUi::Panel* _associationsPage = nullptr;
-    RedSalamander::DxUi::Panel* _actionsPage = nullptr;
+    RedSalamander::DxUi::Panel* _actionsPage      = nullptr;
 
-    RedSalamander::DxUi::Label* _searchLabel = nullptr;
-    RedSalamander::DxUi::TextField* _searchField = nullptr;
-    RedSalamander::DxUi::Grid* _associationsGrid = nullptr;
-    RedSalamander::DxUi::Label* _matchKindLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _matchKindCombo = nullptr;
-    RedSalamander::DxUi::Label* _matchValueLabel = nullptr;
-    RedSalamander::DxUi::TextField* _matchValueField = nullptr;
-    RedSalamander::DxUi::Label* _computerLabel = nullptr;
-    RedSalamander::DxUi::TextField* _computerField = nullptr;
-    RedSalamander::DxUi::Label* _primaryActionLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _primaryActionCombo = nullptr;
-    RedSalamander::DxUi::Label* _alternateActionLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _alternateActionCombo = nullptr;
-    RedSalamander::DxUi::Label* _editNewActionLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _editNewActionCombo = nullptr;
-    RedSalamander::DxUi::Label* _testFileLabel = nullptr;
-    RedSalamander::DxUi::TextField* _testFileField = nullptr;
-    RedSalamander::DxUi::Label* _previewLabel = nullptr;
-    RedSalamander::DxUi::Button* _associationSaveButton = nullptr;
+    RedSalamander::DxUi::Label* _searchLabel              = nullptr;
+    RedSalamander::DxUi::TextField* _searchField          = nullptr;
+    RedSalamander::DxUi::Grid* _associationsGrid          = nullptr;
+    RedSalamander::DxUi::Label* _matchKindLabel           = nullptr;
+    RedSalamander::DxUi::ComboBox* _matchKindCombo        = nullptr;
+    RedSalamander::DxUi::Label* _matchValueLabel          = nullptr;
+    RedSalamander::DxUi::TextField* _matchValueField      = nullptr;
+    RedSalamander::DxUi::Label* _computerLabel            = nullptr;
+    RedSalamander::DxUi::TextField* _computerField        = nullptr;
+    RedSalamander::DxUi::Label* _primaryActionLabel       = nullptr;
+    RedSalamander::DxUi::ComboBox* _primaryActionCombo    = nullptr;
+    RedSalamander::DxUi::Label* _alternateActionLabel     = nullptr;
+    RedSalamander::DxUi::ComboBox* _alternateActionCombo  = nullptr;
+    RedSalamander::DxUi::Label* _editNewActionLabel       = nullptr;
+    RedSalamander::DxUi::ComboBox* _editNewActionCombo    = nullptr;
+    RedSalamander::DxUi::Label* _testFileLabel            = nullptr;
+    RedSalamander::DxUi::TextField* _testFileField        = nullptr;
+    RedSalamander::DxUi::Label* _previewLabel             = nullptr;
+    RedSalamander::DxUi::Button* _associationSaveButton   = nullptr;
     RedSalamander::DxUi::Button* _associationRemoveButton = nullptr;
-    RedSalamander::DxUi::Button* _associationResetButton = nullptr;
+    RedSalamander::DxUi::Button* _associationResetButton  = nullptr;
 
-    RedSalamander::DxUi::Grid* _actionsGrid = nullptr;
-    RedSalamander::DxUi::Label* _actionIdLabel = nullptr;
-    RedSalamander::DxUi::TextField* _actionIdField = nullptr;
-    RedSalamander::DxUi::Label* _actionNameLabel = nullptr;
-    RedSalamander::DxUi::TextField* _actionNameField = nullptr;
-    RedSalamander::DxUi::Label* _actionKindLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _actionKindCombo = nullptr;
-    RedSalamander::DxUi::Checkbox* _actionEnabledCheckbox = nullptr;
-    RedSalamander::DxUi::Label* _pluginIdLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _pluginIdCombo = nullptr;
-    RedSalamander::DxUi::Label* _executableLabel = nullptr;
-    RedSalamander::DxUi::TextField* _executableField = nullptr;
-    RedSalamander::DxUi::Label* _argumentsLabel = nullptr;
-    RedSalamander::DxUi::TextField* _argumentsField = nullptr;
-    RedSalamander::DxUi::Label* _workingDirectoryLabel = nullptr;
+    RedSalamander::DxUi::Grid* _actionsGrid                = nullptr;
+    RedSalamander::DxUi::Label* _actionIdLabel             = nullptr;
+    RedSalamander::DxUi::TextField* _actionIdField         = nullptr;
+    RedSalamander::DxUi::Label* _actionNameLabel           = nullptr;
+    RedSalamander::DxUi::TextField* _actionNameField       = nullptr;
+    RedSalamander::DxUi::Label* _actionKindLabel           = nullptr;
+    RedSalamander::DxUi::ComboBox* _actionKindCombo        = nullptr;
+    RedSalamander::DxUi::Checkbox* _actionEnabledCheckbox  = nullptr;
+    RedSalamander::DxUi::Label* _pluginIdLabel             = nullptr;
+    RedSalamander::DxUi::ComboBox* _pluginIdCombo          = nullptr;
+    RedSalamander::DxUi::Label* _executableLabel           = nullptr;
+    RedSalamander::DxUi::TextField* _executableField       = nullptr;
+    RedSalamander::DxUi::Label* _argumentsLabel            = nullptr;
+    RedSalamander::DxUi::TextField* _argumentsField        = nullptr;
+    RedSalamander::DxUi::Label* _workingDirectoryLabel     = nullptr;
     RedSalamander::DxUi::TextField* _workingDirectoryField = nullptr;
-    RedSalamander::DxUi::Label* _appliesToLabel = nullptr;
-    RedSalamander::DxUi::TextField* _appliesToField = nullptr;
-    RedSalamander::DxUi::Label* _computersLabel = nullptr;
-    RedSalamander::DxUi::TextField* _computersField = nullptr;
-    RedSalamander::DxUi::Button* _actionSaveButton = nullptr;
-    RedSalamander::DxUi::Button* _actionRemoveButton = nullptr;
+    RedSalamander::DxUi::Label* _appliesToLabel            = nullptr;
+    RedSalamander::DxUi::TextField* _appliesToField        = nullptr;
+    RedSalamander::DxUi::Label* _computersLabel            = nullptr;
+    RedSalamander::DxUi::TextField* _computersField        = nullptr;
+    RedSalamander::DxUi::Button* _actionSaveButton         = nullptr;
+    RedSalamander::DxUi::Button* _actionRemoveButton       = nullptr;
 
     std::unique_ptr<FileActionGridModel> _associationsModel;
     std::unique_ptr<FileActionGridModel> _actionsModel;
     PreferencesDialogState* _state = nullptr;
-    HWND _hostWindow = nullptr;
-    ActiveGrid _activeGrid = ActiveGrid::Actions;
+    HWND _hostWindow               = nullptr;
+    ActiveGrid _activeGrid         = ActiveGrid::Actions;
     std::wstring _editorSearchText;
     std::wstring _previewActionId;
     std::wstring _previewReason;
     bool _usesDxUiTypographyContext = false;
     bool _usesDxUiTypographyMetrics = false;
-    bool _syncing = false;
+    bool _syncing                   = false;
 };

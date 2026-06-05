@@ -105,6 +105,12 @@ Folder views can be switched between **Brief**, **Detailed**, **Extra Detailed**
 
 Use the **Left** and **Right** menus to toggle per-pane display and chrome options. **Show -> File Extensions** changes only displayed labels in the named pane; file operations still use real names and paths. **Thumbnails** uses larger item visuals and background thumbnail loading with shell/WIC thumbnail fallback to icons. The sort indicator at the bottom right of each pane opens a sort popup that also includes a per-pane thumbnail-size slider. **Preview Pane** opens a Folder/Preview tabbed host in the opposite pane, follows the named pane's focused item, and shows scrollable Properties cards when no specific embedded preview is available. **Filter Bar** shows the current persistent folder filter below the named pane. **Navigation Bar** targets the named pane, and address-bar focus commands show the bar first when needed. Persistent options are saved per pane.
 
+![Brief and Detailed folder views](res/folder-view-brief-detailed.png)
+
+![Extra Detailed and Thumbnails folder views](res/folder-view-extra-thumbnails.png)
+
+![Preview Pane with text content](res/preview-pane-text.png)
+
 Default shortcuts:
 
 - `Alt+2`: Brief
@@ -300,10 +306,12 @@ Search features include:
 
 - Search by name and path.
 - Search by file content where supported by the backend.
-- Scope from the current pane.
+- Scope from the current pane, with multiple independent Find windows supported.
 - Native, indexed, and fallback search backend handling.
 - Backend status and degraded-mode diagnostics.
 - Reusable recent values stored in settings.
+- Result-list actions for shell copy/cut, configured viewer/editor, copy/move to the other pane, and delete/permanent delete.
+- A `?` help button that summarizes result-list actions and shows the current copy/move destination folder.
 
 Because the search window is modeless, you can keep browsing while a search is open.
 

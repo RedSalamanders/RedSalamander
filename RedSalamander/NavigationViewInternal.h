@@ -23,7 +23,9 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cwctype>
+#include <exception>
 #include <format>
 #include <iterator>
 #include <limits>
@@ -137,6 +139,29 @@ constexpr wchar_t kHistoryText[]          = L"⩔";
     return RGB(static_cast<BYTE>(std::clamp(r, 0, 255)), static_cast<BYTE>(std::clamp(g, 0, 255)), static_cast<BYTE>(std::clamp(b, 0, 255)));
 }
 
+template <typename... Args>
+void TraceNavigationViewMenuDiagnostics(std::wstring_view eventName, std::wformat_string<Args...> format, Args&&... args) noexcept
+{
+    if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled())
+    {
+        return;
+    }
+
+    try
+    {
+        RedSalamander::DxUi::TraceContextMenuDiagnostics(eventName, std::format(format, std::forward<Args>(args)...));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::format_error&)
+    {
+        // Navigation tracing is diagnostic only; formatting failure must not change input behavior.
+        RedSalamander::DxUi::TraceContextMenuDiagnostics(eventName, L"formatting failed");
+    }
+}
+
 [[nodiscard]] float DipsToPixels(float dips, UINT dpi) noexcept
 {
     return dips * static_cast<float>(dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
@@ -160,12 +185,9 @@ struct EditChromeRects
     return result;
 }
 
-[[nodiscard]] RECT GetPathEditBoundsRect(const RECT& pathRect, const RECT& historyRect) noexcept
+[[nodiscard]] RECT GetPathEditBoundsRect(const RECT& pathRect, [[maybe_unused]] const RECT& historyRect) noexcept
 {
-    RECT result   = pathRect;
-    result.right  = std::max(result.right, historyRect.right);
-    result.bottom = std::max(result.bottom, historyRect.bottom);
-    return result;
+    return pathRect;
 }
 
 [[nodiscard]] std::wstring TrimWhitespace(std::wstring_view text)

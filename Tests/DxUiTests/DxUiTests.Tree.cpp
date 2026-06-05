@@ -1,7 +1,7 @@
 #include "DxUiTestHelpers.h"
 
-#include <cmath>
 #include <clocale>
+#include <cmath>
 
 namespace
 {

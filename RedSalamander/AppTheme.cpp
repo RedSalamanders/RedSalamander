@@ -202,8 +202,12 @@ D2D1::ColorF GetSystemAccentColor() noexcept
 
 uint32_t StableHash32(std::wstring_view text) noexcept
 {
-    uint32_t hash = kFnvOffsetBasis32;
-    for (wchar_t ch : text)
+    return AppendStableHash32(kFnvOffsetBasis32, text);
+}
+
+uint32_t AppendStableHash32(uint32_t hash, std::wstring_view text) noexcept
+{
+    for (const wchar_t ch : text)
     {
         const uint16_t value = static_cast<uint16_t>(ch);
 
@@ -214,6 +218,12 @@ uint32_t StableHash32(std::wstring_view text) noexcept
         hash *= kFnvPrime32;
     }
     return hash;
+}
+
+uint32_t FolderItemStableHash32(std::wstring_view folderText, std::wstring_view displayName) noexcept
+{
+    static constexpr std::wstring_view kStableHashSeparator = L"|";
+    return AppendStableHash32(AppendStableHash32(StableHash32(folderText), kStableHashSeparator), displayName);
 }
 
 D2D1::ColorF ColorFromHSV(float hueDegrees, float saturation, float value, float alpha) noexcept

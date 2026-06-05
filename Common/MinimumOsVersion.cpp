@@ -6,12 +6,12 @@ namespace
 {
 using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
 
-constexpr wchar_t kWindowsCurrentVersionSubKey[] = LR"(SOFTWARE\Microsoft\Windows NT\CurrentVersion)";
+constexpr wchar_t kWindowsCurrentVersionSubKey[]     = LR"(SOFTWARE\Microsoft\Windows NT\CurrentVersion)";
 constexpr wchar_t kWindowsUpdateBuildRevisionValue[] = L"UBR";
 
 [[nodiscard]] bool TryGetWindowsVersion(OSVERSIONINFOW& version) noexcept
 {
-    version                      = {};
+    version                     = {};
     version.dwOSVersionInfoSize = sizeof(version);
 
     const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
@@ -30,15 +30,10 @@ constexpr wchar_t kWindowsUpdateBuildRevisionValue[] = L"UBR";
 {
     revision = 0u;
 
-    DWORD value = 0u;
-    DWORD size  = sizeof(value);
-    const LSTATUS status = ::RegGetValueW(HKEY_LOCAL_MACHINE,
-                                          kWindowsCurrentVersionSubKey,
-                                          kWindowsUpdateBuildRevisionValue,
-                                          RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY,
-                                          nullptr,
-                                          &value,
-                                          &size);
+    DWORD value          = 0u;
+    DWORD size           = sizeof(value);
+    const LSTATUS status = ::RegGetValueW(
+        HKEY_LOCAL_MACHINE, kWindowsCurrentVersionSubKey, kWindowsUpdateBuildRevisionValue, RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY, nullptr, &value, &size);
     if (status != ERROR_SUCCESS || size != sizeof(value))
     {
         return false;

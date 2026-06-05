@@ -29,20 +29,19 @@ case SelfTestState::Step::Phase10_PermanentDelete:
         HostResetTestPromptRequestCount();
         {
             HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
-            const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
-            const std::optional<std::uint64_t> cancelledTask =
-                StartFileOperationAndGetId(state.fileOps,
-                                           FILESYSTEM_DELETE,
-                                           FolderWindow::Pane::Left,
-                                           std::nullopt,
-                                           state.fsLocal,
-                                           {cancelFile},
-                                           {},
-                                           flags,
-                                           false,
-                                           0,
-                                           FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                           false);
+            const auto clearPromptOverride                   = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+            const std::optional<std::uint64_t> cancelledTask = StartFileOperationAndGetId(state.fileOps,
+                                                                                          FILESYSTEM_DELETE,
+                                                                                          FolderWindow::Pane::Left,
+                                                                                          std::nullopt,
+                                                                                          state.fsLocal,
+                                                                                          {cancelFile},
+                                                                                          {},
+                                                                                          flags,
+                                                                                          false,
+                                                                                          0,
+                                                                                          FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                                          false);
             if (cancelledTask.has_value())
             {
                 Fail(L"Permanent delete without Recycle Bin started even though its confirmation prompt was cancelled.");
@@ -74,17 +73,17 @@ case SelfTestState::Step::Phase10_PermanentDelete:
             HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
             const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
             state.taskA                    = StartFileOperationAndGetId(state.fileOps,
-                                                     FILESYSTEM_DELETE,
-                                                     FolderWindow::Pane::Left,
-                                                     std::nullopt,
-                                                     state.fsLocal,
-                                                     {delFile},
-                                                     {},
-                                                     flags,
-                                                     false,
-                                                     0,
-                                                     FolderWindow::FileOperationState::ExecutionMode::PerItem,
-                                                     false);
+                                                                        FILESYSTEM_DELETE,
+                                                                        FolderWindow::Pane::Left,
+                                                                        std::nullopt,
+                                                                        state.fsLocal,
+                                                                        {delFile},
+                                                                        {},
+                                                                        flags,
+                                                                        false,
+                                                                        0,
+                                                                        FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                        false);
         }
         if (! state.taskA.has_value())
         {
@@ -2610,7 +2609,8 @@ case SelfTestState::Step::Phase12_ReparsePointPolicy:
 
         if (copiedDirBasic.creationTime != seededSourceDirBasic.creationTime || copiedDirBasic.lastWriteTime != seededSourceDirBasic.lastWriteTime)
         {
-            Fail(std::format(L"Directory metadata test: copied directory timestamps did not match source (srcCreation={} dstCreation={} srcWrite={} dstWrite={} srcAttr=0x{:08X} dstAttr=0x{:08X}).",
+            Fail(std::format(L"Directory metadata test: copied directory timestamps did not match source (srcCreation={} dstCreation={} srcWrite={} "
+                             L"dstWrite={} srcAttr=0x{:08X} dstAttr=0x{:08X}).",
                              seededSourceDirBasic.creationTime,
                              copiedDirBasic.creationTime,
                              seededSourceDirBasic.lastWriteTime,
@@ -2941,15 +2941,15 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
         }
 
         const FileSystemFlags diagnosticFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-        state.taskA                          = StartFileOperationAndGetId(state.fileOps,
-                                                 FILESYSTEM_COPY,
-                                                 FolderWindow::Pane::Left,
-                                                 FolderWindow::Pane::Right,
-                                                 state.fsLocal,
-                                                 {diagnosticSrc / L"ok.bin", diagnosticSrc / L"missing.bin"},
-                                                 diagnosticDst,
-                                                 diagnosticFlags,
-                                                 false);
+        state.taskA                           = StartFileOperationAndGetId(state.fileOps,
+                                                                           FILESYSTEM_COPY,
+                                                                           FolderWindow::Pane::Left,
+                                                                           FolderWindow::Pane::Right,
+                                                                           state.fsLocal,
+                                                                           {diagnosticSrc / L"ok.bin", diagnosticSrc / L"missing.bin"},
+                                                                           diagnosticDst,
+                                                                           diagnosticFlags,
+                                                                           false);
         if (! state.taskA.has_value())
         {
             Fail(L"Phase13_PostMortemDiagnostics could not start diagnostic seed copy.");
@@ -2970,9 +2970,8 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
 
         std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
         state.fileOps->CollectCompletedTasks(summaries);
-        const auto summaryIt = std::find_if(summaries.begin(), summaries.end(), [&](const auto& summary) noexcept {
-            return state.taskA.has_value() && summary.taskId == state.taskA.value();
-        });
+        const auto summaryIt = std::find_if(
+            summaries.begin(), summaries.end(), [&](const auto& summary) noexcept { return state.taskA.has_value() && summary.taskId == state.taskA.value(); });
         if (summaryIt == summaries.end())
         {
             Fail(L"Phase13_PostMortemDiagnostics could not find the diagnostic seed task summary.");

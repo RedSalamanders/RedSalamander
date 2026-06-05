@@ -74,6 +74,20 @@ extern "C"
 - `E_POINTER`: `result` is `nullptr`
 - `E_OUTOFMEMORY`: Allocation failed
 
+### Module lifetime and unload
+
+Virtual file-system plugins SHOULD keep async work, callbacks, watches, caches, and provider state owned by `IFileSystem` instances. The host releases manager-owned `IFileSystem` / `IInformations` references before invoking optional module shutdown hooks, unregistering resources, and unloading the DLL, so ordinary COM shutdown is the expected quiet point for shipped file-system plugins.
+
+The optional module-level quiet-point exports from `Common/PlugInterfaces/Factory.h` are only appropriate for a file-system plugin that owns DLL-global workers or resources outside all COM instances. They are not required for plugins whose outstanding work is tied to instance methods, cancellation, callbacks, and COM release.
+
+`FileSystemPluginManager` MUST unload existing plugin entries through its centralized quiet-point helper before rediscovery clears the plugin list. During process shutdown, the same helper honors `RedSalamanderPluginRetainModuleUntilProcessExit()` after normal COM instance release and `RedSalamanderPluginShutdown()`.
+
+Runtime settings refresh MUST release pane-owned file-system references first: close live viewers, clear FolderView/NavigationView file-system references and navigation callbacks, then rediscover file-system plugins, rediscover viewer plugins, and reload pane file-system instances.
+
+Disabling a file-system plugin marks it unavailable for new selection and may switch the active plugin, but it MUST NOT `FreeLibrary` a loaded file-system DLL immediately because folders, navigation views, compare/search, or file-operation code may still hold external `IFileSystem` references. A later rediscovery or process shutdown performs centralized unload once the manager is closing plugin entries.
+
+`builtin/file-system-s3` / `builtin/file-system-s3table` are the shipped exception that request process-shutdown module retention: AWS SDK lifetime is still reference-counted by live instances and I/O objects, but the DLL remains mapped until OS process teardown to avoid documented AWS CRT late-thread execution after dependency unload.
+
 **Interface discovery:**
 - The factory only creates `IFileSystem`.
 - The host obtains `IFileSystemSearch` via `QueryInterface` on the `IFileSystem` instance.
@@ -1403,6 +1417,7 @@ enum FileSystemSearchFlags : uint32_t
     FILESYSTEM_SEARCH_MATCH_CASE_CONTENT  = 0x20,
     FILESYSTEM_SEARCH_WANT_SNIPPETS       = 0x40,
     FILESYSTEM_SEARCH_PREFER_INDEX        = 0x80,
+    FILESYSTEM_SEARCH_FORCE_SCAN          = 0x100,
 };
 
 enum FileSystemSearchNameMode : uint32_t
@@ -1522,6 +1537,8 @@ struct FileSystemSearchProgress
 - `maxSnippetCharacters` of `0` means the plugin default. The current built-in `file` plugin default is `160` UTF-16 code units.
 - `FILESYSTEM_SEARCH_WANT_SNIPPETS` is a hint, not a guarantee.
 - `FILESYSTEM_SEARCH_PREFER_INDEX` is a hint. Implementations may fall back to scan and should report `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX` when they do.
+- `FILESYSTEM_SEARCH_FORCE_SCAN` is a host override for multi-backend implementations. It takes precedence over `FILESYSTEM_SEARCH_PREFER_INDEX` and backend auto-selection and should route to live scan without service/index lookup when scan is supported.
+- Recursive implementations MUST traverse child directories when `FILESYSTEM_SEARCH_RECURSIVE` is set even if the child directory's own name does not match `namePattern`; name matching controls result emission, not whether descendants are reachable.
 - `fullPathSize`, `relativePathSize`, `displayNameSize`, `previewTextSize`, and `currentPathSize` are in bytes (not characters).
 
 #### IFileSystemSearchCallback Interface

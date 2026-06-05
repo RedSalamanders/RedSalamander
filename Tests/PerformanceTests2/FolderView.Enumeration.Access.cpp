@@ -399,24 +399,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                 perf.SetDetail(folderText);
                 perf.SetValue0(entryCount);
 
-                const auto appendStableHash32 = [](uint32_t hash, std::wstring_view text) noexcept -> uint32_t
-                {
-                    static constexpr uint32_t kFnvPrime32 = 16777619u;
-                    for (const wchar_t ch : text)
-                    {
-                        const uint16_t value = static_cast<uint16_t>(ch);
-
-                        hash ^= static_cast<uint8_t>(value & 0xFFu);
-                        hash *= kFnvPrime32;
-
-                        hash ^= static_cast<uint8_t>((value >> 8) & 0xFFu);
-                        hash *= kFnvPrime32;
-                    }
-                    return hash;
-                };
-
-                static constexpr std::wstring_view kStableHashSeparator = L"|";
-                const uint32_t folderStableHashSeed                     = appendStableHash32(StableHash32(folderText), kStableHashSeparator);
+                const uint32_t folderStableHashSeed = AppendStableHash32(StableHash32(folderText), L"|");
 
                 const bool showHiddenFiles = _showHiddenFiles.load(std::memory_order_acquire);
                 const bool showSystemFiles = _showSystemFiles.load(std::memory_order_acquire);
@@ -462,7 +445,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
                         // Stable hash used for rainbow rendering (avoid storing full paths per item).
                         {
-                            item.stableHash32 = appendStableHash32(folderStableHashSeed, item.displayName);
+                            item.stableHash32 = AppendStableHash32(folderStableHashSeed, item.displayName);
                         }
 
                         item.isDirectory    = (fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;

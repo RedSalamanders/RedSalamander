@@ -125,5 +125,14 @@
     <None Include="res\exe.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopyRedLauncherAlias"
+          AfterTargets="Build"
+          Inputs="$(TargetPath)"
+          Outputs="$(OutDir)red.exe"
+          Condition="'$(ConfigurationType)'=='Application' and Exists('$(TargetPath)')">
+    <Copy SourceFiles="$(TargetPath)"
+          DestinationFiles="$(OutDir)red.exe"
+          SkipUnchangedFiles="true" />
+  </Target>
   <ImportGroup Label="ExtensionTargets" />
 </Project>

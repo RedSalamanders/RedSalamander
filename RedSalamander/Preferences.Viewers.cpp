@@ -26,14 +26,8 @@ void ViewersPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
     _page.Refresh(host, state);
 }
 
-void ViewersPane::LayoutPage(HWND host,
-                             PreferencesDialogState& state,
-                             int x,
-                             int& y,
-                             int width,
-                             int margin,
-                             int gapY,
-                             const PreferencesTypographyContext& typography) noexcept
+void ViewersPane::LayoutPage(
+    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept
 {
     _page.LayoutPage(host, state, x, y, width, margin, gapY, typography);
 }

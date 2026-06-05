@@ -18,7 +18,7 @@ struct RcStringEntry
     std::wstring id;
     std::wstring text;
     size_t sourceLine = 0u;
-    bool duplicate   = false;
+    bool duplicate    = false;
 };
 
 enum class RcLocalizableKind
@@ -37,7 +37,7 @@ struct RcLocalizableEntry
     std::wstring id;
     std::wstring text;
     size_t sourceLine = 0u;
-    bool duplicate   = false;
+    bool duplicate    = false;
 };
 
 struct RcParseResult

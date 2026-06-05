@@ -66,8 +66,8 @@ struct LocalizationViewOptions
 {
     std::wstring searchText;
     std::wstring idFilterText;
-    LocalizationStatusFilter statusFilter = LocalizationStatusFilter::All;
-    LocalizationViewColumn sortColumn     = LocalizationViewColumn::Id;
+    LocalizationStatusFilter statusFilter   = LocalizationStatusFilter::All;
+    LocalizationViewColumn sortColumn       = LocalizationViewColumn::Id;
     LocalizationSortDirection sortDirection = LocalizationSortDirection::None;
 };
 

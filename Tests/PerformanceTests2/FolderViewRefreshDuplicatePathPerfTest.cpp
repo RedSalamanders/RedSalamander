@@ -653,6 +653,22 @@ unsigned int StableHash32(std::wstring_view) noexcept
     return 0u;
 }
 
+unsigned int AppendStableHash32(unsigned int hash, std::wstring_view text) noexcept
+{
+    static constexpr unsigned int kFnvPrime32 = 16777619u;
+    for (const wchar_t ch : text)
+    {
+        const uint16_t value = static_cast<uint16_t>(ch);
+
+        hash ^= static_cast<uint8_t>(value & 0xFFu);
+        hash *= kFnvPrime32;
+
+        hash ^= static_cast<uint8_t>((value >> 8) & 0xFFu);
+        hash *= kFnvPrime32;
+    }
+    return hash;
+}
+
 namespace StartupMetrics
 {
 void MarkFirstPanePopulated(std::wstring_view, uint64_t)

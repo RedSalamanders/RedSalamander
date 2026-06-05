@@ -1,12 +1,12 @@
-#include "RedConfigureApp.h"
 #include "Localization/PlaceholderValidation.h"
 #include "Localization/RcParser.h"
 #include "Localization/RcWriter.h"
+#include "RedConfigureApp.h"
 #include "RedConfigureSession.h"
 #include "SettingsStore.h"
+#include "ThemeDefinitionIo.h"
 #include "Themes/ThemeCatalog.h"
 #include "Themes/ThemePreviewModel.h"
-#include "ThemeDefinitionIo.h"
 #include "Workspace/WorkspaceDiscovery.h"
 
 #include <array>
@@ -120,11 +120,11 @@ namespace
     ok = Require(! ec, L"Failed to create nested build folder fixture.") && ok;
 
     const std::filesystem::path resolved = RedConfigure::ResolveWorkspaceRootForLaunchPath(tempRoot / L".build" / L"x64" / L"Debug");
-    ok = Require(resolved == tempRoot, L"Launch paths inside .build should resolve back to the repository root.") && ok;
+    ok                                   = Require(resolved == tempRoot, L"Launch paths inside .build should resolve back to the repository root.") && ok;
 
-    const std::filesystem::path unknownRoot = tempRoot.parent_path() / L"RedConfigureStandaloneRootResolveTest";
+    const std::filesystem::path unknownRoot     = tempRoot.parent_path() / L"RedConfigureStandaloneRootResolveTest";
     const std::filesystem::path unknownResolved = RedConfigure::ResolveWorkspaceRootForLaunchPath(unknownRoot);
-    ok = Require(unknownResolved == unknownRoot, L"Paths without repository markers should be preserved.") && ok;
+    ok                                          = Require(unknownResolved == unknownRoot, L"Paths without repository markers should be preserved.") && ok;
 
     std::filesystem::remove_all(tempRoot, ec);
     std::filesystem::remove_all(unknownRoot, ec);
@@ -145,17 +145,15 @@ namespace
 
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"RedSalamander" / L"RedSalamander.vcxproj",
-                                   R"xml(<?xml version="1.0" encoding="utf-8"?>
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <ItemGroup>
     <ResourceCompile Include="RedSalamander.rc" />
   </ItemGroup>
 </Project>)xml"),
-                 L"Failed to write app project fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"RedSalamander" / L"RedSalamander.rc", "STRINGTABLE\nBEGIN\nEND\n"),
-                 L"Failed to write app rc fixture.") &&
-         ok;
+                      L"Failed to write app project fixture.") &&
+              ok;
+    ok = Require(WriteTestTextFile(tempRoot / L"RedSalamander" / L"RedSalamander.rc", "STRINGTABLE\nBEGIN\nEND\n"), L"Failed to write app rc fixture.") && ok;
     ok = Require(WriteTestTextFile(tempRoot / L"RedSalamander" / L"Lang" / L"fr-FR" / L"RedSalamander-fr-FR.rc", "STRINGTABLE\nBEGIN\nEND\n"),
                  L"Failed to write satellite rc fixture.") &&
          ok;
@@ -171,9 +169,8 @@ namespace
     ok = Require(WriteTestTextFile(tempRoot / L"Plugins" / L"ViewerText" / L"ViewerText.rc", "STRINGTABLE\nBEGIN\nEND\n"),
                  L"Failed to write plugin rc fixture.") &&
          ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"Specs" / L"Themes" / L"Forest.theme.json5", "{ id: 'user/forest' }\n"),
-                 L"Failed to write theme fixture.") &&
-         ok;
+    ok =
+        Require(WriteTestTextFile(tempRoot / L"Specs" / L"Themes" / L"Forest.theme.json5", "{ id: 'user/forest' }\n"), L"Failed to write theme fixture.") && ok;
     ok = Require(WriteTestTextFile(tempRoot / L".build" / L"x64" / L"Debug" / L"Ignored.vcxproj",
                                    R"xml(<Project><ItemGroup><ResourceCompile Include="Ignored.rc" /></ItemGroup></Project>)xml"),
                  L"Failed to write ignored build project fixture.") &&
@@ -202,7 +199,7 @@ namespace
     };
 
     const auto* appOwner = ownerByName(L"RedSalamander");
-    ok                  = Require(appOwner != nullptr, L"Workspace discovery should expose the RedSalamander owner.") && ok;
+    ok                   = Require(appOwner != nullptr, L"Workspace discovery should expose the RedSalamander owner.") && ok;
     if (appOwner)
     {
         ok = Require(appOwner->embeddedResourcePath.filename() == L"RedSalamander.rc", L"App owner should expose its embedded resource file.") && ok;
@@ -210,7 +207,7 @@ namespace
     }
 
     const auto* pluginOwner = ownerByName(L"ViewerText");
-    ok                     = Require(pluginOwner != nullptr, L"Workspace discovery should expose the ViewerText owner.") && ok;
+    ok                      = Require(pluginOwner != nullptr, L"Workspace discovery should expose the ViewerText owner.") && ok;
     if (pluginOwner)
     {
         ok = Require(pluginOwner->embeddedResourcePath.filename() == L"ViewerText.rc", L"Plugin owner should expose its embedded resource file.") && ok;
@@ -239,8 +236,8 @@ namespace
 
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"Broken" / L"Broken.vcxproj", "<Project><ItemGroup><ResourceCompile Include=\"Broken.rc\"></Project>"),
-                 L"Failed to write broken project fixture.") &&
-         ok;
+                      L"Failed to write broken project fixture.") &&
+              ok;
 
     RedConfigure::Workspace::WorkspaceScanResult result;
     const HRESULT hr = RedConfigure::Workspace::DiscoverWorkspace(tempRoot, result);
@@ -289,26 +286,27 @@ namespace
     bool ok                                        = true;
 
     const HRESULT emptyInput = Common::Settings::ParseThemeDefinitionJson5("", theme, &error, nullptr);
-    ok = Require(emptyInput == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Empty theme input should fail with invalid data.") && ok;
+    ok                       = Require(emptyInput == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Empty theme input should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::EmptyInput, L"Empty theme input should report the empty-input error.") && ok;
 
-    const HRESULT missingId = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"name":"Bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
+    const HRESULT missingId =
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"name":"Bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
     ok = Require(missingId == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing id should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidId, L"Missing id should report the id error.") && ok;
 
-    const HRESULT missingName = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"user/bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
+    const HRESULT missingName =
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","baseThemeId":"builtin/dark","colors":{}})json", theme, &error, nullptr);
     ok = Require(missingName == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing name should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidName, L"Missing name should report the name error.") && ok;
 
-    const HRESULT missingBaseTheme = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"user/bad","name":"Bad","colors":{}})json", theme, &error, nullptr);
+    const HRESULT missingBaseTheme =
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","name":"Bad","colors":{}})json", theme, &error, nullptr);
     ok = Require(missingBaseTheme == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing base theme should fail with invalid data.") && ok;
-    ok = Require(error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidBaseThemeId, L"Missing base theme should report the base-theme error.") && ok;
+    ok = Require(error == Common::Settings::ThemeDefinitionIoError::MissingOrInvalidBaseThemeId, L"Missing base theme should report the base-theme error.") &&
+         ok;
 
-    const HRESULT missingColors = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark"})json", theme, &error, nullptr);
+    const HRESULT missingColors =
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","name":"Bad","baseThemeId":"builtin/dark"})json", theme, &error, nullptr);
     ok = Require(missingColors == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Missing colors should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::ColorsMissingOrNotObject, L"Missing colors should report the colors error.") && ok;
 
@@ -317,8 +315,8 @@ namespace
     ok = Require(invalidId == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Invalid user theme id should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::InvalidId, L"Invalid id should report the id error.") && ok;
 
-    const HRESULT invalidBaseTheme = Common::Settings::ParseThemeDefinitionJson5(
-        R"json({"id":"user/bad","name":"Bad","baseThemeId":"user/base","colors":{}})json", theme, &error, nullptr);
+    const HRESULT invalidBaseTheme =
+        Common::Settings::ParseThemeDefinitionJson5(R"json({"id":"user/bad","name":"Bad","baseThemeId":"user/base","colors":{}})json", theme, &error, nullptr);
     ok = Require(invalidBaseTheme == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Invalid base theme should fail with invalid data.") && ok;
     ok = Require(error == Common::Settings::ThemeDefinitionIoError::InvalidBaseThemeId, L"Invalid base theme should report the base-theme error.") && ok;
 
@@ -354,8 +352,7 @@ namespace
     const HRESULT hr = Common::Settings::BuildThemeDefinitionJson5(theme, json);
     ok               = Require(SUCCEEDED(hr), L"Expected theme export to succeed.") && ok;
     ok               = Require(json.find("\"id\": \"user/export-test\"") != std::string::npos, L"Exported theme id is missing.") && ok;
-    ok               = Require(json.find("\"app.accent\": \"#0055AA\"") < json.find("\"folderView.background\": \"#FFFFFF\""),
-                 L"Exported colors should be sorted by key.") &&
+    ok = Require(json.find("\"app.accent\": \"#0055AA\"") < json.find("\"folderView.background\": \"#FFFFFF\""), L"Exported colors should be sorted by key.") &&
          ok;
 
     Common::Settings::ThemeDefinition reparsed;
@@ -379,7 +376,7 @@ namespace
     std::filesystem::remove_all(tempRoot, ec);
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"Good.theme.json5",
-                                   R"json5({
+                                        R"json5({
   id: "user/settings-good",
   name: "Settings Good",
   baseThemeId: "builtin/dark",
@@ -387,10 +384,10 @@ namespace
     "app.accent": "#336699",
   },
 })json5"),
-                 L"Failed to write valid SettingsStore theme fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"InvalidId.theme.json5",
-                                   R"json5({
+                      L"Failed to write valid SettingsStore theme fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"InvalidId.theme.json5",
+                                        R"json5({
   id: "builtin/dark",
   name: "Invalid Builtin",
   baseThemeId: "builtin/dark",
@@ -398,8 +395,8 @@ namespace
     "app.accent": "#445566",
   },
 })json5"),
-                 L"Failed to write invalid SettingsStore theme fixture.") &&
-         ok;
+                      L"Failed to write invalid SettingsStore theme fixture.") &&
+              ok;
 
     std::vector<Common::Settings::ThemeDefinition> themes;
     const HRESULT hr = Common::Settings::LoadThemeDefinitionsFromDirectory(tempRoot, themes);
@@ -526,28 +523,26 @@ END
 
     bool ok = true;
     ok      = Require(ValidatePlaceholders(L"Value {0:08X}", L"Valeur {0:08X}").status == RedConfigure::Localization::PlaceholderStatus::Ok,
-                 L"Indexed placeholder validation should accept matching placeholders.") &&
-         ok;
-    ok = Require(ValidatePlaceholders(L"Value {0}", L"Valeur {}").status == RedConfigure::Localization::PlaceholderStatus::BarePlaceholder,
-                 L"Bare placeholders should be rejected.") &&
-         ok;
-    ok = Require(ValidatePlaceholders(L"Value {0:08X}", L"Valeur {:08X}").status == RedConfigure::Localization::PlaceholderStatus::UnindexedFormatSpec,
-                 L"Unindexed format specs should be rejected.") &&
-         ok;
-    ok = Require(ValidatePlaceholders(L"Value {0}", L"Valeur").status == RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch,
-                 L"Missing target placeholders should be rejected.") &&
-         ok;
-    ok = Require(ValidatePlaceholders(L"Values {0} {0}", L"Valeurs {0}").status ==
-                     RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch,
-                 L"Duplicated source placeholders must not collapse to one target placeholder.") &&
-         ok;
-    ok = Require(ValidatePlaceholders(L"Value {0}", L"Valeur {0} {0}").status ==
-                     RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch,
-                 L"Duplicated target placeholders must not collapse to one source placeholder.") &&
-         ok;
-    ok = Require(ValidatePlaceholders(L"Value {0}", L"Valeur %s").status == RedConfigure::Localization::PlaceholderStatus::PrintfPlaceholder,
-                 L"Printf placeholders should be rejected.") &&
-         ok;
+                      L"Indexed placeholder validation should accept matching placeholders.") &&
+              ok;
+    ok      = Require(ValidatePlaceholders(L"Value {0}", L"Valeur {}").status == RedConfigure::Localization::PlaceholderStatus::BarePlaceholder,
+                      L"Bare placeholders should be rejected.") &&
+              ok;
+    ok      = Require(ValidatePlaceholders(L"Value {0:08X}", L"Valeur {:08X}").status == RedConfigure::Localization::PlaceholderStatus::UnindexedFormatSpec,
+                      L"Unindexed format specs should be rejected.") &&
+              ok;
+    ok      = Require(ValidatePlaceholders(L"Value {0}", L"Valeur").status == RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch,
+                      L"Missing target placeholders should be rejected.") &&
+              ok;
+    ok      = Require(ValidatePlaceholders(L"Values {0} {0}", L"Valeurs {0}").status == RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch,
+                      L"Duplicated source placeholders must not collapse to one target placeholder.") &&
+              ok;
+    ok      = Require(ValidatePlaceholders(L"Value {0}", L"Valeur {0} {0}").status == RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch,
+                      L"Duplicated target placeholders must not collapse to one source placeholder.") &&
+              ok;
+    ok      = Require(ValidatePlaceholders(L"Value {0}", L"Valeur %s").status == RedConfigure::Localization::PlaceholderStatus::PrintfPlaceholder,
+                      L"Printf placeholders should be rejected.") &&
+              ok;
     return ok;
 }
 
@@ -557,43 +552,41 @@ END
     bool ok = true;
 
     std::vector<RedConfigure::TranslationEntry> rows;
+    rows.push_back(RedConfigure::TranslationEntry{.id         = L"IDS_SAVE",
+                                                  .sourceText = L"Save file",
+                                                  .targetText = L"Enregistrer",
+                                                  .validation = RedConfigure::Localization::PlaceholderValidationResult{.status = PlaceholderStatus::Ok}});
+    rows.push_back(RedConfigure::TranslationEntry{.id         = L"IDS_OPEN",
+                                                  .sourceText = L"Open file",
+                                                  .targetText = L"Ouvrir",
+                                                  .validation = RedConfigure::Localization::PlaceholderValidationResult{.status = PlaceholderStatus::Ok}});
     rows.push_back(RedConfigure::TranslationEntry{
-        .id = L"IDS_SAVE",
-        .sourceText = L"Save file",
-        .targetText = L"Enregistrer",
-        .validation = RedConfigure::Localization::PlaceholderValidationResult{.status = PlaceholderStatus::Ok}});
-    rows.push_back(RedConfigure::TranslationEntry{
-        .id = L"IDS_OPEN",
-        .sourceText = L"Open file",
-        .targetText = L"Ouvrir",
-        .validation = RedConfigure::Localization::PlaceholderValidationResult{.status = PlaceholderStatus::Ok}});
-    rows.push_back(RedConfigure::TranslationEntry{
-        .id = L"IDS_DELETE",
+        .id         = L"IDS_DELETE",
         .sourceText = L"Delete {0}",
         .targetText = L"Supprimer",
         .validation = RedConfigure::Localization::PlaceholderValidationResult{.status = PlaceholderStatus::PlaceholderMismatch}});
 
     RedConfigure::LocalizationViewOptions options;
-    options.searchText = L"file";
+    options.searchText       = L"file";
     std::vector<size_t> view = RedConfigure::BuildTranslationView(rows, options);
-    ok = Require(view == std::vector<size_t>{0u, 1u}, L"Translation view search should match source and preserve source order.") && ok;
+    ok                       = Require(view == std::vector<size_t>{0u, 1u}, L"Translation view search should match source and preserve source order.") && ok;
 
-    options.searchText = {};
+    options.searchText   = {};
     options.idFilterText = L"delete";
     options.statusFilter = RedConfigure::LocalizationStatusFilter::Problems;
-    view = RedConfigure::BuildTranslationView(rows, options);
-    ok = Require(view == std::vector<size_t>{2u}, L"Translation view filters should combine ID and status filters.") && ok;
+    view                 = RedConfigure::BuildTranslationView(rows, options);
+    ok                   = Require(view == std::vector<size_t>{2u}, L"Translation view filters should combine ID and status filters.") && ok;
 
-    options.idFilterText = {};
-    options.statusFilter = RedConfigure::LocalizationStatusFilter::All;
-    options.sortColumn = RedConfigure::LocalizationViewColumn::Target;
+    options.idFilterText  = {};
+    options.statusFilter  = RedConfigure::LocalizationStatusFilter::All;
+    options.sortColumn    = RedConfigure::LocalizationViewColumn::Target;
     options.sortDirection = RedConfigure::LocalizationSortDirection::Ascending;
-    view = RedConfigure::BuildTranslationView(rows, options);
-    ok = Require(view == std::vector<size_t>{0u, 1u, 2u}, L"Translation view target sort should order by target text ascending.") && ok;
+    view                  = RedConfigure::BuildTranslationView(rows, options);
+    ok                    = Require(view == std::vector<size_t>{0u, 1u, 2u}, L"Translation view target sort should order by target text ascending.") && ok;
 
     options.sortDirection = RedConfigure::LocalizationSortDirection::Descending;
-    view = RedConfigure::BuildTranslationView(rows, options);
-    ok = Require(view == std::vector<size_t>{2u, 1u, 0u}, L"Translation view target sort should reverse when descending.") && ok;
+    view                  = RedConfigure::BuildTranslationView(rows, options);
+    ok                    = Require(view == std::vector<size_t>{2u, 1u, 0u}, L"Translation view target sort should reverse when descending.") && ok;
 
     return ok;
 }
@@ -611,7 +604,7 @@ BEGIN
     IDS_ALPHA "Alpha"
 END
 )rc",
-                                                                     source)),
+                                                                           source)),
                  L"Source STRINGTABLE fixture should parse.") &&
          ok;
     ok = Require(SUCCEEDED(RedConfigure::Localization::ParseRcStringTables(LR"rc(
@@ -620,17 +613,17 @@ BEGIN
     IDS_BETA "Beta FR {0}"
 END
 )rc",
-                                                                     target)),
+                                                                           target)),
                  L"Target STRINGTABLE fixture should parse.") &&
          ok;
 
     const auto merged = RedConfigure::Localization::MergeStringTables(source.strings, target.strings);
-    ok               = Require(merged.size() == 2u, L"Merged resource model should contain all source strings.") && ok;
-    ok               = Require(merged[1].targetText == L"Beta FR {0}", L"Merged resource model should keep target translations by ID.") && ok;
+    ok                = Require(merged.size() == 2u, L"Merged resource model should contain all source strings.") && ok;
+    ok                = Require(merged[1].targetText == L"Beta FR {0}", L"Merged resource model should keep target translations by ID.") && ok;
 
     const std::wstring output = RedConfigure::Localization::BuildSatelliteRcStringTable(L"resource.h", L"fr-FR", merged);
-    ok                       = Require(output.find(L"#include \"resource.h\"") != std::wstring::npos, L"Satellite writer should include resource.h.") && ok;
-    ok                       = Require(output.find(L"IDS_ALPHA") < output.find(L"IDS_BETA"), L"Satellite writer should sort entries by ID.") && ok;
+    ok                        = Require(output.find(L"#include \"resource.h\"") != std::wstring::npos, L"Satellite writer should include resource.h.") && ok;
+    ok                        = Require(output.find(L"IDS_ALPHA") < output.find(L"IDS_BETA"), L"Satellite writer should sort entries by ID.") && ok;
     ok = Require(output.find(L"\"Beta FR {0}\"") != std::wstring::npos, L"Satellite writer should keep positional placeholders unchanged.") && ok;
     return ok;
 }
@@ -647,7 +640,7 @@ END
     std::filesystem::remove_all(tempRoot, ec);
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"Good.theme.json5",
-                                   R"json5({
+                                        R"json5({
   id: "user/catalog-good",
   name: "Catalog Good",
   baseThemeId: "builtin/dark",
@@ -655,9 +648,9 @@ END
     "app.accent": "#336699",
   },
 })json5"),
-                 L"Failed to write valid theme catalog fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"Bad.theme.json5", "{ id: 'user/bad' }\n"), L"Failed to write invalid theme catalog fixture.") && ok;
+                      L"Failed to write valid theme catalog fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Bad.theme.json5", "{ id: 'user/bad' }\n"), L"Failed to write invalid theme catalog fixture.") && ok;
 
     std::vector<RedConfigure::Workspace::ThemeFile> files;
     files.push_back({.path = tempRoot / L"Good.theme.json5"});
@@ -690,16 +683,16 @@ END
 
     bool ok = true;
     ok      = Require(model.GetEffectiveColor(L"folderView.itemBackgroundSelected").value_or(0u) == 0xFF204060u,
-                 L"Theme preview should expose the initial override color.") &&
-         ok;
-    ok = Require(model.TryEditOverride(L"folderView.itemBackgroundSelected", L"#336699"), L"Theme preview should accept valid color edits.") && ok;
-    ok = Require(model.GetEffectiveColor(L"folderView.itemBackgroundSelected").value_or(0u) == 0xFF336699u,
-                 L"Theme preview should update immediately after valid color edits.") &&
-         ok;
-    ok = Require(! model.TryEditOverride(L"folderView.itemBackgroundSelected", L"not-a-color"), L"Theme preview should reject invalid color text.") && ok;
-    ok = Require(model.GetEffectiveColor(L"folderView.itemBackgroundSelected").value_or(0u) == 0xFF336699u,
-                 L"Theme preview should keep the last valid color after invalid text.") &&
-         ok;
+                      L"Theme preview should expose the initial override color.") &&
+              ok;
+    ok      = Require(model.TryEditOverride(L"folderView.itemBackgroundSelected", L"#336699"), L"Theme preview should accept valid color edits.") && ok;
+    ok      = Require(model.GetEffectiveColor(L"folderView.itemBackgroundSelected").value_or(0u) == 0xFF336699u,
+                      L"Theme preview should update immediately after valid color edits.") &&
+              ok;
+    ok      = Require(! model.TryEditOverride(L"folderView.itemBackgroundSelected", L"not-a-color"), L"Theme preview should reject invalid color text.") && ok;
+    ok      = Require(model.GetEffectiveColor(L"folderView.itemBackgroundSelected").value_or(0u) == 0xFF336699u,
+                      L"Theme preview should keep the last valid color after invalid text.") &&
+              ok;
     return ok;
 }
 
@@ -716,33 +709,25 @@ END
     model.SetTheme(theme);
 
     bool ok = true;
-    ok = Require(model.TryEditOverride(L"folderView.itemBackgroundSelected", L"darken(app.accent,25%)"),
-                 L"Theme preview should accept darken expressions.") &&
+    ok = Require(model.TryEditOverride(L"folderView.itemBackgroundSelected", L"darken(app.accent,25%)"), L"Theme preview should accept darken expressions.") &&
          ok;
     ok = Require(model.GetEffectiveColor(L"folderView.itemBackgroundSelected").value_or(0u) == 0xFF606060u,
                  L"Darken expressions should derive the expected color.") &&
          ok;
 
-    ok = Require(model.TryEditOverride(L"folderView.background", L"blend(menu.background,app.accent,50%)"),
-                 L"Theme preview should accept blend expressions.") &&
-         ok;
-    ok = Require(model.GetEffectiveColor(L"folderView.background").value_or(0u) == 0xFF505050u,
-                 L"Blend expressions should derive the expected color.") &&
-         ok;
+    ok =
+        Require(model.TryEditOverride(L"folderView.background", L"blend(menu.background,app.accent,50%)"), L"Theme preview should accept blend expressions.") &&
+        ok;
+    ok = Require(model.GetEffectiveColor(L"folderView.background").value_or(0u) == 0xFF505050u, L"Blend expressions should derive the expected color.") && ok;
 
-    ok = Require(model.TryEditOverride(L"window.background", L"ref(folderView.background)"),
-                 L"Theme preview should accept reference expressions.") &&
-         ok;
+    ok = Require(model.TryEditOverride(L"window.background", L"ref(folderView.background)"), L"Theme preview should accept reference expressions.") && ok;
     ok = Require(model.GetEffectiveColor(L"window.background").value_or(0u) == 0xFF505050u,
                  L"Reference expressions should reuse the referenced effective color.") &&
          ok;
 
-    ok = Require(! model.TryEditOverride(L"app.accent", L"ref(folderView.itemBackgroundSelected)"),
-                 L"Theme preview should reject color expression cycles.") &&
+    ok = Require(! model.TryEditOverride(L"app.accent", L"ref(folderView.itemBackgroundSelected)"), L"Theme preview should reject color expression cycles.") &&
          ok;
-    ok = Require(model.GetEffectiveColor(L"app.accent").value_or(0u) == 0xFF808080u,
-                 L"Rejected expression cycles should keep the previous valid color.") &&
-         ok;
+    ok = Require(model.GetEffectiveColor(L"app.accent").value_or(0u) == 0xFF808080u, L"Rejected expression cycles should keep the previous valid color.") && ok;
     return ok;
 }
 
@@ -752,18 +737,16 @@ END
         RedConfigure::BuildThemeColorSuggestions(L"folderView.itemBackgroundSelected", L"menu.background", 0xFF2ECC71u);
 
     const auto contains = [&suggestions](std::wstring_view expected) noexcept
-    {
-        return std::find(suggestions.begin(), suggestions.end(), expected) != suggestions.end();
-    };
+    { return std::find(suggestions.begin(), suggestions.end(), expected) != suggestions.end(); };
 
     bool ok = true;
-    ok = Require(contains(L"#2ECC71"), L"Theme color suggestions should include the current direct color.") && ok;
-    ok = Require(contains(L"ref(app.accent)"), L"Theme color suggestions should include an accent reference.") && ok;
-    ok = Require(contains(L"darken(app.accent,20%)"), L"Theme color suggestions should include a darken expression template.") && ok;
-    ok = Require(contains(L"blend(menu.background,app.accent,16%)"),
-                 L"Theme color suggestions should include a blend expression using the previously selected color.") &&
-         ok;
-    ok = Require(contains(L"ref(menu.background)"), L"Theme color suggestions should include the previous color reference.") && ok;
+    ok      = Require(contains(L"#2ECC71"), L"Theme color suggestions should include the current direct color.") && ok;
+    ok      = Require(contains(L"ref(app.accent)"), L"Theme color suggestions should include an accent reference.") && ok;
+    ok      = Require(contains(L"darken(app.accent,20%)"), L"Theme color suggestions should include a darken expression template.") && ok;
+    ok      = Require(contains(L"blend(menu.background,app.accent,16%)"),
+                      L"Theme color suggestions should include a blend expression using the previously selected color.") &&
+              ok;
+    ok      = Require(contains(L"ref(menu.background)"), L"Theme color suggestions should include the previous color reference.") && ok;
     return ok;
 }
 
@@ -777,19 +760,19 @@ END
         L"dialog.text",
     };
 
-    bool ok = true;
+    bool ok                            = true;
     std::vector<std::wstring> filtered = RedConfigure::FilterThemeColorKeys(keys, L"MENU");
-    ok = Require(filtered == std::vector<std::wstring>{L"menu.background", L"menu.selectionBackground"},
-                 L"Theme color key filter should match key groups case-insensitively.") &&
-         ok;
+    ok                                 = Require(filtered == std::vector<std::wstring>{L"menu.background", L"menu.selectionBackground"},
+                                                 L"Theme color key filter should match key groups case-insensitively.") &&
+                                         ok;
 
     filtered = RedConfigure::FilterThemeColorKeys(keys, L"background");
-    ok = Require(filtered == std::vector<std::wstring>{L"menu.background", L"menu.selectionBackground", L"folderView.background"},
-                 L"Theme color key filter should match substrings anywhere in the key.") &&
-         ok;
+    ok       = Require(filtered == std::vector<std::wstring>{L"menu.background", L"menu.selectionBackground", L"folderView.background"},
+                       L"Theme color key filter should match substrings anywhere in the key.") &&
+               ok;
 
     filtered = RedConfigure::FilterThemeColorKeys(keys, L"missing");
-    ok = Require(filtered.empty(), L"Theme color key filter should produce an empty list when no keys match.") && ok;
+    ok       = Require(filtered.empty(), L"Theme color key filter should produce an empty list when no keys match.") && ok;
     return ok;
 }
 
@@ -803,18 +786,18 @@ END
     };
 
     bool ok = true;
-    ok = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 3.0f, 50.0f, {}) == L"app.accent",
-                 L"Theme preview hit selection should prefer the smallest visible region.") &&
-         ok;
-    ok = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 3.0f, 50.0f, L"app.accent") == L"navigation.background",
-                 L"Theme preview repeated clicks should cycle to the containing region.") &&
-         ok;
-    ok = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 80.0f, 20.0f, {}) == L"menu.selectionBackground",
-                 L"Theme preview hit selection should prefer nested menu selection over menu background.") &&
-         ok;
-    ok = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 500.0f, 500.0f, {}).empty(),
-                 L"Theme preview hit selection should return no key outside all regions.") &&
-         ok;
+    ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 3.0f, 50.0f, {}) == L"app.accent",
+                      L"Theme preview hit selection should prefer the smallest visible region.") &&
+              ok;
+    ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 3.0f, 50.0f, L"app.accent") == L"navigation.background",
+                      L"Theme preview repeated clicks should cycle to the containing region.") &&
+              ok;
+    ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 80.0f, 20.0f, {}) == L"menu.selectionBackground",
+                      L"Theme preview hit selection should prefer nested menu selection over menu background.") &&
+              ok;
+    ok      = Require(RedConfigure::SelectThemePreviewHitKey(candidates, 500.0f, 500.0f, {}).empty(),
+                      L"Theme preview hit selection should return no key outside all regions.") &&
+              ok;
     return ok;
 }
 
@@ -830,16 +813,16 @@ END
     std::filesystem::remove_all(tempRoot, ec);
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.vcxproj",
-                                   R"xml(<?xml version="1.0" encoding="utf-8"?>
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <ItemGroup>
     <ResourceCompile Include="App.rc" />
   </ItemGroup>
 </Project>)xml"),
-                 L"Failed to write session project fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"App" / L"App.rc",
-                                   R"rc(#include "resource.h"
+                      L"Failed to write session project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.rc",
+                                        R"rc(#include "resource.h"
 STRINGTABLE
 BEGIN
     IDS_HELLO "Hello {0}"
@@ -857,26 +840,26 @@ BEGIN
     LTEXT "Name:", IDC_STATIC, 7, 7, 48, 8
 END
 )rc"),
-                 L"Failed to write session source rc fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
-                                   "#include \"resource.h\"\nSTRINGTABLE\nBEGIN\n    IDS_HELLO \"Bonjour {0}\"\nEND\n"),
-                 L"Failed to write session target rc fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"Zeta" / L"Zeta.vcxproj",
-                                   R"xml(<?xml version="1.0" encoding="utf-8"?>
+                      L"Failed to write session source rc fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
+                                        "#include \"resource.h\"\nSTRINGTABLE\nBEGIN\n    IDS_HELLO \"Bonjour {0}\"\nEND\n"),
+                      L"Failed to write session target rc fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Zeta" / L"Zeta.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <ItemGroup>
     <ResourceCompile Include="Zeta.rc" />
   </ItemGroup>
 </Project>)xml"),
-                 L"Failed to write second session project fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"Zeta" / L"Zeta.rc", "STRINGTABLE\nBEGIN\n    IDS_ZETA \"Zeta\"\nEND\n"),
-                 L"Failed to write second source rc fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"Themes" / L"Session.theme.json5",
-                                   R"json5({
+                      L"Failed to write second session project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Zeta" / L"Zeta.rc", "STRINGTABLE\nBEGIN\n    IDS_ZETA \"Zeta\"\nEND\n"),
+                      L"Failed to write second source rc fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Themes" / L"Session.theme.json5",
+                                        R"json5({
   id: "user/session",
   name: "Session",
   baseThemeId: "builtin/dark",
@@ -884,10 +867,10 @@ END
     "app.accent": "#336699",
   },
 })json5"),
-                 L"Failed to write session theme fixture.") &&
-         ok;
-    ok = Require(WriteTestTextFile(tempRoot / L"Themes" / L"Zed.theme.json5",
-                                   R"json5({
+                      L"Failed to write session theme fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Themes" / L"Zed.theme.json5",
+                                        R"json5({
   id: "user/zed",
   name: "Zed",
   baseThemeId: "builtin/light",
@@ -895,8 +878,8 @@ END
     "app.accent": "#AA5500",
   },
 })json5"),
-                 L"Failed to write second session theme fixture.") &&
-         ok;
+                      L"Failed to write second session theme fixture.") &&
+              ok;
 
     RedConfigure::RedConfigureSession session;
     ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load a fixture workspace.") && ok;
@@ -905,8 +888,8 @@ END
     if (! session.GetTranslations().empty())
     {
         const auto& first = session.GetTranslations().front();
-        ok               = Require(first.id == L"IDS_HELLO", L"Session should preserve string ids.") && ok;
-        ok               = Require(first.targetText == L"Bonjour {0}", L"Session should merge target translations.") && ok;
+        ok                = Require(first.id == L"IDS_HELLO", L"Session should preserve string ids.") && ok;
+        ok                = Require(first.targetText == L"Bonjour {0}", L"Session should merge target translations.") && ok;
     }
     ok = Require(SUCCEEDED(session.SetActiveResourceOwner(1u)), L"Session should switch active resource owners.") && ok;
     ok = Require(! session.GetTranslations().empty() && session.GetTranslations().front().id == L"IDS_ZETA",
@@ -928,19 +911,17 @@ END
     ok = Require(SUCCEEDED(session.BuildLocalizationExportText(rcPreview)), L"Session should build a localization export preview.") && ok;
     ok = Require(SUCCEEDED(session.BuildThemeExportText(themePreview)), L"Session should build a theme export preview.") && ok;
     ok = Require(rcPreview.find(L"Salut {0}") != std::wstring::npos, L"Localization export preview should contain edited translations.") && ok;
-    ok = Require(themePreview.find("\"app.accent\": \"#123456\"") != std::string::npos,
-                 L"Theme export preview should contain edited colors.") &&
-         ok;
+    ok = Require(themePreview.find("\"app.accent\": \"#123456\"") != std::string::npos, L"Theme export preview should contain edited colors.") && ok;
     ok = Require(themePreview.find("\"folderView.itemBackgroundSelected\": \"#091A2B\"") != std::string::npos,
                  L"Theme export preview should flatten expression-authored colors.") &&
          ok;
 
     const std::filesystem::path rcPath    = tempRoot / L"Out" / L"App-fr-FR.rc";
     const std::filesystem::path themePath = tempRoot / L"Out" / L"Session.theme.json5";
-    ok = Require(SUCCEEDED(session.ExportLocalization(rcPath)), L"Session should export a satellite rc file.") && ok;
-    ok = Require(SUCCEEDED(session.ExportTheme(themePath)), L"Session should export a theme json5 file.") && ok;
-    ok = Require(std::filesystem::exists(rcPath, ec), L"Exported rc file should exist.") && ok;
-    ok = Require(std::filesystem::exists(themePath, ec), L"Exported theme file should exist.") && ok;
+    ok                                    = Require(SUCCEEDED(session.ExportLocalization(rcPath)), L"Session should export a satellite rc file.") && ok;
+    ok                                    = Require(SUCCEEDED(session.ExportTheme(themePath)), L"Session should export a theme json5 file.") && ok;
+    ok                                    = Require(std::filesystem::exists(rcPath, ec), L"Exported rc file should exist.") && ok;
+    ok                                    = Require(std::filesystem::exists(themePath, ec), L"Exported theme file should exist.") && ok;
 
     std::filesystem::remove_all(tempRoot, ec);
     return ok;
@@ -958,42 +939,41 @@ END
     std::filesystem::remove_all(tempRoot, ec);
     bool ok = true;
     ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.vcxproj",
-                                   R"xml(<?xml version="1.0" encoding="utf-8"?>
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <ItemGroup>
     <ResourceCompile Include="App.rc" />
   </ItemGroup>
 </Project>)xml"),
-                 L"Failed to write BOM-less session project fixture.") &&
-         ok;
-    ok = Require(WriteTestUtf16LeTextFile(tempRoot / L"App" / L"App.rc",
-                                          LR"rc(#include "resource.h"
+                      L"Failed to write BOM-less session project fixture.") &&
+              ok;
+    ok      = Require(WriteTestUtf16LeTextFile(tempRoot / L"App" / L"App.rc",
+                                               LR"rc(#include "resource.h"
 STRINGTABLE
 BEGIN
     IDS_HELLO "Héllo {0}"
 END
 )rc",
-                                          false),
-                 L"Failed to write BOM-less UTF-16 LE source rc fixture.") &&
-         ok;
-    ok = Require(WriteTestUtf16LeTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
-                                          LR"rc(#include "resource.h"
+                                               false),
+                      L"Failed to write BOM-less UTF-16 LE source rc fixture.") &&
+              ok;
+    ok      = Require(WriteTestUtf16LeTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
+                                               LR"rc(#include "resource.h"
 STRINGTABLE
 BEGIN
     IDS_HELLO "Salut {0}"
 END
 )rc",
-                                          false),
-                 L"Failed to write BOM-less UTF-16 LE target rc fixture.") &&
-         ok;
+                                               false),
+                      L"Failed to write BOM-less UTF-16 LE target rc fixture.") &&
+              ok;
 
     RedConfigure::RedConfigureSession session;
     ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load BOM-less UTF-16 LE rc files.") && ok;
     ok = Require(session.GetTranslations().size() == 1u, L"Session should parse one string from BOM-less UTF-16 LE rc files.") && ok;
     if (session.GetTranslations().size() == 1u)
     {
-        ok = Require(session.GetTranslations().front().sourceText == L"Héllo {0}",
-                     L"Session should preserve non-ASCII source text from BOM-less UTF-16 LE.") &&
+        ok = Require(session.GetTranslations().front().sourceText == L"Héllo {0}", L"Session should preserve non-ASCII source text from BOM-less UTF-16 LE.") &&
              ok;
         ok = Require(session.GetTranslations().front().targetText == L"Salut {0}",
                      L"Session should preserve target text from BOM-less UTF-16 LE satellite resources.") &&

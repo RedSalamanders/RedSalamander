@@ -90,7 +90,7 @@ void LoadBindings(const std::vector<Common::Settings::ShortcutBinding>& bindings
         {
             continue;
         }
-        const auto [reverseIt, reverseInserted]    = outReverseMap.try_emplace(std::wstring(canonicalCommandId), key);
+        const auto [reverseIt, reverseInserted] = outReverseMap.try_emplace(std::wstring(canonicalCommandId), key);
         if (! reverseInserted && PreferShortcutReverseLookupKey(key, reverseIt->second))
         {
             reverseIt->second = key;

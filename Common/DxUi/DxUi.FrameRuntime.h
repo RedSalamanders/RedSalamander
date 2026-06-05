@@ -43,8 +43,8 @@ public:
     [[nodiscard]] uint64_t SmoothDeltaUs(uint64_t rawDeltaUs, const FrameBudget& budget) noexcept;
 
 private:
-    int64_t _frequency              = 1;
-    uint64_t _lastSmoothedDeltaUs   = 16667;
+    int64_t _frequency            = 1;
+    uint64_t _lastSmoothedDeltaUs = 16667;
 };
 
 class FrameStageScope final
@@ -57,7 +57,7 @@ public:
 
 private:
     FrameStage& _currentStage;
-    FrameStage _previousStage = FrameStage::Idle;
+    FrameStage _previousStage      = FrameStage::Idle;
     FrameStage _previousDebugStage = FrameStage::Idle;
 };
 

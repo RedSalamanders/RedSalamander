@@ -29,18 +29,18 @@ using RedSalamander::DxUi::WindowHost;
 class ThemeExampleControl final : public Control
 {
 public:
-    explicit ThemeExampleControl(HINSTANCE instance) :
-        _navText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_NAV)),
-        _menuText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_MENU)),
-        _folderText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_FOLDER)),
-        _hoverText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_HOVER)),
-        _selectedText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_SELECTED)),
-        _dialogText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_DIALOG)),
-        _buttonText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_BUTTON)),
-        _progressText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_PROGRESS)),
-        _warningText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_WARNING)),
-        _diffAddedText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_DIFF_ADDED)),
-        _diffRemovedText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_DIFF_REMOVED))
+    explicit ThemeExampleControl(HINSTANCE instance)
+        : _navText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_NAV)),
+          _menuText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_MENU)),
+          _folderText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_FOLDER)),
+          _hoverText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_HOVER)),
+          _selectedText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_SELECTED)),
+          _dialogText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_DIALOG)),
+          _buttonText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_BUTTON)),
+          _progressText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_PROGRESS)),
+          _warningText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_WARNING)),
+          _diffAddedText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_DIFF_ADDED)),
+          _diffRemovedText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_DIFF_REMOVED))
     {
     }
 
@@ -73,9 +73,9 @@ public:
             return false;
         }
 
-        const PreviewLayout layout = BuildLayout(GetBounds());
+        const PreviewLayout layout                                           = BuildLayout(GetBounds());
         const std::vector<RedConfigure::ThemePreviewHitCandidate> candidates = BuildHitCandidates(layout);
-        const bool continuingCycle = IsSameClickPoint(point, _lastClickPoint);
+        const bool continuingCycle                                           = IsSameClickPoint(point, _lastClickPoint);
         const std::wstring selectedKey =
             RedConfigure::SelectThemePreviewHitKey(candidates, point.x, point.y, continuingCycle ? std::wstring_view(_lastClickKey) : std::wstring_view{});
         if (! selectedKey.empty())
@@ -97,8 +97,8 @@ public:
             return;
         }
 
-        const D2D1_RECT_F bounds = GetBounds();
-        const PreviewLayout layout = BuildLayout(bounds);
+        const D2D1_RECT_F bounds    = GetBounds();
+        const PreviewLayout layout  = BuildLayout(bounds);
         const ThemePalette& palette = host.GetTheme();
 
         const D2D1_COLOR_F windowColor        = ColorFromArgb(ColorOrDefault(*_model, L"window.background", 0xFFFFFFFFu));
@@ -195,10 +195,8 @@ public:
         }
         if (auto* brush = host.GetSolidBrush(menuBorderColor))
         {
-            dc->DrawLine(D2D1::Point2F(layout.menuRect.left, layout.menuRect.bottom),
-                         D2D1::Point2F(layout.menuRect.right, layout.menuRect.bottom),
-                         brush,
-                         1.0f);
+            dc->DrawLine(
+                D2D1::Point2F(layout.menuRect.left, layout.menuRect.bottom), D2D1::Point2F(layout.menuRect.right, layout.menuRect.bottom), brush, 1.0f);
         }
 
         const auto drawText = [&](std::wstring_view text, const D2D1_RECT_F& rect, FontRole role, const D2D1_COLOR_F& color)
@@ -225,10 +223,11 @@ public:
                  D2D1::RectF(layout.hoverRowRect.left + 10.0f, layout.hoverRowRect.top + 6.0f, layout.hoverRowRect.right, layout.hoverRowRect.bottom),
                  FontRole::Body,
                  folderTextColor);
-        drawText(_selectedText,
-                 D2D1::RectF(layout.selectedRowRect.left + 10.0f, layout.selectedRowRect.top + 6.0f, layout.selectedRowRect.right, layout.selectedRowRect.bottom),
-                 FontRole::Body,
-                 selectedTextColor);
+        drawText(
+            _selectedText,
+            D2D1::RectF(layout.selectedRowRect.left + 10.0f, layout.selectedRowRect.top + 6.0f, layout.selectedRowRect.right, layout.selectedRowRect.bottom),
+            FontRole::Body,
+            selectedTextColor);
         drawText(_warningText,
                  D2D1::RectF(layout.warningRowRect.left + 10.0f, layout.warningRowRect.top + 6.0f, layout.warningRowRect.right, layout.warningRowRect.bottom),
                  FontRole::Body,
@@ -303,11 +302,7 @@ private:
         for (const PreviewHitRegion& region : regions)
         {
             candidates.push_back(RedConfigure::ThemePreviewHitCandidate{
-                .key = std::wstring(region.key),
-                .left = region.rect.left,
-                .top = region.rect.top,
-                .right = region.rect.right,
-                .bottom = region.rect.bottom});
+                .key = std::wstring(region.key), .left = region.rect.left, .top = region.rect.top, .right = region.rect.right, .bottom = region.rect.bottom});
         }
         return candidates;
     }
@@ -336,7 +331,7 @@ private:
             return;
         }
 
-        const ThemePalette& palette = host.GetTheme();
+        const ThemePalette& palette                    = host.GetTheme();
         const std::array<PreviewHitRegion, 14> regions = BuildHitRegions(layout);
         for (const PreviewHitRegion& region : regions)
         {
@@ -364,9 +359,9 @@ private:
         layout.navRect       = D2D1::RectF(bounds.left + inset, bounds.top + inset, bounds.left + 172.0f, bounds.bottom - inset);
         layout.navAccentRect = D2D1::RectF(layout.navRect.left, layout.navRect.top, layout.navRect.left + 5.0f, layout.navRect.bottom);
         layout.menuRect      = D2D1::RectF(layout.navRect.right + 12.0f, bounds.top + inset, bounds.right - inset, bounds.top + inset + 36.0f);
-        layout.menuSelectionRect = D2D1::RectF(layout.menuRect.left + 92.0f, layout.menuRect.top + 5.0f, layout.menuRect.left + 150.0f, layout.menuRect.bottom - 5.0f);
-        layout.folderRect =
-            D2D1::RectF(layout.navRect.right + 12.0f, layout.menuRect.bottom + 12.0f, bounds.right - inset, bounds.bottom - inset);
+        layout.menuSelectionRect =
+            D2D1::RectF(layout.menuRect.left + 92.0f, layout.menuRect.top + 5.0f, layout.menuRect.left + 150.0f, layout.menuRect.bottom - 5.0f);
+        layout.folderRect = D2D1::RectF(layout.navRect.right + 12.0f, layout.menuRect.bottom + 12.0f, bounds.right - inset, bounds.bottom - inset);
 
         const float rowLeft  = layout.folderRect.left + 12.0f;
         const float rowRight = std::max(rowLeft + 60.0f, layout.folderRect.right - 250.0f);
@@ -377,17 +372,23 @@ private:
         rowTop += 34.0f;
         layout.warningRowRect = D2D1::RectF(rowLeft, rowTop, rowRight, rowTop + 30.0f);
 
-        layout.dialogRect =
-            D2D1::RectF(std::max(rowRight + 16.0f, layout.folderRect.right - 230.0f), layout.folderRect.top + 48.0f, layout.folderRect.right - 12.0f, layout.folderRect.top + 154.0f);
-        layout.buttonRect = D2D1::RectF(layout.dialogRect.left + 14.0f, layout.dialogRect.bottom - 42.0f, layout.dialogRect.left + 112.0f, layout.dialogRect.bottom - 12.0f);
+        layout.dialogRect = D2D1::RectF(std::max(rowRight + 16.0f, layout.folderRect.right - 230.0f),
+                                        layout.folderRect.top + 48.0f,
+                                        layout.folderRect.right - 12.0f,
+                                        layout.folderRect.top + 154.0f);
+        layout.buttonRect =
+            D2D1::RectF(layout.dialogRect.left + 14.0f, layout.dialogRect.bottom - 42.0f, layout.dialogRect.left + 112.0f, layout.dialogRect.bottom - 12.0f);
 
-        layout.progressBgRect =
-            D2D1::RectF(rowLeft, std::max(layout.warningRowRect.bottom + 44.0f, layout.folderRect.bottom - 104.0f), rowRight, std::max(layout.warningRowRect.bottom + 56.0f, layout.folderRect.bottom - 92.0f));
-        layout.progressFillRect = D2D1::RectF(layout.progressBgRect.left, layout.progressBgRect.top, layout.progressBgRect.left + ((layout.progressBgRect.right - layout.progressBgRect.left) * 0.62f), layout.progressBgRect.bottom);
-        layout.diffAddedRect =
-            D2D1::RectF(rowLeft, layout.progressBgRect.bottom + 22.0f, rowRight, layout.progressBgRect.bottom + 48.0f);
-        layout.diffRemovedRect =
-            D2D1::RectF(rowLeft, layout.diffAddedRect.bottom + 4.0f, rowRight, layout.diffAddedRect.bottom + 30.0f);
+        layout.progressBgRect   = D2D1::RectF(rowLeft,
+                                              std::max(layout.warningRowRect.bottom + 44.0f, layout.folderRect.bottom - 104.0f),
+                                              rowRight,
+                                              std::max(layout.warningRowRect.bottom + 56.0f, layout.folderRect.bottom - 92.0f));
+        layout.progressFillRect = D2D1::RectF(layout.progressBgRect.left,
+                                              layout.progressBgRect.top,
+                                              layout.progressBgRect.left + ((layout.progressBgRect.right - layout.progressBgRect.left) * 0.62f),
+                                              layout.progressBgRect.bottom);
+        layout.diffAddedRect    = D2D1::RectF(rowLeft, layout.progressBgRect.bottom + 22.0f, rowRight, layout.progressBgRect.bottom + 48.0f);
+        layout.diffRemovedRect  = D2D1::RectF(rowLeft, layout.diffAddedRect.bottom + 4.0f, rowRight, layout.diffAddedRect.bottom + 30.0f);
         return layout;
     }
 
@@ -408,4 +409,4 @@ private:
     std::wstring _diffAddedText;
     std::wstring _diffRemovedText;
 };
-}
+} // namespace RedConfigure::Ui

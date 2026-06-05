@@ -12,21 +12,21 @@ namespace
 class NativeTextStoreTestSink final : public ITextStoreACPSink
 {
 public:
-    NativeTextStoreTestSink() = default;
-    NativeTextStoreTestSink(const NativeTextStoreTestSink&) = delete;
+    NativeTextStoreTestSink()                                          = default;
+    NativeTextStoreTestSink(const NativeTextStoreTestSink&)            = delete;
     NativeTextStoreTestSink& operator=(const NativeTextStoreTestSink&) = delete;
-    NativeTextStoreTestSink(NativeTextStoreTestSink&&) = delete;
-    NativeTextStoreTestSink& operator=(NativeTextStoreTestSink&&) = delete;
+    NativeTextStoreTestSink(NativeTextStoreTestSink&&)                 = delete;
+    NativeTextStoreTestSink& operator=(NativeTextStoreTestSink&&)      = delete;
 
     std::function<HRESULT(DWORD)> onLockGranted;
     std::function<HRESULT(const TS_TEXTCHANGE*)> onTextChange;
-    DWORD lastLockFlags = 0u;
-    uint32_t textChangeCount = 0u;
-    uint32_t selectionChangeCount = 0u;
-    uint32_t layoutChangeCount = 0u;
+    DWORD lastLockFlags                = 0u;
+    uint32_t textChangeCount           = 0u;
+    uint32_t selectionChangeCount      = 0u;
+    uint32_t layoutChangeCount         = 0u;
     uint32_t editTransactionStartCount = 0u;
-    uint32_t editTransactionEndCount = 0u;
-    uint32_t editTransactionDepth = 0u;
+    uint32_t editTransactionEndCount   = 0u;
+    uint32_t editTransactionDepth      = 0u;
     TS_TEXTCHANGE lastTextChange{};
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
@@ -151,18 +151,17 @@ void SendNativeClick(HWND hwnd, POINT point)
 
 [[nodiscard]] POINT DipPointToScreenPoint(AttachedHostWindow& window, D2D1_POINT_2F pointDip)
 {
-    POINT point{static_cast<LONG>(std::lround(window.Host().DipsToPixels(pointDip.x))),
-                static_cast<LONG>(std::lround(window.Host().DipsToPixels(pointDip.y)))};
+    POINT point{static_cast<LONG>(std::lround(window.Host().DipsToPixels(pointDip.x))), static_cast<LONG>(std::lround(window.Host().DipsToPixels(pointDip.y)))};
     MapWindowPoints(window.Hwnd(), nullptr, &point, 1);
     return point;
 }
 
 [[nodiscard]] RECT DipRectToScreenRect(AttachedHostWindow& window, const D2D1_RECT_F& rectDip)
 {
-    POINT points[2]{{static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.left))),
-                     static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.top)))},
-                    {static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.right))),
-                     static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.bottom)))}};
+    POINT points[2]{
+        {static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.left))), static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.top)))},
+        {static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.right))),
+         static_cast<LONG>(std::lround(window.Host().DipsToPixels(rectDip.bottom)))}};
     MapWindowPoints(window.Hwnd(), nullptr, points, 2);
     return RECT{points[0].x, points[0].y, points[1].x, points[1].y};
 }
@@ -201,8 +200,8 @@ using DirectWritePointerSpan = std::pair<size_t, size_t>;
 {
     Require(layout != nullptr, context);
     const size_t clampedCaret = (std::min)(caretIndex, textSize);
-    float x                  = 0.0f;
-    float y                  = 0.0f;
+    float x                   = 0.0f;
+    float y                   = 0.0f;
     DWRITE_HIT_TEST_METRICS positionMetrics{};
     const UINT32 textPosition = static_cast<UINT32>(clampedCaret == 0u ? 0u : clampedCaret - 1u);
     const BOOL trailingHit    = clampedCaret == 0u ? FALSE : TRUE;
@@ -224,33 +223,26 @@ using DirectWritePointerSpan = std::pair<size_t, size_t>;
     IDWriteFactory* factory = host.GetWriteFactory();
     Require(factory != nullptr, context);
     const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(flowDirection);
-    IDWriteTextFormat* format =
-        host.GetTextFormat(FontRole::Body, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, readingDirection);
+    IDWriteTextFormat* format = host.GetTextFormat(FontRole::Body, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, readingDirection);
     Require(format != nullptr, context);
 
     const float layoutWidthDip  = std::max(1.0f, textRect.right - textRect.left);
     const float layoutHeightDip = std::max(1.0f, textRect.bottom - textRect.top);
     wil::com_ptr<IDWriteTextLayout> layout;
-    RequireSucceeded(factory->CreateTextLayout(text.data(),
-                                               static_cast<UINT32>(text.size()),
-                                               format,
-                                               layoutWidthDip,
-                                               layoutHeightDip,
-                                               layout.addressof()),
+    RequireSucceeded(factory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), format, layoutWidthDip, layoutHeightDip, layout.addressof()),
                      context);
     Require(layout != nullptr, context);
 
-    const float spanStartX = DirectWriteCaretOffsetDip(layout.get(), text.size(), spanStart, context);
-    const float spanEndX   = DirectWriteCaretOffsetDip(layout.get(), text.size(), spanEnd, context);
-    const float localX     = std::clamp((spanStartX + spanEndX) * 0.5f, 0.0f, std::max(0.0f, layoutWidthDip - 1.0f));
-    const float localY     = layoutHeightDip * 0.5f;
-    const D2D1_POINT_2F clickedPointDip = D2D1::Point2F(
-        host.PixelsToDip(static_cast<float>(std::round(host.DipsToPixels(textRect.left + localX)))),
-        host.PixelsToDip(static_cast<float>(std::round(host.DipsToPixels(textRect.top + localY)))));
-    const float clickedLocalX = std::clamp(clickedPointDip.x - textRect.left, 0.0f, std::max(0.0f, layoutWidthDip - 1.0f));
-    const float clickedLocalY = std::clamp(clickedPointDip.y - textRect.top, 0.0f, std::max(1.0f, layoutHeightDip) - 1.0f);
-    BOOL isTrailingHit = FALSE;
-    BOOL isInside      = FALSE;
+    const float spanStartX              = DirectWriteCaretOffsetDip(layout.get(), text.size(), spanStart, context);
+    const float spanEndX                = DirectWriteCaretOffsetDip(layout.get(), text.size(), spanEnd, context);
+    const float localX                  = std::clamp((spanStartX + spanEndX) * 0.5f, 0.0f, std::max(0.0f, layoutWidthDip - 1.0f));
+    const float localY                  = layoutHeightDip * 0.5f;
+    const D2D1_POINT_2F clickedPointDip = D2D1::Point2F(host.PixelsToDip(static_cast<float>(std::round(host.DipsToPixels(textRect.left + localX)))),
+                                                        host.PixelsToDip(static_cast<float>(std::round(host.DipsToPixels(textRect.top + localY)))));
+    const float clickedLocalX           = std::clamp(clickedPointDip.x - textRect.left, 0.0f, std::max(0.0f, layoutWidthDip - 1.0f));
+    const float clickedLocalY           = std::clamp(clickedPointDip.y - textRect.top, 0.0f, std::max(1.0f, layoutHeightDip) - 1.0f);
+    BOOL isTrailingHit                  = FALSE;
+    BOOL isInside                       = FALSE;
     DWRITE_HIT_TEST_METRICS pointMetrics{};
     RequireSucceeded(layout->HitTestPoint(clickedLocalX, clickedLocalY, &isTrailingHit, &isInside, &pointMetrics), context);
     Require(isInside != FALSE, context);
@@ -285,12 +277,9 @@ void VerifyNativeTextInputPointerScenarioMatchesDirectWrite(std::wstring_view te
     Require(field->DebugGetSingleLinePaintState(window.Host(), paint), context);
 
     std::array<DirectWritePointerProbe, 3u> probes{
-        CreateDirectWritePointerProbeForTextSpan(
-            window.Host(), text, paint.textRect, flowDirection, spans[0].first, spans[0].second, context),
-        CreateDirectWritePointerProbeForTextSpan(
-            window.Host(), text, paint.textRect, flowDirection, spans[1].first, spans[1].second, context),
-        CreateDirectWritePointerProbeForTextSpan(
-            window.Host(), text, paint.textRect, flowDirection, spans[2].first, spans[2].second, context),
+        CreateDirectWritePointerProbeForTextSpan(window.Host(), text, paint.textRect, flowDirection, spans[0].first, spans[0].second, context),
+        CreateDirectWritePointerProbeForTextSpan(window.Host(), text, paint.textRect, flowDirection, spans[1].first, spans[1].second, context),
+        CreateDirectWritePointerProbeForTextSpan(window.Host(), text, paint.textRect, flowDirection, spans[2].first, spans[2].second, context),
     };
     std::sort(probes.begin(), probes.end(), [](const DirectWritePointerProbe& lhs, const DirectWritePointerProbe& rhs) noexcept {
         return lhs.pointDip.x < rhs.pointDip.x;
@@ -312,11 +301,8 @@ void VerifyNativeTextInputPointerScenarioMatchesDirectWrite(std::wstring_view te
     }
 }
 
-void RequireNativeTextSelection(RedSalamander::DxUi::WindowHost& host,
-                                RedSalamander::DxUi::TextField& field,
-                                size_t expectedStart,
-                                size_t expectedEnd,
-                                const char* context)
+void RequireNativeTextSelection(
+    RedSalamander::DxUi::WindowHost& host, RedSalamander::DxUi::TextField& field, size_t expectedStart, size_t expectedEnd, const char* context)
 {
     const std::optional<std::pair<size_t, size_t>> selection = field.GetSelectionRange();
     Require(selection.has_value(), context);
@@ -443,12 +429,10 @@ void TestNativeTextInputBackendActivatesTsfDocumentOnFocus()
             "native text input attempts TSF document activation when a text field gains focus");
     Require(counters.tsfActivationSuccessCount > beforeCounters.tsfActivationSuccessCount,
             "native text input activates a TSF document manager/context for the focused field");
-    Require(window.Host().DebugHasActiveNativeTextInputTsfDocument(),
-            "native text input keeps a TSF document/context alive while the field is focused");
+    Require(window.Host().DebugHasActiveNativeTextInputTsfDocument(), "native text input keeps a TSF document/context alive while the field is focused");
 
     window.Host().SetFocusControl(nullptr);
-    Require(! window.Host().DebugHasActiveNativeTextInputTsfDocument(),
-            "native text input releases the TSF document/context when focus leaves the field");
+    Require(! window.Host().DebugHasActiveNativeTextInputTsfDocument(), "native text input releases the TSF document/context when focus leaves the field");
     Require(window.Host().DebugGetNativeTextInputEventCounters().tsfDeactivationCount > counters.tsfDeactivationCount,
             "native text input counts TSF document deactivation when focus leaves the field");
 }
@@ -686,11 +670,9 @@ void TestNativeTextInputBackendMultilineDialogKeysStayHostOwned()
                         : "native multiline return stays text-owned instead of invoking the default button");
         static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, static_cast<WPARAM>(L'\r'), 0));
         Require(field->GetText() == initialText + L"\n",
-                wrapped ? "native wrapped multiline return inserts a logical newline"
-                        : "native multiline return inserts a logical newline");
+                wrapped ? "native wrapped multiline return inserts a logical newline" : "native multiline return inserts a logical newline");
         Require(window.Host().GetFocusControl() == field,
-                wrapped ? "native wrapped multiline return keeps focus on the text field"
-                        : "native multiline return keeps focus on the text field");
+                wrapped ? "native wrapped multiline return keeps focus on the text field" : "native multiline return keeps focus on the text field");
         Require(window.Host().DebugHasActiveNativeTextInputSession(),
                 wrapped ? "native wrapped multiline return keeps the native text session active"
                         : "native multiline return keeps the native text session active");
@@ -705,9 +687,7 @@ void TestNativeTextInputBackendMultilineDialogKeysStayHostOwned()
 
         window.Host().SetFocusControl(field);
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_ESCAPE, 0));
-        Require(cancelCount == 1u,
-                wrapped ? "native wrapped multiline escape invokes the cancel button"
-                        : "native multiline escape invokes the cancel button");
+        Require(cancelCount == 1u, wrapped ? "native wrapped multiline escape invokes the cancel button" : "native multiline escape invokes the cancel button");
         Require(window.Host().GetFocusControl() == field,
                 wrapped ? "native wrapped multiline escape keeps retained focus on the text field"
                         : "native multiline escape keeps retained focus on the text field");
@@ -717,11 +697,9 @@ void TestNativeTextInputBackendMultilineDialogKeysStayHostOwned()
 
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_TAB, 0));
         Require(window.Host().GetFocusControl() == nextButton,
-                wrapped ? "native wrapped multiline tab moves focus to the next control"
-                        : "native multiline tab moves focus to the next control");
+                wrapped ? "native wrapped multiline tab moves focus to the next control" : "native multiline tab moves focus to the next control");
         Require(! window.Host().DebugHasActiveNativeTextInputSession(),
-                wrapped ? "native wrapped multiline tab deactivates the native text session"
-                        : "native multiline tab deactivates the native text session");
+                wrapped ? "native wrapped multiline tab deactivates the native text session" : "native multiline tab deactivates the native text session");
     };
 
     runCase(false);
@@ -816,17 +794,16 @@ void TestNativeTextInputBackendMenuKeyInvokesContextMenu()
     AttachedHostWindow window;
     window.Host().SetTextInputBackend(TextInputBackend::Native);
 
-    int contextMenuCount = 0;
+    int contextMenuCount    = 0;
     bool keyboardInvocation = false;
     auto root               = std::make_unique<Panel>();
     auto* field             = root->AddChild<TextField>(L"alpha");
     field->SetBounds(D2D1::RectF(12.0f, 16.0f, 220.0f, 44.0f));
-    field->SetOnContextMenu(
-        [&](POINT /*screenPoint*/, bool invokedByKeyboard)
-        {
-            ++contextMenuCount;
-            keyboardInvocation = invokedByKeyboard;
-        });
+    field->SetOnContextMenu([&](POINT /*screenPoint*/, bool invokedByKeyboard)
+    {
+        ++contextMenuCount;
+        keyboardInvocation = invokedByKeyboard;
+    });
 
     window.Host().SetRoot(std::move(root));
     window.Host().SetFocusControl(field);
@@ -850,8 +827,7 @@ void TestNativeTextInputBackendMultilineContextMenuKeysStayOnHostHwnd()
         auto root   = std::make_unique<Panel>();
         auto* field = root->AddChild<TextField>(wrapped ? std::wstring(kWrappedMultilineClipboardTextForTest) : std::wstring(L"alpha\nbeta"));
         field->SetMultiline(true);
-        const D2D1_RECT_F fieldBounds =
-            wrapped ? D2D1::RectF(12.0f, 16.0f, 132.0f, 112.0f) : D2D1::RectF(12.0f, 16.0f, 232.0f, 112.0f);
+        const D2D1_RECT_F fieldBounds = wrapped ? D2D1::RectF(12.0f, 16.0f, 132.0f, 112.0f) : D2D1::RectF(12.0f, 16.0f, 232.0f, 112.0f);
         field->SetBounds(fieldBounds);
         field->SetOnContextMenu([&](POINT point, bool keyboardInvocation) { contextMenu.Record(point, keyboardInvocation); });
 
@@ -925,8 +901,7 @@ void TestNativeTextInputBackendImeStartEndUpdatesCompositionState()
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_ENDCOMPOSITION, 0, 0));
 
     Require(window.Host().TryReadNativeTextInputState(field, state), "native session state is readable after ime composition ends");
-    Require(! state.compositionStartIndex.has_value() && ! state.compositionEndIndex.has_value(),
-            "native ime end clears the composition range");
+    Require(! state.compositionStartIndex.has_value() && ! state.compositionEndIndex.has_value(), "native ime end clears the composition range");
     Require(! state.conversionTargetStartIndex.has_value() && ! state.conversionTargetEndIndex.has_value(),
             "native ime end clears the conversion-target range");
 }
@@ -1127,8 +1102,7 @@ void TestNativeTextInputBackendMultilineImeWindowsTrackCaretAcrossLines()
         else
         {
             laterIndex = field->GetText().find(L"gamma");
-            Require(laterIndex.has_value() && laterIndex.value() != std::wstring::npos,
-                    "native multiline ime anchor test can locate a later-line token");
+            Require(laterIndex.has_value() && laterIndex.value() != std::wstring::npos, "native multiline ime anchor test can locate a later-line token");
         }
 
         const auto requireImeFormsAtCaret = [&](size_t caretIndex, const char* context)
@@ -1139,15 +1113,11 @@ void TestNativeTextInputBackendMultilineImeWindowsTrackCaretAcrossLines()
 
             const auto compositionForm = ReadTextInputCompositionFormForTest(window.Hwnd());
             Require(compositionForm.has_value(), context);
-            RequirePointNear(compositionForm.value().ptCurrentPos,
-                             POINT{expectedCaretClientPx.left, expectedCaretClientPx.top},
-                             context);
+            RequirePointNear(compositionForm.value().ptCurrentPos, POINT{expectedCaretClientPx.left, expectedCaretClientPx.top}, context);
 
             const auto candidateForm = ReadTextInputCandidateFormForTest(window.Hwnd(), 0u);
             Require(candidateForm.has_value(), context);
-            RequirePointNear(candidateForm.value().ptCurrentPos,
-                             POINT{expectedCaretClientPx.left, expectedCaretClientPx.bottom},
-                             context);
+            RequirePointNear(candidateForm.value().ptCurrentPos, POINT{expectedCaretClientPx.left, expectedCaretClientPx.bottom}, context);
             RequireRectNear(candidateForm.value().rcArea, expectedCaretClientPx, context);
             return compositionForm.value().ptCurrentPos;
         };
@@ -1156,22 +1126,20 @@ void TestNativeTextInputBackendMultilineImeWindowsTrackCaretAcrossLines()
         window.Host().SyncTextInput(field);
         static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_STARTCOMPOSITION, 0, 0));
 
-        const POINT laterPoint = requireImeFormsAtCaret(
-            laterIndex.value(),
-            wrapped ? "native wrapped ime composition/candidate forms track a later wrapped visual-line caret"
-                    : "native multiline ime composition/candidate forms track a later logical-line caret");
+        const POINT laterPoint = requireImeFormsAtCaret(laterIndex.value(),
+                                                        wrapped ? "native wrapped ime composition/candidate forms track a later wrapped visual-line caret"
+                                                                : "native multiline ime composition/candidate forms track a later logical-line caret");
         Require(laterPoint.y > static_cast<LONG>(firstCaretDip.top),
-                wrapped ? "native wrapped ime anchor starts on a later visual line"
-                        : "native multiline ime anchor starts on a later logical line");
+                wrapped ? "native wrapped ime anchor starts on a later visual line" : "native multiline ime anchor starts on a later logical line");
 
         field->SetSelectionRange(firstIndex, firstIndex);
         window.Host().SyncTextInput(field);
         static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, 0));
 
-        const POINT firstPoint = requireImeFormsAtCaret(
-            firstIndex,
-            wrapped ? "native wrapped ime composition/candidate forms update after caret moves during composition"
-                    : "native multiline ime composition/candidate forms update after caret moves during composition");
+        const POINT firstPoint =
+            requireImeFormsAtCaret(firstIndex,
+                                   wrapped ? "native wrapped ime composition/candidate forms update after caret moves during composition"
+                                           : "native multiline ime composition/candidate forms update after caret moves during composition");
         Require(firstPoint.y < laterPoint.y,
                 wrapped ? "native wrapped ime anchor returns to the first visual line during composition"
                         : "native multiline ime anchor returns to the first logical line during composition");
@@ -1247,14 +1215,12 @@ void TestNativeTextInputBackendMultilineImeWindowsUpdateWhenFocusedFieldMoves()
         if (wrapped)
         {
             laterIndex = field->GetText().find(L"foxtrot");
-            Require(laterIndex.has_value() && laterIndex.value() != std::wstring::npos,
-                    "native wrapped ime move test can locate a later wrapped token");
+            Require(laterIndex.has_value() && laterIndex.value() != std::wstring::npos, "native wrapped ime move test can locate a later wrapped token");
         }
         else
         {
             laterIndex = field->GetText().find(L"gamma");
-            Require(laterIndex.has_value() && laterIndex.value() != std::wstring::npos,
-                    "native multiline ime move test can locate a later-line token");
+            Require(laterIndex.has_value() && laterIndex.value() != std::wstring::npos, "native multiline ime move test can locate a later-line token");
         }
 
         field->SetSelectionRange(laterIndex.value(), laterIndex.value());
@@ -1399,9 +1365,8 @@ void TestNativeTextInputBackendImeWindowsUpdateAfterProgrammaticTextFieldCaretMo
     RequirePointNear(afterCandidateForm.value().ptCurrentPos,
                      POINT{expectedCaretClientPx.left, expectedCaretClientPx.bottom},
                      "native ime candidate point reanchors after programmatic TextField caret movement");
-    RequireRectNear(afterCandidateForm.value().rcArea,
-                    expectedCaretClientPx,
-                    "native ime candidate exclusion rect reanchors after programmatic TextField caret movement");
+    RequireRectNear(
+        afterCandidateForm.value().rcArea, expectedCaretClientPx, "native ime candidate exclusion rect reanchors after programmatic TextField caret movement");
     Require(afterCandidateForm.value().ptCurrentPos.x > beforeCandidateForm.value().ptCurrentPos.x,
             "native ime candidate point moves right after programmatic TextField caret movement");
 }
@@ -1497,9 +1462,8 @@ void TestNativeTextInputBackendImeWindowsUpdateAfterFocusedTextFieldPaddingChang
     RequirePointNear(afterCandidateForm.value().ptCurrentPos,
                      POINT{expectedCaretClientPx.left, expectedCaretClientPx.bottom},
                      "native ime candidate point reanchors after focused TextField padding changes");
-    RequireRectNear(afterCandidateForm.value().rcArea,
-                    expectedCaretClientPx,
-                    "native ime candidate exclusion rect reanchors after focused TextField padding changes");
+    RequireRectNear(
+        afterCandidateForm.value().rcArea, expectedCaretClientPx, "native ime candidate exclusion rect reanchors after focused TextField padding changes");
     Require(afterCandidateForm.value().ptCurrentPos.x > beforeCandidateForm.value().ptCurrentPos.x,
             "native ime candidate point moves right after focused TextField padding changes");
 }
@@ -1546,9 +1510,8 @@ void TestNativeTextInputBackendImeWindowsUpdateAfterFocusedEditableComboDensityC
     RequirePointNear(afterCandidateForm.value().ptCurrentPos,
                      POINT{expectedCaretClientPx.left, expectedCaretClientPx.bottom},
                      "native editable combo ime candidate point reanchors after density changes");
-    RequireRectNear(afterCandidateForm.value().rcArea,
-                    expectedCaretClientPx,
-                    "native editable combo ime candidate exclusion rect reanchors after density changes");
+    RequireRectNear(
+        afterCandidateForm.value().rcArea, expectedCaretClientPx, "native editable combo ime candidate exclusion rect reanchors after density changes");
     Require(afterCandidateForm.value().rcArea.right > beforeCandidateForm.value().rcArea.right,
             "native editable combo ime candidate exclusion rect widens with compact density text viewport");
 }
@@ -1725,12 +1688,12 @@ void TestNativeTextInputBackendImeCompositionPayloadPreviewsAndCancelRestoresBas
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_STARTCOMPOSITION, 0, 0));
 
     NativeTextInputImePayload payload;
-    payload.hasCompositionString = true;
-    payload.compositionString    = L"-ime";
+    payload.hasCompositionString  = true;
+    payload.compositionString     = L"-ime";
     payload.compositionAttributes = {ATTR_INPUT, ATTR_TARGET_CONVERTED, ATTR_TARGET_CONVERTED, ATTR_INPUT};
     payload.compositionClauses    = {0u, 1u, 4u};
-    payload.hasCursorPosition    = true;
-    payload.cursorPosition       = 3u;
+    payload.hasCursorPosition     = true;
+    payload.cursorPosition        = 3u;
     window.Host().DebugSetNativeTextInputImePayloadForTest(payload);
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, GCS_COMPSTR | GCS_COMPATTR | GCS_COMPCLAUSE | GCS_CURSORPOS));
 
@@ -1749,8 +1712,7 @@ void TestNativeTextInputBackendImeCompositionPayloadPreviewsAndCancelRestoresBas
     Require(state.compositionCursorIndex.has_value() && state.compositionCursorIndex.value() == 8u,
             "native ime composition exposes an absolute debug cursor index");
     const std::vector<size_t> expectedClauseBoundaries{5u, 6u, 9u};
-    Require(state.compositionClauseBoundaries == expectedClauseBoundaries,
-            "native ime composition maps clause offsets to absolute debug boundaries");
+    Require(state.compositionClauseBoundaries == expectedClauseBoundaries, "native ime composition maps clause offsets to absolute debug boundaries");
     Require(state.caretIndex == 8u, "native ime composition cursor position maps inside the preview string");
 
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_ENDCOMPOSITION, 0, 0));
@@ -1783,18 +1745,16 @@ void TestNativeTextInputBackendImeCompositionPaintExposesStyledInlineRanges()
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_STARTCOMPOSITION, 0, 0));
 
     NativeTextInputImePayload payload;
-    payload.hasCompositionString = true;
-    payload.compositionString    = L"-ime";
+    payload.hasCompositionString  = true;
+    payload.compositionString     = L"-ime";
     payload.compositionAttributes = {ATTR_INPUT, ATTR_TARGET_CONVERTED, ATTR_TARGET_CONVERTED, ATTR_INPUT};
     window.Host().DebugSetNativeTextInputImePayloadForTest(payload);
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, GCS_COMPSTR | GCS_COMPATTR));
 
     NativeTextInputState state;
     Require(window.Host().TryReadNativeTextInputState(field, state), "native ime styled paint test reads native session state");
-    Require(state.compositionStartIndex.has_value() && state.compositionStartIndex.value() == 5u,
-            "native ime styled paint test has a composition start");
-    Require(state.compositionEndIndex.has_value() && state.compositionEndIndex.value() == 9u,
-            "native ime styled paint test has a composition end");
+    Require(state.compositionStartIndex.has_value() && state.compositionStartIndex.value() == 5u, "native ime styled paint test has a composition start");
+    Require(state.compositionEndIndex.has_value() && state.compositionEndIndex.value() == 9u, "native ime styled paint test has a composition end");
     Require(state.conversionTargetStartIndex.has_value() && state.conversionTargetStartIndex.value() == 6u,
             "native ime styled paint test has a conversion target start");
     Require(state.conversionTargetEndIndex.has_value() && state.conversionTargetEndIndex.value() == 8u,
@@ -1802,8 +1762,7 @@ void TestNativeTextInputBackendImeCompositionPaintExposesStyledInlineRanges()
 
     const std::optional<std::vector<D2D1_RECT_F>> expectedCompositionRects = field->TryGetTextInputRangeRects(window.Host(), 5u, 9u);
     const std::optional<std::vector<D2D1_RECT_F>> expectedConversionRects  = field->TryGetTextInputRangeRects(window.Host(), 6u, 8u);
-    Require(expectedCompositionRects.has_value() && ! expectedCompositionRects->empty(),
-            "native ime styled paint test resolves composition range geometry");
+    Require(expectedCompositionRects.has_value() && ! expectedCompositionRects->empty(), "native ime styled paint test resolves composition range geometry");
     Require(expectedConversionRects.has_value() && ! expectedConversionRects->empty(),
             "native ime styled paint test resolves conversion target range geometry");
 
@@ -1932,14 +1891,12 @@ void TestNativeTextInputBackendImeMultilineWrappedPreviewThenResultCommitsAtOrig
     static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_COMPOSITION, 0, GCS_COMPSTR | GCS_CURSORPOS));
 
     NativeTextInputState state;
-    Require(field->GetText() == L"first line\nkana-previewalpha beta gamma wraps",
-            "native multiline ime preview inserts at the retained composition anchor");
+    Require(field->GetText() == L"first line\nkana-previewalpha beta gamma wraps", "native multiline ime preview inserts at the retained composition anchor");
     Require(window.Host().TryReadNativeTextInputState(field, state), "native multiline ime preview leaves readable native state");
     Require(state.multiline, "native multiline ime preview keeps multiline session state");
     Require(state.compositionStartIndex.has_value() && state.compositionStartIndex.value() == 11u,
             "native multiline ime preview starts at the original anchor");
-    Require(state.compositionEndIndex.has_value() && state.compositionEndIndex.value() == 23u,
-            "native multiline ime preview exposes the active preview span");
+    Require(state.compositionEndIndex.has_value() && state.compositionEndIndex.value() == 23u, "native multiline ime preview exposes the active preview span");
     Require(state.caretIndex == 23u, "native multiline ime preview moves the caret to the preview cursor");
 
     NativeTextInputImePayload resultPayload;
@@ -2089,8 +2046,9 @@ void TestNativeTextInputBackendMultilineImeCompositionOwnsSpecialKeys()
                         : "native multiline ime composition activates on the host hwnd");
 
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_RETURN, 0));
-        Require(defaultCount == 0u, wrapped ? "native wrapped multiline ime keeps return from invoking the default button"
-                                            : "native multiline ime keeps return from invoking the default button");
+        Require(defaultCount == 0u,
+                wrapped ? "native wrapped multiline ime keeps return from invoking the default button"
+                        : "native multiline ime keeps return from invoking the default button");
         Require(field->GetText() == originalText,
                 wrapped ? "native wrapped multiline ime return does not insert a newline during active composition"
                         : "native multiline ime return does not insert a newline during active composition");
@@ -2100,8 +2058,8 @@ void TestNativeTextInputBackendMultilineImeCompositionOwnsSpecialKeys()
                 wrapped ? "native wrapped multiline ime keeps session active after return" : "native multiline ime keeps session active after return");
 
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_ESCAPE, 0));
-        Require(cancelCount == 0u, wrapped ? "native wrapped multiline ime keeps escape from invoking cancel"
-                                           : "native multiline ime keeps escape from invoking cancel");
+        Require(cancelCount == 0u,
+                wrapped ? "native wrapped multiline ime keeps escape from invoking cancel" : "native multiline ime keeps escape from invoking cancel");
         Require(window.Host().GetFocusControl() == field,
                 wrapped ? "native wrapped multiline ime keeps focus after escape" : "native multiline ime keeps focus after escape");
 
@@ -2114,13 +2072,15 @@ void TestNativeTextInputBackendMultilineImeCompositionOwnsSpecialKeys()
         static_cast<void>(SendMessageW(window.Hwnd(), WM_IME_ENDCOMPOSITION, 0, 0));
 
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_RETURN, 0));
-        Require(defaultCount == 0u, wrapped ? "native wrapped multiline return remains text-owned after composition ends"
-                                            : "native multiline return remains text-owned after composition ends");
+        Require(defaultCount == 0u,
+                wrapped ? "native wrapped multiline return remains text-owned after composition ends"
+                        : "native multiline return remains text-owned after composition ends");
 
         window.Host().SetFocusControl(field);
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_ESCAPE, 0));
-        Require(cancelCount == 1u, wrapped ? "native wrapped multiline escape resumes cancel routing after composition ends"
-                                           : "native multiline escape resumes cancel routing after composition ends");
+        Require(cancelCount == 1u,
+                wrapped ? "native wrapped multiline escape resumes cancel routing after composition ends"
+                        : "native multiline escape resumes cancel routing after composition ends");
 
         window.Host().SetFocusControl(field);
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_TAB, 0));
@@ -2152,8 +2112,7 @@ void TestNativeTextInputBackendImeResultOnlyResumesHostKeyRouting()
         auto* cancelButton = root->AddChild<Button>(L"Cancel");
         field->SetMultiline(multiline || wrapped);
         field->SetBounds(wrapped ? D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f)
-                                 : (multiline ? D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f)
-                                              : D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f)));
+                                 : (multiline ? D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f) : D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f)));
         nextButton->SetBounds(D2D1::RectF(0.0f, 112.0f, 120.0f, 140.0f));
         cancelButton->SetBounds(D2D1::RectF(140.0f, 112.0f, 260.0f, 140.0f));
 
@@ -2177,14 +2136,13 @@ void TestNativeTextInputBackendImeResultOnlyResumesHostKeyRouting()
 
         NativeTextInputState state;
         Require(window.Host().TryReadNativeTextInputState(field, state), "native ime result-only test reads native session state");
-        Require(! state.compositionStartIndex.has_value() && ! state.compositionEndIndex.has_value(),
-                "native ime result-only clears composition ownership");
+        Require(! state.compositionStartIndex.has_value() && ! state.compositionEndIndex.has_value(), "native ime result-only clears composition ownership");
 
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_RETURN, 0));
         if (multiline || wrapped)
         {
-            Require(defaultCount == 0u, wrapped ? "native wrapped multiline ime result-only keeps return text-owned"
-                                                : "native multiline ime result-only keeps return text-owned");
+            Require(defaultCount == 0u,
+                    wrapped ? "native wrapped multiline ime result-only keeps return text-owned" : "native multiline ime result-only keeps return text-owned");
             Require(window.Host().GetFocusControl() == field,
                     wrapped ? "native wrapped multiline ime result-only return keeps focus" : "native multiline ime result-only return keeps focus");
         }
@@ -2195,9 +2153,10 @@ void TestNativeTextInputBackendImeResultOnlyResumesHostKeyRouting()
 
         window.Host().SetFocusControl(field);
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_ESCAPE, 0));
-        Require(cancelCount == 1u, wrapped ? "native wrapped multiline ime result-only escape resumes cancel routing"
-                                           : (multiline ? "native multiline ime result-only escape resumes cancel routing"
-                                                        : "native single-line ime result-only escape resumes cancel routing"));
+        Require(cancelCount == 1u,
+                wrapped ? "native wrapped multiline ime result-only escape resumes cancel routing"
+                        : (multiline ? "native multiline ime result-only escape resumes cancel routing"
+                                     : "native single-line ime result-only escape resumes cancel routing"));
 
         window.Host().SetFocusControl(field);
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_TAB, 0));
@@ -2229,8 +2188,7 @@ void TestNativeTextInputBackendImeResultAndCompositionKeepsKeyOwnership()
         auto* cancelButton = root->AddChild<Button>(L"Cancel");
         field->SetMultiline(multiline || wrapped);
         field->SetBounds(wrapped ? D2D1::RectF(0.0f, 0.0f, 120.0f, 96.0f)
-                                 : (multiline ? D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f)
-                                              : D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f)));
+                                 : (multiline ? D2D1::RectF(0.0f, 0.0f, 220.0f, 96.0f) : D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f)));
         nextButton->SetBounds(D2D1::RectF(0.0f, 112.0f, 120.0f, 140.0f));
         cancelButton->SetBounds(D2D1::RectF(140.0f, 112.0f, 260.0f, 140.0f));
 
@@ -2261,17 +2219,17 @@ void TestNativeTextInputBackendImeResultAndCompositionKeepsKeyOwnership()
 
         const std::wstring textBeforeReturn(field->GetText());
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_RETURN, 0));
-        Require(defaultCount == 0u, wrapped ? "native wrapped multiline continuing ime keeps return owned"
-                                            : (multiline ? "native multiline continuing ime keeps return owned"
-                                                         : "native single-line continuing ime keeps return owned"));
+        Require(defaultCount == 0u,
+                wrapped ? "native wrapped multiline continuing ime keeps return owned"
+                        : (multiline ? "native multiline continuing ime keeps return owned" : "native single-line continuing ime keeps return owned"));
         Require(field->GetText() == textBeforeReturn, "native continuing ime return does not mutate retained text");
         Require(window.Host().GetFocusControl() == field, "native continuing ime keeps focus after return");
         Require(window.Host().DebugHasActiveNativeTextInputSession(), "native continuing ime keeps session active after return");
 
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_ESCAPE, 0));
-        Require(cancelCount == 0u, wrapped ? "native wrapped multiline continuing ime keeps escape owned"
-                                           : (multiline ? "native multiline continuing ime keeps escape owned"
-                                                        : "native single-line continuing ime keeps escape owned"));
+        Require(cancelCount == 0u,
+                wrapped ? "native wrapped multiline continuing ime keeps escape owned"
+                        : (multiline ? "native multiline continuing ime keeps escape owned" : "native single-line continuing ime keeps escape owned"));
         Require(window.Host().GetFocusControl() == field, "native continuing ime keeps focus after escape");
 
         static_cast<void>(SendMessageW(window.Hwnd(), WM_KEYDOWN, VK_TAB, 0));
@@ -2313,39 +2271,38 @@ void TestNativeTextInputBackendSingleLineTabCharAndPasteReplacementSyncState()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha beta gamma");
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'\t', 0));
+        NativeTextInputState state;
+        if (field->GetText() != L"alpha beta gamma" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != L"alpha beta gamma" ||
+            ! window.Host().DebugHasActiveNativeTextInputSession())
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha beta gamma");
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 28.0f));
+        field->SetSelectionRange(6u, 10u);
+        window.Host().SyncTextInput(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"OMEGA"), "clipboard prepared before native partial-selection paste");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'\t', 0));
-            NativeTextInputState state;
-            if (field->GetText() != L"alpha beta gamma" || ! window.Host().TryReadNativeTextInputState(field, state) ||
-                state.text != L"alpha beta gamma" || ! window.Host().DebugHasActiveNativeTextInputSession())
-            {
-                return false;
-            }
-
-            field->SetSelectionRange(6u, 10u);
-            window.Host().SyncTextInput(field);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"OMEGA"), "clipboard prepared before native partial-selection paste");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-
-            if (! window.Host().TryReadNativeTextInputState(field, state))
-            {
-                return false;
-            }
-            return field->GetText() == L"alpha OMEGA gamma" && state.text == field->GetText() && state.caretIndex == 11u &&
-                   ! state.selectionAnchorIndex.has_value();
-        });
+        if (! window.Host().TryReadNativeTextInputState(field, state))
+        {
+            return false;
+        }
+        return field->GetText() == L"alpha OMEGA gamma" && state.text == field->GetText() && state.caretIndex == 11u &&
+               ! state.selectionAnchorIndex.has_value();
+    });
     Require(edited, "native single-line host ignores tab characters and syncs partial-selection paste state");
 }
 
@@ -2356,7 +2313,7 @@ void TestNativeTextInputBackendStateMirrorsInheritedFlowDirection()
     AttachedHostWindow window;
     window.Host().SetTextInputBackend(TextInputBackend::Native);
 
-    auto root   = std::make_unique<Panel>();
+    auto root = std::make_unique<Panel>();
     root->SetFlowDirection(FlowDirection::RightToLeft);
     auto* field = root->AddChild<TextField>(L"abc \x05D0\x05D1\x05D2 123");
     field->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 28.0f));
@@ -2443,107 +2400,103 @@ void TestNativeTextInputBackendEditableComboCommandsAndPopupSyncState()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* combo = root->AddChild<ComboBox>();
+        combo->SetEditable(true);
+        combo->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 32.0f));
+        combo->SetItems(
+            {ComboBox::Item{L"alpha", L"Alpha"}, ComboBox::Item{L"beta", L"Beta"}, ComboBox::Item{L"gamma", L"Gamma"}, ComboBox::Item{L"omega", L"Omega"}});
+        combo->SetText(L"alpha beta");
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(combo);
+        combo->SetEditableSelectionRange(6u, 10u);
+        window.Host().SyncTextInput(combo);
+
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native editable combo copy");
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"beta" || combo->GetText() != L"alpha beta")
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* combo = root->AddChild<ComboBox>();
-            combo->SetEditable(true);
-            combo->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 32.0f));
-            combo->SetItems({ComboBox::Item{L"alpha", L"Alpha"},
-                             ComboBox::Item{L"beta", L"Beta"},
-                             ComboBox::Item{L"gamma", L"Gamma"},
-                             ComboBox::Item{L"omega", L"Omega"}});
-            combo->SetText(L"alpha beta");
+        SendNativeCtrlKey(window.Hwnd(), 'X');
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"beta" || combo->GetText() != L"alpha ")
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(combo);
-            combo->SetEditableSelectionRange(6u, 10u);
-            window.Host().SyncTextInput(combo);
+        NativeTextInputState state;
+        if (! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha " || state.caretIndex != 6u ||
+            state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native editable combo copy");
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"beta" || combo->GetText() != L"alpha beta")
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        const std::optional<std::pair<size_t, size_t>> restoredSelection = combo->GetEditableSelectionRange();
+        if (combo->GetText() != L"alpha beta" || ! restoredSelection || restoredSelection.value().first != 6u || restoredSelection.value().second != 10u)
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'X');
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"beta" || combo->GetText() != L"alpha ")
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Y');
+        if (combo->GetText() != L"alpha " || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha " || state.caretIndex != 6u ||
+            state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            NativeTextInputState state;
-            if (! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha " || state.caretIndex != 6u ||
-                state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"omega\r\npsi\t"), "clipboard initialized before native editable combo paste");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
+        if (combo->GetText() != L"alpha omegapsi" || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha omegapsi" ||
+            state.caretIndex != combo->GetText().size() || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            const std::optional<std::pair<size_t, size_t>> restoredSelection = combo->GetEditableSelectionRange();
-            if (combo->GetText() != L"alpha beta" || ! restoredSelection || restoredSelection.value().first != 6u ||
-                restoredSelection.value().second != 10u)
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        if (combo->GetText() != L"alpha " || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha " || state.caretIndex != 6u ||
+            state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'Y');
-            if (combo->GetText() != L"alpha " || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha " ||
-                state.caretIndex != 6u || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"XYZ"), "clipboard initialized before native editable combo shift+insert");
+        SendNativeShiftKey(window.Hwnd(), VK_INSERT);
+        if (combo->GetText() != L"alpha XYZ" || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha XYZ" ||
+            state.caretIndex != combo->GetText().size() || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"omega\r\npsi\t"), "clipboard initialized before native editable combo paste");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-            if (combo->GetText() != L"alpha omegapsi" || ! window.Host().TryReadNativeTextInputState(combo, state) ||
-                state.text != L"alpha omegapsi" || state.caretIndex != combo->GetText().size() || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
+        combo->SetEditableSelectionRange(6u, 9u);
+        window.Host().SyncTextInput(combo);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native editable combo shift+delete");
+        SendNativeShiftKey(window.Hwnd(), VK_DELETE);
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"XYZ" || combo->GetText() != L"alpha ")
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            if (combo->GetText() != L"alpha " || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha " ||
-                state.caretIndex != 6u || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
+        SendNativeAltKey(window.Hwnd(), VK_DOWN);
+        if (! combo->DebugIsPopupOpen() || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha ")
+        {
+            return false;
+        }
 
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"XYZ"), "clipboard initialized before native editable combo shift+insert");
-            SendNativeShiftKey(window.Hwnd(), VK_INSERT);
-            if (combo->GetText() != L"alpha XYZ" || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha XYZ" ||
-                state.caretIndex != combo->GetText().size() || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-
-            combo->SetEditableSelectionRange(6u, 9u);
-            window.Host().SyncTextInput(combo);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native editable combo shift+delete");
-            SendNativeShiftKey(window.Hwnd(), VK_DELETE);
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"XYZ" || combo->GetText() != L"alpha ")
-            {
-                return false;
-            }
-
-            SendNativeAltKey(window.Hwnd(), VK_DOWN);
-            if (! combo->DebugIsPopupOpen() || ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alpha ")
-            {
-                return false;
-            }
-
-            SendNativeKey(window.Hwnd(), VK_ESCAPE);
-            return ! combo->DebugIsPopupOpen() && window.Host().DebugHasActiveNativeTextInputSession() &&
-                   window.Host().TryReadNativeTextInputState(combo, state) && state.text == L"alpha ";
-        });
+        SendNativeKey(window.Hwnd(), VK_ESCAPE);
+        return ! combo->DebugIsPopupOpen() && window.Host().DebugHasActiveNativeTextInputSession() && window.Host().TryReadNativeTextInputState(combo, state) &&
+               state.text == L"alpha ";
+    });
     Require(edited, "native editable combo command keys, undo/redo, and popup keys mutate retained text and sync native state");
 }
 
@@ -2551,65 +2504,63 @@ void TestNativeTextInputBackendEditableComboExactMatchCommandsSyncSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* combo = root->AddChild<ComboBox>();
+        combo->SetEditable(true);
+        combo->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 32.0f));
+        combo->SetItems({ComboBox::Item{L"alpha", L"Alpha"},
+                         ComboBox::Item{L"alphax", L"Alphax"},
+                         ComboBox::Item{L"alphabeta", L"Alphabeta"},
+                         ComboBox::Item{L"beta", L"Beta"}});
+        combo->SetText(L"alpha");
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(combo);
+        combo->SetEditableSelectionRange(combo->GetText().size(), combo->GetText().size());
+        window.Host().SyncTextInput(combo);
+
+        if (! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 0u)
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* combo = root->AddChild<ComboBox>();
-            combo->SetEditable(true);
-            combo->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 32.0f));
-            combo->SetItems({ComboBox::Item{L"alpha", L"Alpha"},
-                             ComboBox::Item{L"alphax", L"Alphax"},
-                             ComboBox::Item{L"alphabeta", L"Alphabeta"},
-                             ComboBox::Item{L"beta", L"Beta"}});
-            combo->SetText(L"alpha");
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'x', 0));
+        NativeTextInputState state{};
+        if (combo->GetText() != L"alphax" || ! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 1u ||
+            ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alphax" || state.caretIndex != 6u)
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(combo);
-            combo->SetEditableSelectionRange(combo->GetText().size(), combo->GetText().size());
-            window.Host().SyncTextInput(combo);
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        if (combo->GetText() != L"alpha" || ! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 0u)
+        {
+            return false;
+        }
 
-            if (! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 0u)
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Y');
+        if (combo->GetText() != L"alphax" || ! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 1u)
+        {
+            return false;
+        }
 
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'x', 0));
-            NativeTextInputState state{};
-            if (combo->GetText() != L"alphax" || ! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 1u ||
-                ! window.Host().TryReadNativeTextInputState(combo, state) || state.text != L"alphax" || state.caretIndex != 6u)
-            {
-                return false;
-            }
+        combo->SetText(L"alpha");
+        combo->SetEditableSelectionRange(combo->GetText().size(), combo->GetText().size());
+        window.Host().SyncTextInput(combo);
+        if (! SetClipboardUnicodeTextForTest(window.Hwnd(), L"beta"))
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            if (combo->GetText() != L"alpha" || ! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 0u)
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Y');
-            if (combo->GetText() != L"alphax" || ! combo->GetSelectedIndex().has_value() || combo->GetSelectedIndex().value() != 1u)
-            {
-                return false;
-            }
-
-            combo->SetText(L"alpha");
-            combo->SetEditableSelectionRange(combo->GetText().size(), combo->GetText().size());
-            window.Host().SyncTextInput(combo);
-            if (! SetClipboardUnicodeTextForTest(window.Hwnd(), L"beta"))
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-            return combo->GetText() == L"alphabeta" && combo->GetSelectedIndex().has_value() && combo->GetSelectedIndex().value() == 2u &&
-                   window.Host().TryReadNativeTextInputState(combo, state) && state.text == L"alphabeta" &&
-                   state.caretIndex == combo->GetText().size();
-        });
+        SendNativeCtrlKey(window.Hwnd(), 'V');
+        return combo->GetText() == L"alphabeta" && combo->GetSelectedIndex().has_value() && combo->GetSelectedIndex().value() == 2u &&
+               window.Host().TryReadNativeTextInputState(combo, state) && state.text == L"alphabeta" && state.caretIndex == combo->GetText().size();
+    });
 
     Require(edited, "native editable combo exact-match typing, undo/redo, and paste keep selected item synchronized");
 }
@@ -2658,18 +2609,15 @@ void TestNativeTextInputBackendEditableComboDeleteKeysAndPathWordDeleteSyncState
     combo->SetEditableSelectionRange(pathText.size(), pathText.size());
     window.Host().SyncTextInput(combo);
     SendNativeCtrlKey(window.Hwnd(), VK_BACK);
-    Require(combo->GetText() == L"C:\\repo\\.build\\x64\\",
-            "native editable combo ctrl+backspace deletes only the previous path segment");
-    Require(combo->GetText().find(L'\x7F') == std::wstring_view::npos,
-            "native editable combo ctrl+backspace does not insert the translated delete character");
+    Require(combo->GetText() == L"C:\\repo\\.build\\x64\\", "native editable combo ctrl+backspace deletes only the previous path segment");
+    Require(combo->GetText().find(L'\x7F') == std::wstring_view::npos, "native editable combo ctrl+backspace does not insert the translated delete character");
 
     combo->SetText(pathText);
     combo->SetEditableSelectionRange(pathText.size(), pathText.size());
     window.Host().SyncTextInput(combo);
     SendNativeCtrlKey(window.Hwnd(), VK_BACK);
     SendNativeCtrlKey(window.Hwnd(), VK_BACK);
-    Require(combo->GetText() == L"C:\\repo\\.build\\",
-            "native editable combo repeated ctrl+backspace keeps deleting meaningful path segments");
+    Require(combo->GetText() == L"C:\\repo\\.build\\", "native editable combo repeated ctrl+backspace keeps deleting meaningful path segments");
     Require(window.Host().TryReadNativeTextInputState(combo, state), "native editable combo path deletion keeps state readable");
     Require(state.text == combo->GetText() && state.caretIndex == combo->GetText().size() && ! state.selectionAnchorIndex.has_value(),
             "native editable combo path deletion syncs native state");
@@ -2920,7 +2868,7 @@ void TestNativeTextInputBackendEmojiSuffixDeletionSyncsState()
         AttachedHostWindow window;
         window.Host().SetTextInputBackend(TextInputBackend::Native);
 
-        auto root = std::make_unique<Panel>();
+        auto root         = std::make_unique<Panel>();
         std::wstring text = L"A";
         text += textElement;
         text.push_back(L'B');
@@ -2945,7 +2893,7 @@ void TestNativeTextInputBackendEmojiSuffixDeletionSyncsState()
         AttachedHostWindow window;
         window.Host().SetTextInputBackend(TextInputBackend::Native);
 
-        auto root = std::make_unique<Panel>();
+        auto root         = std::make_unique<Panel>();
         std::wstring text = L"A";
         text += textElement;
         text.push_back(L'B');
@@ -3004,7 +2952,8 @@ void TestNativeTextInputBackendEmojiShiftSelectionSyncsState()
     NativeTextInputState state;
     Require(window.Host().TryReadNativeTextInputState(field, state), "native session state is readable after emoji shift-selection");
     Require(state.caretIndex == 1u, "native shift-left lands at the start of the emoji text element");
-    Require(state.selectionAnchorIndex.has_value() && state.selectionAnchorIndex.value() == 6u, "native shift-left anchors at the end of the emoji text element");
+    Require(state.selectionAnchorIndex.has_value() && state.selectionAnchorIndex.value() == 6u,
+            "native shift-left anchors at the end of the emoji text element");
 
     static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, static_cast<WPARAM>(L'X'), 0));
 
@@ -3166,11 +3115,8 @@ void TestNativeTextInputBackendSingleLineRepeatedClicksWithoutClassDoubleClicksS
     static_cast<void>(SendMessageW(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON, clickLp));
     static_cast<void>(SendMessageW(window.Hwnd(), WM_LBUTTONUP, 0, clickLp));
 
-    RequireNativeTextSelection(window.Host(),
-                               *field,
-                               expectedStart,
-                               expectedEnd,
-                               "native repeated clicks synthesize double-click word selection on host classes without CS_DBLCLKS");
+    RequireNativeTextSelection(
+        window.Host(), *field, expectedStart, expectedEnd, "native repeated clicks synthesize double-click word selection on host classes without CS_DBLCLKS");
 
     static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'X', 0));
 
@@ -3241,8 +3187,7 @@ void TestNativeTextInputBackendSingleLineDragSelectionReplacesRangeOnHostHwnd()
     Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native drag-selection test keeps input on the host hwnd");
 
     POINT startPoint = GetNativeTextClientPointForCaretIndex(window, *field, 0u, "native drag-selection test can locate the start caret");
-    POINT endPoint =
-        GetNativeTextClientPointForCaretIndex(window, *field, field->GetText().size(), "native drag-selection test can locate the end caret");
+    POINT endPoint   = GetNativeTextClientPointForCaretIndex(window, *field, field->GetText().size(), "native drag-selection test can locate the end caret");
     startPoint.x -= 4;
     endPoint.x += 4;
 
@@ -3286,8 +3231,8 @@ void TestNativeTextInputBackendMixedBiDiDragSelectionCopiesLogicalOrderOnHostHwn
         Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native mixed BiDi drag keeps input on the host hwnd");
 
         POINT logicalStartPoint = GetNativeTextClientPointForCaretIndex(window, *field, 0u, "native mixed BiDi drag locates the logical start caret");
-        POINT logicalEndPoint = GetNativeTextClientPointForCaretIndex(
-            window, *field, field->GetText().size(), "native mixed BiDi drag locates the cross-script target caret");
+        POINT logicalEndPoint =
+            GetNativeTextClientPointForCaretIndex(window, *field, field->GetText().size(), "native mixed BiDi drag locates the cross-script target caret");
         if (logicalStartIsVisuallyBeforeLogicalEnd)
         {
             Require(logicalStartPoint.x < logicalEndPoint.x, "native mixed BiDi ltr drag uses left-to-right visual caret order");
@@ -3300,15 +3245,12 @@ void TestNativeTextInputBackendMixedBiDiDragSelectionCopiesLogicalOrderOnHostHwn
         TextFieldDebugSingleLinePaintState paint{};
         Require(field->DebugGetSingleLinePaintState(window.Host(), paint), "native mixed BiDi drag exposes the single-line text rectangle");
         const auto pointFromDip = [&window](float xDip, float yDip)
-        {
-            return POINT{static_cast<LONG>(std::lround(window.Host().DipsToPixels(xDip))),
-                         static_cast<LONG>(std::lround(window.Host().DipsToPixels(yDip)))};
-        };
+        { return POINT{static_cast<LONG>(std::lround(window.Host().DipsToPixels(xDip))), static_cast<LONG>(std::lround(window.Host().DipsToPixels(yDip)))}; };
         const float yDip = (paint.textRect.top + paint.textRect.bottom) * 0.5f;
-        POINT dragStart  = logicalStartIsVisuallyBeforeLogicalEnd ? pointFromDip(paint.textRect.left + 1.0f, yDip)
-                                                                  : pointFromDip(paint.textRect.right - 1.0f, yDip);
-        POINT dragEnd    = logicalStartIsVisuallyBeforeLogicalEnd ? pointFromDip(paint.textRect.right - 1.0f, yDip)
-                                                                  : pointFromDip(paint.textRect.left + 1.0f, yDip);
+        POINT dragStart =
+            logicalStartIsVisuallyBeforeLogicalEnd ? pointFromDip(paint.textRect.left + 1.0f, yDip) : pointFromDip(paint.textRect.right - 1.0f, yDip);
+        POINT dragEnd =
+            logicalStartIsVisuallyBeforeLogicalEnd ? pointFromDip(paint.textRect.right - 1.0f, yDip) : pointFromDip(paint.textRect.left + 1.0f, yDip);
 
         const LPARAM startLp = MAKELPARAM(dragStart.x, dragStart.y);
         const LPARAM endLp   = MAKELPARAM(dragEnd.x, dragEnd.y);
@@ -3335,11 +3277,9 @@ void TestNativeTextInputBackendMixedBiDiDragSelectionCopiesLogicalOrderOnHostHwn
         return true;
     };
 
-    Require(RetryClipboardSensitiveAction(
-                [&] { return verifyScenario(FlowDirection::LeftToRight, true); }),
+    Require(RetryClipboardSensitiveAction([&] { return verifyScenario(FlowDirection::LeftToRight, true); }),
             "native mixed BiDi ltr drag selection copies logical UTF-16 order");
-    Require(RetryClipboardSensitiveAction(
-                [&] { return verifyScenario(FlowDirection::RightToLeft, false); }),
+    Require(RetryClipboardSensitiveAction([&] { return verifyScenario(FlowDirection::RightToLeft, false); }),
             "native mixed BiDi rtl drag selection copies logical UTF-16 order");
 }
 
@@ -3348,9 +3288,8 @@ void TestNativeTextInputBackendMixedBiDiPointerHitTestMatchesDirectWriteVisualOr
     using namespace RedSalamander::DxUi;
 
     constexpr std::wstring_view mixedBiDiText = L"abc \x05D0\x05D1\x05D2 123";
-    constexpr std::array<DirectWritePointerSpan, 3u> spans{DirectWritePointerSpan{0u, 1u},
-                                                           DirectWritePointerSpan{5u, 6u},
-                                                           DirectWritePointerSpan{mixedBiDiText.size() - 1u, mixedBiDiText.size()}};
+    constexpr std::array<DirectWritePointerSpan, 3u> spans{
+        DirectWritePointerSpan{0u, 1u}, DirectWritePointerSpan{5u, 6u}, DirectWritePointerSpan{mixedBiDiText.size() - 1u, mixedBiDiText.size()}};
 
     VerifyNativeTextInputPointerScenarioMatchesDirectWrite(
         mixedBiDiText, FlowDirection::LeftToRight, spans, "native mixed BiDi ltr pointer hit-test matches DirectWrite logical index");
@@ -3362,42 +3301,38 @@ void TestNativeTextInputBackendBiDiPointerScenarioMatrixMatchesDirectWriteOnHost
 {
     using namespace RedSalamander::DxUi;
 
-    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(L"abc 123 xyz",
-                                                           FlowDirection::LeftToRight,
-                                                           std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u},
-                                                                                                  DirectWritePointerSpan{4u, 5u},
-                                                                                                  DirectWritePointerSpan{10u, 11u}},
-                                                           "native ltr text pointer matrix matches DirectWrite");
-    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(L"\x05D0\x05D1\x05D2 \x05D3\x05D4\x05D5",
-                                                           FlowDirection::RightToLeft,
-                                                           std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u},
-                                                                                                  DirectWritePointerSpan{4u, 5u},
-                                                                                                  DirectWritePointerSpan{6u, 7u}},
-                                                           "native rtl text pointer matrix matches DirectWrite");
-    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(L"\x0627\x0628\x062C 123 abc",
-                                                           FlowDirection::RightToLeft,
-                                                           std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u},
-                                                                                                  DirectWritePointerSpan{5u, 6u},
-                                                                                                  DirectWritePointerSpan{10u, 11u}},
-                                                           "native arabic digits pointer matrix matches DirectWrite");
+    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(
+        L"abc 123 xyz",
+        FlowDirection::LeftToRight,
+        std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u}, DirectWritePointerSpan{4u, 5u}, DirectWritePointerSpan{10u, 11u}},
+        "native ltr text pointer matrix matches DirectWrite");
+    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(
+        L"\x05D0\x05D1\x05D2 \x05D3\x05D4\x05D5",
+        FlowDirection::RightToLeft,
+        std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u}, DirectWritePointerSpan{4u, 5u}, DirectWritePointerSpan{6u, 7u}},
+        "native rtl text pointer matrix matches DirectWrite");
+    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(
+        L"\x0627\x0628\x062C 123 abc",
+        FlowDirection::RightToLeft,
+        std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u}, DirectWritePointerSpan{5u, 6u}, DirectWritePointerSpan{10u, 11u}},
+        "native arabic digits pointer matrix matches DirectWrite");
 
     std::wstring rtlWithSurrogate = L"\x05D0\x05D1 ";
     rtlWithSurrogate += MakeGrinningFaceTextElement();
     rtlWithSurrogate += L" \x05D2\x05D3";
-    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(rtlWithSurrogate,
-                                                           FlowDirection::RightToLeft,
-                                                           std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u},
-                                                                                                  DirectWritePointerSpan{3u, 5u},
-                                                                                                  DirectWritePointerSpan{7u, 8u}},
-                                                           "native rtl surrogate pointer matrix matches DirectWrite");
+    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(
+        rtlWithSurrogate,
+        FlowDirection::RightToLeft,
+        std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u}, DirectWritePointerSpan{3u, 5u}, DirectWritePointerSpan{7u, 8u}},
+        "native rtl surrogate pointer matrix matches DirectWrite");
 
     const std::wstring pathLikeRtl = L"C:\\src\\\x05D0\x05D1\x05D2\\file.txt";
-    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(pathLikeRtl,
-                                                           FlowDirection::RightToLeft,
-                                                           std::array<DirectWritePointerSpan, 3u>{DirectWritePointerSpan{0u, 1u},
-                                                                                                  DirectWritePointerSpan{7u, 8u},
-                                                                                                  DirectWritePointerSpan{pathLikeRtl.size() - 1u, pathLikeRtl.size()}},
-                                                           "native rtl path-like pointer matrix matches DirectWrite");
+    VerifyNativeTextInputPointerScenarioMatchesDirectWrite(
+        pathLikeRtl,
+        FlowDirection::RightToLeft,
+        std::array<DirectWritePointerSpan, 3u>{
+            DirectWritePointerSpan{0u, 1u}, DirectWritePointerSpan{7u, 8u}, DirectWritePointerSpan{pathLikeRtl.size() - 1u, pathLikeRtl.size()}},
+        "native rtl path-like pointer matrix matches DirectWrite");
 }
 
 void TestNativeTextInputBackendBiDiKeyboardLogicalBoundaryCommandsSyncState()
@@ -3476,97 +3411,96 @@ void TestNativeTextInputBackendMixedBiDiEditTransactionsPreserveLogicalOrder()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        constexpr std::wstring_view originalText          = L"ab \x05D0\x05D1 cd/ef 123";
+        constexpr std::wstring_view selectedHebrewText    = L"\x05D0\x05D1";
+        constexpr std::wstring_view replacementHebrewText = L"\x05D2\x05D3";
+        constexpr size_t hebrewStart                      = 3u;
+        constexpr size_t hebrewEnd                        = 5u;
+
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root = std::make_unique<Panel>();
+        root->SetFlowDirection(FlowDirection::RightToLeft);
+        auto* field = root->AddChild<TextField>(std::wstring(originalText));
+        field->SetBounds(D2D1::RectF(16.0f, 16.0f, 300.0f, 48.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native mixed-BiDi transaction test keeps the hidden bridge child absent");
+        Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native mixed-BiDi transaction test keeps input on the host hwnd");
+
+        field->SetSelectionRange(hebrewStart, hebrewEnd);
+        window.Host().SyncTextInput(field);
+        RequireNativeTextSelection(window.Host(), *field, hebrewStart, hebrewEnd, "native mixed-BiDi transaction starts with logical selection");
+
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native mixed-BiDi copy");
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText.has_value() || clipboardText.value() != selectedHebrewText)
         {
-            constexpr std::wstring_view originalText = L"ab \x05D0\x05D1 cd/ef 123";
-            constexpr std::wstring_view selectedHebrewText = L"\x05D0\x05D1";
-            constexpr std::wstring_view replacementHebrewText = L"\x05D2\x05D3";
-            constexpr size_t hebrewStart = 3u;
-            constexpr size_t hebrewEnd = 5u;
+            return false;
+        }
 
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+        SendNativeCtrlKey(window.Hwnd(), 'X');
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        NativeTextInputState state{};
+        if (! clipboardText.has_value() || clipboardText.value() != selectedHebrewText || field->GetText() != L"ab  cd/ef 123" ||
+            ! window.Host().TryReadNativeTextInputState(field, state) || state.text != field->GetText() || state.caretIndex != hebrewStart ||
+            state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            auto root = std::make_unique<Panel>();
-            root->SetFlowDirection(FlowDirection::RightToLeft);
-            auto* field = root->AddChild<TextField>(std::wstring(originalText));
-            field->SetBounds(D2D1::RectF(16.0f, 16.0f, 300.0f, 48.0f));
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        if (field->GetText() != originalText)
+        {
+            return false;
+        }
+        RequireNativeTextSelection(window.Host(), *field, hebrewStart, hebrewEnd, "native mixed-BiDi undo restores logical selection after cut");
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), replacementHebrewText), "clipboard initialized before native mixed-BiDi paste");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
+        if (field->GetText() != L"ab \x05D2\x05D3 cd/ef 123" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != field->GetText() ||
+            state.caretIndex != hebrewEnd || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native mixed-BiDi transaction test keeps the hidden bridge child absent");
-            Require(window.Host().GetTextInputHwnd() == window.Hwnd(), "native mixed-BiDi transaction test keeps input on the host hwnd");
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        if (field->GetText() != originalText)
+        {
+            return false;
+        }
+        RequireNativeTextSelection(window.Host(), *field, hebrewStart, hebrewEnd, "native mixed-BiDi undo restores logical selection after paste");
 
-            field->SetSelectionRange(hebrewStart, hebrewEnd);
-            window.Host().SyncTextInput(field);
-            RequireNativeTextSelection(window.Host(), *field, hebrewStart, hebrewEnd, "native mixed-BiDi transaction starts with logical selection");
+        SendNativeCtrlKey(window.Hwnd(), 'Y');
+        if (field->GetText() != L"ab \x05D2\x05D3 cd/ef 123" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != field->GetText() ||
+            state.caretIndex != hebrewEnd || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native mixed-BiDi copy");
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText.has_value() || clipboardText.value() != selectedHebrewText)
-            {
-                return false;
-            }
+        field->SetText(std::wstring(originalText));
+        field->SetSelectionRange(hebrewEnd, hebrewEnd);
+        window.Host().SyncTextInput(field);
+        SendNativeCtrlKey(window.Hwnd(), VK_BACK);
+        if (field->GetText() != L"ab  cd/ef 123" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != field->GetText() ||
+            state.caretIndex != hebrewStart || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'X');
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            NativeTextInputState state{};
-            if (! clipboardText.has_value() || clipboardText.value() != selectedHebrewText || field->GetText() != L"ab  cd/ef 123" ||
-                ! window.Host().TryReadNativeTextInputState(field, state) || state.text != field->GetText() || state.caretIndex != hebrewStart ||
-                state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            if (field->GetText() != originalText)
-            {
-                return false;
-            }
-            RequireNativeTextSelection(window.Host(), *field, hebrewStart, hebrewEnd, "native mixed-BiDi undo restores logical selection after cut");
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), replacementHebrewText), "clipboard initialized before native mixed-BiDi paste");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-            if (field->GetText() != L"ab \x05D2\x05D3 cd/ef 123" || ! window.Host().TryReadNativeTextInputState(field, state) ||
-                state.text != field->GetText() || state.caretIndex != hebrewEnd || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            if (field->GetText() != originalText)
-            {
-                return false;
-            }
-            RequireNativeTextSelection(window.Host(), *field, hebrewStart, hebrewEnd, "native mixed-BiDi undo restores logical selection after paste");
-
-            SendNativeCtrlKey(window.Hwnd(), 'Y');
-            if (field->GetText() != L"ab \x05D2\x05D3 cd/ef 123" || ! window.Host().TryReadNativeTextInputState(field, state) ||
-                state.text != field->GetText() || state.caretIndex != hebrewEnd || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-
-            field->SetText(std::wstring(originalText));
-            field->SetSelectionRange(hebrewEnd, hebrewEnd);
-            window.Host().SyncTextInput(field);
-            SendNativeCtrlKey(window.Hwnd(), VK_BACK);
-            if (field->GetText() != L"ab  cd/ef 123" || ! window.Host().TryReadNativeTextInputState(field, state) ||
-                state.text != field->GetText() || state.caretIndex != hebrewStart || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-
-            field->SetText(std::wstring(originalText));
-            field->SetSelectionRange(6u, 6u);
-            window.Host().SyncTextInput(field);
-            SendNativeCtrlKey(window.Hwnd(), VK_DELETE);
-            return field->GetText() == L"ab \x05D0\x05D1 /ef 123" && window.Host().TryReadNativeTextInputState(field, state) &&
-                   state.text == field->GetText() && state.caretIndex == 6u && ! state.selectionAnchorIndex.has_value();
-        });
+        field->SetText(std::wstring(originalText));
+        field->SetSelectionRange(6u, 6u);
+        window.Host().SyncTextInput(field);
+        SendNativeCtrlKey(window.Hwnd(), VK_DELETE);
+        return field->GetText() == L"ab \x05D0\x05D1 /ef 123" && window.Host().TryReadNativeTextInputState(field, state) && state.text == field->GetText() &&
+               state.caretIndex == 6u && ! state.selectionAnchorIndex.has_value();
+    });
 
     Require(edited, "native mixed-BiDi edit transactions preserve logical order and state across copy/cut/paste/undo/redo/word delete");
 }
@@ -3640,7 +3574,7 @@ void TestNativeTextInputBackendEditableComboPointerHitTestDoesNotSplitEmojiTextE
     window.Host().SetTextInputBackend(TextInputBackend::Native);
 
     const std::wstring textElement = MakeUsFlagTextElement();
-    std::wstring text             = L"A";
+    std::wstring text              = L"A";
     text += textElement;
     text.push_back(L'B');
 
@@ -3692,26 +3626,24 @@ void TestNativeTextInputBackendNoSelectionCopyLeavesClipboardUnchanged()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool copied = RetryClipboardSensitiveAction(
-        []()
-        {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+    const bool copied = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha");
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha");
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native no-selection ctrl+c");
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native no-selection ctrl+c");
 
-            SendNativeCtrlKey(window.Hwnd(), 'C');
+        SendNativeCtrlKey(window.Hwnd(), 'C');
 
-            const std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            return clipboardText.has_value() && clipboardText.value() == L"sentinel" && field->GetText() == L"alpha" &&
-                   ! field->GetSelectionRange().has_value();
-        });
+        const std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        return clipboardText.has_value() && clipboardText.value() == L"sentinel" && field->GetText() == L"alpha" && ! field->GetSelectionRange().has_value();
+    });
     Require(copied, "native ctrl+c without selection leaves clipboard and text unchanged");
 }
 
@@ -3719,61 +3651,60 @@ void TestNativeTextInputBackendCtrlCopyCutPasteSyncsState()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha beta");
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"stale"), "clipboard initialized before native ctrl+c");
+
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+        const std::optional<std::pair<size_t, size_t>> selectedAll = field->GetSelectionRange();
+        if (! selectedAll || selectedAll.value().first != 0u || selectedAll.value().second != field->GetText().size())
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha beta");
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 220.0f, 28.0f));
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"alpha beta")
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"stale"), "clipboard initialized before native ctrl+c");
+        SendNativeCtrlKey(window.Hwnd(), 'X');
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"alpha beta" || ! field->GetText().empty())
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'A');
-            const std::optional<std::pair<size_t, size_t>> selectedAll = field->GetSelectionRange();
-            if (! selectedAll || selectedAll.value().first != 0u || selectedAll.value().second != field->GetText().size())
-            {
-                return false;
-            }
+        NativeTextInputState state;
+        if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.text.empty() || state.caretIndex != 0u ||
+            state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"alpha beta")
-            {
-                return false;
-            }
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"omega\r\npsi\tzeta"), "clipboard initialized before native ctrl+v");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
 
-            SendNativeCtrlKey(window.Hwnd(), 'X');
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"alpha beta" || ! field->GetText().empty())
-            {
-                return false;
-            }
-
-            NativeTextInputState state;
-            if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.text.empty() || state.caretIndex != 0u ||
-                state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"omega\r\npsi\tzeta"), "clipboard initialized before native ctrl+v");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-
-            if (field->GetText() != L"omegapsizeta")
-            {
-                return false;
-            }
-            if (! window.Host().TryReadNativeTextInputState(field, state))
-            {
-                return false;
-            }
-            return state.text == L"omegapsizeta" && state.caretIndex == field->GetText().size() && ! state.selectionAnchorIndex.has_value();
-        });
+        if (field->GetText() != L"omegapsizeta")
+        {
+            return false;
+        }
+        if (! window.Host().TryReadNativeTextInputState(field, state))
+        {
+            return false;
+        }
+        return state.text == L"omegapsizeta" && state.caretIndex == field->GetText().size() && ! state.selectionAnchorIndex.has_value();
+    });
     Require(edited, "native ctrl+a/c/x/v copies, cuts, strips single-line paste control characters, and syncs session state");
 }
 
@@ -3781,59 +3712,58 @@ void TestNativeTextInputBackendUndoRedoAndRedoClear()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha");
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"beta"), "clipboard initialized before native replacement paste");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
+        if (field->GetText() != L"beta")
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha");
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        NativeTextInputState state;
+        if (field->GetText() != L"alpha" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != L"alpha")
+        {
+            return false;
+        }
+        const std::optional<std::pair<size_t, size_t>> restoredSelection = field->GetSelectionRange();
+        if (! restoredSelection || restoredSelection.value().first != 0u || restoredSelection.value().second != field->GetText().size())
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
+        SendNativeCtrlKey(window.Hwnd(), 'Y');
+        if (field->GetText() != L"beta" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != L"beta")
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'A');
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"beta"), "clipboard initialized before native replacement paste");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-            if (field->GetText() != L"beta")
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'Z', 0));
+        if (field->GetText() != L"Z")
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            NativeTextInputState state;
-            if (field->GetText() != L"alpha" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != L"alpha")
-            {
-                return false;
-            }
-            const std::optional<std::pair<size_t, size_t>> restoredSelection = field->GetSelectionRange();
-            if (! restoredSelection || restoredSelection.value().first != 0u || restoredSelection.value().second != field->GetText().size())
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Y');
-            if (field->GetText() != L"beta" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != L"beta")
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'Z', 0));
-            if (field->GetText() != L"Z")
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Y');
-            if (field->GetText() != L"Z" || ! window.Host().TryReadNativeTextInputState(field, state))
-            {
-                return false;
-            }
-            return state.text == L"Z" && state.caretIndex == 1u && ! state.selectionAnchorIndex.has_value();
-        });
+        SendNativeCtrlKey(window.Hwnd(), 'Y');
+        if (field->GetText() != L"Z" || ! window.Host().TryReadNativeTextInputState(field, state))
+        {
+            return false;
+        }
+        return state.text == L"Z" && state.caretIndex == 1u && ! state.selectionAnchorIndex.has_value();
+    });
     Require(edited, "native ctrl+z/y restores edit transactions and fresh edits clear redo history");
 }
 
@@ -3850,12 +3780,11 @@ void TestNativeTextInputBackendEditTransactionsNotifyOnceAndIgnoreNoOps()
 
     uint32_t changeCount = 0u;
     std::wstring lastChangedText;
-    field->SetOnTextChanged(
-        [&](std::wstring_view text)
-        {
-            ++changeCount;
-            lastChangedText.assign(text);
-        });
+    field->SetOnTextChanged([&](std::wstring_view text)
+    {
+        ++changeCount;
+        lastChangedText.assign(text);
+    });
 
     window.Host().SetRoot(std::move(root));
     window.Host().SetFocusControl(field);
@@ -3876,93 +3805,90 @@ void TestNativeTextInputBackendEditTransactionsNotifyOnceAndIgnoreNoOps()
     SendNativeCtrlKey(window.Hwnd(), 'Z');
     Require(changeCount == 2u && lastChangedText == L"alpha", "native undo notifies exactly once");
     Require(window.Host().TryReadNativeTextInputState(field, state), "native edit transaction test reads state after undo");
-    Require(state.text == L"alpha" && state.caretIndex == 5u && ! state.selectionAnchorIndex.has_value(),
-            "native undo restores text and collapsed caret");
+    Require(state.text == L"alpha" && state.caretIndex == 5u && ! state.selectionAnchorIndex.has_value(), "native undo restores text and collapsed caret");
 
     SendNativeCtrlKey(window.Hwnd(), 'Y');
     Require(changeCount == 3u && lastChangedText == L"alphaZ", "native redo notifies exactly once");
     Require(window.Host().TryReadNativeTextInputState(field, state), "native edit transaction test reads state after redo");
-    Require(state.text == L"alphaZ" && state.caretIndex == 6u && ! state.selectionAnchorIndex.has_value(),
-            "native redo restores text and collapsed caret");
+    Require(state.text == L"alphaZ" && state.caretIndex == 6u && ! state.selectionAnchorIndex.has_value(), "native redo restores text and collapsed caret");
 }
 
 void TestNativeTextInputBackendEmojiClipboardReplacementUndoRedo()
 {
     using namespace RedSalamander::DxUi;
 
-    const std::wstring emojiText = MakeGrinningFaceTextElement() + MakeWomanTechnologistTextElement() + MakeRainbowFlagTextElement() +
-                                   MakeThumbsUpMediumSkinToneTextElement() + MakeUsFlagTextElement();
+    const std::wstring emojiText    = MakeGrinningFaceTextElement() + MakeWomanTechnologistTextElement() + MakeRainbowFlagTextElement() +
+                                      MakeThumbsUpMediumSkinToneTextElement() + MakeUsFlagTextElement();
     const std::wstring originalText = L"left " + emojiText + L" right";
     const std::wstring cutText      = L"left  right";
     const std::wstring replacement  = MakeRainbowFlagTextElement() + MakeGrinningFaceTextElement();
     const std::wstring replacedText = L"left " + replacement + L" right";
 
-    const bool edited = RetryClipboardSensitiveAction(
-        [&]()
+    const bool edited = RetryClipboardSensitiveAction([&]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(originalText);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        const size_t emojiStart = std::wstring_view(L"left ").size();
+        const size_t emojiEnd   = emojiStart + emojiText.size();
+        field->SetSelectionRange(emojiStart, emojiEnd);
+        window.Host().SyncTextInput(field);
+
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native emoji copy");
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText.has_value() || clipboardText.value() != emojiText)
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(originalText);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 28.0f));
+        SendNativeCtrlKey(window.Hwnd(), 'X');
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText.has_value() || clipboardText.value() != emojiText || field->GetText() != cutText)
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        const std::optional<std::pair<size_t, size_t>> restoredSelection = field->GetSelectionRange();
+        if (field->GetText() != originalText || ! restoredSelection.has_value() || restoredSelection.value().first != emojiStart ||
+            restoredSelection.value().second != emojiEnd)
+        {
+            return false;
+        }
 
-            const size_t emojiStart = std::wstring_view(L"left ").size();
-            const size_t emojiEnd   = emojiStart + emojiText.size();
-            field->SetSelectionRange(emojiStart, emojiEnd);
-            window.Host().SyncTextInput(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), replacement), "clipboard initialized before native emoji replacement paste");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
+        if (field->GetText() != replacedText)
+        {
+            return false;
+        }
 
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native emoji copy");
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText.has_value() || clipboardText.value() != emojiText)
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        if (field->GetText() != originalText)
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'X');
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText.has_value() || clipboardText.value() != emojiText || field->GetText() != cutText)
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            const std::optional<std::pair<size_t, size_t>> restoredSelection = field->GetSelectionRange();
-            if (field->GetText() != originalText || ! restoredSelection.has_value() || restoredSelection.value().first != emojiStart ||
-                restoredSelection.value().second != emojiEnd)
-            {
-                return false;
-            }
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), replacement), "clipboard initialized before native emoji replacement paste");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-            if (field->GetText() != replacedText)
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            if (field->GetText() != originalText)
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Y');
-            NativeTextInputState state;
-            if (field->GetText() != replacedText || ! window.Host().TryReadNativeTextInputState(field, state))
-            {
-                return false;
-            }
-            if (state.text != replacedText || state.caretIndex != (emojiStart + replacement.size()) || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-            return true;
-        });
+        SendNativeCtrlKey(window.Hwnd(), 'Y');
+        NativeTextInputState state;
+        if (field->GetText() != replacedText || ! window.Host().TryReadNativeTextInputState(field, state))
+        {
+            return false;
+        }
+        if (state.text != replacedText || state.caretIndex != (emojiStart + replacement.size()) || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
+        return true;
+    });
     Require(edited, "native emoji edit transactions copy/cut/paste, replace selections, round-trip clipboard text, and undo/redo");
 }
 
@@ -3970,45 +3896,44 @@ void TestNativeTextInputBackendMaskedHiddenSuppressesCopyAndCut()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool suppressed = RetryClipboardSensitiveAction(
-        []()
+    const bool suppressed = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"secret");
+        field->SetMasked(true);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+
+        NativeTextInputState state;
+        if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.masked)
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"secret");
-            field->SetMasked(true);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native masked copy");
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"sentinel")
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-            SendNativeCtrlKey(window.Hwnd(), 'A');
+        SendNativeCtrlKey(window.Hwnd(), 'X');
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"sentinel" || field->GetText() != L"secret")
+        {
+            return false;
+        }
 
-            NativeTextInputState state;
-            if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.masked)
-            {
-                return false;
-            }
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native masked copy");
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"sentinel")
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'X');
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"sentinel" || field->GetText() != L"secret")
-            {
-                return false;
-            }
-
-            const std::optional<std::pair<size_t, size_t>> selection = field->GetSelectionRange();
-            return selection.has_value() && selection.value().first == 0u && selection.value().second == field->GetText().size();
-        });
+        const std::optional<std::pair<size_t, size_t>> selection = field->GetSelectionRange();
+        return selection.has_value() && selection.value().first == 0u && selection.value().second == field->GetText().size();
+    });
     Require(suppressed, "native hidden masked text suppresses copy and cut without disclosing or mutating the secret");
 }
 
@@ -4121,73 +4046,69 @@ void TestNativeTextInputBackendConcealedEditingAffordancesAndPointerPolicy()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"secret");
+        field->SetMasked(true);
+        field->SetPasswordMaskLengthPolicy(PasswordMaskLengthPolicy::Concealed);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        NativeTextInputState state;
+        if (! window.Host().TryReadNativeTextInputState(field, state) || state.secretVisibleDotCount < 8u || state.secretVisibleDotCount > 11u)
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"secret");
-            field->SetMasked(true);
-            field->SetPasswordMaskLengthPolicy(PasswordMaskLengthPolicy::Concealed);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 28.0f));
+        SendNativeClick(window.Hwnd(), POINT{12, 14});
+        if (! window.Host().TryReadNativeTextInputState(field, state) || state.caretIndex != field->GetText().size() || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
+        SendNativeKey(window.Hwnd(), VK_BACK);
+        if (field->GetText() != L"secre")
+        {
+            return false;
+        }
 
-            NativeTextInputState state;
-            if (! window.Host().TryReadNativeTextInputState(field, state) || state.secretVisibleDotCount < 8u ||
-                state.secretVisibleDotCount > 11u)
-            {
-                return false;
-            }
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'X', 0));
+        if (field->GetText() != L"secreX")
+        {
+            return false;
+        }
 
-            SendNativeClick(window.Hwnd(), POINT{12, 14});
-            if (! window.Host().TryReadNativeTextInputState(field, state) || state.caretIndex != field->GetText().size() ||
-                state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'Z', 0));
+        if (field->GetText() != L"Z")
+        {
+            return false;
+        }
 
-            SendNativeKey(window.Hwnd(), VK_BACK);
-            if (field->GetText() != L"secre")
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Z');
+        if (field->GetText() != L"secreX")
+        {
+            return false;
+        }
 
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'X', 0));
-            if (field->GetText() != L"secreX")
-            {
-                return false;
-            }
+        SendNativeCtrlKey(window.Hwnd(), 'Y');
+        if (field->GetText() != L"Z")
+        {
+            return false;
+        }
 
-            SendNativeCtrlKey(window.Hwnd(), 'A');
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'Z', 0));
-            if (field->GetText() != L"Z")
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Z');
-            if (field->GetText() != L"secreX")
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'Y');
-            if (field->GetText() != L"Z")
-            {
-                return false;
-            }
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"paste"), "clipboard initialized before concealed paste");
-            SendNativeCtrlKey(window.Hwnd(), 'A');
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-            return field->GetText() == L"paste" && window.Host().TryReadNativeTextInputState(field, state) &&
-                   state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount >= 8u &&
-                   state.secretVisibleDotCount <= 11u;
-        });
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"paste"), "clipboard initialized before concealed paste");
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+        SendNativeCtrlKey(window.Hwnd(), 'V');
+        return field->GetText() == L"paste" && window.Host().TryReadNativeTextInputState(field, state) &&
+               state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount >= 8u && state.secretVisibleDotCount <= 11u;
+    });
     Require(edited, "native concealed mode supports keyboard edits while pointer placement snaps to the logical end");
 }
 
@@ -4195,43 +4116,41 @@ void TestNativeTextInputBackendRevealedMaskedFieldAllowsCopyAndCut()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool revealedCut = RetryClipboardSensitiveAction(
-        []()
+    const bool revealedCut = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"secret");
+        field->SetMasked(true);
+        field->SetPasswordRevealState(PasswordRevealState::Visible);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+
+        NativeTextInputState state;
+        if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.masked || state.passwordRevealState != PasswordRevealState::Visible ||
+            state.secretVisibleDotCount != 0u)
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"secret");
-            field->SetMasked(true);
-            field->SetPasswordRevealState(PasswordRevealState::Visible);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native revealed masked copy");
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"secret")
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-            SendNativeCtrlKey(window.Hwnd(), 'A');
-
-            NativeTextInputState state;
-            if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.masked ||
-                state.passwordRevealState != PasswordRevealState::Visible || state.secretVisibleDotCount != 0u)
-            {
-                return false;
-            }
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native revealed masked copy");
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"secret")
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'X');
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            return clipboardText.has_value() && clipboardText.value() == L"secret" && field->GetText().empty() &&
-                   window.Host().TryReadNativeTextInputState(field, state) && state.text.empty() &&
-                   state.passwordRevealState == PasswordRevealState::Visible;
-        });
+        SendNativeCtrlKey(window.Hwnd(), 'X');
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        return clipboardText.has_value() && clipboardText.value() == L"secret" && field->GetText().empty() &&
+               window.Host().TryReadNativeTextInputState(field, state) && state.text.empty() && state.passwordRevealState == PasswordRevealState::Visible;
+    });
     Require(revealedCut, "native revealed masked text allows copy and cut while preserving revealed state until remask");
 }
 
@@ -4404,8 +4323,7 @@ void TestNativeTextInputBackendMaskedRevealButtonRemasksOnCaptureLoss()
 
     Require(field->GetPasswordRevealState() == PasswordRevealState::Hidden, "capture loss remasks a pressed reveal button");
     Require(window.Host().TryReadNativeTextInputState(field, state), "native masked reveal capture-loss test reads state after capture loss");
-    Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u,
-            "capture loss syncs hidden masked state");
+    Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u, "capture loss syncs hidden masked state");
 }
 
 void TestNativeTextInputBackendMaskedRevealButtonPeeksWithoutClearingSecret()
@@ -4425,21 +4343,18 @@ void TestNativeTextInputBackendMaskedRevealButtonPeeksWithoutClearingSecret()
 
     NativeTextInputState state;
     Require(window.Host().TryReadNativeTextInputState(field, state), "native masked reveal button test starts with readable state");
-    Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u,
-            "native masked reveal button test starts hidden");
+    Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u, "native masked reveal button test starts hidden");
 
     const D2D1_POINT_2F revealButtonPoint = D2D1::Point2F(170.0f, 14.0f);
     Require(field->OnMouseDown(window.Host(), revealButtonPoint, false, 0), "masked reveal button press is handled");
     Require(field->GetText() == L"secret", "masked reveal button press does not clear the secret");
     Require(window.Host().TryReadNativeTextInputState(field, state), "native masked reveal button press syncs state");
-    Require(state.passwordRevealState == PasswordRevealState::Visible && state.secretVisibleDotCount == 0u,
-            "masked reveal button press peeks plaintext");
+    Require(state.passwordRevealState == PasswordRevealState::Visible && state.secretVisibleDotCount == 0u, "masked reveal button press peeks plaintext");
 
     Require(field->OnMouseUp(window.Host(), revealButtonPoint, false, 0), "masked reveal button release is handled");
     Require(field->GetText() == L"secret", "masked reveal button release preserves the secret");
     Require(window.Host().TryReadNativeTextInputState(field, state), "native masked reveal button release syncs state");
-    Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u,
-            "masked reveal button release remasks plaintext");
+    Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u, "masked reveal button release remasks plaintext");
 }
 
 void TestNativeTextInputBackendMaskedRevealButtonSupportsKeyboardPeek()
@@ -4513,8 +4428,7 @@ void TestNativeTextInputBackendPasswordRevealModesControlAffordanceAndVisibility
 
         NativeTextInputState state;
         Require(window.Host().TryReadNativeTextInputState(field, state), "hidden reveal mode exposes initial native state");
-        Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u,
-                "hidden reveal mode starts masked");
+        Require(state.passwordRevealState == PasswordRevealState::Hidden && state.secretVisibleDotCount == 6u, "hidden reveal mode starts masked");
 
         const D2D1_POINT_2F rightEdgePoint = D2D1::Point2F(170.0f, 14.0f);
         Require(field->OnMouseDown(window.Host(), rightEdgePoint, false, 0), "hidden reveal mode still handles a text-field click");
@@ -4526,51 +4440,50 @@ void TestNativeTextInputBackendPasswordRevealModesControlAffordanceAndVisibility
         Require(window.Host().GetFocusControl() == next, "hidden reveal mode skips reveal affordance keyboard focus");
     }
 
-    const bool visibleModeCopied = RetryClipboardSensitiveAction(
-        []()
+    const bool visibleModeCopied = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"secret");
+        field->SetMasked(true);
+        field->SetPasswordRevealMode(PasswordRevealMode::Visible);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+        auto* next = root->AddChild<Button>(L"next");
+        next->SetBounds(D2D1::RectF(0.0f, 40.0f, 80.0f, 68.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        NativeTextInputState state;
+        if (field->GetPasswordRevealMode() != PasswordRevealMode::Visible || field->GetPasswordRevealState() != PasswordRevealState::Visible ||
+            field->GetSecretVisibleDotCount() != 0u || ! window.Host().TryReadNativeTextInputState(field, state) ||
+            state.passwordRevealState != PasswordRevealState::Visible || state.secretVisibleDotCount != 0u)
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"secret");
-            field->SetMasked(true);
-            field->SetPasswordRevealMode(PasswordRevealMode::Visible);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before visible reveal mode copy");
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        const std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText.has_value() || clipboardText.value() != L"secret")
+        {
+            return false;
+        }
 
-            auto* next = root->AddChild<Button>(L"next");
-            next->SetBounds(D2D1::RectF(0.0f, 40.0f, 80.0f, 68.0f));
+        window.Host().SetFocusControl(next);
+        if (field->GetPasswordRevealState() != PasswordRevealState::Visible || field->GetSecretVisibleDotCount() != 0u)
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-
-            NativeTextInputState state;
-            if (field->GetPasswordRevealMode() != PasswordRevealMode::Visible || field->GetPasswordRevealState() != PasswordRevealState::Visible ||
-                field->GetSecretVisibleDotCount() != 0u || ! window.Host().TryReadNativeTextInputState(field, state) ||
-                state.passwordRevealState != PasswordRevealState::Visible || state.secretVisibleDotCount != 0u)
-            {
-                return false;
-            }
-
-            SendNativeCtrlKey(window.Hwnd(), 'A');
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before visible reveal mode copy");
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            const std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText.has_value() || clipboardText.value() != L"secret")
-            {
-                return false;
-            }
-
-            window.Host().SetFocusControl(next);
-            if (field->GetPasswordRevealState() != PasswordRevealState::Visible || field->GetSecretVisibleDotCount() != 0u)
-            {
-                return false;
-            }
-
-            field->SetReadOnly(true);
-            field->SetEnabled(false);
-            return field->GetPasswordRevealState() == PasswordRevealState::Visible && field->GetSecretVisibleDotCount() == 0u;
-        });
+        field->SetReadOnly(true);
+        field->SetEnabled(false);
+        return field->GetPasswordRevealState() == PasswordRevealState::Visible && field->GetSecretVisibleDotCount() == 0u;
+    });
     Require(visibleModeCopied, "visible reveal mode keeps plaintext visible and copy-enabled across blur/read-only/disabled transitions");
 }
 
@@ -4578,57 +4491,56 @@ void TestNativeTextInputBackendReadOnlyAllowsCopyAndSuppressesMutation()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool suppressed = RetryClipboardSensitiveAction(
-        []()
+    const bool suppressed = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha");
+        field->SetReadOnly(true);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+
+        NativeTextInputState state;
+        if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.readOnly)
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha");
-            field->SetReadOnly(true);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 180.0f, 28.0f));
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native read-only copy");
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"alpha")
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-            SendNativeCtrlKey(window.Hwnd(), 'A');
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"replacement"), "clipboard initialized before native read-only mutation attempts");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
+        SendNativeCtrlKey(window.Hwnd(), 'X');
+        SendNativeShiftKey(window.Hwnd(), VK_DELETE);
+        SendNativeKey(window.Hwnd(), VK_BACK);
+        SendNativeKey(window.Hwnd(), VK_DELETE);
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'Z', 0));
 
-            NativeTextInputState state;
-            if (! window.Host().TryReadNativeTextInputState(field, state) || ! state.readOnly)
-            {
-                return false;
-            }
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"replacement" || field->GetText() != L"alpha")
+        {
+            return false;
+        }
 
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native read-only copy");
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"alpha")
-            {
-                return false;
-            }
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"replacement"), "clipboard initialized before native read-only mutation attempts");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-            SendNativeCtrlKey(window.Hwnd(), 'X');
-            SendNativeShiftKey(window.Hwnd(), VK_DELETE);
-            SendNativeKey(window.Hwnd(), VK_BACK);
-            SendNativeKey(window.Hwnd(), VK_DELETE);
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CHAR, L'Z', 0));
-
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"replacement" || field->GetText() != L"alpha")
-            {
-                return false;
-            }
-
-            if (! window.Host().TryReadNativeTextInputState(field, state))
-            {
-                return false;
-            }
-            const std::optional<std::pair<size_t, size_t>> selection = field->GetSelectionRange();
-            return state.text == L"alpha" && state.readOnly && selection.has_value() && selection.value().first == 0u &&
-                   selection.value().second == field->GetText().size();
-        });
+        if (! window.Host().TryReadNativeTextInputState(field, state))
+        {
+            return false;
+        }
+        const std::optional<std::pair<size_t, size_t>> selection = field->GetSelectionRange();
+        return state.text == L"alpha" && state.readOnly && selection.has_value() && selection.value().first == 0u &&
+               selection.value().second == field->GetText().size();
+    });
     Require(suppressed, "native read-only text allows copy and suppresses paste, cut, delete, and character mutation");
 }
 
@@ -4636,41 +4548,40 @@ void TestNativeTextInputBackendMultilineCtrlCopyPastePreservesLogicalNewlines()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha\nbeta");
+        field->SetMultiline(true);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        SendNativeCtrlKey(window.Hwnd(), 'A');
+        SendNativeCtrlKey(window.Hwnd(), 'C');
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"alpha\nbeta")
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha\nbeta");
-            field->SetMultiline(true);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
+        field->SetSelectionRange(5u, 5u);
+        window.Host().SyncTextInput(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"ONE\r\nTWO"), "clipboard initialized before native multiline ctrl+v");
+        SendNativeCtrlKey(window.Hwnd(), 'V');
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-
-            SendNativeCtrlKey(window.Hwnd(), 'A');
-            SendNativeCtrlKey(window.Hwnd(), 'C');
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"alpha\nbeta")
-            {
-                return false;
-            }
-
-            field->SetSelectionRange(5u, 5u);
-            window.Host().SyncTextInput(field);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"ONE\r\nTWO"), "clipboard initialized before native multiline ctrl+v");
-            SendNativeCtrlKey(window.Hwnd(), 'V');
-
-            NativeTextInputState state;
-            if (! window.Host().TryReadNativeTextInputState(field, state))
-            {
-                return false;
-            }
-            return field->GetText() == L"alphaONE\nTWO\nbeta" && state.text == field->GetText() && state.caretIndex == 12u &&
-                   ! state.selectionAnchorIndex.has_value();
-        });
+        NativeTextInputState state;
+        if (! window.Host().TryReadNativeTextInputState(field, state))
+        {
+            return false;
+        }
+        return field->GetText() == L"alphaONE\nTWO\nbeta" && state.text == field->GetText() && state.caretIndex == 12u &&
+               ! state.selectionAnchorIndex.has_value();
+    });
     Require(edited, "native multiline ctrl+c/ctrl+v preserves logical LF text and normalizes pasted CRLF to LF");
 }
 
@@ -4684,10 +4595,8 @@ void TestNativeTextInputBackendMultilineCharAndReturnReplacementSyncState()
         const size_t selectionStart    = wrapped ? kWrappedMultilineClipboardSelectionStartForTest : kLogicalNewlineClipboardSelectionStartForTest;
         const size_t selectionEnd      = wrapped ? kWrappedMultilineClipboardSelectionEndForTest : kLogicalNewlineClipboardSelectionEndForTest;
 
-        const std::wstring charExpected =
-            initialText.substr(0u, selectionStart) + L"Z" + initialText.substr(selectionEnd);
-        const std::wstring returnExpected =
-            initialText.substr(0u, selectionStart) + L"\n" + initialText.substr(selectionEnd);
+        const std::wstring charExpected   = initialText.substr(0u, selectionStart) + L"Z" + initialText.substr(selectionEnd);
+        const std::wstring returnExpected = initialText.substr(0u, selectionStart) + L"\n" + initialText.substr(selectionEnd);
 
         {
             AttachedHostWindow window;
@@ -4710,8 +4619,7 @@ void TestNativeTextInputBackendMultilineCharAndReturnReplacementSyncState()
                     wrapped ? "native wrapped multiline wm_char replaces the selected visible range"
                             : "native multiline wm_char replaces the selected logical newline-spanning range");
             Require(window.Host().TryReadNativeTextInputState(field, state),
-                    wrapped ? "native wrapped multiline wm_char replacement syncs state"
-                            : "native multiline wm_char replacement syncs state");
+                    wrapped ? "native wrapped multiline wm_char replacement syncs state" : "native multiline wm_char replacement syncs state");
             Require(state.text == field->GetText(),
                     wrapped ? "native wrapped multiline wm_char replacement keeps session text in sync"
                             : "native multiline wm_char replacement keeps session text in sync");
@@ -4763,8 +4671,7 @@ void TestNativeTextInputBackendMultilineCharAndReturnReplacementSyncState()
                     wrapped ? "native wrapped multiline return replaces the selected visible range with LF"
                             : "native multiline return replaces the selected logical newline-spanning range with LF");
             Require(window.Host().TryReadNativeTextInputState(field, state),
-                    wrapped ? "native wrapped multiline return replacement syncs state"
-                            : "native multiline return replacement syncs state");
+                    wrapped ? "native wrapped multiline return replacement syncs state" : "native multiline return replacement syncs state");
             Require(state.text == field->GetText() && state.caretIndex == selectionStart + 1u && ! state.selectionAnchorIndex.has_value(),
                     wrapped ? "native wrapped multiline return replacement leaves a collapsed caret after LF"
                             : "native multiline return replacement leaves a collapsed caret after LF");
@@ -4779,61 +4686,59 @@ void TestNativeTextInputBackendEditMessagesCopyPasteCutClearSelection()
 {
     using namespace RedSalamander::DxUi;
 
-    const bool edited = RetryClipboardSensitiveAction(
-        []()
+    const bool edited = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
+
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha\nbeta\ncharlie");
+        field->SetMultiline(true);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 140.0f));
+
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+
+        field->SetSelectionRange(0u, 10u);
+        window.Host().SyncTextInput(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native wm_copy");
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_COPY, 0, 0));
+        std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"alpha\nbeta")
         {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+            return false;
+        }
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha\nbeta\ncharlie");
-            field->SetMultiline(true);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 140.0f));
+        field->SetSelectionRange(5u, 10u);
+        window.Host().SyncTextInput(field);
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CLEAR, 0, 0));
+        NativeTextInputState state;
+        if (field->GetText() != L"alpha\ncharlie" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != field->GetText() ||
+            state.caretIndex != 5u || state.selectionAnchorIndex.has_value())
+        {
+            return false;
+        }
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"ONE\r\nTWO"), "clipboard initialized before native wm_paste");
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_PASTE, 0, 0));
+        if (field->GetText() != L"alphaONE\nTWO\ncharlie")
+        {
+            return false;
+        }
 
-            field->SetSelectionRange(0u, 10u);
-            window.Host().SyncTextInput(field);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native wm_copy");
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_COPY, 0, 0));
-            std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"alpha\nbeta")
-            {
-                return false;
-            }
+        field->SetSelectionRange(0u, 5u);
+        window.Host().SyncTextInput(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native wm_cut");
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CUT, 0, 0));
+        clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        if (! clipboardText || clipboardText.value() != L"alpha" || field->GetText() != L"ONE\nTWO\ncharlie")
+        {
+            return false;
+        }
 
-            field->SetSelectionRange(5u, 10u);
-            window.Host().SyncTextInput(field);
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CLEAR, 0, 0));
-            NativeTextInputState state;
-            if (field->GetText() != L"alpha\ncharlie" || ! window.Host().TryReadNativeTextInputState(field, state) || state.text != field->GetText() ||
-                state.caretIndex != 5u || state.selectionAnchorIndex.has_value())
-            {
-                return false;
-            }
-
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"ONE\r\nTWO"), "clipboard initialized before native wm_paste");
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_PASTE, 0, 0));
-            if (field->GetText() != L"alphaONE\nTWO\ncharlie")
-            {
-                return false;
-            }
-
-            field->SetSelectionRange(0u, 5u);
-            window.Host().SyncTextInput(field);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native wm_cut");
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CUT, 0, 0));
-            clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            if (! clipboardText || clipboardText.value() != L"alpha" || field->GetText() != L"ONE\nTWO\ncharlie")
-            {
-                return false;
-            }
-
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_UNDO, 0, 0));
-            return field->GetText() == L"alphaONE\nTWO\ncharlie" && window.Host().TryReadNativeTextInputState(field, state) &&
-                   state.text == field->GetText();
-        });
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_UNDO, 0, 0));
+        return field->GetText() == L"alphaONE\nTWO\ncharlie" && window.Host().TryReadNativeTextInputState(field, state) && state.text == field->GetText();
+    });
     Require(edited, "native edit messages copy, paste, cut, clear selection, and undo through the host-owned text session");
 }
 
@@ -4862,8 +4767,7 @@ void TestNativeTextInputBackendEditMessagesRoundTripWin32Protocol()
             "native wm_gettext returns CRLF-normalized multiline text and preserves surrogate pairs");
 
     const wchar_t replacementText[] = L"one\r\ntwo \xD83D\xDE00";
-    Require(SendMessageW(window.Hwnd(), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(replacementText)) == TRUE,
-            "native wm_settext reports success");
+    Require(SendMessageW(window.Hwnd(), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(replacementText)) == TRUE, "native wm_settext reports success");
     Require(field->GetText() == L"one\ntwo \xD83D\xDE00", "native wm_settext normalizes CRLF input to logical LF text");
 
     DWORD selectionStart = 0;
@@ -4872,8 +4776,7 @@ void TestNativeTextInputBackendEditMessagesRoundTripWin32Protocol()
     Require(selectionStart == 11u && selectionEnd == 11u, "native wm_settext leaves the Win32 selection collapsed at the logical end");
 
     Require(SendMessageW(window.Hwnd(), EM_SETSEL, 0, 3) != 0, "native em_setsel returns nonzero on success");
-    Require(SendMessageW(window.Hwnd(), EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L"ONE\r\nTWO")) == TRUE,
-            "native em_replacesel reports success");
+    Require(SendMessageW(window.Hwnd(), EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L"ONE\r\nTWO")) == TRUE, "native em_replacesel reports success");
     Require(field->GetText() == L"ONE\nTWO\ntwo \xD83D\xDE00", "native em_replacesel normalizes CRLF replacement text");
 
     Require(SendMessageW(window.Hwnd(), EM_SETSEL, static_cast<WPARAM>(static_cast<UINT>(-1)), static_cast<LPARAM>(-1)) != 0,
@@ -4906,8 +4809,7 @@ void TestNativeTextInputBackendEditMessagesSetTextClearsComposition()
     Require(SendMessageW(window.Hwnd(), WM_SETTEXT, 0, reinterpret_cast<LPARAM>(L"omega\r\npsi")) == TRUE,
             "native wm_settext during composition reports success");
     Require(window.Host().TryReadNativeTextInputState(field, state), "native wm_settext during composition leaves readable state");
-    Require(field->GetText() == L"omega\r\npsi" || field->GetText() == L"omega\npsi",
-            "native wm_settext during composition writes replacement text");
+    Require(field->GetText() == L"omega\r\npsi" || field->GetText() == L"omega\npsi", "native wm_settext during composition writes replacement text");
     Require(! state.compositionStartIndex.has_value() && ! state.compositionEndIndex.has_value(),
             "native wm_settext during composition clears the active composition range");
 }
@@ -4919,7 +4821,7 @@ void TestNativeTextInputBackendEditMessagesFallBackWithoutTextInput()
     AttachedHostWindow window;
     Require(SetWindowTextW(window.Hwnd(), L"fallback-title") != FALSE, "native edit-message fallback test sets a host window title");
 
-    bool handled = true;
+    bool handled         = true;
     const LRESULT length = window.Host().HandleMessage(window.Hwnd(), WM_GETTEXTLENGTH, 0, 0, handled);
     Require(handled, "native edit-message shim dispatches default handling without a focused native text input");
     Require(length == 14, "native edit-message shim returns the default window-proc value when it declines a message");
@@ -4929,31 +4831,30 @@ void TestNativeTextInputBackendClearWithoutSelectionLeavesTextAndClipboardUnchan
 {
     using namespace RedSalamander::DxUi;
 
-    const bool unchanged = RetryClipboardSensitiveAction(
-        []()
-        {
-            AttachedHostWindow window;
-            window.Host().SetTextInputBackend(TextInputBackend::Native);
+    const bool unchanged = RetryClipboardSensitiveAction([]()
+    {
+        AttachedHostWindow window;
+        window.Host().SetTextInputBackend(TextInputBackend::Native);
 
-            auto root   = std::make_unique<Panel>();
-            auto* field = root->AddChild<TextField>(L"alpha\nbeta");
-            field->SetMultiline(true);
-            field->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 140.0f));
+        auto root   = std::make_unique<Panel>();
+        auto* field = root->AddChild<TextField>(L"alpha\nbeta");
+        field->SetMultiline(true);
+        field->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 140.0f));
 
-            window.Host().SetRoot(std::move(root));
-            window.Host().SetFocusControl(field);
-            field->SetSelectionRange(5u, 5u);
-            window.Host().SyncTextInput(field);
-            Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native wm_clear no-selection");
+        window.Host().SetRoot(std::move(root));
+        window.Host().SetFocusControl(field);
+        field->SetSelectionRange(5u, 5u);
+        window.Host().SyncTextInput(field);
+        Require(SetClipboardUnicodeTextForTest(window.Hwnd(), L"sentinel"), "clipboard initialized before native wm_clear no-selection");
 
-            static_cast<void>(SendMessageW(window.Hwnd(), WM_CLEAR, 0, 0));
+        static_cast<void>(SendMessageW(window.Hwnd(), WM_CLEAR, 0, 0));
 
-            NativeTextInputState state;
-            const std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
-            return field->GetText() == L"alpha\nbeta" && clipboardText.has_value() && clipboardText.value() == L"sentinel" &&
-                   window.Host().TryReadNativeTextInputState(field, state) && state.text == field->GetText() && state.caretIndex == 5u &&
-                   ! state.selectionAnchorIndex.has_value();
-        });
+        NativeTextInputState state;
+        const std::optional<std::wstring> clipboardText = ReadClipboardUnicodeTextForTest(window.Hwnd());
+        return field->GetText() == L"alpha\nbeta" && clipboardText.has_value() && clipboardText.value() == L"sentinel" &&
+               window.Host().TryReadNativeTextInputState(field, state) && state.text == field->GetText() && state.caretIndex == 5u &&
+               ! state.selectionAnchorIndex.has_value();
+    });
     Require(unchanged, "native wm_clear without selection leaves text and clipboard unchanged");
 }
 
@@ -4988,19 +4889,18 @@ void TestNativeTextInputTextStoreRequiresLockAndExposesTextSelectionGeometry()
     TS_SELECTION_ACP selection{};
     ULONG fetchedSelection = 0u;
     std::wstring readText;
-    ULONG fetchedChars = 0u;
-    ULONG fetchedRuns = 0u;
-    LONG nextAcp = -1;
+    ULONG fetchedChars      = 0u;
+    ULONG fetchedRuns       = 0u;
+    LONG nextAcp            = -1;
     TsViewCookie activeView = 0u;
-    HWND textStoreHwnd = nullptr;
+    HWND textStoreHwnd      = nullptr;
     RECT screenExt{};
     RECT textExt{};
     BOOL textExtClipped = TRUE;
-    LONG pointAcp = -1;
-    HRESULT callbackHr = E_UNEXPECTED;
+    LONG pointAcp       = -1;
+    HRESULT callbackHr  = E_UNEXPECTED;
 
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    sink.onLockGranted = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->GetEndACP(&endAcp);
         if (FAILED(callbackHr))
@@ -5056,8 +4956,7 @@ void TestNativeTextInputTextStoreRequiresLockAndExposesTextSelectionGeometry()
     Require(sink.lastLockFlags == TS_LF_READ, "native text store grants a read lock");
     Require(endAcp == 10, "native text store reports the focused text end ACP");
     Require(fetchedSelection == 1u && selection.acpStart == 0 && selection.acpEnd == 5, "native text store exposes the retained selection range");
-    Require(readText == L"alpha beta" && fetchedChars == 10u && fetchedRuns == 1u && nextAcp == 10,
-            "native text store returns plain text and run info");
+    Require(readText == L"alpha beta" && fetchedChars == 10u && fetchedRuns == 1u && nextAcp == 10, "native text store returns plain text and run info");
     Require(textStoreHwnd == window.Hwnd(), "native text store exposes the host HWND");
     Require(screenExt.right > screenExt.left && screenExt.bottom > screenExt.top, "native text store exposes a non-empty screen extent");
     Require(textExt.right > textExt.left && textExt.bottom > textExt.top && textExtClipped == FALSE, "native text store exposes a text extent");
@@ -5090,8 +4989,7 @@ void TestNativeTextInputTextStoreExposesOwnerCompositionSink()
     RequireSucceeded(compositionSink->OnStartComposition(nullptr, &compositionAccepted),
                      "native text store owner composition sink accepts composition start callbacks");
     Require(compositionAccepted == TRUE, "native text store owner composition sink allows TSF composition");
-    RequireSucceeded(compositionSink->OnUpdateComposition(nullptr, nullptr),
-                     "native text store owner composition sink accepts composition update callbacks");
+    RequireSucceeded(compositionSink->OnUpdateComposition(nullptr, nullptr), "native text store owner composition sink accepts composition update callbacks");
     RequireSucceeded(compositionSink->OnEndComposition(nullptr), "native text store owner composition sink accepts composition end callbacks");
 }
 
@@ -5125,18 +5023,17 @@ void TestNativeTextInputTextStoreExposesAcp2Surface()
     TS_SELECTION_ACP selection{};
     ULONG fetchedSelection = 0u;
     std::wstring readText;
-    ULONG fetchedChars = 0u;
-    ULONG fetchedRuns = 0u;
-    LONG nextAcp = -1;
+    ULONG fetchedChars      = 0u;
+    ULONG fetchedRuns       = 0u;
+    LONG nextAcp            = -1;
     TsViewCookie activeView = 0u;
     RECT screenExt{};
     RECT textExt{};
     BOOL textExtClipped = TRUE;
-    LONG pointAcp = -1;
-    HRESULT callbackHr = E_UNEXPECTED;
+    LONG pointAcp       = -1;
+    HRESULT callbackHr  = E_UNEXPECTED;
 
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    sink.onLockGranted = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store2->GetEndACP(&endAcp);
         if (FAILED(callbackHr))
@@ -5186,8 +5083,7 @@ void TestNativeTextInputTextStoreExposesAcp2Surface()
     RequireSucceeded(callbackHr, "native ACP2 text store read callback completed all queries");
     Require(endAcp == 10, "native ACP2 text store reports the focused text end ACP");
     Require(fetchedSelection == 1u && selection.acpStart == 6 && selection.acpEnd == 10, "native ACP2 text store exposes the retained selection range");
-    Require(readText == L"alpha beta" && fetchedChars == 10u && fetchedRuns == 1u && nextAcp == 10,
-            "native ACP2 text store returns plain text and run info");
+    Require(readText == L"alpha beta" && fetchedChars == 10u && fetchedRuns == 1u && nextAcp == 10, "native ACP2 text store returns plain text and run info");
     Require(screenExt.right > screenExt.left && screenExt.bottom > screenExt.top, "native ACP2 text store exposes a non-empty screen extent");
     Require(textExt.right > textExt.left && textExt.bottom > textExt.top && textExtClipped == FALSE, "native ACP2 text store exposes a text extent");
     Require(pointAcp >= 0 && pointAcp <= endAcp, "native ACP2 text store maps a screen point to an ACP");
@@ -5200,9 +5096,8 @@ void TestNativeTextInputTextStoreMixedBiDiGeometryUsesTextViewport()
     using namespace RedSalamander::DxUi;
 
     constexpr std::wstring_view mixedBiDiText = L"abc \x05D0\x05D1\x05D2 123";
-    constexpr std::array<DirectWritePointerSpan, 3u> spans{DirectWritePointerSpan{0u, 1u},
-                                                           DirectWritePointerSpan{5u, 6u},
-                                                           DirectWritePointerSpan{mixedBiDiText.size() - 1u, mixedBiDiText.size()}};
+    constexpr std::array<DirectWritePointerSpan, 3u> spans{
+        DirectWritePointerSpan{0u, 1u}, DirectWritePointerSpan{5u, 6u}, DirectWritePointerSpan{mixedBiDiText.size() - 1u, mixedBiDiText.size()}};
 
     for (const FlowDirection flowDirection : {FlowDirection::LeftToRight, FlowDirection::RightToLeft})
     {
@@ -5227,11 +5122,16 @@ void TestNativeTextInputTextStoreMixedBiDiGeometryUsesTextViewport()
         const RECT expectedScreenExt = DipRectToScreenRect(window, paint.textRect);
 
         std::array<DirectWritePointerProbe, 3u> probes{
-            CreateDirectWritePointerProbeForTextSpan(window.Host(), mixedBiDiText, paint.textRect, flowDirection, spans[0].first, spans[0].second,
-                                                     "native text store mixed-BiDi first span probe"),
-            CreateDirectWritePointerProbeForTextSpan(window.Host(), mixedBiDiText, paint.textRect, flowDirection, spans[1].first, spans[1].second,
-                                                     "native text store mixed-BiDi script span probe"),
-            CreateDirectWritePointerProbeForTextSpan(window.Host(), mixedBiDiText, paint.textRect, flowDirection, spans[2].first, spans[2].second,
+            CreateDirectWritePointerProbeForTextSpan(
+                window.Host(), mixedBiDiText, paint.textRect, flowDirection, spans[0].first, spans[0].second, "native text store mixed-BiDi first span probe"),
+            CreateDirectWritePointerProbeForTextSpan(
+                window.Host(), mixedBiDiText, paint.textRect, flowDirection, spans[1].first, spans[1].second, "native text store mixed-BiDi script span probe"),
+            CreateDirectWritePointerProbeForTextSpan(window.Host(),
+                                                     mixedBiDiText,
+                                                     paint.textRect,
+                                                     flowDirection,
+                                                     spans[2].first,
+                                                     spans[2].second,
                                                      "native text store mixed-BiDi trailing span probe")};
 
         wil::com_ptr_nothrow<ITextStoreACP> store;
@@ -5239,8 +5139,7 @@ void TestNativeTextInputTextStoreMixedBiDiGeometryUsesTextViewport()
         Require(store != nullptr, "native text store mixed-BiDi geometry creates the text store");
 
         NativeTextStoreTestSink sink;
-        RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE),
-                         "native text store mixed-BiDi geometry accepts a sink");
+        RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE), "native text store mixed-BiDi geometry accepts a sink");
 
         TsViewCookie activeView = 0u;
         RECT screenExt{};
@@ -5249,8 +5148,7 @@ void TestNativeTextInputTextStoreMixedBiDiGeometryUsesTextViewport()
         std::array<LONG, spans.size()> pointAcps{};
         HRESULT callbackHr = E_UNEXPECTED;
 
-        sink.onLockGranted =
-            [&](DWORD /*lockFlags*/) noexcept
+        sink.onLockGranted = [&](DWORD /*lockFlags*/) noexcept
         {
             callbackHr = store->GetActiveView(&activeView);
             if (FAILED(callbackHr))
@@ -5266,9 +5164,8 @@ void TestNativeTextInputTextStoreMixedBiDiGeometryUsesTextViewport()
 
             for (size_t index = 0u; index < spans.size(); ++index)
             {
-                callbackHr =
-                    store->GetTextExt(activeView, static_cast<LONG>(spans[index].first), static_cast<LONG>(spans[index].second), &textExts[index],
-                                      &clipped[index]);
+                callbackHr = store->GetTextExt(
+                    activeView, static_cast<LONG>(spans[index].first), static_cast<LONG>(spans[index].second), &textExts[index], &clipped[index]);
                 if (FAILED(callbackHr))
                 {
                     return callbackHr;
@@ -5324,27 +5221,24 @@ void TestNativeTextInputTextStoreMultilineTextExtUsesCaretLineGeometry()
     D2D1_RECT_F expectedEndRect{};
     Require(field->DebugGetCaretRect(window.Host(), 4u, expectedStartRect), "native text store multiline geometry can measure range start");
     Require(field->DebugGetCaretRect(window.Host(), 13u, expectedEndRect), "native text store multiline geometry can measure range end");
-    const D2D1_RECT_F expectedDip =
-        D2D1::RectF((std::min)(expectedStartRect.left, expectedEndRect.left),
-                    (std::min)(expectedStartRect.top, expectedEndRect.top),
-                    (std::max)(expectedStartRect.right, expectedEndRect.right),
-                    (std::max)(expectedStartRect.bottom, expectedEndRect.bottom));
-    const RECT expectedScreen = DipRectToScreenRect(window, expectedDip);
+    const D2D1_RECT_F expectedDip = D2D1::RectF((std::min)(expectedStartRect.left, expectedEndRect.left),
+                                                (std::min)(expectedStartRect.top, expectedEndRect.top),
+                                                (std::max)(expectedStartRect.right, expectedEndRect.right),
+                                                (std::max)(expectedStartRect.bottom, expectedEndRect.bottom));
+    const RECT expectedScreen     = DipRectToScreenRect(window, expectedDip);
 
     wil::com_ptr_nothrow<ITextStoreACP> store;
     store.attach(window.Host().DebugCreateNativeTextInputTextStoreForTest());
     Require(store != nullptr, "native text store multiline geometry creates the text store");
 
     NativeTextStoreTestSink sink;
-    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE),
-                     "native text store multiline geometry accepts a sink");
+    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE), "native text store multiline geometry accepts a sink");
 
     TsViewCookie activeView = 0u;
     RECT textExt{};
     BOOL textExtClipped = TRUE;
-    HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    HRESULT callbackHr  = E_UNEXPECTED;
+    sink.onLockGranted  = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->GetActiveView(&activeView);
         if (FAILED(callbackHr))
@@ -5402,28 +5296,25 @@ void TestNativeTextInputTextStoreWrappedTextExtSpansVisualLineGeometry()
     }
     Require(wrappedLineStart.has_value(), "native text store wrapped extent found a caret on a wrapped visual line");
 
-    const RECT expectedFirstLineScreen = DipRectToScreenRect(
-        window,
-        D2D1::RectF((std::min)(firstCaretRect.left, previousLineCaretRect.left),
-                    (std::min)(firstCaretRect.top, previousLineCaretRect.top),
-                    (std::max)(firstCaretRect.right, previousLineCaretRect.right),
-                    (std::max)(firstCaretRect.bottom, previousLineCaretRect.bottom)));
-    const LONG expectedMinimumWidth = expectedFirstLineScreen.right - expectedFirstLineScreen.left;
+    const RECT expectedFirstLineScreen = DipRectToScreenRect(window,
+                                                             D2D1::RectF((std::min)(firstCaretRect.left, previousLineCaretRect.left),
+                                                                         (std::min)(firstCaretRect.top, previousLineCaretRect.top),
+                                                                         (std::max)(firstCaretRect.right, previousLineCaretRect.right),
+                                                                         (std::max)(firstCaretRect.bottom, previousLineCaretRect.bottom)));
+    const LONG expectedMinimumWidth    = expectedFirstLineScreen.right - expectedFirstLineScreen.left;
 
     wil::com_ptr_nothrow<ITextStoreACP> store;
     store.attach(window.Host().DebugCreateNativeTextInputTextStoreForTest());
     Require(store != nullptr, "native text store wrapped extent creates the text store");
 
     NativeTextStoreTestSink sink;
-    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE),
-                     "native text store wrapped extent accepts a sink");
+    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE), "native text store wrapped extent accepts a sink");
 
     TsViewCookie activeView = 0u;
     RECT textExt{};
     BOOL textExtClipped = TRUE;
-    HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    HRESULT callbackHr  = E_UNEXPECTED;
+    sink.onLockGranted  = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->GetActiveView(&activeView);
         if (FAILED(callbackHr))
@@ -5471,14 +5362,12 @@ void TestNativeTextInputTextStoreMultilinePointMapsToLineCaretAcp()
     Require(store != nullptr, "native text store multiline point creates the text store");
 
     NativeTextStoreTestSink sink;
-    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE),
-                     "native text store multiline point accepts a sink");
+    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE), "native text store multiline point accepts a sink");
 
     TsViewCookie activeView = 0u;
-    LONG pointAcp = -1;
-    HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    LONG pointAcp           = -1;
+    HRESULT callbackHr      = E_UNEXPECTED;
+    sink.onLockGranted      = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->GetActiveView(&activeView);
         if (FAILED(callbackHr))
@@ -5533,22 +5422,19 @@ void TestNativeTextInputTextStoreWrappedPointMapsToVisualLineCaretAcp()
     }
     Require(wrappedCaretIndex.has_value(), "native text store wrapped point found a caret on a wrapped visual line");
 
-    const POINT queryPoint =
-        DipPointToScreenPoint(window, D2D1::Point2F(wrappedCaretRect.left, (wrappedCaretRect.top + wrappedCaretRect.bottom) * 0.5f));
+    const POINT queryPoint = DipPointToScreenPoint(window, D2D1::Point2F(wrappedCaretRect.left, (wrappedCaretRect.top + wrappedCaretRect.bottom) * 0.5f));
 
     wil::com_ptr_nothrow<ITextStoreACP> store;
     store.attach(window.Host().DebugCreateNativeTextInputTextStoreForTest());
     Require(store != nullptr, "native text store wrapped point creates the text store");
 
     NativeTextStoreTestSink sink;
-    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE),
-                     "native text store wrapped point accepts a sink");
+    RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_LAYOUT_CHANGE), "native text store wrapped point accepts a sink");
 
     TsViewCookie activeView = 0u;
-    LONG pointAcp = -1;
-    HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    LONG pointAcp           = -1;
+    HRESULT callbackHr      = E_UNEXPECTED;
+    sink.onLockGranted      = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->GetActiveView(&activeView);
         if (FAILED(callbackHr))
@@ -5593,11 +5479,10 @@ void TestNativeTextInputTextStoreReportsNoLayoutForEmptyBounds()
     RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_TEXT_CHANGE | TS_AS_SEL_CHANGE | TS_AS_LAYOUT_CHANGE),
                      "native text store no-layout test advises a sink");
 
-    HRESULT textExtHr = E_UNEXPECTED;
+    HRESULT textExtHr   = E_UNEXPECTED;
     HRESULT screenExtHr = E_UNEXPECTED;
-    HRESULT pointHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    HRESULT pointHr     = E_UNEXPECTED;
+    sink.onLockGranted  = [&](DWORD /*lockFlags*/) noexcept
     {
         TsViewCookie activeView{};
         HRESULT callbackHr = store->GetActiveView(&activeView);
@@ -5608,14 +5493,14 @@ void TestNativeTextInputTextStoreReportsNoLayoutForEmptyBounds()
 
         RECT textExt{1, 2, 3, 4};
         BOOL textExtClipped = FALSE;
-        textExtHr = store->GetTextExt(activeView, 0, 5, &textExt, &textExtClipped);
+        textExtHr           = store->GetTextExt(activeView, 0, 5, &textExt, &textExtClipped);
 
         RECT screenExt{1, 2, 3, 4};
         screenExtHr = store->GetScreenExt(activeView, &screenExt);
 
         POINT queryPoint{0, 0};
         LONG pointAcp = -1;
-        pointHr = store->GetACPFromPoint(activeView, &queryPoint, 0u, &pointAcp);
+        pointHr       = store->GetACPFromPoint(activeView, &queryPoint, 0u, &pointAcp);
         return S_OK;
     };
 
@@ -5654,14 +5539,13 @@ void TestNativeTextInputTextStoreInsertAtSelectionMutatesRetainedTextAndNotifies
                      "native text store mutation test advises a sink");
 
     LONG queryStart = -1;
-    LONG queryEnd = -1;
+    LONG queryEnd   = -1;
     TS_TEXTCHANGE queryChange{};
     LONG insertStart = -1;
-    LONG insertEnd = -1;
+    LONG insertEnd   = -1;
     TS_TEXTCHANGE change{};
     HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    sink.onLockGranted = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->InsertTextAtSelection(TS_IAS_QUERYONLY, L"delta", 5u, &queryStart, &queryEnd, &queryChange);
         if (FAILED(callbackHr))
@@ -5733,12 +5617,11 @@ void TestNativeTextInputTextStoreEmojiRangeUsesLogicalUtf16Acp()
     ULONG fetchedChars = 0u;
     TS_SELECTION_ACP emojiSelectionAfterSet{};
     ULONG fetchedSelection = 0u;
-    LONG insertStart = -1;
-    LONG insertEnd = -1;
+    LONG insertStart       = -1;
+    LONG insertEnd         = -1;
     TS_TEXTCHANGE change{};
     HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    sink.onLockGranted = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->GetEndACP(&endAcp);
         if (FAILED(callbackHr))
@@ -5749,8 +5632,8 @@ void TestNativeTextInputTextStoreEmojiRangeUsesLogicalUtf16Acp()
         wchar_t buffer[32]{};
         TS_RUNINFO runInfo{};
         ULONG fetchedRuns = 0u;
-        LONG nextAcp = -1;
-        callbackHr = store->GetText(0, -1, buffer, static_cast<ULONG>(std::size(buffer)), &fetchedChars, &runInfo, 1u, &fetchedRuns, &nextAcp);
+        LONG nextAcp      = -1;
+        callbackHr        = store->GetText(0, -1, buffer, static_cast<ULONG>(std::size(buffer)), &fetchedChars, &runInfo, 1u, &fetchedRuns, &nextAcp);
         if (FAILED(callbackHr))
         {
             return callbackHr;
@@ -5762,7 +5645,7 @@ void TestNativeTextInputTextStoreEmojiRangeUsesLogicalUtf16Acp()
         emojiSelection.acpEnd             = static_cast<LONG>(emojiEnd);
         emojiSelection.style.ase          = TS_AE_END;
         emojiSelection.style.fInterimChar = FALSE;
-        callbackHr = store->SetSelection(1u, &emojiSelection);
+        callbackHr                        = store->SetSelection(1u, &emojiSelection);
         if (FAILED(callbackHr))
         {
             return callbackHr;
@@ -5774,8 +5657,7 @@ void TestNativeTextInputTextStoreEmojiRangeUsesLogicalUtf16Acp()
             return callbackHr;
         }
 
-        callbackHr = store->InsertTextAtSelection(
-            0u, replacement.data(), static_cast<ULONG>(replacement.size()), &insertStart, &insertEnd, &change);
+        callbackHr = store->InsertTextAtSelection(0u, replacement.data(), static_cast<ULONG>(replacement.size()), &insertStart, &insertEnd, &change);
         return callbackHr;
     };
 
@@ -5833,9 +5715,8 @@ void TestNativeTextInputTextStoreSetTextReplacesRangeAndNotifiesSink()
     TS_TEXTCHANGE change{};
     TS_SELECTION_ACP selectionAfter{};
     ULONG fetchedSelection = 0u;
-    HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    HRESULT callbackHr     = E_UNEXPECTED;
+    sink.onLockGranted     = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->SetText(0u, 6, 10, L"delta", 5u, &change);
         if (FAILED(callbackHr))
@@ -5859,8 +5740,7 @@ void TestNativeTextInputTextStoreSetTextReplacesRangeAndNotifiesSink()
             "native text store SetText collapses native selection after replacement");
     Require(fetchedSelection == 1u && selectionAfter.acpStart == 11 && selectionAfter.acpEnd == 11,
             "native text store SetText exposes the collapsed post-replacement selection");
-    Require(change.acpStart == 6 && change.acpOldEnd == 10 && change.acpNewEnd == 11,
-            "native text store SetText reports the replacement TS_TEXTCHANGE span");
+    Require(change.acpStart == 6 && change.acpOldEnd == 10 && change.acpNewEnd == 11, "native text store SetText reports the replacement TS_TEXTCHANGE span");
     Require(sink.textChangeCount == 1u && sink.selectionChangeCount == 1u && sink.layoutChangeCount == 1u,
             "native text store SetText notifies text, selection, and layout sinks after replacement");
     Require(sink.lastTextChange.acpStart == change.acpStart && sink.lastTextChange.acpOldEnd == change.acpOldEnd &&
@@ -5973,8 +5853,7 @@ void TestNativeTextInputTextStoreExternalChangeNotificationHandlesSinkRequestedL
     bool requestedNestedLock = false;
     HRESULT innerRequestHr   = E_UNEXPECTED;
     HRESULT innerSessionHr   = E_UNEXPECTED;
-    sink.onTextChange =
-        [&](const TS_TEXTCHANGE* /*change*/) noexcept
+    sink.onTextChange        = [&](const TS_TEXTCHANGE* /*change*/) noexcept
     {
         if (! requestedNestedLock)
         {
@@ -6036,8 +5915,7 @@ void TestNativeTextInputTextStoreRepeatedEmojiExternalChangesStayBounded()
     uint32_t nestedLockCount = 0u;
     HRESULT innerRequestHr   = S_OK;
     HRESULT innerSessionHr   = S_OK;
-    sink.onTextChange =
-        [&](const TS_TEXTCHANGE* /*change*/) noexcept
+    sink.onTextChange        = [&](const TS_TEXTCHANGE* /*change*/) noexcept
     {
         ++nestedLockCount;
         innerSessionHr = E_UNEXPECTED;
@@ -6052,7 +5930,7 @@ void TestNativeTextInputTextStoreRepeatedEmojiExternalChangesStayBounded()
                                          MakeHeartVariationTextElement()};
     std::wstring previousText(field->GetText());
     uint32_t expectedChangeCount = 0u;
-    wchar_t suffix = L'A';
+    wchar_t suffix               = L'A';
     for (const std::wstring& emoji : emojiChanges)
     {
         std::wstring nextText = L"prefix ";
@@ -6086,8 +5964,8 @@ void TestNativeTextInputTextStoreRepeatedEmojiExternalChangesStayBounded()
     sessionHr = E_UNEXPECTED;
     RequireSucceeded(store->RequestLock(TS_LF_READ, &sessionHr), "native text store repeated emoji soak accepts a final no-change lock");
     RequireSucceeded(sessionHr, "native text store repeated emoji soak final no-change lock succeeds");
-    Require(sink.textChangeCount == expectedChangeCount && sink.selectionChangeCount == expectedChangeCount &&
-                sink.layoutChangeCount == expectedChangeCount && nestedLockCount == expectedChangeCount,
+    Require(sink.textChangeCount == expectedChangeCount && sink.selectionChangeCount == expectedChangeCount && sink.layoutChangeCount == expectedChangeCount &&
+                nestedLockCount == expectedChangeCount,
             "native text store repeated emoji soak does not emit extra notifications after the final no-change lock");
 
     RequireSucceeded(store->UnadviseSink(&sink), "native text store repeated emoji external-change soak unadvises the sink");
@@ -6154,15 +6032,13 @@ void TestNativeTextInputTextStoreReadWriteLockBracketsEditTransactionAndRejectsR
     RequireSucceeded(store->AdviseSink(__uuidof(ITextStoreACPSink), &sink, TS_AS_TEXT_CHANGE | TS_AS_SEL_CHANGE | TS_AS_LAYOUT_CHANGE),
                      "native text store transaction test advises a sink");
 
-    HRESULT callbackHr = E_UNEXPECTED;
+    HRESULT callbackHr     = E_UNEXPECTED;
     HRESULT innerRequestHr = E_UNEXPECTED;
     HRESULT innerSessionHr = E_UNEXPECTED;
-    LONG endAcp = -1;
-    sink.onLockGranted =
-        [&](DWORD dwLockFlags) noexcept
+    LONG endAcp            = -1;
+    sink.onLockGranted     = [&](DWORD dwLockFlags) noexcept
     {
-        if (dwLockFlags != TS_LF_READWRITE || sink.editTransactionDepth != 1u || sink.editTransactionStartCount != 1u ||
-            sink.editTransactionEndCount != 0u)
+        if (dwLockFlags != TS_LF_READWRITE || sink.editTransactionDepth != 1u || sink.editTransactionStartCount != 1u || sink.editTransactionEndCount != 0u)
         {
             callbackHr = E_UNEXPECTED;
             return callbackHr;
@@ -6189,8 +6065,7 @@ void TestNativeTextInputTextStoreReadWriteLockBracketsEditTransactionAndRejectsR
             "native text store brackets read-write locks with a balanced edit transaction");
 
     TS_TEXTCHANGE change{};
-    Require(store->SetText(0u, 0, 5, L"omega", 5u, &change) == TS_E_NOLOCK,
-            "native text store releases the read-write lock after the callback returns");
+    Require(store->SetText(0u, 0, 5, L"omega", 5u, &change) == TS_E_NOLOCK, "native text store releases the read-write lock after the callback returns");
 
     RequireSucceeded(store->UnadviseSink(&sink), "native text store transaction test unadvises the sink");
 }
@@ -6227,8 +6102,7 @@ void TestNativeTextInputTextStoreEditableComboBoxSelectionAndMutation()
     LONG insertEnd         = -1;
     TS_TEXTCHANGE change{};
     HRESULT callbackHr = E_UNEXPECTED;
-    sink.onLockGranted =
-        [&](DWORD /*lockFlags*/) noexcept
+    sink.onLockGranted = [&](DWORD /*lockFlags*/) noexcept
     {
         callbackHr = store->GetSelection(TS_DEFAULT_SELECTION, 1u, &initialSelection, &fetchedSelection);
         if (FAILED(callbackHr))
@@ -6241,7 +6115,7 @@ void TestNativeTextInputTextStoreEditableComboBoxSelectionAndMutation()
         alphaSelection.acpEnd             = 5;
         alphaSelection.style.ase          = TS_AE_END;
         alphaSelection.style.fInterimChar = FALSE;
-        callbackHr = store->SetSelection(1u, &alphaSelection);
+        callbackHr                        = store->SetSelection(1u, &alphaSelection);
         if (FAILED(callbackHr))
         {
             return callbackHr;

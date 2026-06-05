@@ -10,4 +10,4 @@ inline constexpr size_t kParallelSortThreshold = 20000u;
 {
     return itemCount >= kParallelSortThreshold;
 }
-}
+} // namespace FolderViewSortPolicy

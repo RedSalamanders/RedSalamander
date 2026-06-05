@@ -197,32 +197,31 @@ enum : size_t
     const HWND activePage = DebugGetPreferencesActivePageHandle();
     const HWND focus      = GetFocus();
 
-    return std::format(
-        L"headers=[{}] haveSnapshot={} category={} search='{}' selected='{}' rows={} visibleRows={} visibleColumns={} visibleCells={} "
-        L"verticalScrollbar={} verticalScrollDip={:.1f} renders={} resizes={} resizeFailures={} pageChildren={} paneWindows={}/{} "
-        L"pageResizeFailures={} viewersFocusTarget={} prefsWindow=[{}] activePage=[{}] focus=[{}]",
-        DescribeViewersHeaderAvailabilityForSelfTest(),
-        haveCurrentSnapshot,
-        static_cast<int>(diagnostic.currentCategory),
-        diagnostic.viewersSearchText,
-        diagnostic.viewersSelectedExtensionText,
-        diagnostic.viewersListRowCount,
-        diagnostic.viewersListVisibleRowCount,
-        diagnostic.viewersListVisibleColumnCount,
-        diagnostic.viewersListVisibleCellCount,
-        diagnostic.viewersListHasVerticalScrollbar,
-        diagnostic.viewersListVerticalScrollDip,
-        diagnostic.viewersListRenderCount,
-        diagnostic.viewersListResizeCount,
-        diagnostic.viewersListResizeFailureCount,
-        diagnostic.visibleCurrentPageChildWindowCount,
-        diagnostic.createdPaneWindowCount,
-        diagnostic.visiblePaneWindowCount,
-        diagnostic.currentPageDxHostResizeFailureCount,
-        static_cast<int>(diagnostic.viewersFocusTarget),
-        DescribeViewersWindowForHeaderDiagnostics(prefs),
-        DescribeViewersWindowForHeaderDiagnostics(activePage),
-        DescribeViewersWindowForHeaderDiagnostics(focus));
+    return std::format(L"headers=[{}] haveSnapshot={} category={} search='{}' selected='{}' rows={} visibleRows={} visibleColumns={} visibleCells={} "
+                       L"verticalScrollbar={} verticalScrollDip={:.1f} renders={} resizes={} resizeFailures={} pageChildren={} paneWindows={}/{} "
+                       L"pageResizeFailures={} viewersFocusTarget={} prefsWindow=[{}] activePage=[{}] focus=[{}]",
+                       DescribeViewersHeaderAvailabilityForSelfTest(),
+                       haveCurrentSnapshot,
+                       static_cast<int>(diagnostic.currentCategory),
+                       diagnostic.viewersSearchText,
+                       diagnostic.viewersSelectedExtensionText,
+                       diagnostic.viewersListRowCount,
+                       diagnostic.viewersListVisibleRowCount,
+                       diagnostic.viewersListVisibleColumnCount,
+                       diagnostic.viewersListVisibleCellCount,
+                       diagnostic.viewersListHasVerticalScrollbar,
+                       diagnostic.viewersListVerticalScrollDip,
+                       diagnostic.viewersListRenderCount,
+                       diagnostic.viewersListResizeCount,
+                       diagnostic.viewersListResizeFailureCount,
+                       diagnostic.visibleCurrentPageChildWindowCount,
+                       diagnostic.createdPaneWindowCount,
+                       diagnostic.visiblePaneWindowCount,
+                       diagnostic.currentPageDxHostResizeFailureCount,
+                       static_cast<int>(diagnostic.viewersFocusTarget),
+                       DescribeViewersWindowForHeaderDiagnostics(prefs),
+                       DescribeViewersWindowForHeaderDiagnostics(activePage),
+                       DescribeViewersWindowForHeaderDiagnostics(focus));
 }
 
 [[nodiscard]] std::wstring DescribeKeyboardSearchWindowForSelfTest(HWND hwnd)
@@ -261,31 +260,30 @@ enum : size_t
     const HWND capture      = GetCapture();
     const HWND activeWindow = GetActiveWindow();
 
-    return std::format(
-        L"haveSnapshot={} category={} keyboardFocusTarget={} search='{}' rows={} visibleRows={} visibleColumns={} visibleCells={} "
-        L"captureActive={} renders={} resizes={} resizeFailures={} pageChildren={} paneWindows={}/{} pageResizeFailures={} "
-        L"prefsWindow=[{}] activePage=[{}] focus=[{}] capture=[{}] activeWindow=[{}]",
-        haveCurrentSnapshot,
-        static_cast<int>(diagnostic.currentCategory),
-        static_cast<int>(diagnostic.keyboardFocusTarget),
-        diagnostic.keyboardSearchText,
-        diagnostic.keyboardListRowCount,
-        diagnostic.keyboardListVisibleRowCount,
-        diagnostic.keyboardListVisibleColumnCount,
-        diagnostic.keyboardListVisibleCellCount,
-        diagnostic.keyboardCaptureActive,
-        diagnostic.keyboardListRenderCount,
-        diagnostic.keyboardListResizeCount,
-        diagnostic.keyboardListResizeFailureCount,
-        diagnostic.visibleCurrentPageChildWindowCount,
-        diagnostic.createdPaneWindowCount,
-        diagnostic.visiblePaneWindowCount,
-        diagnostic.currentPageDxHostResizeFailureCount,
-        DescribeKeyboardSearchWindowForSelfTest(prefs),
-        DescribeKeyboardSearchWindowForSelfTest(activePage),
-        DescribeKeyboardSearchWindowForSelfTest(focus),
-        DescribeKeyboardSearchWindowForSelfTest(capture),
-        DescribeKeyboardSearchWindowForSelfTest(activeWindow));
+    return std::format(L"haveSnapshot={} category={} keyboardFocusTarget={} search='{}' rows={} visibleRows={} visibleColumns={} visibleCells={} "
+                       L"captureActive={} renders={} resizes={} resizeFailures={} pageChildren={} paneWindows={}/{} pageResizeFailures={} "
+                       L"prefsWindow=[{}] activePage=[{}] focus=[{}] capture=[{}] activeWindow=[{}]",
+                       haveCurrentSnapshot,
+                       static_cast<int>(diagnostic.currentCategory),
+                       static_cast<int>(diagnostic.keyboardFocusTarget),
+                       diagnostic.keyboardSearchText,
+                       diagnostic.keyboardListRowCount,
+                       diagnostic.keyboardListVisibleRowCount,
+                       diagnostic.keyboardListVisibleColumnCount,
+                       diagnostic.keyboardListVisibleCellCount,
+                       diagnostic.keyboardCaptureActive,
+                       diagnostic.keyboardListRenderCount,
+                       diagnostic.keyboardListResizeCount,
+                       diagnostic.keyboardListResizeFailureCount,
+                       diagnostic.visibleCurrentPageChildWindowCount,
+                       diagnostic.createdPaneWindowCount,
+                       diagnostic.visiblePaneWindowCount,
+                       diagnostic.currentPageDxHostResizeFailureCount,
+                       DescribeKeyboardSearchWindowForSelfTest(prefs),
+                       DescribeKeyboardSearchWindowForSelfTest(activePage),
+                       DescribeKeyboardSearchWindowForSelfTest(focus),
+                       DescribeKeyboardSearchWindowForSelfTest(capture),
+                       DescribeKeyboardSearchWindowForSelfTest(activeWindow));
 }
 
 [[nodiscard]] std::wstring DescribePreferencesViewersLongRunStateForSelfTest(const PreferencesDebugSnapshot& snapshot)
@@ -1098,22 +1096,18 @@ enum : size_t
     };
 
     PreferencesDebugSnapshot snapshot{};
-    const bool viewersPageReady = waitForSnapshot(
-        [](const PreferencesDebugSnapshot& value) noexcept
-        { return value.currentCategory == kPrefCategoryViewers && true /* Phase 8: removed field */ && value.viewersListRowCount > 0u; },
-        snapshot);
-    state.Require(
-        viewersPageReady,
-        std::format(
-            L"Preferences Viewers page did not expose its stabilized DxUi list surface for long-run scrolling validation; {}.",
-            DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
+    const bool viewersPageReady = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+        return value.currentCategory == kPrefCategoryViewers && true /* Phase 8: removed field */ && value.viewersListRowCount > 0u;
+    }, snapshot);
+    state.Require(viewersPageReady,
+                  std::format(L"Preferences Viewers page did not expose its stabilized DxUi list surface for long-run scrolling validation; {}.",
+                              DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
     if (! state.failure.empty())
     {
         return false;
     }
     SelfTest::AppendSuiteTrace(kSuite,
-                               std::format(L"Preferences Viewers long-run baseline ready: {}",
-                                           DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
+                               std::format(L"Preferences Viewers long-run baseline ready: {}", DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
 
     state.Require(snapshot.viewersListRowCount == kViewersRowCount,
                   std::format(L"Preferences Viewers DxUi list should show all seeded mappings before long-run scrolling validation; saw {} vs expected {}.",
@@ -1136,9 +1130,8 @@ enum : size_t
     {
         return false;
     }
-    SelfTest::AppendSuiteTrace(kSuite,
-                               std::format(L"Preferences Viewers long-run category tree settled: {}",
-                                           DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
+    SelfTest::AppendSuiteTrace(
+        kSuite, std::format(L"Preferences Viewers long-run category tree settled: {}", DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
 
     const std::wstring viewersTitle       = LoadStringResource(nullptr, IDS_PREFS_CAT_VIEWERS);
     const size_t initialRowCount          = snapshot.viewersListRowCount;
@@ -1176,10 +1169,8 @@ enum : size_t
         previousRenderCount = snapshot.viewersListRenderCount;
         previousScrollDip   = snapshot.viewersListVerticalScrollDip;
         scrolledDown        = scrolledDown || previousScrollDip > initialScrollDip + 0.5f;
-        SelfTest::AppendSuiteTrace(kSuite,
-                                   std::format(L"Preferences Viewers long-run chunk {} after scroll: {}",
-                                               chunk,
-                                               DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
+        SelfTest::AppendSuiteTrace(
+            kSuite, std::format(L"Preferences Viewers long-run chunk {} after scroll: {}", chunk, DescribePreferencesViewersLongRunStateForSelfTest(snapshot)));
         state.Require(snapshot.currentCategory == kPrefCategoryViewers,
                       std::format(L"Preferences long-run Viewers scrolling chunk {} changed the active category unexpectedly; {}.",
                                   chunk,
@@ -1305,12 +1296,11 @@ enum : size_t
 
     const int width = std::max(1l, initialRect.right - initialRect.left);
     MONITORINFO monitorInfo{};
-    monitorInfo.cbSize = sizeof(monitorInfo);
-    const HMONITOR monitor = MonitorFromWindow(prefs, MONITOR_DEFAULTTONEAREST);
-    const int workAreaHeight =
-        (monitor && GetMonitorInfoW(monitor, &monitorInfo)) ? std::max(1l, monitorInfo.rcWork.bottom - monitorInfo.rcWork.top) : 900;
-    const int tallHeight = std::max(520, workAreaHeight - 20);
-    const int compactHeight = std::clamp(tallHeight - 260, 420, std::max(420, tallHeight - 120));
+    monitorInfo.cbSize         = sizeof(monitorInfo);
+    const HMONITOR monitor     = MonitorFromWindow(prefs, MONITOR_DEFAULTTONEAREST);
+    const int workAreaHeight   = (monitor && GetMonitorInfoW(monitor, &monitorInfo)) ? std::max(1l, monitorInfo.rcWork.bottom - monitorInfo.rcWork.top) : 900;
+    const int tallHeight       = std::max(520, workAreaHeight - 20);
+    const int compactHeight    = std::clamp(tallHeight - 260, 420, std::max(420, tallHeight - 120));
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
@@ -1344,9 +1334,8 @@ enum : size_t
         {
             if (category == kPrefCategoryViewers)
             {
-                return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == kRowCount &&
-                       value.viewersListVisibleRowCount > 0u && value.viewersListVisibleColumnCount > 0u &&
-                       value.currentPageDxHostResizeFailureCount == 0u;
+                return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == kRowCount && value.viewersListVisibleRowCount > 0u &&
+                       value.viewersListVisibleColumnCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
             }
 
             return value.currentCategory == kPrefCategoryEditors && value.editorsAssociationRowCount == kRowCount &&
@@ -1570,11 +1559,12 @@ enum : size_t
         state.Require(
             snapshot.themesListResizeFailureCount == 0u,
             std::format(L"Preferences Themes DxUi list hit DX resize failures during chunk {}; saw {}.", chunk, snapshot.themesListResizeFailureCount));
-        state.Require(snapshot.categoryTreeDxHostRenderCount <= maxTreeRenderCount,
-                      std::format(L"Preferences category tree host should not churn repainting during Themes list scrolling chunk {}; render count moved from {} to {}.",
-                                  chunk,
-                                  initialTreeRenderCount,
-                                  snapshot.categoryTreeDxHostRenderCount));
+        state.Require(
+            snapshot.categoryTreeDxHostRenderCount <= maxTreeRenderCount,
+            std::format(L"Preferences category tree host should not churn repainting during Themes list scrolling chunk {}; render count moved from {} to {}.",
+                        chunk,
+                        initialTreeRenderCount,
+                        snapshot.categoryTreeDxHostRenderCount));
         state.Require(snapshot.visibleCurrentPageChildWindowCount == 1u,
                       std::format(L"Preferences Themes page should keep exactly one visible child window during scroll chunk {}; saw {}.",
                                   chunk,
@@ -2554,8 +2544,8 @@ enum : size_t
     }
 
     const bool focusSearchField = DebugFocusPreferencesViewersSearchField();
-    SelfTest::AppendSelfTestTrace(
-        std::format(L"Preferences Viewers tab traversal search focus call result={}{}", focusSearchField ? 1 : 0, describeViewersSnapshot(L"after focus call")));
+    SelfTest::AppendSelfTestTrace(std::format(
+        L"Preferences Viewers tab traversal search focus call result={}{}", focusSearchField ? 1 : 0, describeViewersSnapshot(L"after focus call")));
     state.Require(focusSearchField, L"Failed to focus the Preferences Viewers DX search field before tab-traversal validation.");
     const bool searchFieldFocused = waitForSnapshot(
         [](const PreferencesDebugSnapshot& value) noexcept
@@ -2864,14 +2854,14 @@ enum : size_t
             return false;
         }
 
-        const LONG clickX = tabRect.left + ((tabRect.right - tabRect.left) / 2);
-        const LONG clickY = tabRect.top + ((tabRect.bottom - tabRect.top) / 2);
+        const LONG clickX  = tabRect.left + ((tabRect.right - tabRect.left) / 2);
+        const LONG clickY  = tabRect.top + ((tabRect.bottom - tabRect.top) / 2);
         const auto started = std::chrono::steady_clock::now();
         SendMouseClickToResolvedPointWindow(activePage, MAKELPARAM(clickX, clickY));
 
         PreferencesDebugSnapshot switchedSnapshot{};
         size_t observedTabIndex = 0u;
-        const bool switched = waitForSnapshot(
+        const bool switched     = waitForSnapshot(
             [&](const PreferencesDebugSnapshot& value) noexcept
         {
             observedTabIndex = 0u;
@@ -2891,8 +2881,7 @@ enum : size_t
                           switched ? S_OK : S_FALSE);
 
         state.Require(switched, std::format(L"Clicking the Preferences Viewers {} tab did not select it.", label));
-        state.Require(elapsed <= SelfTest::Scale(1000ms),
-                      std::format(L"Clicking the Preferences Viewers {} tab settled too slowly: {} us.", label, elapsedUs));
+        state.Require(elapsed <= SelfTest::Scale(1000ms), std::format(L"Clicking the Preferences Viewers {} tab settled too slowly: {} us.", label, elapsedUs));
         return state.failure.empty();
     };
 
@@ -3223,8 +3212,7 @@ enum : size_t
                   L"Preferences Viewers Match header rect should be non-empty before reorder validation.");
     state.Require(viewerHeaderRect.right > viewerHeaderRect.left && viewerHeaderRect.bottom > viewerHeaderRect.top,
                   L"Preferences Viewers F3 View header rect should be non-empty before reorder validation.");
-    state.Require(extensionHeaderRect.left < viewerHeaderRect.left,
-                  L"Preferences Viewers should start with Match before F3 View in the visible header order.");
+    state.Require(extensionHeaderRect.left < viewerHeaderRect.left, L"Preferences Viewers should start with Match before F3 View in the visible header order.");
     if (! state.failure.empty())
     {
         return false;
@@ -3663,9 +3651,9 @@ enum : size_t
     const uint64_t baselineRenderCount           = snapshot.viewersListRenderCount;
     const float baselineExtensionHeaderWidth     = static_cast<float>(extensionHeaderRect.right - extensionHeaderRect.left);
     const float baselineViewerHeaderLeft         = static_cast<float>(viewerHeaderRect.left);
-    const HWND activeDxHost                       = DebugGetPreferencesActivePageDxHostHandle();
-    const bool activeDxHostValid                  = activeDxHost != nullptr && IsWindow(activeDxHost) != FALSE;
-    const bool activePageMatchesDxHost            = activePage == activeDxHost;
+    const HWND activeDxHost                      = DebugGetPreferencesActivePageDxHostHandle();
+    const bool activeDxHostValid                 = activeDxHost != nullptr && IsWindow(activeDxHost) != FALSE;
+    const bool activePageMatchesDxHost           = activePage == activeDxHost;
     const POINT resizeStartPoint{extensionHeaderRect.right - 1, extensionHeaderRect.top + ((extensionHeaderRect.bottom - extensionHeaderRect.top) / 2)};
     uint32_t resizeHitZone     = 0u;
     size_t resizeHitColumn     = 0u;
@@ -3680,10 +3668,8 @@ enum : size_t
     const bool resizePointerStateCaptured = DebugGetPreferencesViewersListPointerState(resizePointerState);
     RECT immediateExtensionHeaderRect{};
     RECT immediateViewerHeaderRect{};
-    const bool immediateExtensionHeaderCaptured =
-        DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationMatchColumn, immediateExtensionHeaderRect);
-    const bool immediateViewerHeaderCaptured =
-        DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, immediateViewerHeaderRect);
+    const bool immediateExtensionHeaderCaptured = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationMatchColumn, immediateExtensionHeaderRect);
+    const bool immediateViewerHeaderCaptured    = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, immediateViewerHeaderRect);
     PreferencesDebugSnapshot immediateSnapshot{};
     const bool immediateSnapshotCaptured = DebugGetPreferencesDialogSnapshot(immediateSnapshot);
 
@@ -3700,10 +3686,10 @@ enum : size_t
             snapshot = {};
             RECT currentExtensionHeaderRect{};
             RECT currentViewerHeaderRect{};
-            const bool haveExtensionHeader          = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationMatchColumn, currentExtensionHeaderRect);
-            const bool haveViewerHeader             = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, currentViewerHeaderRect);
-            const bool haveSnapshot                 = DebugGetPreferencesDialogSnapshot(snapshot);
-            lastPointerStateCaptured                = DebugGetPreferencesViewersListPointerState(lastPointerState);
+            const bool haveExtensionHeader = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationMatchColumn, currentExtensionHeaderRect);
+            const bool haveViewerHeader    = DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, currentViewerHeaderRect);
+            const bool haveSnapshot        = DebugGetPreferencesDialogSnapshot(snapshot);
+            lastPointerStateCaptured       = DebugGetPreferencesViewersListPointerState(lastPointerState);
             const float currentExtensionHeaderWidth = static_cast<float>(currentExtensionHeaderRect.right - currentExtensionHeaderRect.left);
             lastExtensionHeaderWidth                = currentExtensionHeaderWidth;
             lastViewerHeaderLeft                    = static_cast<float>(currentViewerHeaderRect.left);
@@ -3973,8 +3959,9 @@ enum : size_t
         RECT currentExtensionHeaderRect{};
         RECT currentViewerHeaderRect{};
         return DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationMatchColumn, currentExtensionHeaderRect) &&
-               DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, currentViewerHeaderRect) && value.currentCategory == kPrefCategoryViewers &&
-               value.viewersSearchText == kSearchText && value.viewersListRowCount == 1u && value.viewersSelectedExtensionText == baselineSelectedExtension &&
+               DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, currentViewerHeaderRect) &&
+               value.currentCategory == kPrefCategoryViewers && value.viewersSearchText == kSearchText && value.viewersListRowCount == 1u &&
+               value.viewersSelectedExtensionText == baselineSelectedExtension &&
                static_cast<float>(currentExtensionHeaderRect.right - currentExtensionHeaderRect.left) >= resizedExtensionHeaderWidth - 2.0f &&
                static_cast<float>(currentViewerHeaderRect.left) >= resizedViewerHeaderLeft - 2.0f && value.createdPaneWindowCount == 0u &&
                value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
@@ -3994,8 +3981,8 @@ enum : size_t
         RECT currentExtensionHeaderRect{};
         RECT currentViewerHeaderRect{};
         return DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationMatchColumn, currentExtensionHeaderRect) &&
-               DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, currentViewerHeaderRect) && value.currentCategory == kPrefCategoryViewers &&
-               value.viewersSearchText.empty() && value.viewersListRowCount == baselineRowCount &&
+               DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationComputerColumn, currentViewerHeaderRect) &&
+               value.currentCategory == kPrefCategoryViewers && value.viewersSearchText.empty() && value.viewersListRowCount == baselineRowCount &&
                value.viewersSelectedExtensionText == baselineSelectedExtension &&
                static_cast<float>(currentExtensionHeaderRect.right - currentExtensionHeaderRect.left) >= resizedExtensionHeaderWidth - 2.0f &&
                static_cast<float>(currentViewerHeaderRect.left) >= resizedViewerHeaderLeft - 2.0f && value.createdPaneWindowCount == 0u &&
@@ -4130,8 +4117,7 @@ enum : size_t
                   L"Failed to capture the visible Preferences Viewers Match header rect before reordered-search validation.");
     state.Require(DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationPrimaryActionColumn, viewerHeaderRect),
                   L"Failed to capture the visible Preferences Viewers F3 View header rect before reordered-search validation.");
-    state.Require(extensionHeaderRect.left < viewerHeaderRect.left,
-                  L"Preferences Viewers should start with Match before F3 View in the visible header order.");
+    state.Require(extensionHeaderRect.left < viewerHeaderRect.left, L"Preferences Viewers should start with Match before F3 View in the visible header order.");
     if (! state.failure.empty())
     {
         return false;
@@ -4623,8 +4609,7 @@ enum : size_t
                   L"Failed to capture the visible Preferences Viewers Match header rect before reordered-resized/search validation.");
     state.Require(DebugGetPreferencesViewersListHeaderClientRect(kViewersAssociationPrimaryActionColumn, viewerHeaderRect),
                   L"Failed to capture the visible Preferences Viewers F3 View header rect before reordered-resized/search validation.");
-    state.Require(extensionHeaderRect.left < viewerHeaderRect.left,
-                  L"Preferences Viewers should start with Match before F3 View in the visible header order.");
+    state.Require(extensionHeaderRect.left < viewerHeaderRect.left, L"Preferences Viewers should start with Match before F3 View in the visible header order.");
     if (! state.failure.empty())
     {
         return false;
@@ -4913,8 +4898,7 @@ enum : size_t
     state.Require(haveF3Header,
                   std::format(L"Failed to capture the visible Preferences Viewers F3 View header rect before reordered-resized/sort validation. {}",
                               DescribePreferencesViewersHeaderBaselineForSelfTest(snapshot)));
-    state.Require(extensionHeaderRect.left < viewerHeaderRect.left,
-                  L"Preferences Viewers should start with Match before F3 View in the visible header order.");
+    state.Require(extensionHeaderRect.left < viewerHeaderRect.left, L"Preferences Viewers should start with Match before F3 View in the visible header order.");
     if (! state.failure.empty())
     {
         return false;
@@ -6631,8 +6615,7 @@ enum : size_t
                && value.keyboardListRowCount >= 2u;
     },
                       snapshot),
-                  std::format(L"Preferences Keyboard page did not expose its DX grid surface for UIA selection validation; {}.",
-                              describeKeyboardSnapshot()));
+                  std::format(L"Preferences Keyboard page did not expose its DX grid surface for UIA selection validation; {}.", describeKeyboardSnapshot()));
     if (! state.failure.empty())
     {
         return false;
@@ -6778,27 +6761,24 @@ enum : size_t
     const size_t baselineVisibleColumns     = snapshot.keyboardListVisibleColumnCount;
     const size_t baselineVisibleCells       = snapshot.keyboardListVisibleCellCount;
     const uint64_t baselineResizeCount      = snapshot.keyboardListResizeCount;
-    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept
-    {
-        return value >= baselineResizeCount && value <= baselineResizeCount + 1u;
-    };
+    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept { return value >= baselineResizeCount && value <= baselineResizeCount + 1u; };
     const LONG dragStartX                   = shortcutHeaderRect.left + ((shortcutHeaderRect.right - shortcutHeaderRect.left) / 2);
     const LONG dragY                        = shortcutHeaderRect.top + ((shortcutHeaderRect.bottom - shortcutHeaderRect.top) / 2);
     const LONG dragTargetX                  = commandHeaderRect.left + 12;
     const POINT dragStartPoint{dragStartX, dragY};
     const POINT dragTargetPoint{dragTargetX, dragY};
-    uint32_t dragStartZone       = 0u;
-    size_t dragStartColumn       = 0u;
-    bool dragStartHeaderResize   = false;
-    bool dragStartHostHitsList   = false;
-    uint32_t dragTargetZone      = 0u;
-    size_t dragTargetColumn      = 0u;
-    bool dragTargetHeaderResize  = false;
-    bool dragTargetHostHitsList  = false;
-    const bool dragStartHitOk    = DebugHitTestPreferencesKeyboardListClientPoint(
-        dragStartPoint, dragStartZone, dragStartColumn, dragStartHeaderResize, dragStartHostHitsList);
-    const bool dragTargetHitOk = DebugHitTestPreferencesKeyboardListClientPoint(
-        dragTargetPoint, dragTargetZone, dragTargetColumn, dragTargetHeaderResize, dragTargetHostHitsList);
+    uint32_t dragStartZone      = 0u;
+    size_t dragStartColumn      = 0u;
+    bool dragStartHeaderResize  = false;
+    bool dragStartHostHitsList  = false;
+    uint32_t dragTargetZone     = 0u;
+    size_t dragTargetColumn     = 0u;
+    bool dragTargetHeaderResize = false;
+    bool dragTargetHostHitsList = false;
+    const bool dragStartHitOk =
+        DebugHitTestPreferencesKeyboardListClientPoint(dragStartPoint, dragStartZone, dragStartColumn, dragStartHeaderResize, dragStartHostHitsList);
+    const bool dragTargetHitOk =
+        DebugHitTestPreferencesKeyboardListClientPoint(dragTargetPoint, dragTargetZone, dragTargetColumn, dragTargetHeaderResize, dragTargetHostHitsList);
 
     state.Require(dragStartHitOk && dragStartHostHitsList && ! dragStartHeaderResize && dragStartColumn == 1u,
                   std::format(L"Preferences Keyboard header-reorder drag start did not target the Shortcut header; start=({},{}), "
@@ -6843,7 +6823,7 @@ enum : size_t
     bool lastHaveCommandHeader  = false;
     bool lastHaveShortcutHeader = false;
     PreferencesGridPointerDebugState lastPointerState{};
-    bool lastPointerStateCaptured = false;
+    bool lastPointerStateCaptured      = false;
     const auto waitForReorderedHeaders = [&]() noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
@@ -6862,9 +6842,8 @@ enum : size_t
             lastShortcutHeaderRect        = currentShortcutHeaderRect;
             lastPointerStateCaptured      = DebugGetPreferencesKeyboardListPointerState(lastPointerState);
 
-            if (haveCommandHeader && haveShortcutHeader && haveSnapshot &&
-                currentShortcutHeaderRect.left + 4 < currentCommandHeaderRect.left && snapshot.currentCategory == kPrefCategoryKeyboard &&
-                snapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::ShortcutsGrid &&
+            if (haveCommandHeader && haveShortcutHeader && haveSnapshot && currentShortcutHeaderRect.left + 4 < currentCommandHeaderRect.left &&
+                snapshot.currentCategory == kPrefCategoryKeyboard && snapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::ShortcutsGrid &&
                 snapshot.keyboardListVisibleRowCount == baselineVisibleRows && snapshot.keyboardListVisibleColumnCount == baselineVisibleColumns &&
                 snapshot.keyboardListVisibleCellCount == baselineVisibleCells && resizeCountIsBounded(snapshot.keyboardListResizeCount) &&
                 snapshot.createdPaneWindowCount == 0u && snapshot.visiblePaneWindowCount == 0u && snapshot.visibleCurrentPageChildWindowCount == 1u &&
@@ -6962,8 +6941,7 @@ enum : size_t
                                                    [&](const UiaSelectionPatternState& value) noexcept
     {
         return value.rootControlType == UIA_DataGridControlTypeId && value.hasSelectionPattern && value.selectionCount == 1u &&
-               value.selectedControlType == UIA_DataItemControlTypeId && value.selectedHasSelectionItemPattern &&
-               value.selectedName == baselineSelectedName;
+               value.selectedControlType == UIA_DataItemControlTypeId && value.selectedHasSelectionItemPattern && value.selectedName == baselineSelectedName;
     },
                                                    selectionState),
                   std::format(L"Preferences Keyboard header reorder did not keep the selected DX row stable; expected='{}', actual='{}'.",
@@ -7103,10 +7081,7 @@ enum : size_t
     const size_t baselineVisibleColumns     = snapshot.keyboardListVisibleColumnCount;
     const size_t baselineVisibleCells       = snapshot.keyboardListVisibleCellCount;
     const uint64_t baselineResizeCount      = snapshot.keyboardListResizeCount;
-    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept
-    {
-        return value >= baselineResizeCount && value <= baselineResizeCount + 1u;
-    };
+    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept { return value >= baselineResizeCount && value <= baselineResizeCount + 1u; };
     const uint64_t baselineRenderCount      = snapshot.keyboardListRenderCount;
     const float baselineCommandHeaderWidth  = static_cast<float>(commandHeaderRect.right - commandHeaderRect.left);
     const float baselineShortcutHeaderLeft  = static_cast<float>(shortcutHeaderRect.left);
@@ -7466,10 +7441,7 @@ enum : size_t
     const size_t baselineVisibleColumns     = snapshot.keyboardListVisibleColumnCount;
     const size_t baselineVisibleCells       = snapshot.keyboardListVisibleCellCount;
     const uint64_t baselineResizeCount      = snapshot.keyboardListResizeCount;
-    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept
-    {
-        return value >= baselineResizeCount && value <= baselineResizeCount + 1u;
-    };
+    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept { return value >= baselineResizeCount && value <= baselineResizeCount + 1u; };
     const LONG dragStartX                   = shortcutHeaderRect.left + ((shortcutHeaderRect.right - shortcutHeaderRect.left) / 2);
     const LONG dragY                        = shortcutHeaderRect.top + ((shortcutHeaderRect.bottom - shortcutHeaderRect.top) / 2);
     const LONG dragTargetX                  = commandHeaderRect.left + 12;
@@ -7777,10 +7749,7 @@ enum : size_t
     const size_t baselineVisibleColumns     = snapshot.keyboardListVisibleColumnCount;
     const size_t baselineVisibleCells       = snapshot.keyboardListVisibleCellCount;
     const uint64_t baselineResizeCount      = snapshot.keyboardListResizeCount;
-    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept
-    {
-        return value >= baselineResizeCount && value <= baselineResizeCount + 1u;
-    };
+    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept { return value >= baselineResizeCount && value <= baselineResizeCount + 1u; };
     const uint64_t baselineRenderCount      = snapshot.keyboardListRenderCount;
     const LONG dragStartX                   = shortcutHeaderRect.left + ((shortcutHeaderRect.right - shortcutHeaderRect.left) / 2);
     const LONG dragY                        = shortcutHeaderRect.top + ((shortcutHeaderRect.bottom - shortcutHeaderRect.top) / 2);
@@ -8070,10 +8039,7 @@ enum : size_t
     const size_t baselineVisibleColumns     = snapshot.keyboardListVisibleColumnCount;
     const size_t baselineVisibleCells       = snapshot.keyboardListVisibleCellCount;
     const uint64_t baselineResizeCount      = snapshot.keyboardListResizeCount;
-    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept
-    {
-        return value >= baselineResizeCount && value <= baselineResizeCount + 1u;
-    };
+    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept { return value >= baselineResizeCount && value <= baselineResizeCount + 1u; };
     const uint64_t baselineRenderCount      = snapshot.keyboardListRenderCount;
 
     const LONG reorderStartX  = shortcutHeaderRect.left + ((shortcutHeaderRect.right - shortcutHeaderRect.left) / 2);
@@ -8253,10 +8219,9 @@ enum : size_t
         return false;
     }
     SelfTest::AppendSuiteTrace(kSuite, L"Keyboard reordered+resized search roundtrip: no-match rebuild settled");
-    SelfTest::AppendSuiteTrace(
-        kSuite,
-        std::format(L"Keyboard reordered+resized search roundtrip: no-match settled search state {}",
-                    DescribePreferencesKeyboardSearchStateForSelfTest(snapshot)));
+    SelfTest::AppendSuiteTrace(kSuite,
+                               std::format(L"Keyboard reordered+resized search roundtrip: no-match settled search state {}",
+                                           DescribePreferencesKeyboardSearchStateForSelfTest(snapshot)));
 
     focusedWindow = WaitForPreferencesKeyboardSearchInputTarget(SelfTest::Scale(1000ms), snapshot);
     state.Require(focusedWindow != nullptr,
@@ -8526,10 +8491,7 @@ enum : size_t
     const size_t baselineVisibleColumns     = snapshot.keyboardListVisibleColumnCount;
     const size_t baselineVisibleCells       = snapshot.keyboardListVisibleCellCount;
     const uint64_t baselineResizeCount      = snapshot.keyboardListResizeCount;
-    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept
-    {
-        return value >= baselineResizeCount && value <= baselineResizeCount + 1u;
-    };
+    const auto resizeCountIsBounded         = [&](const uint64_t value) noexcept { return value >= baselineResizeCount && value <= baselineResizeCount + 1u; };
     const uint64_t baselineRenderCount      = snapshot.keyboardListRenderCount;
 
     const LONG reorderStartX  = shortcutHeaderRect.left + ((shortcutHeaderRect.right - shortcutHeaderRect.left) / 2);

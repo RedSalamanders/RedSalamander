@@ -19,28 +19,28 @@ namespace RedConfigure::Ui
 class RedConfigureRootController
 {
 public:
-    RedConfigureRootController() = default;
-    RedConfigureRootController(const RedConfigureRootController&) = delete;
+    RedConfigureRootController()                                             = default;
+    RedConfigureRootController(const RedConfigureRootController&)            = delete;
     RedConfigureRootController& operator=(const RedConfigureRootController&) = delete;
-    RedConfigureRootController(RedConfigureRootController&&) = delete;
-    RedConfigureRootController& operator=(RedConfigureRootController&&) = delete;
-    virtual ~RedConfigureRootController() = default;
+    RedConfigureRootController(RedConfigureRootController&&)                 = delete;
+    RedConfigureRootController& operator=(RedConfigureRootController&&)      = delete;
+    virtual ~RedConfigureRootController()                                    = default;
 
     virtual void ReloadWorkspaceFromFields() = 0;
 };
 
 struct RedConfigureRootCreateResult
 {
-    RedConfigureRootCreateResult() = default;
-    RedConfigureRootCreateResult(const RedConfigureRootCreateResult&) = delete;
-    RedConfigureRootCreateResult& operator=(const RedConfigureRootCreateResult&) = delete;
-    RedConfigureRootCreateResult(RedConfigureRootCreateResult&&) noexcept = default;
+    RedConfigureRootCreateResult()                                                   = default;
+    RedConfigureRootCreateResult(const RedConfigureRootCreateResult&)                = delete;
+    RedConfigureRootCreateResult& operator=(const RedConfigureRootCreateResult&)     = delete;
+    RedConfigureRootCreateResult(RedConfigureRootCreateResult&&) noexcept            = default;
     RedConfigureRootCreateResult& operator=(RedConfigureRootCreateResult&&) noexcept = default;
-    ~RedConfigureRootCreateResult() = default;
+    ~RedConfigureRootCreateResult()                                                  = default;
 
     std::unique_ptr<RedSalamander::DxUi::Panel> control;
     RedConfigureRootController* controller = nullptr;
 };
 
 [[nodiscard]] RedConfigureRootCreateResult CreateRedConfigureRoot(HINSTANCE instance, RedConfigureSession& session, std::filesystem::path initialRoot);
-}
+} // namespace RedConfigure::Ui

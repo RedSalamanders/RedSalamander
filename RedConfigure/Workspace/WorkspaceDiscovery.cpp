@@ -274,9 +274,7 @@ void DiscoverThemeFiles(const fs::path& root, std::vector<RedConfigure::Workspac
     std::sort(outThemeFiles.begin(), outThemeFiles.end(), [](const auto& lhs, const auto& rhs) noexcept { return lhs.path < rhs.path; });
 }
 
-void DiscoverResourceOwners(const fs::path& root,
-                            std::vector<RedConfigure::Workspace::ResourceOwner>& outOwners,
-                            std::vector<std::wstring>& outErrors) noexcept
+void DiscoverResourceOwners(const fs::path& root, std::vector<RedConfigure::Workspace::ResourceOwner>& outOwners, std::vector<std::wstring>& outErrors) noexcept
 {
     outOwners.clear();
 
@@ -340,7 +338,7 @@ namespace RedConfigure::Workspace
 {
 HRESULT DiscoverWorkspace(const std::filesystem::path& root, WorkspaceScanResult& outResult) noexcept
 {
-    outResult = {};
+    outResult      = {};
     outResult.root = root.lexically_normal();
 
     std::error_code ec;

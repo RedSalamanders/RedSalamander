@@ -267,7 +267,9 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
 
         {
             std::unique_lock lock(_enumerationMutex);
-            _enumerationCv.wait(lock, [&]() {
+            _enumerationCv.wait(lock,
+                                [&]()
+            {
                 return stopToken.stop_requested() || _pendingEnumerationPath.has_value() || _iconLoadingActive.load(std::memory_order_acquire) ||
                        _thumbnailLoadingActive.load(std::memory_order_acquire);
             });
@@ -411,24 +413,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                 perf.SetDetail(folderText);
                 perf.SetValue0(entryCount);
 
-                const auto appendStableHash32 = [](uint32_t hash, std::wstring_view text) noexcept -> uint32_t
-                {
-                    static constexpr uint32_t kFnvPrime32 = 16777619u;
-                    for (const wchar_t ch : text)
-                    {
-                        const uint16_t value = static_cast<uint16_t>(ch);
-
-                        hash ^= static_cast<uint8_t>(value & 0xFFu);
-                        hash *= kFnvPrime32;
-
-                        hash ^= static_cast<uint8_t>((value >> 8) & 0xFFu);
-                        hash *= kFnvPrime32;
-                    }
-                    return hash;
-                };
-
-                static constexpr std::wstring_view kStableHashSeparator = L"|";
-                const uint32_t folderStableHashSeed                     = appendStableHash32(StableHash32(folderText), kStableHashSeparator);
+                const uint32_t folderStableHashSeed = AppendStableHash32(StableHash32(folderText), L"|");
 
                 const bool showHiddenFiles = _showHiddenFiles.load(std::memory_order_acquire);
                 const bool showSystemFiles = _showSystemFiles.load(std::memory_order_acquire);
@@ -474,7 +459,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
                         // Stable hash used for rainbow rendering (avoid storing full paths per item).
                         {
-                            item.stableHash32 = appendStableHash32(folderStableHashSeed, item.displayName);
+                            item.stableHash32 = AppendStableHash32(folderStableHashSeed, item.displayName);
                         }
 
                         item.isDirectory    = (fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -1678,8 +1663,8 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     }
     _itemMetricsCached = false;
 
-    const bool includeDetailsLine  = _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed ||
-                                    _displayMode == DisplayMode::Thumbnails;
+    const bool includeDetailsLine =
+        _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     if (_detailsTextProvider && includeDetailsLine)
     {

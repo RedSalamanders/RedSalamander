@@ -68,13 +68,13 @@ void AppendWindowsQuotedArgument(std::wstring& out, std::wstring_view value)
 
 [[nodiscard]] HRESULT WriteAllBytes(HANDLE file, const void* data, size_t byteCount) noexcept
 {
-    const auto* cursor = static_cast<const std::byte*>(data);
+    const auto* cursor  = static_cast<const std::byte*>(data);
     size_t totalWritten = 0u;
     while (totalWritten < byteCount)
     {
         const size_t remaining = byteCount - totalWritten;
-        const DWORD chunk = static_cast<DWORD>(std::min<size_t>(remaining, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
-        DWORD written = 0u;
+        const DWORD chunk      = static_cast<DWORD>(std::min<size_t>(remaining, static_cast<size_t>(std::numeric_limits<DWORD>::max())));
+        DWORD written          = 0u;
         if (WriteFile(file, cursor + totalWritten, chunk, &written, nullptr) == FALSE || written == 0u)
         {
             const DWORD error = GetLastError();
@@ -394,7 +394,7 @@ void CleanupFiles(const std::vector<std::filesystem::path>& files) noexcept
     }
 
     const std::filesystem::path filePath(tempFile.data());
-    bool keepFile = false;
+    bool keepFile              = false;
     const auto deleteOnFailure = wil::scope_exit([&]() noexcept
     {
         if (! keepFile)
@@ -403,13 +403,7 @@ void CleanupFiles(const std::vector<std::filesystem::path>& files) noexcept
         }
     });
 
-    wil::unique_handle file(CreateFileW(filePath.c_str(),
-                                        GENERIC_WRITE,
-                                        0u,
-                                        nullptr,
-                                        CREATE_ALWAYS,
-                                        FILE_ATTRIBUTE_TEMPORARY,
-                                        nullptr));
+    wil::unique_handle file(CreateFileW(filePath.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr));
     if (! file)
     {
         const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
@@ -456,11 +450,11 @@ void CleanupFiles(const std::vector<std::filesystem::path>& files) noexcept
 
 struct DeferredCleanupContext
 {
-    DeferredCleanupContext() = default;
-    DeferredCleanupContext(const DeferredCleanupContext&) = delete;
+    DeferredCleanupContext()                                         = default;
+    DeferredCleanupContext(const DeferredCleanupContext&)            = delete;
     DeferredCleanupContext& operator=(const DeferredCleanupContext&) = delete;
-    DeferredCleanupContext(DeferredCleanupContext&&) = delete;
-    DeferredCleanupContext& operator=(DeferredCleanupContext&&) = delete;
+    DeferredCleanupContext(DeferredCleanupContext&&)                 = delete;
+    DeferredCleanupContext& operator=(DeferredCleanupContext&&)      = delete;
 
     wil::unique_threadpool_wait_nowait wait;
     wil::unique_handle process;
@@ -527,7 +521,7 @@ HRESULT BuildExternalLaunchPlan(const Common::Settings::FileActionDefinition& ac
 
     MacroContext effectiveContext = context;
     std::vector<std::filesystem::path> createdCleanupFiles;
-    bool keepCreatedFiles = false;
+    bool keepCreatedFiles       = false;
     const auto cleanupOnFailure = wil::scope_exit([&]() noexcept
     {
         if (! keepCreatedFiles)

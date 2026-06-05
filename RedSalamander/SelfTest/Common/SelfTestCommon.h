@@ -164,11 +164,8 @@ struct CaseState
 }
 
 void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noexcept;
-void AppendCaseResult(SelfTestSuiteResult& suite,
-                      std::wstring_view name,
-                      SelfTestCaseResult::Status status,
-                      std::wstring_view reason,
-                      uint64_t durationMs) noexcept;
+void AppendCaseResult(
+    SelfTestSuiteResult& suite, std::wstring_view name, SelfTestCaseResult::Status status, std::wstring_view reason, uint64_t durationMs) noexcept;
 
 template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSuiteResult& suite, std::wstring_view name, Func&& func) noexcept
 {

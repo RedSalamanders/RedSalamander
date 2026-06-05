@@ -188,3 +188,13 @@ extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, co
     *schemaJsonUtf8 = schema;
     return S_OK;
 }
+
+extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
+{
+    // AWS SDK lifetime is reference-counted by FileSystemS3 instances and I/O objects.
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept
+{
+    return TRUE;
+}

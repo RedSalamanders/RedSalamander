@@ -155,6 +155,7 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 - The "focused pane" is the pane that contains the current keyboard focus (either its `NavigationView` or its `FolderView`).
 - Keyboard accelerators that target "the active pane" apply to the focused pane.
 - When keyboard focus is outside both pane `FolderView` controls but still belongs to main-window chrome or a transient menu, `FolderWindow`'s active pane is the fallback pane for focus restoration.
+- Modeless external actions that call into `FolderWindow` to navigate/open in the active pane must commit the same-folder preparation or new target path before activating the main window or moving keyboard focus into the `FolderView`, so foreground/focus changes cannot visibly outrun the navigation work.
 - Any user navigation action inside a pane's `NavigationView` activates that pane before changing navigation state. This includes the drive/menu button, history and disk-info dropdowns, breadcrumb segment clicks, sibling menus, and menu-selected path changes. If the action originates from an unfocused pane, keyboard focus returns to that pane's `FolderView` rather than staying in the previously focused pane.
 - A first `Escape` from main-window chrome or transient menu focus MUST restore keyboard focus to the active pane's `FolderView` without changing that pane's selection. A subsequent `Escape` delivered while the `FolderView` already has focus uses normal `FolderView` behavior.
 
@@ -187,8 +188,9 @@ FolderWindow responsibilities:
 - resolve the target pane for `cmd/pane/find`,
 - expose `Alt+F7` and `Ctrl+F` as default bindings for the same command,
 - provide the current plugin, instance context, and root path as the default search scope,
-- reuse the existing Find window when it is already open and refresh its pane context,
+- allow multiple independent modeless Find windows,
 - route result actions back into the pane navigation/open flow,
+- route queued pane-level viewer/editor commands posted through a `FolderView` back to the main command dispatcher after the folder view has focus,
 - keep search execution off the UI thread.
 
 The Find window is part of the existing themed host UI stack and must follow runtime theme changes and normal keyboard/focus behavior. See `Specs/Core/Core_Search.md`.

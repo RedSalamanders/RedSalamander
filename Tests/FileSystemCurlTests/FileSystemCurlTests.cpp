@@ -76,9 +76,9 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
 
     const std::wstring longSubject(100u, L'A');
     const std::wstring expectedLong = std::wstring(93u, L'A') + L"... [42].eml";
-    ok = Require(FileSystemCurlInternal::BuildImapMessageLeafName(longSubject, L"boss@example.test", 42u) == expectedLong,
-                 L"Long IMAP subjects should truncate with ASCII ellipsis before the uid suffix.") &&
-         ok;
+    ok                              = Require(FileSystemCurlInternal::BuildImapMessageLeafName(longSubject, L"boss@example.test", 42u) == expectedLong,
+                                              L"Long IMAP subjects should truncate with ASCII ellipsis before the uid suffix.") &&
+                                      ok;
 
     return ok;
 }
@@ -132,8 +132,7 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
                       L"IMAP subject decoder should join adjacent encoded words without separator whitespace.") &&
          ok;
 
-    ok = RequireEqual(FileSystemCurlInternal::DecodeRfc2047EncodedWordsToUtf16(
-                          "25844 =_utf-8_q_=C2=AD_CHATENAY_MALABRY_=C2=AD_Appel_de_fonds"),
+    ok = RequireEqual(FileSystemCurlInternal::DecodeRfc2047EncodedWordsToUtf16("25844 =_utf-8_q_=C2=AD_CHATENAY_MALABRY_=C2=AD_Appel_de_fonds"),
                       L"25844 - CHATENAY MALABRY - Appel de fonds",
                       L"IMAP subject decoder should recover malformed sanitized encoded-word fragments and normalize soft hyphens.") &&
          ok;
@@ -164,26 +163,26 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
     bool ok      = true;
     uint64_t uid = 0;
 
-    ok = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [abc].eml", uid),
-                 L"IMAP UID parser should reject non-numeric bracketed ids.") &&
-         ok;
-    ok = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [].eml", uid),
-                 L"IMAP UID parser should reject empty bracketed ids.") &&
-         ok;
-    ok = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [12345] draft.eml", uid),
-                 L"IMAP UID parser should require the bracketed id immediately before .eml.") &&
-         ok;
-    ok = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report 12345.eml", uid),
-                 L"IMAP UID parser should reject ambiguous subject-plus-trailing-digits names.") &&
-         ok;
-    const wchar_t separator  = static_cast<wchar_t>(0xFF5C);
+    ok                        = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [abc].eml", uid),
+                                        L"IMAP UID parser should reject non-numeric bracketed ids.") &&
+                                ok;
+    ok                        = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [].eml", uid),
+                                        L"IMAP UID parser should reject empty bracketed ids.") &&
+                                ok;
+    ok                        = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [12345] draft.eml", uid),
+                                        L"IMAP UID parser should require the bracketed id immediately before .eml.") &&
+                                ok;
+    ok                        = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report 12345.eml", uid),
+                                        L"IMAP UID parser should reject ambiguous subject-plus-trailing-digits names.") &&
+                                ok;
+    const wchar_t separator   = static_cast<wchar_t>(0xFF5C);
     const std::wstring legacy = std::wstring(L"Quarterly report") + separator + L"boss@example.test" + separator + L"4321.eml";
-    ok = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(legacy, uid),
-                 L"IMAP UID parser should reject the retired legacy decorated name shape.") &&
-         ok;
-    ok = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [12345].txt", uid),
-                 L"IMAP UID parser should require the .eml extension.") &&
-         ok;
+    ok                        = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(legacy, uid),
+                                        L"IMAP UID parser should reject the retired legacy decorated name shape.") &&
+                                ok;
+    ok                        = Require(! FileSystemCurlInternal::TryParseImapUidFromLeafName(L"Quarterly report [12345].txt", uid),
+                                        L"IMAP UID parser should require the .eml extension.") &&
+                                ok;
 
     return ok;
 }
@@ -194,8 +193,7 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
     bool ok = true;
 
     ok = Require(FileSystemCurlInternal::TryParseImapMailboxStatus(
-                     "* STATUS \"INBOX\" (MESSAGES 42 RECENT 2 UIDNEXT 9001 UIDVALIDITY 777 UNSEEN 5)\r\nA OK STATUS completed\r\n",
-                     status),
+                     "* STATUS \"INBOX\" (MESSAGES 42 RECENT 2 UIDNEXT 9001 UIDVALIDITY 777 UNSEEN 5)\r\nA OK STATUS completed\r\n", status),
                  L"IMAP STATUS parser should recognize a normal STATUS response.") &&
          ok;
     ok = Require(status.messages.has_value() && status.messages.value() == 42u, L"IMAP STATUS parser should read MESSAGES.") && ok;
@@ -247,16 +245,14 @@ void AppendCodePoint(std::wstring& out, uint32_t codePoint)
     ok = Require(empty.empty(), L"IMAP summary repair should not fetch when no summaries are missing.") && ok;
 
     const std::vector<FileSystemCurlInternal::ImapUidBatchRange> small = FileSystemCurlInternal::BuildImapUidBatchRanges(16u, 16u);
-    ok = Require(small.size() == 1u && small[0].offset == 0u && small[0].count == 16u,
-                 L"IMAP summary repair should keep a full small repair set in one fetch.") &&
-         ok;
+    ok                                                                 = Require(small.size() == 1u && small[0].offset == 0u && small[0].count == 16u,
+                                                                                 L"IMAP summary repair should keep a full small repair set in one fetch.") &&
+                                                                         ok;
 
     const std::vector<FileSystemCurlInternal::ImapUidBatchRange> large = FileSystemCurlInternal::BuildImapUidBatchRanges(37u, 16u);
-    ok = Require(large.size() == 3u,
-                 L"IMAP summary repair should split large missing sets instead of skipping repair.") &&
-         ok;
-    ok = Require(large.size() >= 3u && large[0].offset == 0u && large[0].count == 16u && large[1].offset == 16u &&
-                     large[1].count == 16u && large[2].offset == 32u && large[2].count == 5u,
+    ok = Require(large.size() == 3u, L"IMAP summary repair should split large missing sets instead of skipping repair.") && ok;
+    ok = Require(large.size() >= 3u && large[0].offset == 0u && large[0].count == 16u && large[1].offset == 16u && large[1].count == 16u &&
+                     large[2].offset == 32u && large[2].count == 5u,
                  L"IMAP summary repair should cover every missing UID exactly once.") &&
          ok;
 
@@ -286,7 +282,7 @@ void RunPerfProbe()
     uint64_t checksum             = 0;
 
     const std::wstring name = L"Quarterly [draft] report [123456789].eml";
-    auto started           = std::chrono::steady_clock::now();
+    auto started            = std::chrono::steady_clock::now();
     for (uint64_t i = 0; i < iterations; ++i)
     {
         uint64_t uid = 0;
@@ -306,9 +302,8 @@ void RunPerfProbe()
     const auto buildElapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
 
     FileSystemCurlInternal::ImapMailboxStatus status;
-    constexpr std::string_view statusResponse =
-        "* STATUS \"INBOX\" (MESSAGES 42 RECENT 2 UIDNEXT 9001 UIDVALIDITY 777 UNSEEN 5)\r\nA OK STATUS completed\r\n";
-    started = std::chrono::steady_clock::now();
+    constexpr std::string_view statusResponse = "* STATUS \"INBOX\" (MESSAGES 42 RECENT 2 UIDNEXT 9001 UIDVALIDITY 777 UNSEEN 5)\r\nA OK STATUS completed\r\n";
+    started                                   = std::chrono::steady_clock::now();
     for (uint64_t i = 0; i < iterations; ++i)
     {
         if (FileSystemCurlInternal::TryParseImapMailboxStatus(statusResponse, status) && status.messages.has_value())
@@ -319,10 +314,9 @@ void RunPerfProbe()
     const auto statusElapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
     const std::vector<FileSystemCurlInternal::ImapUidBatchRange> repairRanges = FileSystemCurlInternal::BuildImapUidBatchRanges(37u, 16u);
 
-    constexpr uint64_t decodeIterations = 100000u;
-    constexpr std::string_view encodedSubject =
-        "=?UTF-8?Q?=F0=9F=8E=89=E3=80=90Weekly=20Trends=E3=80=91=F0=9F=91=82=F0=9F=A4=96=20Add=20Voice?=";
-    started = std::chrono::steady_clock::now();
+    constexpr uint64_t decodeIterations       = 100000u;
+    constexpr std::string_view encodedSubject = "=?UTF-8?Q?=F0=9F=8E=89=E3=80=90Weekly=20Trends=E3=80=91=F0=9F=91=82=F0=9F=A4=96=20Add=20Voice?=";
+    started                                   = std::chrono::steady_clock::now();
     for (uint64_t i = 0; i < decodeIterations; ++i)
     {
         checksum += FileSystemCurlInternal::DecodeRfc2047EncodedWordsToUtf16(encodedSubject).size();
@@ -339,11 +333,8 @@ void RunPerfProbe()
         const uint64_t baseline  = ImapBaselineMessagePropertiesCommandCount(mailboxMessages);
         const uint64_t candidate = ImapCandidateMessagePropertiesCommandCount();
         const double reduction   = 100.0 * static_cast<double>(baseline - candidate) / static_cast<double>(baseline);
-        std::wcout << std::format(L"messagePropertiesCommands messages={} baseline={} candidate={} reductionPercent={:.1f}\n",
-                                  mailboxMessages,
-                                  baseline,
-                                  candidate,
-                                  reduction);
+        std::wcout << std::format(
+            L"messagePropertiesCommands messages={} baseline={} candidate={} reductionPercent={:.1f}\n", mailboxMessages, baseline, candidate, reduction);
     }
 }
 } // namespace

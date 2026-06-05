@@ -115,8 +115,7 @@ case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
 
         if (FAILED(completed->second.hr))
         {
-            Fail(std::format(L"Phase14_PopupHostLifetimeGuard popup reentry copy failed: 0x{:08X}.",
-                             static_cast<unsigned long>(completed->second.hr)));
+            Fail(std::format(L"Phase14_PopupHostLifetimeGuard popup reentry copy failed: 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
             return true;
         }
 

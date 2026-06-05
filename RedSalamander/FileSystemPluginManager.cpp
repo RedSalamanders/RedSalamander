@@ -25,6 +25,8 @@ namespace
 using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
 using EnumeratePluginsFunc             = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
 using GetConfigurationSchemaExportFunc = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
+using PluginShutdownExportFunc         = void(__stdcall*)();
+using PluginRetainModuleUntilProcessExitExportFunc = BOOL(__stdcall*)();
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -253,10 +255,7 @@ void FileSystemPluginManager::Shutdown(Common::Settings::Settings& settings) noe
         PersistConfigurationToSettings(entry, settings);
     }
 
-    for (PluginEntry& entry : _plugins)
-    {
-        Unload(entry);
-    }
+    UnloadAll(ModuleUnloadMode::ProcessShutdown);
 
     _plugins.clear();
     _activePluginId.clear();
@@ -420,7 +419,6 @@ HRESULT FileSystemPluginManager::DisablePlugin(std::wstring_view pluginId, Commo
         settings.plugins.disabledPluginIds.push_back(entry->id);
     }
 
-    Unload(*entry);
     return S_OK;
 }
 
@@ -786,6 +784,7 @@ const FileSystemPluginManager::PluginEntry* FileSystemPluginManager::FindPluginB
 
 HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) noexcept
 {
+    UnloadAll(ModuleUnloadMode::FreeLibrary);
     _plugins.clear();
 
     if (_exeDir.empty())
@@ -899,7 +898,7 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
         {
             entry.loadable = false;
             Debug::Error(L"Plugin '{}' skipped: {}", entry.path.wstring(), entry.loadError);
-            Unload(entry);
+            Unload(entry, ModuleUnloadMode::FreeLibrary);
             _plugins.push_back(std::move(entry));
             return;
         }
@@ -909,7 +908,7 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
 
         if (entry.disabled && ! EqualsNoCase(entry.id, settings.plugins.currentFileSystemPluginId))
         {
-            Unload(entry);
+            Unload(entry, ModuleUnloadMode::FreeLibrary);
         }
 
         _plugins.push_back(std::move(entry));
@@ -1029,9 +1028,8 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
     entry.loadError.clear();
     if (entry.module)
     {
-        Localization::UnregisterResourceOwner(entry.module.get());
+        Unload(entry, ModuleUnloadMode::FreeLibrary);
     }
-    entry.module.reset();
     entry.fileSystem   = nullptr;
     entry.informations = nullptr;
 
@@ -1159,15 +1157,53 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
     return S_OK;
 }
 
-void FileSystemPluginManager::Unload(PluginEntry& entry) noexcept
+void FileSystemPluginManager::UnloadAll(ModuleUnloadMode mode) noexcept
+{
+    for (auto it = _plugins.rbegin(); it != _plugins.rend(); ++it)
+    {
+        Unload(*it, mode);
+    }
+}
+
+void FileSystemPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept
 {
     entry.informations = nullptr;
     entry.fileSystem   = nullptr;
     if (entry.module)
     {
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: unsafe conversion from FARPROC
+        if (const auto pluginShutdown = reinterpret_cast<PluginShutdownExportFunc>(GetProcAddress(entry.module.get(), "RedSalamanderPluginShutdown"));
+            pluginShutdown != nullptr)
+        {
+            pluginShutdown();
+        }
+#pragma warning(pop)
         Localization::UnregisterResourceOwner(entry.module.get());
     }
-    entry.module.reset();
+
+    bool retainModuleUntilProcessExit = false;
+    if (mode == ModuleUnloadMode::ProcessShutdown && entry.module)
+    {
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: unsafe conversion from FARPROC
+        if (const auto retainModule = reinterpret_cast<PluginRetainModuleUntilProcessExitExportFunc>(
+                GetProcAddress(entry.module.get(), "RedSalamanderPluginRetainModuleUntilProcessExit"));
+            retainModule != nullptr)
+        {
+            retainModuleUntilProcessExit = retainModule() != FALSE;
+        }
+#pragma warning(pop)
+    }
+
+    if (retainModuleUntilProcessExit && entry.module)
+    {
+        static_cast<void>(entry.module.release());
+    }
+    else
+    {
+        entry.module.reset();
+    }
 }
 
 HRESULT FileSystemPluginManager::ApplyConfigurationFromSettings(PluginEntry& entry, const Common::Settings::Settings& settings) noexcept

@@ -1197,8 +1197,7 @@ bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(RedSalamander::
     const HWND bodyHwnd            = _optionsDxUi->body.hostHwnd.get();
     const HWND focusedBeforeLayout = GetFocus();
     const bool restoreBodyFocus =
-        _optionsDxUi->body.host.GetFocusControl() == control &&
-        (focusedBeforeLayout == bodyHwnd || IsChild(bodyHwnd, focusedBeforeLayout) != FALSE);
+        _optionsDxUi->body.host.GetFocusControl() == control && (focusedBeforeLayout == bodyHwnd || IsChild(bodyHwnd, focusedBeforeLayout) != FALSE);
 
     RECT hostClient{};
     if (! GetClientRect(_optionsUi.host, &hostClient))

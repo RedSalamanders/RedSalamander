@@ -10,14 +10,20 @@ NestedInstallerType: portable
 NestedInstallerFiles:
   - RelativeFilePath: RedLauncher.exe
     PortableCommandAlias: RedSalamander
+  - RelativeFilePath: red.exe
+    PortableCommandAlias: red
 UpgradeBehavior: install
 Commands:
   - RedSalamander
+  - red
 InstallationMetadata:
   Files:
     - RelativeFilePath: RedLauncher.exe
       FileType: launch
       DisplayName: RedSalamander
+    - RelativeFilePath: red.exe
+      FileType: launch
+      DisplayName: red
 ReleaseDate: { RELEASE_DATE }
 Installers:
   - Architecture: x64

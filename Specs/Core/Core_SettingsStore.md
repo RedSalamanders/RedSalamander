@@ -73,6 +73,10 @@ Notes:
 - `Common.dll` loads the base schema text from `SettingsStore.schema.json` shipped next to the exe (copied from `Specs/SettingsStore.schema.json` during the build) and caches it in memory.
 - `RedSalamander.exe` overwrites that file with an aggregated schema that includes plugin configuration schemas under `plugins.configurationByPluginId[pluginId]` (best-effort).
 
+### UI entry point
+
+`Preferences -> Advanced` exposes a command link that opens `GetSettingsPath(L"RedSalamander")` with the shell default editor for the current user. `Preferences -> Monitor` exposes a separate command link that opens `GetSettingsPath(L"RedSalamanderMonitor")`. Either command may create the target JSON/settings schema first when the file is missing, but invoking the link MUST NOT mark Preferences dirty. The generated `RedSalamander.settings.schema.json` MUST NOT expose the root `monitor` property; the generated `RedSalamanderMonitor.settings.schema.json` MUST expose it.
+
 ## Read/Write Requirements
 
 ### Encoding
@@ -182,10 +186,11 @@ Watcher rules:
 - `RedSalamander.exe` writes its own settings through a shared save helper that refreshes the applied stamp immediately after save.
 - A changed stamp already recorded as `lastAppliedStamp` or `lastRejectedStamp` is ignored on the next reload check.
 - `Themes\\*.theme.json5` files are **not** watched in this iteration.
-- `RedSalamanderMonitor.exe` does not participate in this hot-reload flow.
+- `RedSalamanderMonitor.exe` settings do not participate in this main-app hot-reload flow.
 
 Merge policy after a valid external reload:
-- Disk is authoritative for persisted user-editable sections such as `theme`, `ui`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `monitor`, `mainMenu`, `startup`, `search`, and folder preference fields.
+- Disk is authoritative for persisted main-app user-editable sections such as `theme`, `ui`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `mainMenu`, `startup`, `search`, and folder preference fields.
+- The `monitor` section belongs to the `RedSalamanderMonitor` settings app id. The main `RedSalamander` settings file MUST NOT be used as the persistence owner for Monitor Preferences edits.
 - Runtime session state is preserved for already-open windows and current pane navigation.
 - Preserved runtime window placements are the placements of currently open modeless/top-level windows already running in the process.
 - Preserved folder session fields are:
@@ -223,7 +228,7 @@ The root JSON object may contain (depending on the application):
 - `cache` (object): cache configuration (directory enumeration cache, etc.)
 - `folders` (object): multi-pane folder state (current folder + global folder history)
 - `search` (object): persisted Find Files and Directories dialog state
-- `monitor` (object): RedSalamanderMonitor UI state (menu toggles, filter state)
+- `monitor` (object): RedSalamanderMonitor UI state (menu toggles, filter state); persisted by the `RedSalamanderMonitor` app id
 - `shortcuts` (object): shortcut key bindings
 - `extensions` (object, optional): extension-based behaviors (e.g., open archives as virtual file systems)
 - `fileActions` (object, optional): viewer/editor actions and command associations for View, Alternate View, Edit, Alternate Edit, View With, Edit With, and Edit New

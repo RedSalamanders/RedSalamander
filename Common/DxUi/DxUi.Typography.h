@@ -86,6 +86,7 @@ struct TextPixelMetrics final
     {
         case FontRole::BodyStrong: return MakeUiTextSpec(14.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
         case FontRole::BodyLarge: return MakeUiTextSpec(18.0f, DWRITE_FONT_WEIGHT_NORMAL);
+        case FontRole::ListItem: return MakeUiTextSpec(12.0f, DWRITE_FONT_WEIGHT_NORMAL);
         case FontRole::Title: return MakeUiTextSpec(24.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
         case FontRole::Subtitle: return MakeUiTextSpec(20.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
         case FontRole::TitleLarge: return MakeUiTextSpec(40.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD);

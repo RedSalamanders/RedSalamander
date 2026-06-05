@@ -11,6 +11,7 @@
 #include "Preferences.HotPaths.h"
 #include "Preferences.Internal.h"
 #include "Preferences.Keyboard.h"
+#include "Preferences.Monitor.h"
 #include "Preferences.Mouse.h"
 #include "Preferences.Panes.h"
 #include "Preferences.Plugins.h"
@@ -33,6 +34,7 @@
 #include <functional>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -42,6 +44,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <shellapi.h>
 #include <uxtheme.h>
 #include <windowsx.h>
 
@@ -97,6 +100,32 @@ using RedSalamander::DxUi::ThemePalette;
 using RedSalamander::DxUi::Tree;
 using RedSalamander::DxUi::TreeItemData;
 using RedSalamander::DxUi::WindowHost;
+
+#ifdef ENABLE_TESTS
+struct PreferencesSettingsFileOpenDebugState
+{
+    bool captureNext = false;
+    std::filesystem::path lastPath;
+    HRESULT lastHr = S_FALSE;
+};
+
+std::mutex g_preferencesSettingsFileOpenDebugMutex;
+PreferencesSettingsFileOpenDebugState g_preferencesSettingsFileOpenDebug;
+
+[[nodiscard]] bool TryCapturePreferencesSettingsFileOpenForTest(const std::filesystem::path& path, const HRESULT hr) noexcept
+{
+    std::lock_guard lock(g_preferencesSettingsFileOpenDebugMutex);
+    if (! g_preferencesSettingsFileOpenDebug.captureNext)
+    {
+        return false;
+    }
+
+    g_preferencesSettingsFileOpenDebug.captureNext = false;
+    g_preferencesSettingsFileOpenDebug.lastPath    = path;
+    g_preferencesSettingsFileOpenDebug.lastHr      = hr;
+    return true;
+}
+#endif
 
 [[maybe_unused]] [[nodiscard]] uint32_t PackColorArgb(const D2D1_COLOR_F& color) noexcept
 {
@@ -196,7 +225,7 @@ private:
     HWND _hwnd = nullptr;
 };
 
-constexpr std::array<CategoryInfo, 13> kCategories = {{
+constexpr std::array<CategoryInfo, 14> kCategories = {{
     {PrefCategory::General, IDS_PREFS_CAT_GENERAL, IDS_PREFS_CAT_GENERAL_DESC},
     {PrefCategory::Panes, IDS_PREFS_CAT_PANES, IDS_PREFS_CAT_PANES_DESC},
     {PrefCategory::Viewers, IDS_PREFS_CAT_VIEWERS, IDS_PREFS_CAT_VIEWERS_DESC},
@@ -209,6 +238,7 @@ constexpr std::array<CategoryInfo, 13> kCategories = {{
     {PrefCategory::FileOperations, IDS_PREFS_CAT_FILE_OPERATIONS, IDS_PREFS_CAT_FILE_OPERATIONS_DESC},
     {PrefCategory::CompareDirectories, IDS_PREFS_CAT_COMPARE_DIRECTORIES, IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC},
     {PrefCategory::HotPaths, IDS_PREFS_CAT_HOT_PATHS, IDS_PREFS_CAT_HOT_PATHS_DESC},
+    {PrefCategory::Monitor, IDS_PREFS_CAT_MONITOR, IDS_PREFS_CAT_MONITOR_DESC},
     {PrefCategory::Advanced, IDS_PREFS_CAT_ADVANCED, IDS_PREFS_CAT_ADVANCED_DESC},
 }};
 
@@ -230,6 +260,7 @@ struct PreferencesDialogHost final : PreferencesDialogState
     FileOperationsPane _fileOperationsPane;
     CompareDirectoriesPane _compareDirectoriesPane;
     HotPathsPane _hotPathsPane;
+    MonitorPane _monitorPane;
     AdvancedPane _advancedPane;
     WindowHost _categoryTreeHost;
     Tree* _categoryTreeControl = nullptr;
@@ -576,6 +607,7 @@ protected:
         case PrefCategory::FileOperations: return L"FileOperations";
         case PrefCategory::CompareDirectories: return L"CompareDirectories";
         case PrefCategory::HotPaths: return L"HotPaths";
+        case PrefCategory::Monitor: return L"Monitor";
         case PrefCategory::Advanced: return L"Advanced";
         default: return L"Unknown";
     }
@@ -613,6 +645,7 @@ protected:
         case PrefCategory::UserMenu:
         case PrefCategory::Themes:
         case PrefCategory::Plugins:
+        case PrefCategory::Monitor:
         case PrefCategory::Advanced:
         case PrefCategory::CompareDirectories:
         case PrefCategory::HotPaths:
@@ -743,6 +776,7 @@ void InitializePreferencesPageControls(const PrefCategory category, PreferencesD
         case PrefCategory::FileOperations: return ensurePage(hostState._fileOperationsPane);
         case PrefCategory::CompareDirectories: return ensurePage(hostState._compareDirectoriesPane);
         case PrefCategory::HotPaths: return ensurePage(hostState._hotPathsPane);
+        case PrefCategory::Monitor: return ensurePage(hostState._monitorPane);
         case PrefCategory::Advanced: return ensurePage(hostState._advancedPane);
         default: return false;
     }
@@ -916,13 +950,13 @@ void DestroyInactivePreferencesPageState(PreferencesDialogState& state, const Pr
 [[nodiscard]] bool HandlePageHostMouseWheel(HWND host, PreferencesDialogState& state, WPARAM wp) noexcept
 {
 #ifdef ENABLE_TESTS
-    state.debugLastWheelFallbackCalled   = true;
-    state.debugLastWheelFallbackHandled  = false;
-    state.debugLastWheelDelta            = static_cast<int>(GET_WHEEL_DELTA_WPARAM(wp));
-    state.debugLastWheelBeforeY          = state.pageScrollY;
-    state.debugLastWheelBeforeMaxY       = state.pageScrollMaxY;
-    state.debugLastWheelAfterY           = state.pageScrollY;
-    state.debugLastWheelAfterMaxY        = state.pageScrollMaxY;
+    state.debugLastWheelFallbackCalled  = true;
+    state.debugLastWheelFallbackHandled = false;
+    state.debugLastWheelDelta           = static_cast<int>(GET_WHEEL_DELTA_WPARAM(wp));
+    state.debugLastWheelBeforeY         = state.pageScrollY;
+    state.debugLastWheelBeforeMaxY      = state.pageScrollMaxY;
+    state.debugLastWheelAfterY          = state.pageScrollY;
+    state.debugLastWheelAfterMaxY       = state.pageScrollMaxY;
 #endif
 
     if (! host || state.pageScrollMaxY <= 0)
@@ -1063,7 +1097,7 @@ LRESULT CALLBACK PreferencesWheelRouteWndProc(HWND hwnd, UINT msg, WPARAM wp, LP
 
             HWND target = FindWheelTargetFromPoint(dlg, *state, ptScreen);
 #ifdef ENABLE_TESTS
-            const HWND windowFromPoint                           = WindowFromPoint(ptScreen);
+            const HWND windowFromPoint                          = WindowFromPoint(ptScreen);
             state->debugLastWheelRouteSeen                      = true;
             state->debugLastWheelRouteForwarded                 = target && target != hwnd;
             state->debugLastWheelRouteTargetWasPageHost         = target && target == state->pageHostWindow;
@@ -1205,7 +1239,7 @@ void RestorePreviewAppliedPreferencesOnCancel(PreferencesDialogState& state) noe
 
     Common::Settings::Settings restored = *state.settings;
     restored.theme                      = state.baselineSettings.theme;
-    *state.settings                    = std::move(restored);
+    *state.settings                     = std::move(restored);
 
     if (state.owner)
     {
@@ -1475,10 +1509,10 @@ void ApplyDxShellTheme(PreferencesDialogHost& hostState, const AppTheme& theme) 
         return button;
     };
 
-    hostState._resetAllButtonControl  = addButton(IDC_PREFS_RESET_ALL, false);
-    hostState._okButtonControl        = addButton(IDOK, true);
-    hostState._cancelButtonControl    = addButton(IDCANCEL, false);
-    hostState._applyButtonControl     = addButton(IDC_PREFS_APPLY, false);
+    hostState._resetAllButtonControl = addButton(IDC_PREFS_RESET_ALL, false);
+    hostState._okButtonControl       = addButton(IDOK, true);
+    hostState._cancelButtonControl   = addButton(IDCANCEL, false);
+    hostState._applyButtonControl    = addButton(IDC_PREFS_APPLY, false);
 
     hostState._shellHost.SetRoot(std::move(root));
     hostState._shellHost.SetDefaultButton(hostState._okButtonControl);
@@ -1546,8 +1580,8 @@ void OnPageHostScrollPanelOffsetChanged(PreferencesDialogState& state, const flo
         return;
     }
 
-    const int oldScrollY = state.pageScrollY;
-    state.pageScrollY    = newScrollY;
+    const int oldScrollY             = state.pageScrollY;
+    state.pageScrollY                = newScrollY;
     state.pageHostScrollApplyPending = false;
 
     PrefsPageHost::ApplyScrollDelta(state.pageHostWindow, oldScrollY - state.pageScrollY, false);
@@ -1713,6 +1747,15 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
         return settings.monitor.value();
     }
     return kDefaults;
+}
+
+[[nodiscard]] bool AreEquivalentMonitorSettings(const Common::Settings::Settings& a, const Common::Settings::Settings& b) noexcept
+{
+    const auto& left  = GetMonitorSettingsOrDefault(a);
+    const auto& right = GetMonitorSettingsOrDefault(b);
+    return left.menu.toolbarVisible == right.menu.toolbarVisible && left.menu.lineNumbersVisible == right.menu.lineNumbersVisible &&
+           left.menu.alwaysOnTop == right.menu.alwaysOnTop && left.menu.showIds == right.menu.showIds && left.menu.autoScroll == right.menu.autoScroll &&
+           left.filter.mask == right.filter.mask && left.filter.preset == right.filter.preset;
 }
 
 [[nodiscard]] const Common::Settings::CacheSettings& GetCacheSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
@@ -2019,17 +2062,9 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     {
         return true;
     }
+    if (! AreEquivalentMonitorSettings(state.monitorBaselineSettings, state.workingMonitorSettings))
     {
-        const auto& baselineMonitor = GetMonitorSettingsOrDefault(state.baselineSettings);
-        const auto& workingMonitor  = GetMonitorSettingsOrDefault(state.workingSettings);
-        if (baselineMonitor.menu.toolbarVisible != workingMonitor.menu.toolbarVisible ||
-            baselineMonitor.menu.lineNumbersVisible != workingMonitor.menu.lineNumbersVisible ||
-            baselineMonitor.menu.alwaysOnTop != workingMonitor.menu.alwaysOnTop || baselineMonitor.menu.showIds != workingMonitor.menu.showIds ||
-            baselineMonitor.menu.autoScroll != workingMonitor.menu.autoScroll || baselineMonitor.filter.mask != workingMonitor.filter.mask ||
-            baselineMonitor.filter.preset != workingMonitor.filter.preset)
-        {
-            return true;
-        }
+        return true;
     }
     {
         const auto& baselineCache = GetCacheSettingsOrDefault(state.baselineSettings);
@@ -2266,6 +2301,31 @@ int PrefsUi::ShowSharedPageEmptyState(HWND host,
 
 namespace
 {
+[[nodiscard]] HRESULT SaveMonitorSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
+{
+    if (AreEquivalentMonitorSettings(state.monitorBaselineSettings, state.workingMonitorSettings))
+    {
+        return S_OK;
+    }
+
+    Common::Settings::Settings merged = state.monitorBaselineSettings;
+    merged.monitor                    = GetMonitorSettingsOrDefault(state.workingMonitorSettings);
+
+    Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(merged);
+    const HRESULT hr                          = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, merged);
+    if (FAILED(hr))
+    {
+        const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kPreferencesMonitorAppId);
+        const std::wstring title                 = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        const std::wstring message = FormatStringResource(nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsPath.wstring(), static_cast<unsigned long>(hr));
+        ShowDialogAlert(dlg, HOST_ALERT_ERROR, title, message);
+        return hr;
+    }
+
+    state.workingMonitorSettings = std::move(settingsToSave);
+    return S_OK;
+}
+
 [[nodiscard]] HRESULT SaveSettingsFromDialog(HWND dlg, PreferencesDialogState& state) noexcept
 {
     if (state.appId.empty())
@@ -2349,18 +2409,6 @@ namespace
     }
 
     {
-        const auto& baselineMonitor = GetMonitorSettingsOrDefault(state.baselineSettings);
-        const auto& workingMonitor  = GetMonitorSettingsOrDefault(state.workingSettings);
-        if (baselineMonitor.menu.toolbarVisible != workingMonitor.menu.toolbarVisible ||
-            baselineMonitor.menu.lineNumbersVisible != workingMonitor.menu.lineNumbersVisible ||
-            baselineMonitor.menu.alwaysOnTop != workingMonitor.menu.alwaysOnTop || baselineMonitor.menu.showIds != workingMonitor.menu.showIds ||
-            baselineMonitor.menu.autoScroll != workingMonitor.menu.autoScroll || baselineMonitor.filter.mask != workingMonitor.filter.mask ||
-            baselineMonitor.filter.preset != workingMonitor.filter.preset)
-        {
-            merged.monitor = workingMonitor;
-        }
-    }
-    {
         const auto& baselineCache = GetCacheSettingsOrDefault(state.baselineSettings);
         const auto& workingCache  = GetCacheSettingsOrDefault(state.workingSettings);
         if (baselineCache.directoryInfo.maxBytes != workingCache.directoryInfo.maxBytes ||
@@ -2419,6 +2467,8 @@ namespace
         merged.plugins = state.workingSettings.plugins;
     }
 
+    merged.monitor.reset();
+
     Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(merged);
 
     const HRESULT hr = SettingsHotReload::SaveSettingsAndSchema(state.appId, merged);
@@ -2433,7 +2483,7 @@ namespace
 
     state.workingSettings = std::move(settingsToSave);
 
-    return S_OK;
+    return SaveMonitorSettingsFromDialog(dlg, state);
 }
 
 void RefreshPreferencesDialogThemeImpl(HWND dlg, PreferencesDialogState& state) noexcept;
@@ -2451,7 +2501,13 @@ void ReloadPreferencesDialogFromDisk(HWND dlg, PreferencesDialogState& state) no
     state.previewApplied          = false;
     state.staleFromExternalReload = false;
     state.baselineSettings        = *state.settings;
+    state.baselineSettings.monitor.reset();
     state.workingSettings         = *state.settings;
+    state.workingSettings.monitor.reset();
+    Common::Settings::Settings monitorSettings{};
+    static_cast<void>(Common::Settings::LoadSettings(kPreferencesMonitorAppId, monitorSettings));
+    state.monitorBaselineSettings = monitorSettings;
+    state.workingMonitorSettings  = monitorSettings;
 
     PopulateCategoryTree(dlg, state);
     RefreshPreferencesDialogThemeImpl(dlg, state);
@@ -2517,6 +2573,7 @@ void ResetAllPreferencesToDefaults(HWND dlg, PreferencesDialogState& state) noex
     SelfTest::AppendSelfTestTrace(L"Preferences reset-all: resetting working settings");
 #endif
     state.workingSettings = Common::Settings::Settings{};
+    state.workingMonitorSettings = Common::Settings::Settings{};
 
     // Shortcuts require explicit default initialization via the factory.
 #ifdef ENABLE_TESTS
@@ -2672,6 +2729,7 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
 
     *state.settings               = state.workingSettings;
     state.baselineSettings        = state.workingSettings;
+    state.monitorBaselineSettings = state.workingMonitorSettings;
     state.previewApplied          = false;
     state.staleFromExternalReload = false;
 
@@ -2711,8 +2769,7 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
     request.defaultResult = HOST_PROMPT_RESULT_CANCEL;
 
 #ifdef ENABLE_TESTS
-    const bool forceDiscardForAutoAccept =
-        HostGetAutoAcceptPrompts() && HostGetTestPromptResultOverride() == HOST_PROMPT_RESULT_NONE;
+    const bool forceDiscardForAutoAccept = HostGetAutoAcceptPrompts() && HostGetTestPromptResultOverride() == HOST_PROMPT_RESULT_NONE;
     if (forceDiscardForAutoAccept)
     {
         HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_NO);
@@ -2754,9 +2811,7 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
                 return true;
             }
             return RequestPreferencesDialogClose(dlg);
-        case HOST_PROMPT_RESULT_NO:
-            RestorePreviewAppliedPreferencesOnCancel(state);
-            return RequestPreferencesDialogClose(dlg);
+        case HOST_PROMPT_RESULT_NO: RestorePreviewAppliedPreferencesOnCancel(state); return RequestPreferencesDialogClose(dlg);
         case HOST_PROMPT_RESULT_NONE:
         case HOST_PROMPT_RESULT_OK:
         case HOST_PROMPT_RESULT_CANCEL:
@@ -2984,7 +3039,7 @@ void UpdatePageHostScrollInfo(HWND host, PreferencesDialogState& state) noexcept
         contentHeight = clientHeight;
     }
 
-    const int maxScroll     = std::max(0, contentHeight - clientHeight);
+    const int maxScroll  = std::max(0, contentHeight - clientHeight);
     state.pageScrollMaxY = maxScroll;
     state.pageScrollY    = std::clamp(state.pageScrollY, 0, maxScroll);
 
@@ -3048,8 +3103,8 @@ void FinalizePreferencesPageHostLayout(HWND host, PreferencesDialogState& state,
 
     RECT client{};
     GetClientRect(host, &client);
-    const int clientWidth = std::max(0l, client.right - client.left);
-    const UINT dpi        = GetDpiForWindow(host);
+    const int clientWidth  = std::max(0l, client.right - client.left);
+    const UINT dpi         = GetDpiForWindow(host);
     const int scrollbarGap = state.pageScrollMaxY > 0 ? UiMetrics::ScaleDip(dpi, 6) : 0;
     const int widthNow     = std::max(0, clientWidth - 2 * margin - scrollbarGap);
     if (widthNow == layoutWidth)
@@ -3450,7 +3505,7 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
         static_cast<void>(SetWindowRgn(hostState._shellHostHwnd, nullptr, FALSE));
 
         // Shell host DxUi controls expect DIP coordinates, not raw pixels.
-        const auto shellToDip = [&](float px) noexcept { return hostState._shellHost.PixelsToDip(px); };
+        const auto shellToDip      = [&](float px) noexcept { return hostState._shellHost.PixelsToDip(px); };
         const int buttonTopInShell = buttonsTop - footerTop;
 
         if (hostState._okButtonControl)
@@ -3512,9 +3567,9 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const int sectionY = UiMetrics::ScaleDip(dpi, 14);
 
     const int scrollbarGap = state.pageScrollMaxY > 0 ? UiMetrics::ScaleDip(dpi, 6) : 0;
-    const int width = std::max(0l, client.right - client.left - 2 * margin - scrollbarGap);
-    int x           = margin;
-    int y           = margin;
+    const int width        = std::max(0l, client.right - client.left - 2 * margin - scrollbarGap);
+    int x                  = margin;
+    int y                  = margin;
 
     const PreferencesTypographyContext pageTypography = PrefsUi::MakeTypographyContext(host);
     state.pageHostDirectContentBottomPx               = 0;
@@ -3564,8 +3619,8 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
         }
     };
 
-    const int headerGapY     = gapY;
-    const int headerSectionY = sectionY;
+    const int headerGapY         = gapY;
+    const int headerSectionY     = sectionY;
     const std::wstring titleText = hostState._pageTitleControl ? std::wstring(hostState._pageTitleControl->GetText()) : std::wstring{};
     if (! titleText.empty())
     {
@@ -3604,6 +3659,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const bool showFileOperations       = state.currentCategory == PrefCategory::FileOperations;
     const bool showCompareDirectories   = state.currentCategory == PrefCategory::CompareDirectories;
     const bool showHotPaths             = state.currentCategory == PrefCategory::HotPaths;
+    const bool showMonitor              = state.currentCategory == PrefCategory::Monitor;
     const bool showAdvanced             = state.currentCategory == PrefCategory::Advanced;
     const bool notePageSkipsHostTabStop = showMouse;
 
@@ -3653,6 +3709,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     hostState._fileOperationsPane.OnVisibilityChanged(showFileOperations);
     hostState._compareDirectoriesPane.OnVisibilityChanged(showCompareDirectories);
     hostState._hotPathsPane.OnVisibilityChanged(showHotPaths);
+    hostState._monitorPane.OnVisibilityChanged(showMonitor);
     hostState._advancedPane.OnVisibilityChanged(showAdvanced);
 
     if (showPanes)
@@ -3738,6 +3795,13 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
         return;
     }
 
+    if (showMonitor)
+    {
+        hostState._monitorPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
+        FinalizePreferencesPageHostLayout(host, state, margin, width);
+        return;
+    }
+
     if (showAdvanced)
     {
         hostState._advancedPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
@@ -3766,6 +3830,11 @@ void RefreshAdvancedPage(HWND host, PreferencesDialogState& state) noexcept
     static_cast<PreferencesDialogHost&>(state)._advancedPane.Refresh(host, state);
 }
 
+void RefreshMonitorPage(HWND host, PreferencesDialogState& state) noexcept
+{
+    static_cast<PreferencesDialogHost&>(state)._monitorPane.Refresh(host, state);
+}
+
 void RefreshActivePreferencesPage(HWND host, PreferencesDialogState& state) noexcept
 {
     if (! host)
@@ -3786,6 +3855,7 @@ void RefreshActivePreferencesPage(HWND host, PreferencesDialogState& state) noex
         case PrefCategory::FileOperations: static_cast<PreferencesDialogHost&>(state)._fileOperationsPane.Refresh(host, state); break;
         case PrefCategory::CompareDirectories: static_cast<PreferencesDialogHost&>(state)._compareDirectoriesPane.Refresh(host, state); break;
         case PrefCategory::HotPaths: static_cast<PreferencesDialogHost&>(state)._hotPathsPane.Refresh(host, state); break;
+        case PrefCategory::Monitor: RefreshMonitorPage(host, state); break;
         case PrefCategory::Advanced: RefreshAdvancedPage(host, state); break;
         case PrefCategory::Mouse: break;
     }
@@ -4162,12 +4232,12 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
                 if (msg == WM_NCDESTROY)
                 {
                     hostState._pageHostHost.ReleaseMouseCapture();
-                    state->pageHostUsesDxUi               = false;
-                    state->pageHostDxHost                 = nullptr;
-                    state->pageHostDxRootControl          = nullptr;
-                    state->pageHostDxScrollPanelControl   = nullptr;
-                    state->pageHostDxContentRootControl   = nullptr;
-                    state->pageHostDxNoteControl          = nullptr;
+                    state->pageHostUsesDxUi             = false;
+                    state->pageHostDxHost               = nullptr;
+                    state->pageHostDxRootControl        = nullptr;
+                    state->pageHostDxScrollPanelControl = nullptr;
+                    state->pageHostDxContentRootControl = nullptr;
+                    state->pageHostDxNoteControl        = nullptr;
                     return 0;
                 }
 
@@ -4176,15 +4246,15 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
                 const bool debugWheelMessage = msg == WM_MOUSEWHEEL;
                 if (debugWheelMessage)
                 {
-                    state->debugLastWheelWndProcSeen      = true;
-                    state->debugLastWheelDxHandled        = false;
-                    state->debugLastWheelFallbackCalled   = false;
-                    state->debugLastWheelFallbackHandled  = false;
-                    state->debugLastWheelDelta            = static_cast<int>(GET_WHEEL_DELTA_WPARAM(wp));
-                    state->debugLastWheelBeforeY          = state->pageScrollY;
-                    state->debugLastWheelBeforeMaxY       = state->pageScrollMaxY;
-                    state->debugLastWheelAfterY           = state->pageScrollY;
-                    state->debugLastWheelAfterMaxY        = state->pageScrollMaxY;
+                    state->debugLastWheelWndProcSeen     = true;
+                    state->debugLastWheelDxHandled       = false;
+                    state->debugLastWheelFallbackCalled  = false;
+                    state->debugLastWheelFallbackHandled = false;
+                    state->debugLastWheelDelta           = static_cast<int>(GET_WHEEL_DELTA_WPARAM(wp));
+                    state->debugLastWheelBeforeY         = state->pageScrollY;
+                    state->debugLastWheelBeforeMaxY      = state->pageScrollMaxY;
+                    state->debugLastWheelAfterY          = state->pageScrollY;
+                    state->debugLastWheelAfterMaxY       = state->pageScrollMaxY;
                     POINT pageHostClientPoint{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
                     ScreenToClient(hwnd, &pageHostClientPoint);
                     state->debugLastWheelClientX = pageHostClientPoint.x;
@@ -4593,9 +4663,7 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
                 return HandleDeferredPaneAction(hwnd, *state, std::move(*payload)) ? 0 : FALSE;
             }
             return FALSE;
-        case WndMsg::kPreferencesApplyPageHostScroll:
-            PrefsPageHost::FlushPendingScroll(hwnd, *state);
-            return 0;
+        case WndMsg::kPreferencesApplyPageHostScroll: PrefsPageHost::FlushPendingScroll(hwnd, *state); return 0;
         case WM_COMMAND:
         {
             const UINT notify = HIWORD(wp);
@@ -4634,9 +4702,9 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
                 break;
             }
 
-            int newPos         = state->pageScrollY;
-            const UINT dpi     = GetDpiForWindow(hwnd);
-            const int lineStep = std::max(1, UiMetrics::ScaleDip(dpi, 24));
+            int newPos            = state->pageScrollY;
+            const UINT dpi        = GetDpiForWindow(hwnd);
+            const int lineStep    = std::max(1, UiMetrics::ScaleDip(dpi, 24));
             const UINT scrollCode = LOWORD(wp);
 
             switch (scrollCode)
@@ -4650,7 +4718,7 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
                 case SB_THUMBPOSITION:
                 case SB_THUMBTRACK:
                 {
-                    newPos = si.nTrackPos;
+                    newPos                   = si.nTrackPos;
                     const int packedTrackPos = static_cast<int>(HIWORD(wp));
                     if (packedTrackPos != 0 && newPos == si.nPos)
                     {
@@ -4658,9 +4726,7 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
                     }
                     break;
                 }
-                case SB_ENDSCROLL:
-                    PrefsPageHost::FlushPendingScroll(hwnd, *state);
-                    return 0;
+                case SB_ENDSCROLL: PrefsPageHost::FlushPendingScroll(hwnd, *state); return 0;
                 default: break;
             }
 
@@ -4717,12 +4783,12 @@ LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, L
             if (state->pageHostUsesDxUi)
             {
                 hostState._pageHostHost.Detach();
-                state->pageHostUsesDxUi               = false;
-                state->pageHostDxHost                 = nullptr;
-                state->pageHostDxRootControl          = nullptr;
-                state->pageHostDxScrollPanelControl   = nullptr;
-                state->pageHostDxContentRootControl   = nullptr;
-                state->pageHostDxNoteControl          = nullptr;
+                state->pageHostUsesDxUi             = false;
+                state->pageHostDxHost               = nullptr;
+                state->pageHostDxRootControl        = nullptr;
+                state->pageHostDxScrollPanelControl = nullptr;
+                state->pageHostDxContentRootControl = nullptr;
+                state->pageHostDxNoteControl        = nullptr;
             }
             RemovePropW(hwnd, kPrefsDxDiagnosticsProp);
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
@@ -4941,6 +5007,122 @@ INT_PTR OnCtlColorListBox(PreferencesDialogState* state, HDC hdc, HWND listBox)
     return reinterpret_cast<INT_PTR>(useInputBrush ? state->inputBrush.get() : state->backgroundBrush.get());
 }
 
+[[nodiscard]] DWORD ShellExecuteResultToWin32Error(const INT_PTR result) noexcept
+{
+    switch (result)
+    {
+        case 0: return ERROR_GEN_FAILURE;
+        case SE_ERR_FNF: return ERROR_FILE_NOT_FOUND;
+        case SE_ERR_PNF: return ERROR_PATH_NOT_FOUND;
+        case SE_ERR_ACCESSDENIED: return ERROR_ACCESS_DENIED;
+        case SE_ERR_OOM: return ERROR_NOT_ENOUGH_MEMORY;
+        case SE_ERR_DLLNOTFOUND: return ERROR_MOD_NOT_FOUND;
+        case SE_ERR_SHARE: return ERROR_SHARING_VIOLATION;
+        case SE_ERR_ASSOCINCOMPLETE: return ERROR_NO_ASSOCIATION;
+        case SE_ERR_DDETIMEOUT: return ERROR_TIMEOUT;
+        case SE_ERR_DDEFAIL: return ERROR_GEN_FAILURE;
+        case SE_ERR_DDEBUSY: return ERROR_BUSY;
+        case SE_ERR_NOASSOC: return ERROR_NO_ASSOCIATION;
+        default: return ERROR_GEN_FAILURE;
+    }
+}
+
+enum class PreferencesSettingsFileTarget : uint8_t
+{
+    Main,
+    Monitor,
+};
+
+[[nodiscard]] std::wstring_view GetPreferencesSettingsFileAppId(const PreferencesDialogState& state, const PreferencesSettingsFileTarget target) noexcept
+{
+    return target == PreferencesSettingsFileTarget::Monitor ? kPreferencesMonitorAppId : std::wstring_view{state.appId};
+}
+
+[[nodiscard]] const Common::Settings::Settings& GetPreferencesSettingsFileSourceSettings(
+    const PreferencesDialogState& state, const PreferencesSettingsFileTarget target) noexcept
+{
+    return target == PreferencesSettingsFileTarget::Monitor ? state.monitorBaselineSettings : state.baselineSettings;
+}
+
+[[nodiscard]] HRESULT OpenPreferencesSettingsFile(
+    HWND owner, const PreferencesDialogState& state, const PreferencesSettingsFileTarget target, std::filesystem::path& outPath) noexcept
+{
+    outPath.clear();
+
+    const std::wstring_view appId = GetPreferencesSettingsFileAppId(state, target);
+    if (appId.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    outPath = Common::Settings::GetSettingsPath(appId);
+    if (outPath.empty() || ! outPath.has_parent_path())
+    {
+        return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+    }
+
+    const std::filesystem::path parent = outPath.parent_path();
+    if (parent.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND);
+    }
+
+    std::error_code createError;
+    std::filesystem::create_directories(parent, createError);
+    if (createError)
+    {
+        const DWORD errorCode = createError.value() > 0 ? static_cast<DWORD>(createError.value()) : static_cast<DWORD>(ERROR_CANNOT_MAKE);
+        return HRESULT_FROM_WIN32(errorCode);
+    }
+
+    std::error_code existsError;
+    const bool exists = std::filesystem::exists(outPath, existsError);
+    if (existsError)
+    {
+        const DWORD errorCode = existsError.value() > 0 ? static_cast<DWORD>(existsError.value()) : static_cast<DWORD>(ERROR_FILE_NOT_FOUND);
+        return HRESULT_FROM_WIN32(errorCode);
+    }
+    if (! exists)
+    {
+        Common::Settings::Settings settingsToCreate = GetPreferencesSettingsFileSourceSettings(state, target);
+        if (target == PreferencesSettingsFileTarget::Main)
+        {
+            settingsToCreate.monitor.reset();
+        }
+
+        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(appId, settingsToCreate);
+        if (FAILED(saveHr))
+        {
+            return saveHr;
+        }
+    }
+
+#ifdef ENABLE_TESTS
+    if (TryCapturePreferencesSettingsFileOpenForTest(outPath, S_OK))
+    {
+        return S_OK;
+    }
+#endif
+
+    const HINSTANCE result = ShellExecuteW(owner, L"open", outPath.c_str(), nullptr, parent.c_str(), SW_SHOWNORMAL);
+    const INT_PTR resultCode = reinterpret_cast<INT_PTR>(result);
+    if (resultCode > 32)
+    {
+        return S_OK;
+    }
+
+    return HRESULT_FROM_WIN32(ShellExecuteResultToWin32Error(resultCode));
+}
+
+void ShowPreferencesSettingsFileOpenFailure(HWND dlg, const std::filesystem::path& path, const HRESULT hr) noexcept
+{
+    Debug::Error(L"Preferences: failed to open settings file '{}': 0x{:08X}", path.wstring(), static_cast<unsigned int>(hr));
+
+    const std::wstring message = FormatStringResource(nullptr, IDS_FMT_PREFS_OPEN_SETTINGS_FILE_FAILED, path.wstring(), static_cast<unsigned long>(hr));
+    const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+    static_cast<void>(MessageBoxW(dlg, message.c_str(), caption.c_str(), MB_OK | MB_ICONERROR));
+}
+
 INT_PTR OnCommand(HWND dlg, PreferencesDialogState* state, UINT commandId, [[maybe_unused]] UINT notifyCode, [[maybe_unused]] HWND hwndCtl)
 {
     if (! dlg || ! state)
@@ -4967,6 +5149,26 @@ INT_PTR OnCommand(HWND dlg, PreferencesDialogState* state, UINT commandId, [[may
             }
             return TRUE;
         case IDC_PREFS_RESET_ALL: ResetAllPreferencesToDefaults(dlg, *state); return TRUE;
+        case IDC_PREFS_ADV_OPEN_SETTINGS_FILE:
+        {
+            std::filesystem::path path;
+            const HRESULT hr = OpenPreferencesSettingsFile(dlg, *state, PreferencesSettingsFileTarget::Main, path);
+            if (FAILED(hr))
+            {
+                ShowPreferencesSettingsFileOpenFailure(dlg, path, hr);
+            }
+            return TRUE;
+        }
+        case IDC_PREFS_MONITOR_OPEN_SETTINGS_FILE:
+        {
+            std::filesystem::path path;
+            const HRESULT hr = OpenPreferencesSettingsFile(dlg, *state, PreferencesSettingsFileTarget::Monitor, path);
+            if (FAILED(hr))
+            {
+                ShowPreferencesSettingsFileOpenFailure(dlg, path, hr);
+            }
+            return TRUE;
+        }
         case IDCANCEL: return RequestPreferencesDialogCancelClose(dlg, *state) ? TRUE : FALSE;
     }
 
@@ -5211,6 +5413,7 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 if (state->settings)
                 {
                     WindowPlacementPersistence::Save(*state->settings, kPreferencesWindowId, dlg);
+                    state->settings->monitor.reset();
 
                     const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(state->appId, *state->settings);
                     if (FAILED(saveHr))
@@ -5225,12 +5428,12 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                     if (state->pageHostUsesDxUi)
                     {
                         hostState._pageHostHost.Detach();
-                        state->pageHostUsesDxUi               = false;
-                        state->pageHostDxHost                 = nullptr;
-                        state->pageHostDxRootControl          = nullptr;
-                        state->pageHostDxScrollPanelControl   = nullptr;
-                        state->pageHostDxContentRootControl   = nullptr;
-                        state->pageHostDxNoteControl          = nullptr;
+                        state->pageHostUsesDxUi             = false;
+                        state->pageHostDxHost               = nullptr;
+                        state->pageHostDxRootControl        = nullptr;
+                        state->pageHostDxScrollPanelControl = nullptr;
+                        state->pageHostDxContentRootControl = nullptr;
+                        state->pageHostDxNoteControl        = nullptr;
                     }
                     SetWindowLongPtrW(state->pageHostWindow, GWLP_USERDATA, 0);
                 }
@@ -5351,6 +5554,7 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
     state->appId           = std::wstring(appId);
     state->theme           = theme;
     state->initialCategory = initialCategory;
+    const std::optional<Common::Settings::MonitorSettings> legacyMainMonitorSettings = settings.monitor;
 
     if (! EnsurePrefsPageHostClassRegistered())
     {
@@ -5358,7 +5562,18 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
     }
 
     state->baselineSettings = settings;
-    state->workingSettings  = settings;
+    state->baselineSettings.monitor.reset();
+    state->workingSettings = state->baselineSettings;
+    settings.monitor.reset();
+
+    Common::Settings::Settings monitorSettings{};
+    static_cast<void>(Common::Settings::LoadSettings(kPreferencesMonitorAppId, monitorSettings));
+    if (! monitorSettings.monitor.has_value() && legacyMainMonitorSettings.has_value())
+    {
+        monitorSettings.monitor = legacyMainMonitorSettings.value();
+    }
+    state->monitorBaselineSettings = monitorSettings;
+    state->workingMonitorSettings  = monitorSettings;
 
     // Ensure mainMenu is explicitly set with defaults if not present
     // This prevents function bar from being reset when applying preferences
@@ -5433,9 +5648,9 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
         out.dialogClientBottomPx = static_cast<int>(dialogClient.bottom);
     }
 
-    out.categoryTreeUsesDxUiHost      = state->categoryTreeUsesDxUi;
-    out.shellUsesDxUiHost             = true;
-    out.pageHostUsesDxUiHost          = state->pageHostUsesDxUi;
+    out.categoryTreeUsesDxUiHost = state->categoryTreeUsesDxUi;
+    out.shellUsesDxUiHost        = true;
+    out.pageHostUsesDxUiHost     = state->pageHostUsesDxUi;
     out.pageHostDxHostAttachedToPageHost =
         state->pageHostWindow && static_cast<PreferencesDialogHost*>(state)->_pageHostHost.GetHwnd() == state->pageHostWindow;
     out.pageHostDxContentRootUsesScrollPanel =
@@ -5443,20 +5658,16 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
     if (const auto* scrollPanel = dynamic_cast<const ScrollPanel*>(static_cast<const PreferencesDialogHost*>(state)->_pageHostContentRootControl))
     {
         out.pageHostDxInternalScrollbarEnabled = scrollPanel->IsInternalScrollbarEnabled();
-        const UINT dpi = state->pageHostWindow ? GetDpiForWindow(state->pageHostWindow) : USER_DEFAULT_SCREEN_DPI;
-        out.pageHostDxScrollOffsetPx = static_cast<int>(std::lround((scrollPanel->GetScrollOffset() * static_cast<float>(dpi)) / 96.0f));
-        const auto dipToPx = [dpi](const float value) noexcept
-        {
-            return static_cast<LONG>(std::lround((value * static_cast<float>(dpi)) / 96.0f));
-        };
+        const UINT dpi                         = state->pageHostWindow ? GetDpiForWindow(state->pageHostWindow) : USER_DEFAULT_SCREEN_DPI;
+        out.pageHostDxScrollOffsetPx           = static_cast<int>(std::lround((scrollPanel->GetScrollOffset() * static_cast<float>(dpi)) / 96.0f));
+        const auto dipToPx = [dpi](const float value) noexcept { return static_cast<LONG>(std::lround((value * static_cast<float>(dpi)) / 96.0f)); };
         if (state->pageHostWindow)
         {
             RECT pageClient{};
             if (GetClientRect(state->pageHostWindow, &pageClient))
             {
-                const int clientWidthPx = std::max(0l, pageClient.right - pageClient.left);
-                const int thicknessPx =
-                    static_cast<int>(std::lround((scrollPanel->GetScrollbarThickness() * static_cast<float>(dpi)) / 96.0f));
+                const int clientWidthPx          = std::max(0l, pageClient.right - pageClient.left);
+                const int thicknessPx            = static_cast<int>(std::lround((scrollPanel->GetScrollbarThickness() * static_cast<float>(dpi)) / 96.0f));
                 out.pageHostScrollbarTrackLeftPx = std::max(0, clientWidthPx - std::max(0, thicknessPx));
             }
         }
@@ -5464,7 +5675,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
         if (scrollPanel->DebugGetScrollbarThumbHitRect(thumbDip))
         {
             out.pageHostDxScrollbarThumbHitRectPx = RECT{dipToPx(thumbDip.left), dipToPx(thumbDip.top), dipToPx(thumbDip.right), dipToPx(thumbDip.bottom)};
-            const D2D1_POINT_2F centerDip = D2D1::Point2F((thumbDip.left + thumbDip.right) * 0.5f, (thumbDip.top + thumbDip.bottom) * 0.5f);
+            const D2D1_POINT_2F centerDip         = D2D1::Point2F((thumbDip.left + thumbDip.right) * 0.5f, (thumbDip.top + thumbDip.bottom) * 0.5f);
             if (const Control* hitControl = static_cast<PreferencesDialogHost*>(state)->_pageHostHost.DebugHitTestControl(centerDip))
             {
                 out.pageHostDxThumbCenterHitAnyControl  = true;
@@ -5472,13 +5683,13 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             }
         }
     }
-    out.categoryTreeFocused           = state->categoryTreeWindow && GetFocus() == state->categoryTreeWindow;
-    out.pluginItemSelected            = state->pluginsSelectedPlugin.has_value();
-    out.pluginsDetailsActive          = state->pluginsDetailsActive;
-    out.currentCategory               = state->currentCategory;
-    out.visibleChildWindowCount       = CountVisibleChildWindows(dlg);
-    out.visibleLegacyTreeViewCount    = CountVisibleChildWindowsByClass(dlg, L"SysTreeView32");
-    out.currentPageCardCount          = state->pageSettingCards.size();
+    out.categoryTreeFocused        = state->categoryTreeWindow && GetFocus() == state->categoryTreeWindow;
+    out.pluginItemSelected         = state->pluginsSelectedPlugin.has_value();
+    out.pluginsDetailsActive       = state->pluginsDetailsActive;
+    out.currentCategory            = state->currentCategory;
+    out.visibleChildWindowCount    = CountVisibleChildWindows(dlg);
+    out.visibleLegacyTreeViewCount = CountVisibleChildWindowsByClass(dlg, L"SysTreeView32");
+    out.currentPageCardCount       = state->pageSettingCards.size();
     for (const RECT& card : state->pageSettingCards)
     {
         out.pageHostRightmostCardRightPx = std::max(out.pageHostRightmostCardRightPx, static_cast<int>(card.right));
@@ -5494,7 +5705,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
         ((GetDlgItem(dlg, IDC_PREFS_APPLY) && PrefsUi::IsActuallyVisibleChildWindow(GetDlgItem(dlg, IDC_PREFS_APPLY))) ? 1u : 0u);
     if (state->pageHostWindow)
     {
-        out.pageHostShowsVerticalScroll = state->pageScrollMaxY > 0;
+        out.pageHostShowsVerticalScroll     = state->pageScrollMaxY > 0;
         out.pageHostHasNativeVerticalScroll = (GetWindowLongPtrW(state->pageHostWindow, GWL_STYLE) & WS_VSCROLL) != 0;
         RECT pageHostRect{};
         if (GetWindowRect(state->pageHostWindow, &pageHostRect))
@@ -5552,14 +5763,14 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
 
         const auto rectInsideHost = [&](const RECT& rect) noexcept
         {
-            return rect.right > rect.left && rect.bottom > rect.top && rect.left >= 0 && rect.top >= 0 &&
-                   rect.right <= out.shellHostClientWidthPx && rect.bottom <= out.shellHostClientHeightPx;
+            return rect.right > rect.left && rect.bottom > rect.top && rect.left >= 0 && rect.top >= 0 && rect.right <= out.shellHostClientWidthPx &&
+                   rect.bottom <= out.shellHostClientHeightPx;
         };
-        out.shellFooterButtonsInsideHost = rectInsideHost(out.shellOkButtonBoundsPx) && rectInsideHost(out.shellCancelButtonBoundsPx) &&
-                                           rectInsideHost(out.shellApplyButtonBoundsPx);
+        out.shellFooterButtonsInsideHost =
+            rectInsideHost(out.shellOkButtonBoundsPx) && rectInsideHost(out.shellCancelButtonBoundsPx) && rectInsideHost(out.shellApplyButtonBoundsPx);
 
         wil::unique_hrgn clipRegion(CreateRectRgn(0, 0, 0, 0));
-        const int clipType = clipRegion ? GetWindowRgn(hostState._shellHostHwnd, clipRegion.get()) : ERROR;
+        const int clipType                = clipRegion ? GetWindowRgn(hostState._shellHostHwnd, clipRegion.get()) : ERROR;
         const auto buttonCenterInsideClip = [&](const RECT& rect) noexcept
         {
             if (clipType == ERROR)
@@ -5574,8 +5785,7 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             const int y = rect.top + ((rect.bottom - rect.top) / 2);
             return PtInRegion(clipRegion.get(), x, y) != FALSE;
         };
-        out.shellFooterButtonsInsideClip = buttonCenterInsideClip(out.shellOkButtonBoundsPx) &&
-                                           buttonCenterInsideClip(out.shellCancelButtonBoundsPx) &&
+        out.shellFooterButtonsInsideClip = buttonCenterInsideClip(out.shellOkButtonBoundsPx) && buttonCenterInsideClip(out.shellCancelButtonBoundsPx) &&
                                            buttonCenterInsideClip(out.shellApplyButtonBoundsPx);
 
         RedSalamander::DxUi::WindowHostBitmapCapture capture{};
@@ -5587,16 +5797,13 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
                 {
                     return false;
                 }
-                const size_t base =
-                    (static_cast<size_t>(y) * static_cast<size_t>(capture.widthPx) + static_cast<size_t>(x)) * 4u;
+                const size_t base = (static_cast<size_t>(y) * static_cast<size_t>(capture.widthPx) + static_cast<size_t>(x)) * 4u;
                 if ((base + 3u) >= capture.bgraPixels.size())
                 {
                     return false;
                 }
-                outPixel = static_cast<uint32_t>(capture.bgraPixels[base + 0u]) |
-                           (static_cast<uint32_t>(capture.bgraPixels[base + 1u]) << 8u) |
-                           (static_cast<uint32_t>(capture.bgraPixels[base + 2u]) << 16u) |
-                           (static_cast<uint32_t>(capture.bgraPixels[base + 3u]) << 24u);
+                outPixel = static_cast<uint32_t>(capture.bgraPixels[base + 0u]) | (static_cast<uint32_t>(capture.bgraPixels[base + 1u]) << 8u) |
+                           (static_cast<uint32_t>(capture.bgraPixels[base + 2u]) << 16u) | (static_cast<uint32_t>(capture.bgraPixels[base + 3u]) << 24u);
                 return true;
             };
 
@@ -5608,14 +5815,11 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
                 return r >= 240u && g >= 240u && b >= 240u;
             };
 
-            const auto colorComponent = [](const float value) noexcept
-            {
-                return static_cast<uint8_t>(std::clamp(std::lround(value * 255.0f), 0l, 255l));
-            };
-            const ThemePalette expectedPalette = PrefsUi::MakeDxPalette(state->theme);
-            const uint8_t expectedB            = colorComponent(expectedPalette.windowBackground.b);
-            const uint8_t expectedG            = colorComponent(expectedPalette.windowBackground.g);
-            const uint8_t expectedR            = colorComponent(expectedPalette.windowBackground.r);
+            const auto colorComponent = [](const float value) noexcept { return static_cast<uint8_t>(std::clamp(std::lround(value * 255.0f), 0l, 255l)); };
+            const ThemePalette expectedPalette   = PrefsUi::MakeDxPalette(state->theme);
+            const uint8_t expectedB              = colorComponent(expectedPalette.windowBackground.b);
+            const uint8_t expectedG              = colorComponent(expectedPalette.windowBackground.g);
+            const uint8_t expectedR              = colorComponent(expectedPalette.windowBackground.r);
             const auto matchesExpectedBackground = [&](const uint32_t bgra) noexcept
             {
                 const int b = static_cast<int>(bgra & 0xFFu);
@@ -5627,9 +5831,9 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
 
             if (out.shellOkButtonBoundsPx.right > out.shellOkButtonBoundsPx.left && out.shellOkButtonBoundsPx.bottom > out.shellOkButtonBoundsPx.top)
             {
-                const int okWidth = out.shellOkButtonBoundsPx.right - out.shellOkButtonBoundsPx.left;
-                const int sampleX = out.shellOkButtonBoundsPx.left + std::clamp(okWidth / 4, 2, std::max(2, okWidth - 2));
-                const int sampleY = out.shellOkButtonBoundsPx.top + ((out.shellOkButtonBoundsPx.bottom - out.shellOkButtonBoundsPx.top) / 2);
+                const int okWidth                = out.shellOkButtonBoundsPx.right - out.shellOkButtonBoundsPx.left;
+                const int sampleX                = out.shellOkButtonBoundsPx.left + std::clamp(okWidth / 4, 2, std::max(2, okWidth - 2));
+                const int sampleY                = out.shellOkButtonBoundsPx.top + ((out.shellOkButtonBoundsPx.bottom - out.shellOkButtonBoundsPx.top) / 2);
                 out.shellOkButtonInteriorSampled = samplePixel(sampleX, sampleY, out.shellOkButtonInteriorBgra);
                 if (out.shellOkButtonInteriorSampled)
                 {
@@ -5639,8 +5843,8 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
 
             if (out.shellHostClientWidthPx > 0 && out.shellOkButtonBoundsPx.bottom > out.shellOkButtonBoundsPx.top)
             {
-                const int sampleX = out.shellHostClientWidthPx / 2;
-                const int sampleY = out.shellOkButtonBoundsPx.top + ((out.shellOkButtonBoundsPx.bottom - out.shellOkButtonBoundsPx.top) / 2);
+                const int sampleX                = out.shellHostClientWidthPx / 2;
+                const int sampleY                = out.shellOkButtonBoundsPx.top + ((out.shellOkButtonBoundsPx.bottom - out.shellOkButtonBoundsPx.top) / 2);
                 out.shellFooterBackgroundSampled = samplePixel(sampleX, sampleY, out.shellFooterBackgroundBgra);
                 if (out.shellFooterBackgroundSampled)
                 {
@@ -5649,8 +5853,8 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
             }
         }
     }
-    out.pageScrollY    = state->pageScrollY;
-    out.pageScrollMaxY = state->pageScrollMaxY;
+    out.pageScrollY                                     = state->pageScrollY;
+    out.pageScrollMaxY                                  = state->pageScrollMaxY;
     out.pageHostLastWheelRouteSeen                      = state->debugLastWheelRouteSeen;
     out.pageHostLastWheelRouteForwarded                 = state->debugLastWheelRouteForwarded;
     out.pageHostLastWheelRouteTargetWasPageHost         = state->debugLastWheelRouteTargetWasPageHost;
@@ -5669,14 +5873,14 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
     out.pageHostLastWheelBeforeMaxY                     = state->debugLastWheelBeforeMaxY;
     out.pageHostLastWheelAfterY                         = state->debugLastWheelAfterY;
     out.pageHostLastWheelAfterMaxY                      = state->debugLastWheelAfterMaxY;
-    out.pageHostScrollRequestCount          = state->pageHostScrollRequestCount;
-    out.pageHostScrollCoalescedRequestCount = state->pageHostScrollCoalescedRequestCount;
-    out.pageHostScrollApplyCount            = state->pageHostScrollApplyCount;
-    out.pageHostScrollMovedChildCountTotal  = state->pageHostScrollMovedChildCountTotal;
-    out.pageHostDxScrollMovedControlCountTotal = state->pageHostDxScrollMovedControlCountTotal;
-    out.pageHostDxScrollLastMovedControlCount  = state->pageHostDxScrollLastMovedControlCount;
-    out.pageHostScrollLastApplyUs           = state->pageHostScrollLastApplyUs;
-    out.pageHostScrollApplyPending          = state->pageHostScrollApplyPending;
+    out.pageHostScrollRequestCount                      = state->pageHostScrollRequestCount;
+    out.pageHostScrollCoalescedRequestCount             = state->pageHostScrollCoalescedRequestCount;
+    out.pageHostScrollApplyCount                        = state->pageHostScrollApplyCount;
+    out.pageHostScrollMovedChildCountTotal              = state->pageHostScrollMovedChildCountTotal;
+    out.pageHostDxScrollMovedControlCountTotal          = state->pageHostDxScrollMovedControlCountTotal;
+    out.pageHostDxScrollLastMovedControlCount           = state->pageHostDxScrollLastMovedControlCount;
+    out.pageHostScrollLastApplyUs                       = state->pageHostScrollLastApplyUs;
+    out.pageHostScrollApplyPending                      = state->pageHostScrollApplyPending;
 
     if (state->categoryTreeUsesDxUi)
     {
@@ -5788,6 +5992,8 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
         out.viewersUsesDxUiTypographyMetrics  = hostState._viewersPane.DebugUsesDxUiTypographyMetrics();
         out.hotPathsFocusTarget               = hostState._hotPathsPane.DebugGetFocusTarget();
         out.advancedFocusTarget               = hostState._advancedPane.DebugGetFocusTarget();
+        out.monitorFocusTarget                = hostState._monitorPane.DebugGetFocusTarget();
+        out.monitorSettingsFileCardLast       = hostState._monitorPane.DebugSettingsFileCardIsLast();
         out.fileOperationsFocusTarget         = hostState._fileOperationsPane.DebugGetFocusTarget();
         out.compareDirectoriesFocusTarget     = hostState._compareDirectoriesPane.DebugGetFocusTarget();
         out.themesFocusTarget                 = hostState._themesPane.DebugGetFocusTarget();
@@ -5837,18 +6043,18 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
                 }
             }
         }
-        out.viewersListRowCount                        = hostState._viewersPane.DebugListRowCount();
-        const auto viewersListMetrics                  = hostState._viewersPane.DebugListVisibleWorkMetrics();
-        out.viewersListVisibleRowCount                 = static_cast<size_t>(viewersListMetrics.visibleRowCount);
-        out.viewersListVisibleColumnCount              = static_cast<size_t>(viewersListMetrics.visibleColumnCount);
-        out.viewersListVisibleCellCount                = static_cast<size_t>(viewersListMetrics.visibleCellCount);
-        out.viewersListHasVerticalScrollbar            = viewersListMetrics.hasVerticalScrollbar;
-        out.viewersListVerticalScrollDip               = viewersListMetrics.verticalScrollDip;
-        out.viewersListRenderCount                     = hostState._viewersPane.DebugListRenderCount();
-        out.viewersListResizeCount                     = hostState._viewersPane.DebugListResizeCount();
-        out.viewersListResizeFailureCount              = hostState._viewersPane.DebugListResizeFailureCount();
-        out.viewersActionCount                         = state->workingSettings.fileActions.viewers.actions.size();
-        out.viewersActionRowCount                      = hostState._viewersPane.DebugActionRowCount();
+        out.viewersListRowCount             = hostState._viewersPane.DebugListRowCount();
+        const auto viewersListMetrics       = hostState._viewersPane.DebugListVisibleWorkMetrics();
+        out.viewersListVisibleRowCount      = static_cast<size_t>(viewersListMetrics.visibleRowCount);
+        out.viewersListVisibleColumnCount   = static_cast<size_t>(viewersListMetrics.visibleColumnCount);
+        out.viewersListVisibleCellCount     = static_cast<size_t>(viewersListMetrics.visibleCellCount);
+        out.viewersListHasVerticalScrollbar = viewersListMetrics.hasVerticalScrollbar;
+        out.viewersListVerticalScrollDip    = viewersListMetrics.verticalScrollDip;
+        out.viewersListRenderCount          = hostState._viewersPane.DebugListRenderCount();
+        out.viewersListResizeCount          = hostState._viewersPane.DebugListResizeCount();
+        out.viewersListResizeFailureCount   = hostState._viewersPane.DebugListResizeFailureCount();
+        out.viewersActionCount              = state->workingSettings.fileActions.viewers.actions.size();
+        out.viewersActionRowCount           = hostState._viewersPane.DebugActionRowCount();
         out.viewersPrimaryActionIdText.clear();
         out.viewersAlternateActionIdText.clear();
         for (const auto& rule : state->workingSettings.fileActions.viewers.associations)
@@ -5860,20 +6066,20 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
                 break;
             }
         }
-        out.viewersSearchText                          = state->viewersSearchText;
-        out.viewersSelectedExtensionText               = state->viewersSelectedExtensionText;
-        out.viewersPreviewActionIdText                 = hostState._viewersPane.DebugPreviewActionId();
-        out.viewersPreviewReasonText                   = hostState._viewersPane.DebugPreviewReason();
-        out.viewersFocusTarget                         = hostState._viewersPane.DebugGetFocusTarget();
-        out.editorsActionCount                         = state->workingSettings.fileActions.editors.actions.size();
-        out.editorsAssociationRowCount                 = hostState._editorsPane.DebugAssociationRowCount();
-        const auto editorsAssociationMetrics           = hostState._editorsPane.DebugAssociationVisibleWorkMetrics();
-        out.editorsAssociationVisibleRowCount          = static_cast<size_t>(editorsAssociationMetrics.visibleRowCount);
-        out.editorsAssociationVisibleColumnCount       = static_cast<size_t>(editorsAssociationMetrics.visibleColumnCount);
-        out.editorsAssociationVisibleCellCount         = static_cast<size_t>(editorsAssociationMetrics.visibleCellCount);
-        out.editorsAssociationHasVerticalScrollbar     = editorsAssociationMetrics.hasVerticalScrollbar;
-        out.editorsAssociationVerticalScrollDip        = editorsAssociationMetrics.verticalScrollDip;
-        out.editorsActionRowCount                      = hostState._editorsPane.DebugActionRowCount();
+        out.viewersSearchText                      = state->viewersSearchText;
+        out.viewersSelectedExtensionText           = state->viewersSelectedExtensionText;
+        out.viewersPreviewActionIdText             = hostState._viewersPane.DebugPreviewActionId();
+        out.viewersPreviewReasonText               = hostState._viewersPane.DebugPreviewReason();
+        out.viewersFocusTarget                     = hostState._viewersPane.DebugGetFocusTarget();
+        out.editorsActionCount                     = state->workingSettings.fileActions.editors.actions.size();
+        out.editorsAssociationRowCount             = hostState._editorsPane.DebugAssociationRowCount();
+        const auto editorsAssociationMetrics       = hostState._editorsPane.DebugAssociationVisibleWorkMetrics();
+        out.editorsAssociationVisibleRowCount      = static_cast<size_t>(editorsAssociationMetrics.visibleRowCount);
+        out.editorsAssociationVisibleColumnCount   = static_cast<size_t>(editorsAssociationMetrics.visibleColumnCount);
+        out.editorsAssociationVisibleCellCount     = static_cast<size_t>(editorsAssociationMetrics.visibleCellCount);
+        out.editorsAssociationHasVerticalScrollbar = editorsAssociationMetrics.hasVerticalScrollbar;
+        out.editorsAssociationVerticalScrollDip    = editorsAssociationMetrics.verticalScrollDip;
+        out.editorsActionRowCount                  = hostState._editorsPane.DebugActionRowCount();
         out.editorsPrimaryActionIdText.clear();
         out.editorsAlternateActionIdText.clear();
         out.editorsEditNewActionIdText.clear();
@@ -5887,21 +6093,21 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
                 break;
             }
         }
-        out.editorsPreviewActionIdText                 = hostState._editorsPane.DebugPreviewActionId();
-        out.editorsPreviewReasonText                   = hostState._editorsPane.DebugPreviewReason();
-        out.userMenuActionCount                        = state->workingSettings.userMenu.actions.size();
-        out.keyboardListRowCount                       = hostState._keyboardPane.DebugListRowCount();
-        const auto keyboardListMetrics                 = hostState._keyboardPane.DebugListVisibleWorkMetrics();
-        out.keyboardListVisibleRowCount                = static_cast<size_t>(keyboardListMetrics.visibleRowCount);
-        out.keyboardListVisibleColumnCount             = static_cast<size_t>(keyboardListMetrics.visibleColumnCount);
-        out.keyboardListVisibleCellCount               = static_cast<size_t>(keyboardListMetrics.visibleCellCount);
-        out.keyboardListHasVerticalScrollbar           = keyboardListMetrics.hasVerticalScrollbar;
-        out.keyboardListVerticalScrollDip              = keyboardListMetrics.verticalScrollDip;
-        out.keyboardListRenderCount                    = hostState._keyboardPane.DebugListRenderCount();
-        out.keyboardListResizeCount                    = hostState._keyboardPane.DebugListResizeCount();
-        out.keyboardListResizeFailureCount             = hostState._keyboardPane.DebugListResizeFailureCount();
-        out.keyboardSearchText                         = state->keyboardSearchText;
-        out.keyboardHintText                           = state->keyboardHintText;
+        out.editorsPreviewActionIdText       = hostState._editorsPane.DebugPreviewActionId();
+        out.editorsPreviewReasonText         = hostState._editorsPane.DebugPreviewReason();
+        out.userMenuActionCount              = state->workingSettings.userMenu.actions.size();
+        out.keyboardListRowCount             = hostState._keyboardPane.DebugListRowCount();
+        const auto keyboardListMetrics       = hostState._keyboardPane.DebugListVisibleWorkMetrics();
+        out.keyboardListVisibleRowCount      = static_cast<size_t>(keyboardListMetrics.visibleRowCount);
+        out.keyboardListVisibleColumnCount   = static_cast<size_t>(keyboardListMetrics.visibleColumnCount);
+        out.keyboardListVisibleCellCount     = static_cast<size_t>(keyboardListMetrics.visibleCellCount);
+        out.keyboardListHasVerticalScrollbar = keyboardListMetrics.hasVerticalScrollbar;
+        out.keyboardListVerticalScrollDip    = keyboardListMetrics.verticalScrollDip;
+        out.keyboardListRenderCount          = hostState._keyboardPane.DebugListRenderCount();
+        out.keyboardListResizeCount          = hostState._keyboardPane.DebugListResizeCount();
+        out.keyboardListResizeFailureCount   = hostState._keyboardPane.DebugListResizeFailureCount();
+        out.keyboardSearchText               = state->keyboardSearchText;
+        out.keyboardHintText                 = state->keyboardHintText;
         PreferencesKeyboardDebugSnapshot keyboardSnapshot{};
         if (hostState._keyboardPane.DebugGetSnapshot(keyboardSnapshot))
         {
@@ -6209,7 +6415,7 @@ bool PreferencesDialog::DebugDragPageHostDxScrollbarThumb(const int distancePx, 
         return false;
     }
 
-    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    auto& hostState   = static_cast<PreferencesDialogHost&>(*state);
     auto* scrollPanel = dynamic_cast<ScrollPanel*>(hostState._pageHostContentRootControl);
     if (! scrollPanel || ! scrollPanel->IsInternalScrollbarEnabled() || state->pageScrollMaxY <= 0)
     {
@@ -6222,8 +6428,8 @@ bool PreferencesDialog::DebugDragPageHostDxScrollbarThumb(const int distancePx, 
         return false;
     }
 
-    const float x = (thumb.left + thumb.right) * 0.5f;
-    const float y = (thumb.top + thumb.bottom) * 0.5f;
+    const float x       = (thumb.left + thumb.right) * 0.5f;
+    const float y       = (thumb.top + thumb.bottom) * 0.5f;
     const float targetY = y + hostState._pageHostHost.PixelsToDip(static_cast<float>(distancePx));
 
     if (! scrollPanel->OnMouseDown(hostState._pageHostHost, D2D1::Point2F(x, y), false, MK_LBUTTON))
@@ -6681,7 +6887,7 @@ bool PreferencesDialog::DebugHitTestViewersListClientPoint(
 
 bool PreferencesDialog::DebugGetViewersListPointerState(::PreferencesGridPointerDebugState& outState) noexcept
 {
-    outState = {};
+    outState       = {};
     const HWND dlg = GetHandle();
     if (! dlg)
     {
@@ -7258,6 +7464,12 @@ bool PreferencesDialog::DebugFocusAdvancedBypassHelloToggle() noexcept
 
 bool PreferencesDialog::DebugSelectAdvancedFilterPreset(std::wstring_view displayText) noexcept
 {
+    static_cast<void>(displayText);
+    return false;
+}
+
+bool PreferencesDialog::DebugFocusMonitorToolbarToggle() noexcept
+{
     const HWND dlg = GetHandle();
     if (! dlg)
     {
@@ -7271,7 +7483,51 @@ bool PreferencesDialog::DebugSelectAdvancedFilterPreset(std::wstring_view displa
     }
 
     auto& hostState = static_cast<PreferencesDialogHost&>(*state);
-    return hostState._advancedPane.DebugSelectFilterPresetByText(displayText);
+    return hostState._monitorPane.DebugFocusToolbarToggle();
+}
+
+bool PreferencesDialog::DebugSelectMonitorFilterPreset(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._monitorPane.DebugSelectFilterPresetByText(displayText);
+}
+
+void PreferencesDialog::DebugSetSettingsFileOpenCapture(const bool capture) noexcept
+{
+    std::lock_guard lock(g_preferencesSettingsFileOpenDebugMutex);
+    g_preferencesSettingsFileOpenDebug.captureNext = capture;
+}
+
+void PreferencesDialog::DebugClearLastSettingsFileOpen() noexcept
+{
+    std::lock_guard lock(g_preferencesSettingsFileOpenDebugMutex);
+    g_preferencesSettingsFileOpenDebug.lastPath.clear();
+    g_preferencesSettingsFileOpenDebug.lastHr = S_FALSE;
+}
+
+bool PreferencesDialog::DebugGetLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept
+{
+    std::lock_guard lock(g_preferencesSettingsFileOpenDebugMutex);
+    if (g_preferencesSettingsFileOpenDebug.lastPath.empty() && g_preferencesSettingsFileOpenDebug.lastHr == S_FALSE)
+    {
+        return false;
+    }
+
+    outPath = g_preferencesSettingsFileOpenDebug.lastPath;
+    outHr   = g_preferencesSettingsFileOpenDebug.lastHr;
+    return true;
 }
 
 bool PreferencesDialog::DebugSelectFileOperationsBandwidthPreset(std::wstring_view displayText) noexcept

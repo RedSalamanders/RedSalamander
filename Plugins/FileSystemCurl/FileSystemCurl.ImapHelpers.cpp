@@ -504,7 +504,7 @@ namespace
     if (const std::optional<UINT> codePage = CodePageFromMimeCharset(charset); codePage.has_value())
     {
         const DWORD flags = codePage.value() == CP_UTF8 ? MB_ERR_INVALID_CHARS : 0;
-        std::wstring out = Utf16FromCodePage(bytes, codePage.value(), flags);
+        std::wstring out  = Utf16FromCodePage(bytes, codePage.value(), flags);
         if (! out.empty())
         {
             return out;
@@ -827,8 +827,8 @@ struct EncodedWord
     }
 
     const std::string_view body = response.substr(open + 1u, close - open - 1u);
-    bool recognized            = false;
-    size_t pos                 = 0;
+    bool recognized             = false;
+    size_t pos                  = 0;
     while (pos < body.size())
     {
         while (pos < body.size() && IsAsciiWhitespace(body[pos]))

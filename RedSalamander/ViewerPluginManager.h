@@ -93,6 +93,12 @@ public:
     HRESULT TestPlugin(std::wstring_view pluginId) noexcept;
 
 private:
+    enum class ModuleUnloadMode : uint8_t
+    {
+        FreeLibrary,
+        ProcessShutdown,
+    };
+
     ViewerPluginManager()  = default;
     ~ViewerPluginManager() = default;
 
@@ -103,7 +109,8 @@ private:
 
     HRESULT Discover(Common::Settings::Settings& settings) noexcept;
     HRESULT EnsureLoaded(PluginEntry& entry) noexcept;
-    void Unload(PluginEntry& entry) noexcept;
+    void UnloadAll(ModuleUnloadMode mode) noexcept;
+    void Unload(PluginEntry& entry, ModuleUnloadMode mode) noexcept;
 
     std::filesystem::path GetExecutableDirectory() noexcept;
     std::filesystem::path GetOptionalPluginsDirectory() noexcept;

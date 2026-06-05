@@ -356,10 +356,10 @@ private:
     float _gutterDipW         = 50.f;
     UINT32 _gutterDigits      = 2; // cached digit count for gutter width
     // Scrollbar visibility/state
-    bool _vertScrollbarVisible      = true; // initial window style includes WS_VSCROLL
-    bool _horzScrollbarVisible      = true; // initial window style includes WS_HSCROLL
-    bool _updatingScrollBars        = false;
-    bool _scrollBarUpdatePending    = false;
+    bool _vertScrollbarVisible   = true; // initial window style includes WS_VSCROLL
+    bool _horzScrollbarVisible   = true; // initial window style includes WS_HSCROLL
+    bool _updatingScrollBars     = false;
+    bool _scrollBarUpdatePending = false;
 
     // Selection/caret
     UINT32 _selStart                         = 0;

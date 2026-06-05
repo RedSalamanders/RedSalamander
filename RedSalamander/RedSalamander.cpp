@@ -37,8 +37,8 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
-#include <shlobj_core.h>
 #include <shellapi.h>
+#include <shlobj_core.h>
 #include <strsafe.h>
 #include <winnetwk.h>
 
@@ -59,6 +59,7 @@
 #include "CrashHandler.h"
 #include "CrashQuarantine.h"
 #include "DirectoryInfoCache.h"
+#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
@@ -118,7 +119,7 @@ constexpr wchar_t kItemPropertiesWindowId[]          = L"ItemPropertiesWindow";
 constexpr wchar_t kItemPropertiesWindowClassName[]   = L"RedSalamander.ItemPropertiesWindow";
 constexpr wchar_t kAboutDialogWindowClassName[]      = L"RedSalamander.AboutWindow";
 constexpr wchar_t kFatalErrorDialogWindowClassName[] = L"RedSalamander.FatalErrorWindow";
-constexpr wchar_t kExternalHelpUrl[]                 = L"https://github.com/RedSalamanders/RedSalamander/tree/main/Docs#readme";
+constexpr wchar_t kExternalHelpUrl[]                 = L"https://github.com/RedSalamanders/RedSalamander/tree/main/docs#readme";
 constexpr wchar_t kLeftPaneSlot[]                    = L"left";
 constexpr wchar_t kRightPaneSlot[]                   = L"right";
 #ifdef ENABLE_TESTS
@@ -160,6 +161,100 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
     const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
     const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
     SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+[[nodiscard]] const wchar_t* TraceApplicationLoopMessageName(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_NCHITTEST: return L"WM_NCHITTEST";
+        case WM_MOUSEACTIVATE: return L"WM_MOUSEACTIVATE";
+        case WM_SETCURSOR: return L"WM_SETCURSOR";
+        case WM_MOUSEMOVE: return L"WM_MOUSEMOVE";
+        case WM_MOUSELEAVE: return L"WM_MOUSELEAVE";
+        case WM_LBUTTONDOWN: return L"WM_LBUTTONDOWN";
+        case WM_LBUTTONUP: return L"WM_LBUTTONUP";
+        case WM_LBUTTONDBLCLK: return L"WM_LBUTTONDBLCLK";
+        case WM_RBUTTONDOWN: return L"WM_RBUTTONDOWN";
+        case WM_RBUTTONUP: return L"WM_RBUTTONUP";
+        case WM_CAPTURECHANGED: return L"WM_CAPTURECHANGED";
+        case WM_CANCELMODE: return L"WM_CANCELMODE";
+        case WM_SETFOCUS: return L"WM_SETFOCUS";
+        case WM_KILLFOCUS: return L"WM_KILLFOCUS";
+        case WM_KEYDOWN: return L"WM_KEYDOWN";
+        case WM_KEYUP: return L"WM_KEYUP";
+        case WM_SYSKEYDOWN: return L"WM_SYSKEYDOWN";
+        case WM_SYSKEYUP: return L"WM_SYSKEYUP";
+        default: return L"message";
+    }
+}
+
+[[nodiscard]] bool ShouldTraceFindFilesApplicationLoopMessage(UINT message) noexcept
+{
+    return (message >= WM_MOUSEFIRST && message <= WM_MOUSELAST) || (message >= WM_NCMOUSEMOVE && message <= WM_NCXBUTTONDBLCLK) ||
+           (message >= WM_KEYFIRST && message <= WM_KEYLAST) || message == WM_MOUSEACTIVATE || message == WM_SETCURSOR || message == WM_NCHITTEST ||
+           message == WM_CAPTURECHANGED || message == WM_CANCELMODE || message == WM_SETFOCUS || message == WM_KILLFOCUS;
+}
+
+void TraceFindFilesApplicationLoopMessage(const MSG& msg, HWND root, std::wstring_view phase) noexcept
+{
+    if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled() || ! ShouldTraceFindFilesApplicationLoopMessage(msg.message))
+    {
+        return;
+    }
+
+    if (! IsFindFilesWindowHandle(root))
+    {
+        return;
+    }
+    const HWND findRoot = root;
+
+    POINT cursorScreen{};
+    const bool haveCursor = GetCursorPos(&cursorScreen) != FALSE; // getcursorpos-allow: diagnostic-only
+    POINT rootClient      = cursorScreen;
+    const bool haveRootClient = haveCursor && ScreenToClient(findRoot, &rootClient) != FALSE;
+    HWND childAtCursor         = nullptr;
+    if (haveRootClient)
+    {
+        childAtCursor = ChildWindowFromPointEx(findRoot, rootClient, CWP_SKIPINVISIBLE);
+    }
+
+    try
+    {
+        RedSalamander::DxUi::TraceContextMenuDiagnostics(
+            L"app.message-loop.find",
+            std::format(L"phase={} hwnd={:#x} root={:#x} msg={} msgId={:#x} wParam={:#x} lParam={:#x} "
+                        L"cursorScreen=({}, {}) haveCursor={} rootClient=({}, {}) haveRootClient={} "
+                        L"windowAtCursor={:#x} childAtCursor={:#x} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+                        phase,
+                        reinterpret_cast<uintptr_t>(msg.hwnd),
+                        reinterpret_cast<uintptr_t>(root),
+                        TraceApplicationLoopMessageName(msg.message),
+                        static_cast<unsigned int>(msg.message),
+                        static_cast<uintptr_t>(msg.wParam),
+                        static_cast<uintptr_t>(msg.lParam),
+                        cursorScreen.x,
+                        cursorScreen.y,
+                        haveCursor ? 1 : 0,
+                        rootClient.x,
+                        rootClient.y,
+                        haveRootClient ? 1 : 0,
+                        reinterpret_cast<uintptr_t>(haveCursor ? WindowFromPoint(cursorScreen) : nullptr),
+                        reinterpret_cast<uintptr_t>(childAtCursor),
+                        reinterpret_cast<uintptr_t>(GetFocus()),
+                        reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                        reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                        reinterpret_cast<uintptr_t>(GetCapture())));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::format_error&)
+    {
+        // Main-loop tracing is diagnostic only; formatting failure must not change input behavior.
+        RedSalamander::DxUi::TraceContextMenuDiagnostics(L"app.message-loop.find", L"formatting failed");
+    }
 }
 
 #ifdef ENABLE_TESTS
@@ -2375,15 +2470,15 @@ void CaptureRuntimeSettings(Common::Settings::Settings& settings, HWND hWnd) noe
 
             pane.current = current;
 
-            pane.view.display          = DisplayModeToSettings(g_folderWindow.GetDisplayMode(paneId));
-            pane.view.sortBy           = SortByToSettings(g_folderWindow.GetSortBy(paneId));
-            pane.view.sortDirection    = SortDirectionToSettings(g_folderWindow.GetSortDirection(paneId));
+            pane.view.display               = DisplayModeToSettings(g_folderWindow.GetDisplayMode(paneId));
+            pane.view.sortBy                = SortByToSettings(g_folderWindow.GetSortBy(paneId));
+            pane.view.sortDirection         = SortDirectionToSettings(g_folderWindow.GetSortDirection(paneId));
             pane.view.fileExtensionsVisible = g_folderWindow.GetFileExtensionsVisible(paneId);
             pane.view.thumbnailSizeDip      = g_folderWindow.GetThumbnailSizeDip(paneId);
             pane.view.thumbnailsVisible     = false;
             pane.view.navigationBarVisible  = g_folderWindow.GetNavigationBarVisible(paneId);
             pane.view.filterBarVisible      = g_folderWindow.GetFilterBarVisible(paneId);
-            pane.view.statusBarVisible = g_folderWindow.GetStatusBarVisible(paneId);
+            pane.view.statusBarVisible      = g_folderWindow.GetStatusBarVisible(paneId);
 
             folders.items.push_back(std::move(pane));
         };
@@ -3393,16 +3488,16 @@ void ShowSortMenuPopup(HWND hWnd, FolderWindow::Pane pane, POINT screenPoint) no
     EnsureMenuHandles(hWnd);
     UpdatePaneMenuChecks();
 
-    const bool isLeft = pane == FolderWindow::Pane::Left;
-    const UINT idName = isLeft ? IDM_LEFT_SORT_NAME : IDM_RIGHT_SORT_NAME;
-    const UINT idExt  = isLeft ? IDM_LEFT_SORT_EXTENSION : IDM_RIGHT_SORT_EXTENSION;
-    const UINT idTime = isLeft ? IDM_LEFT_SORT_TIME : IDM_RIGHT_SORT_TIME;
-    const UINT idSize = isLeft ? IDM_LEFT_SORT_SIZE : IDM_RIGHT_SORT_SIZE;
-    const UINT idAttr = isLeft ? IDM_LEFT_SORT_ATTRIBUTES : IDM_RIGHT_SORT_ATTRIBUTES;
-    const UINT idNone = isLeft ? IDM_LEFT_SORT_NONE : IDM_RIGHT_SORT_NONE;
-    const UINT idThumbSmall = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_SMALL : IDM_RIGHT_THUMBNAIL_SIZE_SMALL;
-    const UINT idThumbMedium = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_MEDIUM : IDM_RIGHT_THUMBNAIL_SIZE_MEDIUM;
-    const UINT idThumbLarge = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_LARGE : IDM_RIGHT_THUMBNAIL_SIZE_LARGE;
+    const bool isLeft            = pane == FolderWindow::Pane::Left;
+    const UINT idName            = isLeft ? IDM_LEFT_SORT_NAME : IDM_RIGHT_SORT_NAME;
+    const UINT idExt             = isLeft ? IDM_LEFT_SORT_EXTENSION : IDM_RIGHT_SORT_EXTENSION;
+    const UINT idTime            = isLeft ? IDM_LEFT_SORT_TIME : IDM_RIGHT_SORT_TIME;
+    const UINT idSize            = isLeft ? IDM_LEFT_SORT_SIZE : IDM_RIGHT_SORT_SIZE;
+    const UINT idAttr            = isLeft ? IDM_LEFT_SORT_ATTRIBUTES : IDM_RIGHT_SORT_ATTRIBUTES;
+    const UINT idNone            = isLeft ? IDM_LEFT_SORT_NONE : IDM_RIGHT_SORT_NONE;
+    const UINT idThumbSmall      = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_SMALL : IDM_RIGHT_THUMBNAIL_SIZE_SMALL;
+    const UINT idThumbMedium     = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_MEDIUM : IDM_RIGHT_THUMBNAIL_SIZE_MEDIUM;
+    const UINT idThumbLarge      = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_LARGE : IDM_RIGHT_THUMBNAIL_SIZE_LARGE;
     const UINT idThumbExtraLarge = isLeft ? IDM_LEFT_THUMBNAIL_SIZE_EXTRA_LARGE : IDM_RIGHT_THUMBNAIL_SIZE_EXTRA_LARGE;
     const std::array<UINT, Common::Settings::Thumbnail::StopsDip.size()> thumbnailCommandIds{
         idThumbSmall,
@@ -3532,7 +3627,7 @@ void RebuildFileActionMenuDynamicItems(HMENU menu, bool viewerActions)
     auto& menuMap = viewerActions ? g_viewWithMenuIdToActionId : g_editWithMenuIdToActionId;
     menuMap.clear();
 
-    const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+    const FolderWindow::Pane pane                          = g_folderWindow.GetFocusedPane();
     const std::optional<std::filesystem::path> focusedPath = g_folderWindow.GetFocusedItemPath(pane);
     if (! focusedPath.has_value())
     {
@@ -3595,7 +3690,7 @@ void RebuildUserMenuDynamicItems(HMENU menu)
     DeleteMenuItemsFromPosition(menu, 0);
     g_userMenuIdToActionId.clear();
 
-    const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+    const FolderWindow::Pane pane                       = g_folderWindow.GetFocusedPane();
     const std::vector<FolderWindow::UserMenuItem> items = g_folderWindow.CollectUserMenuItems(pane);
 
     UINT nextId      = IDM_PANE_USER_MENU_BASE;
@@ -3628,8 +3723,7 @@ void RebuildUserMenuDynamicItems(HMENU menu)
 [[nodiscard]] POINT GetUserMenuPopupAnchor(HWND ownerWindow) noexcept
 {
     RECT rect{};
-    if (const HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
-        focusedFolderView && GetWindowRect(focusedFolderView, &rect) != FALSE)
+    if (const HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd(); focusedFolderView && GetWindowRect(focusedFolderView, &rect) != FALSE)
     {
         return POINT{rect.left + 8, rect.top + 8};
     }
@@ -3639,9 +3733,7 @@ void RebuildUserMenuDynamicItems(HMENU menu)
         return POINT{rect.left + 16, rect.top + GetSystemMetrics(SM_CYMENU) + 8};
     }
 
-    POINT point{};
-    static_cast<void>(GetCursorPos(&point));
-    return point;
+    return {};
 }
 
 void ShowUserMenuPopup(HWND hWnd) noexcept
@@ -3656,8 +3748,8 @@ void ShowUserMenuPopup(HWND hWnd) noexcept
 
     const POINT point = GetUserMenuPopupAnchor(hWnd);
     SetForegroundWindow(hWnd);
-    const UINT commandId = static_cast<UINT>(
-        TrackPopupMenuEx(g_userMenu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, hWnd, nullptr));
+    const UINT commandId =
+        static_cast<UINT>(TrackPopupMenuEx(g_userMenu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, hWnd, nullptr));
     if (commandId != 0u)
     {
         SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(static_cast<WORD>(commandId), 0), 0);
@@ -3677,7 +3769,7 @@ void RebuildShellNewTemplateMenuDynamicItems(HMENU menu)
     DeleteMenuItemsFromPosition(menu, kFirstDynamicPosition);
     g_newTemplateMenuIdToTemplateId.clear();
 
-    const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+    const FolderWindow::Pane pane                                   = g_folderWindow.GetFocusedPane();
     const std::vector<FolderWindow::ShellNewTemplateMenuItem> items = g_folderWindow.CollectShellNewTemplateMenuItems(pane);
 
     UINT nextId      = IDM_PANE_NEW_TEMPLATE_BASE;
@@ -3945,8 +4037,8 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
     }
 
     if (menu != g_leftGoToMenu && menu != g_rightGoToMenu && menu != g_leftSortMenu && menu != g_rightSortMenu && menu != g_leftDisplayMenu &&
-        menu != g_rightDisplayMenu && menu != g_leftShowMenu && menu != g_rightShowMenu && menu != g_viewMenu && menu != g_editMenu && menu != g_editAdvancedMenu &&
-        menu != g_leftPaneMenu && menu != g_rightPaneMenu)
+        menu != g_rightDisplayMenu && menu != g_leftShowMenu && menu != g_rightShowMenu && menu != g_viewMenu && menu != g_editMenu &&
+        menu != g_editAdvancedMenu && menu != g_leftPaneMenu && menu != g_rightPaneMenu)
     {
         return;
     }
@@ -4879,8 +4971,8 @@ private:
         return request;
     }
 
-    [[nodiscard]] std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest> TryBuildRootSwitchFromVisualIndex(
-        size_t targetIndex, std::wstring_view source) noexcept
+    [[nodiscard]] std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest> TryBuildRootSwitchFromVisualIndex(size_t targetIndex,
+                                                                                                                     std::wstring_view source) noexcept
     {
         if (! _activePopupIndex.has_value())
         {
@@ -4926,11 +5018,7 @@ private:
                     targetLabel = currentItems[targetIndex].text;
                 }
             }
-            Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} accepted from={} to={} label='{}'",
-                        source,
-                        activeIndex,
-                        targetIndex,
-                        targetLabel);
+            Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch {} accepted from={} to={} label='{}'", source, activeIndex, targetIndex, targetLabel);
             _activePopupIndex            = targetIndex;
             _pendingHoverRootSwitchIndex = std::nullopt;
             return request;
@@ -5037,8 +5125,8 @@ private:
         RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
         sessionCallbacks.focusFirstNavigableItem = keyboardInvocation;
 
-        _popupSessionActive         = true;
-        _activePopupIndex           = index;
+        _popupSessionActive = true;
+        _activePopupIndex   = index;
         _pendingHoverRootSwitchIndex.reset();
         const auto popupSessionState = wil::scope_exit([this]() noexcept
         {
@@ -5077,7 +5165,7 @@ private:
                 return std::nullopt;
             }
 
-            const size_t activeIndex = _activePopupIndex.value();
+            const size_t activeIndex              = _activePopupIndex.value();
             const std::optional<size_t> nextIndex = FindNextEnabledItem(activeIndex, forward);
             if (! nextIndex.has_value() || nextIndex.value() == activeIndex)
             {
@@ -5163,8 +5251,8 @@ private:
         {
             if (IsMainMenuTraceMessage(message))
             {
-                const bool pointerMessage = message == WM_MOUSEMOVE || message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_RBUTTONDOWN ||
-                                            message == WM_RBUTTONUP;
+                const bool pointerMessage =
+                    message == WM_MOUSEMOVE || message == WM_LBUTTONDOWN || message == WM_LBUTTONUP || message == WM_RBUTTONDOWN || message == WM_RBUTTONUP;
                 POINT clientPoint{};
                 POINT screenPoint{};
                 std::optional<size_t> hitIndex;
@@ -5204,7 +5292,7 @@ private:
                     self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
                     self->_visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
                     self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
-                    self->_focusRestoreHwnd = nullptr;
+                    self->_focusRestoreHwnd   = nullptr;
                     self->_popupSessionActive = false;
                     self->_activePopupIndex.reset();
                     self->_pendingHoverRootSwitchIndex.reset();
@@ -5236,7 +5324,7 @@ private:
                 self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
                 self->_visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
                 self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
-                self->_focusRestoreHwnd = nullptr;
+                self->_focusRestoreHwnd   = nullptr;
                 self->_popupSessionActive = false;
                 self->_activePopupIndex.reset();
                 self->_pendingHoverRootSwitchIndex.reset();
@@ -5256,7 +5344,7 @@ private:
             return;
         }
 
-        const std::optional<size_t> selectedIndex = _menuBar->GetSelectedIndex();
+        const std::optional<size_t> selectedIndex  = _menuBar->GetSelectedIndex();
         const std::optional<size_t> highlightIndex = _menuBar->GetVisualHighlightIndex();
         _selectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
         _visualHighlightIndexSnapshot.store(highlightIndex.has_value() ? static_cast<int>(highlightIndex.value()) : -1, std::memory_order_release);
@@ -5288,7 +5376,7 @@ private:
     std::atomic<int> _selectedIndexSnapshot{-1};
     std::atomic<int> _visualHighlightIndexSnapshot{-1};
     std::atomic<int> _visualHighlightCountSnapshot{0};
-    HWND _focusRestoreHwnd = nullptr;
+    HWND _focusRestoreHwnd   = nullptr;
     bool _popupSessionActive = false;
     std::optional<size_t> _activePopupIndex;
     std::optional<size_t> _pendingHoverRootSwitchIndex;
@@ -5932,7 +6020,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         }
 
         const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
-        const bool visible           = g_folderWindow.GetStatusBarVisible(pane);
+        const bool visible            = g_folderWindow.GetStatusBarVisible(pane);
         g_folderWindow.SetStatusBarVisible(pane, ! visible);
         UpdatePaneMenuChecks();
         return true;
@@ -5945,7 +6033,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         }
 
         const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
-        const bool visible           = g_folderWindow.GetFileExtensionsVisible(pane);
+        const bool visible            = g_folderWindow.GetFileExtensionsVisible(pane);
         g_folderWindow.SetFileExtensionsVisible(pane, ! visible);
         UpdatePaneMenuChecks();
         return true;
@@ -5958,7 +6046,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         }
 
         const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
-        const bool visible           = g_folderWindow.GetNavigationBarVisible(pane);
+        const bool visible            = g_folderWindow.GetNavigationBarVisible(pane);
         g_folderWindow.SetNavigationBarVisible(pane, ! visible);
         UpdatePaneMenuChecks();
         return true;
@@ -5995,7 +6083,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         }
 
         const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
-        const bool visible           = g_folderWindow.GetFilterBarVisible(pane);
+        const bool visible            = g_folderWindow.GetFilterBarVisible(pane);
         g_folderWindow.SetFilterBarVisible(pane, ! visible);
         UpdatePaneMenuChecks();
         return true;
@@ -6516,6 +6604,31 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
     return DispatchShortcutCommandToCompareWindow(compareWindow, commandId);
 }
 
+[[nodiscard]] bool IsVisibleAlertOverlayWindow(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE || IsWindowVisible(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    constexpr wchar_t kAlertOverlayWindowClassName[] = L"RedSalamander.AlertOverlayWindow";
+
+    wchar_t className[64]{};
+    const int classLen = GetClassNameW(hwnd, className, static_cast<int>(_countof(className)));
+    return classLen > 0 && wcscmp(className, kAlertOverlayWindowClassName) == 0;
+}
+
+[[nodiscard]] bool TryDismissAlertOverlayWindow(HWND hwnd) noexcept
+{
+    if (! IsVisibleAlertOverlayWindow(hwnd))
+    {
+        return false;
+    }
+
+    SendMessageW(hwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+    return IsWindowVisible(hwnd) == FALSE;
+}
+
 [[nodiscard]] bool TryDismissAlertOverlaysOnEscape(HWND root) noexcept
 {
     if (! root || IsWindow(root) == FALSE)
@@ -6525,10 +6638,11 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
 
     struct EnumState
     {
+        HWND root      = nullptr;
         bool dismissed = false;
     };
 
-    EnumState state{};
+    EnumState state{.root = root};
     EnumChildWindows(root,
                      [](HWND child, LPARAM lParam) noexcept -> BOOL
     {
@@ -6538,22 +6652,7 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
             return TRUE;
         }
 
-        constexpr wchar_t kAlertOverlayWindowClassName[] = L"RedSalamander.AlertOverlayWindow";
-
-        wchar_t className[64]{};
-        const int classLen = GetClassNameW(child, className, static_cast<int>(_countof(className)));
-        if (classLen <= 0 || wcscmp(className, kAlertOverlayWindowClassName) != 0)
-        {
-            return TRUE;
-        }
-
-        if (IsWindowVisible(child) == FALSE)
-        {
-            return TRUE;
-        }
-
-        SendMessageW(child, WM_KEYDOWN, VK_ESCAPE, 0);
-        if (IsWindowVisible(child) == FALSE)
+        if (TryDismissAlertOverlayWindow(child))
         {
             state->dismissed = true;
             return FALSE; // stop enumeration
@@ -6562,6 +6661,36 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
         return TRUE;
     },
                      reinterpret_cast<LPARAM>(&state));
+    if (state.dismissed)
+    {
+        return true;
+    }
+
+    const DWORD threadId = GetWindowThreadProcessId(root, nullptr);
+    EnumThreadWindows(threadId,
+                      [](HWND candidate, LPARAM lParam) noexcept -> BOOL
+    {
+        auto* state = reinterpret_cast<EnumState*>(lParam);
+        if (! state || ! state->root)
+        {
+            return TRUE;
+        }
+
+        const HWND owner = GetWindow(candidate, GW_OWNER);
+        if (! owner || GetAncestor(owner, GA_ROOT) != state->root)
+        {
+            return TRUE;
+        }
+
+        if (TryDismissAlertOverlayWindow(candidate))
+        {
+            state->dismissed = true;
+            return FALSE;
+        }
+
+        return TRUE;
+    },
+                      reinterpret_cast<LPARAM>(&state));
     return state.dismissed;
 }
 
@@ -6987,6 +7116,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         // before the global DxUi host sweep so teardown cannot race across threads.
         SplashScreen::CloseIfExist();
         RedSalamander::DxUi::ShutdownAllWindowHostsForProcessExit();
+        IconCache::GetInstance().Shutdown();
 
         if (IsRunningAnySelfTest())
         {
@@ -6997,7 +7127,6 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         // Explicitly release their resources before COM/CRT teardown to keep shutdown smooth and memory-bounded.
         RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
         DirectoryInfoCache::GetInstance().Shutdown();
-        IconCache::GetInstance().Shutdown();
     });
 
     const ThemeMode envTheme = GetInitialThemeModeFromEnvironment();
@@ -7064,10 +7193,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
                                        settingsRecovery.unsupportedSchemaVersion,
                                        settingsRecovery.settingsPath.wstring(),
                                        settingsRecovery.backupPath.wstring())
-                : FormatStringResource(nullptr,
-                                       IDS_FMT_SETTINGS_RESTORED_DEFAULTS_BACKUP,
-                                       settingsRecovery.settingsPath.wstring(),
-                                       settingsRecovery.backupPath.wstring());
+                : FormatStringResource(
+                      nullptr, IDS_FMT_SETTINGS_RESTORED_DEFAULTS_BACKUP, settingsRecovery.settingsPath.wstring(), settingsRecovery.backupPath.wstring());
         MessageBoxCenteredText(nullptr, message, title, MB_OK | MB_ICONWARNING);
     }
 
@@ -7251,6 +7378,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         const HWND root                   = msg.hwnd ? GetAncestor(msg.hwnd, GA_ROOT) : nullptr;
         const bool isMainWindowMessage    = (root == *hWnd);
         const bool isCompareWindowMessage = IsCompareDirectoriesWindowMessageRoot(root);
+        TraceFindFilesApplicationLoopMessage(msg, root, L"dequeue");
 
         if ((msg.message == WM_SYSKEYDOWN || msg.message == WM_KEYDOWN) && msg.wParam == static_cast<WPARAM>(VK_ESCAPE))
         {
@@ -7435,6 +7563,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
         if (! isMainWindowMessage || editFocused || ! TranslateAccelerator(*hWnd, hAccelTable.get(), &msg))
         {
+            TraceFindFilesApplicationLoopMessage(msg, root, L"dispatch");
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
@@ -7855,10 +7984,7 @@ void SelectAdjacentTheme(HWND hWnd, int direction)
         return;
     }
 
-    const auto findTheme = [&](std::wstring_view id)
-    {
-        return std::find(ids.begin(), ids.end(), id);
-    };
+    const auto findTheme = [&](std::wstring_view id) { return std::find(ids.begin(), ids.end(), id); };
 
     auto currentIt = findTheme(g_settings.theme.currentThemeId);
     if (currentIt == ids.end())
@@ -7970,9 +8096,9 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
                 {
                     displayMode = FolderView::DisplayMode::Thumbnails;
                 }
-                navigationBarVisible  = settingsPane->view.navigationBarVisible;
-                filterBarVisible      = settingsPane->view.filterBarVisible;
-                statusBarVisible      = settingsPane->view.statusBarVisible;
+                navigationBarVisible = settingsPane->view.navigationBarVisible;
+                filterBarVisible     = settingsPane->view.filterBarVisible;
+                statusBarVisible     = settingsPane->view.statusBarVisible;
             }
 
             g_folderWindow.SetFileExtensionsVisible(pane, fileExtensionsVisible);
@@ -8004,6 +8130,8 @@ void RefreshRunningPluginsFromSettings(HWND hWnd) noexcept
         return;
     }
 
+    g_folderWindow.CloseAllViewers();
+    g_folderWindow.ReleaseFileSystemPluginsForRefresh();
     static_cast<void>(FileSystemPluginManager::GetInstance().Refresh(g_settings));
     static_cast<void>(ViewerPluginManager::GetInstance().Refresh(g_settings));
     static_cast<void>(g_folderWindow.ReloadFileSystemPlugins());
@@ -8038,8 +8166,9 @@ void RefreshRunningPluginsFromSettings(HWND hWnd) noexcept
     return runtimeWindowIds;
 }
 
-[[nodiscard]] bool SettingsContainPanePath(
-    const std::optional<Common::Settings::FoldersSettings>& folders, std::wstring_view slot, const std::optional<std::filesystem::path>& expected) noexcept
+[[nodiscard]] bool SettingsContainPanePath(const std::optional<Common::Settings::FoldersSettings>& folders,
+                                           std::wstring_view slot,
+                                           const std::optional<std::filesystem::path>& expected) noexcept
 {
     if (! expected.has_value())
     {
@@ -8091,9 +8220,9 @@ void RereadAssociations(HWND hWnd) noexcept
 
 #ifdef ENABLE_TESTS
     RereadAssociationsDebugSnapshot snapshot{};
-    snapshot.attempted                 = true;
-    snapshot.leftRefreshCountBefore    = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
-    snapshot.rightRefreshCountBefore   = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Right);
+    snapshot.attempted                      = true;
+    snapshot.leftRefreshCountBefore         = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    snapshot.rightRefreshCountBefore        = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Right);
     snapshot.associationIconCacheSizeBefore = DebugGetAssociationIconCacheSize();
 #endif
 
@@ -8114,7 +8243,7 @@ void RereadAssociations(HWND hWnd) noexcept
         return;
     }
 
-    const FolderWindow::Pane activePaneBefore = g_folderWindow.GetActivePane();
+    const FolderWindow::Pane activePaneBefore                  = g_folderWindow.GetActivePane();
     const std::optional<std::filesystem::path> liveLeftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> liveRightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
 
@@ -8176,19 +8305,19 @@ void RereadAssociations(HWND hWnd) noexcept
     snapshot.userMenuActionCount             = g_settings.userMenu.actions.size();
     snapshot.viewerExtensionMappingCount     = g_settings.fileActions.viewers.associations.size();
     snapshot.fileSystemExtensionMappingCount = g_settings.extensions.openWithFileSystemByExtension.size();
-    snapshot.leftRefreshCountAfter              = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
-    snapshot.rightRefreshCountAfter             = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Right);
-    snapshot.dynamicFileActionMenusRebuilt      = viewWithMenuRebuilt && editWithMenuRebuilt;
-    snapshot.userMenuRebuilt                    = userMenuRebuilt;
-    snapshot.pluginsRefreshed                   = hWnd && IsWindow(hWnd) != FALSE;
-    snapshot.runtimeFoldersPreserved =
-        SettingsContainPanePath(g_settings.folders, kLeftPaneSlot, liveLeftBefore) && SettingsContainPanePath(g_settings.folders, kRightPaneSlot, liveRightBefore);
+    snapshot.leftRefreshCountAfter           = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    snapshot.rightRefreshCountAfter          = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Right);
+    snapshot.dynamicFileActionMenusRebuilt   = viewWithMenuRebuilt && editWithMenuRebuilt;
+    snapshot.userMenuRebuilt                 = userMenuRebuilt;
+    snapshot.pluginsRefreshed                = hWnd && IsWindow(hWnd) != FALSE;
+    snapshot.runtimeFoldersPreserved         = SettingsContainPanePath(g_settings.folders, kLeftPaneSlot, liveLeftBefore) &&
+                                               SettingsContainPanePath(g_settings.folders, kRightPaneSlot, liveRightBefore);
     DebugPublishRereadAssociationsSnapshot(snapshot);
 #endif
 
     perf.SetValue0(static_cast<uint64_t>(g_settings.fileActions.viewers.associations.size()));
-    perf.SetValue1(
-        static_cast<uint64_t>(g_settings.fileActions.viewers.actions.size() + g_settings.fileActions.editors.actions.size() + g_settings.userMenu.actions.size()));
+    perf.SetValue1(static_cast<uint64_t>(g_settings.fileActions.viewers.actions.size() + g_settings.fileActions.editors.actions.size() +
+                                         g_settings.userMenu.actions.size()));
     perf.SetHr(S_OK);
 }
 
@@ -8460,9 +8589,9 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
             {
                 displayMode = FolderView::DisplayMode::Thumbnails;
             }
-            navigationBarVisible  = settingsPane->view.navigationBarVisible;
-            filterBarVisible      = settingsPane->view.filterBarVisible;
-            statusBarVisible      = settingsPane->view.statusBarVisible;
+            navigationBarVisible = settingsPane->view.navigationBarVisible;
+            filterBarVisible     = settingsPane->view.filterBarVisible;
+            statusBarVisible     = settingsPane->view.statusBarVisible;
         }
 
         perf.SetDetail(current.native());
@@ -9058,27 +9187,13 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_APP_SWAP_PANES: g_folderWindow.SwapPanes(); break;
-        case IDM_VIEW_THEME_PREV:
-            SelectAdjacentTheme(hWnd, -1);
-            break;
-        case IDM_VIEW_THEME_NEXT:
-            SelectAdjacentTheme(hWnd, 1);
-            break;
-        case IDM_VIEW_THEME_SYSTEM:
-            ApplyThemeId(hWnd, L"builtin/system");
-            break;
-        case IDM_VIEW_THEME_LIGHT:
-            ApplyThemeId(hWnd, L"builtin/light");
-            break;
-        case IDM_VIEW_THEME_DARK:
-            ApplyThemeId(hWnd, L"builtin/dark");
-            break;
-        case IDM_VIEW_THEME_RAINBOW:
-            ApplyThemeId(hWnd, L"builtin/rainbow");
-            break;
-        case IDM_VIEW_THEME_HIGH_CONTRAST_APP:
-            ApplyThemeId(hWnd, L"builtin/highContrast");
-            break;
+        case IDM_VIEW_THEME_PREV: SelectAdjacentTheme(hWnd, -1); break;
+        case IDM_VIEW_THEME_NEXT: SelectAdjacentTheme(hWnd, 1); break;
+        case IDM_VIEW_THEME_SYSTEM: ApplyThemeId(hWnd, L"builtin/system"); break;
+        case IDM_VIEW_THEME_LIGHT: ApplyThemeId(hWnd, L"builtin/light"); break;
+        case IDM_VIEW_THEME_DARK: ApplyThemeId(hWnd, L"builtin/dark"); break;
+        case IDM_VIEW_THEME_RAINBOW: ApplyThemeId(hWnd, L"builtin/rainbow"); break;
+        case IDM_VIEW_THEME_HIGH_CONTRAST_APP: ApplyThemeId(hWnd, L"builtin/highContrast"); break;
         case IDM_VIEW_PLUGINS_MANAGE:
         {
             const AppTheme theme = ResolveConfiguredTheme();
@@ -9122,7 +9237,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_VIEW_PANE_FILE_EXTENSIONS:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
-            const bool visible           = g_folderWindow.GetFileExtensionsVisible(pane);
+            const bool visible            = g_folderWindow.GetFileExtensionsVisible(pane);
             g_folderWindow.SetFileExtensionsVisible(pane, ! visible);
             UpdatePaneMenuChecks();
             break;
@@ -9184,7 +9299,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_VIEW_PANE_FILTER_BAR:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
-            const bool visible           = g_folderWindow.GetFilterBarVisible(pane);
+            const bool visible            = g_folderWindow.GetFilterBarVisible(pane);
             g_folderWindow.SetFilterBarVisible(pane, ! visible);
             UpdatePaneMenuChecks();
             break;
@@ -10599,10 +10714,17 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
         {
             g_folderWindow.Destroy();
         }
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: folder window destroyed");
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: file-system plugin shutdown begin");
         FileSystemPluginManager::GetInstance().Shutdown(g_settings);
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: file-system plugin shutdown complete");
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: viewer plugin shutdown begin");
         ViewerPluginManager::GetInstance().Shutdown(g_settings);
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: viewer plugin shutdown complete");
         SessionState::Clear();
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: session state cleared");
         ShutdownSelfTestMonitor();
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: selftest monitor shutdown complete");
         TraceSelfTestExitCode(L"OnMainWindowDestroy: PostQuitMessage",
                               (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
         PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);

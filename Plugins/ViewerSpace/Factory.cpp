@@ -2,6 +2,7 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <exception>
 #include <new>
 
 #pragma warning(push)
@@ -24,19 +25,50 @@ extern HINSTANCE g_hInstance;
 
 namespace
 {
+struct PluginMetaDataStorage final
+{
+    PluginMetaDataStorage() :
+        name(LoadStringResource(g_hInstance, IDS_VIEWERSPACE_NAME)),
+        description(LoadStringResource(g_hInstance, IDS_VIEWERSPACE_DESCRIPTION)),
+        metaData{
+            .id          = L"builtin/viewer-space",
+            .shortId     = L"viewspace",
+            .name        = name.c_str(),
+            .description = description.c_str(),
+            .author      = nullptr,
+            .version     = VERSINFO_PLUGIN_VERSION,
+        }
+    {
+    }
+
+    std::wstring name;
+    std::wstring description;
+    PluginMetaData metaData;
+};
+
+PluginMetaDataStorage* g_pluginMetaDataStorage = nullptr;
+
 [[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
 {
-    static const std::wstring name        = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_NAME);
-    static const std::wstring description = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_DESCRIPTION);
-    static const PluginMetaData metaData  = {
-        .id          = L"builtin/viewer-space",
-        .shortId     = L"viewspace",
-        .name        = name.c_str(),
-        .description = description.c_str(),
-        .author      = nullptr,
-        .version     = VERSINFO_PLUGIN_VERSION,
-    };
-    return metaData;
+    if (g_pluginMetaDataStorage == nullptr)
+    {
+        g_pluginMetaDataStorage = new (std::nothrow) PluginMetaDataStorage();
+        if (g_pluginMetaDataStorage == nullptr)
+        {
+            std::terminate();
+        }
+    }
+
+    return g_pluginMetaDataStorage->metaData;
+}
+
+void ShutdownPluginMetaData() noexcept
+{
+    if (g_pluginMetaDataStorage != nullptr)
+    {
+        delete g_pluginMetaDataStorage;
+        g_pluginMetaDataStorage = nullptr;
+    }
 }
 
 [[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
@@ -138,4 +170,15 @@ extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, co
 
     *schemaJsonUtf8 = schema;
     return S_OK;
+}
+
+extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
+{
+    ShutdownViewerSpaceModuleState();
+    ShutdownPluginMetaData();
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept
+{
+    return TRUE;
 }

@@ -49,8 +49,7 @@ void MigrateDeprecatedShortcutCommandIds(std::vector<Common::Settings::ShortcutB
     return nullptr;
 }
 
-[[nodiscard]] bool IsDefaultBindingIn(const std::vector<Common::Settings::ShortcutBinding>& defaults,
-                                      const Common::Settings::ShortcutBinding& binding) noexcept
+[[nodiscard]] bool IsDefaultBindingIn(const std::vector<Common::Settings::ShortcutBinding>& defaults, const Common::Settings::ShortcutBinding& binding) noexcept
 {
     for (const Common::Settings::ShortcutBinding& defaultBinding : defaults)
     {
@@ -62,8 +61,7 @@ void MigrateDeprecatedShortcutCommandIds(std::vector<Common::Settings::ShortcutB
     return false;
 }
 
-void RestoreMissingDefaultBindings(std::vector<Common::Settings::ShortcutBinding>& bindings,
-                                   const std::vector<Common::Settings::ShortcutBinding>& defaults)
+void RestoreMissingDefaultBindings(std::vector<Common::Settings::ShortcutBinding>& bindings, const std::vector<Common::Settings::ShortcutBinding>& defaults)
 {
     for (const Common::Settings::ShortcutBinding& defaultBinding : defaults)
     {
@@ -247,6 +245,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(
         shortcuts.folderView, DefaultUnselectDialogVk(), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/unselectSameExtension");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('X'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCut");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('V'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardPaste");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('L'), ShortcutManager::kModCtrl, L"cmd/pane/focusAddressBar");
     AddBinding(shortcuts.folderView, VK_OEM_PERIOD, ShortcutManager::kModCtrl, L"cmd/pane/setPathFromOtherPane");

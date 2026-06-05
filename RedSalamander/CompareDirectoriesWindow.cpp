@@ -4,6 +4,8 @@
 #include "DxUi/DxUi.Typography.h"
 #include "LocalizationManager.h"
 
+#include <windowsx.h>
+
 namespace CompareDirectoriesWindowInternal
 {
 // UI-thread-only registry for theme refresh.
@@ -507,14 +509,12 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
         case WM_CAPTURECHANGED: OnCaptureChanged(); return 0;
         case WM_SETCURSOR:
         {
-            POINT pt{};
-            if (GetCursorPos(&pt))
+            const LPARAM messagePos = static_cast<LPARAM>(GetMessagePos());
+            POINT pt{GET_X_LPARAM(messagePos), GET_Y_LPARAM(messagePos)};
+            ScreenToClient(hwnd, &pt);
+            if (OnSetCursor(pt))
             {
-                ScreenToClient(hwnd, &pt);
-                if (OnSetCursor(pt))
-                {
-                    return TRUE;
-                }
+                return TRUE;
             }
             break;
         }

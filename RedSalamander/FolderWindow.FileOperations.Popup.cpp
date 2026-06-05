@@ -50,6 +50,19 @@ constexpr UINT kFileOperationsSpeedLimitPromptDebugMessage = WM_APP + 0x73;
     return (nowUs >= startUs) ? (nowUs - startUs) : 0u;
 }
 
+[[nodiscard]] POINT ResolveOwnerCenterScreenPoint(HWND hwnd) noexcept
+{
+    POINT point{};
+    RECT client{};
+    if (hwnd && GetClientRect(hwnd, &client) != FALSE)
+    {
+        point.x = client.left + ((client.right - client.left) / 2);
+        point.y = client.top + ((client.bottom - client.top) / 2);
+        static_cast<void>(ClientToScreen(hwnd, &point));
+    }
+    return point;
+}
+
 float DipsToPixels(float dip, UINT dpi) noexcept
 {
     return dip * (static_cast<float>(dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI));
@@ -3525,8 +3538,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
 
                         if (_smallFormat && _textBrush &&
-                            (info.changeAttributesEnumerating || info.changeAttributesScannedFolders > 0 ||
-                             info.changeAttributesScannedEntries > 0))
+                            (info.changeAttributesEnumerating || info.changeAttributesScannedFolders > 0 || info.changeAttributesScannedEntries > 0))
                         {
                             const std::wstring scanPath =
                                 info.changeAttributesCurrentPath.empty() ? std::wstring(L".") : info.changeAttributesCurrentPath.native();
@@ -3543,8 +3555,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
 
                         if (_smallFormat && _subTextBrush &&
-                            (info.changeAttributesApplying || info.changeAttributesPlannedItems > 0 ||
-                             info.changeAttributesCompletedItems > 0))
+                            (info.changeAttributesApplying || info.changeAttributesPlannedItems > 0 || info.changeAttributesCompletedItems > 0))
                         {
                             if (textY + lineH <= cardRect.bottom)
                             {
@@ -3806,8 +3817,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             }
                             else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeAttributes)
                             {
-                                hasTotal = info.changeAttributesPlannedItems > 0 &&
-                                           info.changeAttributesCompletedItems <= info.changeAttributesPlannedItems;
+                                hasTotal = info.changeAttributesPlannedItems > 0 && info.changeAttributesCompletedItems <= info.changeAttributesPlannedItems;
                                 frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.changeAttributesCompletedItems) /
                                                                                  static_cast<double>(info.changeAttributesPlannedItems)))
                                                     : 0.0f;
@@ -5456,9 +5466,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     customItem.commandId = static_cast<int>(kCmdCustom);
     items.push_back(std::move(customItem));
 
-    POINT pt{};
-    GetCursorPos(&pt);
-
+    const POINT pt = ResolveOwnerCenterScreenPoint(hwnd);
     const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()));
     if (! chosenOpt.has_value())
     {
@@ -5657,9 +5665,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
         items.push_back(std::move(item));
     }
 
-    POINT pt{};
-    GetCursorPos(&pt);
-
+    const POINT pt = ResolveOwnerCenterScreenPoint(hwnd);
     const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()));
     if (! chosenOpt.has_value())
     {

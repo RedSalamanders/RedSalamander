@@ -45,9 +45,9 @@ enum class AccessibilityUiActionKind : uint8_t
 
 struct AccessibilityUiActionRequest
 {
-    AccessibilityProvider* provider = nullptr;
+    AccessibilityProvider* provider                   = nullptr;
     AccessibilityTextRangeProvider* textRangeProvider = nullptr;
-    AccessibilityUiActionKind kind  = AccessibilityUiActionKind::Invoke;
+    AccessibilityUiActionKind kind                    = AccessibilityUiActionKind::Invoke;
     std::wstring stringValue{};
     double numberValue = 0.0;
     HRESULT result     = static_cast<HRESULT>(UIA_E_NOTSUPPORTED);
@@ -706,8 +706,10 @@ struct TextRangeSpan
     return rect;
 }
 
-[[nodiscard]] std::optional<D2D1_RECT_F> TryResolveSimpleTextRangeCaretRect(
-    const WindowHost& host, const Control& control, std::wstring_view text, const TextRangeSpan& range) noexcept
+[[nodiscard]] std::optional<D2D1_RECT_F> TryResolveSimpleTextRangeCaretRect(const WindowHost& host,
+                                                                            const Control& control,
+                                                                            std::wstring_view text,
+                                                                            const TextRangeSpan& range) noexcept
 {
     if (range.start == range.end || ! IsSimpleTextRangeCaretGeometrySupported(control, text) || TextRangeContainsLineBreak(text, range))
     {
@@ -733,8 +735,10 @@ struct TextRangeSpan
     return ClipRectToBounds(rect, viewport);
 }
 
-[[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> TryResolveTextRangeCaretRects(
-    const WindowHost& host, const Control& control, std::wstring_view text, const TextRangeSpan& range)
+[[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> TryResolveTextRangeCaretRects(const WindowHost& host,
+                                                                                    const Control& control,
+                                                                                    std::wstring_view text,
+                                                                                    const TextRangeSpan& range)
 {
     if (range.start == range.end)
     {
@@ -767,7 +771,7 @@ struct TextRangeSpan
 
     const D2D1_RECT_F viewport = ResolveTextPatternViewportRect(&control);
     std::vector<D2D1_RECT_F> rects;
-    size_t segmentStart = (std::min)(range.start, text.size());
+    size_t segmentStart   = (std::min)(range.start, text.size());
     const size_t rangeEnd = (std::min)(range.end, text.size());
     while (segmentStart < rangeEnd)
     {
@@ -784,9 +788,9 @@ struct TextRangeSpan
             if (CaretRectsShareVisualLine(startRect.value(), endRect.value()))
             {
                 const D2D1_RECT_F rect = D2D1::RectF((std::min)(startRect->left, endRect->left),
-                                                    (std::min)(startRect->top, endRect->top),
-                                                    (std::max)(startRect->right, endRect->right),
-                                                    (std::max)(startRect->bottom, endRect->bottom));
+                                                     (std::min)(startRect->top, endRect->top),
+                                                     (std::max)(startRect->right, endRect->right),
+                                                     (std::max)(startRect->bottom, endRect->bottom));
                 rects.push_back(ClipRectToBounds(rect, viewport));
             }
             else if (std::optional<std::vector<D2D1_RECT_F>> segmentRects = control.TryGetTextInputRangeRects(host, segmentStart, segmentEnd);
@@ -825,8 +829,7 @@ struct TextRangeUnitMoveResult
     int moved       = 0;
 };
 
-[[nodiscard]] TextRangeUnitMoveResult MoveTextRangePositionByUnit(
-    std::wstring_view text, size_t position, TextUnit unit, int count) noexcept
+[[nodiscard]] TextRangeUnitMoveResult MoveTextRangePositionByUnit(std::wstring_view text, size_t position, TextUnit unit, int count) noexcept
 {
     const size_t clampedPosition = std::min(position, text.size());
     if (count == 0)
@@ -953,7 +956,7 @@ struct TextRangeUnitMoveResult
     }
 
     const TextRangeUnitMoveResult endBoundary = MoveTextRangePositionByUnit(text, start, TextUnit_Word, 1);
-    const size_t end = TrimTrailingTextRangeWhitespace(text, start, endBoundary.position);
+    const size_t end                          = TrimTrailingTextRangeWhitespace(text, start, endBoundary.position);
     return TextRangeSpan{start, end};
 }
 
@@ -1150,8 +1153,9 @@ struct TextRangeSpanMoveResult
     return TextRangeSpanMoveResult{GetTextRangeLineSpanAtPosition(text, cursor), moved};
 }
 
-[[nodiscard]] std::optional<std::vector<TextRangeSpan>> TryResolveTextRangeVisualLineSpans(
-    const WindowHost& host, const Control& control, std::wstring_view text) noexcept
+[[nodiscard]] std::optional<std::vector<TextRangeSpan>> TryResolveTextRangeVisualLineSpans(const WindowHost& host,
+                                                                                           const Control& control,
+                                                                                           std::wstring_view text) noexcept
 {
     if (text.empty() || ! IsSimpleTextRangeCaretGeometrySupported(control, text))
     {
@@ -1171,7 +1175,7 @@ struct TextRangeSpanMoveResult
         }
         else
         {
-            size_t visualLineStart = logicalLineStart;
+            size_t visualLineStart                    = logicalLineStart;
             std::optional<D2D1_RECT_F> visualLineRect = control.TryGetTextInputCaretRect(host, visualLineStart);
             if (! visualLineRect.has_value())
             {
@@ -1181,7 +1185,7 @@ struct TextRangeSpanMoveResult
             size_t cursor = logicalLineStart;
             while (cursor < logicalLineEnd)
             {
-                const size_t next = StepToNextCodePoint(text, cursor);
+                const size_t next                         = StepToNextCodePoint(text, cursor);
                 const std::optional<D2D1_RECT_F> nextRect = control.TryGetTextInputCaretRect(host, next);
                 if (! nextRect.has_value())
                 {
@@ -1285,7 +1289,7 @@ struct TextRangeSpanMoveResult
         return TextRangeUnitMoveResult{clampedPosition, 0};
     }
 
-    const TextRangeSpan lineRange = GetTextRangeLineSpanAtPosition(text, clampedPosition);
+    const TextRangeSpan lineRange            = GetTextRangeLineSpanAtPosition(text, clampedPosition);
     const TextRangeSpanMoveResult moveResult = MoveTextRangeSpanByLine(text, lineRange, count);
     if (moveResult.moved == 0)
     {
@@ -2052,7 +2056,7 @@ HRESULT SetTextRangeProviderArray(SAFEARRAY** outArray, std::span<ITextRangeProv
     for (LONG index = 0; index < static_cast<LONG>(providers.size()); ++index)
     {
         ITextRangeProvider* provider = providers[static_cast<size_t>(index)];
-        const HRESULT hr            = SafeArrayPutElement(array.get(), &index, provider);
+        const HRESULT hr             = SafeArrayPutElement(array.get(), &index, provider);
         if (FAILED(hr))
         {
             return hr;
@@ -2119,10 +2123,7 @@ public:
                                                TextPatternRangeEndpoint targetEndpoint,
                                                int* outResult) noexcept override;
     HRESULT STDMETHODCALLTYPE ExpandToEnclosingUnit(TextUnit unit) noexcept override;
-    HRESULT STDMETHODCALLTYPE FindAttribute(TEXTATTRIBUTEID attributeId,
-                                            VARIANT value,
-                                            BOOL backward,
-                                            ITextRangeProvider** outRange) noexcept override;
+    HRESULT STDMETHODCALLTYPE FindAttribute(TEXTATTRIBUTEID attributeId, VARIANT value, BOOL backward, ITextRangeProvider** outRange) noexcept override;
     HRESULT STDMETHODCALLTYPE FindText(BSTR text, BOOL backward, BOOL ignoreCase, ITextRangeProvider** outRange) noexcept override;
     HRESULT STDMETHODCALLTYPE GetAttributeValue(TEXTATTRIBUTEID attributeId, VARIANT* outValue) noexcept override;
     HRESULT STDMETHODCALLTYPE GetBoundingRectangles(SAFEARRAY** outRectangles) noexcept override;
@@ -2417,8 +2418,8 @@ HRESULT AccessibilityTextRangeProvider::Compare(ITextRangeProvider* range, BOOL*
     }
 
     const auto* other = dynamic_cast<AccessibilityTextRangeProvider*>(range);
-    *outSame = (other && _target == other->_target && _hwnd == other->_hwnd && AreControlPathsEqual(_path, other->_path) &&
-                _rangeStart == other->_rangeStart && _rangeEnd == other->_rangeEnd)
+    *outSame = (other && _target == other->_target && _hwnd == other->_hwnd && AreControlPathsEqual(_path, other->_path) && _rangeStart == other->_rangeStart &&
+                _rangeEnd == other->_rangeEnd)
                    ? TRUE
                    : FALSE;
     return S_OK;
@@ -2445,11 +2446,11 @@ HRESULT AccessibilityTextRangeProvider::CompareEndpoints(TextPatternRangeEndpoin
     }
 
     const std::scoped_lock accessibilityLock(GetAccessibilityTargetMutex());
-    const std::wstring text = ResolveText();
-    const TextRangeSpan range = ClampCurrentRange(text.size());
+    const std::wstring text        = ResolveText();
+    const TextRangeSpan range      = ClampCurrentRange(text.size());
     const TextRangeSpan otherRange = other->ClampCurrentRange(text.size());
-    const size_t position = GetTextRangeEndpointPosition(range, endpoint);
-    const size_t targetPosition = GetTextRangeEndpointPosition(otherRange, targetEndpoint);
+    const size_t position          = GetTextRangeEndpointPosition(range, endpoint);
+    const size_t targetPosition    = GetTextRangeEndpointPosition(otherRange, targetEndpoint);
 
     *outResult = position < targetPosition ? -1 : (position > targetPosition ? 1 : 0);
     return S_OK;
@@ -2467,8 +2468,8 @@ HRESULT AccessibilityTextRangeProvider::ExpandToEnclosingUnit(TextUnit unit) noe
     else
     {
         const TextRangeSpan range = ClampCurrentRange(text.size());
-        _rangeStart              = range.start;
-        _rangeEnd                = range.end;
+        _rangeStart               = range.start;
+        _rangeEnd                 = range.end;
     }
     return S_OK;
 }
@@ -2519,10 +2520,10 @@ HRESULT AccessibilityTextRangeProvider::GetBoundingRectangles(SAFEARRAY** outRec
     const auto startedAt = std::chrono::steady_clock::now();
     *outRectangles       = nullptr;
 
-    WindowHost* const host    = ResolveHost();
+    WindowHost* const host       = ResolveHost();
     const Control* const control = ResolveControl();
-    const std::wstring text   = ResolveText();
-    const TextRangeSpan range = ClampCurrentRange(text.size());
+    const std::wstring text      = ResolveText();
+    const TextRangeSpan range    = ClampCurrentRange(text.size());
     if (! host || ! control || range.start == range.end)
     {
         const HRESULT hr = SetDoubleArray(outRectangles, {});
@@ -2547,8 +2548,7 @@ HRESULT AccessibilityTextRangeProvider::GetBoundingRectangles(SAFEARRAY** outRec
         values.push_back(static_cast<double>(bottomRight.y - topLeft.y));
     }
     const HRESULT hr = SetDoubleArray(outRectangles, values);
-    Debug::Perf::Emit(
-        L"dxui.uia.text_range_us", L"bounding-rectangles", Debug::Perf::ElapsedUs(startedAt), boundsDip.size(), range.end - range.start, hr);
+    Debug::Perf::Emit(L"dxui.uia.text_range_us", L"bounding-rectangles", Debug::Perf::ElapsedUs(startedAt), boundsDip.size(), range.end - range.start, hr);
     return hr;
 }
 
@@ -2595,8 +2595,8 @@ HRESULT AccessibilityTextRangeProvider::GetText(int maxLength, BSTR* outText) no
         return E_POINTER;
     }
 
-    *outText              = nullptr;
-    const std::wstring text = ResolveText();
+    *outText                  = nullptr;
+    const std::wstring text   = ResolveText();
     const TextRangeSpan range = ClampCurrentRange(text.size());
     std::wstring_view value(text.data() + range.start, range.end - range.start);
     if (maxLength >= 0)
@@ -2604,7 +2604,7 @@ HRESULT AccessibilityTextRangeProvider::GetText(int maxLength, BSTR* outText) no
         value = value.substr(0u, (std::min)(value.size(), static_cast<size_t>(maxLength)));
     }
 
-    *outText = SysAllocStringLen(value.data(), static_cast<UINT>(value.size()));
+    *outText         = SysAllocStringLen(value.data(), static_cast<UINT>(value.size()));
     const HRESULT hr = (*outText || value.empty()) ? S_OK : E_OUTOFMEMORY;
     Debug::Perf::Emit(L"dxui.uia.text_range_us", L"gettext", Debug::Perf::ElapsedUs(startedAt), value.size(), text.size(), hr);
     return hr;
@@ -2619,9 +2619,9 @@ HRESULT AccessibilityTextRangeProvider::Move(TextUnit unit, int count, int* outM
         return E_POINTER;
     }
 
-    const std::wstring text = ResolveText();
+    const std::wstring text   = ResolveText();
     const TextRangeSpan range = ClampCurrentRange(text.size());
-    *outMoved = 0;
+    *outMoved                 = 0;
     if ((unit != TextUnit_Character && unit != TextUnit_Word && unit != TextUnit_Line) || count == 0)
     {
         Debug::Perf::Emit(L"dxui.uia.text_range_us", L"move-unsupported", Debug::Perf::ElapsedUs(startedAt), 0u, text.size(), S_OK);
@@ -2630,17 +2630,15 @@ HRESULT AccessibilityTextRangeProvider::Move(TextUnit unit, int count, int* outM
 
     if (unit == TextUnit_Line)
     {
-        WindowHost* const host          = ResolveHost();
-        const Control* const control    = ResolveControl();
+        WindowHost* const host       = ResolveHost();
+        const Control* const control = ResolveControl();
         const TextRangeSpanMoveResult moveResult =
-            (host && control)
-                ? TryMoveTextRangeSpanByVisualLine(*host, *control, text, range, count).value_or(MoveTextRangeSpanByLine(text, range, count))
-                : MoveTextRangeSpanByLine(text, range, count);
+            (host && control) ? TryMoveTextRangeSpanByVisualLine(*host, *control, text, range, count).value_or(MoveTextRangeSpanByLine(text, range, count))
+                              : MoveTextRangeSpanByLine(text, range, count);
         _rangeStart = moveResult.range.start;
         _rangeEnd   = moveResult.range.end;
         *outMoved   = moveResult.moved;
-        Debug::Perf::Emit(
-            L"dxui.uia.text_range_us", L"move-line", Debug::Perf::ElapsedUs(startedAt), _rangeEnd - _rangeStart, text.size(), S_OK);
+        Debug::Perf::Emit(L"dxui.uia.text_range_us", L"move-line", Debug::Perf::ElapsedUs(startedAt), _rangeEnd - _rangeStart, text.size(), S_OK);
         return S_OK;
     }
 
@@ -2652,15 +2650,14 @@ HRESULT AccessibilityTextRangeProvider::Move(TextUnit unit, int count, int* outM
             _rangeStart                              = moveResult.range.start;
             _rangeEnd                                = moveResult.range.end;
             *outMoved                                = moveResult.moved;
-            Debug::Perf::Emit(
-                L"dxui.uia.text_range_us", L"move-word", Debug::Perf::ElapsedUs(startedAt), _rangeEnd - _rangeStart, text.size(), S_OK);
+            Debug::Perf::Emit(L"dxui.uia.text_range_us", L"move-word", Debug::Perf::ElapsedUs(startedAt), _rangeEnd - _rangeStart, text.size(), S_OK);
             return S_OK;
         }
 
         const TextRangeUnitMoveResult moveResult = MoveTextRangePositionByUnit(text, range.start, unit, count);
-        _rangeStart = moveResult.position;
-        _rangeEnd   = moveResult.position;
-        *outMoved   = moveResult.moved;
+        _rangeStart                              = moveResult.position;
+        _rangeEnd                                = moveResult.position;
+        *outMoved                                = moveResult.moved;
         Debug::Perf::Emit(L"dxui.uia.text_range_us", L"move-word", Debug::Perf::ElapsedUs(startedAt), 0u, text.size(), S_OK);
         return S_OK;
     }
@@ -2679,10 +2676,7 @@ HRESULT AccessibilityTextRangeProvider::Move(TextUnit unit, int count, int* outM
     return S_OK;
 }
 
-HRESULT AccessibilityTextRangeProvider::MoveEndpointByUnit(TextPatternRangeEndpoint endpoint,
-                                                           TextUnit unit,
-                                                           int count,
-                                                           int* outMoved) noexcept
+HRESULT AccessibilityTextRangeProvider::MoveEndpointByUnit(TextPatternRangeEndpoint endpoint, TextUnit unit, int count, int* outMoved) noexcept
 {
     const auto startedAt = std::chrono::steady_clock::now();
     const std::scoped_lock accessibilityLock(GetAccessibilityTargetMutex());
@@ -2691,9 +2685,9 @@ HRESULT AccessibilityTextRangeProvider::MoveEndpointByUnit(TextPatternRangeEndpo
         return E_POINTER;
     }
 
-    const std::wstring text = ResolveText();
+    const std::wstring text   = ResolveText();
     const TextRangeSpan range = ClampCurrentRange(text.size());
-    *outMoved = 0;
+    *outMoved                 = 0;
     if ((unit != TextUnit_Character && unit != TextUnit_Word && unit != TextUnit_Line) || count == 0)
     {
         Debug::Perf::Emit(L"dxui.uia.text_range_us", L"move-endpoint-unsupported", Debug::Perf::ElapsedUs(startedAt), 0u, text.size(), S_OK);
@@ -2706,9 +2700,9 @@ HRESULT AccessibilityTextRangeProvider::MoveEndpointByUnit(TextPatternRangeEndpo
     {
         WindowHost* const host       = ResolveHost();
         const Control* const control = ResolveControl();
-        moveResult = (host && control) ? TryMoveTextRangePositionByVisualLine(*host, *control, text, endpointPosition, count)
-                                             .value_or(MoveTextRangePositionByLine(text, endpointPosition, count))
-                                      : MoveTextRangePositionByLine(text, endpointPosition, count);
+        moveResult                   = (host && control) ? TryMoveTextRangePositionByVisualLine(*host, *control, text, endpointPosition, count)
+                                                               .value_or(MoveTextRangePositionByLine(text, endpointPosition, count))
+                                                         : MoveTextRangePositionByLine(text, endpointPosition, count);
     }
     else
     {
@@ -2726,11 +2720,8 @@ HRESULT AccessibilityTextRangeProvider::MoveEndpointByUnit(TextPatternRangeEndpo
         _rangeEnd   = movedTo;
         _rangeStart = _rangeEnd < range.start ? _rangeEnd : range.start;
     }
-    const wchar_t* detail = unit == TextUnit_Line ? L"move-endpoint-line" :
-                            unit == TextUnit_Word ? L"move-endpoint-word" :
-                                                    L"move-endpoint-character";
-    Debug::Perf::Emit(
-        L"dxui.uia.text_range_us", detail, Debug::Perf::ElapsedUs(startedAt), _rangeEnd - _rangeStart, text.size(), S_OK);
+    const wchar_t* detail = unit == TextUnit_Line ? L"move-endpoint-line" : unit == TextUnit_Word ? L"move-endpoint-word" : L"move-endpoint-character";
+    Debug::Perf::Emit(L"dxui.uia.text_range_us", detail, Debug::Perf::ElapsedUs(startedAt), _rangeEnd - _rangeStart, text.size(), S_OK);
     return S_OK;
 }
 
@@ -2766,7 +2757,7 @@ HRESULT AccessibilityTextRangeProvider::ExecuteSelectOnWindowThread() noexcept
         return UIA_E_ELEMENTNOTAVAILABLE;
     }
 
-    const std::wstring text = GetControlAccessibleTextRangeText(control);
+    const std::wstring text   = GetControlAccessibleTextRangeText(control);
     const TextRangeSpan range = ClampCurrentRange(text.size());
     if (auto* textField = dynamic_cast<TextField*>(control))
     {
@@ -2937,13 +2928,13 @@ HRESULT AccessibilityProvider::QueryInterface(REFIID riid, void** ppvObject) noe
     {
         *ppvObject = static_cast<IValueProvider*>(this);
     }
-    else if ((_kind == AccessibilityFragmentKind::Control || _kind == AccessibilityFragmentKind::Root) && pathVisible &&
-             riid == __uuidof(ITextProvider) && SupportsTextPattern(control))
+    else if ((_kind == AccessibilityFragmentKind::Control || _kind == AccessibilityFragmentKind::Root) && pathVisible && riid == __uuidof(ITextProvider) &&
+             SupportsTextPattern(control))
     {
         *ppvObject = static_cast<ITextProvider*>(static_cast<ITextEditProvider*>(this));
     }
-    else if ((_kind == AccessibilityFragmentKind::Control || _kind == AccessibilityFragmentKind::Root) && pathVisible &&
-             riid == __uuidof(ITextEditProvider) && SupportsTextPattern(control))
+    else if ((_kind == AccessibilityFragmentKind::Control || _kind == AccessibilityFragmentKind::Root) && pathVisible && riid == __uuidof(ITextEditProvider) &&
+             SupportsTextPattern(control))
     {
         *ppvObject = static_cast<ITextEditProvider*>(this);
     }
@@ -3370,7 +3361,7 @@ HRESULT AccessibilityProvider::GetPropertyValue(PROPERTYID propertyId, VARIANT* 
 
     if (_kind == AccessibilityFragmentKind::TextFieldPasswordRevealButton)
     {
-        const auto* textField = dynamic_cast<const TextField*>(control);
+        const auto* textField    = dynamic_cast<const TextField*>(control);
         const bool buttonVisible = pathVisible && textField && textField->IsPasswordRevealButtonVisibleForAccessibility();
         switch (propertyId)
         {
@@ -3403,8 +3394,8 @@ HRESULT AccessibilityProvider::GetPropertyValue(PROPERTYID propertyId, VARIANT* 
         case UIA_HasKeyboardFocusPropertyId: *outValue = VariantFromBool(pathVisible && control->HasFocus()); return S_OK;
         case UIA_IsOffscreenPropertyId: *outValue = VariantFromBool(! pathVisible || ! control->IsVisible()); return S_OK;
         case UIA_IsPasswordPropertyId:
-            *outValue = VariantFromBool(pathVisible && dynamic_cast<const TextField*>(control) != nullptr &&
-                                        static_cast<const TextField*>(control)->IsMasked());
+            *outValue =
+                VariantFromBool(pathVisible && dynamic_cast<const TextField*>(control) != nullptr && static_cast<const TextField*>(control)->IsMasked());
             return S_OK;
         case UIA_ValueValuePropertyId:
             if (pathVisible && SupportsValuePattern(control))
@@ -4035,9 +4026,8 @@ HRESULT AccessibilityProvider::ElementProviderFromPoint(double x, double y, IRaw
     if (FindSemanticControlAtPoint(root, ControlPath{}, pointDip, hitPath))
     {
         const Control* control = ResolveControlAtPath(const_cast<Control*>(root), hitPath);
-        if (const auto* textField = dynamic_cast<const TextField*>(control);
-            textField && textField->IsPasswordRevealButtonVisibleForAccessibility() &&
-            PointInRect(textField->GetPasswordRevealButtonAccessibilityRect(), pointDip))
+        if (const auto* textField = dynamic_cast<const TextField*>(control); textField && textField->IsPasswordRevealButtonVisibleForAccessibility() &&
+                                                                             PointInRect(textField->GetPasswordRevealButtonAccessibilityRect(), pointDip))
         {
             *outProvider = CreateTextFieldPasswordRevealButtonProvider(hitPath);
             return S_OK;
@@ -4224,7 +4214,8 @@ HRESULT AccessibilityProvider::GetVisibleRanges(SAFEARRAY** outRanges) noexcept
 
     ITextRangeProvider* rawRanges[] = {range.get()};
     const HRESULT hr                = SetTextRangeProviderArray(outRanges, rawRanges);
-    Debug::Perf::Emit(L"dxui.uia.text_range_us", L"visible-ranges", Debug::Perf::ElapsedUs(startedAt), 1u, GetControlAccessibleTextRangeText(control).size(), hr);
+    Debug::Perf::Emit(
+        L"dxui.uia.text_range_us", L"visible-ranges", Debug::Perf::ElapsedUs(startedAt), 1u, GetControlAccessibleTextRangeText(control).size(), hr);
     return hr;
 }
 
@@ -4259,7 +4250,7 @@ HRESULT AccessibilityProvider::RangeFromPoint(UiaPoint point, ITextRangeProvider
     }
 
     const D2D1_POINT_2F hitPoint = D2D1::Point2F(pointDip->x, pointDip->y);
-    size_t caretIndex = 0u;
+    size_t caretIndex            = 0u;
     if (const std::optional<size_t> hitIndex = control->TryHitTestTextInputPoint(*host, hitPoint); hitIndex.has_value())
     {
         caretIndex = (std::min)(hitIndex.value(), text.size());
@@ -4273,7 +4264,7 @@ HRESULT AccessibilityProvider::RangeFromPoint(UiaPoint point, ITextRangeProvider
         caretIndex = HitTestCaretIndexDip(
             host, text, FontRole::Body, ResolveTextPatternViewportRect(control), 0.0f, hitPoint, ResolveReadingDirection(control->GetFlowDirection()));
     }
-    *outRange = CreateTextRangeProvider(caretIndex, caretIndex);
+    *outRange        = CreateTextRangeProvider(caretIndex, caretIndex);
     const HRESULT hr = *outRange ? S_OK : E_OUTOFMEMORY;
     Debug::Perf::Emit(L"dxui.uia.text_range_us", L"range-from-point", Debug::Perf::ElapsedUs(startedAt), caretIndex, text.size(), hr);
     return hr;
@@ -4613,7 +4604,7 @@ HRESULT AccessibilityProvider::GetSelection(SAFEARRAY** outSelection) noexcept
     const Control* control = ResolveControl();
     if (control && SupportsTextPattern(control))
     {
-        const std::wstring text = GetControlAccessibleTextRangeText(control);
+        const std::wstring text       = GetControlAccessibleTextRangeText(control);
         const TextRangeSpan rangeSpan = GetControlAccessibleSelectionRange(ResolveHost(), control, text.size());
         wil::com_ptr_nothrow<ITextRangeProvider> range;
         range.attach(CreateTextRangeProvider(rangeSpan.start, rangeSpan.end));
@@ -5546,7 +5537,7 @@ HRESULT AccessibilityProvider::ExecuteInvokeOnWindowThread() noexcept
         return S_OK;
     }
 
-    auto* button     = dynamic_cast<Button*>(ResolveMutableControl());
+    auto* button = dynamic_cast<Button*>(ResolveMutableControl());
     if (! host || ! button || ! SupportsInvokePattern(button))
     {
         return UIA_E_NOTSUPPORTED;
@@ -5967,20 +5958,18 @@ bool RaiseWindowHostTextInputAutomationEvent(HWND hwnd, const Control* control, 
                     static_cast<void>(target->Release());
                 }
             }
-            static_cast<void>(
-                UiaRaiseActiveTextPositionChangedEvent(static_cast<IRawElementProviderSimple*>(provider), activeRange.get()));
+            static_cast<void>(UiaRaiseActiveTextPositionChangedEvent(static_cast<IRawElementProviderSimple*>(provider), activeRange.get()));
             return true;
         }
         case TextInputAutomationEventKind::TextEditCompositionChanged:
         {
             unique_safearray changedData(SafeArrayCreateVector(VT_BSTR, 0u, 0u));
-            static_cast<void>(UiaRaiseTextEditTextChangedEvent(
-                static_cast<IRawElementProviderSimple*>(provider), TextEditChangeType_Composition, changedData.get()));
+            static_cast<void>(
+                UiaRaiseTextEditTextChangedEvent(static_cast<IRawElementProviderSimple*>(provider), TextEditChangeType_Composition, changedData.get()));
             return true;
         }
         case TextInputAutomationEventKind::TextEditConversionTargetChanged:
-            static_cast<void>(
-                UiaRaiseAutomationEvent(static_cast<IRawElementProviderSimple*>(provider), UIA_TextEdit_ConversionTargetChangedEventId));
+            static_cast<void>(UiaRaiseAutomationEvent(static_cast<IRawElementProviderSimple*>(provider), UIA_TextEdit_ConversionTargetChangedEventId));
             return true;
         default: return false;
     }

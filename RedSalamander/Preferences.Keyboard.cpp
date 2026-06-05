@@ -2496,18 +2496,17 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
         }
     }
 
-    const uint32_t chordKey = ShortcutManager::MakeChordKey(vk, modifiers);
-    uint32_t previousTargetVk        = 0u;
-    uint32_t previousTargetModifiers = 0u;
+    const uint32_t chordKey                       = ShortcutManager::MakeChordKey(vk, modifiers);
+    uint32_t previousTargetVk                     = 0u;
+    uint32_t previousTargetModifiers              = 0u;
     bool preservePreviousDefaultChordAsUnassigned = false;
     if (targetIndex != std::numeric_limits<size_t>::max())
     {
         const Common::Settings::ShortcutBinding& targetBinding = (*bindings)[targetIndex];
-        previousTargetVk                                      = targetBinding.vk;
-        previousTargetModifiers                               = targetBinding.modifiers;
-        preservePreviousDefaultChordAsUnassigned =
-            IsDefaultBindingForScope(state.keyboardCaptureScope, targetBinding) &&
-            ShortcutManager::MakeChordKey(previousTargetVk, previousTargetModifiers) != chordKey;
+        previousTargetVk                                       = targetBinding.vk;
+        previousTargetModifiers                                = targetBinding.modifiers;
+        preservePreviousDefaultChordAsUnassigned               = IsDefaultBindingForScope(state.keyboardCaptureScope, targetBinding) &&
+                                                                 ShortcutManager::MakeChordKey(previousTargetVk, previousTargetModifiers) != chordKey;
     }
 
     std::vector<size_t> conflictIndices;

@@ -28,7 +28,7 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
 
     constexpr size_t kRequiredStableSamples = 12u;
 
-    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+    const auto deadline          = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
     uint64_t previousRenderCount = 0u;
     size_t stableSamples         = 0u;
     bool haveSample              = false;
@@ -99,6 +99,146 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     return GetFocus() == hwnd;
 }
 
+struct ScopedSettingsArtifactBackup final
+{
+    ScopedSettingsArtifactBackup() = default;
+    ScopedSettingsArtifactBackup(const ScopedSettingsArtifactBackup&)            = delete;
+    ScopedSettingsArtifactBackup& operator=(const ScopedSettingsArtifactBackup&) = delete;
+
+    ~ScopedSettingsArtifactBackup()
+    {
+        Restore();
+    }
+
+    [[nodiscard]] bool Capture(std::wstring_view appId) noexcept
+    {
+        if (appId.empty())
+        {
+            return false;
+        }
+
+        _settingsPath = Common::Settings::GetSettingsPath(appId);
+        _schemaPath   = Common::Settings::GetSettingsSchemaPath(appId);
+        if (_settingsPath.empty() || _schemaPath.empty())
+        {
+            return false;
+        }
+
+        const std::filesystem::path backupRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands) / L"settings-backups";
+        std::error_code ec;
+        std::filesystem::create_directories(backupRoot, ec);
+        if (ec)
+        {
+            return false;
+        }
+
+        const std::wstring appIdText(appId);
+        _settingsBackupPath = backupRoot / (appIdText + L".settings.json.bak");
+        _schemaBackupPath   = backupRoot / (appIdText + L".settings.schema.json.bak");
+
+        _settingsExisted = false;
+        _schemaExisted   = false;
+        if (! BackupOne(_settingsPath, _settingsBackupPath, _settingsExisted))
+        {
+            return false;
+        }
+        if (! BackupOne(_schemaPath, _schemaBackupPath, _schemaExisted))
+        {
+            return false;
+        }
+
+        _armed = true;
+        return true;
+    }
+
+    void Restore() noexcept
+    {
+        if (! _armed)
+        {
+            return;
+        }
+
+        RestoreOne(_settingsPath, _settingsBackupPath, _settingsExisted);
+        RestoreOne(_schemaPath, _schemaBackupPath, _schemaExisted);
+        _armed = false;
+    }
+
+private:
+    [[nodiscard]] static bool BackupOne(const std::filesystem::path& source, const std::filesystem::path& backup, bool& existed) noexcept
+    {
+        std::error_code ec;
+        existed = std::filesystem::exists(source, ec);
+        if (ec)
+        {
+            return false;
+        }
+
+        std::filesystem::remove(backup, ec);
+        ec.clear();
+        if (existed)
+        {
+            std::filesystem::copy_file(source, backup, std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    static void RestoreOne(const std::filesystem::path& target, const std::filesystem::path& backup, const bool existed) noexcept
+    {
+        std::error_code ec;
+        std::filesystem::remove(target, ec);
+        ec.clear();
+
+        if (existed)
+        {
+            std::filesystem::copy_file(backup, target, std::filesystem::copy_options::overwrite_existing, ec);
+            ec.clear();
+        }
+
+        std::filesystem::remove(backup, ec);
+    }
+
+    bool _armed           = false;
+    bool _settingsExisted = false;
+    bool _schemaExisted   = false;
+    std::filesystem::path _settingsPath;
+    std::filesystem::path _schemaPath;
+    std::filesystem::path _settingsBackupPath;
+    std::filesystem::path _schemaBackupPath;
+};
+
+[[nodiscard]] bool ReadSmallPreferencesSelfTestFile(const std::filesystem::path& path, std::string& outText) noexcept
+{
+    outText.clear();
+
+    std::ifstream file(path, std::ios::binary);
+    if (! file)
+    {
+        return false;
+    }
+
+    file.seekg(0, std::ios::end);
+    const std::streampos end = file.tellg();
+    if (end < std::streampos{} || end > std::streampos{1024 * 1024})
+    {
+        return false;
+    }
+
+    file.seekg(0, std::ios::beg);
+    outText.resize(static_cast<size_t>(end));
+    if (outText.empty())
+    {
+        return true;
+    }
+
+    file.read(outText.data(), static_cast<std::streamsize>(outText.size()));
+    return file.gcount() == static_cast<std::streamsize>(outText.size());
+}
+
 [[nodiscard]] HWND WaitForPreferencesKeyboardSearchInputTarget(std::chrono::milliseconds timeout, PreferencesDebugSnapshot& outSnapshot) noexcept
 {
     using namespace std::chrono_literals;
@@ -108,12 +248,11 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     {
         PumpPendingMessages();
 
-        outSnapshot = {};
-        const bool snapshotMatches =
-            DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.currentCategory == kPrefCategoryKeyboard &&
-            outSnapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::SearchField && outSnapshot.createdPaneWindowCount == 0u &&
-            outSnapshot.visiblePaneWindowCount == 0u && outSnapshot.visibleCurrentPageChildWindowCount == 1u &&
-            outSnapshot.currentPageDxHostResizeFailureCount == 0u;
+        outSnapshot                = {};
+        const bool snapshotMatches = DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.currentCategory == kPrefCategoryKeyboard &&
+                                     outSnapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::SearchField &&
+                                     outSnapshot.createdPaneWindowCount == 0u && outSnapshot.visiblePaneWindowCount == 0u &&
+                                     outSnapshot.visibleCurrentPageChildWindowCount == 1u && outSnapshot.currentPageDxHostResizeFailureCount == 0u;
 
         const HWND focusedWindow = GetFocus();
         if (snapshotMatches && focusedWindow && IsWindow(focusedWindow) != FALSE)
@@ -125,7 +264,7 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     }
 
     PumpPendingMessages();
-    outSnapshot = {};
+    outSnapshot              = {};
     const HWND focusedWindow = GetFocus();
     if (DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.currentCategory == kPrefCategoryKeyboard &&
         outSnapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::SearchField && focusedWindow && IsWindow(focusedWindow) != FALSE)
@@ -244,12 +383,9 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     }
 
     PreferencesDebugSnapshot baseline{};
-    state.Require(waitForSnapshot(
-                      [](const PreferencesDebugSnapshot& value) noexcept
-    {
-        return value.currentCategory == kPrefCategoryGeneral && value.currentPageDxHostResizeFailureCount == 0u;
-    },
-                      baseline),
+    state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept
+    { return value.currentCategory == kPrefCategoryGeneral && value.currentPageDxHostResizeFailureCount == 0u; },
+                                  baseline),
                   L"Preferences General page did not settle before Escape dirty-close validation.");
     if (! state.failure.empty())
     {
@@ -260,10 +396,9 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     state.Require(DebugSetPreferencesGeneralCompactMode(targetCompactMode),
                   L"Preferences General compact-mode mutation failed before Escape dirty-close validation.");
     PreferencesDebugSnapshot dirtySnapshot{};
-    state.Require(waitForSnapshot(
-                      [&](const PreferencesDebugSnapshot& value) noexcept
+    state.Require(waitForSnapshot([&](const PreferencesDebugSnapshot& value) noexcept
     { return value.currentCategory == kPrefCategoryGeneral && value.themeCompactMode == targetCompactMode && value.currentPageDxHostResizeFailureCount == 0u; },
-                      dirtySnapshot),
+                                  dirtySnapshot),
                   L"Preferences General compact-mode mutation did not settle before Escape dirty-close validation.");
     if (! state.failure.empty())
     {
@@ -273,8 +408,7 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     HostResetTestPromptRequestCount();
     HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
     postEscapeCancelCommand(prefs);
-    state.Require(WaitForPreferencesPromptRequestCountAtLeast(1u, SelfTest::Scale(3000ms)),
-                  L"Dirty Preferences Escape should prompt before closing.");
+    state.Require(WaitForPreferencesPromptRequestCountAtLeast(1u, SelfTest::Scale(3000ms)), L"Dirty Preferences Escape should prompt before closing.");
     state.Require(IsWindow(prefs) != FALSE, L"Dirty Preferences Escape with prompt Cancel should keep the dialog open.");
     if (! state.failure.empty())
     {
@@ -303,7 +437,10 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
     PreferencesDebugSnapshot reopened{};
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
-    { return value.currentCategory == kPrefCategoryGeneral && value.themeCompactMode == baseline.themeCompactMode && value.currentPageDxHostResizeFailureCount == 0u; },
+    {
+        return value.currentCategory == kPrefCategoryGeneral && value.themeCompactMode == baseline.themeCompactMode &&
+               value.currentPageDxHostResizeFailureCount == 0u;
+    },
                       reopened),
                   L"Preferences dirty Escape discard path did not restore the original compact-mode setting.");
     state.Require(DebugCancelPreferencesDialog(), L"Preferences window did not accept debug close after Escape dirty-close validation.");

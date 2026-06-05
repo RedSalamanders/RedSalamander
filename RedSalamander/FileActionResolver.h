@@ -54,17 +54,13 @@ struct Resolution
 [[nodiscard]] Resolution ResolveViewerAction(const Common::Settings::ViewerFileActionsSettings& settings, const Request& request);
 [[nodiscard]] Resolution ResolveEditorAction(const Common::Settings::EditorFileActionsSettings& settings, const Request& request);
 [[nodiscard]] std::vector<const Common::Settings::FileActionDefinition*> CollectAssociatedEditorActions(
-    const Common::Settings::EditorFileActionsSettings& settings,
-    const Request& request);
-[[nodiscard]] const Common::Settings::FileActionDefinition* FindApplicableActionById(
-    const std::vector<Common::Settings::FileActionDefinition>& actions,
-    std::wstring_view actionId,
-    const std::filesystem::path& itemPath,
-    std::wstring_view computerName);
+    const Common::Settings::EditorFileActionsSettings& settings, const Request& request);
+[[nodiscard]] const Common::Settings::FileActionDefinition* FindApplicableActionById(const std::vector<Common::Settings::FileActionDefinition>& actions,
+                                                                                     std::wstring_view actionId,
+                                                                                     const std::filesystem::path& itemPath,
+                                                                                     std::wstring_view computerName);
 [[nodiscard]] std::vector<const Common::Settings::FileActionDefinition*> CollectApplicableActions(
-    const std::vector<Common::Settings::FileActionDefinition>& actions,
-    const std::filesystem::path& itemPath,
-    std::wstring_view computerName);
+    const std::vector<Common::Settings::FileActionDefinition>& actions, const std::filesystem::path& itemPath, std::wstring_view computerName);
 [[nodiscard]] bool ActionAppliesToContext(const Common::Settings::FileActionDefinition& action,
                                           const std::filesystem::path& itemPath,
                                           std::wstring_view computerName);

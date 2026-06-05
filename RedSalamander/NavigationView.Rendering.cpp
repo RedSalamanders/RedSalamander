@@ -920,6 +920,10 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
     {
         if (! dirtyRect)
         {
+            TraceNavigationViewMenuDiagnostics(L"navigation.present",
+                                               L"hwnd={:#x} action=queue-full defer=1 hasPresented={}",
+                                               reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                               _hasPresented ? 1 : 0);
             _queuedPresentFull = true;
             _queuedPresentDirtyRect.reset();
             return;
@@ -927,10 +931,22 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
 
         if (_queuedPresentFull)
         {
+            TraceNavigationViewMenuDiagnostics(L"navigation.present",
+                                               L"hwnd={:#x} action=skip-dirty-full-queued defer=1 hasPresented={}",
+                                               reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                               _hasPresented ? 1 : 0);
             return;
         }
 
         const RECT rect = *dirtyRect.value();
+        TraceNavigationViewMenuDiagnostics(L"navigation.present",
+                                           L"hwnd={:#x} action=queue-dirty defer=1 rect=({}, {}, {}, {}) hasPresented={}",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                           rect.left,
+                                           rect.top,
+                                           rect.right,
+                                           rect.bottom,
+                                           _hasPresented ? 1 : 0);
         if (_queuedPresentDirtyRect)
         {
             RECT merged{};
@@ -952,6 +968,10 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
         // First present must be a regular Present without dirty rects
         hr            = _swapChain->Present(0, 0);
         _hasPresented = true;
+        TraceNavigationViewMenuDiagnostics(L"navigation.present",
+                                           L"hwnd={:#x} action=present-first hr={:#x}",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                           static_cast<unsigned int>(hr));
         if (FAILED(hr))
         {
             Debug::Error(L"[NavigationView] Present failed (hr=0x{:08X})", static_cast<unsigned long>(hr));
@@ -972,6 +992,25 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
         params.pDirtyRects     = dirtyRect.value();
     }
     hr = _swapChain->Present1(0, 0, &params);
+    if (dirtyRect)
+    {
+        const RECT rect = *dirtyRect.value();
+        TraceNavigationViewMenuDiagnostics(L"navigation.present",
+                                           L"hwnd={:#x} action=present-dirty hr={:#x} rect=({}, {}, {}, {})",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                           static_cast<unsigned int>(hr),
+                                           rect.left,
+                                           rect.top,
+                                           rect.right,
+                                           rect.bottom);
+    }
+    else
+    {
+        TraceNavigationViewMenuDiagnostics(L"navigation.present",
+                                           L"hwnd={:#x} action=present-full hr={:#x}",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                           static_cast<unsigned int>(hr));
+    }
     if (FAILED(hr))
     {
         Debug::Error(L"[NavigationView] Present1 failed (hr=0x{:08X})", static_cast<unsigned long>(hr));
@@ -983,7 +1022,7 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
     }
 }
 
-void NavigationView::UpdateDiskInfo()
+void NavigationView::ResetDiskInfoState() noexcept
 {
     _diskSpaceText.clear();
     _freeBytes     = 0;
@@ -995,23 +1034,184 @@ void NavigationView::UpdateDiskInfo()
     _volumeLabel.clear();
     _fileSystem.clear();
     _driveDisplayName.clear();
+}
+
+void NavigationView::UpdateDiskInfo(bool resetState)
+{
+    if (resetState)
+    {
+        ResetDiskInfoState();
+    }
+
+    const uint64_t requestId = _driveInfoRequestId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    {
+        std::lock_guard lock(_driveInfoMutex);
+        _driveInfoPendingQuery.reset();
+    }
 
     if (! _currentPluginPath || ! _driveInfo)
     {
+        _driveInfoCv.notify_one();
         return;
     }
 
-    const std::wstring pathText = _currentPluginPath.value().wstring();
-    DriveInfo info{};
-    const HRESULT hr = _driveInfo->GetDriveInfo(pathText.c_str(), &info);
-    if (FAILED(hr) || hr == S_FALSE)
+    EnsureDriveInfoWorker();
+
+    {
+        std::lock_guard lock(_driveInfoMutex);
+        _driveInfoPendingQuery = DriveInfoQuery{.requestId = requestId, .driveInfo = _driveInfo, .pathText = _currentPluginPath.value().wstring()};
+    }
+    _driveInfoCv.notify_one();
+}
+
+void NavigationView::EnsureDriveInfoWorker()
+{
+    if (_driveInfoThread.joinable())
     {
         return;
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_DISPLAY_NAME) != 0 && info.displayName)
+    _driveInfoThread = std::jthread([this](std::stop_token stopToken) { DriveInfoWorker(stopToken); });
+}
+
+void NavigationView::StopDriveInfoWorker()
+{
+    if (_driveInfoThread.joinable())
     {
-        _driveDisplayName = info.displayName;
+        _driveInfoThread.request_stop();
+        _driveInfoCv.notify_all();
+        _driveInfoThread.join();
+    }
+
+    std::lock_guard lock(_driveInfoMutex);
+    _driveInfoPendingQuery.reset();
+}
+
+void NavigationView::DriveInfoWorker(std::stop_token stopToken)
+{
+    const HRESULT coinitHr   = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool coinitialized = SUCCEEDED(coinitHr);
+    auto coUninitialize      = wil::scope_exit([&] noexcept
+    {
+        if (coinitialized)
+        {
+            CoUninitialize();
+        }
+    });
+    if (FAILED(coinitHr) && coinitHr != RPC_E_CHANGED_MODE)
+    {
+        Debug::Warning(L"NavigationView drive info worker: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", static_cast<unsigned long>(coinitHr));
+    }
+
+    std::stop_callback stopCallback(stopToken, [this] { _driveInfoCv.notify_all(); });
+
+    for (;;)
+    {
+        if (stopToken.stop_requested())
+        {
+            return;
+        }
+
+        DriveInfoQuery query{};
+        {
+            std::unique_lock lock(_driveInfoMutex);
+            _driveInfoCv.wait(lock, [&] { return stopToken.stop_requested() || _driveInfoPendingQuery.has_value(); });
+            if (stopToken.stop_requested())
+            {
+                return;
+            }
+
+            query = std::move(_driveInfoPendingQuery.value());
+            _driveInfoPendingQuery.reset();
+        }
+
+        if (! query.driveInfo || query.pathText.empty())
+        {
+            continue;
+        }
+
+        auto payload       = std::make_unique<DriveInfoResultPayload>();
+        payload->requestId = query.requestId;
+        payload->pathText  = query.pathText;
+
+        DriveInfo info{};
+        const auto startedAt = std::chrono::steady_clock::now();
+        const HRESULT hr     = query.driveInfo->GetDriveInfo(query.pathText.c_str(), &info);
+        Debug::Perf::Emit(L"navigation.drive_info.query_us", query.pathText, Debug::Perf::ElapsedUs(startedAt), query.requestId, 0u, hr);
+
+        payload->hr = hr;
+        if (SUCCEEDED(hr) && hr != S_FALSE)
+        {
+            if ((info.flags & DRIVE_INFO_FLAG_HAS_DISPLAY_NAME) != 0 && info.displayName)
+            {
+                payload->hasDisplayName   = true;
+                payload->driveDisplayName = info.displayName;
+            }
+            if ((info.flags & DRIVE_INFO_FLAG_HAS_VOLUME_LABEL) != 0 && info.volumeLabel)
+            {
+                payload->hasVolumeLabel = true;
+                payload->volumeLabel    = info.volumeLabel;
+            }
+            if ((info.flags & DRIVE_INFO_FLAG_HAS_FILE_SYSTEM) != 0 && info.fileSystem)
+            {
+                payload->hasFileSystem = true;
+                payload->fileSystem    = info.fileSystem;
+            }
+            if ((info.flags & DRIVE_INFO_FLAG_HAS_TOTAL_BYTES) != 0)
+            {
+                payload->hasTotalBytes = true;
+                payload->totalBytes    = info.totalBytes;
+            }
+            if ((info.flags & DRIVE_INFO_FLAG_HAS_FREE_BYTES) != 0)
+            {
+                payload->hasFreeBytes = true;
+                payload->freeBytes    = info.freeBytes;
+            }
+            if ((info.flags & DRIVE_INFO_FLAG_HAS_USED_BYTES) != 0)
+            {
+                payload->hasUsedBytes = true;
+                payload->usedBytes    = info.usedBytes;
+            }
+        }
+
+        if (stopToken.stop_requested())
+        {
+            return;
+        }
+
+        if (_hWnd)
+        {
+            static_cast<void>(PostMessagePayload(_hWnd.get(), WndMsg::kNavigationViewDriveInfoLoaded, 0, std::move(payload)));
+        }
+    }
+}
+
+LRESULT NavigationView::OnDriveInfoLoaded(std::unique_ptr<DriveInfoResultPayload> payload) noexcept
+{
+    if (! payload)
+    {
+        return 0;
+    }
+
+    const uint64_t latestRequestId = _driveInfoRequestId.load(std::memory_order_acquire);
+    if (payload->requestId != latestRequestId)
+    {
+        return 0;
+    }
+
+    if (! _currentPluginPath || payload->pathText != _currentPluginPath.value().wstring())
+    {
+        return 0;
+    }
+
+    if (FAILED(payload->hr) || payload->hr == S_FALSE)
+    {
+        return 0;
+    }
+
+    if (payload->hasDisplayName)
+    {
+        _driveDisplayName = std::move(payload->driveDisplayName);
     }
     else
     {
@@ -1027,31 +1227,31 @@ void NavigationView::UpdateDiskInfo()
         }
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_VOLUME_LABEL) != 0 && info.volumeLabel)
+    if (payload->hasVolumeLabel)
     {
-        _volumeLabel = info.volumeLabel;
+        _volumeLabel = std::move(payload->volumeLabel);
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_FILE_SYSTEM) != 0 && info.fileSystem)
+    if (payload->hasFileSystem)
     {
-        _fileSystem = info.fileSystem;
+        _fileSystem = std::move(payload->fileSystem);
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_TOTAL_BYTES) != 0)
+    if (payload->hasTotalBytes)
     {
-        _totalBytes    = info.totalBytes;
+        _totalBytes    = payload->totalBytes;
         _hasTotalBytes = true;
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_FREE_BYTES) != 0)
+    if (payload->hasFreeBytes)
     {
-        _freeBytes    = info.freeBytes;
+        _freeBytes    = payload->freeBytes;
         _hasFreeBytes = true;
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_USED_BYTES) != 0)
+    if (payload->hasUsedBytes)
     {
-        _usedBytes    = info.usedBytes;
+        _usedBytes    = payload->usedBytes;
         _hasUsedBytes = true;
     }
 
@@ -1066,4 +1266,11 @@ void NavigationView::UpdateDiskInfo()
             _diskSpaceText = FormatBytesCompact(_totalBytes) + L" ";
         }
     }
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), &_sectionDiskInfoRect, FALSE);
+    }
+
+    return 0;
 }

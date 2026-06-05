@@ -86,6 +86,26 @@ extern "C"
 }
 ```
 
+### Common factory module lifetime exports
+
+`Common/PlugInterfaces/Factory.h` also declares optional module quiet-point exports:
+
+```cpp
+extern "C"
+{
+    PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept;
+    PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept;
+}
+```
+
+These exports are not a default plugin requirement. A plugin SHOULD omit them unless it owns DLL-global worker threads, schedulers, caches, registered window classes, graphics resources, or driver-backed resources whose lifetime cannot be fully represented by ordinary COM instance shutdown.
+
+`RedSalamanderPluginShutdown()` must be idempotent and non-throwing. After it returns, no DLL-global worker may call host callbacks or touch state that the host can release before `FreeLibrary`. A host manager MUST still release or close live plugin instances through their normal interface contract before unloading a module; the export is a final module quiet point, not a replacement for `Close()`, `SetCallback(nullptr, nullptr)`, cancellation, or COM `Release()`.
+
+`RedSalamanderPluginRetainModuleUntilProcessExit()` is only meaningful during process shutdown. Returning `TRUE` asks the host to run the quiet point but leave the DLL mapped until OS process teardown. This is reserved for modules where explicit process-shutdown `FreeLibrary` is known to race with driver or library teardown after the plugin has already gone quiet.
+
+Host plugin managers that load DLLs through `RedSalamanderCreate` MUST centralize unload through a helper that releases normal COM instances first, calls `RedSalamanderPluginShutdown()` when present, unregisters resource owners, and honors `RedSalamanderPluginRetainModuleUntilProcessExit()` only for process-shutdown unload.
+
 Lifetime/ownership:
 - `host` is caller-owned and remains valid for the lifetime of the plugin instance created from this call.
 - `pluginId` identifies the logical plugin being created; single-plugin DLLs MAY accept `nullptr` or empty.

@@ -1,6 +1,6 @@
 // Commands.SelfTest.PluginConfig.cpp
 // Included from Commands.SelfTest.cpp — NOT compiled standalone.
-// PluginConfig test family: 13 test functions.
+// PluginConfig test family: 14 test functions.
 
 [[nodiscard]] bool TestFileSystemPluginConfigurationRoundTrip(CaseState& state) noexcept
 {
@@ -4507,6 +4507,156 @@ private:
     return state.failure.empty();
 }
 
+[[nodiscard]] std::filesystem::path FindRepoRootForPluginManagerSourceGuard() noexcept
+{
+    std::error_code currentPathError;
+    std::filesystem::path cursor = std::filesystem::current_path(currentPathError);
+    if (currentPathError || cursor.empty())
+    {
+        return {};
+    }
+
+    for (int depth = 0; depth < 8; ++depth)
+    {
+        std::error_code ec;
+        if (std::filesystem::exists(cursor / L"RedSalamander.sln", ec) && std::filesystem::exists(cursor / L"RedSalamander" / L"ViewerPluginManager.cpp", ec))
+        {
+            return cursor;
+        }
+
+        if (! cursor.has_parent_path())
+        {
+            break;
+        }
+        cursor = cursor.parent_path();
+    }
+
+    return {};
+}
+
+[[nodiscard]] bool ReadSourceFileUtf8(const std::filesystem::path& path, std::string& outSource) noexcept
+{
+    outSource.clear();
+    std::ifstream input(path);
+    if (! input.good())
+    {
+        return false;
+    }
+
+    outSource.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    return true;
+}
+
+[[nodiscard]] std::string_view SourceBetween(std::string_view source, std::string_view beginMarker, std::string_view endMarker) noexcept
+{
+    const size_t begin = source.find(beginMarker);
+    if (begin == std::string_view::npos)
+    {
+        return {};
+    }
+
+    const size_t end = source.find(endMarker, begin + beginMarker.size());
+    if (end == std::string_view::npos || end <= begin)
+    {
+        return {};
+    }
+
+    return source.substr(begin, end - begin);
+}
+
+[[nodiscard]] bool TestViewerPluginManagerUnloadLifecycleSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for ViewerPluginManager source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string source;
+    const std::filesystem::path managerPath = repoRoot / L"RedSalamander" / L"ViewerPluginManager.cpp";
+    state.Require(ReadSourceFileUtf8(managerPath, source), std::format(L"Failed to read {}.", managerPath.wstring()));
+    if (source.empty())
+    {
+        return false;
+    }
+
+    const std::string_view disableBody =
+        SourceBetween(source, "HRESULT ViewerPluginManager::DisablePlugin", "HRESULT ViewerPluginManager::EnablePlugin");
+    state.Require(! disableBody.empty(), L"ViewerPluginManager::DisablePlugin body was not found.");
+    state.Require(disableBody.find("Unload(") == std::string_view::npos,
+                  L"ViewerPluginManager::DisablePlugin must not FreeLibrary a viewer DLL because external IViewer references may still be alive.");
+
+    const std::string_view discoverBody = SourceBetween(source, "HRESULT ViewerPluginManager::Discover", "struct Candidate");
+    state.Require(! discoverBody.empty(), L"ViewerPluginManager::Discover body was not found.");
+    state.Require(source.find("void ViewerPluginManager::UnloadAll(") != std::string::npos,
+                  L"ViewerPluginManager must centralize plugin unload through an explicit quiet-point helper.");
+    state.Require(discoverBody.find("UnloadAll(ModuleUnloadMode::FreeLibrary);") != std::string_view::npos,
+                  L"ViewerPluginManager::Discover must unload existing modules through the quiet-point helper before clearing plugin entries.");
+
+    std::string appSource;
+    const std::filesystem::path appPath = repoRoot / L"RedSalamander" / L"RedSalamander.cpp";
+    state.Require(ReadSourceFileUtf8(appPath, appSource), std::format(L"Failed to read {}.", appPath.wstring()));
+    const std::string_view refreshBody = SourceBetween(appSource, "void RefreshRunningPluginsFromSettings", "[[nodiscard]] std::vector<std::wstring_view>");
+    state.Require(! refreshBody.empty(), L"RefreshRunningPluginsFromSettings body was not found.");
+    const size_t closeAllViewersPos = refreshBody.find("g_folderWindow.CloseAllViewers();");
+    const size_t releaseFileSystemsPos = refreshBody.find("g_folderWindow.ReleaseFileSystemPluginsForRefresh();");
+    const size_t fileSystemRefreshPos = refreshBody.find("FileSystemPluginManager::GetInstance().Refresh");
+    const size_t viewerRefreshPos     = refreshBody.find("ViewerPluginManager::GetInstance().Refresh");
+    state.Require(closeAllViewersPos != std::string_view::npos && fileSystemRefreshPos != std::string_view::npos &&
+                      viewerRefreshPos != std::string_view::npos && releaseFileSystemsPos != std::string_view::npos &&
+                      closeAllViewersPos < releaseFileSystemsPos && releaseFileSystemsPos < fileSystemRefreshPos && closeAllViewersPos < viewerRefreshPos,
+                  L"Runtime plugin refresh must close live viewers and release pane file-system references before rediscovering/unloading plugin DLLs.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileSystemPluginManagerUnloadLifecycleSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for FileSystemPluginManager source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string source;
+    const std::filesystem::path managerPath = repoRoot / L"RedSalamander" / L"FileSystemPluginManager.cpp";
+    state.Require(ReadSourceFileUtf8(managerPath, source), std::format(L"Failed to read {}.", managerPath.wstring()));
+    if (source.empty())
+    {
+        return false;
+    }
+
+    const std::string_view disableBody =
+        SourceBetween(source, "HRESULT FileSystemPluginManager::DisablePlugin", "HRESULT FileSystemPluginManager::EnablePlugin");
+    state.Require(! disableBody.empty(), L"FileSystemPluginManager::DisablePlugin body was not found.");
+    state.Require(disableBody.find("Unload(") == std::string_view::npos,
+                  L"FileSystemPluginManager::DisablePlugin must not FreeLibrary a file system DLL because external IFileSystem references may still be alive.");
+
+    const std::string_view shutdownBody =
+        SourceBetween(source, "void FileSystemPluginManager::Shutdown", "const std::vector<FileSystemPluginManager::PluginEntry>&");
+    state.Require(! shutdownBody.empty(), L"FileSystemPluginManager::Shutdown body was not found.");
+    state.Require(shutdownBody.find("UnloadAll(ModuleUnloadMode::ProcessShutdown);") != std::string_view::npos,
+                  L"FileSystemPluginManager::Shutdown must unload modules through the process-shutdown quiet-point helper.");
+
+    const std::string_view discoverBody = SourceBetween(source, "HRESULT FileSystemPluginManager::Discover", "    if (_exeDir.empty())");
+    state.Require(! discoverBody.empty(), L"FileSystemPluginManager::Discover body was not found.");
+    state.Require(source.find("void FileSystemPluginManager::UnloadAll(") != std::string::npos,
+                  L"FileSystemPluginManager must centralize plugin unload through an explicit quiet-point helper.");
+    state.Require(discoverBody.find("UnloadAll(ModuleUnloadMode::FreeLibrary);") != std::string_view::npos,
+                  L"FileSystemPluginManager::Discover must unload existing modules through the quiet-point helper before clearing plugin entries.");
+
+    const std::string_view unloadBody = SourceBetween(source, "void FileSystemPluginManager::Unload(", "HRESULT FileSystemPluginManager::ApplyConfigurationFromSettings");
+    state.Require(! unloadBody.empty(), L"FileSystemPluginManager::Unload body was not found.");
+    state.Require(unloadBody.find("RedSalamanderPluginShutdown") != std::string_view::npos,
+                  L"FileSystemPluginManager::Unload must call optional plugin shutdown hooks before unloading.");
+    state.Require(unloadBody.find("RedSalamanderPluginRetainModuleUntilProcessExit") != std::string_view::npos,
+                  L"FileSystemPluginManager::Unload must honor process-shutdown module retention hooks.");
+
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -4521,6 +4671,12 @@ void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"viewer_pe_close_roundtrip", [](CaseState& state) noexcept { return TestViewerPECloseRoundTrip(state); });
     SelfTest::RunCase(options, suite, L"viewer_imgraw_close_roundtrip", [](CaseState& state) noexcept { return TestViewerImgRawCloseRoundTrip(state); });
     SelfTest::RunCase(options, suite, L"viewer_web_close_roundtrip", [](CaseState& state) noexcept { return TestViewerWebCloseRoundTrip(state); });
+    SelfTest::RunCase(options, suite, L"viewer_plugin_manager_unload_lifecycle_source_guard", [](CaseState& state) noexcept {
+        return TestViewerPluginManagerUnloadLifecycleSourceGuard(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_system_plugin_manager_unload_lifecycle_source_guard", [](CaseState& state) noexcept {
+        return TestFileSystemPluginManagerUnloadLifecycleSourceGuard(state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_plugin_configuration_dialog_uses_dxui_command_buttons", [=](CaseState& state) noexcept {
         return TestPluginConfigurationDialogUsesDxUiFormSurface(mainWindow, state);
     });

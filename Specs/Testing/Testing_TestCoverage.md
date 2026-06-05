@@ -5,9 +5,9 @@
 This document provides a comprehensive inventory of every declared test case across all
 RedSalamander test suites. It serves as the authoritative reference for test coverage.
 
-Current runner-native inventory as of 2026-05-18:
+Current runner-native inventory as of 2026-06-03:
 
-- Commands: 633 listed cases.
+- Commands: 651 listed cases.
 - CompareDirectories: 149 listed cases.
 - FileOperations: 75 listed phases: 73 active ordered phases, plus setup and
   cleanup.
@@ -28,9 +28,299 @@ equivalent to runner-listed cases.
 
 Current source-derived fallback counts:
 
-- Commands: 610 static `SelfTest::RunCase` call-site registrations.
+- Commands: 621 static `SelfTest::RunCase` call-site registrations.
 - CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
 - FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
+
+Recent focused coverage updates:
+
+- 2026-06-05 Find Look-in NavigationView/result context menu coverage:
+  Debug `RedSalamander` build passed with
+  `.build/logs/msbuild-20260605_191128_989.log` (`0 warning(s), 0 error(s)`),
+  Debug `DxUiTests` build passed with
+  `.build/logs/msbuild-20260605_184731_385.log` (`0 warning(s), 0 error(s)`),
+  and `.build\x64\Debug\DxUiTests.exe --suite=Grid` exited 0. The focused
+  command case
+  `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions`
+  passed at `Specs/TestRuns/4cb089111a23/Commands/2026-06-05_191333/`.
+  This run covers the embedded `Look in` `NavigationView`, the hidden root
+  combo remaining non-visual plumbing, result-grid right-click preservation of
+  multi-selection, the two-section result context menu, shortcut text resolved
+  from active `ShortcutManager` bindings, clicked-item dispatch operating only
+  on the hit row, and selection-section dispatch operating on the whole selected
+  result set. The broad `DxUiTests --suite=Menu` sweep was not recorded as green
+  in this desktop run: repeated attempts failed in pre-existing timing-sensitive
+  menu cases before reaching the Find result-menu assertions.
+- 2026-06-04 central pointer input router continuation closeout: the
+  `cmd_viewer_` shutdown blocker is closed. ViewerSpace now exposes a module
+  quiet point and process-exit retention path for DLL-global scheduler/cache,
+  window-class, and graphics state; `cmd_viewer_` passed on the current Debug
+  app build at `Specs/TestRuns/7d3a1247382a/Commands/2026-06-04_215054/`
+  (`4 passed, 0 failed`). Debug `RedSalamander` build passed with
+  `.build/logs/msbuild-20260604_213301_479.log` (`0 warning(s), 0 error(s)`).
+  Debug `DxUiTests` rebuild passed with
+  `.build/logs/msbuild-20260604_214754_056.log` (`0 warning(s), 0 error(s)`),
+  and `.build\x64\Debug\DxUiTests.exe --suite=Menu` passed twice after the
+  menu DPI clamp test was hardened to anchor outside the virtual screen instead
+  of assuming no monitor exists left/above the primary monitor. Focused command
+  slices passed at `2026-06-04_145308/` (`cmd_app_menuBar_`, `17 passed`),
+  `2026-06-04_145534/` (`cmd_pane_navigation_`, `31 passed`),
+  `2026-06-04_145538/` (pane status-bar sort popup), `2026-06-04_145551/`
+  (file-operations speed-limit prompt, `4 passed`), and `2026-06-04_145554/`
+  (current-directory context menu). The full Find prefix passed at
+  `Specs/TestRuns/7d3a1247382a/Commands/2026-06-04_214327/` with `56 passed`,
+  `0 failed`, and `6 skipped` because the desktop OS clipboard was unavailable
+  (`OpenClipboard error=5, openWindow=0x0, owner=0x0`). The skipped cases are
+  the six clipboard-content assertions only; the broader Find status,
+  incremental-search, destination routing, action-button, layout, sort, and
+  activation cases executed and passed. Earlier same-day clipboard coverage for
+  the result shortcut case passed before the external clipboard lock at
+  `Specs/TestRuns/7d3a1247382a/Commands/2026-06-04_180358/`, and the focused
+  unavailable-clipboard run is archived at `2026-06-04_212254/`. The final
+  source guard `powershell -NoProfile -ExecutionPolicy Bypass -File
+  .\Scripts\VerifyNoProductionGetCursorPos.ps1` reported
+  `No production GetCursorPos violations found.`; `git diff --check -- Common
+  RedSalamander Plugins Specs\UI Specs\Testing Scripts Tests` exited 0 with
+  only line-ending normalization warnings.
+- 2026-06-03 central pointer input router final closeout coverage
+  (supersedes earlier same-day live-cursor classification notes for the final
+  contract): production routing under `Common`, `RedSalamander`, and `Plugins`
+  now treats delivered pointer message coordinates or explicit owner/control
+  anchors as authoritative. The whole-tree source guard
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1`
+  first failed with 30 production `GetCursorPos()` violations, then passed with
+  `No production GetCursorPos violations found.` after the migration. Raw
+  `GetCursorPos()` remains only in selftests or same-line annotated
+  diagnostic-only production trace sites. Debug `DxUiTests` build passed with
+  `.build/logs/msbuild-20260603_201812_256.log` (`0 warning(s), 0 error(s)`),
+  and `.build\x64\Debug\DxUiTests.exe --suite=Menu` exited 0 across three
+  consecutive reruns plus final verification after fixing the Menu-suite flakes
+  by settling delivered hover input, accepting either pending or already-fired
+  delayed submenu timer state, and parking cursor state for keyboard/baseline
+  probes. Debug `RedSalamander` build passed with
+  `.build/logs/msbuild-20260603_201952_657.log` (`0 warning(s), 0 error(s)`).
+  Focused command selftests exited 0 after one setup-only cursor-position retry:
+  the retry pass is archived at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_202320/`, and the final
+  green batch runs from `2026-06-03_202334/` through
+  `2026-06-03_202346_001/` for the Find destination, Find popup/Escape,
+  result-shortcut/help overlay, and ViewerText/ViewerSpace delivered
+  anchor/hover cases. NavigationView now carries the shared
+  `DxUi::InputGeneration` token, stamps delivered owner pointer events with it,
+  exposes it in debug snapshots, and bumps it on layout/DPI/path,
+  file-system/menu/dropdown, edit-mode, popup, focus/theme, and teardown
+  transitions.
+  Final operator-style live validation used the Debug app with
+  `REDSALAMANDER_DXUI_MENU_TRACE=1` and per-case
+  `REDSALAMANDER_DXUI_MENU_TRACE_FILE` outputs under
+  `Specs/TestRuns/4cb089111a23/LivePointer/2026-06-03_final_validation/`.
+  Thirteen command archives, `2026-06-03_203537/`, `2026-06-03_203539/`,
+  `2026-06-03_203542/`, `2026-06-03_203548/`, `2026-06-03_203549/`,
+  `2026-06-03_203550/`, `2026-06-03_203633/`, `2026-06-03_203634/`,
+  `2026-06-03_203635/`, `2026-06-03_203636/`, `2026-06-03_203637/`,
+  `2026-06-03_203639/`, and `2026-06-03_203640/`, all exited 0. That live slice
+  covers the Find split-button menu opening, hover highlight, outside
+  light-dismiss, destination NavigationView history/menu routing with same-owner
+  pointer drift, stale edit-host retirement, help overlay close glyph, Escape,
+  backdrop repaint, FolderWindow current-directory context routing, pane
+  status-bar delivered hover/sort-click popup open/close, file-operation
+  speed-limit popup/prompt ownership and close, and ViewerText/ViewerSpace
+  context-menu and hover routing from delivered points rather than later cursor
+  state.
+- 2026-06-03 central pointer input router: focused baseline command selftests
+  passed before migration (`cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing`,
+  `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions`,
+  `cmd_pane_find_dialog_result_drains_respect_child_input_queue_order`,
+  `cmd_pane_find_dialog_escape_closes_popup_before_cancel`, and
+  `cmd_pane_find_dialog_escape_from_dx_control_closes_cancel`, all `EXIT=0`).
+  The new whole-tree guard
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1`
+  is intentionally red at the start of the migration, reporting 30 production
+  `GetCursorPos()` violations across `Common`, `RedSalamander`, and `Plugins`.
+- 2026-06-03 Find destination near-owner queued click classification:
+  the live repro log showed `WM_MOUSEMOVE` / `WM_LBUTTONDOWN` delivered to the
+  destination `NavigationView` with an inside-nav client point, while
+  `GetCursorPos()` had already drifted a few pixels below the control on the
+  same Find owner window. Treating that as stale cleared hover and dropped the
+  click, so menus appeared to wait for unrelated pointer movement. The
+  contract now distinguishes same-owner edge drift from true stale residue:
+  same-owner fringe messages are accepted, while far or different-window live
+  pointers are still ignored/cleared. The new red probe in
+  `cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing`
+  failed at `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_153437/` with
+  "Find destination navigation should accept an inside-history queued click
+  when the live cursor only drifted to the same-owner fringe." Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260603_153841_661.log` (`0 warning(s), 0 error(s)`).
+  Focused green coverage is archived at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_154056/`.
+- 2026-06-03 Find destination stale queued activation and active-edit
+  chrome routing: live repro logs showed a queued destination `NavigationView`
+  `WM_LBUTTONDBLCLK` whose delivered client point was still over the footer
+  path area, but whose live cursor had already left the child HWND by the time
+  the message was processed. Accepting that stale double-click entered
+  destination edit mode and left the edit host owning later pointer messages
+  until unrelated title-bar or owner-window movement changed focus. The final
+  contract is that no-capture `NavigationView` owner hover/click/double-click
+  messages are ignored and hover is cleared when `GetCursorPos()` /
+  `WindowFromPoint()` prove the live pointer is far from the control or on a
+  different top-level window; small same-owner edge drift remains valid
+  delivered input. Stale double-clicks must not enter edit mode. Active edit mode
+  still keeps menu/history/disk buttons live, and inactive stale edit hosts
+  retire as transparent/hidden before destination history/menu input is routed.
+  The red command run at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_140743/` caught the stale
+  double-click entering edit mode. Debug `RedSalamander` build passed with
+  `.build/logs/msbuild-20260603_150035_996.log` (`0 warning(s), 0 error(s)`).
+  Focused green coverage is archived at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_150245/`. Adjacent
+  queue/popup/Escape regressions also passed at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_145844/`,
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_145844_001/`, and
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_145845/`.
+- 2026-06-03 DxUi menu delivered popup root-switch routing: the refreshed live
+  repro showed popup/captured mouse messages whose delivered `lParam` no longer
+  matched `GetCursorPos()` by the time the menu loop handled them. The new red
+  `TestMenuPopupMouseMoveUsesDeliveredPointForRootSwitch` failed because
+  `RouteMenuPointerHover(...)` replaced the delivered popup `WM_MOUSEMOVE`
+  point with the live cursor before probing top-level root switching. After
+  removing that live-cursor substitution, popup and owner mouse messages use the
+  delivered coordinate as the authoritative input point; the existing
+  menu-bar-hover notification remains the explicit captured-menu-bar switching
+  path. The same update drained generated cursor-move residue in synthetic idle
+  tests so `TestMenuRootSwitchDoesNotPollCursorWhileIdle` validates no-message
+  behavior instead of depending on the removed substitution. Debug `DxUiTests`
+  build passed with `.build/logs/msbuild-20260603_094341_655.log`
+  (`0 warning(s), 0 error(s)`), and `.build\x64\Debug\DxUiTests.exe --suite=Menu`
+  exited 0. Debug `RedSalamander` build passed with
+  `.build/logs/msbuild-20260603_094600_595.log` (`0 warning(s), 0 error(s)`),
+  and the focused command selftests archived passed runs at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_094812/`,
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_094825/`,
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_094837/`, and
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_094851/`.
+- 2026-06-03 Find destination delivered pointer routing
+  (superseded later on 2026-06-03 by stale queued activation handling above): a follow-up live repro
+  log showed `WM_MOUSEMOVE` and `WM_LBUTTONDOWN` reaching the embedded
+  destination `NavigationView`, with each delivered message `lParam` inside the
+  child client area, but `NavigationView` rejected them as
+  `live-cursor-outside` because `GetCursorPos()` had already moved outside the
+  36px footer bar by handler time. The corrected red
+  `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions`
+  assertion failed at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_085637/` with
+  `history=0`. After restoring Win32 delivered-message semantics so
+  `WM_MOUSEMOVE` / `WM_LBUTTONDOWN` use their `lParam` client point and
+  `GetCursorPos()` is limited to explicit timer/menu-loop reconciliation, Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260603_085733_299.log` (`0 warning(s), 0 error(s)`)
+  and the same case passed at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_085932/`. A later follow-up
+  extended the destination hover probe so an immediate repaint after delivered
+  `WM_MOUSEMOVE` must preserve the delivered hover even when the live cursor is
+  outside the embedded footer; `WM_PAINT` and `WM_SETCURSOR` no longer mutate
+  NavigationView hover state.
+- 2026-06-03 Find destination stale edit-host hit-testing: live repro logs showed
+  only `dxui.windowhost.raw` records for a 30px `RedSalamander.NavigationView`
+  edit host covering the embedded destination bar, with no `navigation.wndproc`
+  input reaching the history/menu branch. The new red
+  `cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing`
+  case recreated a stale visible `RedSalamander.NavigationView.DxHost` child
+  and failed at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_075606/` because the real
+  mouse click on the destination history arrow was swallowed. A follow-up
+  no-diagnostics run reproduced the same case as timing-sensitive at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_103028/`: the stale edit host
+  could receive activation and disappear before a forwarded click reached the
+  history branch. After making inactive edit hosts hide during layout and
+  retire/forward pointer activation from the triggering `WM_MOUSEACTIVATE`
+  coordinates when edit focus has escaped, Debug `RedSalamander` builds passed with
+  `.build/logs/msbuild-20260603_080013_833.log` and
+  `.build/logs/msbuild-20260603_103349_929.log`; the final cleanup build passed
+  with `.build/logs/msbuild-20260603_103856_705.log` (`0 warning(s), 0 error(s)`),
+  the focused case passed at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_080150/`, and related
+  NavigationView history-keyboard and Find queue-order cases passed at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_080208/` and
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_080231/`. The hardened
+  focused case passed once at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_103550/` and then three
+  consecutive no-diagnostics reruns at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_103603/`,
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_103605/`, and
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_103606/`; the final
+  post-cleanup focused run passed at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-03_104057/`. The Debug
+  `DxUiTests --suite=Menu` suite passed with
+  `.build/logs/msbuild-20260603_103618_258.log`.
+- 2026-06-02 Find destination stale-hover/stale-click stabilization
+  (superseded on 2026-06-03 by delivered pointer routing above): live repro
+  logs showed a stale `WM_MOUSEMOVE` clearing correctly, followed by a stale
+  `WM_LBUTTONDOWN` over the embedded destination disk/history area while the
+  live cursor was already outside the `NavigationView`; that delayed click
+  opened a menu only after unrelated pointer movement. The red
+  `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions`
+  stale-click probe failed with "Find destination navigation should ignore
+  stale click messages whose old coordinate no longer matches the live cursor."
+  That fix shared the live-pointer resolver across hover and click activation,
+  but was later found to be the wrong contract for delivered child-window
+  messages; the 2026-06-03 entry above supersedes it.
+  The same case also keeps the deterministic overlay close/backdrop coverage:
+  owner/anchor backdrop capture is available before first paint, and close-glyph
+  mouse messages dismiss without title-bar movement. Verification: Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260602_220733_842.log` (`0 warning(s), 0 error(s)`),
+  the focused Find command selftest passed and archived
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-02_220930/`, Debug
+  `DxUiTests` build passed with `.build/logs/msbuild-20260602_221207_344.log`
+  (`0 warning(s), 0 error(s)`), and `.build\x64\Debug\DxUiTests.exe --suite=Menu`
+  exited 0.
+- 2026-06-02 Find destination stale-hover stabilization
+  (superseded on 2026-06-03 by delivered pointer routing above): live repro logs showed
+  queued `WM_MOUSEMOVE` coordinates over the embedded destination history arrow
+  while the live cursor was outside the `NavigationView`. The new red
+  `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions`
+  probe failed with `history=1` at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-02_210659/`. That run changed
+  `NavigationView::OnMouseMove` to compute hover from the live cursor/window hit
+  result, but the delivered-message rule in the 2026-06-03 entry above now
+  supersedes that behavior for `WM_MOUSEMOVE` messages routed to the child HWND.
+  Debug `RedSalamander` build passed with
+  `.build/logs/msbuild-20260602_210935_990.log` (`0 warning(s), 0 error(s)`),
+  the same command selftest exited 0 and archived
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-02_211132/`, Debug
+  `DxUiTests` build passed with `.build/logs/msbuild-20260602_211247_680.log`
+  (`0 warning(s), 0 error(s)`), and `.build\x64\Debug\DxUiTests.exe --suite=Menu`
+  exited 0. Earlier no-op destination path/history refresh guards remain covered
+  by the same Find command case.
+- 2026-06-02 NavigationView/Find destination menu diagnostics: Debug `RedSalamander` build passed with `.build/logs/msbuild-20260602_193607_073.log` (`0 warning(s), 0 error(s)`), Debug `DxUiTests` rebuild passed with `.build/logs/msbuild-20260602_193857_319.log` (`0 warning(s), 0 error(s)`), and `.build\x64\Debug\DxUiTests.exe --suite=Menu` exited 0 after the diagnostic-only input-state/edit-host/hover-timer/render tracing refresh.
+- 2026-06-02 Find/DxUi raw input diagnostics: after the repro log showed no click/dropdown messages, Debug `RedSalamander` build passed with `.build/logs/msbuild-20260602_200651_211.log` (`0 warning(s), 0 error(s)`), Debug `DxUiTests` rebuild passed with `.build/logs/msbuild-20260602_200842_610.log` (`0 warning(s), 0 error(s)`), and `.build\x64\Debug\DxUiTests.exe --suite=Menu` exited 0 after adding diagnostic-only `find.wndproc.raw` and `dxui.windowhost.*` trace records.
+- 2026-06-02 Find/DxUi raw input diagnostic flood trim: after live repro logging showed 368,340 `WM_NCHITTEST` and 38,900 owner `WM_MOUSELEAVE` trace records, Debug `RedSalamander` build passed with `.build/logs/msbuild-20260602_202216_918.log` (`0 warning(s), 0 error(s)`), Debug `DxUiTests` rebuild passed with `.build/logs/msbuild-20260602_202352_999.log` (`0 warning(s), 0 error(s)`), and `.build\x64\Debug\DxUiTests.exe --suite=Menu` exited 0 after removing reentrant/high-volume hit-test and leave logging.
+- `DxUiTests.Grid` covers clipped-only fallback grid text tooltips, repeated explicit cell tooltips that reappear when the visible text is clipped, and the shared folder-view grid visual mode used by Find results.
+- `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions`
+  now covers the embedded `Look in` NavigationView, two-section Find result
+  context menu, clicked-item and whole-selection menu dispatch, effective
+  shortcut text resolved from `ShortcutManager`, the right-aligned Find result
+  `?` help button, modal help focus,
+  synchronous close-glyph hit geometry before paint, visible first-frame modal
+  help paint without mouse movement, captured owner backdrop for the modal
+  scrim so the owner area cannot render black, nonzero applied scrim opacity,
+  captured-backdrop refresh after owner resize while the help overlay is
+  visible, delivered close-glyph press/release dismissal without title-bar movement,
+  release-only close-glyph dismissal for first-activation routing, `Escape`
+  dismissal, blank idle action-row status, blended action-row status text, bottom destination `NavigationView`
+  visibility/text/embedded presentation/history seeding/delivered-pointer
+  history-arrow popup behavior, rendered first-frame destination popup state,
+  footer-top anchored compact scroll-capped embedded destination dropdowns,
+  explicit F5/F6 destination override, destination text in
+  the help message, no scheduled Find foreground/focus restoration after
+  configured viewer/editor action launches, UI Automation context cleanup, and
+  selftest shutdown cleanup for icon/D2D resources used by Find result icons.
+- `cmd_pane_clipboardPaste_uses_preferred_move_effect` covers the real
+  `cmd/pane/clipboardPaste` dispatch using `CF_HDROP` plus
+  `Preferred DropEffect = DROPEFFECT_MOVE`, proving Ctrl+X then Ctrl+V moves
+  source files instead of copying them and asks for exactly one shared move
+  confirmation.
 
 Related documents:
 - `Specs/Testing/Testing_SelfTests.md` — result contract
@@ -578,7 +868,7 @@ window using UIAutomation and direct Win32 message simulation.
 |-----------|---------------|
 | `cmd_app_prompt_access_keys_route_expected_actions` | Prompt dialog access keys |
 | `cmd_app_prompt_long_run_open_close_stays_stable` | Prompt dialog stability |
-| `cmd_app_prompt_uses_alert_overlay_window` | Prompt uses alert overlay |
+| `cmd_app_prompt_uses_alert_overlay_window` | Host prompt uses owned top-level alert overlay popup |
 | `cmd_app_splash_live_dx_text_update` | Splash screen DxUi text update |
 | `cmd_app_splash_long_run_open_close_stays_stable` | Splash screen stability |
 | `cmd_app_splash_uses_dxui_surface` | Splash screen DxUi surface |
@@ -703,12 +993,12 @@ Connection Manager closeout requires:
 | `cmd_pane_selection_invert` | Invert selection |
 | `cmd_pane_shares_shows_synthetic_rows_opens_paths_and_reports_access_denied` | Shared Directories sorted synthetic rows, open-path navigation, deferred close after Open Path, access-denied empty/error state, shortcut dispatch, and perf artifact output |
 
-### 1.7 Find Files Dialog (46 cases)
+### 1.7 Find Files Dialog (61 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
 | `cmd_pane_find_dialog_access_keys_focus_expected_fields` | Access key focus |
-| `cmd_pane_find_dialog_action_buttons_activate_expected_commands` | Action button dispatch |
+| `cmd_pane_find_dialog_action_buttons_activate_expected_commands` | Action button dispatch, including file Open default-open disposition without pane navigation, directory Open navigation, and Go to folder parent navigation |
 | `cmd_pane_find_dialog_command_enablement_matches_idle_running_and_selection_states` | Command state management |
 | `cmd_pane_find_dialog_copy_follows_reordered_columns` | Copy follows column order |
 | `cmd_pane_find_dialog_directory_activation_navigates_into_selection` | Directory navigation |
@@ -728,11 +1018,17 @@ Connection Manager closeout requires:
 | `cmd_pane_find_dialog_long_run_scrolling_stays_bounded` | Scroll bounds |
 | `cmd_pane_find_dialog_mode_typeahead_updates_selection_and_dependencies` | Typeahead mode |
 | `cmd_pane_find_dialog_open_parent_keeps_directory_focused_in_parent` | Open parent focus |
+| `cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances` | Focused-pane initial root and multiple modeless Find windows |
 | `cmd_pane_find_dialog_pointer_click_toggles_recursive_checkbox` | Recursive toggle |
+| `cmd_pane_find_dialog_compact_mode_shrinks_results_grid_metrics` | Compact mode result-grid density |
+| `cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing` | Destination NavigationView accepts delivered input after stale edit-host retirement without synthetic input-generation gates |
+| `cmd_pane_find_dialog_editable_combo_keyboard_editing_keys` | Editable combo keyboard editing keys |
+| `cmd_pane_find_dialog_recursive_local_search_and_index_availability` | Local recursive subfolder results, Path column subfolder text, shell icon indices, forced scan when indexed preference is unchecked, and indexed-backend availability |
 | `cmd_pane_find_dialog_reordered_columns_survive_search_rerun` | Column order persistence |
 | `cmd_pane_find_dialog_reordered_columns_survive_sort_cycles` | Column order through sort |
 | `cmd_pane_find_dialog_reordered_resized_columns_survive_search_rerun` | Reorder+resize persistence |
 | `cmd_pane_find_dialog_reordered_resized_columns_survive_sort_cycles` | Reorder+resize through sort |
+| `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions` | Result-grid configured command shortcut resolution for shell clipboard, multi-subfolder `Ctrl+X` file-drop/text fallback, compact result-action help button including captured owner/anchor backdrop, applied scrim opacity, visible-owner-resize backdrop refresh, and visible first-frame modal paint without mouse movement, action-row status plus bottom destination NavigationView embedded presentation/history seeding/live history-arrow popup behavior, stale footer NavigationView hover/click rejection after the live pointer leaves the child control, rendered first-frame destination popup state, footer-top anchored compact scroll-capped embedded destination dropdowns, explicit F5/F6 destination override, viewer/editor dispatch without scheduled Find foreground/focus restoration, row removal after accepted move/delete, canceled permanent-delete row preservation, move-to-recycle delete, and permanent-delete confirmation |
 | `cmd_pane_find_dialog_resized_columns_survive_search_rerun` | Resize persistence |
 | `cmd_pane_find_dialog_resized_columns_survive_sort_cycles` | Resize through sort |
 | `cmd_pane_find_dialog_restored_combined_view_state_*` | (10 sub-cases) Combined view state restoration |
@@ -742,12 +1038,13 @@ Connection Manager closeout requires:
 | `cmd_pane_find_dialog_restores_reordered_grid_layout` | Reordered layout |
 | `cmd_pane_find_dialog_restores_reordered_sorted_grid_layout` | Reordered+sorted layout |
 | `cmd_pane_find_dialog_restores_resized_grid_layout` | Resized layout |
+| `cmd_pane_find_dialog_result_drains_respect_child_input_queue_order` | Result action drains respect child input queue order |
 | `cmd_pane_find_dialog_running_status_shows_phase_and_path` | Running status display |
 | `cmd_pane_find_dialog_search_ops` | Search operations |
 | `cmd_pane_find_dialog_service_status_shows_backend_diagnostics` | Service status |
 | `cmd_pane_find_dialog_service_unavailable_warning_is_distinct` | Service warning |
 | `cmd_pane_find_dialog_tab_traversal_matches_expected_order` | Tab order |
-| `cmd_pane_find_dialog_theme_cycle_keeps_grid_legible` | Theme legibility |
+| `cmd_pane_find_dialog_theme_cycle_keeps_grid_legible` | Theme legibility plus Find results-grid folder-view visual mode and Rainbow selected-row color derived from the same containing-folder/display-name stable hash used by FolderView |
 | `cmd_pane_find_dialog_uses_dxui_host_without_visible_child_controls` | DxUi host |
 
 ### 1.8 FileOps Issues Pane and Speed Limit Prompt (21 cases)

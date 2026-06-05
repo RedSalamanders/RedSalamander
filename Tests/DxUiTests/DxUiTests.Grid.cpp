@@ -250,8 +250,7 @@ void TestGroupedGridLongRunScrollKeepsVisibleRowRects()
         {
             if (! reachedScrollEdge)
             {
-                reachedScrollEdge =
-                    ! grid->OnMouseWheel(host, D2D1::Point2F(0.0f, 0.0f), -static_cast<float>(WHEEL_DELTA), 0u);
+                reachedScrollEdge = ! grid->OnMouseWheel(host, D2D1::Point2F(0.0f, 0.0f), -static_cast<float>(WHEEL_DELTA), 0u);
             }
         }
 
@@ -304,7 +303,7 @@ void TestScrollPanelForwardsCapturedChildGridScrollbarDrag()
     host.SetRoot(std::move(root));
     static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
 
-    const ThemePalette theme           = MakeDefaultThemePalette(true);
+    const ThemePalette theme       = MakeDefaultThemePalette(true);
     GridScrollbarVisualState state = grid->DebugGetScrollbarVisualState(theme);
     Require(state.hasVerticalScrollbar, "scroll-panel child grid exposes a vertical scrollbar");
     RequireRectHasArea(state.verticalThumbRect, "scroll-panel child grid exposes a visible scrollbar thumb");
@@ -343,7 +342,7 @@ void TestGridScrollbarThumbGutterDragThroughWindowHost()
     host.SetRoot(std::move(root));
     static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 160.0f));
 
-    const ThemePalette theme           = MakeDefaultThemePalette(true);
+    const ThemePalette theme             = MakeDefaultThemePalette(true);
     const GridScrollbarVisualState state = grid->DebugGetScrollbarVisualState(theme);
     Require(state.hasVerticalScrollbar, "grid exposes a vertical scrollbar for thumb gutter drag");
     RequireRectHasArea(state.verticalThumbRect, "grid exposes a visible vertical scrollbar thumb for gutter drag");
@@ -873,6 +872,53 @@ void TestGridHeaderClickStillRequestsSortWithoutReordering()
     Require(delegate.lastSortSpec.direction == SortDirection::Ascending, "grid header click starts sort at ascending");
 }
 
+void TestGridHeaderClickMovesSortGlyphToClickedColumn()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    ThemePalette theme  = host.GetTheme();
+    theme.reducedMotion = true;
+    host.SetTheme(theme);
+
+    Grid grid;
+    grid.SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 140.0f));
+
+    ColumnLayoutGridModel model;
+    class ApplyingSortDelegate final : public RecordingGridDelegate
+    {
+    public:
+        explicit ApplyingSortDelegate(Grid& targetGrid) noexcept : grid(&targetGrid) {}
+
+        void OnGridSortRequested(const GridSortSpec& sortSpec) override
+        {
+            RecordingGridDelegate::OnGridSortRequested(sortSpec);
+            grid->SetSortSpec(sortSpec);
+        }
+
+    private:
+        Grid* grid = nullptr;
+    } delegate(grid);
+
+    grid.SetModel(&model);
+    grid.SetDelegate(&delegate);
+    grid.SetSortSpec({1u, SortDirection::Ascending});
+
+    const GridSortGlyphVisualState pathBefore = grid.DebugGetSortGlyphVisualState(theme, 1u, GetTickCount64() + 200u);
+    Require(pathBefore.currentDirection == SortDirection::Ascending, "grid sort glyph starts on the Path column before header click");
+
+    Require(grid.OnMouseDown(host, D2D1::Point2F(80.0f, 12.0f), false, 0), "grid sort glyph click handles mouse-down");
+    Require(grid.OnMouseUp(host, D2D1::Point2F(80.0f, 12.0f), false, 0), "grid sort glyph click handles mouse-up");
+
+    const uint64_t settledTick = GetTickCount64() + 200u;
+    const GridSortGlyphVisualState nameAfter = grid.DebugGetSortGlyphVisualState(theme, 0u, settledTick);
+    const GridSortGlyphVisualState pathAfter = grid.DebugGetSortGlyphVisualState(theme, 1u, settledTick);
+    Require(delegate.sortRequestedCount == 1u, "grid sort glyph click requests one delegated sort");
+    Require(delegate.lastSortSpec.columnIndex == 0u, "grid sort glyph click requests the clicked Name column");
+    Require(nameAfter.currentDirection == SortDirection::Ascending, "grid sort glyph moves to the clicked Name column");
+    Require(pathAfter.currentDirection == SortDirection::None, "grid sort glyph leaves the previous Path column after delegated sort");
+}
+
 void TestGridHeaderDragReorderRoundTripsThroughCapturedLayout()
 {
     using namespace RedSalamander::DxUi;
@@ -946,6 +992,31 @@ void TestGridRightClickInvokesContextMenuForHitRow()
     Require(delegate.contextMenuCount == 1u, "grid right-click invokes one context menu");
     Require(delegate.lastContextMenuRow == 1u, "grid right-click targets the hit row");
     RequirePointNear(delegate.lastContextMenuPoint, POINT{48, 74}, "grid right-click uses the hit point as its screen anchor");
+}
+
+void TestGridRightClickPreservesExtendedSelectionForSelectedHitRow()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    Grid grid;
+    grid.SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 160.0f));
+    grid.SetSelectionMode(GridSelectionMode::Extended);
+
+    MultiRowGridModel model(4u);
+    RecordingGridDelegate delegate;
+    grid.SetModel(&model);
+    grid.SetDelegate(&delegate);
+    grid.GetSelectionModel().SetSingle(model.GetStableRowId(0u));
+    grid.GetSelectionModel().Toggle(model.GetStableRowId(2u));
+
+    const D2D1_POINT_2F rowPoint = D2D1::Point2F(48.0f, 102.0f);
+    Require(grid.OnMouseDown(host, rowPoint, true, 0), "grid right-click on selected extended row is handled");
+    Require(delegate.contextMenuCount == 1u, "grid preserved-selection right-click invokes one context menu");
+    Require(delegate.lastContextMenuRow == 2u, "grid preserved-selection right-click targets the hit row");
+    Require(grid.GetSelectionModel().GetCount() == 2u, "grid right-click should preserve multi-selection on selected hit row");
+    Require(grid.GetSelectionModel().IsSelected(model.GetStableRowId(0u)), "grid right-click should keep the first selected row");
+    Require(grid.GetSelectionModel().IsSelected(model.GetStableRowId(2u)), "grid right-click should keep the hit selected row");
 }
 
 void TestGridSelectionChangeNotifiesDelegateOnUserSelection()
@@ -1084,6 +1155,62 @@ void TestGridCellLayoutMetricsReserveSpaceForIconAndBadge()
     Require(metrics.textRect.right <= metrics.badgeRect.left, "grid icon text stops before the badge rect");
 }
 
+void TestGridIconTextUsesIconFontForFluentGlyphs()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    Grid grid;
+    grid.SetBounds(D2D1::RectF(0.0f, 0.0f, 280.0f, 120.0f));
+
+    GridCellData cellData;
+    cellData.kind     = GridCellKind::IconText;
+    cellData.iconText = std::wstring(1u, static_cast<wchar_t>(0xE8A5));
+    cellData.text     = L"alpha.txt";
+    SingleCellGridModel model(cellData);
+    grid.SetModel(&model);
+
+    GridDebugCellVisualState state{};
+    Require(grid.DebugGetCellVisualState(host.GetTheme(), 0u, 0u, state), "grid fluent icon font test resolves cell visuals");
+    Require(state.hasIcon, "grid fluent icon font test reports icon text");
+    Require(state.iconUsesIconFont, "grid fluent private-use glyphs use the icon font instead of the body text font");
+
+    cellData.iconText = L"*";
+    SingleCellGridModel plainModel(cellData);
+    grid.SetModel(&plainModel);
+    Require(grid.DebugGetCellVisualState(host.GetTheme(), 0u, 0u, state), "grid plain icon font test resolves cell visuals");
+    Require(state.hasIcon, "grid plain icon font test reports icon text");
+    Require(! state.iconUsesIconFont, "grid non-Fluent icon text keeps the small text font");
+}
+
+void TestGridIconIndexReservesIconSpaceWithoutTextGlyph()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    Grid grid;
+    grid.SetBounds(D2D1::RectF(0.0f, 0.0f, 280.0f, 120.0f));
+
+    GridCellData cellData;
+    cellData.kind      = GridCellKind::IconText;
+    cellData.iconIndex = 42;
+    cellData.text      = L"alpha.txt";
+    SingleCellGridModel model(cellData);
+    grid.SetModel(&model);
+
+    const GridCellLayoutMetrics metrics = grid.GetCellLayoutMetrics(host, 0u, 0u);
+    Require(metrics.hasIcon, "grid icon-index layout reports icon presence without icon text");
+    RequireRectHasArea(metrics.iconRect, "grid icon-index layout reserves icon rect");
+
+    const GridVisibleWorkMetrics workMetrics = grid.GetVisibleWorkMetrics();
+    Require(workMetrics.visibleIconCellCount == 1u, "grid visible-work metrics count icon-index cells as icon work");
+
+    GridDebugCellVisualState state{};
+    Require(grid.DebugGetCellVisualState(host.GetTheme(), 0u, 0u, state), "grid icon-index visual test resolves cell visuals");
+    Require(state.hasIcon, "grid icon-index visual test reports icon presence");
+    Require(! state.iconUsesIconFont, "grid icon-index visual test does not require icon-font glyph fallback");
+}
+
 void TestGridCellLayoutMetricsCenterDedicatedColorSwatch()
 {
     using namespace RedSalamander::DxUi;
@@ -1207,7 +1334,7 @@ void TestGridIgnoresExplicitTooltipThatRepeatsCellText()
 
     GridCellData cellData;
     cellData.kind        = GridCellKind::Text;
-    cellData.text        = L"Alternate View\nToggle an alternate view mode.";
+    cellData.text        = L"Alternate View";
     cellData.tooltipText = cellData.text;
     SingleCellGridModel model(std::move(cellData));
     grid->SetModel(&model);
@@ -1273,6 +1400,151 @@ void TestGridExplicitTooltipOverridesLongTextFallback()
     Require(grid->OnMouseMove(host, hoverPoint, 0), "grid cell hover is handled for tooltip precedence");
     Require(host.HasTooltip(), "grid explicit tooltip is shown when long text fallback is also available");
     Require(host.GetTooltipText() == L"Conflict with Assign Shortcut.", "grid explicit tooltip overrides the long-text fallback tooltip");
+}
+
+void TestGridLongTextFallbackTooltipRequiresClippedText()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 120.0f));
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 640.0f, 120.0f));
+
+    GridCellData cellData;
+    cellData.kind = GridCellKind::Text;
+    cellData.text = L"This long result name is still fully visible when the column is wide enough.";
+    SingleCellGridModel model(std::move(cellData));
+    grid->SetModel(&model);
+
+    const std::array<GridColumnLayoutEntry, 1u> wideLayout{GridColumnLayoutEntry{.columnId = L"status", .displayIndex = 0u, .widthDip = 560.0f}};
+    grid->ApplyColumnLayout(wideLayout);
+    GridCellLayoutMetrics metrics = grid->GetCellLayoutMetrics(host, 0u, 0u);
+    D2D1_POINT_2F hoverPoint      = D2D1::Point2F((metrics.cellRect.left + metrics.cellRect.right) * 0.5f, (metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f);
+
+    Require(grid->OnMouseMove(host, hoverPoint, 0), "grid cell hover is handled for visible long text");
+    Require(! host.HasTooltip(), "grid does not show a long-text fallback tooltip when the cell text is fully visible");
+
+    host.ClearTooltip();
+    const std::array<GridColumnLayoutEntry, 1u> narrowLayout{GridColumnLayoutEntry{.columnId = L"status", .displayIndex = 0u, .widthDip = 96.0f}};
+    grid->ApplyColumnLayout(narrowLayout);
+    metrics    = grid->GetCellLayoutMetrics(host, 0u, 0u);
+    hoverPoint = D2D1::Point2F((metrics.cellRect.left + metrics.cellRect.right) * 0.5f, (metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f);
+
+    Require(grid->OnMouseMove(host, hoverPoint, 0), "grid cell hover is handled for clipped long text");
+    Require(host.HasTooltip(), "grid shows the long-text fallback tooltip when the visible text is clipped");
+}
+
+void TestGridRepeatedExplicitTooltipShowsWhenCellTextIsClipped()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 120.0f));
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 140.0f, 120.0f));
+
+    GridCellData cellData;
+    cellData.kind        = GridCellKind::Text;
+    cellData.text        = L"Clipped repeated tooltip text";
+    cellData.tooltipText = cellData.text;
+    SingleCellGridModel model(std::move(cellData));
+    grid->SetModel(&model);
+
+    const std::array<GridColumnLayoutEntry, 1u> narrowLayout{GridColumnLayoutEntry{.columnId = L"status", .displayIndex = 0u, .widthDip = 80.0f}};
+    grid->ApplyColumnLayout(narrowLayout);
+    const GridCellLayoutMetrics metrics = grid->GetCellLayoutMetrics(host, 0u, 0u);
+    const D2D1_POINT_2F hoverPoint =
+        D2D1::Point2F((metrics.cellRect.left + metrics.cellRect.right) * 0.5f, (metrics.cellRect.top + metrics.cellRect.bottom) * 0.5f);
+
+    Require(grid->OnMouseMove(host, hoverPoint, 0), "grid cell hover is handled for clipped repeated explicit tooltip");
+    Require(host.HasTooltip(), "grid shows a repeated explicit tooltip when the visible text is clipped");
+    Require(host.GetTooltipText() == L"Clipped repeated tooltip text", "grid uses the repeated explicit tooltip for clipped visible text");
+}
+
+void TestGridFolderViewVisualModeUsesFolderLikeRowHighlights()
+{
+    using namespace RedSalamander::DxUi;
+
+    class StyledGridModel final : public IDxGridModel
+    {
+    public:
+        [[nodiscard]] size_t GetRowCount() const noexcept override
+        {
+            return 1u;
+        }
+
+        [[nodiscard]] size_t GetColumnCount() const noexcept override
+        {
+            return 1u;
+        }
+
+        [[nodiscard]] GridColumnDesc GetColumn(size_t /*columnIndex*/) const override
+        {
+            return GridColumnDesc{.id = L"name", .title = L"Name", .widthDip = 180.0f};
+        }
+
+        void GetCellData(size_t /*rowIndex*/, size_t /*columnIndex*/, GridCellData& outCell) const override
+        {
+            outCell.kind = GridCellKind::Text;
+            outCell.text = L"alpha.txt";
+        }
+
+        [[nodiscard]] GridRowStyle GetRowStyle(size_t /*rowIndex*/) const override
+        {
+            GridRowStyle style{};
+            style.rainbowSeed             = L"alpha.txt";
+            style.folderViewRainbowHash32 = 123u;
+            return style;
+        }
+
+        [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+        {
+            return rowId == 0u ? std::optional<size_t>(0u) : std::nullopt;
+        }
+    };
+
+    ThemePalette theme = MakeDefaultThemePalette(true);
+    theme.rainbowMode  = true;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
+    StyledGridModel model;
+    grid->SetModel(&model);
+    grid->SetVisualMode(GridVisualMode::FolderView);
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 240.0f, 120.0f));
+    host.SetTheme(theme);
+    host.SetFocusControl(grid);
+
+    Require(grid->GetVisualMode() == GridVisualMode::FolderView, "grid records folder-view visual mode");
+    Require(grid->RequestSelectRow(0u, 0u), "grid folder-view visual mode test selects the row");
+
+    GridDebugRowVisualState selectedState{};
+    Require(grid->DebugGetRowVisualState(theme, 0u, selectedState), "grid exposes selected folder-view row visual state");
+    Require(selectedState.selected, "grid folder-view selected row reports selected state");
+    Require(selectedState.usesRainbow, "grid folder-view selected row uses the rainbow selection tint in rainbow mode");
+    Require(selectedState.fillArgb == PackColor(RainbowFolderViewSelectionTint(123u, theme.dark)),
+            "grid folder-view selected row uses the folder-view rainbow highlight formula when a stable hash is supplied");
+
+    Require(grid->RequestRemoveRowSelection(0u), "grid folder-view visual mode test clears selection");
+    GridDebugRowVisualState idleState{};
+    Require(grid->DebugGetRowVisualState(theme, 0u, idleState), "grid exposes idle folder-view row visual state");
+    Require(! idleState.selected, "grid folder-view idle row reports unselected state");
+    Require(! idleState.usesRainbow, "grid folder-view idle row does not tint every row in rainbow mode");
+    Require(idleState.fillArgb == 0u, "grid folder-view idle row paints no full-row background");
+
+    Require(grid->OnMouseMove(host, D2D1::Point2F(24.0f, 48.0f), 0u), "grid folder-view hover is handled");
+    GridDebugRowVisualState hoverState{};
+    Require(grid->DebugGetRowVisualState(theme, 0u, hoverState), "grid exposes hovered folder-view row visual state");
+    Require(! hoverState.usesRainbow, "grid folder-view hover uses the normal hover fill instead of rainbow row tint");
+    Require(hoverState.fillArgb == PackColor(theme.hoverFill), "grid folder-view hover uses the theme hover fill");
 }
 
 void TestGridEmptyModelDoesNotHitTestBodyRows()
@@ -1400,6 +1672,38 @@ void TestGridCompactDensityShrinksHeaderAndRowMetrics()
     Require(compact.rowHeightDip < standard.rowHeightDip, "compact grid density reduces the effective row height");
 }
 
+void TestGridEffectiveRowHeightBypassesDensityScaling()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root  = std::make_unique<Panel>();
+    auto* grid = root->AddChild<Grid>();
+    grid->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 160.0f));
+    grid->SetHeaderHeightDip(0.0f);
+    grid->SetRowHeightDip(46.0f);
+    grid->SetEffectiveRowHeightDip(24.0f);
+
+    MultiRowGridModel model(2u);
+    grid->SetModel(&model);
+
+    host.SetRoot(std::move(root));
+    static_cast<Panel*>(host.GetRoot())->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 160.0f));
+
+    ThemePalette compactTheme = MakeDefaultThemePalette(true);
+    compactTheme.density      = Density::Compact;
+    host.SetTheme(compactTheme);
+
+    GridCellLayoutMetrics row0 = grid->GetCellLayoutMetrics(host, 0u, 0u);
+    GridCellLayoutMetrics row1 = grid->GetCellLayoutMetrics(host, 1u, 0u);
+    RequireFloatNear(row1.cellRect.top - row0.cellRect.top, 24.0f, 0.5f, "effective row height is not compact-density scaled");
+
+    grid->SetRowHeightDip(46.0f);
+    row0 = grid->GetCellLayoutMetrics(host, 0u, 0u);
+    row1 = grid->GetCellLayoutMetrics(host, 1u, 0u);
+    Require(row1.cellRect.top - row0.cellRect.top < 46.0f, "SetRowHeightDip returns to density-scaled row metrics");
+}
+
 void TestGridRowMetricsClampToSegoeVariableBodyLineHeight()
 {
     using namespace RedSalamander::DxUi;
@@ -1460,15 +1764,19 @@ void RunGridTests()
     TestGridCopyUsesRestoredDisplayOrder();
     TestGridHeaderDragReordersColumnsWithoutTriggeringSort();
     TestGridHeaderClickStillRequestsSortWithoutReordering();
+    TestGridHeaderClickMovesSortGlyphToClickedColumn();
     TestGridHeaderDragReorderRoundTripsThroughCapturedLayout();
     TestGridHeaderDragReordersColumnToEarlierDisplaySlot();
     TestGridRightClickInvokesContextMenuForHitRow();
+    TestGridRightClickPreservesExtendedSelectionForSelectedHitRow();
     TestGridSelectionChangeNotifiesDelegateOnUserSelection();
     TestGridPointerSelectionSurvivesDelegateModelSwap();
     TestGridSelectionChangeReportsSenderGrid();
     TestGridSelectionChangeNotifiesDelegateOnDataChange();
     TestGridCellLayoutMetricsReserveSpaceForCheckboxAndBadge();
     TestGridCellLayoutMetricsReserveSpaceForIconAndBadge();
+    TestGridIconTextUsesIconFontForFluentGlyphs();
+    TestGridIconIndexReservesIconSpaceWithoutTextGlyph();
     TestGridCellLayoutMetricsCenterDedicatedColorSwatch();
     TestGridDoubleClickActivatesHitRow();
     TestDedicatedStateImageColumnCentersIconAndCollapsesText();
@@ -1476,10 +1784,14 @@ void RunGridTests()
     TestGridIgnoresExplicitTooltipThatRepeatsCellText();
     TestGridIgnoresExplicitTooltipThatRepeatsIconBadgeCellText();
     TestGridExplicitTooltipOverridesLongTextFallback();
+    TestGridLongTextFallbackTooltipRequiresClippedText();
+    TestGridRepeatedExplicitTooltipShowsWhenCellTextIsClipped();
+    TestGridFolderViewVisualModeUsesFolderLikeRowHighlights();
     TestGridEmptyModelDoesNotHitTestBodyRows();
     TestGridSetModelNullCancelsActiveColumnResize();
     TestGridHeaderResizeZoneRequestsHorizontalResizeCursor();
     TestGridHeaderBusyColumnAloneDoesNotAnimate();
     TestGridCompactDensityShrinksHeaderAndRowMetrics();
+    TestGridEffectiveRowHeightBypassesDensityScaling();
     TestGridRowMetricsClampToSegoeVariableBodyLineHeight();
 }

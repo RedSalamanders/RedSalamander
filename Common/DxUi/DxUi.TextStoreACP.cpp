@@ -77,10 +77,8 @@ struct AcpRange
 
 [[nodiscard]] RECT DipRectToScreenRect(WindowHost& host, const D2D1_RECT_F& rectDip) noexcept
 {
-    POINT topLeft{static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.left))),
-                  static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.top)))};
-    POINT bottomRight{static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.right))),
-                      static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.bottom)))};
+    POINT topLeft{static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.left))), static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.top)))};
+    POINT bottomRight{static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.right))), static_cast<LONG>(std::lround(host.DipsToPixels(rectDip.bottom)))};
     ClientToScreen(host.GetHwnd(), &topLeft);
     ClientToScreen(host.GetHwnd(), &bottomRight);
     return RECT{topLeft.x, topLeft.y, bottomRight.x, bottomRight.y};
@@ -103,8 +101,10 @@ struct AcpRange
     return rect;
 }
 
-[[nodiscard]] std::optional<D2D1_RECT_F> TryResolveMultilineTextStoreRangeRect(
-    const WindowHost& host, const Control& control, const AcpRange& range, const D2D1_RECT_F& bounds) noexcept
+[[nodiscard]] std::optional<D2D1_RECT_F> TryResolveMultilineTextStoreRangeRect(const WindowHost& host,
+                                                                               const Control& control,
+                                                                               const AcpRange& range,
+                                                                               const D2D1_RECT_F& bounds) noexcept
 {
     std::optional<D2D1_RECT_F> result;
     for (size_t index = range.start;; ++index)
@@ -232,7 +232,7 @@ public:
         }
 
         ITextStoreACPSink* rawSink = nullptr;
-        const HRESULT hr = punk->QueryInterface(__uuidof(ITextStoreACPSink), reinterpret_cast<void**>(&rawSink));
+        const HRESULT hr           = punk->QueryInterface(__uuidof(ITextStoreACPSink), reinterpret_cast<void**>(&rawSink));
         if (FAILED(hr))
         {
             return hr;
@@ -289,16 +289,16 @@ public:
         }
 
         NotifyExternalChangesIfNeeded();
-        _lockFlags = dwLockFlags;
+        _lockFlags                                   = dwLockFlags;
         wil::com_ptr_nothrow<ITextStoreACPSink> sink = _sink;
-        const bool isReadWriteLock = (dwLockFlags & TS_LF_READWRITE) == TS_LF_READWRITE;
-        bool editTransactionStarted = false;
+        const bool isReadWriteLock                   = (dwLockFlags & TS_LF_READWRITE) == TS_LF_READWRITE;
+        bool editTransactionStarted                  = false;
         if (sink && isReadWriteLock)
         {
             const HRESULT startHr = sink->OnStartEditTransaction();
             if (FAILED(startHr))
             {
-                _lockFlags = 0u;
+                _lockFlags  = 0u;
                 *phrSession = startHr;
                 return S_OK;
             }
@@ -334,11 +334,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE QueryInsert(LONG acpTestStart,
-                                          LONG acpTestEnd,
-                                          ULONG cch,
-                                          LONG* pacpResultStart,
-                                          LONG* pacpResultEnd) noexcept override
+    HRESULT STDMETHODCALLTYPE QueryInsert(LONG acpTestStart, LONG acpTestEnd, ULONG cch, LONG* pacpResultStart, LONG* pacpResultEnd) noexcept override
     {
         if (! pacpResultStart || ! pacpResultEnd)
         {
@@ -380,12 +376,12 @@ public:
             return TS_E_INVALIDPOS;
         }
 
-        const AcpRange range = GetSelectionRange(state);
-        pSelection[0].acpStart        = ToAcp(range.start);
-        pSelection[0].acpEnd          = ToAcp(range.end);
-        pSelection[0].style.ase       = TS_AE_END;
+        const AcpRange range             = GetSelectionRange(state);
+        pSelection[0].acpStart           = ToAcp(range.start);
+        pSelection[0].acpEnd             = ToAcp(range.end);
+        pSelection[0].style.ase          = TS_AE_END;
         pSelection[0].style.fInterimChar = FALSE;
-        *pcFetched                    = 1u;
+        *pcFetched                       = 1u;
         return S_OK;
     }
 
@@ -410,8 +406,8 @@ public:
             return TS_E_INVALIDPOS;
         }
 
-        const AcpRange range = ClampAcpRange(pSelection[0].acpStart, pSelection[0].acpEnd, state.text.size(), false);
-        state.caretIndex     = range.end;
+        const AcpRange range       = ClampAcpRange(pSelection[0].acpStart, pSelection[0].acpEnd, state.text.size(), false);
+        state.caretIndex           = range.end;
         state.selectionAnchorIndex = range.start == range.end ? std::nullopt : std::optional<size_t>(range.start);
         if (! ApplyState(state, false))
         {
@@ -461,20 +457,15 @@ public:
         *pcRunInfoRet = 0u;
         if (prgRunInfo && cRunInfoReq > 0u && copied > 0u)
         {
-            prgRunInfo[0].type  = TS_RT_PLAIN;
+            prgRunInfo[0].type   = TS_RT_PLAIN;
             prgRunInfo[0].uCount = static_cast<ULONG>(copied);
-            *pcRunInfoRet       = 1u;
+            *pcRunInfoRet        = 1u;
         }
         *pacpNext = ToAcp(range.start + copied);
         return copied == value.size() ? S_OK : S_FALSE;
     }
 
-    HRESULT STDMETHODCALLTYPE SetText(DWORD dwFlags,
-                                      LONG acpStart,
-                                      LONG acpEnd,
-                                      const WCHAR* pchText,
-                                      ULONG cch,
-                                      TS_TEXTCHANGE* pChange) noexcept override
+    HRESULT STDMETHODCALLTYPE SetText(DWORD dwFlags, LONG acpStart, LONG acpEnd, const WCHAR* pchText, ULONG cch, TS_TEXTCHANGE* pChange) noexcept override
     {
         if (! HasReadWriteLock())
         {
@@ -517,11 +508,8 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE InsertEmbedded(DWORD /*dwFlags*/,
-                                             LONG /*acpStart*/,
-                                             LONG /*acpEnd*/,
-                                             IDataObject* /*pDataObject*/,
-                                             TS_TEXTCHANGE* /*pChange*/) noexcept override
+    HRESULT STDMETHODCALLTYPE
+    InsertEmbedded(DWORD /*dwFlags*/, LONG /*acpStart*/, LONG /*acpEnd*/, IDataObject* /*pDataObject*/, TS_TEXTCHANGE* /*pChange*/) noexcept override
     {
         return E_NOTIMPL;
     }
@@ -704,15 +692,15 @@ public:
             return S_OK;
         }
 
-        const float heightDip    = (std::max)(1.0f, bounds.bottom - bounds.top);
-        const float layoutWidth  = (std::max)(1.0f, bounds.right - bounds.left);
+        const float heightDip                           = (std::max)(1.0f, bounds.bottom - bounds.top);
+        const float layoutWidth                         = (std::max)(1.0f, bounds.right - bounds.left);
         const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(_control->GetFlowDirection());
-        const float startOffset  = MeasureCaretOffsetDip(_host, state.text, FontRole::Body, range.start, heightDip, readingDirection, layoutWidth);
-        const float endOffset    = MeasureCaretOffsetDip(_host, state.text, FontRole::Body, range.end, heightDip, readingDirection, layoutWidth);
-        D2D1_RECT_F rectDip      = bounds;
-        rectDip.left             = std::clamp(bounds.left + (std::min)(startOffset, endOffset), bounds.left, bounds.right);
-        const float minRight     = (std::min)(rectDip.left + 1.0f, bounds.right);
-        rectDip.right            = std::clamp(bounds.left + (std::max)(startOffset, endOffset), minRight, bounds.right);
+        const float startOffset = MeasureCaretOffsetDip(_host, state.text, FontRole::Body, range.start, heightDip, readingDirection, layoutWidth);
+        const float endOffset   = MeasureCaretOffsetDip(_host, state.text, FontRole::Body, range.end, heightDip, readingDirection, layoutWidth);
+        D2D1_RECT_F rectDip     = bounds;
+        rectDip.left            = std::clamp(bounds.left + (std::min)(startOffset, endOffset), bounds.left, bounds.right);
+        const float minRight    = (std::min)(rectDip.left + 1.0f, bounds.right);
+        rectDip.right           = std::clamp(bounds.left + (std::max)(startOffset, endOffset), minRight, bounds.right);
 
         *prc       = DipRectToScreenRect(*_host, rectDip);
         *pfClipped = FALSE;
@@ -740,8 +728,7 @@ public:
             *prc = RECT{};
             return TS_E_NOLAYOUT;
         }
-        POINT topLeft{static_cast<LONG>(std::lround(_host->DipsToPixels(bounds.left))),
-                      static_cast<LONG>(std::lround(_host->DipsToPixels(bounds.top)))};
+        POINT topLeft{static_cast<LONG>(std::lround(_host->DipsToPixels(bounds.left))), static_cast<LONG>(std::lround(_host->DipsToPixels(bounds.top)))};
         POINT bottomRight{static_cast<LONG>(std::lround(_host->DipsToPixels(bounds.right))),
                           static_cast<LONG>(std::lround(_host->DipsToPixels(bounds.bottom)))};
         ClientToScreen(_host->GetHwnd(), &topLeft);
@@ -765,12 +752,8 @@ public:
         return *phwnd ? S_OK : TS_E_INVALIDPOS;
     }
 
-    HRESULT STDMETHODCALLTYPE InsertTextAtSelection(DWORD dwFlags,
-                                                    const WCHAR* pchText,
-                                                    ULONG cch,
-                                                    LONG* pacpStart,
-                                                    LONG* pacpEnd,
-                                                    TS_TEXTCHANGE* pChange) noexcept override
+    HRESULT STDMETHODCALLTYPE
+    InsertTextAtSelection(DWORD dwFlags, const WCHAR* pchText, ULONG cch, LONG* pacpStart, LONG* pacpEnd, TS_TEXTCHANGE* pChange) noexcept override
     {
         if (! HasReadWriteLock())
         {
@@ -804,11 +787,8 @@ public:
         return ReplaceTextRange(dwFlags, ToAcp(range.start), ToAcp(range.end), pchText, cch, pChange);
     }
 
-    HRESULT STDMETHODCALLTYPE InsertEmbeddedAtSelection(DWORD /*dwFlags*/,
-                                                        IDataObject* /*pDataObject*/,
-                                                        LONG* pacpStart,
-                                                        LONG* pacpEnd,
-                                                        TS_TEXTCHANGE* /*pChange*/) noexcept override
+    HRESULT STDMETHODCALLTYPE
+    InsertEmbeddedAtSelection(DWORD /*dwFlags*/, IDataObject* /*pDataObject*/, LONG* pacpStart, LONG* pacpEnd, TS_TEXTCHANGE* /*pChange*/) noexcept override
     {
         if (! pacpStart || ! pacpEnd)
         {
@@ -853,9 +833,9 @@ private:
 
         if (const auto* textField = dynamic_cast<const TextField*>(_control))
         {
-            outState.text      = textField->GetText();
-            outState.readOnly  = textField->IsReadOnly();
-            outState.masked    = textField->IsMasked();
+            outState.text       = textField->GetText();
+            outState.readOnly   = textField->IsReadOnly();
+            outState.masked     = textField->IsMasked();
             outState.caretIndex = outState.text.size();
             if (const std::optional<std::pair<size_t, size_t>> selection = textField->GetSelectionRange())
             {
@@ -1019,8 +999,8 @@ private:
         const bool textChanged      = currentState.text != _observedState.text;
         const bool selectionChanged = ! IsSameSelection(currentState, _observedState);
         const bool layoutChanged    = textChanged || selectionChanged || currentState.firstVisibleLine != _observedState.firstVisibleLine ||
-                                   currentState.masked != _observedState.masked || currentState.multiline != _observedState.multiline ||
-                                   ! IsSameRect(currentViewport, _observedViewport);
+                                      currentState.masked != _observedState.masked || currentState.multiline != _observedState.multiline ||
+                                      ! IsSameRect(currentViewport, _observedViewport);
 
         const TS_TEXTCHANGE textChange{0, ToAcp(_observedState.text.size()), ToAcp(currentState.text.size())};
 
@@ -1079,10 +1059,10 @@ private:
     }
 
     std::atomic<ULONG> _referenceCount{1u};
-    WindowHost* _host   = nullptr;
-    Control* _control   = nullptr;
-    DWORD _lockFlags    = 0u;
-    DWORD _sinkMask     = 0u;
+    WindowHost* _host = nullptr;
+    Control* _control = nullptr;
+    DWORD _lockFlags  = 0u;
+    DWORD _sinkMask   = 0u;
     wil::com_ptr_nothrow<ITextStoreACPSink> _sink;
     TextInputState _observedState;
     D2D1_RECT_F _observedViewport = D2D1::RectF();

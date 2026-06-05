@@ -510,9 +510,7 @@ template <typename... Args> std::wstring FormatLoadedStringResource(_In_ UINT uI
             detail.push_back(byte < 0x80u ? static_cast<wchar_t>(byte) : L'?');
         }
 
-        Debug::Error(L"FormatLoadedStringResource: invalid format string for IDS={} ({}); using fallback text.",
-                     static_cast<unsigned int>(uID),
-                     detail);
+        Debug::Error(L"FormatLoadedStringResource: invalid format string for IDS={} ({}); using fallback text.", static_cast<unsigned int>(uID), detail);
         return std::wstring(fmt);
     }
 }

@@ -796,7 +796,9 @@ void CheckDxComboHostClickActivation(HWND viewerWindow, int comboControlId, std:
 void CheckDxComboHostCompactChrome(HWND viewerWindow, int comboControlId, std::wstring_view viewerName, bool& success) noexcept
 {
     const HWND comboHost = GetDlgItem(viewerWindow, comboControlId);
-    Check(comboHost != nullptr && IsWindowVisible(comboHost) != FALSE, std::format(L"{} exposes a visible combo host for compact chrome validation", viewerName), success);
+    Check(comboHost != nullptr && IsWindowVisible(comboHost) != FALSE,
+          std::format(L"{} exposes a visible combo host for compact chrome validation", viewerName),
+          success);
     if (! comboHost || IsWindowVisible(comboHost) == FALSE)
     {
         return;
@@ -1011,11 +1013,11 @@ void CheckImageRawComboHostIsInsetInsideHeader(HWND viewerWindow, bool& success)
         return;
     }
 
-    const RECT comboRect = GetChildRectInParent(viewerWindow, comboHost);
-    const RECT menuRect  = GetChildRectInParent(viewerWindow, menuHost);
-    const UINT dpi       = GetDpiForWindow(viewerWindow);
-    const int minInset   = (std::max)(1, MulDiv(1, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
-    const int maxInset   = (std::max)(1, MulDiv(4, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
+    const RECT comboRect  = GetChildRectInParent(viewerWindow, comboHost);
+    const RECT menuRect   = GetChildRectInParent(viewerWindow, menuHost);
+    const UINT dpi        = GetDpiForWindow(viewerWindow);
+    const int minInset    = (std::max)(1, MulDiv(1, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
+    const int maxInset    = (std::max)(1, MulDiv(4, static_cast<int>(dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI));
     const int actualInset = comboRect.top - menuRect.bottom;
     Check(actualInset >= minInset && actualInset <= maxInset,
           std::format(L"ViewerImgRaw combo host is tightly inset within the header background (top={}, menuBottom={}, inset={}, max={})",
@@ -4019,15 +4021,13 @@ private:
         return false;
     }
 
-    const char* schema = nullptr;
+    const char* schema     = nullptr;
     const HRESULT schemaHr = informations->GetConfigurationSchema(&schema);
     Check(SUCCEEDED(schemaHr) && schema != nullptr, L"ViewerVLC configuration schema is available", success);
     if (SUCCEEDED(schemaHr) && schema)
     {
         const std::string_view schemaText(schema);
-        Check(schemaText.find("\"lastVolumePercent\"") != std::string_view::npos,
-              L"ViewerVLC schema exposes last volume persistence",
-              success);
+        Check(schemaText.find("\"lastVolumePercent\"") != std::string_view::npos, L"ViewerVLC schema exposes last volume persistence", success);
         Check(schemaText.find("\"muted\"") != std::string_view::npos, L"ViewerVLC schema exposes mute persistence", success);
     }
 
@@ -4036,17 +4036,13 @@ private:
     Check(SUCCEEDED(setHr), L"ViewerVLC accepts persisted volume and mute configuration", success);
 
     const char* savedJson = nullptr;
-    const HRESULT getHr = informations->GetConfiguration(&savedJson);
+    const HRESULT getHr   = informations->GetConfiguration(&savedJson);
     Check(SUCCEEDED(getHr) && savedJson != nullptr, L"ViewerVLC returns normalized persisted configuration", success);
     if (SUCCEEDED(getHr) && savedJson)
     {
         const std::string_view savedText(savedJson);
-        Check(savedText.find("\"lastVolumePercent\":37") != std::string_view::npos,
-              L"ViewerVLC keeps the last volume in its persisted configuration",
-              success);
-        Check(savedText.find("\"muted\":true") != std::string_view::npos,
-              L"ViewerVLC keeps mute state in its persisted configuration",
-              success);
+        Check(savedText.find("\"lastVolumePercent\":37") != std::string_view::npos, L"ViewerVLC keeps the last volume in its persisted configuration", success);
+        Check(savedText.find("\"muted\":true") != std::string_view::npos, L"ViewerVLC keeps mute state in its persisted configuration", success);
     }
 
     BOOL somethingToSave = FALSE;
@@ -4129,7 +4125,7 @@ private:
     }
 
     const ViewerTheme rainbowTheme = MakeViewerTextTestTheme(false, true);
-    const HRESULT themeHr = viewer->SetTheme(&rainbowTheme);
+    const HRESULT themeHr          = viewer->SetTheme(&rainbowTheme);
     Check(SUCCEEDED(themeHr), L"ViewerVLC accepts a rainbow viewer theme for loading-overlay validation", success);
 
     const std::vector<HWND> existingWindows = CollectVisibleWindowsByClass(kViewerVLCWindowClassName);
@@ -4179,9 +4175,7 @@ private:
     Check(snapshot.hasVolumeSlider, L"ViewerVLC HUD exposes a horizontal volume slider", success);
     Check(snapshot.snapshotWidth > 0 && snapshot.snapshotHeight > 0, L"ViewerVLC snapshot uses the visible video surface size", success);
 
-    Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugForceLoadingVisible, 0, 0) != FALSE,
-          L"ViewerVLC debug can force delayed loading overlay",
-          success);
+    Check(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugForceLoadingVisible, 0, 0) != FALSE, L"ViewerVLC debug can force delayed loading overlay", success);
     snapshot = {};
     static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerVlcDebugGetSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)));
     Check(snapshot.loadingActive && snapshot.loadingVisible, L"ViewerVLC shows a loading overlay once VLC init exceeds the delay", success);
@@ -4250,8 +4244,7 @@ void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept
     const std::vector<HWND> existingTooltipWindows = CollectWindowsByClass(kNativeTooltipWindowClassName, false);
 
     WndMsg::ViewerSpaceTooltipDebugSnapshot before{};
-    const LRESULT beforeResult =
-        SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&before));
+    const LRESULT beforeResult = SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&before));
     Check(beforeResult != FALSE, L"ViewerSpace answers the tooltip-overlay debug contract", success);
     if (beforeResult == FALSE)
     {
@@ -4272,13 +4265,11 @@ void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept
     WndMsg::ViewerSpaceTooltipDebugSnapshot after{};
     const bool painted = PumpUntil(
         [&]() noexcept
-        {
-            static_cast<void>(UpdateWindow(viewerWindow));
-            const LRESULT queryResult =
-                SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&after));
-            return queryResult != FALSE && after.tooltipNodeId != 0u && after.tooltipTextLength > 0u &&
-                   after.tooltipPaintCount > before.tooltipPaintCount;
-        },
+    {
+        static_cast<void>(UpdateWindow(viewerWindow));
+        const LRESULT queryResult = SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&after));
+        return queryResult != FALSE && after.tooltipNodeId != 0u && after.tooltipTextLength > 0u && after.tooltipPaintCount > before.tooltipPaintCount;
+    },
         5000ms);
     Check(painted, L"ViewerSpace Direct2D tooltip overlay paints after it is shown", success);
     if (painted)
@@ -4288,12 +4279,11 @@ void CheckViewerSpaceTooltipOverlay(HWND viewerWindow, bool& success) noexcept
     }
 
     const std::vector<HWND> currentTooltipWindows = CollectWindowsByClass(kNativeTooltipWindowClassName, false);
-    const auto isExisting = [&](HWND hwnd) noexcept {
-        return std::find(existingTooltipWindows.begin(), existingTooltipWindows.end(), hwnd) != existingTooltipWindows.end();
-    };
-    const bool createdNativeTooltip =
-        std::find_if(currentTooltipWindows.begin(), currentTooltipWindows.end(), [&](HWND hwnd) noexcept { return ! isExisting(hwnd); }) !=
-        currentTooltipWindows.end();
+    const auto isExisting                         = [&](HWND hwnd) noexcept
+    { return std::find(existingTooltipWindows.begin(), existingTooltipWindows.end(), hwnd) != existingTooltipWindows.end(); };
+    const bool createdNativeTooltip = std::find_if(currentTooltipWindows.begin(), currentTooltipWindows.end(), [&](HWND hwnd) noexcept {
+        return ! isExisting(hwnd);
+    }) != currentTooltipWindows.end();
     Check(! createdNativeTooltip, L"ViewerSpace tooltip overlay does not create a native tooltip window", success);
 }
 
@@ -4588,7 +4578,8 @@ constexpr std::wstring_view kViewerTextGotoPromptInternalTestName = L"__Internal
         success = RunFilteredSelfExecutable(L"TestViewerWebUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
         success = RunFilteredSelfExecutable(L"TestViewerImgRawUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
         success = RunFilteredSelfExecutable(L"TestViewerTextUsesDxUiComboHostWithoutVisibleLegacyCombo", kViewerHarnessDefaultTimeout, success) && success;
-        success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout, success) && success;
+        success = RunFilteredSelfExecutable(L"TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses", kViewerHarnessDefaultTimeout, success) &&
+                  success;
         success = RunFilteredSelfExecutable(L"TestViewerVlcWindowTabTransfersFocusToHudAndClosesCleanly", kViewerHarnessDefaultTimeout, success) && success;
         success = RunFilteredSelfExecutable(L"TestViewerVlcConfigurationPersistsLastVolumeAndMute", kViewerHarnessDefaultTimeout, success) && success;
 #ifdef _DEBUG

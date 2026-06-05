@@ -12,8 +12,8 @@ namespace FolderViewColumnLayout
 {
 struct ItemTextMetrics
 {
-    float labelWidthDip   = 0.0f;
-    float detailsWidthDip = 0.0f;
+    float labelWidthDip    = 0.0f;
+    float detailsWidthDip  = 0.0f;
     float metadataWidthDip = 0.0f;
 };
 
@@ -59,9 +59,7 @@ struct Result
     return (std::clamp)(offsetDip, 0.0f, (std::max)(0.0f, maxHorizontalOffsetDip));
 }
 
-[[nodiscard]] inline float ResolveNextScrollStop(float currentOffsetDip,
-                                                 float maxHorizontalOffsetDip,
-                                                 std::span<const Column> columns) noexcept
+[[nodiscard]] inline float ResolveNextScrollStop(float currentOffsetDip, float maxHorizontalOffsetDip, std::span<const Column> columns) noexcept
 {
     const float maxOffset = (std::max)(0.0f, maxHorizontalOffsetDip);
     if (maxOffset <= 0.0f)
@@ -69,7 +67,7 @@ struct Result
         return 0.0f;
     }
 
-    const float current = ClampScrollOffset(currentOffsetDip, maxOffset);
+    const float current               = ClampScrollOffset(currentOffsetDip, maxOffset);
     constexpr float kStopToleranceDip = 0.5f;
     for (size_t columnIndex = 1u; columnIndex < columns.size(); ++columnIndex)
     {
@@ -83,9 +81,7 @@ struct Result
     return maxOffset;
 }
 
-[[nodiscard]] inline float ResolvePreviousScrollStop(float currentOffsetDip,
-                                                     float maxHorizontalOffsetDip,
-                                                     std::span<const Column> columns) noexcept
+[[nodiscard]] inline float ResolvePreviousScrollStop(float currentOffsetDip, float maxHorizontalOffsetDip, std::span<const Column> columns) noexcept
 {
     const float maxOffset = (std::max)(0.0f, maxHorizontalOffsetDip);
     if (maxOffset <= 0.0f)
@@ -93,9 +89,9 @@ struct Result
         return 0.0f;
     }
 
-    const float current = ClampScrollOffset(currentOffsetDip, maxOffset);
+    const float current               = ClampScrollOffset(currentOffsetDip, maxOffset);
     constexpr float kStopToleranceDip = 0.5f;
-    float previous = 0.0f;
+    float previous                    = 0.0f;
     for (size_t columnIndex = 1u; columnIndex < columns.size(); ++columnIndex)
     {
         const float stop = ClampScrollOffset(columns[columnIndex].leftDip, maxOffset);
@@ -109,9 +105,7 @@ struct Result
     return previous;
 }
 
-[[nodiscard]] inline float ResolveNearestScrollStop(float targetOffsetDip,
-                                                    float maxHorizontalOffsetDip,
-                                                    std::span<const Column> columns) noexcept
+[[nodiscard]] inline float ResolveNearestScrollStop(float targetOffsetDip, float maxHorizontalOffsetDip, std::span<const Column> columns) noexcept
 {
     const float maxOffset = (std::max)(0.0f, maxHorizontalOffsetDip);
     if (maxOffset <= 0.0f)
@@ -183,8 +177,7 @@ struct Result
         rowStride > 0.0f ? (std::max)(1, static_cast<int>(std::floor(((std::max)(0.0f, input.clientHeightDip) + safeRowSpacing) / rowStride))) : 1;
     result.rowsPerColumn = (std::max)(1, maxRowsPerColumn);
 
-    const float minColumnWidth =
-        (std::max)(0.0f, input.iconSizeDip) + (std::max)(0.0f, input.iconTextGapDip) + (std::max)(0.0f, input.horizontalPaddingDip);
+    const float minColumnWidth  = (std::max)(0.0f, input.iconSizeDip) + (std::max)(0.0f, input.iconTextGapDip) + (std::max)(0.0f, input.horizontalPaddingDip);
     const float maxAllowedWidth = input.clientWidthDip > 0.0f ? input.clientWidthDip : (std::numeric_limits<float>::max)();
     const float columnSpacing   = (std::max)(0.0f, input.columnSpacingDip);
 
@@ -220,4 +213,4 @@ struct Result
 
     return result;
 }
-}
+} // namespace FolderViewColumnLayout

@@ -18,6 +18,7 @@ void TestDxUiTypographyMapsFontRolesToSegoeUiVariableFamilies()
 
     const TypographySpec bodySpec       = GetDxUiTypographySpec(FontRole::Body);
     const TypographySpec bodyStrongSpec = GetDxUiTypographySpec(FontRole::BodyStrong);
+    const TypographySpec listItemSpec   = GetDxUiTypographySpec(FontRole::ListItem);
     const TypographySpec smallSpec      = GetDxUiTypographySpec(FontRole::Small);
     const TypographySpec headerSpec     = GetDxUiTypographySpec(FontRole::Header);
     const TypographySpec titleLargeSpec = GetDxUiTypographySpec(FontRole::TitleLarge);
@@ -27,6 +28,8 @@ void TestDxUiTypographyMapsFontRolesToSegoeUiVariableFamilies()
 
     Require(bodySpec.familyName == kSegoeUiVariableTextFamily, "body role uses Segoe UI Variable Text");
     Require(bodyStrongSpec.familyName == kSegoeUiVariableTextFamily, "body-strong role uses Segoe UI Variable Text");
+    Require(listItemSpec.familyName == kSegoeUiVariableSmallFamily && listItemSpec.sizeDip == 12.0f,
+            "list-item role uses 12 DIP Segoe UI Variable Small");
     Require(smallSpec.familyName == kSegoeUiVariableSmallFamily, "small role uses Segoe UI Variable Small");
     Require(headerSpec.familyName == kSegoeUiVariableSmallFamily, "header role uses Segoe UI Variable Small");
     Require(titleLargeSpec.familyName == kSegoeUiVariableDisplayFamily, "title-large role uses Segoe UI Variable Display");
@@ -379,7 +382,10 @@ class DetachOrderProbeControl final : public RedSalamander::DxUi::Control
 {
 public:
     DetachOrderProbeControl(DWORD ownerThreadId, uint32_t expectedAttachmentCount, bool& destroyed, bool& sawAttachmentAlive) noexcept
-        : _ownerThreadId(ownerThreadId), _expectedAttachmentCount(expectedAttachmentCount), _destroyed(destroyed), _sawAttachmentAlive(sawAttachmentAlive)
+        : _ownerThreadId(ownerThreadId),
+          _expectedAttachmentCount(expectedAttachmentCount),
+          _destroyed(destroyed),
+          _sawAttachmentAlive(sawAttachmentAlive)
     {
     }
     DetachOrderProbeControl(const DetachOrderProbeControl&)            = delete;
@@ -486,8 +492,7 @@ void TestWindowHostDetachKeepsSharedGraphicsAttachmentUntilControlTreeDestroyed(
     const uint32_t attachedOwnerAttachmentCount = baselineOwnerAttachmentCount + 1u;
     bool probeDestroyed                         = false;
     bool probeSawAttachmentAlive                = false;
-    window.Host().SetRoot(std::make_unique<DetachOrderProbeControl>(
-        ownerThreadId, attachedOwnerAttachmentCount, probeDestroyed, probeSawAttachmentAlive));
+    window.Host().SetRoot(std::make_unique<DetachOrderProbeControl>(ownerThreadId, attachedOwnerAttachmentCount, probeDestroyed, probeSawAttachmentAlive));
 
     Require(DebugGetAttachedWindowHostCount() == (baselineAttachedHostCount + 1u), "attached host registers before detach-order validation");
     Require(DebugGetSharedWindowHostAttachmentCountForThread(ownerThreadId) == attachedOwnerAttachmentCount,
@@ -510,8 +515,8 @@ void TestWindowHostEmitsFrameStageMetricsForCaptureRender()
     Require(! perfJsonl.Path().empty(), "window host stage metric test has a perf JSONL sink");
 
     AttachedHostWindow window;
-    auto root    = std::make_unique<Panel>();
-    auto* label  = root->AddChild<Label>(L"Frame telemetry");
+    auto root   = std::make_unique<Panel>();
+    auto* label = root->AddChild<Label>(L"Frame telemetry");
     label->SetBounds(D2D1::RectF(8.0f, 8.0f, 160.0f, 32.0f));
     window.Host().SetRoot(std::move(root));
     window.Host().Invalidate();
@@ -523,7 +528,7 @@ void TestWindowHostEmitsFrameStageMetricsForCaptureRender()
     Require(window.Host().DebugCaptureBitmap(capture), "frame-stage metric direct debug capture render succeeds");
     Require(capture.widthPx > 0u && capture.heightPx > 0u && ! capture.bgraPixels.empty(), "frame-stage metric capture has pixels");
 
-    const std::string appendedMetrics = ReadWindowHostPerfJsonlFromOffset(perfJsonl.Path(), metricOffset);
+    const std::string appendedMetrics                          = ReadWindowHostPerfJsonlFromOffset(perfJsonl.Path(), metricOffset);
     constexpr std::array<std::string_view, 6> kExpectedMetrics = {{
         "\"metric\":\"dxui.frame.total_us\"",
         "\"metric\":\"dxui.frame.update_us\"",
@@ -566,8 +571,8 @@ void TestWindowHostBlocksLayoutMutationDuringRender()
     Require(! perfJsonl.Path().empty(), "window host render-mutation test has a perf JSONL sink");
 
     AttachedHostWindow window;
-    auto root      = std::make_unique<Panel>();
-    auto* mutating = root->AddChild<RenderLayoutMutationProbeControl>();
+    auto root                       = std::make_unique<Panel>();
+    auto* mutating                  = root->AddChild<RenderLayoutMutationProbeControl>();
     const D2D1_RECT_F initialBounds = D2D1::RectF(8.0f, 8.0f, 96.0f, 40.0f);
     mutating->SetBounds(initialBounds);
     window.Host().SetRoot(std::move(root));
@@ -636,6 +641,164 @@ void TestWindowHostMouseMoveUpdatesHoverTarget()
     Require(handled, "second hover move handled");
     Require(firstState.hoverLeaveCount == 1u, "first control receives hover leave when hover target changes");
     Require(secondState.hoverEnterCount == 1u, "second control receives hover enter when hover target changes");
+}
+
+[[nodiscard]] HWND CreateForeignPopupForWindowHostMouseLeaveTest(POINT screenPoint)
+{
+    static constexpr PCWSTR kClassName = L"RedSalamander.DxUiTests.ForeignPopup";
+    static const ATOM atom = []() noexcept
+    {
+        WNDCLASSW windowClass{};
+        windowClass.lpfnWndProc   = DefWindowProcW;
+        windowClass.hInstance     = GetModuleHandleW(nullptr);
+        windowClass.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+        windowClass.lpszClassName = kClassName;
+        return RegisterClassW(&windowClass);
+    }();
+    Require(atom != 0, "window host mouse-leave foreign popup class registers");
+
+    return CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST,
+                           kClassName,
+                           L"DxUiTestsForeignPopup",
+                           WS_POPUP | WS_VISIBLE,
+                           screenPoint.x - 8,
+                           screenPoint.y - 8,
+                           48,
+                           48,
+                           nullptr,
+                           nullptr,
+                           GetModuleHandleW(nullptr),
+                           nullptr);
+}
+
+[[nodiscard]] bool WindowHostTestPointHitsWindowOrDescendant(HWND hwnd, POINT screenPoint) noexcept
+{
+    const HWND hitWindow = WindowFromPoint(screenPoint);
+    return hitWindow == hwnd || IsChild(hwnd, hitWindow) != FALSE || GetAncestor(hitWindow, GA_ROOT) == hwnd;
+}
+
+[[nodiscard]] POINT PositionWindowHostForLiveCursorHitTest(
+    AttachedHostWindow& window, LONG widthPx, LONG heightPx, POINT clientPoint, const char* context)
+{
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    Require(GetMonitorInfoW(MonitorFromWindow(window.Hwnd(), MONITOR_DEFAULTTOPRIMARY), &monitorInfo) != FALSE, context);
+    const RECT work = monitorInfo.rcWork;
+
+    const LONG rightX  = (work.right - work.left > widthPx + 32) ? work.right - widthPx - 16 : work.left;
+    const LONG bottomY = (work.bottom - work.top > heightPx + 32) ? work.bottom - heightPx - 16 : work.top;
+    const LONG centerX = work.left + ((work.right - work.left) - widthPx) / 2;
+    const LONG centerY = work.top + ((work.bottom - work.top) - heightPx) / 2;
+
+    const std::array<POINT, 5> candidates{
+        POINT{work.left + 16, work.top + 16},
+        POINT{rightX, work.top + 16},
+        POINT{work.left + 16, bottomY},
+        POINT{rightX, bottomY},
+        POINT{centerX, centerY},
+    };
+
+    for (const POINT& candidate : candidates)
+    {
+        SetWindowPos(window.Hwnd(), HWND_TOPMOST, candidate.x, candidate.y, widthPx, heightPx, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        UpdateWindow(window.Hwnd());
+
+        POINT screenPoint = clientPoint;
+        if (ClientToScreen(window.Hwnd(), &screenPoint) == FALSE || SetCursorPos(screenPoint.x, screenPoint.y) == FALSE)
+        {
+            continue;
+        }
+
+        SetWindowPos(window.Hwnd(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+        UpdateWindow(window.Hwnd());
+        if (WindowHostTestPointHitsWindowOrDescendant(window.Hwnd(), screenPoint))
+        {
+            return screenPoint;
+        }
+    }
+
+    Require(false, context);
+    return POINT{};
+}
+
+void TestWindowHostMouseLeaveOverForeignPopupClearsHover()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    SetWindowPos(window.Hwnd(), nullptr, 180, 180, 320, 220, SWP_NOZORDER);
+    ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
+
+    auto root = std::make_unique<Panel>();
+    TrackingControlState controlState;
+    auto* control = root->AddChild<TrackingControl>(controlState);
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 220.0f));
+    control->SetBounds(D2D1::RectF(0.0f, 0.0f, 160.0f, 80.0f));
+    window.Host().SetRoot(std::move(root));
+    window.PumpMessages();
+
+    constexpr LONG kHoverX = 32;
+    constexpr LONG kHoverY = 32;
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(kHoverX, kHoverY)));
+    Require(controlState.hoverEnterCount == 1u, "window host mouse-leave popup test starts with a hovered control");
+
+    POINT popupPoint{kHoverX, kHoverY};
+    Require(ClientToScreen(window.Hwnd(), &popupPoint) != FALSE, "window host mouse-leave popup point converts to screen coordinates");
+    wil::unique_hwnd popup(CreateForeignPopupForWindowHostMouseLeaveTest(popupPoint));
+    Require(popup != nullptr, "window host mouse-leave popup creates a foreign popup over the host");
+    SetWindowPos(popup.get(), HWND_TOPMOST, popupPoint.x - 8, popupPoint.y - 8, 48, 48, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    UpdateWindow(popup.get());
+    Require(WindowFromPoint(popupPoint) == popup.get(), "window host mouse-leave popup is the window under the cursor point");
+    Require(SetCursorPos(popupPoint.x, popupPoint.y) != FALSE, "window host mouse-leave popup positions the live cursor over the popup");
+
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_MOUSELEAVE, 0, 0));
+
+    Require(controlState.hoverLeaveCount == 1u, "window host mouse leave over a foreign popup clears owner hover instead of rearming tracking");
+}
+
+void TestWindowHostMouseLeaveWithForeignCaptureClearsHover()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    auto root = std::make_unique<Panel>();
+    TrackingControlState controlState;
+    auto* control = root->AddChild<TrackingControl>(controlState);
+    root->SetBounds(D2D1::RectF(0.0f, 0.0f, 320.0f, 220.0f));
+    control->SetBounds(D2D1::RectF(0.0f, 0.0f, 160.0f, 80.0f));
+    window.Host().SetRoot(std::move(root));
+    window.PumpMessages();
+
+    constexpr LONG kHoverX = 32;
+    constexpr LONG kHoverY = 32;
+    const POINT cursorPoint =
+        PositionWindowHostForLiveCursorHitTest(window, 320, 220, POINT{kHoverX, kHoverY}, "window host foreign-capture cursor can hit owner");
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(kHoverX, kHoverY)));
+    Require(controlState.hoverEnterCount == 1u, "window host foreign-capture test starts with a hovered control");
+
+    Require(WindowHostTestPointHitsWindowOrDescendant(window.Hwnd(), cursorPoint), "window host foreign-capture test cursor remains over the owner");
+
+    POINT popupPoint{260, 170};
+    Require(ClientToScreen(window.Hwnd(), &popupPoint) != FALSE, "window host foreign-capture popup point converts to screen coordinates");
+    wil::unique_hwnd popup(CreateForeignPopupForWindowHostMouseLeaveTest(popupPoint));
+    Require(popup != nullptr, "window host foreign-capture test creates a foreign popup");
+    SetWindowPos(popup.get(), HWND_TOPMOST, popupPoint.x - 8, popupPoint.y - 8, 48, 48, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    UpdateWindow(popup.get());
+    Require(WindowHostTestPointHitsWindowOrDescendant(window.Hwnd(), cursorPoint), "window host foreign-capture popup does not cover the owner cursor point");
+
+    SetCapture(popup.get());
+    const auto releaseCapture = wil::scope_exit([&]() noexcept
+    {
+        if (GetCapture() == popup.get())
+        {
+            ReleaseCapture();
+        }
+    });
+    Require(GetCapture() == popup.get(), "window host foreign-capture test gives capture to a non-owner hwnd");
+
+    static_cast<void>(SendMessageW(window.Hwnd(), WM_MOUSELEAVE, 0, 0));
+
+    Require(controlState.hoverLeaveCount == 1u, "window host mouse leave with foreign capture clears owner hover instead of rearming tracking");
 }
 
 void TestWindowHostTabTraversal()
@@ -2356,6 +2519,8 @@ void RunWindowHostTests()
     runTest("TestWindowHostBlocksLayoutMutationDuringRender", TestWindowHostBlocksLayoutMutationDuringRender);
     runTest("TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads", TestPostMessagePayloadTeardownDrainDeletesUndeliveredPayloads);
     runTest("TestWindowHostMouseMoveUpdatesHoverTarget", TestWindowHostMouseMoveUpdatesHoverTarget);
+    runTest("TestWindowHostMouseLeaveOverForeignPopupClearsHover", TestWindowHostMouseLeaveOverForeignPopupClearsHover);
+    runTest("TestWindowHostMouseLeaveWithForeignCaptureClearsHover", TestWindowHostMouseLeaveWithForeignCaptureClearsHover);
     runTest("TestWindowHostTabTraversal", TestWindowHostTabTraversal);
     runTest("TestWindowHostShiftTabTraversal", TestWindowHostShiftTabTraversal);
     runTest("TestWindowHostNativeFocusLossRetainsLogicalFocusForTraversal", TestWindowHostNativeFocusLossRetainsLogicalFocusForTraversal);
@@ -2378,8 +2543,7 @@ void RunWindowHostTests()
     runTest("TestWindowHostMenuKeyInvokesFocusedCheckboxContextMenu", TestWindowHostMenuKeyInvokesFocusedCheckboxContextMenu);
     runTest("TestWindowHostSpaceAndReturnToggleFocusedToggleWithoutDefaultButtonFallback",
             TestWindowHostSpaceAndReturnToggleFocusedToggleWithoutDefaultButtonFallback);
-    runTest("TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton",
-            TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton);
+    runTest("TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton", TestWindowHostSpaceTogglesFocusedCheckboxAndReturnInvokesDefaultButton);
     runTest("TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls", TestWindowHostMixedDialogKeyboardFlowKeepsCommandsOnFocusedControls);
     runTest("TestWindowHostMixedDialogMouseFlowKeepsCommandsOnHitControls", TestWindowHostMixedDialogMouseFlowKeepsCommandsOnHitControls);
     runTest("TestWindowHostMenuKeyInvokesFocusedTreeContextMenu", TestWindowHostMenuKeyInvokesFocusedTreeContextMenu);

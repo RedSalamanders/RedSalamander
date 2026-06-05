@@ -234,8 +234,9 @@ Focused teardown coverage is split across `--fileops-selftest --selftest-case=Ph
 
 Conflict handling covers per-item failures that require a user decision (overwrite, replace read-only, permissions, etc.).
 
-- The host MUST provide conflict handling for all in-app entry points that can trigger Copy/Move/Delete (keyboard shortcuts, menus/context menus, pane → pane drag/drop).
+- The host MUST provide conflict handling for all in-app entry points that can trigger Copy/Move/Delete (keyboard shortcuts, menus/context menus, pane -> pane drag/drop, and Find Files result commands).
 - The host MUST NOT silently auto-resolve conflicts by default (no implicit overwrite, replace-readonly, or continue-on-error without user intent).
+- Find Files result Copy/Move/Delete commands MUST enter this same pipeline with resolved plugin/context/path selections. Copy/Move to other pane MUST infer the source pane from the selected result paths and use the opposite pane destination, so conflicts, progress, cancellation, and completion notifications behave like pane-originated operations.
 
 #### Defaults
 

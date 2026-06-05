@@ -3458,8 +3458,7 @@ struct OwnedMenuSessionEscapeResult
                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
     {
         return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
-               ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showMenuSection &&
-               value.currentPathText.starts_with(L"fk:");
+               ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showMenuSection && value.currentPathText.starts_with(L"fk:");
     },
                                                 SelfTest::Scale(3000ms),
                                                 &baselineSnapshot),
@@ -3485,25 +3484,25 @@ struct OwnedMenuSessionEscapeResult
 
     struct CommonFoldersMenuInspectionResult
     {
-        bool workerStarted               = true;
-        bool sessionObserved             = false;
-        bool popupOwnerValid             = true;
-        bool commonFoldersPresent        = false;
-        bool commonFoldersHasSubmenu     = false;
+        bool workerStarted                = true;
+        bool sessionObserved              = false;
+        bool popupOwnerValid              = true;
+        bool commonFoldersPresent         = false;
+        bool commonFoldersHasSubmenu      = false;
         bool commonFoldersKeyboardFocused = false;
-        bool submenuPopupObserved        = false;
-        bool submenuObserved             = false;
-        int commonFoldersIndex           = -1;
-        int rootKeyboardIndex            = -1;
-        size_t submenuCandidateCount     = 0u;
-        size_t commonFolderChildRowCount = 0u;
-        size_t commonFolderBitmapCount   = 0u;
-        bool sessionClosed               = false;
+        bool submenuPopupObserved         = false;
+        bool submenuObserved              = false;
+        int commonFoldersIndex            = -1;
+        int rootKeyboardIndex             = -1;
+        size_t submenuCandidateCount      = 0u;
+        size_t commonFolderChildRowCount  = 0u;
+        size_t commonFolderBitmapCount    = 0u;
+        bool sessionClosed                = false;
         std::wstring observedRootOrder;
         std::wstring observedSubmenuOrder;
     } menuResult;
 
-    const std::wstring commonFoldersLabel = LoadStringResource(nullptr, IDS_MENU_COMMON_FOLDERS);
+    const std::wstring commonFoldersLabel                = LoadStringResource(nullptr, IDS_MENU_COMMON_FOLDERS);
     const std::array<std::wstring, 7> commonFolderLabels = {
         LoadStringResource(nullptr, IDS_MENU_NAV_DESKTOP),
         LoadStringResource(nullptr, IDS_MENU_NAV_DOCUMENTS),
@@ -3534,7 +3533,7 @@ struct OwnedMenuSessionEscapeResult
         target.append(std::format(L"{}:{}", itemIndex, itemText));
     };
 
-    const HWND rootOwner = GetAncestor(navigationView, GA_ROOT);
+    const HWND rootOwner             = GetAncestor(navigationView, GA_ROOT);
     const auto popupHasExpectedOwner = [&](HWND popup) noexcept
     {
         const HWND popupOwner = GetWindow(popup, GW_OWNER);
@@ -3588,11 +3587,11 @@ struct OwnedMenuSessionEscapeResult
 
                 if (matchedRows >= 4u)
                 {
-                    menuResult.submenuPopupObserved        = true;
-                    menuResult.submenuObserved             = true;
-                    menuResult.commonFolderChildRowCount   = matchedRows;
-                    menuResult.commonFolderBitmapCount     = bitmapRows;
-                    menuResult.observedSubmenuOrder        = std::move(observedOrder);
+                    menuResult.submenuPopupObserved      = true;
+                    menuResult.submenuObserved           = true;
+                    menuResult.commonFolderChildRowCount = matchedRows;
+                    menuResult.commonFolderBitmapCount   = bitmapRows;
+                    menuResult.observedSubmenuOrder      = std::move(observedOrder);
                     return true;
                 }
 
@@ -3611,7 +3610,7 @@ struct OwnedMenuSessionEscapeResult
                     return false;
                 }
 
-                outIndex                    = popupState.keyboardIndex.value();
+                outIndex                     = popupState.keyboardIndex.value();
                 menuResult.rootKeyboardIndex = static_cast<int>(popupState.keyboardIndex.value());
                 return true;
             };
@@ -3703,7 +3702,7 @@ struct OwnedMenuSessionEscapeResult
                                 while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < submenuDeadline)
                                 {
                                     for (HWND candidate = FindWindowW(L"DxUi_ContextMenu", nullptr); candidate != nullptr;
-                                         candidate = FindWindowExW(nullptr, candidate, L"DxUi_ContextMenu", nullptr))
+                                         candidate      = FindWindowExW(nullptr, candidate, L"DxUi_ContextMenu", nullptr))
                                     {
                                         if (candidate != popup && inspectCommonFoldersSubmenu(candidate))
                                         {
@@ -4486,10 +4485,7 @@ struct OwnedMenuSessionEscapeResult
     const std::wstring invalidPathText = (root / L"missing-address-target").wstring();
     state.Require(SetWindowTextW(cutSnapshot.currentEditInputHwnd, invalidPathText.c_str()) != FALSE,
                   L"Failed to seed invalid address-bar edit text for validation feedback coverage.");
-    SendMessageW(cutSnapshot.currentEditInputHwnd,
-                 EM_SETSEL,
-                 static_cast<WPARAM>(invalidPathText.size()),
-                 static_cast<LPARAM>(invalidPathText.size()));
+    SendMessageW(cutSnapshot.currentEditInputHwnd, EM_SETSEL, static_cast<WPARAM>(invalidPathText.size()), static_cast<LPARAM>(invalidPathText.size()));
     SendMessageW(cutSnapshot.currentEditInputHwnd, WM_KEYDOWN, VK_RETURN, 0);
     SendMessageW(cutSnapshot.currentEditInputHwnd, WM_KEYUP, VK_RETURN, 0);
     PumpPendingMessages();
@@ -4591,8 +4587,7 @@ struct OwnedMenuSessionEscapeResult
     const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set pane path for view-space shell-stability test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set pane path for view-space shell-stability test.");
     state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)), L"Enumeration did not complete for view-space shell-stability test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"nested", L"root.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for view-space shell-stability test.");
@@ -4605,8 +4600,7 @@ struct OwnedMenuSessionEscapeResult
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
     const HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
-    state.Require(folderView != nullptr && IsWindow(folderView) != FALSE,
-                  L"Folder view handle unavailable for view-space shell-stability validation.");
+    state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for view-space shell-stability validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -6106,8 +6100,8 @@ struct OwnedMenuSessionEscapeResult
 
     NavigationViewDebugSnapshot snapshot{};
     std::optional<std::filesystem::path> restoredPath;
-    bool snapshotAvailable    = false;
-    bool shellRestored        = false;
+    bool snapshotAvailable     = false;
+    bool shellRestored         = false;
     const auto restoreDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
     while (std::chrono::steady_clock::now() < restoreDeadline)
     {
@@ -6117,12 +6111,12 @@ struct OwnedMenuSessionEscapeResult
         snapshot          = {};
         snapshotAvailable = g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, snapshot);
 
-        const bool panePathStable = restoredPath.has_value() && OrdinalString::EqualsNoCasePath(restoredPath.value(), root);
+        const bool panePathStable    = restoredPath.has_value() && OrdinalString::EqualsNoCasePath(restoredPath.value(), root);
         const HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
-        if (snapshotAvailable && snapshot.focusTarget == NavigationViewDebugFocusTarget::None && ! snapshot.editMode &&
-            ! snapshot.historyDropdownVisible && ! snapshot.editSuggestPopupVisible && ! snapshot.fullPathPopupVisible &&
-            ! snapshot.fullPathPopupEditMode && snapshot.visibleChildWindowCount == 0u && snapshot.currentPathText == root.wstring() &&
-            panePathStable && snapshot.historyCount == baselineSnapshot.historyCount && focusedFolderView == folderView &&
+        if (snapshotAvailable && snapshot.focusTarget == NavigationViewDebugFocusTarget::None && ! snapshot.editMode && ! snapshot.historyDropdownVisible &&
+            ! snapshot.editSuggestPopupVisible && ! snapshot.fullPathPopupVisible && ! snapshot.fullPathPopupEditMode &&
+            snapshot.visibleChildWindowCount == 0u && snapshot.currentPathText == root.wstring() && panePathStable &&
+            snapshot.historyCount == baselineSnapshot.historyCount && focusedFolderView == folderView &&
             g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"b.log" &&
             g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
             g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
@@ -9099,8 +9093,7 @@ struct OwnedMenuSessionEscapeResult
     state.Require(snapshot.usesDxUiHost, L"Command-line input should render through a DxUi host.");
     state.Require(snapshot.usesNativeTextInput, L"Command-line input should use the native DxUi text-input backend.");
     state.Require(snapshot.visibleNativeChildControlCount == 0u,
-                  std::format(L"Command-line input should not expose visible native STATIC/EDIT controls; got {}.",
-                              snapshot.visibleNativeChildControlCount));
+                  std::format(L"Command-line input should not expose visible native STATIC/EDIT controls; got {}.", snapshot.visibleNativeChildControlCount));
     state.Require(snapshot.pane == FolderWindow::Pane::Left, L"Command-line input should be associated with the focused left pane.");
     state.Require(snapshot.workingDirectory == root, L"Command-line working directory should be the focused pane folder.");
     const std::wstring quotedRoot = QuoteExpectedCommandLineText(root.wstring());
@@ -9121,8 +9114,8 @@ struct OwnedMenuSessionEscapeResult
     PumpPendingMessages();
 
     state.Require(g_folderWindow.DebugGetCommandLineSnapshot(snapshot), L"Command-line snapshot should be available after selected path insertion.");
-    const std::wstring expectedSelection = std::wstring(L"tool.exe ") + QuoteExpectedCommandLineText(alphaPath.wstring()) + L" " +
-                                           QuoteExpectedCommandLineText(betaPath.wstring());
+    const std::wstring expectedSelection =
+        std::wstring(L"tool.exe ") + QuoteExpectedCommandLineText(alphaPath.wstring()) + L" " + QuoteExpectedCommandLineText(betaPath.wstring());
     state.Require(snapshot.text == expectedSelection,
                   std::format(L"Bring Filename should append selected item paths. Expected '{}', got '{}'.", expectedSelection, snapshot.text));
 
@@ -9133,8 +9126,7 @@ struct OwnedMenuSessionEscapeResult
         std::filesystem::path workingDirectory;
     } launch;
 
-    g_folderWindow.DebugSetCommandLineLaunchCallback(
-        [&](std::wstring_view commandLine, const std::filesystem::path& workingDirectory) noexcept -> HRESULT
+    g_folderWindow.DebugSetCommandLineLaunchCallback([&](std::wstring_view commandLine, const std::filesystem::path& workingDirectory) noexcept -> HRESULT
     {
         ++launch.calls;
         launch.commandLine.assign(commandLine);
@@ -9264,7 +9256,8 @@ struct OwnedMenuSessionEscapeResult
     g_folderWindow.CommandOpenCommandShell(FolderWindow::Pane::Left);
     PumpPendingMessages();
 
-    state.Require(launch.calls == 2u, std::format(L"Command Shell should retry with the command processor after Terminal launch failure; got {} calls.", launch.calls));
+    state.Require(launch.calls == 2u,
+                  std::format(L"Command Shell should retry with the command processor after Terminal launch failure; got {} calls.", launch.calls));
     state.Require(! launch.plan.usesWindowsTerminal, L"Command Shell should finish on the command-processor fallback after Terminal launch failure.");
 
     FolderView::AlertOverlayDebugSnapshot alert{};
@@ -9274,8 +9267,7 @@ struct OwnedMenuSessionEscapeResult
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Command Shell launch failure should report a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_CMD_OPEN_COMMAND_SHELL),
                   L"Command Shell launch failure should use the localized command-shell title.");
-    state.Require(alert.message.find(L"0x80004005") != std::wstring::npos,
-                  L"Command Shell launch failure should surface the HRESULT in the alert message.");
+    state.Require(alert.message.find(L"0x80004005") != std::wstring::npos, L"Command Shell launch failure should surface the HRESULT in the alert message.");
 
     return state.failure.empty();
 }

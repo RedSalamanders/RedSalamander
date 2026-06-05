@@ -21,6 +21,6 @@ namespace CommandsSelfTest
 {
 std::vector<std::wstring> ListCases(const SelfTest::SelfTestOptions& options = {}) noexcept;
 [[nodiscard]] bool Run(HWND mainWindow, const SelfTest::SelfTestOptions& options = {}, SelfTest::SelfTestSuiteResult* outResult = nullptr) noexcept;
-}
+} // namespace CommandsSelfTest
 
 #endif // ENABLE_TESTS

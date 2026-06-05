@@ -974,15 +974,14 @@ void FolderView::Render(const RECT& invalidRect)
     }
 
     DrawItemPerfStats drawStats{};
-    uint64_t itemsConsidered   = 0;
-    uint64_t itemsDrawn        = 0;
-    uint64_t layoutCreates     = 0;
-    uint64_t dirtyAreaPx       = 0;
-    const auto beginToEndStart = std::chrono::steady_clock::now();
+    uint64_t itemsConsidered          = 0;
+    uint64_t itemsDrawn               = 0;
+    uint64_t layoutCreates            = 0;
+    uint64_t dirtyAreaPx              = 0;
+    const auto beginToEndStart        = std::chrono::steady_clock::now();
     const auto emitFolderFrameMetrics = wil::scope_exit([&]
     {
-        PerfEmitDuration(
-            L"folder.frame.total_us", frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), dirtyAreaPx, itemsDrawn, folderFrameHr);
+        PerfEmitDuration(L"folder.frame.total_us", frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), dirtyAreaPx, itemsDrawn, folderFrameHr);
         if (folderPresentAttempted)
         {
             PerfEmitDuration(L"folder.frame.present_us", folderPresentUs, dirtyAreaPx, itemsDrawn, folderFrameHr);
@@ -1016,7 +1015,7 @@ void FolderView::Render(const RECT& invalidRect)
         _d2dContext->BeginDraw();
         auto endDraw = wil::scope_exit([&]
         {
-            hr = _d2dContext->EndDraw();
+            hr            = _d2dContext->EndDraw();
             folderFrameHr = hr;
             PerfEmitDuration(L"render.begin_to_enddraw_us", PerfElapsedUs(beginToEndStart), dirtyAreaPx, itemsDrawn, hr);
         });
@@ -1813,10 +1812,9 @@ void FolderView::Render(const RECT& invalidRect)
         }
 
         const bool canDrawIncrementalSearchIndicator =
-            _d2dContext && _incrementalSearchIndicatorBackgroundBrush && _incrementalSearchIndicatorBorderBrush &&
-            _incrementalSearchIndicatorTextBrush && _incrementalSearchIndicatorShadowBrush && _incrementalSearchIndicatorAccentBrush &&
-            std::clamp(_incrementalSearchIndicatorVisibility, 0.0f, 1.0f) > 0.001f && DipFromPx(_clientSize.cx) > 0.0f &&
-            DipFromPx(_clientSize.cy) > 0.0f;
+            _d2dContext && _incrementalSearchIndicatorBackgroundBrush && _incrementalSearchIndicatorBorderBrush && _incrementalSearchIndicatorTextBrush &&
+            _incrementalSearchIndicatorShadowBrush && _incrementalSearchIndicatorAccentBrush &&
+            std::clamp(_incrementalSearchIndicatorVisibility, 0.0f, 1.0f) > 0.001f && DipFromPx(_clientSize.cx) > 0.0f && DipFromPx(_clientSize.cy) > 0.0f;
         bool hasErrorOverlay = false;
         {
             std::lock_guard lock(_errorOverlayMutex);
@@ -1872,13 +1870,13 @@ void FolderView::Render(const RECT& invalidRect)
         }
 #endif
         DXGI_PRESENT_PARAMETERS params{};
-        params.DirtyRectsCount  = 1;
-        params.pDirtyRects      = &paintRect;
-        params.pScrollRect      = nullptr;
-        params.pScrollOffset    = nullptr;
-        const auto presentStart = std::chrono::steady_clock::now();
+        params.DirtyRectsCount            = 1;
+        params.pDirtyRects                = &paintRect;
+        params.pScrollRect                = nullptr;
+        params.pScrollOffset              = nullptr;
+        const auto presentStart           = std::chrono::steady_clock::now();
         const auto folderPresentStartedAt = frameClock.Now();
-        HRESULT hrPresent = S_OK;
+        HRESULT hrPresent                 = S_OK;
         {
             RedSalamander::DxUi::FrameStageScope presentScope(frameStage, RedSalamander::DxUi::FrameStage::Present);
             hrPresent = _swapChain->Present1(1, 0, &params);
@@ -1905,9 +1903,9 @@ void FolderView::Render(const RECT& invalidRect)
     }
     else if (_swapChainLegacy)
     {
-        const auto presentStart = std::chrono::steady_clock::now();
+        const auto presentStart           = std::chrono::steady_clock::now();
         const auto folderPresentStartedAt = frameClock.Now();
-        HRESULT hrPresent = S_OK;
+        HRESULT hrPresent                 = S_OK;
         {
             RedSalamander::DxUi::FrameStageScope presentScope(frameStage, RedSalamander::DxUi::FrameStage::Present);
             hrPresent = _swapChainLegacy->Present(1, 0);
@@ -2297,7 +2295,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
         iconOpacity = FolderViewVisualState::ResolveNormalIconOpacity(iconOpacity, _paneFocused);
     }
     const bool drawingThumbnail = _thumbnailsVisible && item.thumbnail;
-    ID2D1Bitmap1* bitmap = drawingThumbnail ? item.thumbnail.get() : item.icon.get();
+    ID2D1Bitmap1* bitmap        = drawingThumbnail ? item.thumbnail.get() : item.icon.get();
     if (bitmap)
     {
 #ifdef ENABLE_TESTS
@@ -2307,23 +2305,23 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
         }
 #endif
         const D2D1_SIZE_U sourcePixelSize = bitmap->GetPixelSize();
-        D2D1_RECT_F bitmapRect = drawingThumbnail ? FitBitmapRectPreserveAspect(iconRect, sourcePixelSize) : iconRect;
+        D2D1_RECT_F bitmapRect            = drawingThumbnail ? FitBitmapRectPreserveAspect(iconRect, sourcePixelSize) : iconRect;
 #ifdef ENABLE_TESTS
         if (drawingThumbnail)
         {
             _debugLastThumbnailDrawSawThumbnail = true;
-            _debugLastThumbnailSourceWidthPx = sourcePixelSize.width;
-            _debugLastThumbnailSourceHeightPx = sourcePixelSize.height;
-            _debugLastThumbnailSlotRectDip = iconRect;
-            _debugLastThumbnailDrawRectDip = bitmapRect;
+            _debugLastThumbnailSourceWidthPx    = sourcePixelSize.width;
+            _debugLastThumbnailSourceHeightPx   = sourcePixelSize.height;
+            _debugLastThumbnailSlotRectDip      = iconRect;
+            _debugLastThumbnailDrawRectDip      = bitmapRect;
         }
         else
         {
-            _debugLastIconDrawSawIcon = true;
-            _debugLastIconDrawSourceWidthPx = sourcePixelSize.width;
+            _debugLastIconDrawSawIcon        = true;
+            _debugLastIconDrawSourceWidthPx  = sourcePixelSize.width;
             _debugLastIconDrawSourceHeightPx = sourcePixelSize.height;
-            _debugLastIconDrawSlotRectDip = iconRect;
-            _debugLastIconDrawRectDip = bitmapRect;
+            _debugLastIconDrawSlotRectDip    = iconRect;
+            _debugLastIconDrawRectDip        = bitmapRect;
         }
 #endif
         const D2D1_INTERPOLATION_MODE interpolationMode = ResolveFolderViewIconBitmapInterpolation(sourcePixelSize, _iconSizeDip, _dpi);
@@ -2355,9 +2353,9 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
         }
     }
 
-    const float labelLeft      = iconRect.right + kIconTextGapDip;
-    const float labelRight     = bounds.right - kLabelHorizontalPaddingDip;
-    const float availableWidth = std::max(0.0f, labelRight - labelLeft);
+    const float labelLeft                     = iconRect.right + kIconTextGapDip;
+    const float labelRight                    = bounds.right - kLabelHorizontalPaddingDip;
+    const float availableWidth                = std::max(0.0f, labelRight - labelLeft);
     const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
 
     // Select text brush based on selection state

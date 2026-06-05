@@ -7,6 +7,7 @@
 #include <iterator>
 #include <limits>
 #include <new>
+#include <optional>
 #include <string_view>
 
 #include <windows.h>
@@ -61,6 +62,189 @@ namespace
 
     return nullptr;
 }
+
+[[nodiscard]] const wchar_t* TraceNavigationWindowMessageName(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_NCHITTEST: return L"WM_NCHITTEST";
+        case WM_MOUSEACTIVATE: return L"WM_MOUSEACTIVATE";
+        case WM_SETCURSOR: return L"WM_SETCURSOR";
+        case WM_MOUSEMOVE: return L"WM_MOUSEMOVE";
+        case WM_MOUSELEAVE: return L"WM_MOUSELEAVE";
+        case WM_LBUTTONDOWN: return L"WM_LBUTTONDOWN";
+        case WM_LBUTTONUP: return L"WM_LBUTTONUP";
+        case WM_LBUTTONDBLCLK: return L"WM_LBUTTONDBLCLK";
+        case WM_RBUTTONDOWN: return L"WM_RBUTTONDOWN";
+        case WM_RBUTTONUP: return L"WM_RBUTTONUP";
+        case WM_CAPTURECHANGED: return L"WM_CAPTURECHANGED";
+        case WM_CANCELMODE: return L"WM_CANCELMODE";
+        case WM_SETFOCUS: return L"WM_SETFOCUS";
+        case WM_KILLFOCUS: return L"WM_KILLFOCUS";
+        case WM_KEYDOWN: return L"WM_KEYDOWN";
+        case WM_SYSKEYDOWN: return L"WM_SYSKEYDOWN";
+        case WndMsg::kNavigationViewShowHistoryDropdown: return L"kNavigationViewShowHistoryDropdown";
+        case WndMsg::kNavigationViewShowMenuDropdown: return L"kNavigationViewShowMenuDropdown";
+        case WndMsg::kNavigationViewShowDiskInfoDropdown: return L"kNavigationViewShowDiskInfoDropdown";
+        case WndMsg::kNavigationViewShowDriveMenuDropdown: return L"kNavigationViewShowDriveMenuDropdown";
+        case WndMsg::kNavigationMenuShowSiblingsDropdown: return L"kNavigationMenuShowSiblingsDropdown";
+        default: return L"message";
+    }
+}
+
+[[nodiscard]] bool ShouldTraceNavigationWindowRaw(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_MOUSEACTIVATE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_CAPTURECHANGED:
+        case WM_CANCELMODE:
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+        case WndMsg::kNavigationViewShowHistoryDropdown:
+        case WndMsg::kNavigationViewShowMenuDropdown:
+        case WndMsg::kNavigationViewShowDiskInfoDropdown:
+        case WndMsg::kNavigationViewShowDriveMenuDropdown:
+        case WndMsg::kNavigationMenuShowSiblingsDropdown: return true;
+        default: return false;
+    }
+}
+
+[[nodiscard]] const wchar_t* TraceNavigationResultName(UINT message, LRESULT result) noexcept
+{
+    if (message == WM_MOUSEACTIVATE)
+    {
+        switch (result)
+        {
+            case MA_ACTIVATE: return L"MA_ACTIVATE";
+            case MA_ACTIVATEANDEAT: return L"MA_ACTIVATEANDEAT";
+            case MA_NOACTIVATE: return L"MA_NOACTIVATE";
+            case MA_NOACTIVATEANDEAT: return L"MA_NOACTIVATEANDEAT";
+            default: return L"result";
+        }
+    }
+
+    if (message == WM_NCHITTEST)
+    {
+        switch (result)
+        {
+            case HTCLIENT: return L"HTCLIENT";
+            case HTTRANSPARENT: return L"HTTRANSPARENT";
+            case HTNOWHERE: return L"HTNOWHERE";
+            default: return L"hit";
+        }
+    }
+
+    return result != 0 ? L"nonzero" : L"zero";
+}
+
+void TraceNavigationWindowRaw(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, std::wstring_view phase, std::optional<LRESULT> result = std::nullopt) noexcept
+{
+    if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled())
+    {
+        return;
+    }
+
+    POINT cursorScreen{};
+    const bool haveCursor = GetCursorPos(&cursorScreen) != FALSE; // getcursorpos-allow: diagnostic-only
+    POINT cursorClient    = cursorScreen;
+    const bool haveCursorClient = hwnd && haveCursor && ScreenToClient(hwnd, &cursorClient) != FALSE;
+
+    POINT messageScreen{};
+    POINT messageClient{};
+    bool haveMessageScreen = false;
+    bool haveMessageClient = false;
+    if (message == WM_NCHITTEST)
+    {
+        messageScreen     = POINT{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        messageClient     = messageScreen;
+        haveMessageScreen = true;
+        haveMessageClient = hwnd && ScreenToClient(hwnd, &messageClient) != FALSE;
+    }
+    else if ((message >= WM_MOUSEFIRST && message <= WM_MOUSELAST) || message == WM_MOUSELEAVE)
+    {
+        messageClient     = POINT{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        messageScreen     = messageClient;
+        haveMessageClient = true;
+        haveMessageScreen = hwnd && ClientToScreen(hwnd, &messageScreen) != FALSE;
+    }
+
+    RECT clientRect{};
+    const bool haveClientRect = hwnd && GetClientRect(hwnd, &clientRect) != FALSE;
+    const bool cursorInClient = haveCursorClient && haveClientRect && PtInRect(&clientRect, cursorClient) != FALSE;
+    const bool messageInClient = haveMessageClient && haveClientRect && PtInRect(&clientRect, messageClient) != FALSE;
+
+    const HWND windowAtCursor = haveCursor ? WindowFromPoint(cursorScreen) : nullptr;
+    HWND childAtCursor        = nullptr;
+    if (hwnd && haveCursor)
+    {
+        const HWND root = GetAncestor(hwnd, GA_ROOT);
+        if (root)
+        {
+            POINT rootClient = cursorScreen;
+            if (ScreenToClient(root, &rootClient) != FALSE)
+            {
+                childAtCursor = ChildWindowFromPointEx(root, rootClient, CWP_SKIPINVISIBLE);
+            }
+        }
+    }
+
+    TraceNavigationViewMenuDiagnostics(L"navigation.wndproc.raw",
+                                       L"phase={} hwnd={:#x} msg={} msgId={:#x} wParam={:#x} lParam={:#x} "
+                                       L"cursorScreen=({}, {}) haveCursor={} cursorClient=({}, {}) cursorInClient={} "
+                                       L"messageScreen=({}, {}) haveMessageScreen={} messageClient=({}, {}) messageInClient={} "
+                                       L"windowAtCursor={:#x} childAtCursor={:#x} focus={:#x} active={:#x} foreground={:#x} capture={:#x} "
+                                       L"result={} resultName={} ownedMenu={:#x}",
+                                       phase,
+                                       reinterpret_cast<uintptr_t>(hwnd),
+                                       TraceNavigationWindowMessageName(message),
+                                       static_cast<unsigned int>(message),
+                                       static_cast<uintptr_t>(wParam),
+                                       static_cast<uintptr_t>(lParam),
+                                       cursorScreen.x,
+                                       cursorScreen.y,
+                                       haveCursor ? 1 : 0,
+                                       cursorClient.x,
+                                       cursorClient.y,
+                                       cursorInClient ? 1 : 0,
+                                       messageScreen.x,
+                                       messageScreen.y,
+                                       haveMessageScreen ? 1 : 0,
+                                       messageClient.x,
+                                       messageClient.y,
+                                       messageInClient ? 1 : 0,
+                                       reinterpret_cast<uintptr_t>(windowAtCursor),
+                                       reinterpret_cast<uintptr_t>(childAtCursor),
+                                       reinterpret_cast<uintptr_t>(GetFocus()),
+                                       reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                                       reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                                       reinterpret_cast<uintptr_t>(GetCapture()),
+                                       result.has_value() ? static_cast<int>(result.value()) : 0,
+                                       result.has_value() ? TraceNavigationResultName(message, result.value()) : L"none",
+                                       reinterpret_cast<uintptr_t>(FindOwnedVisibleDxContextMenuWindow(hwnd)));
+}
+
+[[nodiscard]] bool OptionalPathEquals(const std::optional<std::filesystem::path>& lhs, const std::optional<std::filesystem::path>& rhs) noexcept
+{
+    if (lhs.has_value() != rhs.has_value())
+    {
+        return false;
+    }
+
+    if (! lhs.has_value())
+    {
+        return true;
+    }
+
+    return lhs->native() == rhs->native();
+}
 } // namespace
 
 NavigationView::NavigationView() = default;
@@ -68,6 +252,30 @@ NavigationView::NavigationView() = default;
 NavigationView::~NavigationView()
 {
     Destroy();
+}
+
+bool NavigationView::ShouldAcceptPointerEvent(const RedSalamander::DxUi::PointerInputEvent& event) const noexcept
+{
+    const HWND hwnd = _hWnd.get();
+    if (! hwnd || ! event.targetHwnd || (event.targetHwnd != hwnd && IsChild(hwnd, event.targetHwnd) == FALSE))
+    {
+        TraceNavigationViewMenuDiagnostics(L"navigation.pointer.reject",
+                                           L"hwnd={:#x} reason=target target={:#x}",
+                                           reinterpret_cast<uintptr_t>(hwnd),
+                                           reinterpret_cast<uintptr_t>(event.targetHwnd));
+        return false;
+    }
+
+    if (! event.hasClientPoint)
+    {
+        TraceNavigationViewMenuDiagnostics(L"navigation.pointer.reject",
+                                           L"hwnd={:#x} reason=no-client-point target={:#x}",
+                                           reinterpret_cast<uintptr_t>(hwnd),
+                                           reinterpret_cast<uintptr_t>(event.targetHwnd));
+        return false;
+    }
+
+    return true;
 }
 
 HRESULT STDMETHODCALLTYPE NavigationView::NavigationMenuRequestNavigate(const wchar_t* path, void* cookie) noexcept
@@ -248,6 +456,8 @@ void NavigationView::Destroy()
         _siblingPrefetchThread.join();
     }
 
+    StopDriveInfoWorker();
+
     {
         std::lock_guard lock(_editSuggestMutex);
         _editSuggestPendingQuery.reset();
@@ -256,7 +466,6 @@ void NavigationView::Destroy()
         std::lock_guard lock(_siblingPrefetchMutex);
         _siblingPrefetchPendingQuery.reset();
     }
-
     if (_navigationMenu)
     {
         _navigationMenu->SetCallback(nullptr, nullptr);
@@ -301,6 +510,11 @@ LRESULT CALLBACK NavigationView::WndProcThunk(HWND hWindow, UINT msg, WPARAM wp,
 
 LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
+    if (ShouldTraceNavigationWindowRaw(msg))
+    {
+        TraceNavigationWindowRaw(hwnd, msg, wp, lp, L"enter");
+    }
+
     switch (msg)
     {
         case WM_CREATE: OnCreate(hwnd); return 0;
@@ -308,6 +522,10 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hwnd)); break;
         case WM_ERASEBKGND: return 1;
+        case WM_NCHITTEST: return HTCLIENT;
+        case WM_MOUSEACTIVATE:
+            TraceNavigationWindowRaw(hwnd, msg, wp, lp, L"return", MA_ACTIVATE);
+            return MA_ACTIVATE;
         case WM_PAINT: OnPaint(); return 0;
         case WM_SETREDRAW:
         {
@@ -337,12 +555,51 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
         case WM_COMMAND: OnCommand(LOWORD(wp), reinterpret_cast<HWND>(lp), HIWORD(wp)); return 0;
         case WM_CTLCOLOREDIT: return OnCtlColorEdit(reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
-        case WM_LBUTTONDOWN: OnLButtonDown({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
-        case WM_LBUTTONDBLCLK: OnLButtonDblClk({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
-        case WM_MOUSEMOVE: OnMouseMove({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
+        case WM_LBUTTONDOWN:
+        {
+            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(
+                    hwnd, msg, wp, lp, RedSalamander::DxUi::PointerInputSource::WindowProc);
+                event.has_value())
+            {
+                OnLButtonDown(event.value());
+            }
+            return 0;
+        }
+        case WM_LBUTTONDBLCLK:
+        {
+            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(
+                    hwnd, msg, wp, lp, RedSalamander::DxUi::PointerInputSource::WindowProc);
+                event.has_value())
+            {
+                OnLButtonDblClk(event.value());
+            }
+            return 0;
+        }
+        case WM_MOUSEMOVE:
+        {
+            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(
+                    hwnd, msg, wp, lp, RedSalamander::DxUi::PointerInputSource::WindowProc);
+                event.has_value())
+            {
+                OnMouseMove(event.value());
+            }
+            return 0;
+        }
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_SETCURSOR: OnSetCursor(reinterpret_cast<HWND>(wp), LOWORD(lp), HIWORD(lp)); return TRUE;
         case WM_TIMER: OnTimer(static_cast<UINT_PTR>(wp)); return 0;
+        case WM_CANCELMODE:
+            TraceNavigationInputState(L"cancel-mode");
+            break;
+        case WM_CAPTURECHANGED:
+            TraceNavigationViewMenuDiagnostics(L"navigation.capture-changed",
+                                               L"hwnd={:#x} newCapture={:#x} focus={:#x} active={:#x} foreground={:#x}",
+                                               reinterpret_cast<uintptr_t>(hwnd),
+                                               reinterpret_cast<uintptr_t>(reinterpret_cast<HWND>(lp)),
+                                               reinterpret_cast<uintptr_t>(GetFocus()),
+                                               reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                                               reinterpret_cast<uintptr_t>(GetForegroundWindow()));
+            break;
         case WM_ENTERMENULOOP: OnEnterMenuLoop(static_cast<BOOL>(wp)); return 0;
         case WM_EXITMENULOOP: OnExitMenuLoop(static_cast<BOOL>(wp)); return 0;
         case WM_SETFOCUS: OnSetFocus(); return 0;
@@ -377,6 +634,14 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return OnNavigationMenuRequestPath(std::move(text));
         }
         case WndMsg::kNavigationMenuShowSiblingsDropdown:
+            TraceNavigationViewMenuDiagnostics(L"navigation.siblings-dropdown.message",
+                                               L"hwnd={:#x} index={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
+                                               reinterpret_cast<uintptr_t>(hwnd),
+                                               static_cast<size_t>(wp),
+                                               reinterpret_cast<uintptr_t>(GetFocus()),
+                                               reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                                               reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                                               reinterpret_cast<uintptr_t>(GetCapture()));
             _pendingSeparatorMenuSwitchIndex = -1;
             ShowSiblingsDropdown(static_cast<size_t>(wp));
             return 0;                                                            // Deferred menu opening
@@ -385,6 +650,11 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kNavigationViewShowMenuDropdown: ShowMenuDropdown(false, wp != 0); return 0;
         case WndMsg::kNavigationViewShowDiskInfoDropdown: ShowDiskInfoDropdown(false, wp != 0); return 0;
         case WndMsg::kNavigationViewShowDriveMenuDropdown: ShowFileSystemDriveMenuDropdown(); return 0;
+        case WndMsg::kNavigationViewDriveInfoLoaded:
+        {
+            auto payload = TakeMessagePayload<DriveInfoResultPayload>(lp);
+            return OnDriveInfoLoaded(std::move(payload));
+        }
         case WndMsg::kNavigationViewRestoreFolderFocus:
             if (_requestFolderViewFocusCallback && _hWnd)
             {
@@ -430,7 +700,6 @@ void NavigationView::OnCreate(HWND hWindow)
     // GDI menus are NOT DPI-aware - they always expect physical pixels at 96 DPI
     // Do not scale menu icon size with DPI
     _menuIconSize = GetSystemMetrics(SM_CXSMICON);
-
 }
 
 void NavigationView::OnDeferredInit()
@@ -469,9 +738,15 @@ void NavigationView::OnDeferredInit()
 
 void NavigationView::UpdateHoverTimerState() noexcept
 {
-    const bool shouldRun = _editMode || _inMenuLoop;
+    const bool shouldRun = _inMenuLoop;
     if (! _hWnd)
     {
+        TraceNavigationViewMenuDiagnostics(L"navigation.hover-timer-state",
+                                           L"hwnd=null action=no-window shouldRun={} editMode={} inMenuLoop={} oldTimer={}",
+                                           shouldRun ? 1 : 0,
+                                           _editMode ? 1 : 0,
+                                           _inMenuLoop ? 1 : 0,
+                                           static_cast<unsigned long long>(_hoverTimer));
         _hoverTimer = 0;
         return;
     }
@@ -480,20 +755,59 @@ void NavigationView::UpdateHoverTimerState() noexcept
     {
         if (_hoverTimer == 0)
         {
-            _hoverTimer = SetTimer(_hWnd.get(), HOVER_TIMER_ID, 1000 / HOVER_CHECK_FPS, nullptr);
+            const UINT_PTR oldTimer = _hoverTimer;
+            _hoverTimer             = SetTimer(_hWnd.get(), HOVER_TIMER_ID, 1000 / HOVER_CHECK_FPS, nullptr);
+            const DWORD error       = _hoverTimer == 0 ? GetLastError() : ERROR_SUCCESS;
+            TraceNavigationViewMenuDiagnostics(L"navigation.hover-timer-state",
+                                               L"hwnd={:#x} action=start shouldRun={} editMode={} inMenuLoop={} oldTimer={} newTimer={} lastError={}",
+                                               reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                               shouldRun ? 1 : 0,
+                                               _editMode ? 1 : 0,
+                                               _inMenuLoop ? 1 : 0,
+                                               static_cast<unsigned long long>(oldTimer),
+                                               static_cast<unsigned long long>(_hoverTimer),
+                                               error);
+        }
+        else
+        {
+            TraceNavigationViewMenuDiagnostics(L"navigation.hover-timer-state",
+                                               L"hwnd={:#x} action=keep shouldRun={} editMode={} inMenuLoop={} timer={}",
+                                               reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                               shouldRun ? 1 : 0,
+                                               _editMode ? 1 : 0,
+                                               _inMenuLoop ? 1 : 0,
+                                               static_cast<unsigned long long>(_hoverTimer));
         }
         return;
     }
 
     if (_hoverTimer != 0)
     {
+        const UINT_PTR oldTimer = _hoverTimer;
         KillTimer(_hWnd.get(), HOVER_TIMER_ID);
         _hoverTimer = 0;
+        TraceNavigationViewMenuDiagnostics(L"navigation.hover-timer-state",
+                                           L"hwnd={:#x} action=stop shouldRun={} editMode={} inMenuLoop={} oldTimer={} newTimer=0",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                           shouldRun ? 1 : 0,
+                                           _editMode ? 1 : 0,
+                                           _inMenuLoop ? 1 : 0,
+                                           static_cast<unsigned long long>(oldTimer));
+    }
+    else
+    {
+        TraceNavigationViewMenuDiagnostics(L"navigation.hover-timer-state",
+                                           L"hwnd={:#x} action=idle shouldRun={} editMode={} inMenuLoop={} timer=0",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                           shouldRun ? 1 : 0,
+                                           _editMode ? 1 : 0,
+                                           _inMenuLoop ? 1 : 0);
     }
 }
 
 void NavigationView::OnDestroy()
 {
+
     // Kill timers
     if (_hoverTimer != 0)
     {
@@ -541,13 +855,16 @@ void NavigationView::OnPaint()
     // Fill background
     FillRect(hdc.get(), &ps.rcPaint, _backgroundBrush.get());
 
-    RECT client{};
-    GetClientRect(_hWnd.get(), &client);
-    D2DHdcPaint::Session borderPaint;
-    if (borderPaint.Begin(hdc.get(), client))
+    if (! _embeddedDestinationMode)
     {
-        const float y = static_cast<float>(std::max<LONG>(0, _clientSize.cy - 1));
-        borderPaint.DrawLine(0.0f, y, static_cast<float>(std::max<LONG>(0, _clientSize.cx)), y, _theme.gdiBorderPen);
+        RECT client{};
+        GetClientRect(_hWnd.get(), &client);
+        D2DHdcPaint::Session borderPaint;
+        if (borderPaint.Begin(hdc.get(), client))
+        {
+            const float y = static_cast<float>(std::max<LONG>(0, _clientSize.cy - 1));
+            borderPaint.DrawLine(0.0f, y, static_cast<float>(std::max<LONG>(0, _clientSize.cx)), y, _theme.gdiBorderPen);
+        }
     }
 
     if (! _swapChain || ! _d2dTarget || ! _d2dContext)
@@ -560,10 +877,18 @@ void NavigationView::OnPaint()
         return;
     }
 
-    // Render Section 1, 2, 3 & 4 with Direct2D
+    // Render Section 1, 2, 3 & 4 with Direct2D. Hover is owned by delivered pointer messages;
+    // paint must not sample the global cursor and silently overwrite that state.
     _deferPresent      = true;
     _queuedPresentFull = false;
     _queuedPresentDirtyRect.reset();
+    TraceNavigationViewMenuDiagnostics(L"navigation.paint",
+                                       L"hwnd={:#x} action=defer-present-start paintRect=({}, {}, {}, {})",
+                                       reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                       ps.rcPaint.left,
+                                       ps.rcPaint.top,
+                                       ps.rcPaint.right,
+                                       ps.rcPaint.bottom);
 
     RenderDriveSection();
     RenderPathSection();
@@ -574,12 +899,28 @@ void NavigationView::OnPaint()
 
     if (_queuedPresentFull)
     {
+        TraceNavigationViewMenuDiagnostics(L"navigation.paint",
+                                           L"hwnd={:#x} action=flush-full",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()));
         Present(std::nullopt);
     }
     else if (_queuedPresentDirtyRect.has_value())
     {
         RECT dirtyRect = _queuedPresentDirtyRect.value();
+        TraceNavigationViewMenuDiagnostics(L"navigation.paint",
+                                           L"hwnd={:#x} action=flush-dirty rect=({}, {}, {}, {})",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()),
+                                           dirtyRect.left,
+                                           dirtyRect.top,
+                                           dirtyRect.right,
+                                           dirtyRect.bottom);
         Present(&dirtyRect);
+    }
+    else
+    {
+        TraceNavigationViewMenuDiagnostics(L"navigation.paint",
+                                           L"hwnd={:#x} action=flush-none",
+                                           reinterpret_cast<uintptr_t>(_hWnd.get()));
     }
 
     _queuedPresentFull = false;
@@ -733,6 +1074,12 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
 {
     if (! path)
     {
+        if (! _currentPath.has_value() && ! _currentPluginPath.has_value() && ! _currentEditPath.has_value() && _currentInstanceContext.empty() &&
+            _segments.empty() && _separators.empty() && _hoveredSegmentIndex == -1 && _hoveredSeparatorIndex == -1)
+        {
+            return;
+        }
+
         _currentPath       = std::nullopt;
         _currentPluginPath = std::nullopt;
         _currentEditPath   = std::nullopt;
@@ -761,14 +1108,17 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
     static_cast<void>(NavigationLocation::TryParseLocation(incomingPath.native(), location));
 
     const bool isFilePlugin = _pluginShortId.empty() || EqualsNoCase(_pluginShortId, L"file");
+    std::optional<std::filesystem::path> nextCurrentPath;
+    std::optional<std::filesystem::path> nextPluginPath;
+    std::optional<std::filesystem::path> nextEditPath;
+    std::wstring nextInstanceContext;
 
     if (isFilePlugin)
     {
         const std::filesystem::path normalizedPath = NormalizeDirectoryPath(incomingPath);
-        _currentPath                               = normalizedPath;
-        _currentPluginPath                         = normalizedPath;
-        _currentEditPath                           = normalizedPath;
-        _currentInstanceContext.clear();
+        nextCurrentPath                            = normalizedPath;
+        nextPluginPath                             = normalizedPath;
+        nextEditPath                               = normalizedPath;
     }
     else
     {
@@ -780,11 +1130,23 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
 
         const std::filesystem::path pluginPath = location.pluginPath.empty() ? std::filesystem::path(L"/") : location.pluginPath;
 
-        _currentInstanceContext = location.instanceContext;
-        _currentPluginPath      = pluginPath;
-        _currentEditPath        = NavigationLocation::FormatEditPath(shortId, pluginPath);
-        _currentPath            = NavigationLocation::FormatHistoryPath(shortId, _currentInstanceContext, pluginPath);
+        nextInstanceContext = location.instanceContext;
+        nextPluginPath      = pluginPath;
+        nextEditPath        = NavigationLocation::FormatEditPath(shortId, pluginPath);
+        nextCurrentPath     = NavigationLocation::FormatHistoryPath(shortId, nextInstanceContext, pluginPath);
     }
+
+    const bool samePath = OptionalPathEquals(_currentPath, nextCurrentPath) && OptionalPathEquals(_currentPluginPath, nextPluginPath) &&
+                          OptionalPathEquals(_currentEditPath, nextEditPath) && _currentInstanceContext == nextInstanceContext;
+    if (samePath && _breadcrumbLayoutCacheValid)
+    {
+        return;
+    }
+
+    _currentPath            = std::move(nextCurrentPath);
+    _currentPluginPath      = std::move(nextPluginPath);
+    _currentEditPath        = std::move(nextEditPath);
+    _currentInstanceContext = std::move(nextInstanceContext);
 
     if (! _dwriteFactory || ! _pathFormat || ! _separatorFormat)
     {
@@ -822,7 +1184,7 @@ std::vector<std::filesystem::path> NavigationView::GetHistory() const
 
 void NavigationView::SetHistory(const std::vector<std::filesystem::path>& history)
 {
-    _pathHistory.clear();
+    std::deque<std::filesystem::path> nextHistory;
 
     for (const auto& entry : history)
     {
@@ -831,14 +1193,21 @@ void NavigationView::SetHistory(const std::vector<std::filesystem::path>& histor
             continue;
         }
 
-        const bool exists = std::find(_pathHistory.begin(), _pathHistory.end(), entry) != _pathHistory.end();
+        const bool exists = std::find(nextHistory.begin(), nextHistory.end(), entry) != nextHistory.end();
         if (exists)
         {
             continue;
         }
 
-        _pathHistory.push_back(entry);
+        nextHistory.push_back(entry);
     }
+
+    if (_pathHistory.size() == nextHistory.size() && std::equal(_pathHistory.begin(), _pathHistory.end(), nextHistory.begin()))
+    {
+        return;
+    }
+
+    _pathHistory = std::move(nextHistory);
 
     if (_hWnd)
     {
@@ -852,6 +1221,8 @@ void NavigationView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     {
         _navigationMenu->SetCallback(nullptr, nullptr);
     }
+
+    StopDriveInfoWorker();
 
     _fileSystemPlugin = fileSystem;
     _fileSystemIo     = nullptr;
@@ -989,6 +1360,28 @@ void NavigationView::SetPaneFocused(bool focused) noexcept
     }
 }
 
+void NavigationView::SetEmbeddedDestinationMode(bool embedded) noexcept
+{
+    if (_embeddedDestinationMode == embedded)
+    {
+        return;
+    }
+
+    _embeddedDestinationMode = embedded;
+    UpdateEffectiveTheme();
+    ApplyDxEditHostThemes();
+
+    if (_d2dContext)
+    {
+        EnsureD2DResources();
+    }
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
 void NavigationView::UpdatePathEditHostLayout() noexcept
 {
     if (! _pathEdit || ! _pathEdit->hwnd)
@@ -1000,13 +1393,14 @@ void NavigationView::UpdatePathEditHostLayout() noexcept
     const auto chrome     = ComputeEditChromeRects(editBounds, _dpi);
     const int hostWidth   = static_cast<int>((std::max)(0L, chrome.editRect.right - chrome.editRect.left));
     const int hostHeight  = static_cast<int>((std::max)(0L, chrome.editRect.bottom - chrome.editRect.top));
+    const UINT visibilityFlag = _editMode ? static_cast<UINT>(SWP_SHOWWINDOW) : static_cast<UINT>(SWP_HIDEWINDOW);
     SetWindowPos(_pathEdit->hwnd.get(),
                  nullptr,
                  chrome.editRect.left,
                  chrome.editRect.top,
                  hostWidth,
                  hostHeight,
-                 SWP_NOZORDER | SWP_NOACTIVATE | (_editMode ? SWP_SHOWWINDOW : 0u));
+                 SWP_NOZORDER | SWP_NOACTIVATE | visibilityFlag);
 
     if (_editMode)
     {
@@ -1030,7 +1424,14 @@ void NavigationView::UpdateFullPathPopupEditHostLayout() noexcept
     GetClientRect(_fullPathPopup.get(), &rc);
     const int hostWidth  = static_cast<int>((std::max)(0L, rc.right - rc.left));
     const int hostHeight = static_cast<int>((std::max)(0L, rc.bottom - rc.top));
-    SetWindowPos(_fullPathPopupEdit->hwnd.get(), nullptr, rc.left, rc.top, hostWidth, hostHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+    const UINT visibilityFlag = _fullPathPopupEditMode ? static_cast<UINT>(SWP_SHOWWINDOW) : static_cast<UINT>(SWP_HIDEWINDOW);
+    SetWindowPos(_fullPathPopupEdit->hwnd.get(),
+                 nullptr,
+                 rc.left,
+                 rc.top,
+                 hostWidth,
+                 hostHeight,
+                 SWP_NOZORDER | SWP_NOACTIVATE | visibilityFlag);
 
     if (_fullPathPopupEdit->field && ! _fullPathPopupEdit->field->GetAccessibleHelpText().empty())
     {
@@ -1068,27 +1469,27 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
         return false;
     }
 
-    out.dpi                   = _dpi;
-    out.editMode              = _editMode;
-    out.fullPathPopupVisible  = _fullPathPopup && IsWindowVisible(_fullPathPopup.get()) != FALSE;
-    out.fullPathPopupEditMode = _fullPathPopupEditMode;
-    out.showMenuSection       = _showMenuSection;
-    out.showDiskInfoSection   = _showDiskInfoSection;
-    out.menuIconBitmapLoaded  = _menuIconBitmapD2D != nullptr;
-    out.historyCount          = _pathHistory.size();
-    out.menuRegionRect        = _sectionDriveRect;
-    out.pathRegionRect        = _sectionPathRect;
-    out.historyRegionRect     = _sectionHistoryRect;
-    out.diskInfoRegionRect    = _sectionDiskInfoRect;
+    out.dpi                     = _dpi;
+    out.editMode                = _editMode;
+    out.embeddedDestinationMode = _embeddedDestinationMode;
+    out.fullPathPopupVisible    = _fullPathPopup && IsWindowVisible(_fullPathPopup.get()) != FALSE;
+    out.fullPathPopupEditMode   = _fullPathPopupEditMode;
+    out.showMenuSection         = _showMenuSection;
+    out.showDiskInfoSection     = _showDiskInfoSection;
+    out.menuIconBitmapLoaded    = _menuIconBitmapD2D != nullptr;
+    out.historyCount            = _pathHistory.size();
+    out.menuRegionRect          = _sectionDriveRect;
+    out.pathRegionRect          = _sectionPathRect;
+    out.historyRegionRect       = _sectionHistoryRect;
+    out.diskInfoRegionRect      = _sectionDiskInfoRect;
     if (! _segments.empty() && ! _segments.back().isEllipsis)
     {
-        const auto& lastSegment       = _segments.back();
-        out.pathLastSegmentVisible    = true;
-        out.pathLastSegmentRect.left  = _sectionPathRect.left + static_cast<LONG>(std::floor(lastSegment.bounds.left));
-        out.pathLastSegmentRect.top   = _sectionPathRect.top + static_cast<LONG>(std::floor(lastSegment.bounds.top));
-        out.pathLastSegmentRect.right = _sectionPathRect.left + static_cast<LONG>(std::ceil(lastSegment.bounds.right));
-        out.pathLastSegmentRect.bottom =
-            _sectionPathRect.top + static_cast<LONG>(std::ceil(lastSegment.bounds.bottom));
+        const auto& lastSegment        = _segments.back();
+        out.pathLastSegmentVisible     = true;
+        out.pathLastSegmentRect.left   = _sectionPathRect.left + static_cast<LONG>(std::floor(lastSegment.bounds.left));
+        out.pathLastSegmentRect.top    = _sectionPathRect.top + static_cast<LONG>(std::floor(lastSegment.bounds.top));
+        out.pathLastSegmentRect.right  = _sectionPathRect.left + static_cast<LONG>(std::ceil(lastSegment.bounds.right));
+        out.pathLastSegmentRect.bottom = _sectionPathRect.top + static_cast<LONG>(std::ceil(lastSegment.bounds.bottom));
     }
     for (const auto& segment : _segments)
     {
@@ -1122,6 +1523,11 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
         out.pathEllipsisRect.bottom = _sectionPathRect.top + static_cast<LONG>(std::ceil(segment.bounds.bottom));
         break;
     }
+    out.menuButtonHovered     = _menuButtonHovered;
+    out.historyButtonHovered  = _historyButtonHovered;
+    out.diskInfoHovered       = _diskInfoHovered;
+    out.hoveredSegmentIndex   = _hoveredSegmentIndex;
+    out.hoveredSeparatorIndex = _hoveredSeparatorIndex;
     HWND navDropdownPopup = nullptr;
     if (_navDropdownKind != ModernDropdownKind::None)
     {
@@ -1152,11 +1558,11 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     }
     if (_editValidationPopup && IsWindowVisible(_editValidationPopup.get()) != FALSE)
     {
-        out.currentEditValidationPopupVisible = true;
-        out.currentEditValidationPopupHwnd    = _editValidationPopup.get();
-        out.currentEditValidationPopupRoundedRegion = _editValidationPopupRoundedRegion;
+        out.currentEditValidationPopupVisible        = true;
+        out.currentEditValidationPopupHwnd           = _editValidationPopup.get();
+        out.currentEditValidationPopupRoundedRegion  = _editValidationPopupRoundedRegion;
         out.currentEditValidationPopupUsesFluentIcon = _editValidationPopupIconUsesFluent;
-        out.currentEditValidationPopupIconGlyph = _editValidationPopupIconGlyph;
+        out.currentEditValidationPopupIconGlyph      = _editValidationPopupIconGlyph;
         if (GetWindowRect(_editValidationPopup.get(), &out.currentEditValidationPopupScreenRect) == FALSE)
         {
             out.currentEditValidationPopupScreenRect = _editValidationPopupScreenRect;
@@ -1334,7 +1740,29 @@ void NavigationView::UpdateEffectiveTheme() noexcept
 {
     _theme = _baseTheme;
 
-    if (_paneFocused)
+    if (_embeddedDestinationMode)
+    {
+        const D2D1::ColorF background = ColorFromCOLORREF(_appTheme.windowBackground);
+        const float hoverBlend        = _theme.darkBase ? 0.10f : 0.06f;
+        const float pressedBlend      = _theme.darkBase ? 0.16f : 0.10f;
+        const float textBlend         = _theme.darkBase ? 0.45f : 0.35f;
+        const float sepBlend          = _theme.darkBase ? 0.65f : 0.55f;
+        const float accentBlend       = _theme.darkBase ? 0.50f : 0.40f;
+
+        _theme.background        = background;
+        _theme.backgroundHover   = BlendColorF(background, _theme.text, hoverBlend);
+        _theme.backgroundPressed = BlendColorF(background, _theme.text, pressedBlend);
+        _theme.hoverHighlight    = _theme.backgroundHover;
+        _theme.pressedHighlight  = _theme.backgroundPressed;
+        _theme.text               = BlendColorF(_theme.text, _theme.background, textBlend);
+        _theme.separator          = BlendColorF(_theme.separator, _theme.background, sepBlend);
+        _theme.accent             = BlendColorF(_theme.accent, _theme.background, accentBlend);
+        _theme.progressOk         = BlendColorF(_theme.progressOk, _theme.background, accentBlend);
+        _theme.progressWarn       = BlendColorF(_theme.progressWarn, _theme.background, accentBlend);
+        _theme.progressBackground = BlendColorF(_theme.progressBackground, _theme.background, std::max(accentBlend, 0.65f));
+        _theme.gdiBorderPen       = ColorToCOLORREF(background);
+    }
+    else if (_paneFocused)
     {
         _theme.gdiBorderPen = ColorToCOLORREF(_theme.accent);
     }

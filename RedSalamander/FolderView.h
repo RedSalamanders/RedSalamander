@@ -129,6 +129,12 @@ public:
     void SetPaneFocused(bool focused) noexcept;
 
     void ForceRefresh();
+    void RecordPendingInputToPaintStart(std::chrono::steady_clock::time_point inputStartedAt) noexcept;
+    void RecordPendingInputToPaintStart(std::chrono::steady_clock::time_point inputStartedAt,
+                                        std::wstring metricName,
+                                        std::wstring detail,
+                                        uint64_t value0 = 0u,
+                                        uint64_t value1 = 0u) noexcept;
     void CancelPendingEnumeration();
     void OnDpiChanged(float newDpi);
     void SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem);
@@ -219,24 +225,24 @@ public:
 
     struct DebugWarmPerfSnapshot
     {
-        uint64_t warmRenderingCalls    = 0;
-        uint64_t deferredInitCalls     = 0;
-        uint64_t renderCalls           = 0;
-        uint64_t queueIconLoadingCalls = 0;
-        uint64_t processIconQueueCalls = 0;
-        uint64_t batchIconUpdateCalls  = 0;
+        uint64_t warmRenderingCalls             = 0;
+        uint64_t deferredInitCalls              = 0;
+        uint64_t renderCalls                    = 0;
+        uint64_t queueIconLoadingCalls          = 0;
+        uint64_t processIconQueueCalls          = 0;
+        uint64_t batchIconUpdateCalls           = 0;
         uint64_t incrementalSearchEffectUpdates = 0;
     };
 
     [[nodiscard]] DebugWarmPerfSnapshot DebugGetWarmPerfSnapshot() const noexcept
     {
         return DebugWarmPerfSnapshot{
-            .warmRenderingCalls    = _debugWarmRenderingCallCount,
-            .deferredInitCalls     = _debugDeferredInitCallCount,
-            .renderCalls           = _debugRenderCallCount,
-            .queueIconLoadingCalls = _debugQueueIconLoadingCallCount,
-            .processIconQueueCalls = _debugProcessIconQueueCallCount,
-            .batchIconUpdateCalls  = _debugBatchIconUpdateCallCount,
+            .warmRenderingCalls             = _debugWarmRenderingCallCount,
+            .deferredInitCalls              = _debugDeferredInitCallCount,
+            .renderCalls                    = _debugRenderCallCount,
+            .queueIconLoadingCalls          = _debugQueueIconLoadingCallCount,
+            .processIconQueueCalls          = _debugProcessIconQueueCallCount,
+            .batchIconUpdateCalls           = _debugBatchIconUpdateCallCount,
             .incrementalSearchEffectUpdates = _debugIncrementalSearchEffectUpdateCount,
         };
     }
@@ -274,17 +280,17 @@ public:
 
     struct DebugColumnLayoutSnapshot
     {
-        uint8_t displayMode = 0;
-        int rowsPerColumn      = 0;
-        float horizontalOffsetDip    = 0.0f;
-        float maxHorizontalOffsetDip = 0.0f;
-        float contentWidthDip        = 0.0f;
-        float clientWidthDip         = 0.0f;
-        float clientHeightDip        = 0.0f;
-        float tileWidthDip           = 0.0f;
-        float tileHeightDip          = 0.0f;
-        size_t firstVisibleIndex     = 0;
-        size_t lastVisibleIndex      = 0;
+        uint8_t displayMode                       = 0;
+        int rowsPerColumn                         = 0;
+        float horizontalOffsetDip                 = 0.0f;
+        float maxHorizontalOffsetDip              = 0.0f;
+        float contentWidthDip                     = 0.0f;
+        float clientWidthDip                      = 0.0f;
+        float clientHeightDip                     = 0.0f;
+        float tileWidthDip                        = 0.0f;
+        float tileHeightDip                       = 0.0f;
+        size_t firstVisibleIndex                  = 0;
+        size_t lastVisibleIndex                   = 0;
         uint32_t hitTestSpacingFalsePositiveCount = 0;
         std::vector<DebugColumnLayoutEntry> columns;
         std::vector<DebugVisibleItemEntry> visibleItems;
@@ -363,44 +369,44 @@ public:
 
     struct AlertOverlayDebugSnapshot
     {
-        bool visible            = false;
+        bool visible             = false;
         ErrorOverlayKind kind    = ErrorOverlayKind::Operation;
         OverlaySeverity severity = OverlaySeverity::Error;
         std::wstring title;
         std::wstring message;
-        HRESULT hr         = S_OK;
-        bool closable      = true;
-        bool blocksInput   = true;
+        HRESULT hr       = S_OK;
+        bool closable    = true;
+        bool blocksInput = true;
     };
 
     struct ThumbnailDebugSnapshot
     {
-        bool visible                 = false;
-        float targetDip              = 16.0f;
-        uint64_t queuedCount         = 0;
-        uint64_t completedCount      = 0;
-        uint64_t fallbackCount       = 0;
-        uint64_t staleDropCount      = 0;
-        uint64_t pendingCount        = 0;
-        uint64_t cacheHitCount       = 0;
-        uint64_t shellSuccessCount   = 0;
-        uint64_t wicSuccessCount     = 0;
-        uint64_t wicFactoryCreateCount = 0;
-        uint64_t decodeFailureCount  = 0;
-        uint64_t visibleApplyCount   = 0;
-        uint64_t visibleItemCount     = 0;
-        uint64_t visibleThumbnailCount = 0;
-        uint64_t totalThumbnailCount  = 0;
-        uint64_t cacheBytes          = 0;
-        uint64_t cacheEvictedCount   = 0;
-        uint64_t cancelCount         = 0;
-        bool lastDrawSawThumbnail    = false;
-        uint32_t lastDrawSourceWidthPx = 0;
-        uint32_t lastDrawSourceHeightPx = 0;
-        D2D1_RECT_F lastDrawSlotRectDip = D2D1::RectF();
-        D2D1_RECT_F lastDrawRectDip     = D2D1::RectF();
-        bool lastIconDrawSawIcon = false;
-        uint32_t lastIconDrawSourceWidthPx = 0;
+        bool visible                        = false;
+        float targetDip                     = 16.0f;
+        uint64_t queuedCount                = 0;
+        uint64_t completedCount             = 0;
+        uint64_t fallbackCount              = 0;
+        uint64_t staleDropCount             = 0;
+        uint64_t pendingCount               = 0;
+        uint64_t cacheHitCount              = 0;
+        uint64_t shellSuccessCount          = 0;
+        uint64_t wicSuccessCount            = 0;
+        uint64_t wicFactoryCreateCount      = 0;
+        uint64_t decodeFailureCount         = 0;
+        uint64_t visibleApplyCount          = 0;
+        uint64_t visibleItemCount           = 0;
+        uint64_t visibleThumbnailCount      = 0;
+        uint64_t totalThumbnailCount        = 0;
+        uint64_t cacheBytes                 = 0;
+        uint64_t cacheEvictedCount          = 0;
+        uint64_t cancelCount                = 0;
+        bool lastDrawSawThumbnail           = false;
+        uint32_t lastDrawSourceWidthPx      = 0;
+        uint32_t lastDrawSourceHeightPx     = 0;
+        D2D1_RECT_F lastDrawSlotRectDip     = D2D1::RectF();
+        D2D1_RECT_F lastDrawRectDip         = D2D1::RectF();
+        bool lastIconDrawSawIcon            = false;
+        uint32_t lastIconDrawSourceWidthPx  = 0;
         uint32_t lastIconDrawSourceHeightPx = 0;
         D2D1_RECT_F lastIconDrawSlotRectDip = D2D1::RectF();
         D2D1_RECT_F lastIconDrawRectDip     = D2D1::RectF();
@@ -523,6 +529,7 @@ public:
     struct ViewFileRequest
     {
         ViewFileRole role = ViewFileRole::Primary;
+        HWND ownerWindow  = nullptr;
         std::wstring actionId;
         std::filesystem::path focusedPath;
         std::vector<std::filesystem::path> selectionPaths;
@@ -696,8 +703,8 @@ private:
     {
         struct PixelBuffer
         {
-            uint32_t widthPx = 0;
-            uint32_t heightPx = 0;
+            uint32_t widthPx     = 0;
+            uint32_t heightPx    = 0;
             uint32_t strideBytes = 0;
             std::vector<uint8_t> bgra;
 
@@ -721,9 +728,9 @@ private:
         std::chrono::steady_clock::time_point postedAt{};
         wil::unique_hbitmap hBitmap = nullptr;
         PixelBuffer pixels;
-        HRESULT hr                  = S_OK;
-        bool usedFallback           = false;
-        SourceKind sourceKind       = SourceKind::Fallback;
+        HRESULT hr            = S_OK;
+        bool usedFallback     = false;
+        SourceKind sourceKind = SourceKind::Fallback;
     };
 
     struct FolderItem
@@ -782,7 +789,7 @@ private:
 
     struct IncrementalSearchState
     {
-        bool active = false;
+        bool active                = false;
         bool suppressNextSpaceChar = false;
         std::wstring query;
         size_t highlightedIndex = static_cast<size_t>(-1);
@@ -877,9 +884,17 @@ private:
     std::vector<size_t> _columnPrefixSums; // Prefix sums for O(1) hit testing: _columnPrefixSums[c] = sum of _columnCounts[0..c-1]
     float _scrollOffset     = 0.0f;
     float _horizontalOffset = 0.0f;
-    std::optional<std::chrono::steady_clock::time_point> _pendingInputToPaintStart;
-    float _contentHeight    = 0.0f;
-    float _contentWidth     = 0.0f;
+    struct PendingInputToPaintMetric final
+    {
+        std::chrono::steady_clock::time_point startedAt{};
+        std::wstring metricName;
+        std::wstring detail;
+        uint64_t value0 = 0u;
+        uint64_t value1 = 0u;
+    };
+    std::optional<PendingInputToPaintMetric> _pendingInputToPaintMetric;
+    float _contentHeight = 0.0f;
+    float _contentWidth  = 0.0f;
 
     // Scroll direction tracking for predictive layout pre-loading
     float _lastScrollOffset     = 0.0f;
@@ -1282,11 +1297,10 @@ private:
     D2D1_RECT_F OffsetRect(const D2D1_RECT_F& rect, float dx, float dy) const;
     static RECT ToPixelRect(const D2D1_RECT_F& rect, float dpi);
     static bool RectIntersects(const D2D1_RECT_F& rect, const RECT& pixelRect, float dpi);
-    void RecordPendingInputToPaintStart(std::chrono::steady_clock::time_point inputStartedAt) noexcept;
     void RecordInputToPaintStartIfViewportOrFocusChanged(std::chrono::steady_clock::time_point inputStartedAt,
-                                                          float scrollBefore,
-                                                          float horizontalBefore,
-                                                          size_t focusedBefore) noexcept;
+                                                         float scrollBefore,
+                                                         float horizontalBefore,
+                                                         size_t focusedBefore) noexcept;
     void EmitPendingInputToPaintMetricAfterPresent() noexcept;
 
     std::optional<size_t> HitTest(POINT clientPt) const;
@@ -1316,13 +1330,13 @@ private:
     std::atomic<uint64_t> _enumerationGeneration{0};
     ULONGLONG _lastDirectoryCacheRefreshTick = 0;
 #ifdef ENABLE_TESTS
-    uint64_t _debugForceRefreshCount         = 0;
-    uint64_t _debugWarmRenderingCallCount    = 0;
-    uint64_t _debugDeferredInitCallCount     = 0;
-    uint64_t _debugRenderCallCount           = 0;
-    uint64_t _debugQueueIconLoadingCallCount = 0;
-    uint64_t _debugProcessIconQueueCallCount = 0;
-    uint64_t _debugBatchIconUpdateCallCount  = 0;
+    uint64_t _debugForceRefreshCount                  = 0;
+    uint64_t _debugWarmRenderingCallCount             = 0;
+    uint64_t _debugDeferredInitCallCount              = 0;
+    uint64_t _debugRenderCallCount                    = 0;
+    uint64_t _debugQueueIconLoadingCallCount          = 0;
+    uint64_t _debugProcessIconQueueCallCount          = 0;
+    uint64_t _debugBatchIconUpdateCallCount           = 0;
     uint64_t _debugIncrementalSearchEffectUpdateCount = 0;
 #endif
 
@@ -1430,16 +1444,16 @@ private:
     ThumbnailLoadStats _thumbnailLoadStats;
 #ifdef ENABLE_TESTS
     std::atomic<DebugThumbnailProviderMode> _debugThumbnailProviderMode{DebugThumbnailProviderMode::Shell};
-    bool _debugLastThumbnailDrawSawThumbnail = false;
-    uint32_t _debugLastThumbnailSourceWidthPx = 0;
+    bool _debugLastThumbnailDrawSawThumbnail   = false;
+    uint32_t _debugLastThumbnailSourceWidthPx  = 0;
     uint32_t _debugLastThumbnailSourceHeightPx = 0;
     D2D1_RECT_F _debugLastThumbnailSlotRectDip = D2D1::RectF();
     D2D1_RECT_F _debugLastThumbnailDrawRectDip = D2D1::RectF();
-    bool _debugLastIconDrawSawIcon = false;
-    uint32_t _debugLastIconDrawSourceWidthPx = 0;
-    uint32_t _debugLastIconDrawSourceHeightPx = 0;
-    D2D1_RECT_F _debugLastIconDrawSlotRectDip = D2D1::RectF();
-    D2D1_RECT_F _debugLastIconDrawRectDip = D2D1::RectF();
+    bool _debugLastIconDrawSawIcon             = false;
+    uint32_t _debugLastIconDrawSourceWidthPx   = 0;
+    uint32_t _debugLastIconDrawSourceHeightPx  = 0;
+    D2D1_RECT_F _debugLastIconDrawSlotRectDip  = D2D1::RectF();
+    D2D1_RECT_F _debugLastIconDrawRectDip      = D2D1::RectF();
 #endif
     std::jthread _enumerationThread;
 

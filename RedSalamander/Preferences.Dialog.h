@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string_view>
 
 #include "AppTheme.h"
@@ -89,6 +90,11 @@ namespace PreferencesDialog
 [[nodiscard]] bool DebugGetHotPathsOpenPrefsToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugFocusAdvancedBypassHelloToggle() noexcept;
 [[nodiscard]] bool DebugSelectAdvancedFilterPreset(std::wstring_view displayText) noexcept;
+[[nodiscard]] bool DebugFocusMonitorToolbarToggle() noexcept;
+[[nodiscard]] bool DebugSelectMonitorFilterPreset(std::wstring_view displayText) noexcept;
+void DebugSetSettingsFileOpenCapture(bool capture) noexcept;
+void DebugClearLastSettingsFileOpen() noexcept;
+[[nodiscard]] bool DebugGetLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept;
 [[nodiscard]] bool DebugFocusFileOperationsPreCalcEnabledToggle() noexcept;
 [[nodiscard]] bool DebugGetFileOperationsPreCalcEnabledToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugSelectFileOperationsBandwidthPreset(std::wstring_view displayText) noexcept;

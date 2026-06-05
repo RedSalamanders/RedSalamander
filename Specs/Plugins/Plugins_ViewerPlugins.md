@@ -181,6 +181,24 @@ The host obtains `IInformations` via `QueryInterface` on the returned `IViewer` 
 
 `host` is a caller-owned COM interface pointer that remains valid for the lifetime of the created plugin instance. Plugins MAY `QueryInterface` it for host services (see `Common/PlugInterfaces/Host.h`).
 
+### Optional Module Shutdown Hooks
+
+Viewer plugin DLLs may export process-level shutdown hooks in addition to the COM viewer interfaces:
+
+```cpp
+extern "C"
+{
+    PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept;
+    PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept;
+}
+```
+
+The hooks are optional and SHOULD be omitted by viewer plugins whose workers, callbacks, graphics objects, and caches are fully owned by `IViewer` instances and drained by `Close()`, `SetCallback(nullptr, nullptr)`, cancellation, and COM release. They are intended for DLL-global caches, schedulers, window-class state, graphics resources, or driver/library teardown hazards that cannot be expressed as normal instance lifetime.
+
+The host calls `RedSalamanderPluginShutdown()` during module unload before unregistering the plugin resource owner and before releasing the DLL module. This is a final module quiet point, not a substitute for closing live viewers. Settings-driven plugin refresh MUST close all live viewer windows before rediscovering viewer plugins, and `ViewerPluginManager::DisablePlugin` MUST only mark the plugin disabled for new viewer creation; it MUST NOT `FreeLibrary` a loaded viewer DLL while external `IViewer` references may still be alive. Rediscovery and process shutdown unload modules through the centralized quiet-point helper.
+
+At process shutdown only, a plugin may return `TRUE` from `RedSalamanderPluginRetainModuleUntilProcessExit()` to ask the host to run the shutdown hook but leave the module loaded until OS process teardown. This is reserved for graphics-backed or driver-backed plugins that have already reached their quiet point but are unsafe to detach explicitly during process shutdown.
+
 ## Plugin Interfaces
 
 ### 0. IInformations (required)

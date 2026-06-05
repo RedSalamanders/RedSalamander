@@ -70,6 +70,8 @@ public:
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
 
+    void CancelPendingWebView2Initialization() noexcept;
+
     LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
     void FocusMainSurfaceFromFileCombo(HWND hwnd) noexcept;
 
@@ -132,7 +134,7 @@ private:
     void UpdateMenuState(HWND hwnd, bool syncDxMenuBar = true) noexcept;
 
     HRESULT EnsureWebView2(HWND hwnd) noexcept;
-    HRESULT CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment) noexcept;
+    HRESULT CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment, uint64_t sharedEnvironmentGeneration) noexcept;
     void DiscardWebView2() noexcept;
     void ConfigureWebViewSettings() noexcept;
     void ApplyWebViewThemeScript() noexcept;

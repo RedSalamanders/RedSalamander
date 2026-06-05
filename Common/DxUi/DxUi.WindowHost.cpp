@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <cwctype>
+#include <format>
 #include <limits>
 #include <map>
 #include <mutex>
@@ -12,6 +13,7 @@
 #include <ranges>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <UIAutomation.h>
@@ -22,8 +24,8 @@
 #include <richedit.h>
 #include <windowsx.h>
 
-#include "DxUi.Typography.h"
 #include "DxUi.FrameRuntime.h"
+#include "DxUi.Typography.h"
 #include "Helpers.h"
 #include "Ui/AnimationDispatcher.h"
 #include "WindowMessages.h"
@@ -39,8 +41,8 @@ namespace RedSalamander::DxUi
 {
 namespace
 {
-constexpr UINT kModifierAlt              = 0x0100u;
-constexpr wchar_t kDxUiDiagnosticsProp[] = L"RedSalamander.Preferences.DxDiagnostics";
+constexpr UINT kModifierAlt                    = 0x0100u;
+constexpr wchar_t kDxUiDiagnosticsProp[]       = L"RedSalamander.Preferences.DxDiagnostics";
 constexpr uint64_t kTooltipFallbackShowDelayMs = 500u;
 constexpr uint64_t kTooltipMinShowDelayMs      = 100u;
 constexpr uint64_t kTooltipMaxShowDelayMs      = 2500u;
@@ -88,7 +90,8 @@ struct WindowHostDirtyRectMetrics
     };
 }
 
-void EmitWindowHostFrameMetrics(uint64_t totalUs, uint64_t updateUs, uint64_t renderUs, uint64_t presentUs, const WindowHostDirtyRectMetrics& dirtyMetrics) noexcept
+void EmitWindowHostFrameMetrics(
+    uint64_t totalUs, uint64_t updateUs, uint64_t renderUs, uint64_t presentUs, const WindowHostDirtyRectMetrics& dirtyMetrics) noexcept
 {
     EmitFrameMetric(L"dxui.frame.total_us", totalUs);
     EmitFrameMetric(L"dxui.frame.update_us", updateUs);
@@ -111,6 +114,254 @@ void EmitWindowHostFrameMetrics(uint64_t totalUs, uint64_t updateUs, uint64_t re
 [[nodiscard]] bool IsPointerDoubleClickMessage(UINT msg) noexcept
 {
     return msg == WM_LBUTTONDBLCLK || msg == WM_RBUTTONDBLCLK;
+}
+
+[[nodiscard]] const wchar_t* TraceWindowHostMessageName(UINT msg) noexcept
+{
+    switch (msg)
+    {
+        case WM_MOUSEMOVE: return L"WM_MOUSEMOVE";
+        case WM_LBUTTONDOWN: return L"WM_LBUTTONDOWN";
+        case WM_LBUTTONUP: return L"WM_LBUTTONUP";
+        case WM_LBUTTONDBLCLK: return L"WM_LBUTTONDBLCLK";
+        case WM_RBUTTONDOWN: return L"WM_RBUTTONDOWN";
+        case WM_RBUTTONUP: return L"WM_RBUTTONUP";
+        case WM_RBUTTONDBLCLK: return L"WM_RBUTTONDBLCLK";
+        case WM_MOUSEWHEEL: return L"WM_MOUSEWHEEL";
+        case WM_MOUSEHWHEEL: return L"WM_MOUSEHWHEEL";
+        case WM_MOUSEACTIVATE: return L"WM_MOUSEACTIVATE";
+        case WM_SETCURSOR: return L"WM_SETCURSOR";
+        case WM_CAPTURECHANGED: return L"WM_CAPTURECHANGED";
+        case WM_CANCELMODE: return L"WM_CANCELMODE";
+        case WM_SETFOCUS: return L"WM_SETFOCUS";
+        case WM_KILLFOCUS: return L"WM_KILLFOCUS";
+        case WM_ACTIVATE: return L"WM_ACTIVATE";
+        case WM_ACTIVATEAPP: return L"WM_ACTIVATEAPP";
+        default: return L"message";
+    }
+}
+
+[[nodiscard]] bool ShouldTraceWindowHostMessage(UINT msg) noexcept
+{
+    switch (msg)
+    {
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_RBUTTONDBLCLK:
+        case WM_MOUSEWHEEL:
+        case WM_MOUSEHWHEEL:
+        case WM_MOUSEACTIVATE:
+        case WM_SETCURSOR:
+        case WM_CAPTURECHANGED:
+        case WM_CANCELMODE:
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+        case WM_ACTIVATE:
+        case WM_ACTIVATEAPP: return true;
+        default: return false;
+    }
+}
+
+[[nodiscard]] bool ShouldResolveScreenHitWindowForWindowHostTrace(UINT msg) noexcept
+{
+    switch (msg)
+    {
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_LBUTTONDBLCLK:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_RBUTTONDBLCLK:
+        case WM_MOUSEACTIVATE: return true;
+        default: return false;
+    }
+}
+
+[[nodiscard]] bool IsClientMouseMessageForWindowHostTrace(UINT msg) noexcept
+{
+    return msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST && msg != WM_MOUSEWHEEL && msg != WM_MOUSEHWHEEL;
+}
+
+[[nodiscard]] std::wstring TraceLimitedText(std::wstring_view value)
+{
+    constexpr size_t kMaxTraceTextChars = 80u;
+    std::wstring text;
+    text.reserve((std::min)(value.size(), kMaxTraceTextChars + 3u));
+    for (const wchar_t ch : value)
+    {
+        if (text.size() >= kMaxTraceTextChars)
+        {
+            text.append(L"...");
+            break;
+        }
+        text.push_back((ch == L'\r' || ch == L'\n' || ch == L'\t') ? L' ' : ch);
+    }
+    return text;
+}
+
+[[nodiscard]] std::wstring TraceRect(const D2D1_RECT_F& rect)
+{
+    return std::format(L"({:.1f},{:.1f},{:.1f},{:.1f})", rect.left, rect.top, rect.right, rect.bottom);
+}
+
+[[nodiscard]] std::wstring TraceWindowClassName(HWND hwnd)
+{
+    if (! hwnd)
+    {
+        return L"null";
+    }
+
+    wchar_t className[128]{};
+    const int length = GetClassNameW(hwnd, className, static_cast<int>(std::size(className)));
+    if (length <= 0)
+    {
+        return L"<unknown>";
+    }
+    return std::wstring(className, static_cast<size_t>(length));
+}
+
+[[nodiscard]] const wchar_t* TraceButtonVariantName(ButtonVariant variant) noexcept
+{
+    switch (variant)
+    {
+        case ButtonVariant::Standard: return L"Standard";
+        case ButtonVariant::DropDown: return L"DropDown";
+        case ButtonVariant::Split: return L"Split";
+        case ButtonVariant::Hyperlink: return L"Hyperlink";
+        case ButtonVariant::IconOnly: return L"IconOnly";
+        case ButtonVariant::Repeat: return L"Repeat";
+        default: return L"Unknown";
+    }
+}
+
+[[nodiscard]] const wchar_t* TraceComboBoxVariantName(ComboBoxVariant variant) noexcept
+{
+    switch (variant)
+    {
+        case ComboBoxVariant::Window: return L"Window";
+        case ComboBoxVariant::Modern: return L"Modern";
+        case ComboBoxVariant::Edit: return L"Edit";
+        default: return L"Unknown";
+    }
+}
+
+[[nodiscard]] std::wstring DescribeWindowHostTraceControl(const Control* control)
+{
+    if (! control)
+    {
+        return L"null";
+    }
+
+    std::wstring type = L"Control";
+    std::wstring detail;
+    if (const auto* const comboBox = dynamic_cast<const ComboBox*>(control))
+    {
+        type   = L"ComboBox";
+        detail = std::format(L" variant={} text=\"{}\" display=\"{}\" editable={}",
+                             TraceComboBoxVariantName(comboBox->GetVariant()),
+                             TraceLimitedText(comboBox->GetText()),
+                             TraceLimitedText(comboBox->GetDisplayedText()),
+                             comboBox->IsEditable() ? 1 : 0);
+    }
+    else if (const auto* const textField = dynamic_cast<const TextField*>(control))
+    {
+        type   = L"TextField";
+        detail = std::format(L" text=\"{}\" multiline={}", TraceLimitedText(textField->GetText()), textField->IsMultiline() ? 1 : 0);
+    }
+    else if (const auto* const checkbox = dynamic_cast<const Checkbox*>(control))
+    {
+        type   = L"Checkbox";
+        detail = std::format(L" text=\"{}\" checked={} indeterminate={}",
+                             TraceLimitedText(checkbox->GetDisplayedText()),
+                             checkbox->IsChecked() ? 1 : 0,
+                             checkbox->IsIndeterminate() ? 1 : 0);
+    }
+    else if (const auto* const toggle = dynamic_cast<const Toggle*>(control))
+    {
+        type   = L"Toggle";
+        detail = std::format(L" text=\"{}\" checked={}", TraceLimitedText(toggle->GetDisplayedText()), toggle->IsChecked() ? 1 : 0);
+    }
+    else if (const auto* const radioButton = dynamic_cast<const RadioButton*>(control))
+    {
+        type   = L"RadioButton";
+        detail = std::format(L" text=\"{}\" checked={}", TraceLimitedText(radioButton->GetText()), radioButton->IsChecked() ? 1 : 0);
+    }
+    else if (const auto* const button = dynamic_cast<const Button*>(control))
+    {
+        type   = L"Button";
+        detail = std::format(
+            L" text=\"{}\" variant={} primary={}", TraceLimitedText(button->GetText()), TraceButtonVariantName(button->GetVariant()), button->IsPrimary() ? 1 : 0);
+    }
+    else if (const auto* const label = dynamic_cast<const Label*>(control))
+    {
+        type   = L"Label";
+        detail = std::format(L" text=\"{}\"", TraceLimitedText(label->GetText()));
+    }
+    else if (const auto* const statusStrip = dynamic_cast<const StatusStrip*>(control))
+    {
+        type   = L"StatusStrip";
+        detail = std::format(L" text=\"{}\" sections={}", TraceLimitedText(statusStrip->GetText()), statusStrip->GetSectionCount());
+    }
+    else if (dynamic_cast<const Grid*>(control))
+    {
+        type = L"Grid";
+    }
+    else if (dynamic_cast<const PopupLayer*>(control))
+    {
+        type = L"PopupLayer";
+    }
+    else if (dynamic_cast<const ScrollPanel*>(control))
+    {
+        type = L"ScrollPanel";
+    }
+    else if (dynamic_cast<const PageHost*>(control))
+    {
+        type = L"PageHost";
+    }
+    else if (dynamic_cast<const Panel*>(control))
+    {
+        type = L"Panel";
+    }
+
+    return std::format(L"{}@{:#x} bounds={} hit={} visible={} enabled={} focus={} hover={} acc=\"{}\"{}",
+                       type,
+                       reinterpret_cast<uintptr_t>(control),
+                       TraceRect(control->GetBounds()),
+                       TraceRect(control->GetHitBounds()),
+                       control->IsVisible() ? 1 : 0,
+                       control->IsEnabled() ? 1 : 0,
+                       control->HasFocus() ? 1 : 0,
+                       control->IsHovered() ? 1 : 0,
+                       TraceLimitedText(control->GetAccessibleName()),
+                       detail);
+}
+
+template <typename... Args>
+void TraceWindowHostDiagnostics(std::wstring_view eventName, std::wformat_string<Args...> format, Args&&... args) noexcept
+{
+    if (! IsContextMenuDiagnosticsEnabled())
+    {
+        return;
+    }
+
+    try
+    {
+        TraceContextMenuDiagnostics(eventName, std::format(format, std::forward<Args>(args)...));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::format_error&)
+    {
+        // DxUi tracing is diagnostic only; formatting failure must not disturb input dispatch.
+        TraceContextMenuDiagnostics(eventName, L"formatting failed");
+    }
 }
 
 [[nodiscard]] UINT PointerButtonDownMessageFor(UINT msg) noexcept
@@ -145,8 +396,16 @@ void EmitWindowHostFrameMetrics(uint64_t totalUs, uint64_t updateUs, uint64_t re
 
 [[nodiscard]] std::map<DWORD, SharedWindowHostGraphicsResources>& GetSharedWindowHostGraphicsResourcesByThread() noexcept
 {
-    static std::map<DWORD, SharedWindowHostGraphicsResources> resourcesByThread;
-    return resourcesByThread;
+    static auto* const resourcesByThread = []() noexcept
+    {
+        auto* resources = new (std::nothrow) std::map<DWORD, SharedWindowHostGraphicsResources>();
+        if (resources == nullptr)
+        {
+            std::terminate();
+        }
+        return resources;
+    }();
+    return *resourcesByThread;
 }
 
 [[nodiscard]] bool IsInteractionDiagnosticsEnabled(HWND hwnd) noexcept
@@ -221,6 +480,18 @@ void ResetSharedWindowHostGraphicsResources() noexcept
     {
         ResetSharedWindowHostGraphicsResourcesLocked(it->second);
     }
+}
+
+void ResetAllSharedWindowHostGraphicsResourcesForProcessExit() noexcept
+{
+    const std::scoped_lock lock(GetSharedWindowHostGraphicsResourcesMutex());
+    auto& resourcesByThread = GetSharedWindowHostGraphicsResourcesByThread();
+    for (auto& [threadId, resources] : resourcesByThread)
+    {
+        static_cast<void>(threadId);
+        ResetSharedWindowHostGraphicsResourcesLocked(resources);
+    }
+    resourcesByThread.clear();
 }
 
 void RegisterSharedWindowHostAttachment(WindowHost* host, DWORD ownerThreadId) noexcept
@@ -342,7 +613,10 @@ void ReleaseSharedWindowHostAttachment(WindowHost* host, DWORD ownerThreadId) no
 
     D2D1_FACTORY_OPTIONS options{};
 #if defined(_DEBUG)
-    options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
+    // The D2D debug layer calls DebugBreak from process teardown when graphics
+    // plugins are intentionally retained until ExitProcess to avoid driver
+    // unload hangs. Keep D2D diagnostics opt-in; D3D debug remains enabled.
+    options.debugLevel = D2D1_DEBUG_LEVEL_NONE;
 #endif
     const HRESULT hrD2dFactory =
         D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1), &options, reinterpret_cast<void**>(resources.d2dFactory.addressof()));
@@ -689,8 +963,8 @@ void CollectFocusableControls(Control* control, std::vector<Control*>& out)
 
 struct FocusAdvanceResult
 {
-    Control* control = nullptr;
-    bool wrapped     = false;
+    Control* control    = nullptr;
+    bool wrapped        = false;
     size_t currentIndex = std::numeric_limits<size_t>::max();
     size_t nextIndex    = std::numeric_limits<size_t>::max();
 };
@@ -706,14 +980,14 @@ struct FocusAdvanceResult
 
     if (! current)
     {
-        return FocusAdvanceResult{.control = reverse ? focusableControls.back() : focusableControls.front(),
+        return FocusAdvanceResult{.control   = reverse ? focusableControls.back() : focusableControls.front(),
                                   .nextIndex = reverse ? focusableControls.size() - 1u : 0u};
     }
 
     const auto it = std::ranges::find(focusableControls, current);
     if (it == focusableControls.end())
     {
-        return FocusAdvanceResult{.control = reverse ? focusableControls.back() : focusableControls.front(),
+        return FocusAdvanceResult{.control   = reverse ? focusableControls.back() : focusableControls.front(),
                                   .nextIndex = reverse ? focusableControls.size() - 1u : 0u};
     }
 
@@ -721,18 +995,18 @@ struct FocusAdvanceResult
     if (reverse)
     {
         const bool wrapped = it == focusableControls.begin();
-        return FocusAdvanceResult{.control = wrapped ? focusableControls.back() : *(it - 1),
-                                  .wrapped = wrapped,
+        return FocusAdvanceResult{.control      = wrapped ? focusableControls.back() : *(it - 1),
+                                  .wrapped      = wrapped,
                                   .currentIndex = currentIndex,
-                                  .nextIndex = wrapped ? focusableControls.size() - 1u : currentIndex - 1u};
+                                  .nextIndex    = wrapped ? focusableControls.size() - 1u : currentIndex - 1u};
     }
 
-    const auto nextIt = it + 1;
+    const auto nextIt  = it + 1;
     const bool wrapped = nextIt == focusableControls.end();
-    return FocusAdvanceResult{.control = wrapped ? focusableControls.front() : *nextIt,
-                              .wrapped = wrapped,
+    return FocusAdvanceResult{.control      = wrapped ? focusableControls.front() : *nextIt,
+                              .wrapped      = wrapped,
                               .currentIndex = currentIndex,
-                              .nextIndex = wrapped ? 0u : currentIndex + 1u};
+                              .nextIndex    = wrapped ? 0u : currentIndex + 1u};
 }
 
 [[nodiscard]] Control* FindMnemonicControl(Control* control, wchar_t mnemonic) noexcept
@@ -891,6 +1165,8 @@ void ShutdownAllWindowHostsForProcessExit() noexcept
             host->Detach();
         }
     }
+
+    ResetAllSharedWindowHostGraphicsResourcesForProcessExit();
 }
 
 #if defined(ENABLE_TESTS)
@@ -1170,6 +1446,17 @@ bool WindowHost::PrimeForShow() noexcept
     return EnsureSizeDependentResources(true);
 }
 
+bool WindowHost::RenderInitialFrameForShow() noexcept
+{
+    if (! EnsureSizeDependentResources(true))
+    {
+        return false;
+    }
+
+    Render(nullptr, true);
+    return true;
+}
+
 void WindowHost::RequestAnimation() noexcept
 {
     if (_animationSubscriptionId == 0u)
@@ -1337,11 +1624,8 @@ bool WindowHost::HandleMnemonic(wchar_t mnemonic) noexcept
     return false;
 }
 
-void WindowHost::RecordNativeTextInputKeyToStateMetric(std::chrono::steady_clock::time_point inputStartedAt,
-                                                       const wchar_t* detail,
-                                                       uint64_t value0,
-                                                       uint64_t value1,
-                                                       bool armPaintMetric) noexcept
+void WindowHost::RecordNativeTextInputKeyToStateMetric(
+    std::chrono::steady_clock::time_point inputStartedAt, const wchar_t* detail, uint64_t value0, uint64_t value1, bool armPaintMetric) noexcept
 {
     Debug::Perf::Emit(L"dxui.textinput.key_to_state_us", detail, Debug::Perf::ElapsedUs(inputStartedAt), value0, value1, S_OK);
     if (! armPaintMetric || ! Debug::Perf::IsCaptureEnabled())
@@ -1577,8 +1861,8 @@ IDWriteFactory* WindowHost::GetWriteFactory() const noexcept
 
 IDWriteTextFormat* WindowHost::GetTextFormat(FontRole role) const noexcept
 {
-    if ((! _dwriteFactory || ! _bodyTextFormat || ! _bodyStrongTextFormat || ! _bodyLargeTextFormat || ! _titleTextFormat || ! _subtitleTextFormat ||
-         ! _titleLargeTextFormat || ! _displayTextFormat || ! _headerTextFormat || ! _smallTextFormat || ! _monoTextFormat ||
+    if ((! _dwriteFactory || ! _bodyTextFormat || ! _bodyStrongTextFormat || ! _bodyLargeTextFormat || ! _listItemTextFormat || ! _titleTextFormat ||
+         ! _subtitleTextFormat || ! _titleLargeTextFormat || ! _displayTextFormat || ! _headerTextFormat || ! _smallTextFormat || ! _monoTextFormat ||
          (_fluentIconFontAvailable && (! _iconTextFormat || ! _heroIconTextFormat))))
     {
         if (! EnsureDeviceIndependentResources())
@@ -1591,6 +1875,7 @@ IDWriteTextFormat* WindowHost::GetTextFormat(FontRole role) const noexcept
     {
         case FontRole::BodyStrong: return _bodyStrongTextFormat.get();
         case FontRole::BodyLarge: return _bodyLargeTextFormat.get();
+        case FontRole::ListItem: return _listItemTextFormat.get();
         case FontRole::Title: return _titleTextFormat.get();
         case FontRole::Subtitle: return _subtitleTextFormat.get();
         case FontRole::TitleLarge: return _titleLargeTextFormat.get();
@@ -1916,6 +2201,75 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         return accessibilityResult;
     }
 
+    if (ShouldTraceWindowHostMessage(msg))
+    {
+        POINT cursorScreenPt{};
+        const bool haveCursorScreenPt = GetCursorPos(&cursorScreenPt) != FALSE; // getcursorpos-allow: diagnostic-only
+        POINT cursorClientPt          = cursorScreenPt;
+        const bool haveCursorClientPt = haveCursorScreenPt && ScreenToClient(hwnd, &cursorClientPt) != FALSE;
+        POINT messageClientPt{};
+        bool haveMessageClientPt = false;
+        POINT messageScreenPt{};
+        bool haveMessageScreenPt = false;
+        Control* messageHitControl = nullptr;
+        if (IsClientMouseMessageForWindowHostTrace(msg))
+        {
+            messageClientPt     = POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            haveMessageClientPt = true;
+            messageScreenPt     = messageClientPt;
+            haveMessageScreenPt = ClientToScreen(hwnd, &messageScreenPt) != FALSE;
+            if (_root)
+            {
+                messageHitControl = HitTestControl(PointFromLParam(lp));
+            }
+        }
+        const POINT hitScreenPt = haveMessageScreenPt ? messageScreenPt : cursorScreenPt;
+        const bool haveHitScreenPt = haveMessageScreenPt || haveCursorScreenPt;
+        const HWND windowAtPoint =
+            (haveHitScreenPt && ShouldResolveScreenHitWindowForWindowHostTrace(msg)) ? WindowFromPoint(hitScreenPt) : nullptr;
+        const HWND parentHwnd = GetParent(hwnd);
+        const HWND ownerHwnd  = GetWindow(hwnd, GW_OWNER);
+        TraceWindowHostDiagnostics(L"dxui.windowhost.raw",
+                                   L"phase=enter hwnd={:#x} class=\"{}\" parent={:#x} owner={:#x} message={} msg=0x{:x} wParam={:#x} "
+                                   L"lParam={:#x} cursorClientPt=({}, {}) haveCursorClient={} cursorScreenPt=({}, {}) haveCursorScreen={} "
+                                   L"messageClientPt=({}, {}) haveMessageClient={} messageScreenPt=({}, {}) haveMessageScreen={} "
+                                   L"windowAtPoint={:#x} windowAtPointClass=\"{}\" focus={:#x} active={:#x} foreground={:#x} capture={:#x} "
+                                   L"messageHitControl={} focusedControl={} hoveredControl={} capturedControl={} root={} size={}x{}",
+                                   reinterpret_cast<uintptr_t>(hwnd),
+                                   TraceWindowClassName(hwnd),
+                                   reinterpret_cast<uintptr_t>(parentHwnd),
+                                   reinterpret_cast<uintptr_t>(ownerHwnd),
+                                   TraceWindowHostMessageName(msg),
+                                   msg,
+                                   static_cast<uintptr_t>(wp),
+                                   static_cast<uintptr_t>(lp),
+                                   cursorClientPt.x,
+                                   cursorClientPt.y,
+                                   haveCursorClientPt ? 1 : 0,
+                                   cursorScreenPt.x,
+                                   cursorScreenPt.y,
+                                   haveCursorScreenPt ? 1 : 0,
+                                   messageClientPt.x,
+                                   messageClientPt.y,
+                                   haveMessageClientPt ? 1 : 0,
+                                   messageScreenPt.x,
+                                   messageScreenPt.y,
+                                   haveMessageScreenPt ? 1 : 0,
+                                   reinterpret_cast<uintptr_t>(windowAtPoint),
+                                   TraceWindowClassName(windowAtPoint),
+                                   reinterpret_cast<uintptr_t>(GetFocus()),
+                                   reinterpret_cast<uintptr_t>(GetActiveWindow()),
+                                   reinterpret_cast<uintptr_t>(GetForegroundWindow()),
+                                   reinterpret_cast<uintptr_t>(GetCapture()),
+                                   DescribeWindowHostTraceControl(messageHitControl),
+                                   DescribeWindowHostTraceControl(_focusedControl),
+                                   DescribeWindowHostTraceControl(_hoveredControl),
+                                   DescribeWindowHostTraceControl(_capturedControl),
+                                   DescribeWindowHostTraceControl(_root.get()),
+                                   _widthPx,
+                                   _heightPx);
+    }
+
     switch (msg)
     {
         case WM_PAINT:
@@ -1965,12 +2319,18 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             OnKillFocus(false);
             return 0;
         case WM_ACTIVATE:
-            if (LOWORD(static_cast<DWORD_PTR>(wp)) != WA_INACTIVE) { break; }
+            if (LOWORD(static_cast<DWORD_PTR>(wp)) != WA_INACTIVE)
+            {
+                break;
+            }
             handled = true;
             OnKillFocus(false);
             return 0;
         case WM_ACTIVATEAPP:
-            if (wp != FALSE) { break; }
+            if (wp != FALSE)
+            {
+                break;
+            }
             handled = true;
             OnKillFocus(false);
             return 0;
@@ -2004,25 +2364,6 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         case WM_MOUSELEAVE:
         {
             handled = true;
-            POINT cursorScreenPx{};
-            if (GetCursorPos(&cursorScreenPx) != FALSE)
-            {
-                POINT cursorClientPx = cursorScreenPx;
-                RECT clientRectPx{};
-                if (ScreenToClient(hwnd, &cursorClientPx) != FALSE && GetClientRect(hwnd, &clientRectPx) != FALSE &&
-                    PtInRect(&clientRectPx, cursorClientPx) != FALSE)
-                {
-                    TRACKMOUSEEVENT tme{};
-                    tme.cbSize    = sizeof(tme);
-                    tme.dwFlags   = TME_LEAVE;
-                    tme.hwndTrack = hwnd;
-                    TrackMouseEvent(&tme);
-                    UpdateHover(D2D1::Point2F(PixelsToDip(static_cast<float>(cursorClientPx.x)), PixelsToDip(static_cast<float>(cursorClientPx.y))),
-                                GetModifierState());
-                    return 0;
-                }
-            }
-
             if (_hoveredControl)
             {
                 _hoveredControl->OnHoverChanged(*this, false);
@@ -2040,8 +2381,8 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         {
             handled = true;
             SetInputModality(InputModality::Pointer);
-            const D2D1_POINT_2F point = PointFromLParam(lp);
-            Control* target           = _capturedControl;
+            const D2D1_POINT_2F point    = PointFromLParam(lp);
+            Control* target              = _capturedControl;
             const UINT buttonDownMessage = PointerButtonDownMessageFor(msg);
             if (! target && IsPointerDoubleClickMessage(msg))
             {
@@ -2065,6 +2406,41 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             const bool doubleClick       = IsPointerDoubleClickMessage(msg) || ShouldTreatButtonDownAsDoubleClick(target, buttonDownMessage, lp);
             const bool controlHandled    = target && (doubleClick ? target->OnMouseDoubleClick(*this, point, rightButton, static_cast<UINT>(wp))
                                                                   : target->OnMouseDown(*this, point, rightButton, static_cast<UINT>(wp)));
+            if (IsContextMenuDiagnosticsEnabled())
+            {
+                const POINT messagePointPx{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                POINT liveScreenPx{};
+                const bool haveLiveScreen = GetCursorPos(&liveScreenPx) != FALSE; // getcursorpos-allow: diagnostic-only
+                POINT liveClientPx        = liveScreenPx;
+                const bool haveLiveClient = haveLiveScreen && ScreenToClient(hwnd, &liveClientPx) != FALSE;
+                RECT liveClientRectPx{};
+                const bool haveClientRect = GetClientRect(hwnd, &liveClientRectPx) != FALSE;
+                const bool liveInClient =
+                    haveLiveClient && haveClientRect && PtInRect(&liveClientRectPx, liveClientPx) != FALSE;
+                const HWND liveWindowAtPoint = haveLiveScreen ? WindowFromPoint(liveScreenPx) : nullptr;
+                TraceWindowHostDiagnostics(
+                    L"dxui.windowhost.pointer-down",
+                    L"hwnd={:#x} message={} point=({:.1f}, {:.1f}) messageClientPx=({}, {}) liveClientPx=({}, {}) haveLiveClient={} "
+                    L"liveInClient={} liveWindowAtPoint={:#x} target={} controlHandled={} doubleClick={} rightButton={} focusBefore={} hovered={} capturedBefore={}",
+                    reinterpret_cast<uintptr_t>(hwnd),
+                    TraceWindowHostMessageName(msg),
+                    point.x,
+                    point.y,
+                    messagePointPx.x,
+                    messagePointPx.y,
+                    liveClientPx.x,
+                    liveClientPx.y,
+                    haveLiveClient ? 1 : 0,
+                    liveInClient ? 1 : 0,
+                    reinterpret_cast<uintptr_t>(liveWindowAtPoint),
+                    DescribeWindowHostTraceControl(target),
+                    controlHandled ? 1 : 0,
+                    doubleClick ? 1 : 0,
+                    rightButton ? 1 : 0,
+                    DescribeWindowHostTraceControl(_focusedControl),
+                    DescribeWindowHostTraceControl(_hoveredControl),
+                    DescribeWindowHostTraceControl(_capturedControl));
+            }
             if (controlHandled)
             {
                 if (target->IsFocusable())
@@ -2115,6 +2491,39 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             {
                 target->OnMouseUp(*this, point, rightButton, static_cast<UINT>(wp));
             }
+            if (IsContextMenuDiagnosticsEnabled())
+            {
+                const POINT messagePointPx{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+                POINT liveScreenPx{};
+                const bool haveLiveScreen = GetCursorPos(&liveScreenPx) != FALSE; // getcursorpos-allow: diagnostic-only
+                POINT liveClientPx        = liveScreenPx;
+                const bool haveLiveClient = haveLiveScreen && ScreenToClient(hwnd, &liveClientPx) != FALSE;
+                RECT liveClientRectPx{};
+                const bool haveClientRect = GetClientRect(hwnd, &liveClientRectPx) != FALSE;
+                const bool liveInClient =
+                    haveLiveClient && haveClientRect && PtInRect(&liveClientRectPx, liveClientPx) != FALSE;
+                const HWND liveWindowAtPoint = haveLiveScreen ? WindowFromPoint(liveScreenPx) : nullptr;
+                TraceWindowHostDiagnostics(
+                    L"dxui.windowhost.pointer-up",
+                    L"hwnd={:#x} message={} point=({:.1f}, {:.1f}) messageClientPx=({}, {}) liveClientPx=({}, {}) haveLiveClient={} "
+                    L"liveInClient={} liveWindowAtPoint={:#x} target={} rightButton={} focus={} hovered={} capturedBeforeRelease={}",
+                    reinterpret_cast<uintptr_t>(hwnd),
+                    TraceWindowHostMessageName(msg),
+                    point.x,
+                    point.y,
+                    messagePointPx.x,
+                    messagePointPx.y,
+                    liveClientPx.x,
+                    liveClientPx.y,
+                    haveLiveClient ? 1 : 0,
+                    liveInClient ? 1 : 0,
+                    reinterpret_cast<uintptr_t>(liveWindowAtPoint),
+                    DescribeWindowHostTraceControl(target),
+                    rightButton ? 1 : 0,
+                    DescribeWindowHostTraceControl(_focusedControl),
+                    DescribeWindowHostTraceControl(_hoveredControl),
+                    DescribeWindowHostTraceControl(_capturedControl));
+            }
             ReleaseMouseCapture();
             return 0;
         }
@@ -2155,9 +2564,9 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
             }
             if (wp == VK_TAB && _root)
             {
-                Control* const keyTarget = _focusedControl;
+                Control* const keyTarget  = _focusedControl;
                 const auto inputStartedAt = std::chrono::steady_clock::now();
-                const UINT modifiers = GetModifierState();
+                const UINT modifiers      = GetModifierState();
                 if (keyTarget && keyTarget->OnKeyDown(*this, static_cast<UINT>(wp), modifiers))
                 {
                     if (_textInputBackend == TextInputBackend::Native && keyTarget == _focusedControl && keyTarget->SupportsTextInput())
@@ -2181,7 +2590,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
                 {
                     return 0;
                 }
-                Control* const keyTarget = _focusedControl;
+                Control* const keyTarget  = _focusedControl;
                 const auto inputStartedAt = std::chrono::steady_clock::now();
                 const bool controlHandled = keyTarget && keyTarget->OnKeyDown(*this, static_cast<UINT>(wp), modifiers);
                 if (controlHandled)
@@ -2222,7 +2631,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
                 {
                     modifiers |= kModifierAlt;
                 }
-                Control* const keyTarget = _focusedControl;
+                Control* const keyTarget  = _focusedControl;
                 const auto inputStartedAt = std::chrono::steady_clock::now();
                 if (keyTarget && keyTarget->OnKeyUp(*this, static_cast<UINT>(wp), modifiers))
                 {
@@ -2260,9 +2669,7 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         }
         case WM_IME_STARTCOMPOSITION:
         case WM_IME_COMPOSITION:
-        case WM_IME_ENDCOMPOSITION:
-            handled = HandleNativeTextInputImeMessage(msg, wp, lp);
-            return 0;
+        case WM_IME_ENDCOMPOSITION: handled = HandleNativeTextInputImeMessage(msg, wp, lp); return 0;
         case WM_CHAR:
             handled = true;
             SetInputModality(InputModality::Keyboard);
@@ -2271,12 +2678,16 @@ LRESULT WindowHost::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, boo
         case WM_SYSCHAR:
             handled = true;
             SetInputModality(InputModality::Keyboard);
+            if (HandleMnemonic(static_cast<wchar_t>(wp)))
+            {
+                return 0;
+            }
             if (_textInputBackend == TextInputBackend::Native && _focusedControl && _focusedControl->SupportsTextInput() &&
                 RouteFocusedCharInput(static_cast<wchar_t>(wp), GetModifierState() | kModifierAlt, L"native-syschar"))
             {
                 return 0;
             }
-            handled = HandleMnemonic(static_cast<wchar_t>(wp));
+            handled = false;
             return 0;
         case WM_CAPTURECHANGED:
             handled = true;
@@ -2347,6 +2758,16 @@ bool WindowHost::EnsureDeviceIndependentResources() const noexcept
         if (FAILED(hr) || ! _bodyLargeTextFormat)
         {
             Debug::Error(L"DxUi::WindowHost: CreateTextFormat failed for body-large text: 0x{:08X}", hr);
+            return false;
+        }
+    }
+    if (! _listItemTextFormat)
+    {
+        const Typography::TypographySpec spec = Typography::GetDxUiTypographySpec(FontRole::ListItem);
+        const HRESULT hr                      = Typography::CreateTextFormat(_dwriteFactory.get(), spec, _listItemTextFormat.addressof());
+        if (FAILED(hr) || ! _listItemTextFormat)
+        {
+            Debug::Error(L"DxUi::WindowHost: CreateTextFormat failed for list-item text: 0x{:08X}", hr);
             return false;
         }
     }
@@ -2705,19 +3126,19 @@ void WindowHost::PrepareForSwapChainResize() noexcept
 
 void WindowHost::DiscardSizeDependentResources(const std::wstring_view reason) noexcept
 {
-    Debug::Warning(
-        L"DxUi::WindowHost: DiscardSizeDependentResources hwnd=0x{:X} reason={} size={}x{} swap={}x{} visible={} focused={} hovered={} captured={} textInput={}",
-        reinterpret_cast<uintptr_t>(_hwnd),
-        reason.empty() ? L"(unspecified)" : reason,
-        _widthPx,
-        _heightPx,
-        _swapChainWidthPx,
-        _swapChainHeightPx,
-        (_hwnd && IsWindowVisible(_hwnd) != FALSE) ? L"true" : L"false",
-        static_cast<const void*>(_focusedControl),
-        static_cast<const void*>(_hoveredControl),
-        static_cast<const void*>(_capturedControl),
-        HasActiveTextInput() ? L"true" : L"false");
+    Debug::Warning(L"DxUi::WindowHost: DiscardSizeDependentResources hwnd=0x{:X} reason={} size={}x{} swap={}x{} visible={} focused={} hovered={} captured={} "
+                   L"textInput={}",
+                   reinterpret_cast<uintptr_t>(_hwnd),
+                   reason.empty() ? L"(unspecified)" : reason,
+                   _widthPx,
+                   _heightPx,
+                   _swapChainWidthPx,
+                   _swapChainHeightPx,
+                   (_hwnd && IsWindowVisible(_hwnd) != FALSE) ? L"true" : L"false",
+                   static_cast<const void*>(_focusedControl),
+                   static_cast<const void*>(_hoveredControl),
+                   static_cast<const void*>(_capturedControl),
+                   HasActiveTextInput() ? L"true" : L"false");
     PrepareForSwapChainResize();
     _swapChain.reset();
     _swapChainWidthPx  = 0u;
@@ -2765,10 +3186,10 @@ void WindowHost::RecreateBrushCache() const
     }
 }
 
-void WindowHost::Render(const RECT* dirtyRectPx) noexcept
+void WindowHost::Render(const RECT* dirtyRectPx, bool allowHidden) noexcept
 {
 #if defined(ENABLE_TESTS)
-    Render(dirtyRectPx, nullptr);
+    Render(dirtyRectPx, nullptr, allowHidden);
 #else
     FrameClock frameClock;
     FrameStage frameStage       = FrameStage::Idle;
@@ -2778,9 +3199,7 @@ void WindowHost::Render(const RECT* dirtyRectPx) noexcept
     uint64_t presentUs          = 0u;
     const auto dirtyRectMetrics = ResolveWindowHostDirtyRectMetrics(dirtyRectPx, _widthPx, _heightPx);
     const auto emitFrameMetrics = wil::scope_exit([&]
-    {
-        EmitWindowHostFrameMetrics(frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), updateUs, renderUs, presentUs, dirtyRectMetrics);
-    });
+    { EmitWindowHostFrameMetrics(frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), updateUs, renderUs, presentUs, dirtyRectMetrics); });
 
     Debug::Perf::Scope paintPerf(L"DxUI::Paint");
     paintPerf.SetValue0(_widthPx);
@@ -2789,7 +3208,7 @@ void WindowHost::Render(const RECT* dirtyRectPx) noexcept
     {
         FrameStageScope updateScope(frameStage, FrameStage::Update);
         const auto updateStartedAt = frameClock.Now();
-        if (! EnsureSizeDependentResources())
+        if (! EnsureSizeDependentResources(allowHidden))
         {
             updateUs = frameClock.ElapsedUs(updateStartedAt, frameClock.Now());
             paintPerf.SetHr(E_FAIL);
@@ -2963,7 +3382,7 @@ bool WindowHost::CaptureCurrentBackBuffer(WindowHostBitmapCapture& out) noexcept
     return true;
 }
 
-void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* capture) noexcept
+void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* capture, bool allowHidden) noexcept
 {
     FrameClock frameClock;
     FrameStage frameStage       = FrameStage::Idle;
@@ -2973,9 +3392,7 @@ void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* captur
     uint64_t presentUs          = 0u;
     const auto dirtyRectMetrics = ResolveWindowHostDirtyRectMetrics(dirtyRectPx, _widthPx, _heightPx);
     const auto emitFrameMetrics = wil::scope_exit([&]
-    {
-        EmitWindowHostFrameMetrics(frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), updateUs, renderUs, presentUs, dirtyRectMetrics);
-    });
+    { EmitWindowHostFrameMetrics(frameClock.ElapsedUs(frameStartedAt, frameClock.Now()), updateUs, renderUs, presentUs, dirtyRectMetrics); });
 
     Debug::Perf::Scope paintPerf(L"DxUI::Paint");
     paintPerf.SetValue0(_widthPx);
@@ -2984,7 +3401,7 @@ void WindowHost::Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* captur
     {
         FrameStageScope updateScope(frameStage, FrameStage::Update);
         const auto updateStartedAt = frameClock.Now();
-        if (! EnsureSizeDependentResources())
+        if (! EnsureSizeDependentResources(allowHidden))
         {
             updateUs = frameClock.ElapsedUs(updateStartedAt, frameClock.Now());
             paintPerf.SetHr(E_FAIL);
@@ -3236,9 +3653,9 @@ void WindowHost::PruneStaleInteractionState() noexcept
         return ResolveControlInteractionState(_root.get(), control);
     };
 
-    bool prunedCapture = false;
-    bool prunedHover   = false;
-    bool prunedFocus   = false;
+    bool prunedCapture         = false;
+    bool prunedHover           = false;
+    bool prunedFocus           = false;
     bool prunedNativeTextInput = false;
 
     if (_capturedControl && ! classifyInteractionState(_capturedControl).effectivelyInteractive)

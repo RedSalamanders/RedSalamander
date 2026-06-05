@@ -4486,6 +4486,16 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             snapshot->visibleColorizedByteCount        = _debugHexColorizedByteCount;
             snapshot->visibleUniqueColorBucketCount    = _debugHexUniqueColorBucketCount;
             snapshot->highContrastFallback             = _debugHexHighContrastFallback;
+#if defined(ENABLE_TESTS)
+            snapshot->hasLastContextMenuScreenPoint = _debugHasLastContextMenuScreenPoint;
+            snapshot->lastContextMenuScreenX        = _debugLastContextMenuScreenPoint.x;
+            snapshot->lastContextMenuScreenY        = _debugLastContextMenuScreenPoint.y;
+            snapshot->hasLastTextViewMouseMoveClientPoint = _debugHasLastTextViewMouseMoveClientPoint;
+            snapshot->lastTextViewMouseMoveClientX        = _debugLastTextViewMouseMoveClientPoint.x;
+            snapshot->lastTextViewMouseMoveClientY        = _debugLastTextViewMouseMoveClientPoint.y;
+            snapshot->lastTextViewMouseMoveHit            = _debugLastTextViewMouseMoveHit;
+            snapshot->lastTextViewMouseMoveLogicalLine    = _debugLastTextViewMouseMoveLogicalLine;
+#endif
             if (_viewMode == ViewMode::Text)
             {
                 const auto copyPreviewText = [](std::wstring_view source, auto& destination) noexcept
@@ -4810,7 +4820,8 @@ void ViewerText::OnCreate(HWND hwnd)
                 SetFocus(hwnd);
             }
         });
-        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this]() noexcept
+        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost,
+                                                                       [this]() noexcept
         {
             if (_hWnd)
             {
@@ -6185,14 +6196,14 @@ void ViewerText::Layout(HWND hwnd) noexcept
     _menuBarHost.UpdateLayout();
     client.top += _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
 
-    const UINT dpi                   = GetDpiForWindow(hwnd);
-    const bool showStandaloneHeader  = ! _embeddedMode;
-    const int baseHeaderHeight       = showStandaloneHeader ? PxFromDip(kHeaderHeightDip, dpi) : 0;
-    const int statusHeight     = PxFromDip(kStatusHeightDip, dpi);
-    const int accentHeight     = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip, dpi));
-    const int accentGap        = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip, dpi));
-    const int minPadding       = PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip, dpi);
-    const int minChromeHeight  = showStandaloneHeader ? PxFromDip(22, dpi) + accentHeight + accentGap + 2 * minPadding : 0;
+    const UINT dpi                  = GetDpiForWindow(hwnd);
+    const bool showStandaloneHeader = ! _embeddedMode;
+    const int baseHeaderHeight      = showStandaloneHeader ? PxFromDip(kHeaderHeightDip, dpi) : 0;
+    const int statusHeight          = PxFromDip(kStatusHeightDip, dpi);
+    const int accentHeight          = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentHeightDip, dpi));
+    const int accentGap             = std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboAccentGapDip, dpi));
+    const int minPadding            = PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboChromePaddingDip, dpi);
+    const int minChromeHeight       = showStandaloneHeader ? PxFromDip(22, dpi) + accentHeight + accentGap + 2 * minPadding : 0;
 
     const bool showCombo         = (showStandaloneHeader && _hFileComboHost && ActiveFileComboEntryCount() > 1u);
     const int desiredComboHeight = showCombo ? std::max(1, PxFromDip(RedSalamander::ViewerFileComboHost::kStandaloneComboHeightDip, dpi)) : 0;
@@ -6887,6 +6898,11 @@ void ViewerText::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND cont
 
 void ViewerText::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 {
+#if defined(ENABLE_TESTS) && defined(_DEBUG)
+    _debugHasLastContextMenuScreenPoint = true;
+    _debugLastContextMenuScreenPoint    = screenPt;
+#endif
+
     if (! _menuHandle)
     {
         _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERTEXT_MENU));
@@ -7231,12 +7247,8 @@ bool ViewerText::OnSetCursor(HWND hwnd, LPARAM lParam) noexcept
         return false;
     }
 
-    POINT pt{};
-    if (GetCursorPos(&pt) == 0)
-    {
-        return false;
-    }
-
+    const DWORD messagePos = GetMessagePos();
+    POINT pt{static_cast<LONG>(static_cast<short>(LOWORD(messagePos))), static_cast<LONG>(static_cast<short>(HIWORD(messagePos)))};
     if (ScreenToClient(hwnd, &pt) == 0)
     {
         return false;
@@ -9482,7 +9494,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
         _viewMode = ViewMode::Hex;
     }
 
-    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const bool embeddedMode   = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (! embeddedParent || IsWindow(embeddedParent) == FALSE))
     {
@@ -9504,9 +9516,10 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             return E_FAIL;
         }
 
-        _embeddedMode = embeddedMode;
+        _embeddedMode    = embeddedMode;
         HWND ownerWindow = context->ownerWindow;
-        const std::wstring initialTitle = embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERTEXT_NAME) : _metaName);
+        const std::wstring initialTitle =
+            embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERTEXT_NAME) : _metaName);
 
         RECT ownerRect{};
         if (embeddedMode)
@@ -9709,8 +9722,7 @@ namespace
 {
 void UnhookFileComboHostWindow(HWND hwnd) noexcept
 {
-    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(
-        hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 [[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept

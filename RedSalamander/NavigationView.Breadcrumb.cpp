@@ -32,7 +32,7 @@ void NavigationView::RenderPathSection()
     // Allow rendering background even without path
     _d2dContext->BeginDraw();
     auto refreshActiveEditHost = wil::scope_exit([this] { RefreshActiveEditHostAfterParentPaint(); });
-    auto endDraw = wil::scope_exit([&]
+    auto endDraw               = wil::scope_exit([&]
     {
         const HRESULT hrEnd = _d2dContext->EndDraw();
         if (FAILED(hrEnd))
@@ -565,9 +565,10 @@ void NavigationView::RenderBreadcrumbs()
 
         const bool lastSegment = i == (_segments.size() - 1);
 
-        ID2D1SolidColorBrush* textBrush = (! segment.isEllipsis && lastSegment) ? _accentBrush.get() : _textBrush.get();
+        ID2D1SolidColorBrush* textBrush =
+            (! _embeddedDestinationMode && ! segment.isEllipsis && lastSegment) ? _accentBrush.get() : _textBrush.get();
 
-        if (! segment.isEllipsis && _theme.rainbowMode && _rainbowBrush)
+        if (! _embeddedDestinationMode && ! segment.isEllipsis && _theme.rainbowMode && _rainbowBrush)
         {
             const uint32_t hash  = StableHash32(std::wstring_view(segment.fullPath.native()));
             const float hue      = static_cast<float>(hash % 360u);

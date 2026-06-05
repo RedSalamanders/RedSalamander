@@ -110,7 +110,11 @@ function Get-RSSatelliteBaseEntries {
 
 Describe 'Resource localization contracts' {
     It 'keeps resource format placeholders positional and translation-safe' {
-        $resourceFiles = @(Get-ChildItem -Path $repoRoot -Recurse -Filter '*.rc' | Where-Object { $_.FullName -notmatch '\\.build\\|\\packages\\' })
+        $resourceFiles = @()
+        $resourceFiles += @(Get-ChildItem -LiteralPath $repoRoot -Filter '*.rc')
+        foreach ($rootChild in @(Get-ChildItem -LiteralPath $repoRoot -Directory | Where-Object { $_.Name -notin @('.build', 'packages') })) {
+            $resourceFiles += @(Get-ChildItem -LiteralPath $rootChild.FullName -Recurse -Filter '*.rc')
+        }
         $entries = @($resourceFiles | ForEach-Object { Get-RSResourceStringEntries -File $_ })
         $violations = @()
 

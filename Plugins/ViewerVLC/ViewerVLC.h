@@ -302,11 +302,11 @@ private:
     DWORD _restoreStyle   = 0;
     DWORD _restoreExStyle = 0;
 
-    UINT_PTR _uiTimerId    = 0;
-    bool _missingUiVisible = false;
-    UINT_PTR _loadingTimerId = 0;
-    bool _loadingUiActive    = false;
-    bool _loadingUiVisible   = false;
+    UINT_PTR _uiTimerId           = 0;
+    bool _missingUiVisible        = false;
+    UINT_PTR _loadingTimerId      = 0;
+    bool _loadingUiActive         = false;
+    bool _loadingUiVisible        = false;
     ULONGLONG _loadingStartedTick = 0;
     uint64_t _asyncOpenGeneration = 0;
 

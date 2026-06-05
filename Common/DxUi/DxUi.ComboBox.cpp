@@ -1018,8 +1018,8 @@ bool ComboBox::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButt
         if (_editable && ! onDropButton)
         {
             const D2D1_RECT_F textRect = GetEditableTextRect();
-            const size_t hitIndex      = HitTestCaretIndexDip(
-                &host, _text, FontRole::Body, textRect, _editableHorizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
+            const size_t hitIndex =
+                HitTestCaretIndexDip(&host, _text, FontRole::Body, textRect, _editableHorizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
             if (ModifiersContainShift(modifiers))
             {
                 SetEditableCaretIndex(hitIndex, true);
@@ -1089,8 +1089,8 @@ bool ComboBox::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifie
     if (_editable && _dragSelecting && ! _open)
     {
         const D2D1_RECT_F textRect = GetEditableTextRect();
-        const size_t hitIndex      = HitTestCaretIndexDip(
-            &host, _text, FontRole::Body, textRect, _editableHorizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
+        const size_t hitIndex =
+            HitTestCaretIndexDip(&host, _text, FontRole::Body, textRect, _editableHorizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
         SetEditableCaretIndex(hitIndex, true);
         EnsureEditableCaretVisible(&host, std::max(1.0f, textRect.right - textRect.left));
         ResetEditableCaretBlink(host);
@@ -1148,11 +1148,11 @@ bool ComboBox::DebugGetEditablePaintState(const WindowHost& host, ComboBoxDebugE
         return false;
     }
 
-    out                     = {};
-    out.textRect            = SnapRectToPixel(host, GetEditableTextRect());
-    out.compositionUnderlineRects = BuildNativeCompositionUnderlineRects(host, *this, false);
+    out                                = {};
+    out.textRect                       = SnapRectToPixel(host, GetEditableTextRect());
+    out.compositionUnderlineRects      = BuildNativeCompositionUnderlineRects(host, *this, false);
     out.conversionTargetUnderlineRects = BuildNativeCompositionUnderlineRects(host, *this, true);
-    out.horizontalScrollDip = _editableHorizontalScrollDip;
+    out.horizontalScrollDip            = _editableHorizontalScrollDip;
     return true;
 }
 
@@ -1826,32 +1826,30 @@ std::optional<D2D1_RECT_F> ComboBox::GetTextInputCaretRect(const WindowHost& hos
         return std::nullopt;
     }
 
-    const D2D1_RECT_F textRect     = GetEditableTextRect();
-    const size_t clampedCaretIndex = (std::min)(controlTextIndex, _text.size());
-    const bool perfEnabled         = Debug::Perf::IsCaptureEnabled();
-    const auto startedAt           = perfEnabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const D2D1_RECT_F textRect                      = GetEditableTextRect();
+    const size_t clampedCaretIndex                  = (std::min)(controlTextIndex, _text.size());
+    const bool perfEnabled                          = Debug::Perf::IsCaptureEnabled();
+    const auto startedAt                            = perfEnabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
-    const float caretOffset        = MeasureCaretOffsetDip(&host,
-                                                           _text,
-                                                           FontRole::Body,
-                                                           clampedCaretIndex,
-                                                           std::max(1.0f, textRect.bottom - textRect.top),
-                                                           readingDirection,
-                                                           std::max(1.0f, textRect.right - textRect.left + _editableHorizontalScrollDip));
-    const float caretMaxX          = std::max(textRect.left, textRect.right - 1.0f);
-    const float caretX             = std::clamp(textRect.left + caretOffset - _editableHorizontalScrollDip, textRect.left, caretMaxX);
-    const D2D1_RECT_F result       = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
+    const float caretOffset                         = MeasureCaretOffsetDip(&host,
+                                                                            _text,
+                                                                            FontRole::Body,
+                                                                            clampedCaretIndex,
+                                                                            std::max(1.0f, textRect.bottom - textRect.top),
+                                                                            readingDirection,
+                                                                            std::max(1.0f, textRect.right - textRect.left + _editableHorizontalScrollDip));
+    const float caretMaxX                           = std::max(textRect.left, textRect.right - 1.0f);
+    const float caretX                              = std::clamp(textRect.left + caretOffset - _editableHorizontalScrollDip, textRect.left, caretMaxX);
+    const D2D1_RECT_F result                        = D2D1::RectF(caretX, textRect.top + 2.0f, caretX + 1.0f, textRect.bottom - 2.0f);
     if (perfEnabled && ShouldEmitSingleLineBiDiTextMetric(_text, readingDirection))
     {
         const std::wstring_view detail = readingDirection == DWRITE_READING_DIRECTION_RIGHT_TO_LEFT ? L"editable-combo-rtl" : L"editable-combo-ltr";
-        Debug::Perf::Emit(
-            L"dxui.textinput.bidi_caret_rect_us", detail, Debug::Perf::ElapsedUs(startedAt), clampedCaretIndex, _text.size(), S_OK);
+        Debug::Perf::Emit(L"dxui.textinput.bidi_caret_rect_us", detail, Debug::Perf::ElapsedUs(startedAt), clampedCaretIndex, _text.size(), S_OK);
     }
     return result;
 }
 
-std::optional<std::vector<D2D1_RECT_F>> ComboBox::GetTextInputRangeRects(
-    const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const
+std::optional<std::vector<D2D1_RECT_F>> ComboBox::GetTextInputRangeRects(const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const
 {
     if (! SupportsTextInput() || controlTextStartIndex >= controlTextEndIndex)
     {
@@ -1875,10 +1873,8 @@ std::optional<std::vector<D2D1_RECT_F>> ComboBox::GetTextInputRangeRects(
     const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
     const float heightDip                           = std::max(1.0f, textRect.bottom - textRect.top);
     const float measuredTextWidthDip                = MeasureSingleLineTextWidthDip(&host, _text, FontRole::Body, heightDip, readingDirection);
-    const float layoutWidthDip =
-        std::max({1.0f, textRect.right - textRect.left + _editableHorizontalScrollDip, measuredTextWidthDip + 32.0f});
-    const wil::com_ptr<IDWriteTextLayout> layout =
-        CreateSingleLineTextLayout(&host, _text, FontRole::Body, layoutWidthDip, heightDip, readingDirection);
+    const float layoutWidthDip = std::max({1.0f, textRect.right - textRect.left + _editableHorizontalScrollDip, measuredTextWidthDip + 32.0f});
+    const wil::com_ptr<IDWriteTextLayout> layout = CreateSingleLineTextLayout(&host, _text, FontRole::Body, layoutWidthDip, heightDip, readingDirection);
     if (! layout)
     {
         return std::nullopt;
@@ -1914,8 +1910,8 @@ std::optional<std::vector<D2D1_RECT_F>> ComboBox::GetTextInputRangeRects(
     for (UINT32 index = 0u; index < actualCount; ++index)
     {
         const DWRITE_HIT_TEST_METRICS& hit = metrics[index];
-        D2D1_RECT_F rect = D2D1::RectF(hit.left, hit.top, hit.left + hit.width, hit.top + hit.height);
-        rect             = ClipTextInputRectToBounds(rect, textRect);
+        D2D1_RECT_F rect                   = D2D1::RectF(hit.left, hit.top, hit.left + hit.width, hit.top + hit.height);
+        rect                               = ClipTextInputRectToBounds(rect, textRect);
         if (rect.right > rect.left && rect.bottom > rect.top)
         {
             rects.push_back(rect);
@@ -1942,8 +1938,8 @@ std::optional<size_t> ComboBox::HitTestTextInputPoint(const WindowHost& host, D2
         return std::nullopt;
     }
 
-    const size_t hitIndex = HitTestCaretIndexDip(
-        &host, _text, FontRole::Body, textRect, _editableHorizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
+    const size_t hitIndex =
+        HitTestCaretIndexDip(&host, _text, FontRole::Body, textRect, _editableHorizontalScrollDip, point, ResolveReadingDirection(GetFlowDirection()));
     return (std::min)(hitIndex, _text.size());
 }
 
@@ -2003,10 +1999,8 @@ bool ComboBox::ImportTextInputState(WindowHost& host, const TextInputState& stat
 
 ComboBox::EditHistoryState ComboBox::CaptureEditHistoryState() const
 {
-    return EditHistoryState{.text                  = _text,
-                            .caretIndex            = _caretIndex,
-                            .selectionAnchorIndex  = _selectionAnchorIndex,
-                            .horizontalScrollDip   = _editableHorizontalScrollDip};
+    return EditHistoryState{
+        .text = _text, .caretIndex = _caretIndex, .selectionAnchorIndex = _selectionAnchorIndex, .horizontalScrollDip = _editableHorizontalScrollDip};
 }
 
 void ComboBox::RestoreEditHistoryState(const EditHistoryState& state) noexcept
@@ -2166,14 +2160,14 @@ D2D1_RECT_F ComboBox::GetHitBounds() const noexcept
                        std::max(GetBounds().bottom, popup.bottom));
 }
 
-Control* ComboBox::HitTestOverlay(D2D1_POINT_2F point)
+Control* ComboBox::HitTestOverlay(D2D1_POINT_2F /*point*/)
 {
-    return (_open && IsVisible() && IsEnabled() && PointInRect(GetHitBounds(), point)) ? this : nullptr;
+    return (_open && IsVisible() && IsEnabled()) ? this : nullptr;
 }
 
-const Control* ComboBox::HitTestOverlay(D2D1_POINT_2F point) const
+const Control* ComboBox::HitTestOverlay(D2D1_POINT_2F /*point*/) const
 {
-    return (_open && IsVisible() && IsEnabled() && PointInRect(GetHitBounds(), point)) ? this : nullptr;
+    return (_open && IsVisible() && IsEnabled()) ? this : nullptr;
 }
 
 D2D1_RECT_F ComboBox::GetEditableTextRect() const noexcept
@@ -2206,7 +2200,7 @@ void ComboBox::EnsureEditableCaretVisible(const WindowHost* host, float availabl
                                                        std::max(1.0f, textRect.bottom - textRect.top),
                                                        ResolveReadingDirection(GetFlowDirection()),
                                                        std::max(1.0f, availableWidthDip + _editableHorizontalScrollDip));
-    const float padding = 6.0f;
+    const float padding        = 6.0f;
     if (caretOffset < _editableHorizontalScrollDip + padding)
     {
         _editableHorizontalScrollDip = std::max(0.0f, caretOffset - padding);
@@ -2391,14 +2385,13 @@ void ComboBox::UpdatePopupLayout(const WindowHost* host) const noexcept
     D2D1_RECT_F clientBounds = host->GetClientBoundsDip();
     if (const auto* scrollParent = FindContainingScrollPanel(host, *this))
     {
-        const D2D1_RECT_F scrollBounds = scrollParent->GetBounds();
-        const D2D1_RECT_F visibleBounds =
-            D2D1::RectF((std::max)(clientBounds.left, scrollBounds.left),
-                        (std::max)(clientBounds.top, scrollBounds.top),
-                        (std::min)(clientBounds.right, scrollBounds.right),
-                        (std::min)(clientBounds.bottom, scrollBounds.bottom));
-        const float scrollOffset = scrollParent->GetScrollOffset();
-        clientBounds             = D2D1::RectF(visibleBounds.left, visibleBounds.top + scrollOffset, visibleBounds.right, visibleBounds.bottom + scrollOffset);
+        const D2D1_RECT_F scrollBounds  = scrollParent->GetBounds();
+        const D2D1_RECT_F visibleBounds = D2D1::RectF((std::max)(clientBounds.left, scrollBounds.left),
+                                                      (std::max)(clientBounds.top, scrollBounds.top),
+                                                      (std::min)(clientBounds.right, scrollBounds.right),
+                                                      (std::min)(clientBounds.bottom, scrollBounds.bottom));
+        const float scrollOffset        = scrollParent->GetScrollOffset();
+        clientBounds = D2D1::RectF(visibleBounds.left, visibleBounds.top + scrollOffset, visibleBounds.right, visibleBounds.bottom + scrollOffset);
     }
     if (clientBounds.right <= clientBounds.left || clientBounds.bottom <= clientBounds.top)
     {
@@ -2827,9 +2820,9 @@ D2D1_RECT_F ComboBox::GetPopupScrollbarThumbRect() const noexcept
         return D2D1::RectF();
     }
 
-    const float trackHeight = std::max(0.0f, track.bottom - track.top);
-    const float minThumb    = std::min(kScrollbarMinThumbDip, trackHeight);
-    const float thumbHeight = std::clamp((static_cast<float>(visibleCount) / static_cast<float>(itemCount)) * trackHeight, minThumb, trackHeight);
+    const float trackHeight     = std::max(0.0f, track.bottom - track.top);
+    const float minThumb        = std::min(kScrollbarMinThumbDip, trackHeight);
+    const float thumbHeight     = std::clamp((static_cast<float>(visibleCount) / static_cast<float>(itemCount)) * trackHeight, minThumb, trackHeight);
     const size_t maxScrollIndex = itemCount - visibleCount;
     const float available       = std::max(0.0f, trackHeight - thumbHeight);
     const float thumbTop =
@@ -2852,9 +2845,9 @@ D2D1_RECT_F ComboBox::GetPopupScrollbarThumbHitRect() const noexcept
         return D2D1::RectF();
     }
 
-    const float trackHeight = std::max(0.0f, track.bottom - track.top);
-    const float minThumb    = std::min(kScrollbarMinThumbDip, trackHeight);
-    const float thumbHeight = std::clamp((static_cast<float>(visibleCount) / static_cast<float>(itemCount)) * trackHeight, minThumb, trackHeight);
+    const float trackHeight     = std::max(0.0f, track.bottom - track.top);
+    const float minThumb        = std::min(kScrollbarMinThumbDip, trackHeight);
+    const float thumbHeight     = std::clamp((static_cast<float>(visibleCount) / static_cast<float>(itemCount)) * trackHeight, minThumb, trackHeight);
     const size_t maxScrollIndex = itemCount - visibleCount;
     const float available       = std::max(0.0f, trackHeight - thumbHeight);
     const float thumbTop =

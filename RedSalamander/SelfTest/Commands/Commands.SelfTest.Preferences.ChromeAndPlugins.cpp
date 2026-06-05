@@ -2756,10 +2756,9 @@ namespace
                       L"Failed to select the Preferences Viewers category for remove interaction validation.");
         PumpPendingMessages();
 
-        const bool settled = waitForSnapshot(
-            [](const PreferencesDebugSnapshot& value) noexcept
-            { return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.currentPageDxHostResizeFailureCount == 0u; },
-            outSnapshot);
+        const bool settled = waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+            return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u && value.currentPageDxHostResizeFailureCount == 0u;
+        }, outSnapshot);
         state.Require(settled,
                       std::format(L"Preferences Viewers page did not settle before remove interaction validation; category={}, rows={}, "
                                   L"selected='{}', childWindows={}, renderedDxHosts={}, resizeFailures={}, pageTitle='{}'.",
@@ -3101,7 +3100,7 @@ namespace
     }
 
     const std::wstring baselineSelectedExtension = L".selftest-viewers-001";
-    const bool cancelRestoredBaselineMappings = waitForSnapshot(
+    const bool cancelRestoredBaselineMappings    = waitForSnapshot(
         [&](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount == 3u &&
@@ -3114,8 +3113,9 @@ namespace
         static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
         state.Require(
             false,
-            std::format(L"Preferences Viewers page did not restore the baseline mappings and first-row selection after shell Cancel discarded the pending reset; {}.",
-                        formatViewersResetSnapshot(actualSnapshot, 3u)));
+            std::format(
+                L"Preferences Viewers page did not restore the baseline mappings and first-row selection after shell Cancel discarded the pending reset; {}.",
+                formatViewersResetSnapshot(actualSnapshot, 3u)));
     }
     if (! state.failure.empty())
     {
@@ -3439,7 +3439,8 @@ namespace
     }
 
     const std::wstring saveAssociationButtonText = LoadStringResource(nullptr, IDS_PREFS_FILE_ACTION_BUTTON_SAVE_ASSOCIATION);
-    state.Require(! saveAssociationButtonText.empty(), L"Preferences Viewers Save Association button caption should resolve for live UIA InvokePattern validation.");
+    state.Require(! saveAssociationButtonText.empty(),
+                  L"Preferences Viewers Save Association button caption should resolve for live UIA InvokePattern validation.");
     if (! state.failure.empty())
     {
         return false;

@@ -77,8 +77,7 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 void UnhookFileComboHostWindow(HWND hwnd) noexcept
 {
-    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(
-        hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 [[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
@@ -731,6 +730,8 @@ struct SharedEnvironmentState
 {
     wil::com_ptr<ICoreWebView2Environment> environment;
     bool createInProgress = false;
+    bool shuttingDown     = false;
+    uint64_t generation   = 1;
     // Pending consumers waiting for the first environment creation to complete.
     struct PendingConsumer
     {
@@ -741,6 +742,17 @@ struct SharedEnvironmentState
 };
 
 SharedEnvironmentState g_sharedEnvironment;
+
+[[nodiscard]] uint64_t BeginSharedEnvironmentUse() noexcept
+{
+    g_sharedEnvironment.shuttingDown = false;
+    return g_sharedEnvironment.generation;
+}
+
+[[nodiscard]] bool IsSharedEnvironmentGenerationCurrent(uint64_t generation) noexcept
+{
+    return ! g_sharedEnvironment.shuttingDown && g_sharedEnvironment.generation == generation;
+}
 
 std::wstring GetWebView2UserDataFolder() noexcept
 {
@@ -754,7 +766,24 @@ std::wstring GetWebView2UserDataFolder() noexcept
 
 void ResetSharedEnvironmentImpl() noexcept
 {
+    g_sharedEnvironment.shuttingDown = true;
+    ++g_sharedEnvironment.generation;
+    if (g_sharedEnvironment.generation == 0)
+    {
+        g_sharedEnvironment.generation = 1;
+    }
+
+    auto pendingConsumers = std::move(g_sharedEnvironment.pendingConsumers);
     g_sharedEnvironment.pendingConsumers.clear();
+    for (auto& pending : pendingConsumers)
+    {
+        if (pending.viewer)
+        {
+            pending.viewer->CancelPendingWebView2Initialization();
+            pending.viewer->Release();
+        }
+    }
+
     g_sharedEnvironment.createInProgress = false;
     g_sharedEnvironment.environment.reset();
 }
@@ -1528,14 +1557,15 @@ void ViewerWeb::OnCreate(HWND hwnd)
             }
 
             const HWND hwnd = _hWnd.get();
-            _otherIndex = selectedIndex;
+            _otherIndex     = selectedIndex;
             static_cast<void>(OpenPath(hwnd, _otherFiles[_otherIndex], false));
             if (! _embeddedMode)
             {
                 SetFocus(hwnd);
             }
         });
-        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this]() noexcept
+        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost,
+                                                                       [this]() noexcept
         {
             if (_hWnd)
             {
@@ -2317,7 +2347,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
 
     const std::wstring focusedPath(context->focusedPath);
 
-    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const bool embeddedMode   = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
     {
@@ -2362,9 +2392,9 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
             h = static_cast<int>(std::max<LONG>(1, ownerRect.bottom - ownerRect.top));
         }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(
-            embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
-        const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN);
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(embeddedMode ? nullptr
+                                                                                          : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
+        const DWORD style               = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN);
         const std::wstring initialTitle = embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERWEB_NAME) : _metaName);
         HWND window =
             CreateWindowExW(0, kClassName, initialTitle.c_str(), style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, menu.get(), g_hInstance, this);
@@ -3107,15 +3137,26 @@ HRESULT ViewerWeb::OpenCurrentDocumentInTextViewer() noexcept
     return hostViewers->OpenViewer(&request);
 }
 
-HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment) noexcept
+HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment, uint64_t sharedEnvironmentGeneration) noexcept
 {
-    const HRESULT hr =
-        environment->CreateCoreWebView2Controller(hwnd,
-                                                  MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
-                                                      [this, hwnd](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
+    auto moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerWebModuleAnchor);
+    auto callback =
+        MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
+            [this, hwnd, sharedEnvironmentGeneration, moduleKeepAlive = std::move(moduleKeepAlive)](
+                HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
     {
+        static_cast<void>(moduleKeepAlive);
         _webViewInitInProgress = false;
         auto releaseSelf       = wil::scope_exit([&] { Release(); });
+
+        if (! IsSharedEnvironmentGenerationCurrent(sharedEnvironmentGeneration))
+        {
+            if (controller)
+            {
+                controller->Close();
+            }
+            return S_OK;
+        }
 
         if (FAILED(controllerResult) || ! controller)
         {
@@ -3456,7 +3497,16 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
         }
 
         return S_OK;
-    }).get());
+    });
+
+    if (! callback)
+    {
+        _webViewInitInProgress = false;
+        Release();
+        return E_OUTOFMEMORY;
+    }
+
+    const HRESULT hr = environment->CreateCoreWebView2Controller(hwnd, callback.get());
 
     if (FAILED(hr))
     {
@@ -3527,11 +3577,12 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
 
     _webViewInitInProgress = true;
     AddRef();
+    const uint64_t sharedEnvironmentGeneration = BeginSharedEnvironmentUse();
 
     // Fast path: shared environment already exists — create controller immediately.
     if (g_sharedEnvironment.environment)
     {
-        return CreateControllerFromEnvironment(hwnd, g_sharedEnvironment.environment.get());
+        return CreateControllerFromEnvironment(hwnd, g_sharedEnvironment.environment.get(), sharedEnvironmentGeneration);
     }
 
     // Another instance is already creating the environment — queue ourselves.
@@ -3546,13 +3597,19 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
 
     const std::wstring userDataFolder = GetWebView2UserDataFolder();
 
-    const HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
-        nullptr,
-        userDataFolder.empty() ? nullptr : userDataFolder.c_str(),
-        nullptr,
-        MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
-            [this, hwnd](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT
+    auto moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerWebModuleAnchor);
+    auto callback        = MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
+        [this, hwnd, sharedEnvironmentGeneration, moduleKeepAlive = std::move(moduleKeepAlive)](
+            HRESULT result, ICoreWebView2Environment* environment) -> HRESULT
     {
+        static_cast<void>(moduleKeepAlive);
+        if (! IsSharedEnvironmentGenerationCurrent(sharedEnvironmentGeneration))
+        {
+            _webViewInitInProgress = false;
+            Release();
+            return S_OK;
+        }
+
         g_sharedEnvironment.createInProgress = false;
 
         if (FAILED(result) || ! environment)
@@ -3583,7 +3640,7 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
         g_sharedEnvironment.environment = environment;
 
         // Create our own controller.
-        static_cast<void>(CreateControllerFromEnvironment(hwnd, environment));
+        static_cast<void>(CreateControllerFromEnvironment(hwnd, environment, sharedEnvironmentGeneration));
 
         // Drain pending consumers — each creates its own controller from the shared environment.
         auto pendingConsumers = std::move(g_sharedEnvironment.pendingConsumers);
@@ -3591,12 +3648,23 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
         {
             if (pending.viewer && pending.hwnd)
             {
-                static_cast<void>(pending.viewer->CreateControllerFromEnvironment(pending.hwnd, environment));
+                static_cast<void>(pending.viewer->CreateControllerFromEnvironment(pending.hwnd, environment, sharedEnvironmentGeneration));
             }
         }
 
         return S_OK;
-    }).get());
+    });
+
+    if (! callback)
+    {
+        g_sharedEnvironment.createInProgress = false;
+        _webViewInitInProgress               = false;
+        Release();
+        return E_OUTOFMEMORY;
+    }
+
+    const HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
+        nullptr, userDataFolder.empty() ? nullptr : userDataFolder.c_str(), nullptr, callback.get());
 
     if (FAILED(hr))
     {
@@ -3645,6 +3713,11 @@ void ViewerWeb::DiscardWebView2() noexcept
     // The shared environment is NOT released here — it lives for the DLL lifetime.
     _webView.reset();
     _webViewController.reset();
+}
+
+void ViewerWeb::CancelPendingWebView2Initialization() noexcept
+{
+    _webViewInitInProgress = false;
 }
 
 void ViewerWeb::ConfigureWebViewSettings() noexcept

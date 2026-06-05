@@ -5,8 +5,8 @@
 #include "DxUi.h"
 #include "MinimumOsVersion.h"
 #include "RedConfigureApp.h"
-#include "RedConfigureSession.h"
 #include "RedConfigureRoot.h"
+#include "RedConfigureSession.h"
 #include "SettingsStore.h"
 #include "resource.h"
 
@@ -52,7 +52,9 @@ constexpr wchar_t kWindowClassName[] = L"RedConfigure.MainWindow";
 class MainWindow final
 {
 public:
-    explicit MainWindow(HINSTANCE instance) noexcept : _instance(instance) {}
+    explicit MainWindow(HINSTANCE instance) noexcept : _instance(instance)
+    {
+    }
 
     MainWindow(const MainWindow&)            = delete;
     MainWindow& operator=(const MainWindow&) = delete;
@@ -85,18 +87,8 @@ public:
         wil::unique_hmenu menu(::LoadMenuW(_instance, MAKEINTRESOURCEW(IDR_REDCONFIGURE_MAINMENU)));
         const std::wstring title = LoadAppString(_instance, IDS_REDCONFIGURE_APP_TITLE);
 
-        HWND hwnd = ::CreateWindowExW(0,
-                                      kWindowClassName,
-                                      title.c_str(),
-                                      WS_OVERLAPPEDWINDOW,
-                                      CW_USEDEFAULT,
-                                      CW_USEDEFAULT,
-                                      1280,
-                                      860,
-                                      nullptr,
-                                      menu.get(),
-                                      _instance,
-                                      this);
+        HWND hwnd = ::CreateWindowExW(
+            0, kWindowClassName, title.c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1280, 860, nullptr, menu.get(), _instance, this);
         if (! hwnd)
         {
             return nullptr;
@@ -146,9 +138,7 @@ private:
         switch (message)
         {
             case WM_CREATE: return window->OnCreate() ? 0 : -1;
-            case WM_SIZE:
-                window->Layout();
-                return 0;
+            case WM_SIZE: window->Layout(); return 0;
             case WM_GETMINMAXINFO:
                 if (auto* info = reinterpret_cast<MINMAXINFO*>(lParam))
                 {
@@ -163,12 +153,10 @@ private:
                     return 0;
                 }
                 break;
-            case WM_DESTROY:
-                ::PostQuitMessage(0);
-                return 0;
+            case WM_DESTROY: ::PostQuitMessage(0); return 0;
             case WM_NCDESTROY:
                 window->_dxHost.Detach();
-                window->_root = nullptr;
+                window->_root           = nullptr;
                 window->_rootController = nullptr;
                 ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
                 window->_hwnd = nullptr;
@@ -206,8 +194,8 @@ private:
             root = RedConfigure::ResolveWorkspaceRootForLaunchPath(root);
         }
 
-        auto ui = RedConfigure::Ui::CreateRedConfigureRoot(_instance, _session, root);
-        _root = ui.control.get();
+        auto ui         = RedConfigure::Ui::CreateRedConfigureRoot(_instance, _session, root);
+        _root           = ui.control.get();
         _rootController = ui.controller;
         _dxHost.SetRoot(std::move(ui.control));
         if (_rootController)
@@ -231,7 +219,7 @@ private:
     HWND _hwnd          = nullptr;
     RedSalamander::DxUi::WindowHost _dxHost;
     RedConfigure::RedConfigureSession _session;
-    RedSalamander::DxUi::Panel* _root = nullptr;
+    RedSalamander::DxUi::Panel* _root                             = nullptr;
     RedConfigure::Ui::RedConfigureRootController* _rootController = nullptr;
 };
 } // namespace

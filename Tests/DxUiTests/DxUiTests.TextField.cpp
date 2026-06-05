@@ -1277,7 +1277,8 @@ void TestTextFieldBidiSelectionPaintStaysOutsideTrailingButtons()
 {
     using namespace RedSalamander::DxUi;
 
-    const auto verify = [](TextField& field, WindowHost& host, const char* context) {
+    const auto verify = [](TextField& field, WindowHost& host, const char* context)
+    {
         TextFieldDebugSingleLinePaintState paint{};
         Require(field.DebugGetSingleLinePaintState(host, paint), context);
         Require(paint.hasSelectionPaintRect, "mixed-BiDi selected text exposes a selection paint rect");
@@ -1351,7 +1352,7 @@ void TestTextFieldSelectedEmojiUsesColorFontRendering()
     window.Host().SetFocusControl(field);
 
     const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "selected emoji text field color-font capture succeeds");
-    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    const size_t warmPixels               = CountWarmSaturatedPixels(capture);
     EmitColorGlyphPixelCountForTest(L"textfield-selected", capture, warmPixels);
     Require(warmPixels >= 24u, "selected emoji text field renders warm color-font pixels instead of monochrome glyphs");
 }
@@ -1381,7 +1382,7 @@ void TestNativeTextFieldUnselectedEmojiUsesColorFontRendering()
     Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native text field color-font test does not create a bridge child");
 
     const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native unselected emoji color-font capture succeeds");
-    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    const size_t warmPixels               = CountWarmSaturatedPixels(capture);
     EmitColorGlyphPixelCountForTest(L"native-textfield-unselected", capture, warmPixels);
     Require(warmPixels >= 24u, "native unselected emoji text field renders warm color-font pixels");
 }
@@ -1416,7 +1417,7 @@ void TestNativeTextFieldSelectedEmojiUsesColorFontRendering()
     Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native selected emoji test does not create a bridge child");
 
     const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native selected emoji color-font capture succeeds");
-    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    const size_t warmPixels               = CountWarmSaturatedPixels(capture);
     EmitColorGlyphPixelCountForTest(L"native-textfield-selected", capture, warmPixels);
     Require(warmPixels >= 24u, "native selected emoji text field renders warm color-font pixels");
 }
@@ -1447,7 +1448,7 @@ void TestNativeMultilineTextFieldEmojiUsesColorFontRendering()
     Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native multiline emoji test does not create a bridge child");
 
     const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native multiline emoji color-font capture succeeds");
-    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    const size_t warmPixels               = CountWarmSaturatedPixels(capture);
     EmitColorGlyphPixelCountForTest(L"native-textfield-multiline", capture, warmPixels);
     Require(warmPixels >= 24u, "native multiline emoji text field renders warm color-font pixels");
 }
@@ -1479,7 +1480,7 @@ void TestNativeMixedBidiTextFieldEmojiUsesColorFontRendering()
     Require(FindTextInputBridgeEdit(window.Hwnd()) == nullptr, "native mixed BiDi emoji test does not create a bridge child");
 
     const WindowHostBitmapCapture capture = CaptureAttachedTextFieldHostWindowBitmap(window, "native mixed BiDi emoji color-font capture succeeds");
-    const size_t warmPixels                = CountWarmSaturatedPixels(capture);
+    const size_t warmPixels               = CountWarmSaturatedPixels(capture);
     EmitColorGlyphPixelCountForTest(L"native-textfield-mixed-bidi", capture, warmPixels);
     Require(warmPixels >= 24u, "native mixed BiDi emoji text field renders warm color-font pixels");
 }

@@ -12,6 +12,8 @@ The examples below use generated documentation samples, not personal files.
 
 ![Preview pane showing an embedded Image/RAW viewer](res/preview-pane-image.png)
 
+![Preview pane showing an embedded text preview](res/preview-pane-text.png)
+
 The Preview Pane hosts the viewer for the focused file in the opposite pane, using the same viewer associations where an embedded viewer is available. When no specific embedded preview is available, it shows the focused file or folder Properties as compact cards with wrapping text and an on-demand scrollbar. Rainbow theme adds subtle rainbow section accents. The source Folder view keeps keyboard focus, embedded viewers hide standalone filename/header chrome so they blend with the Preview tab, and compatible preview viewers are reused by closing the previous preview content before opening the next file.
 
 Standalone viewers share a keyboard rule: focus starts on the main viewer surface, `Tab` / `Shift+Tab` moves through menus, dropdowns, and tool controls, and accepted combo/menu actions return focus to the main surface. `Esc` from viewer chrome returns focus to the main surface; from the main surface it cancels active long work when available, then closes when idle unless a visible alert consumes the first press.

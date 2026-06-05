@@ -76,6 +76,7 @@ struct ForceWilTemplateInstantiations
 #include "LocalSearchIndexCore.h"
 #include "ManagePluginsDialog.h"
 #include "NavigationLocation.h"
+#include "NavigationView.h"
 #include "PlugInterfaces/Factory.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
@@ -88,10 +89,11 @@ struct ForceWilTemplateInstantiations
 #include "ShortcutText.h"
 #include "ShortcutsWindow.h"
 #include "SplashScreen.h"
+#include "Ui/AlertOverlayWindow.h"
 #include "ViewerPluginManager.h"
 #include "WindowBackdropPolicy.h"
-#include "WindowsHello.h"
 #include "WindowMessages.h"
+#include "WindowsHello.h"
 #include "resource.h"
 #pragma warning(pop)
 
@@ -113,6 +115,7 @@ constexpr PrefCategory kPrefCategoryUserMenu           = static_cast<PrefCategor
 constexpr PrefCategory kPrefCategoryCompareDirectories = static_cast<PrefCategory>(9);
 constexpr PrefCategory kPrefCategoryHotPaths           = static_cast<PrefCategory>(10);
 constexpr PrefCategory kPrefCategoryAdvanced           = static_cast<PrefCategory>(8);
+constexpr PrefCategory kPrefCategoryMonitor            = static_cast<PrefCategory>(13);
 
 [[nodiscard]] constexpr int PreferencesRootRowForCategory(const PrefCategory category) noexcept
 {
@@ -140,8 +143,10 @@ constexpr PrefCategory kPrefCategoryAdvanced           = static_cast<PrefCategor
         return 10;
     if (category == kPrefCategoryHotPaths)
         return 11;
-    if (category == kPrefCategoryAdvanced)
+    if (category == kPrefCategoryMonitor)
         return 12;
+    if (category == kPrefCategoryAdvanced)
+        return 13;
     return -1;
 }
 
@@ -399,15 +404,14 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 
 [[nodiscard]] AppTheme MakeWindowBackdropSelfTestTheme(Common::Settings::WindowBackdropMode mode, std::wstring_view seed) noexcept
 {
-    AppTheme theme                = ResolveAppTheme(ThemeMode::Dark, seed);
-    theme.highContrast           = false;
-    theme.primaryWindowBackdrop  = AppBackdropTypeFromWindowBackdropKind(Common::WindowBackdrop::Resolve(mode, Common::WindowBackdrop::Target::Primary, false));
-    theme.toolWindowBackdrop     = AppBackdropTypeFromWindowBackdropKind(Common::WindowBackdrop::Resolve(mode, Common::WindowBackdrop::Target::Tool, false));
+    AppTheme theme              = ResolveAppTheme(ThemeMode::Dark, seed);
+    theme.highContrast          = false;
+    theme.primaryWindowBackdrop = AppBackdropTypeFromWindowBackdropKind(Common::WindowBackdrop::Resolve(mode, Common::WindowBackdrop::Target::Primary, false));
+    theme.toolWindowBackdrop    = AppBackdropTypeFromWindowBackdropKind(Common::WindowBackdrop::Resolve(mode, Common::WindowBackdrop::Target::Tool, false));
     return theme;
 }
 
-[[nodiscard]] bool WaitForAppliedBackdropKind(
-    HWND hwnd, Common::WindowBackdrop::Kind expectedKind, std::wstring_view label, CaseState& state) noexcept
+[[nodiscard]] bool WaitForAppliedBackdropKind(HWND hwnd, Common::WindowBackdrop::Kind expectedKind, std::wstring_view label, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -437,11 +441,9 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
         return false;
     }
 
-    state.Require(actual.value() == expectedKind,
-                  std::format(L"{} should report applied backdrop kind {} but reported {}.",
-                              label,
-                              static_cast<int>(expectedKind),
-                              static_cast<int>(actual.value())));
+    state.Require(
+        actual.value() == expectedKind,
+        std::format(L"{} should report applied backdrop kind {} but reported {}.", label, static_cast<int>(expectedKind), static_cast<int>(actual.value())));
     return state.failure.empty();
 }
 
@@ -497,6 +499,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     const bool autoPromptsBefore = HostGetAutoAcceptPrompts();
     HostSetAutoAcceptPrompts(true);
     const auto restoreAutoPrompts = wil::scope_exit([&] { HostSetAutoAcceptPrompts(autoPromptsBefore); });
+    const auto releaseUiaCache    = wil::scope_exit([] { ReleaseThreadUiAutomationForSelfTest(); });
 
     RunSettingsCommandsSelfTestCases(mainWindow, options, suite);
     RunPluginConfigCommandsSelfTestCases(mainWindow, options, suite);

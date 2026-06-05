@@ -4,13 +4,14 @@ Status: WIP - mitigation code is present, but the shutdown-crash validation evid
 
 ## Closeout audit (`2026-04-25`)
 
-The code now has `AwsSdkLifetime` reference counting around S3 instances and IO objects, a finite default `requestTimeoutMs` of 30000, cached S3 client cleanup before SDK release, and request-timeout wiring into client config. This plan stays in WIP because the required ASan/heavy-S3 shutdown reproduction and proof of AWS CRT thread quiescence are not present in the plan or archived test runs.
+The code now has `AwsSdkLifetime` reference counting around S3 instances and IO objects, a finite default `requestTimeoutMs` of 30000, cached S3 client cleanup before SDK release, request-timeout wiring into client config, and process-shutdown module retention for `FileSystemS3.dll` so its imported AWS CRT DLLs remain mapped until OS teardown. This plan stays in WIP because the required ASan/heavy-S3 shutdown reproduction and proof of AWS CRT thread quiescence are not present in the plan or archived test runs.
 
 Remaining closeout checklist:
 
 - [x] Reference-count AWS SDK initialization/shutdown with `AwsSdkLifetime`.
 - [x] Use a finite default request timeout and wire it into S3 client configuration.
 - [x] Clear cached S3 clients before releasing the AWS SDK lifetime reference.
+- [x] Request process-shutdown module retention so AWS CRT dependencies are not explicitly unloaded during process teardown.
 - [ ] Run and archive the ASan heavy-S3 shutdown validation from the recipe.
 - [ ] Confirm no `AwsHostResolver` or other AWS CRT thread executes after AWS DLL unload.
 - [ ] Update the shutdown ordering evidence here, then move the plan to Done.

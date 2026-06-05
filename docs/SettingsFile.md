@@ -12,6 +12,9 @@ Typical filenames:
 
 In Debug builds, RedSalamander first looks for `RedSalamander-debug.settings.json`. If it does not exist, it falls back to the versioned or legacy settings file.
 
+You can open the main settings file from **Preferences -> Advanced -> Open settings file**.
+You can open the monitor settings file from **Preferences -> Monitor -> Open monitor settings file**.
+
 ## Schemas
 
 Two schema files are relevant:
@@ -36,7 +39,7 @@ Notes:
 - If the edited file is invalid or uses an unsupported schema version during live reload, the running app keeps its current settings and shows a warning; the file is not renamed or backed up in that live path.
 - On a later cold startup / recovery load, an invalid settings file still falls back to defaults and is backed up to `.bad.*`.
 - Connection Manager secrets are not stored in this JSON file; only non-secret profile data is kept there.
-- Only the main settings JSON is watched in this iteration; `Themes\\*.theme.json5` files are not live-watched.
+- Only the main RedSalamander settings JSON is watched in this iteration; RedSalamanderMonitor settings and `Themes\\*.theme.json5` files are not live-watched.
 
 ## Common advanced edits
 
