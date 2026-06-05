@@ -17,8 +17,8 @@
 #include <windows.h>
 #pragma warning(pop)
 
-#include "Helpers.h"
 #include "DxUi/DxUi.FrameRuntime.h"
+#include "Helpers.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -428,7 +428,7 @@ private:
                 Debug::Perf::EmitCounter(L"dxui.animation.tick_overrun");
             }
         }
-        _lastTickMs = now;
+        _lastTickMs        = now;
         _lastTickTimestamp = timestamp;
 
         _inTick = true;

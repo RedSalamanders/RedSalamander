@@ -84,14 +84,14 @@ using RedSalamander::DxUi::WindowHost;
 constexpr wchar_t kWindowClassName[]  = L"RedSalamander.ConnectionManagerWindow";
 constexpr wchar_t kWindowSettingsId[] = L"ConnectionManagerWindow";
 
-constexpr float kListPaneWidthDip     = 200.0f;
-constexpr float kListGridColumnWidthDip = 188.0f;
-constexpr float kFooterHeightDip      = 44.0f;
-constexpr float kPanePaddingDip       = 8.0f;
-constexpr float kListGridRowHeight    = 28.0f;
-constexpr float kFooterButtonHeight   = 32.0f;
-constexpr float kFooterButtonWidth    = 96.0f;
-constexpr float kFooterButtonGap      = 8.0f;
+constexpr float kListPaneWidthDip           = 200.0f;
+constexpr float kListGridColumnWidthDip     = 188.0f;
+constexpr float kFooterHeightDip            = 44.0f;
+constexpr float kPanePaddingDip             = 8.0f;
+constexpr float kListGridRowHeight          = 28.0f;
+constexpr float kFooterButtonHeight         = 32.0f;
+constexpr float kFooterButtonWidth          = 96.0f;
+constexpr float kFooterButtonGap            = 8.0f;
 constexpr float kFormLabelWidthDip          = 140.0f;
 constexpr float kFormLabelGapDip            = 8.0f;
 constexpr float kFormRowHeightDip           = 32.0f;
@@ -1070,18 +1070,18 @@ private:
     std::wstring _selectedConnectionName;
     int _selectedListIndex = -1;
 
-    bool _loadingEditor               = false;
-    bool _settingsHotReloadRegistered = false;
-    bool _dirtySinceLastSettingsLoad  = false;
-    bool _staleExternalSettings       = false;
-    bool _loadingFromSettings         = false;
-    bool _secretStoredPlaceholderVisible = false;
+    bool _loadingEditor                   = false;
+    bool _settingsHotReloadRegistered     = false;
+    bool _dirtySinceLastSettingsLoad      = false;
+    bool _staleExternalSettings           = false;
+    bool _loadingFromSettings             = false;
+    bool _secretStoredPlaceholderVisible  = false;
     size_t _secretStoredPlaceholderLength = 0u;
     std::wstring _secretStoredPlaceholderProfileId;
-    bool _isModalFacade               = false;
-    ModalFacadeResult* _modalResult   = nullptr;
-    size_t _dispatchDepth             = 0u;
-    bool _deletePending               = false;
+    bool _isModalFacade             = false;
+    ModalFacadeResult* _modalResult = nullptr;
+    size_t _dispatchDepth           = 0u;
+    bool _deletePending             = false;
 };
 
 bool WindowImpl::Create() noexcept
@@ -1923,7 +1923,7 @@ void WindowImpl::OnEditorFieldChanged() noexcept
 
     if (_editName)
     {
-        profile.name = std::wstring(_editName->GetText());
+        profile.name            = std::wstring(_editName->GetText());
         _selectedConnectionName = profile.name;
     }
     if (_editHost)
@@ -2183,12 +2183,12 @@ HRESULT WindowImpl::VerifySecretRevealForProfile(const Common::Settings::Connect
         return S_OK;
     }
 
-    bool bypassWindowsHello = false;
+    bool bypassWindowsHello      = false;
     uint32_t reauthTimeoutMinute = 10u;
     if (_settings && _settings->connections)
     {
-        bypassWindowsHello   = _settings->connections->bypassWindowsHello;
-        reauthTimeoutMinute  = _settings->connections->windowsHelloReauthTimeoutMinute;
+        bypassWindowsHello  = _settings->connections->bypassWindowsHello;
+        reauthTimeoutMinute = _settings->connections->windowsHelloReauthTimeoutMinute;
     }
     if (bypassWindowsHello)
     {
@@ -2238,8 +2238,8 @@ void WindowImpl::ApplySecretPlaceholderForProfile(const Common::Settings::Connec
         return;
     }
 
-    _secretStoredPlaceholderLength = SavedSecretPlaceholderLength(profile.id);
-    _secretStoredPlaceholderVisible = true;
+    _secretStoredPlaceholderLength    = SavedSecretPlaceholderLength(profile.id);
+    _secretStoredPlaceholderVisible   = true;
     _secretStoredPlaceholderProfileId = profile.id;
     _editSecret->SetPlaceholder(std::wstring(_secretStoredPlaceholderLength, L'\u2022'));
 }
@@ -2715,8 +2715,7 @@ bool WindowImpl::ConfirmDiscardUnsavedChanges() noexcept
     const HRESULT promptHr  = HostShowPrompt(request, nullptr, &result);
     if (FAILED(promptHr))
     {
-        Debug::Warning(L"ConnectionManagerWindow: failed to prompt before discarding unsaved changes (hr=0x{:08X})",
-                       static_cast<unsigned long>(promptHr));
+        Debug::Warning(L"ConnectionManagerWindow: failed to prompt before discarding unsaved changes (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
         return false;
     }
 
@@ -3775,12 +3774,12 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     const D2D1_RECT_F clientDip = _dxHost.GetClientBoundsDip();
     if (_listPane && _newButton)
     {
-        const D2D1_RECT_F listPaneBounds = _listPane->GetBounds();
+        const D2D1_RECT_F listPaneBounds  = _listPane->GetBounds();
         const D2D1_RECT_F newButtonBounds = _newButton->GetBounds();
-        out.listTopGapDip                = listPaneBounds.top - clientDip.top;
-        out.listButtonBottomGapDip       = clientDip.bottom - newButtonBounds.bottom;
-        const float gapDelta             = out.listButtonBottomGapDip > out.listTopGapDip ? out.listButtonBottomGapDip - out.listTopGapDip
-                                                                                           : out.listTopGapDip - out.listButtonBottomGapDip;
+        out.listTopGapDip                 = listPaneBounds.top - clientDip.top;
+        out.listButtonBottomGapDip        = clientDip.bottom - newButtonBounds.bottom;
+        const float gapDelta =
+            out.listButtonBottomGapDip > out.listTopGapDip ? out.listButtonBottomGapDip - out.listTopGapDip : out.listTopGapDip - out.listButtonBottomGapDip;
         out.layoutListButtonsMirrorTopGap = gapDelta <= 1.0f;
     }
 
@@ -3802,21 +3801,21 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     addCardGeometry(_s3Card, _sectionS3);
     addCardGeometry(_sshCard, _sectionSsh);
     addCardGeometry(_s3EndpointCard, nullptr);
-    std::sort(visibleCards.begin(),
-              visibleCards.end(),
-              [](const DebugCardGeometry& lhs, const DebugCardGeometry& rhs) noexcept { return lhs.card.top < rhs.card.top; });
+    std::sort(visibleCards.begin(), visibleCards.end(), [](const DebugCardGeometry& lhs, const DebugCardGeometry& rhs) noexcept {
+        return lhs.card.top < rhs.card.top;
+    });
     out.layoutCardsDoNotOverlap = true;
     out.minVisibleCardGapDip    = visibleCards.size() > 1u ? std::numeric_limits<float>::max() : 0.0f;
     for (size_t i = 1u; i < visibleCards.size(); ++i)
     {
-        const float gap = visibleCards[i].card.top - visibleCards[i - 1u].card.bottom;
+        const float gap          = visibleCards[i].card.top - visibleCards[i - 1u].card.bottom;
         out.minVisibleCardGapDip = (std::min)(out.minVisibleCardGapDip, gap);
         if (gap < -0.5f)
         {
             out.layoutCardsDoNotOverlap = false;
         }
     }
-    bool sawTitledCard = false;
+    bool sawTitledCard                  = false;
     out.layoutSectionTitlesOutsideCards = true;
     for (const DebugCardGeometry& entry : visibleCards)
     {
@@ -3824,7 +3823,7 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
         {
             continue;
         }
-        sawTitledCard = true;
+        sawTitledCard                 = true;
         const D2D1_RECT_F titleBounds = entry.title->GetBounds();
         constexpr float kToleranceDip = 0.5f;
         if (! HasUsableRect(titleBounds) || titleBounds.bottom > entry.card.top - kToleranceDip || titleBounds.left < entry.card.left - kToleranceDip ||
@@ -3856,9 +3855,8 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
         {
             return;
         }
-        const float height = bounds.bottom - bounds.top;
-        out.minVisibleTextFieldHeightDip =
-            out.minVisibleTextFieldHeightDip <= 0.0f ? height : (std::min)(out.minVisibleTextFieldHeightDip, height);
+        const float height               = bounds.bottom - bounds.top;
+        out.minVisibleTextFieldHeightDip = out.minVisibleTextFieldHeightDip <= 0.0f ? height : (std::min)(out.minVisibleTextFieldHeightDip, height);
     };
     observeTextFieldHeight(_editName);
     observeTextFieldHeight(_editHost);
@@ -3887,11 +3885,11 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
         out.currentNameText.clear();
         out.currentPluginId.clear();
     }
-    out.secretMasked = _editSecret && _editSecret->IsMasked();
+    out.secretMasked                   = _editSecret && _editSecret->IsMasked();
     out.secretStoredPlaceholderVisible = _secretStoredPlaceholderVisible;
-    out.secretStoredPlaceholderLength = _secretStoredPlaceholderLength;
-    out.showSecretButtonVisible = _btnShowSecret && _btnShowSecret->IsVisible();
-    out.showSecretButtonEnabled = _btnShowSecret && _btnShowSecret->IsEnabled();
+    out.secretStoredPlaceholderLength  = _secretStoredPlaceholderLength;
+    out.showSecretButtonVisible        = _btnShowSecret && _btnShowSecret->IsVisible();
+    out.showSecretButtonEnabled        = _btnShowSecret && _btnShowSecret->IsEnabled();
     if (_list)
     {
         if (const auto primary = _list->GetPrimarySelectedRow())
@@ -3935,13 +3933,12 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     // it back to a kind for the test surface.
     out.focusKind = ConnectionManagerDebugFocusKind::None;
     out.focusLabel.clear();
-    const HWND nativeFocus  = GetFocus();
-    const HWND hostHwnd     = _hwnd.get();
-    const HWND textEditHwnd = _dxHost.GetTextInputHwnd();
-    out.nativeFocusIsHost   = nativeFocus && hostHwnd && nativeFocus == hostHwnd;
+    const HWND nativeFocus    = GetFocus();
+    const HWND hostHwnd       = _hwnd.get();
+    const HWND textEditHwnd   = _dxHost.GetTextInputHwnd();
+    out.nativeFocusIsHost     = nativeFocus && hostHwnd && nativeFocus == hostHwnd;
     out.nativeFocusIsTextEdit = nativeFocus && textEditHwnd && nativeFocus == textEditHwnd;
-    out.nativeFocusInDialog =
-        nativeFocus && hostHwnd && (nativeFocus == hostHwnd || IsChild(hostHwnd, nativeFocus) != FALSE);
+    out.nativeFocusInDialog   = nativeFocus && hostHwnd && (nativeFocus == hostHwnd || IsChild(hostHwnd, nativeFocus) != FALSE);
     out.newButtonVisible      = _newButton && _newButton->IsVisible();
     out.newButtonEnabled      = _newButton && _newButton->IsEnabled();
     out.newButtonFocusable    = _newButton && _newButton->IsFocusable();
@@ -3951,8 +3948,8 @@ void WindowImpl::DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const 
     out.removeButtonVisible   = _removeButton && _removeButton->IsVisible();
     out.removeButtonEnabled   = _removeButton && _removeButton->IsEnabled();
     out.removeButtonFocusable = _removeButton && _removeButton->IsFocusable();
-    const auto buttonText   = [](const Button* button) -> std::wstring { return button ? std::wstring(button->GetText()) : std::wstring{}; };
-    const auto resourceText = [](UINT stringId) -> std::wstring { return LoadStringResource(nullptr, stringId); };
+    const auto buttonText     = [](const Button* button) -> std::wstring { return button ? std::wstring(button->GetText()) : std::wstring{}; };
+    const auto resourceText   = [](UINT stringId) -> std::wstring { return LoadStringResource(nullptr, stringId); };
     if (const Control* focused = _dxHost.GetFocusControl())
     {
         out.focusControlPresent   = true;

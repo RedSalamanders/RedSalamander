@@ -20,12 +20,11 @@ namespace
 {
 using namespace RedSalamander::DxUi;
 
-constexpr float kGalleryWidthDip        = 1600.0f;
-constexpr float kMarginDip              = 24.0f;
-constexpr float kGapDip                 = 10.0f;
-constexpr size_t kColumnCount           = 7u;
-constexpr float kTileWidthDip =
-    (kGalleryWidthDip - (kMarginDip * 2.0f) - (kGapDip * static_cast<float>(kColumnCount - 1u))) / static_cast<float>(kColumnCount);
+constexpr float kGalleryWidthDip = 1600.0f;
+constexpr float kMarginDip       = 24.0f;
+constexpr float kGapDip          = 10.0f;
+constexpr size_t kColumnCount    = 7u;
+constexpr float kTileWidthDip = (kGalleryWidthDip - (kMarginDip * 2.0f) - (kGapDip * static_cast<float>(kColumnCount - 1u))) / static_cast<float>(kColumnCount);
 
 [[nodiscard]] UINT DipsToPixelsCeil(const WindowHost& host, float dips) noexcept;
 void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx);
@@ -46,10 +45,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx);
 
 [[nodiscard]] uint32_t PackArgbForGallery(const D2D1_COLOR_F& color) noexcept
 {
-    const auto toByte = [](float value) noexcept -> uint32_t
-    {
-        return static_cast<uint32_t>(std::clamp(std::lround(ClampUnit(value) * 255.0f), 0l, 255l));
-    };
+    const auto toByte = [](float value) noexcept -> uint32_t { return static_cast<uint32_t>(std::clamp(std::lround(ClampUnit(value) * 255.0f), 0l, 255l)); };
 
     return (toByte(color.a) << 24u) | (toByte(color.r) << 16u) | (toByte(color.g) << 8u) | toByte(color.b);
 }
@@ -57,10 +53,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx);
 [[nodiscard]] D2D1_COLOR_F BlendColorForGallery(const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
 {
     const float clamped = ClampUnit(t);
-    return D2D1::ColorF(a.r + ((b.r - a.r) * clamped),
-                        a.g + ((b.g - a.g) * clamped),
-                        a.b + ((b.b - a.b) * clamped),
-                        a.a + ((b.a - a.a) * clamped));
+    return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
 }
 
 [[nodiscard]] uint32_t ResolveColor(const Common::Settings::ThemeDefinition& theme, std::wstring_view key, uint32_t fallback)
@@ -86,81 +79,81 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx);
                                                    bool rainbowMode)
 {
     ViewerTheme viewerTheme{};
-    viewerTheme.version                    = 4u;
-    viewerTheme.dpi                        = USER_DEFAULT_SCREEN_DPI;
-    viewerTheme.backgroundArgb             = backgroundArgb;
-    viewerTheme.textArgb                   = textArgb;
-    viewerTheme.selectionBackgroundArgb    = selectionArgb;
-    viewerTheme.selectionTextArgb          = selectionTextArgb;
-    viewerTheme.accentArgb                 = accentArgb;
-    viewerTheme.alertErrorBackgroundArgb   = dark ? 0xFF5C1F25u : 0xFFFFE5E8u;
-    viewerTheme.alertErrorTextArgb         = dark ? 0xFFFFD8DCu : 0xFF8A1F2Du;
-    viewerTheme.alertWarningBackgroundArgb = dark ? 0xFF5A430Eu : 0xFFFFF4CEu;
-    viewerTheme.alertWarningTextArgb       = dark ? 0xFFFFE3A1u : 0xFF6A4B00u;
-    viewerTheme.alertInfoBackgroundArgb    = dark ? 0xFF18324Au : 0xFFE8F3FFu;
-    viewerTheme.alertInfoTextArgb          = dark ? 0xFFD6E8FFu : 0xFF005A9Eu;
-    viewerTheme.darkMode                   = dark ? TRUE : FALSE;
-    viewerTheme.highContrast               = highContrast ? TRUE : FALSE;
-    viewerTheme.rainbowMode                = rainbowMode ? TRUE : FALSE;
-    viewerTheme.darkBase                   = dark ? TRUE : FALSE;
-    viewerTheme.diffAddedBackgroundArgb    = dark ? 0x3830C060u : 0x2430A040u;
-    viewerTheme.diffRemovedBackgroundArgb  = dark ? 0x38D85050u : 0x24C03030u;
-    viewerTheme.diffContextBackgroundArgb  = 0x180078D4u;
-    viewerTheme.diffHeaderBackgroundArgb   = 0x240078D4u;
-    viewerTheme.diffBannerBackgroundArgb   = 0x300078D4u;
+    viewerTheme.version                       = 4u;
+    viewerTheme.dpi                           = USER_DEFAULT_SCREEN_DPI;
+    viewerTheme.backgroundArgb                = backgroundArgb;
+    viewerTheme.textArgb                      = textArgb;
+    viewerTheme.selectionBackgroundArgb       = selectionArgb;
+    viewerTheme.selectionTextArgb             = selectionTextArgb;
+    viewerTheme.accentArgb                    = accentArgb;
+    viewerTheme.alertErrorBackgroundArgb      = dark ? 0xFF5C1F25u : 0xFFFFE5E8u;
+    viewerTheme.alertErrorTextArgb            = dark ? 0xFFFFD8DCu : 0xFF8A1F2Du;
+    viewerTheme.alertWarningBackgroundArgb    = dark ? 0xFF5A430Eu : 0xFFFFF4CEu;
+    viewerTheme.alertWarningTextArgb          = dark ? 0xFFFFE3A1u : 0xFF6A4B00u;
+    viewerTheme.alertInfoBackgroundArgb       = dark ? 0xFF18324Au : 0xFFE8F3FFu;
+    viewerTheme.alertInfoTextArgb             = dark ? 0xFFD6E8FFu : 0xFF005A9Eu;
+    viewerTheme.darkMode                      = dark ? TRUE : FALSE;
+    viewerTheme.highContrast                  = highContrast ? TRUE : FALSE;
+    viewerTheme.rainbowMode                   = rainbowMode ? TRUE : FALSE;
+    viewerTheme.darkBase                      = dark ? TRUE : FALSE;
+    viewerTheme.diffAddedBackgroundArgb       = dark ? 0x3830C060u : 0x2430A040u;
+    viewerTheme.diffRemovedBackgroundArgb     = dark ? 0x38D85050u : 0x24C03030u;
+    viewerTheme.diffContextBackgroundArgb     = 0x180078D4u;
+    viewerTheme.diffHeaderBackgroundArgb      = 0x240078D4u;
+    viewerTheme.diffBannerBackgroundArgb      = 0x300078D4u;
     viewerTheme.diffPlaceholderBackgroundArgb = 0x240078D4u;
-    viewerTheme.diffDividerArgb            = dark ? 0xCC555555u : 0xCCB0B0B0u;
+    viewerTheme.diffDividerArgb               = dark ? 0xCC555555u : 0xCCB0B0B0u;
     return MakeThemePaletteFromViewerTheme(viewerTheme);
 }
 
 void ApplyCustomThemePaletteOverrides(ThemePalette& palette, const Common::Settings::ThemeDefinition& theme)
 {
-    const uint32_t accentArgb       = ResolveColor(theme, L"app.accent", PackArgbForGallery(palette.accent));
-    const uint32_t menuBackground   = ResolveColor(theme, L"menu.background", PackArgbForGallery(palette.headerBackground));
-    const uint32_t menuBorder       = ResolveColor(theme, L"menu.border", PackArgbForGallery(palette.border));
-    const uint32_t disabledText     = ResolveColor(theme, L"menu.disabledText", PackArgbForGallery(palette.disabledText));
-    const uint32_t focusBorder      = ResolveColor(theme, L"folderView.focusBorder", PackArgbForGallery(palette.focusStroke));
-    const uint32_t scrollbarTrack   = ResolveColor(theme, L"fileOps.scrollbarTrack", PackArgbForGallery(palette.scrollbarTrack));
-    const uint32_t scrollbarThumb   = ResolveColor(theme, L"fileOps.scrollbarThumb", PackArgbForGallery(palette.scrollbarThumb));
+    const uint32_t accentArgb     = ResolveColor(theme, L"app.accent", PackArgbForGallery(palette.accent));
+    const uint32_t menuBackground = ResolveColor(theme, L"menu.background", PackArgbForGallery(palette.headerBackground));
+    const uint32_t menuBorder     = ResolveColor(theme, L"menu.border", PackArgbForGallery(palette.border));
+    const uint32_t disabledText   = ResolveColor(theme, L"menu.disabledText", PackArgbForGallery(palette.disabledText));
+    const uint32_t focusBorder    = ResolveColor(theme, L"folderView.focusBorder", PackArgbForGallery(palette.focusStroke));
+    const uint32_t scrollbarTrack = ResolveColor(theme, L"fileOps.scrollbarTrack", PackArgbForGallery(palette.scrollbarTrack));
+    const uint32_t scrollbarThumb = ResolveColor(theme, L"fileOps.scrollbarThumb", PackArgbForGallery(palette.scrollbarThumb));
 
-    palette.accent          = ColorFromArgbForGallery(accentArgb);
-    palette.accentHover     = BlendColorForGallery(palette.accent, D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), palette.dark ? 0.22f : 0.14f);
-    palette.accentPressed   = BlendColorForGallery(palette.accent, palette.dark ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), 0.18f);
-    palette.headerBackground = ColorFromArgbForGallery(menuBackground);
+    palette.accent      = ColorFromArgbForGallery(accentArgb);
+    palette.accentHover = BlendColorForGallery(palette.accent, D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f), palette.dark ? 0.22f : 0.14f);
+    palette.accentPressed =
+        BlendColorForGallery(palette.accent, palette.dark ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), 0.18f);
+    palette.headerBackground  = ColorFromArgbForGallery(menuBackground);
     palette.overlayBackground = BlendColorForGallery(palette.headerBackground, palette.surfaceBackground, palette.dark ? 0.22f : 0.36f);
-    palette.buttonFill      = palette.headerBackground;
-    palette.buttonHotFill   = BlendColorForGallery(palette.buttonFill, palette.accent, palette.dark ? 0.14f : 0.08f);
+    palette.buttonFill        = palette.headerBackground;
+    palette.buttonHotFill     = BlendColorForGallery(palette.buttonFill, palette.accent, palette.dark ? 0.14f : 0.08f);
     palette.buttonPressedFill = BlendColorForGallery(palette.buttonFill, palette.accent, palette.dark ? 0.24f : 0.16f);
-    palette.border          = ColorFromArgbForGallery(menuBorder);
-    palette.gridLine        = palette.border;
-    palette.overlayBorder   = palette.border;
-    palette.buttonBorder    = palette.border;
-    palette.inputBorder     = palette.border;
-    palette.disabledText    = ColorFromArgbForGallery(disabledText);
-    palette.focusStroke     = ColorFromArgbForGallery(focusBorder);
-    palette.scrollbarTrack  = ColorFromArgbForGallery(scrollbarTrack);
-    palette.scrollbarThumb  = ColorFromArgbForGallery(scrollbarThumb);
-    palette.scrollbarThumbHot =
-        BlendColorForGallery(palette.scrollbarThumb, palette.text, palette.dark ? 0.28f : 0.18f);
+    palette.border            = ColorFromArgbForGallery(menuBorder);
+    palette.gridLine          = palette.border;
+    palette.overlayBorder     = palette.border;
+    palette.buttonBorder      = palette.border;
+    palette.inputBorder       = palette.border;
+    palette.disabledText      = ColorFromArgbForGallery(disabledText);
+    palette.focusStroke       = ColorFromArgbForGallery(focusBorder);
+    palette.scrollbarTrack    = ColorFromArgbForGallery(scrollbarTrack);
+    palette.scrollbarThumb    = ColorFromArgbForGallery(scrollbarThumb);
+    palette.scrollbarThumbHot = BlendColorForGallery(palette.scrollbarThumb, palette.text, palette.dark ? 0.28f : 0.18f);
 
-    palette.errorFill = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.errorBackground", PackArgbForGallery(palette.errorFill)));
-    palette.errorText = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.errorText", PackArgbForGallery(palette.errorText)));
+    palette.errorFill   = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.errorBackground", PackArgbForGallery(palette.errorFill)));
+    palette.errorText   = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.errorText", PackArgbForGallery(palette.errorText)));
     palette.warningFill = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.warningBackground", PackArgbForGallery(palette.warningFill)));
     palette.warningText = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.warningText", PackArgbForGallery(palette.warningText)));
-    palette.infoFill = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.infoBackground", PackArgbForGallery(palette.infoFill)));
-    palette.infoText = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.infoText", PackArgbForGallery(palette.infoText)));
+    palette.infoFill    = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.infoBackground", PackArgbForGallery(palette.infoFill)));
+    palette.infoText    = ColorFromArgbForGallery(ResolveColor(theme, L"folderView.infoText", PackArgbForGallery(palette.infoText)));
 }
 
 [[nodiscard]] ThemePalette MakeCustomThemePalette(const Common::Settings::ThemeDefinition& theme)
 {
-    const bool darkBase      = theme.baseThemeId == L"builtin/dark";
-    const ThemePalette base  = MakeDefaultThemePalette(darkBase);
-    const uint32_t bgArgb    = ResolveColor(theme, L"window.background", PackArgbForGallery(base.windowBackground));
-    const bool dark          = darkBase || IsDarkArgb(bgArgb);
-    const uint32_t textArgb  = ResolveColor(theme, L"menu.text", PackArgbForGallery(base.text));
-    const uint32_t selectBg  = ResolveColor(theme, L"menu.selectionBg", PackArgbForGallery(base.selectionFill));
-    const uint32_t selectFg  = ResolveColor(theme, L"menu.selectionText", PackArgbForGallery(base.selectionText));
-    const uint32_t accent    = ResolveColor(theme, L"app.accent", PackArgbForGallery(base.accent));
+    const bool darkBase     = theme.baseThemeId == L"builtin/dark";
+    const ThemePalette base = MakeDefaultThemePalette(darkBase);
+    const uint32_t bgArgb   = ResolveColor(theme, L"window.background", PackArgbForGallery(base.windowBackground));
+    const bool dark         = darkBase || IsDarkArgb(bgArgb);
+    const uint32_t textArgb = ResolveColor(theme, L"menu.text", PackArgbForGallery(base.text));
+    const uint32_t selectBg = ResolveColor(theme, L"menu.selectionBg", PackArgbForGallery(base.selectionFill));
+    const uint32_t selectFg = ResolveColor(theme, L"menu.selectionText", PackArgbForGallery(base.selectionText));
+    const uint32_t accent   = ResolveColor(theme, L"app.accent", PackArgbForGallery(base.accent));
 
     ThemePalette palette = MakeViewerBackedPalette(bgArgb, textArgb, selectBg, selectFg, accent, dark, false, false);
     ApplyCustomThemePaletteOverrides(palette, theme);
@@ -176,7 +169,7 @@ struct GalleryTheme
 
 [[nodiscard]] ThemePalette MakeBuiltInGalleryPalette(ThemeMode mode, std::wstring_view seed)
 {
-    ThemePalette palette = MakeAppThemeDxPalette(ResolveAppTheme(mode, seed));
+    ThemePalette palette  = MakeAppThemeDxPalette(ResolveAppTheme(mode, seed));
     palette.reducedMotion = true;
     return palette;
 }
@@ -188,8 +181,7 @@ struct GalleryTheme
     themes.push_back(GalleryTheme{.name = L"Light", .palette = MakeBuiltInGalleryPalette(ThemeMode::Light, L"dxui-gallery-light")});
     themes.push_back(GalleryTheme{.name = L"Dark", .palette = MakeBuiltInGalleryPalette(ThemeMode::Dark, L"dxui-gallery-dark")});
     themes.push_back(GalleryTheme{.name = L"Rainbow", .palette = MakeBuiltInGalleryPalette(ThemeMode::Rainbow, L"dxui-gallery-rainbow")});
-    themes.push_back(
-        GalleryTheme{.name = L"High Contrast", .palette = MakeBuiltInGalleryPalette(ThemeMode::HighContrast, L"dxui-gallery-high-contrast")});
+    themes.push_back(GalleryTheme{.name = L"High Contrast", .palette = MakeBuiltInGalleryPalette(ThemeMode::HighContrast, L"dxui-gallery-high-contrast")});
 
     std::vector<Common::Settings::ThemeDefinition> customThemes;
     const std::filesystem::path themeDirectory = FindRepoRootForDxUiTests() / L"Specs" / L"Themes";
@@ -300,8 +292,7 @@ template <typename TPredicate>
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     do
     {
-        if (DebugCaptureContextMenuPopupBitmap(popupHwnd, outCapture) && outCapture.widthPx > 0u && outCapture.heightPx > 0u &&
-            ! outCapture.bgraPixels.empty())
+        if (DebugCaptureContextMenuPopupBitmap(popupHwnd, outCapture) && outCapture.widthPx > 0u && outCapture.heightPx > 0u && ! outCapture.bgraPixels.empty())
         {
             return true;
         }
@@ -369,10 +360,9 @@ void CopyCaptureInto(WindowHostBitmapCapture& destination, const WindowHostBitma
         if (submenuItemIndex.has_value())
         {
             ContextMenuPopupDebugState rootState{};
-            if (! WaitForContextMenuPopupState(rootPopupHwnd,
-                                               [](const ContextMenuPopupDebugState& state) noexcept
-            { return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f; },
-                                               rootState))
+            if (! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+                return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f;
+            }, rootState))
             {
                 driverFailure = "gallery submenu root popup exposes geometry";
                 return;
@@ -382,10 +372,9 @@ void CopyCaptureInto(WindowHostBitmapCapture& destination, const WindowHostBitma
             {
                 PostMessageW(rootPopupHwnd, WM_KEYDOWN, VK_DOWN, 0);
             }
-            if (! WaitForContextMenuPopupState(rootPopupHwnd,
-                                               [&](const ContextMenuPopupDebugState& state) noexcept
-            { return state.keyboardIndex.has_value() && state.keyboardIndex.value() == submenuItemIndex.value(); },
-                                               rootState))
+            if (! WaitForContextMenuPopupState(rootPopupHwnd, [&](const ContextMenuPopupDebugState& state) noexcept {
+                return state.keyboardIndex.has_value() && state.keyboardIndex.value() == submenuItemIndex.value();
+            }, rootState))
             {
                 driverFailure = "gallery submenu root popup focuses requested item";
                 return;
@@ -449,17 +438,16 @@ void CopyCaptureInto(WindowHostBitmapCapture& destination, const WindowHostBitma
 [[nodiscard]] std::vector<MenuFlyoutItem> BuildStatefulSubmenuItems()
 {
     return {
-        MenuFlyoutItem{
-            .text = L"Open With",
-            .acceleratorText = L"Ctrl+Enter",
-            .iconGlyph = L"\xE8A7",
-            .commandId = 4301,
-            .children =
-                {
-                    MenuFlyoutItem{.text = L"Internal Viewer", .iconGlyph = L"\xE890", .commandId = 4311},
-                    MenuFlyoutItem{.kind = MenuItemKind::Radio, .text = L"Text Editor", .iconGlyph = L"\xE70F", .checked = true, .commandId = 4312},
-                    MenuFlyoutItem{.text = L"External Tool", .iconGlyph = L"\xE8B7", .enabled = false, .commandId = 4313},
-                }},
+        MenuFlyoutItem{.text            = L"Open With",
+                       .acceleratorText = L"Ctrl+Enter",
+                       .iconGlyph       = L"\xE8A7",
+                       .commandId       = 4301,
+                       .children =
+                           {
+                               MenuFlyoutItem{.text = L"Internal Viewer", .iconGlyph = L"\xE890", .commandId = 4311},
+                               MenuFlyoutItem{.kind = MenuItemKind::Radio, .text = L"Text Editor", .iconGlyph = L"\xE70F", .checked = true, .commandId = 4312},
+                               MenuFlyoutItem{.text = L"External Tool", .iconGlyph = L"\xE8B7", .enabled = false, .commandId = 4313},
+                           }},
         MenuFlyoutItem{.kind = MenuItemKind::Toggle, .text = L"Preview pane", .iconGlyph = L"\xE8A5", .checked = true, .commandId = 4302},
         MenuFlyoutItem{.kind = MenuItemKind::Radio, .text = L"Sort by name", .iconGlyph = L"\xE8CB", .checked = true, .commandId = 4303},
         MenuFlyoutItem{.kind = MenuItemKind::Separator},
@@ -473,7 +461,7 @@ void CopyCaptureInto(WindowHostBitmapCapture& destination, const WindowHostBitma
     ResizeClientArea(window.Hwnd(), DipsToPixelsCeil(window.Host(), 190.0f), DipsToPixelsCeil(window.Host(), 174.0f));
     window.Host().SetTheme(theme);
 
-    auto root = std::make_unique<Panel>();
+    auto root   = std::make_unique<Panel>();
     auto* combo = root->AddChild<ComboBox>();
     combo->SetItems({
         ComboBox::Item{L"system", L"System"},
@@ -523,9 +511,9 @@ struct GalleryMenuCaptures
 [[nodiscard]] GalleryMenuCaptures CaptureGalleryMenus(const ThemePalette& theme)
 {
     GalleryMenuCaptures captures;
-    captures.buttonDropDown = CaptureMenuPopupBitmapForGallery(theme, BuildButtonDropDownMenuItems(), L"Open");
-    captures.buttonSplit    = CaptureMenuPopupBitmapForGallery(theme, BuildButtonSplitMenuItems(), L"Run normally");
-    captures.menuSubmenu    = CaptureMenuPopupBitmapForGallery(theme, BuildStatefulSubmenuItems(), L"Open With", 0u, L"Internal Viewer");
+    captures.buttonDropDown  = CaptureMenuPopupBitmapForGallery(theme, BuildButtonDropDownMenuItems(), L"Open");
+    captures.buttonSplit     = CaptureMenuPopupBitmapForGallery(theme, BuildButtonSplitMenuItems(), L"Run normally");
+    captures.menuSubmenu     = CaptureMenuPopupBitmapForGallery(theme, BuildStatefulSubmenuItems(), L"Open With", 0u, L"Internal Viewer");
     captures.comboWindowOpen = CaptureComboBoxOpenBitmapForGallery(theme, ComboBoxVariant::Window, false);
     captures.comboModernOpen = CaptureComboBoxOpenBitmapForGallery(theme, ComboBoxVariant::Modern, false);
     captures.comboEditOpen   = CaptureComboBoxOpenBitmapForGallery(theme, ComboBoxVariant::Window, true);
@@ -541,16 +529,16 @@ public:
 
     void Paint(WindowHost& host) const override
     {
-        ID2D1Bitmap1* const bitmap = EnsureBitmap(host);
+        ID2D1Bitmap1* const bitmap   = EnsureBitmap(host);
         ID2D1DeviceContext* const dc = host.GetDeviceContext();
         if (! bitmap || ! dc)
         {
             return;
         }
 
-        const D2D1_RECT_F bounds = GetBounds();
-        const float boundsWidth  = std::max(1.0f, bounds.right - bounds.left);
-        const float boundsHeight = std::max(1.0f, bounds.bottom - bounds.top);
+        const D2D1_RECT_F bounds      = GetBounds();
+        const float boundsWidth       = std::max(1.0f, bounds.right - bounds.left);
+        const float boundsHeight      = std::max(1.0f, bounds.bottom - bounds.top);
         const D2D1_SIZE_F naturalSize = bitmap->GetSize();
         const float naturalWidth      = std::max(1.0f, naturalSize.width);
         const float naturalHeight     = std::max(1.0f, naturalSize.height);
@@ -592,7 +580,8 @@ private:
             D2D1_BITMAP_OPTIONS_NONE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), host.GetDpi(), host.GetDpi());
         wil::com_ptr<ID2D1Bitmap1> bitmap;
         const UINT32 pitch = static_cast<UINT32>(_capture.widthPx * 4u);
-        const HRESULT hr   = dc->CreateBitmap(D2D1::SizeU(_capture.widthPx, _capture.heightPx), _capture.bgraPixels.data(), pitch, &bitmapProperties, bitmap.put());
+        const HRESULT hr =
+            dc->CreateBitmap(D2D1::SizeU(_capture.widthPx, _capture.heightPx), _capture.bgraPixels.data(), pitch, &bitmapProperties, bitmap.put());
         if (FAILED(hr) || ! bitmap)
         {
             return nullptr;
@@ -610,14 +599,14 @@ private:
 
 struct Tile
 {
-    D2D1_RECT_F outer = D2D1::RectF();
+    D2D1_RECT_F outer   = D2D1::RectF();
     D2D1_RECT_F content = D2D1::RectF();
 };
 
 struct GalleryFlow
 {
-    float y = 80.0f;
-    size_t column = 0u;
+    float y         = 80.0f;
+    size_t column   = 0u;
     float rowHeight = 0.0f;
 
     [[nodiscard]] Tile Next(Panel& root, std::wstring label, size_t span = 1u, float heightDip = 96.0f)
@@ -628,10 +617,10 @@ struct GalleryFlow
             NewRow();
         }
 
-        const float left = kMarginDip + (static_cast<float>(column) * (kTileWidthDip + kGapDip));
-        const float width = (kTileWidthDip * static_cast<float>(clampedSpan)) + (kGapDip * static_cast<float>(clampedSpan - 1u));
+        const float left        = kMarginDip + (static_cast<float>(column) * (kTileWidthDip + kGapDip));
+        const float width       = (kTileWidthDip * static_cast<float>(clampedSpan)) + (kGapDip * static_cast<float>(clampedSpan - 1u));
         const D2D1_RECT_F outer = D2D1::RectF(left, y, left + width, y + heightDip);
-        auto* frame = root.AddChild<CardPanel>();
+        auto* frame             = root.AddChild<CardPanel>();
         frame->SetBounds(outer);
 
         auto* caption = root.AddChild<Label>(std::move(label));
@@ -656,7 +645,7 @@ struct GalleryFlow
         {
             y += rowHeight + kGapDip;
         }
-        column = 0u;
+        column    = 0u;
         rowHeight = 0.0f;
     }
 };
@@ -664,8 +653,8 @@ struct GalleryFlow
 [[nodiscard]] D2D1_RECT_F CenterIn(const D2D1_RECT_F& bounds, float widthDip, float heightDip) noexcept
 {
     const float resolvedWidthDip = std::min(widthDip, std::max(1.0f, bounds.right - bounds.left));
-    const float x = bounds.left + (((bounds.right - bounds.left) - resolvedWidthDip) * 0.5f);
-    const float y = bounds.top + (((bounds.bottom - bounds.top) - heightDip) * 0.5f);
+    const float x                = bounds.left + (((bounds.right - bounds.left) - resolvedWidthDip) * 0.5f);
+    const float y                = bounds.top + (((bounds.bottom - bounds.top) - heightDip) * 0.5f);
     return D2D1::RectF(x, y, x + resolvedWidthDip, y + heightDip);
 }
 
@@ -724,15 +713,15 @@ public:
         if (columnIndex == 0u)
         {
             constexpr std::wstring_view labels[] = {L"Text", L"Checkbox", L"IconText", L"ColorSwatch", L"Spinner", L"Marquee"};
-            outCell.kind = GridCellKind::Text;
-            outCell.text = std::wstring(labels[std::min(rowIndex, std::size(labels) - 1u)]);
+            outCell.kind                         = GridCellKind::Text;
+            outCell.text                         = std::wstring(labels[std::min(rowIndex, std::size(labels) - 1u)]);
             return;
         }
 
         if (columnIndex == 2u)
         {
-            outCell.kind = GridCellKind::Text;
-            outCell.text = (rowIndex % 2u) == 0u ? L"Ready" : L"Live";
+            outCell.kind      = GridCellKind::Text;
+            outCell.text      = (rowIndex % 2u) == 0u ? L"Ready" : L"Live";
             outCell.badgeText = (rowIndex % 2u) == 0u ? L"Info" : L"Warn";
             outCell.badgeTone = (rowIndex % 2u) == 0u ? AdornmentTone::Info : AdornmentTone::Warning;
             return;
@@ -741,28 +730,28 @@ public:
         switch (rowIndex)
         {
             case 1u:
-                outCell.kind = GridCellKind::Checkbox;
-                outCell.text = L"Enabled";
+                outCell.kind    = GridCellKind::Checkbox;
+                outCell.text    = L"Enabled";
                 outCell.checked = true;
                 return;
             case 2u:
-                outCell.kind = GridCellKind::IconText;
-                outCell.iconText = L"\xE946";
-                outCell.text = L"Plugin";
+                outCell.kind      = GridCellKind::IconText;
+                outCell.iconText  = L"\xE946";
+                outCell.text      = L"Plugin";
                 outCell.badgeText = L"Beta";
                 outCell.badgeTone = AdornmentTone::Accent;
                 return;
             case 3u:
-                outCell.kind = GridCellKind::ColorSwatch;
+                outCell.kind           = GridCellKind::ColorSwatch;
                 outCell.hasSwatchValue = true;
-                outCell.swatchArgb = 0xFF33AA55u;
+                outCell.swatchArgb     = 0xFF33AA55u;
                 return;
             case 4u:
                 outCell.kind = GridCellKind::Spinner;
                 outCell.text = L"Loading";
                 return;
             case 5u:
-                outCell.kind = GridCellKind::Marquee;
+                outCell.kind     = GridCellKind::Marquee;
                 outCell.progress = 0.64f;
                 return;
             default:
@@ -802,21 +791,21 @@ public:
 
 struct GalleryScene
 {
-    GalleryScene() = default;
-    GalleryScene(const GalleryScene&) = delete;
+    GalleryScene()                               = default;
+    GalleryScene(const GalleryScene&)            = delete;
     GalleryScene& operator=(const GalleryScene&) = delete;
-    GalleryScene(GalleryScene&&) = default;
-    GalleryScene& operator=(GalleryScene&&) = default;
-    ~GalleryScene() = default;
+    GalleryScene(GalleryScene&&)                 = default;
+    GalleryScene& operator=(GalleryScene&&)      = default;
+    ~GalleryScene()                              = default;
 
     std::unique_ptr<Panel> root;
     std::unique_ptr<GalleryTreeModel> treeModel;
     std::unique_ptr<GalleryGridModel> gridModel;
-    ExposedButton* hoverButton = nullptr;
-    ExposedButton* pressedButton = nullptr;
-    Control* focusedControl = nullptr;
+    ExposedButton* hoverButton         = nullptr;
+    ExposedButton* pressedButton       = nullptr;
+    Control* focusedControl            = nullptr;
     ProgressBar* indeterminateProgress = nullptr;
-    Grid* grid = nullptr;
+    Grid* grid                         = nullptr;
     std::optional<D2D1_POINT_2F> tooltipOrigin;
     float heightDip = 1.0f;
 };
@@ -828,7 +817,7 @@ void AddSectionHeader(GalleryScene& scene, const GalleryTheme& theme)
     title->SetBounds(D2D1::RectF(kMarginDip, 18.0f, 760.0f, 48.0f));
 
     constexpr std::wstring_view swatchLabels[] = {L"Accent", L"Surface", L"Selection", L"Border"};
-    const uint32_t colors[] = {
+    const uint32_t colors[]                    = {
         PackArgbForGallery(theme.palette.accent),
         PackArgbForGallery(theme.palette.surfaceBackground),
         PackArgbForGallery(theme.palette.selectionFill),
@@ -850,7 +839,7 @@ void AddSectionHeader(GalleryScene& scene, const GalleryTheme& theme)
 void AddButtonTile(GalleryScene& scene, GalleryFlow& flow, std::wstring label, std::wstring text, ButtonVariant variant, bool primary = false)
 {
     const Tile tile = flow.Next(*scene.root, std::move(label));
-    auto* button = scene.root->AddChild<ExposedButton>(std::move(text));
+    auto* button    = scene.root->AddChild<ExposedButton>(std::move(text));
     button->SetVariant(variant);
     button->SetPrimary(primary);
     button->SetBounds(CenterIn(tile.content, variant == ButtonVariant::IconOnly ? 36.0f : 132.0f, 32.0f));
@@ -860,7 +849,7 @@ void AddOpenButtonTile(
     GalleryScene& scene, GalleryFlow& flow, std::wstring label, std::wstring text, ButtonVariant variant, WindowHostBitmapCapture popupCapture)
 {
     const Tile tile = flow.Next(*scene.root, std::move(label), 1u, 174.0f);
-    auto* button = scene.root->AddChild<ExposedButton>(std::move(text));
+    auto* button    = scene.root->AddChild<ExposedButton>(std::move(text));
     button->SetVariant(variant);
     button->SetBounds(D2D1::RectF(tile.content.left + 8.0f, tile.content.top + 2.0f, tile.content.right - 8.0f, tile.content.top + 34.0f));
     button->SetPressed(true);
@@ -872,7 +861,7 @@ void AddOpenButtonTile(
 void AddComboOpenTile(GalleryScene& scene, GalleryFlow& flow, std::wstring label, WindowHostBitmapCapture popupCapture)
 {
     const Tile tile = flow.Next(*scene.root, std::move(label), 1u, 220.0f);
-    auto* preview = scene.root->AddChild<GalleryBitmapPreview>(std::move(popupCapture));
+    auto* preview   = scene.root->AddChild<GalleryBitmapPreview>(std::move(popupCapture));
     preview->SetBounds(D2D1::RectF(tile.content.left, tile.content.top, tile.content.right, tile.content.bottom));
 }
 
@@ -897,12 +886,12 @@ void AddComboItems(ComboBox& combo)
 
     {
         const Tile tile = flow.Next(*scene.root, L"Label / Body");
-        auto* label = scene.root->AddChild<Label>(L"Readable body text");
+        auto* label     = scene.root->AddChild<Label>(L"Readable body text");
         label->SetBounds(CenterIn(tile.content, 220.0f, 28.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"CardPanel / Inline");
-        auto* card = scene.root->AddChild<CardPanel>();
+        auto* card      = scene.root->AddChild<CardPanel>();
         card->SetBounds(CenterIn(tile.content, 220.0f, 50.0f));
         auto* label = scene.root->AddChild<Label>(L"Card content");
         label->SetAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -920,64 +909,64 @@ void AddComboItems(ComboBox& combo)
     AddButtonTile(scene, flow, L"Button / Repeat", L"Repeat", ButtonVariant::Repeat);
 
     {
-        const Tile tile = flow.Next(*scene.root, L"Button / Hover");
+        const Tile tile   = flow.Next(*scene.root, L"Button / Hover");
         scene.hoverButton = scene.root->AddChild<ExposedButton>(L"Hover");
         scene.hoverButton->SetBounds(CenterIn(tile.content, 132.0f, 32.0f));
     }
     {
-        const Tile tile = flow.Next(*scene.root, L"Button / Pressed");
+        const Tile tile     = flow.Next(*scene.root, L"Button / Pressed");
         scene.pressedButton = scene.root->AddChild<ExposedButton>(L"Pressed");
         scene.pressedButton->SetBounds(CenterIn(tile.content, 132.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Button / Disabled");
-        auto* button = scene.root->AddChild<Button>(L"Disabled");
+        auto* button    = scene.root->AddChild<Button>(L"Disabled");
         button->SetEnabled(false);
         button->SetBounds(CenterIn(tile.content, 132.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Toggle / Off");
-        auto* toggle = scene.root->AddChild<Toggle>(L"Notifications");
+        auto* toggle    = scene.root->AddChild<Toggle>(L"Notifications");
         toggle->SetBounds(CenterIn(tile.content, 250.0f, 36.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Toggle / On");
-        auto* toggle = scene.root->AddChild<Toggle>(L"Sync");
+        auto* toggle    = scene.root->AddChild<Toggle>(L"Sync");
         toggle->SetChecked(true);
         toggle->SetBounds(CenterIn(tile.content, 250.0f, 36.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Toggle / Disabled");
-        auto* toggle = scene.root->AddChild<Toggle>(L"Offline");
+        auto* toggle    = scene.root->AddChild<Toggle>(L"Offline");
         toggle->SetEnabled(false);
         toggle->SetBounds(CenterIn(tile.content, 250.0f, 36.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Checkbox / Unchecked");
-        auto* checkbox = scene.root->AddChild<Checkbox>(L"Include hidden");
+        auto* checkbox  = scene.root->AddChild<Checkbox>(L"Include hidden");
         checkbox->SetBounds(CenterIn(tile.content, 230.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Checkbox / Checked");
-        auto* checkbox = scene.root->AddChild<Checkbox>(L"Enable preview");
+        auto* checkbox  = scene.root->AddChild<Checkbox>(L"Enable preview");
         checkbox->SetChecked(true);
         checkbox->SetBounds(CenterIn(tile.content, 230.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Checkbox / Indeterminate");
-        auto* checkbox = scene.root->AddChild<Checkbox>(L"Mixed plugins");
+        auto* checkbox  = scene.root->AddChild<Checkbox>(L"Mixed plugins");
         checkbox->SetIndeterminate(true);
         checkbox->SetBounds(CenterIn(tile.content, 230.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"RadioButton / Selected");
-        auto* radio = scene.root->AddChild<RadioButton>(L"Daily");
+        auto* radio     = scene.root->AddChild<RadioButton>(L"Daily");
         radio->SetChecked(true);
         radio->SetBounds(CenterIn(tile.content, 220.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"RadioButtons / Group");
-        auto* group = scene.root->AddChild<RadioButtons>();
+        auto* group     = scene.root->AddChild<RadioButtons>();
         group->SetHeader(L"Update cadence");
         group->SetBounds(tile.content);
         auto* daily = group->AddItem(L"Daily");
@@ -988,33 +977,33 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"ProgressBar / Determinate");
-        auto* progress = scene.root->AddChild<ProgressBar>();
+        auto* progress  = scene.root->AddChild<ProgressBar>();
         progress->SetValue(0.62);
         progress->SetBounds(CenterIn(tile.content, 260.0f, 20.0f));
     }
     {
-        const Tile tile = flow.Next(*scene.root, L"ProgressBar / Indeterminate");
+        const Tile tile             = flow.Next(*scene.root, L"ProgressBar / Indeterminate");
         scene.indeterminateProgress = scene.root->AddChild<ProgressBar>();
         scene.indeterminateProgress->SetIndeterminate(true);
         scene.indeterminateProgress->SetBounds(CenterIn(tile.content, 260.0f, 20.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Slider / Horizontal");
-        auto* slider = scene.root->AddChild<Slider>();
+        auto* slider    = scene.root->AddChild<Slider>();
         slider->SetValue(68.0);
         slider->SetTickMarks({0.0, 25.0, 50.0, 75.0, 100.0});
         slider->SetBounds(CenterIn(tile.content, 270.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Slider / Vertical");
-        auto* slider = scene.root->AddChild<Slider>();
+        auto* slider    = scene.root->AddChild<Slider>();
         slider->SetOrientation(SliderOrientation::Vertical);
         slider->SetValue(74.0);
         slider->SetBounds(CenterIn(tile.content, 32.0f, 64.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Toolbar / Icon buttons");
-        auto* toolbar = scene.root->AddChild<Toolbar>();
+        auto* toolbar   = scene.root->AddChild<Toolbar>();
         toolbar->SetBounds(CenterIn(tile.content, 220.0f, 40.0f));
         toolbar->AddButton(L"Refresh", L"\xE72C");
         toolbar->AddButton(L"Copy", L"\xE8C8");
@@ -1023,7 +1012,7 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"MenuBar / Standard");
-        auto* menuBar = scene.root->AddChild<MenuBar>();
+        auto* menuBar   = scene.root->AddChild<MenuBar>();
         menuBar->SetBounds(CenterIn(tile.content, 300.0f, 32.0f));
         menuBar->SetItems({
             MenuBarItem{.text = L"File", .mnemonic = L'F'},
@@ -1034,7 +1023,7 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"TabControl / Selected", 2u, 136.0f);
-        auto* tabs = scene.root->AddChild<TabControl>();
+        auto* tabs      = scene.root->AddChild<TabControl>();
         tabs->SetBounds(tile.content);
         tabs->AddTab<Label>(L"Overview", L"Overview page");
         tabs->AddTab<Label>(L"Details", L"Details page");
@@ -1045,52 +1034,52 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"ColorSwatch / Accent");
-        auto* swatch = scene.root->AddChild<ColorSwatch>(PackArgbForGallery(theme.palette.accent));
+        auto* swatch    = scene.root->AddChild<ColorSwatch>(PackArgbForGallery(theme.palette.accent));
         swatch->SetBounds(CenterIn(tile.content, 52.0f, 52.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"TextField / Single line");
-        auto* field = scene.root->AddChild<TextField>(L"Search text");
+        auto* field     = scene.root->AddChild<TextField>(L"Search text");
         field->SetClearButtonEnabled(true);
         field->SetBounds(CenterIn(tile.content, 280.0f, 32.0f));
         scene.focusedControl = scene.focusedControl ? scene.focusedControl : field;
     }
     {
         const Tile tile = flow.Next(*scene.root, L"TextField / Multiline");
-        auto* field = scene.root->AddChild<TextField>(L"Alpha\nBeta\nGamma");
+        auto* field     = scene.root->AddChild<TextField>(L"Alpha\nBeta\nGamma");
         field->SetMultiline(true);
         field->SetBounds(CenterIn(tile.content, 280.0f, 58.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"TextField / Password");
-        auto* field = scene.root->AddChild<TextField>(L"salamander");
+        auto* field     = scene.root->AddChild<TextField>(L"salamander");
         field->SetMasked(true);
         field->SetPasswordRevealMode(PasswordRevealMode::Peek);
         field->SetBounds(CenterIn(tile.content, 280.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"TextField / Read-only");
-        auto* field = scene.root->AddChild<TextField>(L"Read-only value");
+        auto* field     = scene.root->AddChild<TextField>(L"Read-only value");
         field->SetReadOnly(true);
         field->SetBounds(CenterIn(tile.content, 280.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"ComboBox / Window");
-        auto* combo = scene.root->AddChild<ComboBox>();
+        auto* combo     = scene.root->AddChild<ComboBox>();
         AddComboItems(*combo);
         combo->SetVariant(ComboBoxVariant::Window);
         combo->SetBounds(CenterIn(tile.content, 280.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"ComboBox / Modern");
-        auto* combo = scene.root->AddChild<ComboBox>();
+        auto* combo     = scene.root->AddChild<ComboBox>();
         AddComboItems(*combo);
         combo->SetVariant(ComboBoxVariant::Modern);
         combo->SetBounds(CenterIn(tile.content, 280.0f, 32.0f));
     }
     {
         const Tile tile = flow.Next(*scene.root, L"ComboBox / Edit");
-        auto* combo = scene.root->AddChild<ComboBox>();
+        auto* combo     = scene.root->AddChild<ComboBox>();
         AddComboItems(*combo);
         combo->SetEditable(true);
         combo->SetText(L"theme");
@@ -1101,7 +1090,7 @@ void AddComboItems(ComboBox& combo)
     AddComboOpenTile(scene, flow, L"ComboBox / Edit open", std::move(menuCaptures.comboEditOpen));
     {
         const Tile tile = flow.Next(*scene.root, L"StatusStrip / Sections", 2u);
-        auto* status = scene.root->AddChild<StatusStrip>();
+        auto* status    = scene.root->AddChild<StatusStrip>();
         status->SetBounds(CenterIn(tile.content, 600.0f, 28.0f));
         status->SetSections({
             StatusStrip::Section{.text = L"Ready", .widthDip = 0.0f},
@@ -1111,7 +1100,7 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"Menu / Submenu state + icon", 3u, 210.0f);
-        auto* menuBar = scene.root->AddChild<MenuBar>();
+        auto* menuBar   = scene.root->AddChild<MenuBar>();
         menuBar->SetBounds(D2D1::RectF(tile.content.left + 8.0f, tile.content.top + 2.0f, tile.content.right - 8.0f, tile.content.top + 32.0f));
         menuBar->SetItems({
             MenuBarItem{.text = L"File", .mnemonic = L'F'},
@@ -1125,7 +1114,7 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"ScrollPanel / Internal scrollbar", 2u, 148.0f);
-        auto* scroll = scene.root->AddChild<ScrollPanel>();
+        auto* scroll    = scene.root->AddChild<ScrollPanel>();
         scroll->SetBounds(tile.content);
         scroll->SetContentHeight(230.0f);
         scroll->SetScrollOffset(54.0f);
@@ -1141,7 +1130,7 @@ void AddComboItems(ComboBox& combo)
     {
         const Tile tile = flow.Next(*scene.root, L"Tree / Hierarchy", 2u, 156.0f);
         scene.treeModel = std::make_unique<GalleryTreeModel>();
-        auto* tree = scene.root->AddChild<Tree>();
+        auto* tree      = scene.root->AddChild<Tree>();
         tree->SetBounds(tile.content);
         tree->SetModel(scene.treeModel.get());
         tree->SetSelectedItemId(3u);
@@ -1149,7 +1138,7 @@ void AddComboItems(ComboBox& combo)
     {
         const Tile tile = flow.Next(*scene.root, L"Grid / Cell variants", 2u, 176.0f);
         scene.gridModel = std::make_unique<GalleryGridModel>();
-        scene.grid = scene.root->AddChild<Grid>();
+        scene.grid      = scene.root->AddChild<Grid>();
         scene.grid->SetBounds(tile.content);
         scene.grid->SetHeaderHeightDip(30.0f);
         scene.grid->SetRowHeightDip(24.0f);
@@ -1158,9 +1147,9 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"PageHost / Transition");
-        auto* pageHost = scene.root->AddChild<PageHost>();
+        auto* pageHost  = scene.root->AddChild<PageHost>();
         pageHost->SetBounds(tile.content);
-        auto page = std::make_unique<Panel>();
+        auto page   = std::make_unique<Panel>();
         auto* label = page->AddChild<Label>(L"Page content");
         label->SetAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
         label->SetBounds(tile.content);
@@ -1168,7 +1157,7 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"PopupLayer / Overlay");
-        auto* popup = scene.root->AddChild<PopupLayer>();
+        auto* popup     = scene.root->AddChild<PopupLayer>();
         popup->SetBounds(tile.content);
         auto* card = popup->AddChild<CardPanel>();
         card->SetCornerRadius(8.0f);
@@ -1179,7 +1168,7 @@ void AddComboItems(ComboBox& combo)
     }
     {
         const Tile tile = flow.Next(*scene.root, L"TooltipLayer / Tooltip");
-        auto* target = scene.root->AddChild<Button>(L"Hover target");
+        auto* target    = scene.root->AddChild<Button>(L"Hover target");
         target->SetBounds(CenterIn(tile.content, 150.0f, 32.0f));
         scene.tooltipOrigin = D2D1::Point2F(tile.content.left + 210.0f, tile.content.top + 16.0f);
     }
@@ -1260,7 +1249,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
 {
     Require(! captures.empty(), "gallery has at least one section capture");
 
-    UINT widthPx = 0u;
+    UINT widthPx  = 0u;
     UINT heightPx = 0u;
     for (const auto& capture : captures)
     {
@@ -1270,7 +1259,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
     }
 
     WindowHostBitmapCapture stitched;
-    stitched.widthPx = widthPx;
+    stitched.widthPx  = widthPx;
     stitched.heightPx = heightPx;
     stitched.bgraPixels.assign(static_cast<size_t>(widthPx) * static_cast<size_t>(heightPx) * 4u, 0xFFu);
 
@@ -1280,7 +1269,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
         const UINT copyWidth = std::min(widthPx, capture.widthPx);
         for (UINT row = 0u; row < capture.heightPx; ++row)
         {
-            const size_t sourceOffset = (static_cast<size_t>(row) * static_cast<size_t>(capture.widthPx)) * 4u;
+            const size_t sourceOffset      = (static_cast<size_t>(row) * static_cast<size_t>(capture.widthPx)) * 4u;
             const size_t destinationOffset = ((static_cast<size_t>(destinationY + row) * static_cast<size_t>(widthPx))) * 4u;
             std::copy_n(capture.bgraPixels.data() + sourceOffset, static_cast<size_t>(copyWidth) * 4u, stitched.bgraPixels.data() + destinationOffset);
         }
@@ -1323,7 +1312,7 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
                                                                std::unordered_map<std::wstring, size_t>& slugCounts)
 {
     const std::wstring slug = MakeThemeGalleryFileSlug(theme.name);
-    const size_t count = ++slugCounts[slug];
+    const size_t count      = ++slugCounts[slug];
 
     std::wstring fileName = L"theme-controls-" + slug;
     if (count > 1u)
@@ -1334,23 +1323,23 @@ void ResizeClientArea(HWND hwnd, UINT widthPx, UINT heightPx)
     return outputDirectory / fileName;
 }
 
-constexpr float kButtonAuditWidthDip       = 1680.0f;
-constexpr float kButtonAuditMarginDip      = 24.0f;
-constexpr float kButtonAuditHeaderHeightDip = 96.0f;
-constexpr float kButtonAuditThemeGapDip    = 18.0f;
-constexpr float kButtonAuditStateGapDip    = 10.0f;
-constexpr float kButtonAuditRowLabelDip    = 112.0f;
-constexpr float kButtonAuditTileHeightDip  = 96.0f;
+constexpr float kButtonAuditWidthDip         = 1680.0f;
+constexpr float kButtonAuditMarginDip        = 24.0f;
+constexpr float kButtonAuditHeaderHeightDip  = 96.0f;
+constexpr float kButtonAuditThemeGapDip      = 18.0f;
+constexpr float kButtonAuditStateGapDip      = 10.0f;
+constexpr float kButtonAuditRowLabelDip      = 112.0f;
+constexpr float kButtonAuditTileHeightDip    = 96.0f;
 constexpr float kButtonAuditSectionHeaderDip = 48.0f;
 
 struct ButtonAuditState
 {
     std::wstring_view name;
-    bool enabled       = true;
-    bool hovered       = false;
-    bool pressed       = false;
-    bool focused       = false;
-    bool keyboardFocus = false;
+    bool enabled        = true;
+    bool hovered        = false;
+    bool pressed        = false;
+    bool focused        = false;
+    bool keyboardFocus  = false;
     float hoverStrength = 0.0f;
     float focusStrength = 0.0f;
 };
@@ -1373,7 +1362,7 @@ enum class ButtonAuditQuality : uint8_t
 struct ButtonAuditMeasurement
 {
     ButtonVisualStyle style{};
-    double ratio = 1.0;
+    double ratio               = 1.0;
     ButtonAuditQuality quality = ButtonAuditQuality::Fail;
 };
 
@@ -1381,9 +1370,9 @@ struct ButtonAuditThemeSummary
 {
     std::wstring name;
     double minimumEnabledRatio = std::numeric_limits<double>::max();
-    size_t enabledCount = 0u;
-    size_t aaPassCount  = 0u;
-    size_t aaaPassCount = 0u;
+    size_t enabledCount        = 0u;
+    size_t aaPassCount         = 0u;
+    size_t aaaPassCount        = 0u;
 };
 
 constexpr std::array<ButtonAuditState, 5> kButtonAuditStates = {{
@@ -1494,15 +1483,8 @@ constexpr std::array<ButtonAuditVariant, 2> kButtonAuditVariants = {{
                                                            const D2D1_COLOR_F& tileBackground) noexcept
 {
     ButtonAuditMeasurement measurement;
-    measurement.style = ResolveButtonVisualStyle(theme,
-                                                 state.enabled,
-                                                 state.hovered,
-                                                 state.pressed,
-                                                 state.focused,
-                                                 state.keyboardFocus,
-                                                 variant.primary,
-                                                 state.hoverStrength,
-                                                 state.focusStrength);
+    measurement.style = ResolveButtonVisualStyle(
+        theme, state.enabled, state.hovered, state.pressed, state.focused, state.keyboardFocus, variant.primary, state.hoverStrength, state.focusStrength);
     const D2D1_COLOR_F effectiveFill = CompositeColorForAudit(measurement.style.fill, tileBackground);
     const D2D1_COLOR_F effectiveText = CompositeColorForAudit(measurement.style.text, effectiveFill);
     measurement.ratio                = ContrastRatioForAudit(effectiveText, effectiveFill);
@@ -1552,11 +1534,7 @@ void DrawAuditText(WindowHost& host, std::wstring_view text, const D2D1_RECT_F& 
     }
 }
 
-void DrawAuditBadge(WindowHost& host,
-                    const D2D1_RECT_F& rect,
-                    std::wstring_view text,
-                    const D2D1_COLOR_F& fill,
-                    FontRole role = FontRole::Small)
+void DrawAuditBadge(WindowHost& host, const D2D1_RECT_F& rect, std::wstring_view text, const D2D1_COLOR_F& fill, FontRole role = FontRole::Small)
 {
     DrawRoundedRect(host, rect, fill, D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f), 4.0f);
     DrawCenteredText(host, text, rect, role, ChooseTextForAudit(fill));
@@ -1565,7 +1543,9 @@ void DrawAuditBadge(WindowHost& host,
 class ButtonContrastAuditControl final : public Control
 {
 public:
-    explicit ButtonContrastAuditControl(std::vector<GalleryTheme> themes, bool showHeader) : _themes(std::move(themes)), _showHeader(showHeader) {}
+    explicit ButtonContrastAuditControl(std::vector<GalleryTheme> themes, bool showHeader) : _themes(std::move(themes)), _showHeader(showHeader)
+    {
+    }
 
     void Paint(WindowHost& host) const override
     {
@@ -1580,11 +1560,12 @@ public:
                           D2D1::RectF(kButtonAuditMarginDip, 12.0f, bounds.right - kButtonAuditMarginDip, 56.0f),
                           FontRole::TitleLarge,
                           D2D1::ColorF(0.04f, 0.04f, 0.04f, 1.0f));
-            DrawAuditText(host,
-                          L"Enabled text uses WCAG normal-text thresholds: AA >= 4.5:1, AAA >= 7:1. Disabled controls are shown with contrast but marked exempt.",
-                          D2D1::RectF(kButtonAuditMarginDip, 62.0f, bounds.right - kButtonAuditMarginDip, 88.0f),
-                          FontRole::Small,
-                          D2D1::ColorF(0.22f, 0.22f, 0.22f, 1.0f));
+            DrawAuditText(
+                host,
+                L"Enabled text uses WCAG normal-text thresholds: AA >= 4.5:1, AAA >= 7:1. Disabled controls are shown with contrast but marked exempt.",
+                D2D1::RectF(kButtonAuditMarginDip, 62.0f, bounds.right - kButtonAuditMarginDip, 88.0f),
+                FontRole::Small,
+                D2D1::ColorF(0.22f, 0.22f, 0.22f, 1.0f));
             y = kButtonAuditHeaderHeightDip + kButtonAuditMarginDip;
         }
 
@@ -1612,11 +1593,8 @@ private:
         }
     }
 
-    static void PaintButtonTile(WindowHost& host,
-                                const GalleryTheme& theme,
-                                const ButtonAuditVariant& variant,
-                                const ButtonAuditState& state,
-                                const D2D1_RECT_F& tileRect)
+    static void PaintButtonTile(
+        WindowHost& host, const GalleryTheme& theme, const ButtonAuditVariant& variant, const ButtonAuditState& state, const D2D1_RECT_F& tileRect)
     {
         const D2D1_COLOR_F tileFill = theme.palette.surfaceBackground;
         DrawRoundedRect(host, tileRect, tileFill, theme.palette.borderDefault, 5.0f);
@@ -1627,9 +1605,8 @@ private:
                       theme.palette.subduedText);
 
         const ButtonAuditMeasurement measurement = MeasureButtonForAudit(theme.palette, variant, state, tileFill);
-        const D2D1_RECT_F buttonRect =
-            D2D1::RectF(tileRect.left + 12.0f, tileRect.top + 34.0f, tileRect.right - 12.0f, tileRect.top + 68.0f);
-        const D2D1_COLOR_F transparent = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+        const D2D1_RECT_F buttonRect             = D2D1::RectF(tileRect.left + 12.0f, tileRect.top + 34.0f, tileRect.right - 12.0f, tileRect.top + 68.0f);
+        const D2D1_COLOR_F transparent           = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
         DrawRoundedRect(host, buttonRect, measurement.style.fill, measurement.style.showBorder ? measurement.style.border : transparent, 4.0f);
         if (measurement.style.showFocus)
         {
@@ -1660,12 +1637,15 @@ private:
             D2D1::RectF(kButtonAuditMarginDip, y, std::max(kButtonAuditMarginDip + 1.0f, widthDip - kButtonAuditMarginDip), y + sectionHeight);
         DrawRoundedRect(host, sectionRect, theme.palette.windowBackground, theme.palette.borderDefault, 6.0f);
 
-        const ButtonAuditThemeSummary summary = SummarizeButtonAuditTheme(theme);
-        const bool allAa = summary.enabledCount > 0u && summary.aaPassCount == summary.enabledCount;
-        const bool allAaa = summary.enabledCount > 0u && summary.aaaPassCount == summary.enabledCount;
+        const ButtonAuditThemeSummary summary   = SummarizeButtonAuditTheme(theme);
+        const bool allAa                        = summary.enabledCount > 0u && summary.aaPassCount == summary.enabledCount;
+        const bool allAaa                       = summary.enabledCount > 0u && summary.aaaPassCount == summary.enabledCount;
         const ButtonAuditQuality summaryQuality = allAaa ? ButtonAuditQuality::Aaa : (allAa ? ButtonAuditQuality::Aa : ButtonAuditQuality::Fail);
-        const std::wstring summaryText =
-            std::format(L"{} {}/{} enabled  min {}", allAa ? L"Good" : L"Review", summary.aaPassCount, summary.enabledCount, FormatContrastRatioForAudit(summary.minimumEnabledRatio));
+        const std::wstring summaryText          = std::format(L"{} {}/{} enabled  min {}",
+                                                              allAa ? L"Good" : L"Review",
+                                                              summary.aaPassCount,
+                                                              summary.enabledCount,
+                                                              FormatContrastRatioForAudit(summary.minimumEnabledRatio));
 
         DrawAuditText(host,
                       theme.name,
@@ -1683,16 +1663,15 @@ private:
                       FontRole::Small,
                       theme.palette.subduedText);
 
-        const float availableWidth =
-            (sectionRect.right - sectionRect.left) - (kButtonAuditMarginDip * 2.0f) - kButtonAuditRowLabelDip -
-            (kButtonAuditStateGapDip * static_cast<float>(kButtonAuditStates.size() - 1u));
-        const float tileWidth = availableWidth / static_cast<float>(kButtonAuditStates.size());
-        const float rowsTop   = sectionRect.top + kButtonAuditSectionHeaderDip;
+        const float availableWidth = (sectionRect.right - sectionRect.left) - (kButtonAuditMarginDip * 2.0f) - kButtonAuditRowLabelDip -
+                                     (kButtonAuditStateGapDip * static_cast<float>(kButtonAuditStates.size() - 1u));
+        const float tileWidth      = availableWidth / static_cast<float>(kButtonAuditStates.size());
+        const float rowsTop        = sectionRect.top + kButtonAuditSectionHeaderDip;
 
         for (size_t variantIndex = 0u; variantIndex < kButtonAuditVariants.size(); ++variantIndex)
         {
             const ButtonAuditVariant& variant = kButtonAuditVariants[variantIndex];
-            const float rowTop = rowsTop + (static_cast<float>(variantIndex) * (kButtonAuditTileHeightDip + kButtonAuditStateGapDip));
+            const float rowTop                = rowsTop + (static_cast<float>(variantIndex) * (kButtonAuditTileHeightDip + kButtonAuditStateGapDip));
             DrawAuditText(host,
                           variant.name,
                           D2D1::RectF(sectionRect.left + 16.0f, rowTop + 34.0f, sectionRect.left + 16.0f + kButtonAuditRowLabelDip, rowTop + 58.0f),
@@ -1778,7 +1757,7 @@ void RunGalleryGeneratorPerTheme(const std::filesystem::path& outputDirectory)
     for (const GalleryTheme& theme : themes)
     {
         std::wcerr << L"  [GALLERY] Rendering " << theme.name << L'\n' << std::flush;
-        WindowHostBitmapCapture capture = CaptureThemeSection(theme);
+        WindowHostBitmapCapture capture        = CaptureThemeSection(theme);
         const std::filesystem::path outputPath = MakeThemeGalleryOutputPath(absoluteOutputDirectory, theme, slugCounts);
 
         ec.clear();
@@ -1826,7 +1805,7 @@ void RunButtonContrastAuditGenerator(const std::filesystem::path& outputPath)
     for (const ButtonAuditThemeSummary& summary : summaries)
     {
         const bool allAa = summary.enabledCount > 0u && summary.aaPassCount == summary.enabledCount;
-        std::wcout << L"  " << summary.name << L": " << (allAa ? L"GOOD" : L"REVIEW") << L" " << summary.aaPassCount << L"/"
-                   << summary.enabledCount << L" enabled AA, min " << FormatContrastRatioForAudit(summary.minimumEnabledRatio) << L'\n';
+        std::wcout << L"  " << summary.name << L": " << (allAa ? L"GOOD" : L"REVIEW") << L" " << summary.aaPassCount << L"/" << summary.enabledCount
+                   << L" enabled AA, min " << FormatContrastRatioForAudit(summary.minimumEnabledRatio) << L'\n';
     }
 }

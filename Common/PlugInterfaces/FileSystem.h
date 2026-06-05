@@ -173,6 +173,7 @@ enum FileSystemSearchFlags : uint32_t
     FILESYSTEM_SEARCH_MATCH_CASE_CONTENT  = 0x20,
     FILESYSTEM_SEARCH_WANT_SNIPPETS       = 0x40,
     FILESYSTEM_SEARCH_PREFER_INDEX        = 0x80,
+    FILESYSTEM_SEARCH_FORCE_SCAN          = 0x100,
 };
 
 enum FileSystemSearchNameMode : uint32_t

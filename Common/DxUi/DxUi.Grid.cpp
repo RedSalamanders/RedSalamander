@@ -76,6 +76,24 @@ constexpr UINT kDxUiNoDataStringId           = 1305u;
     return text;
 }
 
+[[nodiscard]] bool GridIconTextUsesIconFont(std::wstring_view iconText) noexcept
+{
+    for (const wchar_t ch : iconText)
+    {
+        if (ch >= 0xE000 && ch <= 0xF8FF)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+[[nodiscard]] FontRole ResolveGridIconTextFontRole(std::wstring_view iconText) noexcept
+{
+    return GridIconTextUsesIconFont(iconText) ? FontRole::Icon : FontRole::Small;
+}
+
 [[nodiscard]] bool ModifiersContainCtrl(UINT modifiers) noexcept
 {
     return (modifiers & MK_CONTROL) != 0u;
@@ -136,6 +154,31 @@ constexpr UINT kDxUiNoDataStringId           = 1305u;
     return rect.right > rect.left && rect.bottom > rect.top;
 }
 
+void DrawGridBitmapIcon(WindowHost& host, ID2D1Bitmap1* bitmap, const D2D1_RECT_F& iconRectDip, float opacity) noexcept
+{
+    if (! bitmap || ! host.GetDeviceContext() || ! IsNonEmptyRect(iconRectDip))
+    {
+        return;
+    }
+
+    const D2D1_SIZE_F bitmapSize = bitmap->GetSize();
+    const float maxWidthDip      = std::max(0.0f, iconRectDip.right - iconRectDip.left);
+    const float maxHeightDip     = std::max(0.0f, iconRectDip.bottom - iconRectDip.top);
+    if (bitmapSize.width <= 0.0f || bitmapSize.height <= 0.0f || maxWidthDip <= 0.0f || maxHeightDip <= 0.0f)
+    {
+        return;
+    }
+
+    const float scale          = std::min(1.0f, std::min(maxWidthDip / bitmapSize.width, maxHeightDip / bitmapSize.height));
+    const float drawWidthDip   = bitmapSize.width * scale;
+    const float drawHeightDip  = bitmapSize.height * scale;
+    const float drawLeft       = iconRectDip.left + ((maxWidthDip - drawWidthDip) * 0.5f);
+    const float drawTop        = iconRectDip.top + ((maxHeightDip - drawHeightDip) * 0.5f);
+    const D2D1_RECT_F drawRect = D2D1::RectF(drawLeft, drawTop, drawLeft + drawWidthDip, drawTop + drawHeightDip);
+
+    host.GetDeviceContext()->DrawBitmap(bitmap, drawRect, opacity, D2D1_INTERPOLATION_MODE_LINEAR);
+}
+
 [[nodiscard]] size_t ResolveVisibleRowBoundaryOffset(float offsetDip, float rowHeightDip, size_t maxRowCount) noexcept
 {
     const float safeRowHeightDip = std::max(1.0f, rowHeightDip);
@@ -145,9 +188,11 @@ constexpr UINT kDxUiNoDataStringId           = 1305u;
 
 struct GridResolvedRowVisuals final
 {
-    D2D1_COLOR_F fill = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
-    D2D1_COLOR_F text = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
-    bool usesRainbow  = false;
+    D2D1_COLOR_F fill  = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F text  = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    bool usesRainbow   = false;
+    bool roundedFill   = false;
+    bool showSeparator = true;
 };
 
 struct GridResolvedCellVisuals final
@@ -158,12 +203,65 @@ struct GridResolvedCellVisuals final
 };
 
 [[nodiscard]] GridResolvedRowVisuals ResolveGridRowVisuals(
-    const ThemePalette& theme, const GridRowStyle& rowStyle, size_t rowIndex, bool selected, bool focused, bool hovered) noexcept
+    const ThemePalette& theme,
+    const GridRowStyle& rowStyle,
+    size_t rowIndex,
+    bool selected,
+    bool focused,
+    bool hovered,
+    GridVisualMode visualMode) noexcept
 {
     GridResolvedRowVisuals visuals{};
+    visuals.text = theme.text;
+
+    if (visualMode == GridVisualMode::FolderView)
+    {
+        visuals.roundedFill   = true;
+        visuals.showSeparator = false;
+
+        switch (rowStyle.tone)
+        {
+            case GridRowTone::Info:
+                visuals.fill = theme.infoFill;
+                visuals.text = theme.infoText;
+                break;
+            case GridRowTone::Warning:
+                visuals.fill = theme.warningFill;
+                visuals.text = theme.warningText;
+                break;
+            case GridRowTone::Error:
+                visuals.fill = theme.errorFill;
+                visuals.text = theme.errorText;
+                break;
+            case GridRowTone::None: break;
+        }
+
+        const bool allowSelectionRainbow =
+            theme.rainbowMode && ! theme.highContrast && selected && (rowStyle.folderViewRainbowHash32.has_value() || ! rowStyle.rainbowSeed.empty());
+        if (allowSelectionRainbow)
+        {
+            visuals.usesRainbow = true;
+            visuals.fill        = rowStyle.folderViewRainbowHash32.has_value()
+                                      ? RainbowFolderViewSelectionTint(rowStyle.folderViewRainbowHash32.value(), theme.dark)
+                                      : RainbowMenuSelectionTint(rowStyle.rainbowSeed, theme.dark);
+            visuals.fill.a      = focused ? std::clamp(theme.selectionFill.a, 0.0f, 1.0f) : std::clamp(theme.selectionInactiveFill.a, 0.0f, 1.0f);
+            visuals.text        = ChooseContrastingTextColor(CompositeOverBackground(visuals.fill, theme.surfaceBackground));
+        }
+        else if (selected)
+        {
+            visuals.fill = focused ? theme.selectionFill : theme.selectionInactiveFill;
+            visuals.text = theme.selectionText;
+        }
+        else if (visuals.fill.a <= 0.0f && hovered)
+        {
+            visuals.fill = theme.hoverFill;
+        }
+
+        return visuals;
+    }
+
     const D2D1_COLOR_F baseFill = ((rowIndex % 2u) == 0u) ? theme.surfaceBackground : BlendColor(theme.surfaceBackground, theme.windowBackground, 0.42f);
     visuals.fill                = baseFill;
-    visuals.text                = theme.text;
 
     const bool allowRainbow = theme.rainbowMode && ! theme.highContrast && ! rowStyle.rainbowSeed.empty();
     if (allowRainbow)
@@ -217,6 +315,64 @@ struct GridResolvedCellVisuals final
     }
 
     return visuals;
+}
+
+[[nodiscard]] bool IsGridCellVisibleTextClipped(const WindowHost& host,
+                                                const GridCellData& cellData,
+                                                const GridCellLayoutMetrics& layout,
+                                                uint32_t lineClamp) noexcept
+{
+    const std::wstring_view text = cellData.text;
+    if (text.empty())
+    {
+        return false;
+    }
+
+    const float availableWidthDip = std::max(0.0f, layout.textRect.right - layout.textRect.left);
+    if (availableWidthDip <= 0.5f)
+    {
+        return true;
+    }
+
+    const float textHeightDip = std::max(1.0f, layout.textRect.bottom - layout.textRect.top);
+    if (cellData.multiline && lineClamp > 1u)
+    {
+        size_t lineCount = 1u;
+        size_t lineStart = 0u;
+        for (size_t index = 0u; index <= text.size(); ++index)
+        {
+            if (index < text.size() && text[index] != L'\n')
+            {
+                continue;
+            }
+
+            std::wstring_view line = text.substr(lineStart, index - lineStart);
+            if (! line.empty() && line.back() == L'\r')
+            {
+                line = line.substr(0u, line.size() - 1u);
+            }
+
+            if (MeasureSingleLineTextWidthDip(&host, line, FontRole::Body, textHeightDip) > (availableWidthDip + 0.5f))
+            {
+                return true;
+            }
+
+            if (index < text.size())
+            {
+                ++lineCount;
+                lineStart = index + 1u;
+            }
+        }
+
+        return lineCount > lineClamp;
+    }
+
+    if (text.find(L'\n') != std::wstring_view::npos || text.find(L'\r') != std::wstring_view::npos)
+    {
+        return true;
+    }
+
+    return MeasureSingleLineTextWidthDip(&host, text, FontRole::Body, textHeightDip) > (availableWidthDip + 0.5f);
 }
 
 [[nodiscard]] GridResolvedCellVisuals ResolveGridCellVisuals(
@@ -569,6 +725,12 @@ void IDxGridDelegate::OnGridGroupToggled(uint64_t /*groupStableId*/, bool /*coll
 {
 }
 
+wil::com_ptr<ID2D1Bitmap1> IDxGridDelegate::GetGridIconBitmap(
+    const Grid& /*sender*/, int /*iconIndex*/, float /*targetDipSize*/, ID2D1DeviceContext* /*d2dContext*/)
+{
+    return nullptr;
+}
+
 void GridSelectionModel::Clear() noexcept
 {
     _selectedRowIds.clear();
@@ -724,9 +886,30 @@ void Grid::SetSelectionMode(GridSelectionMode mode) noexcept
     }
 }
 
+void Grid::SetVisualMode(GridVisualMode mode) noexcept
+{
+    if (_visualMode == mode)
+    {
+        return;
+    }
+
+    _visualMode = mode;
+    if (WindowHost* host = GetHost())
+    {
+        Invalidate(*host);
+    }
+}
+
 void Grid::SetRowHeightDip(float rowHeightDip) noexcept
 {
+    _effectiveRowHeightDip = std::nullopt;
     _rowHeightBaseDip = std::max(kMinimumInteractiveTextRowHeightDip, rowHeightDip);
+    OnDensityChanged();
+}
+
+void Grid::SetEffectiveRowHeightDip(float rowHeightDip) noexcept
+{
+    _effectiveRowHeightDip = std::max(kMinimumInteractiveTextRowHeightDip, rowHeightDip);
     OnDensityChanged();
 }
 
@@ -734,6 +917,29 @@ void Grid::SetHeaderHeightDip(float headerHeightDip) noexcept
 {
     _headerHeightBaseDip = std::max(0.0f, headerHeightDip);
     OnDensityChanged();
+}
+
+void Grid::SetCellTextFontRole(FontRole fontRole) noexcept
+{
+    if (_cellTextFontRole == fontRole)
+    {
+        return;
+    }
+
+    _cellTextFontRole = fontRole;
+    RequestInvalidate();
+}
+
+void Grid::SetIconSizeDip(float iconSizeDip) noexcept
+{
+    const float normalized = std::clamp(iconSizeDip, 1.0f, 64.0f);
+    if (std::abs(_iconSizeDip - normalized) <= 0.01f)
+    {
+        return;
+    }
+
+    _iconSizeDip = normalized;
+    RequestInvalidate();
 }
 
 void Grid::SetLineClamp(uint32_t lineClamp) noexcept
@@ -744,7 +950,7 @@ void Grid::SetLineClamp(uint32_t lineClamp) noexcept
 void Grid::OnDensityChanged() noexcept
 {
     Control::OnDensityChanged();
-    _rowHeightDip         = ResolveDensityScaledMetricDip(_rowHeightBaseDip, kMinimumInteractiveTextRowHeightDip, GetDensity());
+    _rowHeightDip         = _effectiveRowHeightDip.value_or(ResolveDensityScaledMetricDip(_rowHeightBaseDip, kMinimumInteractiveTextRowHeightDip, GetDensity()));
     _groupHeaderHeightDip = ResolveDensityScaledMetricDip(_groupHeaderHeightBaseDip, kMinimumInteractiveTextRowHeightDip, GetDensity());
     _headerHeightDip =
         _headerHeightBaseDip <= 0.0f ? 0.0f : ResolveDensityScaledMetricDip(_headerHeightBaseDip, kMinimumInteractiveTextRowHeightDip, GetDensity());
@@ -1065,9 +1271,13 @@ GridVisibleWorkMetrics Grid::GetVisibleWorkMetrics() const
         {
             GridCellData cellData{};
             _model->GetCellData(item.rowIndex, GetModelColumnIndexForDisplayIndex(displayIndex), cellData);
-            if (cellData.kind == GridCellKind::IconText && ! cellData.iconText.empty())
+            if (cellData.kind == GridCellKind::IconText && (! cellData.iconText.empty() || cellData.iconIndex >= 0))
             {
                 ++metrics.visibleIconCellCount;
+                if (cellData.iconBitmap)
+                {
+                    ++metrics.visibleBitmapIconCellCount;
+                }
             }
             if (! cellData.badgeText.empty())
             {
@@ -1509,22 +1719,22 @@ bool Grid::DebugHitTestPoint(PointDip pointDip, GridDebugHitInfo& out) const noe
 Grid::GridDebugPointerState Grid::DebugGetPointerState() const noexcept
 {
     return GridDebugPointerState{
-        .headerResizeDownCount = _debugHeaderResizeDownCount,
-        .resizeMoveCount       = _debugResizeMoveCount,
-        .resizeActive          = _resizeColumn.has_value(),
-        .lastResizeDeltaDip    = _debugLastResizeDeltaDip,
-        .lastResizeWidthDip    = _debugLastResizeWidthDip,
-        .pressedHeaderActive   = _pressedHeaderColumn.has_value(),
-        .pressedHeaderColumn   = _pressedHeaderColumn.value_or(0u),
-        .reorderActive         = _dragReorderColumn.has_value(),
-        .reorderColumn         = _dragReorderColumn.value_or(0u),
-        .reorderTargetDisplayIndex = _dragReorderTargetDisplayIndex,
-        .headerReorderStartCount   = _debugHeaderReorderStartCount,
-        .headerReorderCommitCount  = _debugHeaderReorderCommitCount,
-        .headerReorderNoOpCount    = _debugHeaderReorderNoOpCount,
-        .lastHeaderReorderColumn = _debugLastHeaderReorderColumn,
-        .lastHeaderReorderFromDisplayIndex = _debugLastHeaderReorderFromDisplayIndex,
-        .lastHeaderReorderRawTargetDisplayIndex = _debugLastHeaderReorderRawTargetDisplayIndex,
+        .headerResizeDownCount                         = _debugHeaderResizeDownCount,
+        .resizeMoveCount                               = _debugResizeMoveCount,
+        .resizeActive                                  = _resizeColumn.has_value(),
+        .lastResizeDeltaDip                            = _debugLastResizeDeltaDip,
+        .lastResizeWidthDip                            = _debugLastResizeWidthDip,
+        .pressedHeaderActive                           = _pressedHeaderColumn.has_value(),
+        .pressedHeaderColumn                           = _pressedHeaderColumn.value_or(0u),
+        .reorderActive                                 = _dragReorderColumn.has_value(),
+        .reorderColumn                                 = _dragReorderColumn.value_or(0u),
+        .reorderTargetDisplayIndex                     = _dragReorderTargetDisplayIndex,
+        .headerReorderStartCount                       = _debugHeaderReorderStartCount,
+        .headerReorderCommitCount                      = _debugHeaderReorderCommitCount,
+        .headerReorderNoOpCount                        = _debugHeaderReorderNoOpCount,
+        .lastHeaderReorderColumn                       = _debugLastHeaderReorderColumn,
+        .lastHeaderReorderFromDisplayIndex             = _debugLastHeaderReorderFromDisplayIndex,
+        .lastHeaderReorderRawTargetDisplayIndex        = _debugLastHeaderReorderRawTargetDisplayIndex,
         .lastHeaderReorderNormalizedTargetDisplayIndex = _debugLastHeaderReorderNormalizedTargetDisplayIndex,
     };
 }
@@ -1540,7 +1750,7 @@ bool Grid::DebugGetRowVisualState(const ThemePalette& theme, size_t rowIndex, Gr
     const uint64_t rowId   = _model->GetStableRowId(rowIndex);
     const bool rowSelected = _selectionModel.IsSelected(rowId);
     const GridResolvedRowVisuals visuals =
-        ResolveGridRowVisuals(theme, _model->GetRowStyle(rowIndex), rowIndex, rowSelected, HasFocus(), _hoveredRow && _hoveredRow.value() == rowIndex);
+        ResolveGridRowVisuals(theme, _model->GetRowStyle(rowIndex), rowIndex, rowSelected, HasFocus(), _hoveredRow && _hoveredRow.value() == rowIndex, _visualMode);
     const GridProgressVisualStyle progressStyle = ResolveGridProgressVisualStyle(theme, visuals.fill, visuals.text, rowSelected);
     out.fillArgb                                = PackColor(visuals.fill);
     out.textArgb                                = PackColor(visuals.text);
@@ -1567,7 +1777,7 @@ bool Grid::DebugGetCellVisualState(const ThemePalette& theme, size_t rowIndex, s
     const uint64_t rowId                    = _model->GetStableRowId(rowIndex);
     const bool selected                     = _selectionModel.IsSelected(rowId);
     const bool hovered                      = _hoveredRow && _hoveredRow.value() == rowIndex;
-    const GridResolvedRowVisuals rowVisuals = ResolveGridRowVisuals(theme, _model->GetRowStyle(rowIndex), rowIndex, selected, HasFocus(), hovered);
+    const GridResolvedRowVisuals rowVisuals = ResolveGridRowVisuals(theme, _model->GetRowStyle(rowIndex), rowIndex, selected, HasFocus(), hovered, _visualMode);
     const GridResolvedCellVisuals visuals   = ResolveGridCellVisuals(theme, rowVisuals, selected, hovered, cellData);
 
     if (visuals.checkbox.has_value())
@@ -1576,6 +1786,12 @@ bool Grid::DebugGetCellVisualState(const ThemePalette& theme, size_t rowIndex, s
         out.checkboxIndicatorFillArgb   = PackColor(visuals.checkbox->indicatorFill);
         out.checkboxIndicatorBorderArgb = PackColor(visuals.checkbox->indicatorBorder);
         out.checkboxCheckArgb           = PackColor(visuals.checkbox->check);
+    }
+
+    if (cellData.kind == GridCellKind::IconText && (! cellData.iconText.empty() || cellData.iconIndex >= 0))
+    {
+        out.hasIcon          = true;
+        out.iconUsesIconFont = GridIconTextUsesIconFont(cellData.iconText);
     }
 
     if (visuals.swatch.has_value())
@@ -1878,15 +2094,34 @@ void Grid::Paint(WindowHost& host) const
         const bool rowHovered                   = _hoveredRow && _hoveredRow.value() == rowIndex;
         const GridRowStyle rowStyle             = _model->GetRowStyle(rowIndex);
         const D2D1_RECT_F rowRect               = item.rectDip;
-        const GridResolvedRowVisuals rowVisuals = ResolveGridRowVisuals(theme, rowStyle, rowIndex, rowSelected, HasFocus(), rowHovered);
+        const GridResolvedRowVisuals rowVisuals = ResolveGridRowVisuals(theme, rowStyle, rowIndex, rowSelected, HasFocus(), rowHovered, _visualMode);
         const D2D1_COLOR_F rowFill              = rowVisuals.fill;
         const D2D1_COLOR_F rowText              = rowVisuals.text;
 
-        dc->FillRectangle(visibleItemRect, host.GetSolidBrush(rowFill));
-        dc->DrawLine(D2D1::Point2F(visibleItemRect.left, visibleItemRect.bottom - 0.5f),
-                     D2D1::Point2F(visibleItemRect.right, visibleItemRect.bottom - 0.5f),
-                     host.GetSolidBrush(surfaceStyle.rowSeparator),
-                     1.0f);
+        if (rowFill.a > 0.0f)
+        {
+            if (rowVisuals.roundedFill)
+            {
+                const D2D1_RECT_F roundedFillRect =
+                    D2D1::RectF(visibleItemRect.left + 1.0f, visibleItemRect.top + 1.0f, visibleItemRect.right - 1.0f, visibleItemRect.bottom - 1.0f);
+                if (IsNonEmptyRect(roundedFillRect))
+                {
+                    const D2D1_ROUNDED_RECT rounded = D2D1::RoundedRect(roundedFillRect, 2.0f, 2.0f);
+                    dc->FillRoundedRectangle(&rounded, host.GetSolidBrush(rowFill));
+                }
+            }
+            else
+            {
+                dc->FillRectangle(visibleItemRect, host.GetSolidBrush(rowFill));
+            }
+        }
+        if (rowVisuals.showSeparator)
+        {
+            dc->DrawLine(D2D1::Point2F(visibleItemRect.left, visibleItemRect.bottom - 0.5f),
+                         D2D1::Point2F(visibleItemRect.right, visibleItemRect.bottom - 0.5f),
+                         host.GetSolidBrush(surfaceStyle.rowSeparator),
+                         1.0f);
+        }
 
         float cellX = visibleColumns.beginXDip;
         for (size_t displayIndex = visibleColumns.beginIndex; displayIndex < visibleColumns.endIndex; ++displayIndex)
@@ -2002,14 +2237,30 @@ void Grid::Paint(WindowHost& host) const
 
                 if (layout.hasIcon)
                 {
-                    DrawCenteredText(host,
-                                     cellData.iconText,
-                                     layout.iconRect,
-                                     FontRole::Small,
-                                     ResolveListIconColor(theme, rowText, rowSelected),
-                                     DWRITE_TEXT_ALIGNMENT_CENTER,
-                                     DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
-                                     false);
+                    bool drewBitmapIcon = false;
+                    if (cellData.iconIndex >= 0 && _delegate)
+                    {
+                        const float targetDipSize =
+                            std::max(1.0f, std::min(layout.iconRect.right - layout.iconRect.left, layout.iconRect.bottom - layout.iconRect.top));
+                        auto bitmap = _delegate->GetGridIconBitmap(*this, cellData.iconIndex, targetDipSize, dc);
+                        if (bitmap)
+                        {
+                            dc->DrawBitmap(bitmap.get(), layout.iconRect, 1.0f, D2D1_INTERPOLATION_MODE_LINEAR);
+                            drewBitmapIcon = true;
+                        }
+                    }
+
+                    if (! drewBitmapIcon && ! cellData.iconText.empty())
+                    {
+                        DrawCenteredText(host,
+                                         cellData.iconText,
+                                         layout.iconRect,
+                                         ResolveGridIconTextFontRole(cellData.iconText),
+                                         ResolveListIconColor(theme, rowText, rowSelected),
+                                         DWRITE_TEXT_ALIGNMENT_CENTER,
+                                         DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
+                                         false);
+                    }
                 }
 
                 if (layout.hasSwatch)
@@ -2041,7 +2292,7 @@ void Grid::Paint(WindowHost& host) const
                 DrawCenteredText(host,
                                  cellData.text,
                                  layout.textRect,
-                                 FontRole::Body,
+                                 _cellTextFontRole,
                                  rowText,
                                  cellData.textAlignment,
                                  DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
@@ -2298,7 +2549,7 @@ GridCellLayoutMetrics Grid::ComputeCellLayoutMetrics(const WindowHost& host,
     const bool dedicatedStateImageColumn = columnDesc.kind == GridColumnKind::StateImage;
 
     metrics.hasCheckbox = cellData.kind == GridCellKind::Checkbox;
-    metrics.hasIcon     = cellData.kind == GridCellKind::IconText && ! cellData.iconText.empty();
+    metrics.hasIcon     = cellData.kind == GridCellKind::IconText && (! cellData.iconText.empty() || cellData.iconIndex >= 0);
     metrics.hasSwatch   = cellData.kind == GridCellKind::ColorSwatch && cellData.hasSwatchValue;
     metrics.hasBadge    = ! cellData.badgeText.empty();
 
@@ -2322,7 +2573,7 @@ GridCellLayoutMetrics Grid::ComputeCellLayoutMetrics(const WindowHost& host,
 
     if (metrics.hasIcon)
     {
-        const float iconSize = std::min(18.0f, std::max(14.0f, contentHeight));
+        const float iconSize = std::min(_iconSizeDip, std::max(14.0f, contentHeight));
         const float iconTop  = contentTop + std::max(0.0f, (contentHeight - iconSize) * 0.5f);
         if (dedicatedStateImageColumn && ! metrics.hasCheckbox && ! metrics.hasBadge)
         {
@@ -2443,8 +2694,8 @@ bool Grid::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
         _dragReorderColumn             = _pressedHeaderColumn;
         _dragReorderTargetDisplayIndex = ResolveHeaderReorderTargetDisplayIndex(point.x);
         ++_debugHeaderReorderStartCount;
-        _debugLastHeaderReorderColumn                = _dragReorderColumn.value_or(0u);
-        _debugLastHeaderReorderRawTargetDisplayIndex = _dragReorderTargetDisplayIndex;
+        _debugLastHeaderReorderColumn                       = _dragReorderColumn.value_or(0u);
+        _debugLastHeaderReorderRawTargetDisplayIndex        = _dragReorderTargetDisplayIndex;
         _debugLastHeaderReorderNormalizedTargetDisplayIndex = _dragReorderTargetDisplayIndex;
         Invalidate(host);
         return true;
@@ -2464,16 +2715,20 @@ bool Grid::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
         _hoveredColumn = hit.columnIndex;
         GridCellData cellData{};
         _model->GetCellData(hit.rowIndex, hit.columnIndex, cellData);
+        const GridColumnDesc columnDesc         = _model->GetColumn(hit.columnIndex);
+        const D2D1_RECT_F visibleCellRect       = ClipRectToRect(hit.rectDip, GetContentRect());
+        const GridCellLayoutMetrics cellMetrics = ComputeCellLayoutMetrics(host, visibleCellRect, columnDesc, cellData);
+        const bool visibleTextClipped           = IsGridCellVisibleTextClipped(host, cellData, cellMetrics, _lineClamp);
         const bool repeatedExplicitTooltip =
             ! cellData.tooltipText.empty() && (cellData.tooltipText == cellData.text || cellData.tooltipText == BuildGridCellCopyText(cellData));
         if (! cellData.tooltipText.empty())
         {
-            if (! repeatedExplicitTooltip)
+            if (! repeatedExplicitTooltip || visibleTextClipped)
             {
                 tooltipText = std::move(cellData.tooltipText);
             }
         }
-        else if (! repeatedExplicitTooltip && (cellData.text.size() > 40u || cellData.text.find(L'\n') != std::wstring::npos))
+        else if (visibleTextClipped)
         {
             tooltipText = std::move(cellData.text);
         }
@@ -2482,7 +2737,19 @@ bool Grid::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT /*modifiers*/
     {
         _hoveredColumn              = hit.columnIndex;
         const GridColumnDesc column = _model->GetColumn(hit.columnIndex);
-        if (column.title.size() > 20u)
+        const D2D1_RECT_F headerBounds   = D2D1::RectF(GetBounds().left, GetBounds().top, GetContentRect().right, GetBounds().top + _headerHeightDip);
+        const D2D1_RECT_F headerClipRect = ClipRectToRect(hit.rectDip, headerBounds);
+        const GridSortGlyphVisualState sortGlyphState = ResolveSortGlyphVisualState(host.GetTheme(), hit.columnIndex, ::GetTickCount64());
+        float titleRight                               = headerClipRect.right - 8.0f;
+        if (sortGlyphState.reservesSpace)
+        {
+            titleRight -= 18.0f;
+        }
+        const D2D1_RECT_F titleRect =
+            D2D1::RectF(headerClipRect.left + 8.0f, headerClipRect.top + 2.0f, std::max(headerClipRect.left + 24.0f, titleRight), headerClipRect.bottom - 2.0f);
+        const float titleWidthDip = std::max(0.0f, titleRect.right - titleRect.left);
+        const float titleHeightDip = std::max(1.0f, titleRect.bottom - titleRect.top);
+        if (titleWidthDip <= 0.5f || MeasureSingleLineTextWidthDip(&host, column.title, FontRole::Header, titleHeightDip) > (titleWidthDip + 0.5f))
         {
             tooltipText = column.title;
         }
@@ -2590,7 +2857,13 @@ bool Grid::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, 
                     }
                 }
             }
-            SelectRow(hit.rowIndex, modifiers);
+            const bool preserveRightClickSelection = rightButton && _selectionMode == GridSelectionMode::Extended && modelBeforeSelect &&
+                                                     hit.rowIndex < modelBeforeSelect->GetRowCount() && _selectionModel.GetCount() > 1u &&
+                                                     _selectionModel.IsSelected(modelBeforeSelect->GetStableRowId(hit.rowIndex));
+            if (! preserveRightClickSelection)
+            {
+                SelectRow(hit.rowIndex, modifiers);
+            }
             if (! rightButton && clickedCheckbox && clickedCheckboxRowId.has_value() && _model == modelBeforeSelect && _model &&
                 hit.columnIndex < _model->GetColumnCount())
             {
@@ -2667,9 +2940,9 @@ void Grid::OnCaptureLost(WindowHost& host)
     const bool hadDrag =
         _resizeColumn.has_value() || _dragVerticalThumb || _dragHorizontalThumb || _dragReorderColumn.has_value() || _pressedHeaderColumn.has_value();
     _resizeColumn.reset();
-    _dragVerticalThumb       = false;
-    _dragHorizontalThumb     = false;
-    _dragThumbOffsetDip      = 0.0f;
+    _dragVerticalThumb   = false;
+    _dragHorizontalThumb = false;
+    _dragThumbOffsetDip  = 0.0f;
     _dragReorderColumn.reset();
     _pressedHeaderColumn.reset();
     _pressedHeaderOriginXDip = 0.0f;
@@ -2775,11 +3048,11 @@ bool Grid::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UI
 
         if (draggedColumn < _columnDisplayIndexByModel.size() && ! _columnDisplayOrder.empty())
         {
-            const size_t fromDisplayIndex       = _columnDisplayIndexByModel[draggedColumn];
-            size_t normalizedTargetDisplayIndex = std::min(rawTargetDisplayIndex, _columnDisplayOrder.size());
+            const size_t fromDisplayIndex                = _columnDisplayIndexByModel[draggedColumn];
+            size_t normalizedTargetDisplayIndex          = std::min(rawTargetDisplayIndex, _columnDisplayOrder.size());
             _debugLastHeaderReorderColumn                = draggedColumn;
-            _debugLastHeaderReorderFromDisplayIndex       = fromDisplayIndex;
-            _debugLastHeaderReorderRawTargetDisplayIndex  = rawTargetDisplayIndex;
+            _debugLastHeaderReorderFromDisplayIndex      = fromDisplayIndex;
+            _debugLastHeaderReorderRawTargetDisplayIndex = rawTargetDisplayIndex;
             if (normalizedTargetDisplayIndex > fromDisplayIndex)
             {
                 --normalizedTargetDisplayIndex;
@@ -2815,10 +3088,13 @@ bool Grid::OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UI
             GridSortSpec nextSort{};
             nextSort.columnIndex = pressedColumn;
             nextSort.direction   = (_sortSpec.columnIndex == pressedColumn) ? NextSortDirection(_sortSpec.direction) : SortDirection::Ascending;
-            _sortSpec            = nextSort;
             if (_delegate)
             {
-                _delegate->OnGridSortRequested(_sortSpec);
+                _delegate->OnGridSortRequested(nextSort);
+            }
+            else
+            {
+                SetSortSpec(nextSort);
             }
             return true;
         }

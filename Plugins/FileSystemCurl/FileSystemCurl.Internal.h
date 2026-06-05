@@ -1,7 +1,7 @@
 #pragma once
 
-#include "FileSystemCurl.h"
 #include "FileSystemCurl.ImapHelpers.h"
+#include "FileSystemCurl.h"
 #include "PlugInterfaces/Host.h"
 
 #include "Helpers.h"

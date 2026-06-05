@@ -217,10 +217,11 @@ void UserMenuPane::LayoutPage(HWND host,
     layoutPerf.SetValue0(static_cast<uint64_t>(state.workingSettings.userMenu.actions.size()));
     layoutPerf.SetValue1(typography.dpi);
 
-    const UINT dpi     = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
-    const int rowGap   = std::max(1, gapY / 2);
-    const int titleHeight = std::max(UiMetrics::ScaleDip(dpi, 24), PrefsUi::MeasureWrappedTextHeightPx(
-                                                                 typography, typography.strong, width, _title ? std::wstring(_title->GetText()) : std::wstring{}));
+    const UINT dpi   = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
+    const int rowGap = std::max(1, gapY / 2);
+    const int titleHeight =
+        std::max(UiMetrics::ScaleDip(dpi, 24),
+                 PrefsUi::MeasureWrappedTextHeightPx(typography, typography.strong, width, _title ? std::wstring(_title->GetText()) : std::wstring{}));
     const auto pxToDip = [dpi](const int pixels) noexcept { return (static_cast<float>(pixels) * 96.0f) / static_cast<float>(dpi); };
 
     if (_title)
@@ -238,7 +239,7 @@ void UserMenuPane::LayoutPage(HWND host,
     y += actionsHeight + gapY;
 
     const std::wstring hintText = _hint ? std::wstring(_hint->GetText()) : LoadStringResource(nullptr, IDS_PREFS_USER_MENU_HINT);
-    const int hintHeight = std::max(UiMetrics::ScaleDip(dpi, 40), PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, hintText));
+    const int hintHeight        = std::max(UiMetrics::ScaleDip(dpi, 40), PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, hintText));
     if (_hint)
     {
         _hint->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + hintHeight)));

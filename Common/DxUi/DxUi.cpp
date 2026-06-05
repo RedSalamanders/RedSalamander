@@ -51,8 +51,9 @@ std::optional<D2D1_RECT_F> Control::TryGetTextInputCaretRect(const WindowHost& h
     return GetTextInputCaretRect(host, controlTextIndex);
 }
 
-std::optional<std::vector<D2D1_RECT_F>> Control::TryGetTextInputRangeRects(
-    const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const
+std::optional<std::vector<D2D1_RECT_F>> Control::TryGetTextInputRangeRects(const WindowHost& host,
+                                                                           size_t controlTextStartIndex,
+                                                                           size_t controlTextEndIndex) const
 {
     return GetTextInputRangeRects(host, controlTextStartIndex, controlTextEndIndex);
 }
@@ -502,8 +503,9 @@ std::optional<D2D1_RECT_F> Control::GetTextInputCaretRect(const WindowHost& /*ho
     return std::nullopt;
 }
 
-std::optional<std::vector<D2D1_RECT_F>> Control::GetTextInputRangeRects(
-    const WindowHost& /*host*/, size_t /*controlTextStartIndex*/, size_t /*controlTextEndIndex*/) const
+std::optional<std::vector<D2D1_RECT_F>> Control::GetTextInputRangeRects(const WindowHost& /*host*/,
+                                                                        size_t /*controlTextStartIndex*/,
+                                                                        size_t /*controlTextEndIndex*/) const
 {
     return std::nullopt;
 }

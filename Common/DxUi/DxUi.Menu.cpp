@@ -4,8 +4,15 @@
 #include <chrono>
 #include <cmath>
 #include <d2d1effects.h>
+#include <exception>
+#include <format>
 #include <limits>
+#include <mutex>
+#include <new>
 #include <shellscalingapi.h>
+#include <system_error>
+#include <utility>
+#include <windowsx.h>
 #include <wincodec.h>
 
 #include "Helpers.h"
@@ -23,6 +30,22 @@
 #define DXUI_MENU_TRACE(...) static_cast<void>(0)
 #endif
 
+#if defined(ENABLE_DXUI_MENU_DIAGNOSTICS) || (defined(ENABLE_TESTS) && ! defined(NDEBUG))
+#define DXUI_MENU_PERSISTENT_DIAGNOSTICS 1
+#else
+#define DXUI_MENU_PERSISTENT_DIAGNOSTICS 0
+#endif
+
+// Persistent menu file tracing is compiled out of retail builds. To reactivate
+// it for a support build, define ENABLE_DXUI_MENU_DIAGNOSTICS at compile time
+// and set REDSALAMANDER_DXUI_MENU_TRACE=1 at runtime. Debug/test builds also
+// keep it available while NDEBUG is not defined.
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
+#define DXUI_MENU_DIAGNOSTICS_TRACE(...) WriteMenuDiagnosticsTrace(__VA_ARGS__)
+#else
+#define DXUI_MENU_DIAGNOSTICS_TRACE(...) static_cast<void>(0)
+#endif
+
 namespace RedSalamander::DxUi
 {
 namespace
@@ -31,38 +54,41 @@ namespace
 // Menu layout constants (WinUI spec §3.2)
 // ---------------------------------------------------------------------------
 
-constexpr float kMenuCornerRadiusDip      = kPopupRoundSmallCornerRadiusDip;
-constexpr float kMenuBorderDip            = 1.0f;
-constexpr float kMenuPaddingTopDip        = 4.0f;
-constexpr float kMenuPaddingBottomDip     = 4.0f;
-constexpr float kMenuMinWidthDip          = 128.0f;
-constexpr float kMenuMaxWidthDip          = 456.0f;
-constexpr float kMenuShadowLeftDip        = 10.0f;
-constexpr float kMenuShadowTopDip         = 8.0f;
-constexpr float kMenuShadowRightDip       = 10.0f;
-constexpr float kMenuShadowBottomDip      = 14.0f;
-constexpr float kIconAreaWidthDip         = 28.0f;
-constexpr float kTextLeftPaddingDip       = 36.0f;
-constexpr float kTextToAccelGapDip        = 16.0f;
-constexpr float kAccelRightPaddingDip     = 16.0f;
-constexpr float kChevronRightPaddingDip   = 12.0f;
-constexpr float kChevronAreaWidthDip      = 24.0f;
-constexpr float kItemHoverRadiusDip       = 4.0f;
-constexpr float kItemHoverInsetDip        = 4.0f;
-constexpr float kIconSlotLeftInsetDip     = kMenuBorderDip + kItemHoverInsetDip + 2.0f;
-constexpr float kIconSlotWidthDip         = kIconAreaWidthDip - kItemHoverInsetDip - 2.0f;
-constexpr float kSeparatorHeightDip       = 9.0f; // 1px line + 4 DIP margin above/below
-constexpr float kSeparatorMarginDip       = 4.0f;
-constexpr float kSliderItemHeightDip      = 56.0f;
-constexpr float kSliderTrackInsetDip      = 16.0f;
-constexpr float kSliderTrackTopDip        = 36.0f;
-constexpr float kSliderTrackHeightDip     = 4.0f;
-constexpr float kSliderStopRadiusDip      = 5.0f;
+constexpr float kMenuCornerRadiusDip       = kPopupRoundSmallCornerRadiusDip;
+constexpr float kMenuBorderDip             = 1.0f;
+constexpr float kMenuPaddingTopDip         = 4.0f;
+constexpr float kMenuPaddingBottomDip      = 4.0f;
+constexpr float kMenuMinWidthDip           = 128.0f;
+constexpr float kMenuMaxWidthDip           = 456.0f;
+constexpr float kMenuShadowLeftDip         = 10.0f;
+constexpr float kMenuShadowTopDip          = 8.0f;
+constexpr float kMenuShadowRightDip        = 10.0f;
+constexpr float kMenuShadowBottomDip       = 14.0f;
+constexpr float kIconAreaWidthDip          = 28.0f;
+constexpr float kTextLeftPaddingDip        = 36.0f;
+constexpr float kTextToAccelGapDip         = 16.0f;
+constexpr float kAccelRightPaddingDip      = 16.0f;
+constexpr float kChevronRightPaddingDip    = 12.0f;
+constexpr float kChevronAreaWidthDip       = 24.0f;
+constexpr float kItemHoverRadiusDip        = 4.0f;
+constexpr float kItemHoverInsetDip         = 4.0f;
+constexpr float kIconSlotLeftInsetDip      = kMenuBorderDip + kItemHoverInsetDip + 2.0f;
+constexpr float kIconSlotWidthDip          = kIconAreaWidthDip - kItemHoverInsetDip - 2.0f;
+constexpr float kSeparatorHeightDip        = 9.0f; // 1px line + 4 DIP margin above/below
+constexpr float kSeparatorMarginDip        = 4.0f;
+constexpr float kSliderItemHeightDip       = 56.0f;
+constexpr float kSliderTrackInsetDip       = 16.0f;
+constexpr float kSliderTrackTopDip         = 36.0f;
+constexpr float kSliderTrackHeightDip      = 4.0f;
+constexpr float kSliderStopRadiusDip       = 5.0f;
 constexpr float kSliderActiveStopRadiusDip = 6.0f;
 constexpr float kSliderMenuMinWidthDip    = 260.0f;
 constexpr float kSubmenuVerticalOffsetDip = 4.0f;
 constexpr float kCascadeHoverDelayMs      = 400;
 constexpr float kTextMeasureWidthDip      = 1024.0f;
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
+constexpr uint64_t kMenuLoopTraceRepeatFlushCount     = 1024u;
+#endif
 
 constexpr wchar_t kChevronRightGlyph[]   = L"\uE76C";
 constexpr wchar_t kCheckMarkGlyph[]      = L"\uE73E";
@@ -81,13 +107,31 @@ struct MenuPopup;
         case WM_LBUTTONUP: return L"WM_LBUTTONUP";
         case WM_RBUTTONDOWN: return L"WM_RBUTTONDOWN";
         case WM_RBUTTONUP: return L"WM_RBUTTONUP";
+        case WM_MBUTTONDOWN: return L"WM_MBUTTONDOWN";
+        case WM_MBUTTONUP: return L"WM_MBUTTONUP";
+        case WM_XBUTTONDOWN: return L"WM_XBUTTONDOWN";
+        case WM_XBUTTONUP: return L"WM_XBUTTONUP";
         case WM_MOUSEWHEEL: return L"WM_MOUSEWHEEL";
         case WM_MOUSEHWHEEL: return L"WM_MOUSEHWHEEL";
+        case WM_NCMOUSEMOVE: return L"WM_NCMOUSEMOVE";
+        case WM_NCLBUTTONDOWN: return L"WM_NCLBUTTONDOWN";
+        case WM_NCLBUTTONUP: return L"WM_NCLBUTTONUP";
+        case WM_NCRBUTTONDOWN: return L"WM_NCRBUTTONDOWN";
+        case WM_NCRBUTTONUP: return L"WM_NCRBUTTONUP";
+        case WM_MOUSELEAVE: return L"WM_MOUSELEAVE";
+        case WM_NCMOUSELEAVE: return L"WM_NCMOUSELEAVE";
+        case WM_NULL: return L"WM_NULL";
+        case WM_PAINT: return L"WM_PAINT";
+        case WM_ERASEBKGND: return L"WM_ERASEBKGND";
+        case WM_SETCURSOR: return L"WM_SETCURSOR";
+        case WM_TIMER: return L"WM_TIMER";
         case WM_CAPTURECHANGED: return L"WM_CAPTURECHANGED";
         case WM_CANCELMODE: return L"WM_CANCELMODE";
         case WM_ACTIVATEAPP: return L"WM_ACTIVATEAPP";
         case WM_ACTIVATE: return L"WM_ACTIVATE";
         case WM_NCACTIVATE: return L"WM_NCACTIVATE";
+        case WM_SETFOCUS: return L"WM_SETFOCUS";
+        case WM_KILLFOCUS: return L"WM_KILLFOCUS";
         case WM_DESTROY: return L"WM_DESTROY";
         case WM_KEYDOWN: return L"WM_KEYDOWN";
         case WM_KEYUP: return L"WM_KEYUP";
@@ -98,6 +142,335 @@ struct MenuPopup;
 }
 
 [[nodiscard]] int TracePopupIndex(const MenuController& controller, const MenuPopup* popup) noexcept;
+
+[[nodiscard]] uintptr_t TraceHwndValue(HWND hwnd) noexcept
+{
+    return reinterpret_cast<uintptr_t>(hwnd);
+}
+
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
+[[nodiscard]] const wchar_t* TraceBool(bool value) noexcept
+{
+    return value ? L"true" : L"false";
+}
+#endif
+
+[[nodiscard]] bool IsMenuClientMouseMessage(UINT message) noexcept
+{
+    return message >= WM_MOUSEFIRST && message <= WM_MOUSELAST;
+}
+
+[[nodiscard]] bool IsMenuNonClientMouseMessage(UINT message) noexcept
+{
+    return message >= WM_NCMOUSEMOVE && message <= WM_NCXBUTTONDBLCLK;
+}
+
+[[nodiscard]] bool IsMenuKeyMessage(UINT message) noexcept
+{
+    return message >= WM_KEYFIRST && message <= WM_KEYLAST;
+}
+
+[[nodiscard]] bool IsMenuPriorityInputMessage(UINT message) noexcept
+{
+    return IsMenuClientMouseMessage(message) || IsMenuNonClientMouseMessage(message) || IsMenuKeyMessage(message);
+}
+
+[[nodiscard]] bool PeekMenuPriorityMessage(MSG& msg) noexcept
+{
+    if (PeekMessageW(&msg, nullptr, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE) != FALSE)
+    {
+        return true;
+    }
+    if (PeekMessageW(&msg, nullptr, WM_NCMOUSEMOVE, WM_NCXBUTTONDBLCLK, PM_REMOVE) != FALSE)
+    {
+        return true;
+    }
+    if (PeekMessageW(&msg, nullptr, WM_KEYFIRST, WM_KEYLAST, PM_REMOVE) != FALSE)
+    {
+        return true;
+    }
+    return false;
+}
+
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
+struct MenuDiagnosticsTraceState
+{
+    MenuDiagnosticsTraceState()                                         = default;
+    MenuDiagnosticsTraceState(const MenuDiagnosticsTraceState&)         = delete;
+    MenuDiagnosticsTraceState& operator=(const MenuDiagnosticsTraceState&) = delete;
+    MenuDiagnosticsTraceState(MenuDiagnosticsTraceState&&)              = delete;
+    MenuDiagnosticsTraceState& operator=(MenuDiagnosticsTraceState&&)   = delete;
+
+    std::once_flag initOnce;
+    std::atomic<bool> enabled = false;
+    wil::unique_hfile file;
+    std::mutex mutex;
+    std::wstring path;
+    std::atomic<uint64_t> sequence = 0u;
+};
+
+[[nodiscard]] MenuDiagnosticsTraceState& GetMenuDiagnosticsTraceState() noexcept
+{
+    static MenuDiagnosticsTraceState state;
+    return state;
+}
+
+[[nodiscard]] bool MenuDiagnosticsEnvEquals(std::wstring_view value, std::wstring_view expected) noexcept
+{
+    if (value.size() != expected.size() || value.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
+    }
+    return CompareStringOrdinal(value.data(), static_cast<int>(value.size()), expected.data(), static_cast<int>(expected.size()), TRUE) == CSTR_EQUAL;
+}
+
+[[nodiscard]] std::wstring ReadMenuDiagnosticsEnvironmentVariable(const wchar_t* name)
+{
+    const DWORD required = GetEnvironmentVariableW(name, nullptr, 0u);
+    if (required == 0u)
+    {
+        return {};
+    }
+
+    std::wstring value(required, L'\0');
+    const DWORD copied = GetEnvironmentVariableW(name, value.data(), required);
+    if (copied == 0u || copied >= required)
+    {
+        return {};
+    }
+
+    value.resize(copied);
+    return value;
+}
+
+[[nodiscard]] bool IsMenuDiagnosticsTraceRequested(std::wstring_view value) noexcept
+{
+    if (value.empty())
+    {
+        return false;
+    }
+    if (value == L"0" || MenuDiagnosticsEnvEquals(value, L"false") || MenuDiagnosticsEnvEquals(value, L"off") ||
+        MenuDiagnosticsEnvEquals(value, L"no"))
+    {
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] std::wstring BuildDefaultMenuDiagnosticsTracePath()
+{
+    wchar_t tempPath[MAX_PATH + 1]{};
+    const DWORD tempPathLength = GetTempPathW(static_cast<DWORD>(_countof(tempPath)), tempPath);
+    std::wstring root = (tempPathLength > 0u && tempPathLength < _countof(tempPath)) ? std::wstring(tempPath, tempPathLength) : std::wstring(L".\\");
+    if (! root.empty() && root.back() != L'\\' && root.back() != L'/')
+    {
+        root.push_back(L'\\');
+    }
+    return std::format(L"{}RedSalamander-DxUiMenuTrace-{}.log", root, GetCurrentProcessId());
+}
+
+void InitializeMenuDiagnosticsTrace() noexcept
+{
+    auto& state = GetMenuDiagnosticsTraceState();
+    try
+    {
+        const std::wstring enabledValue = ReadMenuDiagnosticsEnvironmentVariable(L"REDSALAMANDER_DXUI_MENU_TRACE");
+        if (! IsMenuDiagnosticsTraceRequested(enabledValue))
+        {
+            return;
+        }
+
+        std::wstring path = ReadMenuDiagnosticsEnvironmentVariable(L"REDSALAMANDER_DXUI_MENU_TRACE_FILE");
+        if (path.empty())
+        {
+            path = BuildDefaultMenuDiagnosticsTracePath();
+        }
+
+        wil::unique_hfile file(CreateFileW(path.c_str(),
+                                           FILE_APPEND_DATA,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                           nullptr,
+                                           CREATE_ALWAYS,
+                                           FILE_ATTRIBUTE_NORMAL,
+                                           nullptr));
+        if (! file)
+        {
+            OutputDebugStringW(L"DxUi::MenuTrace: failed to open diagnostics trace file.\r\n");
+            return;
+        }
+
+        constexpr wchar_t kUtf16Bom = 0xFEFF;
+        DWORD bytesWritten          = 0u;
+        static_cast<void>(WriteFile(file.get(), &kUtf16Bom, sizeof(kUtf16Bom), &bytesWritten, nullptr));
+
+        state.path = std::move(path);
+        state.file = std::move(file);
+        state.enabled.store(true, std::memory_order_release);
+        Debug::Info(L"DxUi::MenuTrace: writing context menu diagnostics to '{}'", state.path);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Diagnostics are optional evidence gathering; a trace setup failure must not alter menu input behavior.
+        OutputDebugStringW(L"DxUi::MenuTrace: diagnostics initialization failed; continuing without trace file.\r\n");
+    }
+}
+
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
+[[nodiscard]] bool ShouldTraceMenuLoopMessageImmediately(UINT message, bool popupMessage) noexcept
+{
+    if (popupMessage || IsMenuPriorityInputMessage(message))
+    {
+        return true;
+    }
+
+    switch (message)
+    {
+        case WM_TIMER:
+        case WM_CAPTURECHANGED:
+        case WM_CANCELMODE:
+        case WM_ACTIVATEAPP:
+        case WM_ACTIVATE:
+        case WM_NCACTIVATE:
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+        case WM_DESTROY:
+        case WndMsg::kDxUiContextMenuRootHoverChanged:
+            return true;
+        default:
+            return false;
+    }
+}
+#endif
+
+[[nodiscard]] bool IsMenuDiagnosticsTraceEnabled() noexcept
+{
+    try
+    {
+        auto& state = GetMenuDiagnosticsTraceState();
+        std::call_once(state.initOnce, InitializeMenuDiagnosticsTrace);
+        return state.enabled.load(std::memory_order_acquire);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // std::call_once can fail before the flag is initialized; tracing stays disabled in that case.
+        OutputDebugStringW(L"DxUi::MenuTrace: diagnostics enable check failed; continuing without trace file.\r\n");
+        return false;
+    }
+}
+
+void DisableMenuDiagnosticsTraceAfterFailure() noexcept
+{
+    auto& state = GetMenuDiagnosticsTraceState();
+    state.enabled.store(false, std::memory_order_release);
+    OutputDebugStringW(L"DxUi::MenuTrace: diagnostics disabled after a write failure.\r\n");
+}
+
+void WriteMenuDiagnosticsTraceLine(std::wstring_view eventName, std::wstring_view details) noexcept
+{
+    if (! IsMenuDiagnosticsTraceEnabled())
+    {
+        return;
+    }
+
+    auto& state = GetMenuDiagnosticsTraceState();
+    try
+    {
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
+        POINT cursor{};
+        static_cast<void>(GetCursorPos(&cursor)); // getcursorpos-allow: diagnostic-only
+        const uint64_t sequence = state.sequence.fetch_add(1u, std::memory_order_relaxed) + 1u;
+
+        std::wstring line = std::format(L"{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03} seq={} pid={} tid={} event={} "
+                                        L"cursor=({}, {}) capture={:#x} focus={:#x} active={:#x} foreground={:#x}",
+                                        static_cast<unsigned int>(now.wYear),
+                                        static_cast<unsigned int>(now.wMonth),
+                                        static_cast<unsigned int>(now.wDay),
+                                        static_cast<unsigned int>(now.wHour),
+                                        static_cast<unsigned int>(now.wMinute),
+                                        static_cast<unsigned int>(now.wSecond),
+                                        static_cast<unsigned int>(now.wMilliseconds),
+                                        sequence,
+                                        static_cast<unsigned long>(GetCurrentProcessId()),
+                                        static_cast<unsigned long>(GetCurrentThreadId()),
+                                        eventName,
+                                        cursor.x,
+                                        cursor.y,
+                                        TraceHwndValue(GetCapture()),
+                                        TraceHwndValue(GetFocus()),
+                                        TraceHwndValue(GetActiveWindow()),
+                                        TraceHwndValue(GetForegroundWindow()));
+        if (! details.empty())
+        {
+            line.push_back(L' ');
+            line.append(details);
+        }
+        line.append(L"\r\n");
+
+        const DWORD byteCount = static_cast<DWORD>(line.size() * sizeof(wchar_t));
+        DWORD bytesWritten    = 0u;
+        std::lock_guard lock(state.mutex);
+        if (! state.file || WriteFile(state.file.get(), line.data(), byteCount, &bytesWritten, nullptr) == FALSE)
+        {
+            DisableMenuDiagnosticsTraceAfterFailure();
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Diagnostics must never throw through a Win32 input path.
+        DisableMenuDiagnosticsTraceAfterFailure();
+    }
+}
+
+template <typename... Args>
+void WriteMenuDiagnosticsTrace(std::wstring_view eventName, std::wformat_string<Args...> format, Args&&... args) noexcept
+{
+    if (! IsMenuDiagnosticsTraceEnabled())
+    {
+        return;
+    }
+
+    try
+    {
+        WriteMenuDiagnosticsTraceLine(eventName, std::format(format, std::forward<Args>(args)...));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        // Formatting is diagnostic only; disable tracing instead of disturbing menu dispatch.
+        DisableMenuDiagnosticsTraceAfterFailure();
+    }
+}
+#else
+[[nodiscard]] constexpr bool IsMenuDiagnosticsTraceEnabled() noexcept
+{
+    return false;
+}
+
+void WriteMenuDiagnosticsTraceLine(std::wstring_view /*eventName*/, std::wstring_view /*details*/) noexcept
+{
+}
+
+template <typename... Args>
+void WriteMenuDiagnosticsTrace(std::wstring_view /*eventName*/, std::wformat_string<Args...> /*format*/, Args&&... /*args*/) noexcept
+{
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Menu item visual style
@@ -934,11 +1307,16 @@ static std::atomic<bool> s_classRegistered  = false;
 static constexpr UINT kMenuDebugCaptureBitmapMessage = WM_APP + 0x214;
 static constexpr UINT kMenuDebugGetItemTextMessage   = WM_APP + 0x215;
 static constexpr UINT kMenuDebugSetBackdropMessage   = WM_APP + 0x216;
+static constexpr UINT kMenuDebugGetStateMessage      = WM_APP + 0x217;
+static constexpr UINT kMenuDebugGetItemRectMessage   = WM_APP + 0x218;
+static constexpr UINT kMenuDebugGetItemPaintMessage  = WM_APP + 0x219;
 #endif
 
 struct MenuController; // forward
 [[nodiscard]] D2D1_RECT_F GetItemRect(
     const MenuFlyoutItem* items, size_t count, size_t targetIndex, float menuWidthDip, float itemHeightDip, float headerHeightDip) noexcept;
+[[nodiscard]] bool ProcessMenuPopupMessage(MenuController& controller, HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+void DestroyMenuPopupWindow(MenuPopup& popup) noexcept;
 
 struct MenuPopup
 {
@@ -1008,7 +1386,8 @@ struct MenuPopup
     {
         if (index >= itemCount)
             return false;
-        return items[index].kind != MenuItemKind::Separator && items[index].kind != MenuItemKind::Header && items[index].kind != MenuItemKind::Info;
+        return items[index].enabled && items[index].kind != MenuItemKind::Separator && items[index].kind != MenuItemKind::Header &&
+               items[index].kind != MenuItemKind::Info;
     }
 
     [[nodiscard]] bool NeedsScrollbar() const noexcept
@@ -1169,6 +1548,8 @@ struct MenuPopup
     }
 };
 
+void InvalidatePopup(MenuPopup& popup) noexcept;
+
 // ---------------------------------------------------------------------------
 // Menu controller — owns the cascade chain, modal loop, result
 // ---------------------------------------------------------------------------
@@ -1181,8 +1562,18 @@ struct MenuController
     ContextMenuSessionCallbacks sessionCallbacks;
     std::optional<int> result;
     bool running = true;
+    bool ignoreInitialLeftButtonUp = false;
+    bool ignoreInitialRightButtonUp = false;
+    bool leftButtonDownInPopup = false;
+    bool rightButtonDownInPopup = false;
+    POINT lastPointerScreenPoint{};
+    bool hasLastPointerScreenPoint = false;
+    POINT lastRootSwitchPointerScreenPoint{};
+    bool hasLastRootSwitchPointerScreenPoint = false;
+    DWORD lastKeyboardRootSwitchMessageTime = 0;
+    bool hasLastKeyboardRootSwitchMessageTime = false;
 #if defined(ENABLE_TESTS)
-    uint64_t rootPointerSwitchCount = 0;
+    uint64_t rootPointerSwitchCount         = 0;
     uint64_t rootSwitchImmediateRenderCount = 0;
 #endif
 
@@ -1194,11 +1585,23 @@ struct MenuController
 
     void Dismiss() noexcept
     {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.dismiss",
+                                  L"owner={:#x} popups={} resultBefore={} runningBefore={}",
+                                  TraceHwndValue(ownerHwnd),
+                                  popups.size(),
+                                  result.value_or(-1),
+                                  TraceBool(running));
         running = false;
     }
 
     void InvokeItem(int commandId) noexcept
     {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.invoke",
+                                  L"owner={:#x} commandId={} popups={} runningBefore={}",
+                                  TraceHwndValue(ownerHwnd),
+                                  commandId,
+                                  popups.size(),
+                                  TraceBool(running));
         result  = commandId;
         running = false;
     }
@@ -1210,15 +1613,11 @@ struct MenuController
             auto& parent = popups[popups.size() - 2];
             parent->hoveredIndex.reset();
             auto& child = popups.back();
-            if (child->hwnd)
-            {
-                DestroyWindow(child->hwnd);
-                child->hwnd = nullptr;
-            }
+            DestroyMenuPopupWindow(*child);
             popups.pop_back();
             if (! popups.empty() && popups.back()->hwnd)
             {
-                InvalidateRect(popups.back()->hwnd, nullptr, FALSE);
+                InvalidatePopup(*popups.back());
             }
         }
     }
@@ -1258,6 +1657,16 @@ struct MenuController
     }
 };
 
+void InvalidatePopup(MenuPopup& popup) noexcept
+{
+    if (! popup.hwnd || IsWindow(popup.hwnd) == FALSE)
+    {
+        return;
+    }
+
+    InvalidateRect(popup.hwnd, nullptr, FALSE);
+}
+
 [[nodiscard]] int TracePopupIndex(const MenuController& controller, const MenuPopup* popup) noexcept
 {
     if (! popup)
@@ -1276,21 +1685,21 @@ struct MenuController
     return -1;
 }
 
+[[nodiscard]] POINT UnpackMousePoint(LPARAM lParam) noexcept
+{
+    return POINT{static_cast<LONG>(static_cast<short>(LOWORD(static_cast<DWORD_PTR>(lParam)))),
+                 static_cast<LONG>(static_cast<short>(HIWORD(static_cast<DWORD_PTR>(lParam))))};
+}
+
 [[nodiscard]] POINT ResolveMouseScreenPoint(const MSG& msg) noexcept
 {
-    const auto unpackPoint = [&](LPARAM lParam) noexcept -> POINT
-    {
-        return POINT{static_cast<LONG>(static_cast<short>(LOWORD(static_cast<DWORD_PTR>(lParam)))),
-                     static_cast<LONG>(static_cast<short>(HIWORD(static_cast<DWORD_PTR>(lParam))))};
-    };
-
     POINT screenPt{};
     if (msg.message == WM_MOUSEWHEEL || msg.message == WM_MOUSEHWHEEL)
     {
-        return unpackPoint(msg.lParam);
+        return UnpackMousePoint(msg.lParam);
     }
 
-    screenPt = unpackPoint(msg.lParam);
+    screenPt = UnpackMousePoint(msg.lParam);
     if (msg.hwnd && IsWindow(msg.hwnd) != FALSE)
     {
         POINT clientPoint = screenPt;
@@ -1300,9 +1709,194 @@ struct MenuController
         }
     }
 
-    static_cast<void>(GetCursorPos(&screenPt));
     return screenPt;
 }
+
+enum class MenuInputSource : uint8_t
+{
+    ModalMessage,
+    PopupWndProc,
+};
+
+enum class MenuPointerKind : uint8_t
+{
+    Move,
+    LeftDown,
+    LeftUp,
+    RightDown,
+    RightUp,
+    Wheel,
+};
+
+enum class MenuKeyboardKind : uint8_t
+{
+    Up,
+    Down,
+    Left,
+    Right,
+    Home,
+    End,
+    Enter,
+    Space,
+    Escape,
+    Tab,
+    F10,
+    Alt,
+    Mnemonic,
+};
+
+struct MenuPointerEvent
+{
+    MenuInputSource source = MenuInputSource::ModalMessage;
+    MenuPointerKind kind  = MenuPointerKind::Move;
+    HWND hwnd             = nullptr;
+    POINT screenPoint{};
+    DWORD messageTime = 0;
+    std::optional<D2D1_POINT_2F> deliveredPopupPointDip;
+    WPARAM wParam       = 0;
+    LPARAM lParam       = 0;
+    bool mayInvoke      = false;
+    bool mayDismiss     = false;
+    bool maySwitchRoot  = false;
+    bool mayTakeKeyboardFocus = false;
+};
+
+struct MenuKeyboardEvent
+{
+    MenuInputSource source = MenuInputSource::ModalMessage;
+    MenuKeyboardKind kind  = MenuKeyboardKind::Mnemonic;
+    HWND hwnd             = nullptr;
+    UINT virtualKey       = 0;
+    wchar_t mnemonic      = L'\0';
+    DWORD messageTime     = 0;
+    LPARAM lParam         = 0;
+};
+
+enum class MenuInputDisposition : uint8_t
+{
+    Ignored,
+    Consumed,
+    HoverChanged,
+    Dismissed,
+    Invoked,
+    SwitchedRoot,
+};
+
+[[nodiscard]] bool IsMessageTimeAfter(DWORD candidate, DWORD reference) noexcept
+{
+    return static_cast<LONG>(candidate - reference) > 0;
+}
+
+[[nodiscard]] DWORD CurrentMessageTime() noexcept
+{
+    return static_cast<DWORD>(GetMessageTime());
+}
+
+void RememberKeyboardRootSwitchMessageTime(MenuController& controller, DWORD messageTime) noexcept
+{
+    controller.lastKeyboardRootSwitchMessageTime    = messageTime;
+    controller.hasLastKeyboardRootSwitchMessageTime = true;
+    controller.hasLastRootSwitchPointerScreenPoint  = false;
+    controller.lastRootSwitchPointerScreenPoint     = {};
+}
+
+void ClearKeyboardRootSwitchMessageTime(MenuController& controller) noexcept
+{
+    controller.hasLastKeyboardRootSwitchMessageTime = false;
+    controller.lastKeyboardRootSwitchMessageTime    = 0;
+}
+
+[[nodiscard]] bool IsStaleRootSwitchPointerMoveAfterKeyboard(const MenuController& controller, const MenuPointerEvent& event) noexcept
+{
+    if ((event.source != MenuInputSource::ModalMessage && event.source != MenuInputSource::PopupWndProc) || ! controller.hasLastKeyboardRootSwitchMessageTime)
+    {
+        return false;
+    }
+
+    if (! controller.hasLastRootSwitchPointerScreenPoint)
+    {
+        return true;
+    }
+
+    return event.messageTime != 0 && ! IsMessageTimeAfter(event.messageTime, controller.lastKeyboardRootSwitchMessageTime);
+}
+
+void RememberRootSwitchPointerPoint(MenuController& controller, POINT screenPoint) noexcept
+{
+    controller.lastRootSwitchPointerScreenPoint    = screenPoint;
+    controller.hasLastRootSwitchPointerScreenPoint = true;
+}
+
+[[nodiscard]] bool ShouldRememberRejectedRootSwitchPointer(const MenuPointerEvent& event) noexcept
+{
+    return event.source == MenuInputSource::ModalMessage;
+}
+
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
+[[nodiscard]] const wchar_t* TraceInputSourceName(MenuInputSource source) noexcept
+{
+    switch (source)
+    {
+        case MenuInputSource::ModalMessage: return L"ModalMessage";
+        case MenuInputSource::PopupWndProc: return L"PopupWndProc";
+    }
+    return L"unknown";
+}
+
+[[nodiscard]] const wchar_t* TracePointerKindName(MenuPointerKind kind) noexcept
+{
+    switch (kind)
+    {
+        case MenuPointerKind::Move: return L"Move";
+        case MenuPointerKind::LeftDown: return L"LeftDown";
+        case MenuPointerKind::LeftUp: return L"LeftUp";
+        case MenuPointerKind::RightDown: return L"RightDown";
+        case MenuPointerKind::RightUp: return L"RightUp";
+        case MenuPointerKind::Wheel: return L"Wheel";
+    }
+    return L"unknown";
+}
+
+[[nodiscard]] const wchar_t* TraceKeyboardKindName(MenuKeyboardKind kind) noexcept
+{
+    switch (kind)
+    {
+        case MenuKeyboardKind::Up: return L"Up";
+        case MenuKeyboardKind::Down: return L"Down";
+        case MenuKeyboardKind::Left: return L"Left";
+        case MenuKeyboardKind::Right: return L"Right";
+        case MenuKeyboardKind::Home: return L"Home";
+        case MenuKeyboardKind::End: return L"End";
+        case MenuKeyboardKind::Enter: return L"Enter";
+        case MenuKeyboardKind::Space: return L"Space";
+        case MenuKeyboardKind::Escape: return L"Escape";
+        case MenuKeyboardKind::Tab: return L"Tab";
+        case MenuKeyboardKind::F10: return L"F10";
+        case MenuKeyboardKind::Alt: return L"Alt";
+        case MenuKeyboardKind::Mnemonic: return L"Mnemonic";
+    }
+    return L"unknown";
+}
+
+[[nodiscard]] const wchar_t* TraceDispositionName(MenuInputDisposition disposition) noexcept
+{
+    switch (disposition)
+    {
+        case MenuInputDisposition::Ignored: return L"Ignored";
+        case MenuInputDisposition::Consumed: return L"Consumed";
+        case MenuInputDisposition::HoverChanged: return L"HoverChanged";
+        case MenuInputDisposition::Dismissed: return L"Dismissed";
+        case MenuInputDisposition::Invoked: return L"Invoked";
+        case MenuInputDisposition::SwitchedRoot: return L"SwitchedRoot";
+    }
+    return L"unknown";
+}
+
+[[nodiscard]] uint64_t TraceOptionalSizeValue(std::optional<size_t> value) noexcept
+{
+    return value.has_value() ? static_cast<uint64_t>(value.value()) : UINT64_MAX;
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Window class registration
@@ -1317,6 +1911,18 @@ struct MenuDebugGetItemTextRequest
 {
     size_t itemIndex      = 0u;
     std::wstring* outText = nullptr;
+};
+
+struct MenuDebugGetItemRectRequest
+{
+    size_t itemIndex        = 0u;
+    D2D1_RECT_F* outRectDip = nullptr;
+};
+
+struct MenuDebugGetItemPaintRequest
+{
+    size_t itemIndex                                = 0u;
+    ContextMenuPopupItemPaintDebugState* outState = nullptr;
 };
 
 bool TryGetMenuPopupItemText(const MenuPopup& popup, size_t itemIndex, std::wstring& outText)
@@ -1364,6 +1970,31 @@ static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
             return TryGetMenuPopupItemText(*popup, request->itemIndex, *request->outText) ? TRUE : FALSE;
         }
+        if (msg == kMenuDebugGetStateMessage)
+        {
+            auto* const outState = reinterpret_cast<ContextMenuPopupDebugState*>(lp);
+            return outState && DebugGetContextMenuPopupState(hwnd, *outState) ? TRUE : FALSE;
+        }
+        if (msg == kMenuDebugGetItemRectMessage)
+        {
+            auto* const request = reinterpret_cast<MenuDebugGetItemRectRequest*>(lp);
+            if (! request || ! request->outRectDip)
+            {
+                return FALSE;
+            }
+
+            return DebugGetContextMenuPopupItemRect(hwnd, request->itemIndex, *request->outRectDip) ? TRUE : FALSE;
+        }
+        if (msg == kMenuDebugGetItemPaintMessage)
+        {
+            auto* const request = reinterpret_cast<MenuDebugGetItemPaintRequest*>(lp);
+            if (! request || ! request->outState)
+            {
+                return FALSE;
+            }
+
+            return DebugGetContextMenuPopupItemPaint(hwnd, request->itemIndex, *request->outState) ? TRUE : FALSE;
+        }
         if (msg == kMenuDebugSetBackdropMessage)
         {
             const auto* const capture = reinterpret_cast<const WindowHostBitmapCapture*>(lp);
@@ -1380,6 +2011,32 @@ static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return TRUE;
         }
 #endif
+        if (msg == WM_NCDESTROY)
+        {
+            popup->host.Detach();
+            if (popup->hwnd == hwnd)
+            {
+                popup->hwnd = nullptr;
+            }
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            return DefWindowProcW(hwnd, msg, wp, lp);
+        }
+        if (msg == WM_NCHITTEST)
+        {
+            const POINT screenPoint{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            if (! PtInRect(&popup->surfaceRectPx, screenPoint))
+            {
+                return HTTRANSPARENT;
+            }
+
+            return HTCLIENT;
+        }
+
+        if (popup->controller && ProcessMenuPopupMessage(*popup->controller, hwnd, msg, wp, lp))
+        {
+            return 0;
+        }
+
         bool handled   = false;
         LRESULT result = popup->host.HandleMessage(hwnd, msg, wp, lp, handled);
         if (handled)
@@ -1606,11 +2263,11 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
         return layout;
     }
 
-    const ThemePalette& theme               = popup.host.GetTheme();
-    const float itemHeightDip               = ResolveMenuItemHeightDip(theme);
-    const float headerHeightDip             = ResolveMenuHeaderHeightDip(theme);
-    const auto& item                        = popup.items[targetIndex];
-    float rowHeightDip                      = itemHeightDip;
+    const ThemePalette& theme   = popup.host.GetTheme();
+    const float itemHeightDip   = ResolveMenuItemHeightDip(theme);
+    const float headerHeightDip = ResolveMenuHeaderHeightDip(theme);
+    const auto& item            = popup.items[targetIndex];
+    float rowHeightDip          = itemHeightDip;
     if (item.kind == MenuItemKind::Header)
         rowHeightDip = headerHeightDip;
     else if (item.kind == MenuItemKind::Slider)
@@ -1653,14 +2310,11 @@ void EnsureMenuWindowClass(HINSTANCE hInstance)
 
     if (item.kind == MenuItemKind::Slider)
     {
-        const float sliderTextTopDip = layout.itemRectDip.top + 6.0f;
+        const float sliderTextTopDip    = layout.itemRectDip.top + 6.0f;
         const float sliderTextBottomDip = sliderTextTopDip + 22.0f;
-        layout.iconRectDip = D2D1::RectF();
-        layout.textRectDip = ClampHorizontalRect(surfaceLeftDip + kAccelRightPaddingDip,
-                                                 textRightDip,
-                                                 sliderTextTopDip,
-                                                 sliderTextBottomDip,
-                                                 surfaceLeftDip + kAccelRightPaddingDip);
+        layout.iconRectDip              = D2D1::RectF();
+        layout.textRectDip              = ClampHorizontalRect(
+            surfaceLeftDip + kAccelRightPaddingDip, textRightDip, sliderTextTopDip, sliderTextBottomDip, surfaceLeftDip + kAccelRightPaddingDip);
         if (acceleratorColumnWidthDip > 0.0f)
         {
             const float accelRightDip = surfaceLeftDip + contentWidthDip - kAccelRightPaddingDip;
@@ -1812,8 +2466,7 @@ public:
                 const DecodedMenuItemText decoded          = DecodeMenuItemText(item);
                 const ParsedMenuLabel label                = ParseMenuLabel(decoded.labelText);
                 const MenuResolvedItemPaintStyle itemPaint = ResolveMenuItemPaintStyle(theme, style, item, label.displayText, isHovered);
-                const D2D1_COLOR_F textColor =
-                    isDisabled ? D2D1::ColorF(itemPaint.text.r, itemPaint.text.g, itemPaint.text.b, 0.4f) : itemPaint.text;
+                const D2D1_COLOR_F textColor = isDisabled ? D2D1::ColorF(itemPaint.text.r, itemPaint.text.g, itemPaint.text.b, 0.4f) : itemPaint.text;
                 const D2D1_COLOR_F accelColor =
                     isDisabled ? D2D1::ColorF(itemPaint.accelText.r, itemPaint.accelText.g, itemPaint.accelText.b, 0.4f) : itemPaint.accelText;
 
@@ -1868,13 +2521,13 @@ public:
 
                     for (size_t stopIndex = 0u; stopIndex < stopCount; ++stopIndex)
                     {
-                        const float t = stopCount <= 1u ? 0.0f : static_cast<float>(stopIndex) / static_cast<float>(stopCount - 1u);
-                        const float x = trackRect.left + ((trackRect.right - trackRect.left) * t);
-                        const bool activeStop = stopIndex == sliderValue;
-                        const float radius    = activeStop ? kSliderActiveStopRadiusDip : kSliderStopRadiusDip;
+                        const float t                  = stopCount <= 1u ? 0.0f : static_cast<float>(stopIndex) / static_cast<float>(stopCount - 1u);
+                        const float x                  = trackRect.left + ((trackRect.right - trackRect.left) * t);
+                        const bool activeStop          = stopIndex == sliderValue;
+                        const float radius             = activeStop ? kSliderActiveStopRadiusDip : kSliderStopRadiusDip;
                         const D2D1_ELLIPSE stopEllipse = D2D1::Ellipse(D2D1::Point2F(x, trackCenterY), radius, radius);
-                        auto* stopBrush   = host.GetSolidBrush(activeStop ? activeColor : style.background);
-                        auto* borderBrush = host.GetSolidBrush(activeColor);
+                        auto* stopBrush                = host.GetSolidBrush(activeStop ? activeColor : style.background);
+                        auto* borderBrush              = host.GetSolidBrush(activeColor);
                         if (stopBrush)
                         {
                             dc->FillEllipse(stopEllipse, stopBrush);
@@ -2250,6 +2903,17 @@ bool CreateMenuPopupWindow(MenuController& controller,
                            bool forceInitialRender      = true,
                            bool focusFirstNavigableItem = false)
 {
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-create-begin",
+                              L"owner={:#x} point=({}, {}) items={} submenu={} forceInitialRender={} focusFirst={} maxRootHeightDip={:.1f}",
+                              TraceHwndValue(controller.ownerHwnd),
+                              screenPoint.x,
+                              screenPoint.y,
+                              itemCount,
+                              TraceBool(isSubmenu),
+                              TraceBool(forceInitialRender),
+                              TraceBool(focusFirstNavigableItem),
+                              controller.sessionCallbacks.maxRootHeightDip);
+
     auto popup = std::make_unique<MenuPopup>();
     if (items && itemCount > 0u)
     {
@@ -2279,7 +2943,13 @@ bool CreateMenuPopupWindow(MenuController& controller,
     HWND hwnd = CreateWindowExW(exStyle, kMenuWindowClass, L"", style, 0, 0, 1, 1, controller.ownerHwnd, nullptr, hInstance, nullptr);
 
     if (! hwnd)
+    {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-create-failed",
+                                  L"owner={:#x} stage=CreateWindowEx lastError={}",
+                                  TraceHwndValue(controller.ownerHwnd),
+                                  static_cast<unsigned long>(GetLastError()));
         return false;
+    }
 
     popup->hwnd = hwnd;
 
@@ -2289,6 +2959,10 @@ bool CreateMenuPopupWindow(MenuController& controller,
     // Attach WindowHost and set theme
     if (! popup->host.Attach(hwnd, WindowHost::AttachOptions{.presentationMode = WindowHost::PresentationMode::CompositionSwapChain}))
     {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-create-failed",
+                                  L"owner={:#x} hwnd={:#x} stage=WindowHost.Attach",
+                                  TraceHwndValue(controller.ownerHwnd),
+                                  TraceHwndValue(hwnd));
         DestroyWindow(hwnd);
         return false;
     }
@@ -2300,11 +2974,15 @@ bool CreateMenuPopupWindow(MenuController& controller,
 
     // Compute menu size
     const D2D1_SIZE_F sizeDip = ComputeMenuSize(items, itemCount, popup->host, &popup->acceleratorColumnWidthDip);
+    const float requestedVisibleHeightDip =
+        (! isSubmenu && controller.sessionCallbacks.maxRootHeightDip > 0.0f)
+            ? (std::min)(sizeDip.height, controller.sessionCallbacks.maxRootHeightDip)
+            : sizeDip.height;
 
     // Position the window
     const RECT surfaceRectPx     = ComputePopupPosition(screenPoint,
                                                         sizeDip.width,
-                                                        sizeDip.height,
+                                                        requestedVisibleHeightDip,
                                                         popup->dpi,
                                                         isSubmenu,
                                                         controller.sessionCallbacks.rootHorizontalAlignment,
@@ -2343,22 +3021,47 @@ bool CreateMenuPopupWindow(MenuController& controller,
     content->SetBounds(D2D1::RectF(0, 0, popup->windowWidthDip, popup->windowHeightDip));
     popup->host.SetRoot(std::move(content));
     popup->keyboardIndex = popup->FindInitialKeyboardItem(focusFirstNavigableItem);
+    MenuPopup* const registeredPopup = popup.get();
+    controller.popups.push_back(std::move(popup));
 
     // Resize and show
     const int widthPx  = windowRect.right - windowRect.left;
     const int heightPx = windowRect.bottom - windowRect.top;
     SetWindowPos(hwnd, HWND_TOP, windowRect.left, windowRect.top, widthPx, heightPx, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-    ApplyMenuPopupWindowRegion(hwnd, popup->shadowMargins, popup->dpi, widthPx, heightPx);
-    static_cast<void>(popup->host.PrimeForShow());
+    ApplyMenuPopupWindowRegion(hwnd, registeredPopup->shadowMargins, registeredPopup->dpi, widthPx, heightPx);
+    const bool initialFrameReady =
+        forceInitialRender ? registeredPopup->host.RenderInitialFrameForShow() : registeredPopup->host.PrimeForShow();
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 
     InvalidateRect(hwnd, nullptr, FALSE);
-    if (forceInitialRender)
-    {
-        UpdateWindow(hwnd);
-    }
 
-    controller.popups.push_back(std::move(popup));
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-create-end",
+                               L"owner={:#x} hwnd={:#x} popupIndex={} point=({}, {}) windowRect=({}, {}, {}, {}) surfaceRect=({}, {}, {}, {}) "
+                               L"dpi={} items={} keyboardHas={} keyboard={} visibleDip=({:.1f}, {:.1f}) contentHeightDip={:.1f} "
+                               L"maxRootHeightDip={:.1f} initialFrameReady={}",
+                               TraceHwndValue(controller.ownerHwnd),
+                               TraceHwndValue(hwnd),
+                              TracePopupIndex(controller, registeredPopup),
+                              screenPoint.x,
+                              screenPoint.y,
+                              windowRect.left,
+                              windowRect.top,
+                              windowRect.right,
+                              windowRect.bottom,
+                              surfaceRectPx.left,
+                              surfaceRectPx.top,
+                              surfaceRectPx.right,
+                              surfaceRectPx.bottom,
+                              static_cast<unsigned int>(registeredPopup->dpi),
+                              registeredPopup->itemCount,
+                              TraceBool(registeredPopup->keyboardIndex.has_value()),
+                              TraceOptionalSizeValue(registeredPopup->keyboardIndex),
+                               registeredPopup->menuWidthDip,
+                               registeredPopup->menuHeightDip,
+                               registeredPopup->contentHeightDip,
+                               controller.sessionCallbacks.maxRootHeightDip,
+                               TraceBool(initialFrameReady));
+
     return true;
 }
 
@@ -2378,8 +3081,7 @@ void OpenSubmenu(MenuController& controller, MenuPopup& parent, size_t itemIndex
     while (controller.popups.size() > 1 && controller.popups.back().get() != &parent)
     {
         auto& child = controller.popups.back();
-        if (child->hwnd)
-            DestroyWindow(child->hwnd);
+        DestroyMenuPopupWindow(*child);
         controller.popups.pop_back();
     }
 
@@ -2418,6 +3120,20 @@ void CancelSubmenuHoverTimer(MenuPopup& popup) noexcept
     popup.hoverTimerId        = 0;
     popup.hoverTimerKind      = MenuPopup::SubmenuHoverTimerKind::None;
     popup.hoverTimerItemIndex = SIZE_MAX;
+}
+
+void DestroyMenuPopupWindow(MenuPopup& popup) noexcept
+{
+    CancelSubmenuHoverTimer(popup);
+
+    const HWND hwnd = popup.hwnd;
+    if (hwnd && IsWindow(hwnd) != FALSE)
+    {
+        DestroyWindow(hwnd);
+    }
+
+    popup.host.Detach();
+    popup.hwnd = nullptr;
 }
 
 [[nodiscard]] bool HasPendingSubmenuOpenTimer(const MenuPopup& popup) noexcept
@@ -2496,18 +3212,14 @@ void CloseSubmenuChainFrom(MenuController& controller, MenuPopup& parent) noexce
     while (controller.popups.size() > 1 && controller.popups.back().get() != &parent)
     {
         auto& child = controller.popups.back();
-        CancelSubmenuHoverTimer(*child);
-        if (child->hwnd)
-        {
-            DestroyWindow(child->hwnd);
-        }
+        DestroyMenuPopupWindow(*child);
         controller.popups.pop_back();
         closedAny = true;
     }
 
     if (closedAny && parent.hwnd)
     {
-        InvalidateRect(parent.hwnd, nullptr, FALSE);
+        InvalidatePopup(parent);
     }
 }
 
@@ -2515,14 +3227,11 @@ void CloseSubmenuChainFrom(MenuController& controller, MenuPopup& parent) noexce
 // Process mouse move in a popup
 // ---------------------------------------------------------------------------
 
-void HandleMenuMouseMove(MenuController& controller, MenuPopup& popup, POINT screenPt)
+void HandleMenuMouseMoveAtPointDip(MenuController& controller,
+                                   MenuPopup& popup,
+                                   D2D1_POINT_2F pointDip,
+                                   bool pointerTakesKeyboardFocus = true) noexcept
 {
-    RECT wr{};
-    GetWindowRect(popup.hwnd, &wr);
-    const float dipX = popup.PixelToDip(static_cast<float>(screenPt.x - wr.left));
-    const float dipY = popup.PixelToDip(static_cast<float>(screenPt.y - wr.top));
-
-    const D2D1_POINT_2F pointDip = D2D1::Point2F(dipX, dipY);
     if (popup.draggingScrollbarThumb)
     {
         const D2D1_RECT_F track = popup.GetScrollbarTrackRect();
@@ -2534,7 +3243,7 @@ void HandleMenuMouseMove(MenuController& controller, MenuPopup& popup, POINT scr
             const float thumbTop  = (std::clamp)(pointDip.y - popup.scrollbarDragOffsetDip, track.top, track.bottom - thumbHeight);
             popup.scrollOffsetDip = ((thumbTop - track.top) / available) * popup.GetScrollExtent();
             popup.ClampScrollOffset();
-            InvalidateRect(popup.hwnd, nullptr, FALSE);
+            InvalidatePopup(popup);
         }
         return;
     }
@@ -2547,17 +3256,20 @@ void HandleMenuMouseMove(MenuController& controller, MenuPopup& popup, POINT scr
     if (popup.scrollbarHotPart != nextHotPart)
     {
         popup.scrollbarHotPart = nextHotPart;
-        InvalidateRect(popup.hwnd, nullptr, FALSE);
+        InvalidatePopup(popup);
     }
 
     const std::optional<size_t> hit = HitTestMenuItem(popup, pointDip);
     const bool changed              = (hit != popup.hoveredIndex);
     popup.hoveredIndex              = hit;
-    popup.keyboardIndex.reset(); // mouse takes over
+    if (pointerTakesKeyboardFocus)
+    {
+        popup.keyboardIndex.reset();
+    }
 
     if (changed)
     {
-        InvalidateRect(popup.hwnd, nullptr, FALSE);
+        InvalidatePopup(popup);
 
         // Start/cancel submenu hover timer
         if (popup.hoverTimerId)
@@ -2600,13 +3312,7 @@ void DestroyPopupChain(MenuController& controller) noexcept
     for (auto it = controller.popups.rbegin(); it != controller.popups.rend(); ++it)
     {
         auto& popup = *it;
-        CancelSubmenuHoverTimer(*popup);
-        popup->host.Detach();
-        if (popup->hwnd)
-        {
-            DestroyWindow(popup->hwnd);
-            popup->hwnd = nullptr;
-        }
+        DestroyMenuPopupWindow(*popup);
     }
     controller.popups.clear();
 }
@@ -2623,31 +3329,20 @@ void ActivatePopupForKeyboard(MenuPopup& popup) noexcept
     SetFocus(popup.hwnd);
 }
 
-void RepaintPopupNow(MenuPopup& popup) noexcept
-{
-    if (! popup.hwnd || IsWindow(popup.hwnd) == FALSE)
-    {
-        return;
-    }
-
-    InvalidateRect(popup.hwnd, nullptr, FALSE);
-    UpdateWindow(popup.hwnd);
-}
-
 [[nodiscard]] bool SwitchRootPopup(MenuController& controller,
                                    ContextMenuRootSwitchRequest request,
                                    std::wstring_view popupDetail,
                                    bool focusFirstNavigableItem) noexcept
 {
     DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup switch-begin owner={:#x} capture={:#x} detail='{}' oldPopupCount={} newItems={} point=({}, {}) focusFirst={}",
-                reinterpret_cast<uintptr_t>(controller.ownerHwnd),
-                reinterpret_cast<uintptr_t>(GetCapture()),
-                popupDetail,
-                controller.popups.size(),
-                request.items.size(),
-                request.screenPoint.x,
-                request.screenPoint.y,
-                focusFirstNavigableItem ? L"true" : L"false");
+                    reinterpret_cast<uintptr_t>(controller.ownerHwnd),
+                    reinterpret_cast<uintptr_t>(GetCapture()),
+                    popupDetail,
+                    controller.popups.size(),
+                    request.items.size(),
+                    request.screenPoint.x,
+                    request.screenPoint.y,
+                    focusFirstNavigableItem ? L"true" : L"false");
     DestroyPopupChain(controller);
 
     controller.rootItems = std::move(request.items);
@@ -2681,12 +3376,992 @@ void RepaintPopupNow(MenuPopup& popup) noexcept
         SetCapture(root->hwnd);
         ActivatePopupForKeyboard(*root);
         DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup switch-capture root={:#x} previousCapture={:#x} currentCapture={:#x}",
-                    reinterpret_cast<uintptr_t>(root->hwnd),
-                    reinterpret_cast<uintptr_t>(previousCapture),
-                    reinterpret_cast<uintptr_t>(GetCapture()));
+                        reinterpret_cast<uintptr_t>(root->hwnd),
+                        reinterpret_cast<uintptr_t>(previousCapture),
+                        reinterpret_cast<uintptr_t>(GetCapture()));
     }
     Debug::Perf::Emit(L"DxUI::PopupShow", popupDetail, Debug::Perf::ElapsedUs(startedAt), static_cast<uint64_t>(controller.rootItems.size()), 0u);
     return true;
+}
+
+[[nodiscard]] MenuPopup* FindPointerTargetPopup(MenuController& controller, POINT screenPt) noexcept
+{
+    for (auto it = controller.popups.rbegin(); it != controller.popups.rend(); ++it)
+    {
+        const RECT wr = (*it)->GetInteractiveScreenRect();
+        if (PtInRect(&wr, screenPt))
+        {
+            return it->get();
+        }
+    }
+
+    for (auto& popup : controller.popups)
+    {
+        if (popup->draggingScrollbarThumb)
+        {
+            return popup.get();
+        }
+    }
+
+    return nullptr;
+}
+
+[[nodiscard]] bool IsPointInAnyPopupInteractiveRect(const MenuController& controller, POINT screenPt) noexcept
+{
+    for (const auto& popup : controller.popups)
+    {
+        const RECT interactiveRect = popup->GetInteractiveScreenRect();
+        if (PtInRect(&interactiveRect, screenPt))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+[[nodiscard]] std::optional<D2D1_POINT_2F> ScreenPointToPopupDip(const MenuPopup& popup, POINT screenPt) noexcept
+{
+    RECT wr{};
+    if (! popup.hwnd || GetWindowRect(popup.hwnd, &wr) == FALSE)
+    {
+        return std::nullopt;
+    }
+
+    return D2D1::Point2F(popup.PixelToDip(static_cast<float>(screenPt.x - wr.left)), popup.PixelToDip(static_cast<float>(screenPt.y - wr.top)));
+}
+
+[[nodiscard]] D2D1_POINT_2F PopupClientPointToDip(const MenuPopup& popup, POINT clientPoint) noexcept
+{
+    return D2D1::Point2F(popup.PixelToDip(static_cast<float>(clientPoint.x)), popup.PixelToDip(static_cast<float>(clientPoint.y)));
+}
+
+[[nodiscard]] bool IsDeliveredPopupSurfacePoint(const MenuPopup& popup, const MenuPointerEvent& event) noexcept
+{
+    return event.source == MenuInputSource::PopupWndProc && event.hwnd == popup.hwnd && event.deliveredPopupPointDip.has_value() &&
+           PointInRect(popup.GetSurfaceRect(), event.deliveredPopupPointDip.value());
+}
+
+[[nodiscard]] MenuPopup* FindPointerTargetPopup(MenuController& controller, const MenuPointerEvent& event) noexcept
+{
+    if (MenuPopup* popup = controller.FindPopupForHwnd(event.hwnd); popup && IsDeliveredPopupSurfacePoint(*popup, event))
+    {
+        return popup;
+    }
+
+    return FindPointerTargetPopup(controller, event.screenPoint);
+}
+
+[[nodiscard]] std::optional<D2D1_POINT_2F> ResolvePointerPopupPointDip(const MenuPopup& popup, const MenuPointerEvent& event) noexcept
+{
+    if (event.hwnd == popup.hwnd && event.deliveredPopupPointDip.has_value())
+    {
+        return event.deliveredPopupPointDip;
+    }
+
+    return ScreenPointToPopupDip(popup, event.screenPoint);
+}
+
+struct MenuPointerTargetTrace
+{
+    int popupIndex = -1;
+    uintptr_t popupHwnd = 0u;
+    std::optional<size_t> hitIndex;
+    std::optional<size_t> hoveredIndex;
+    std::optional<size_t> keyboardIndex;
+};
+
+[[nodiscard]] MenuPointerTargetTrace CaptureMenuPointerTargetTrace(MenuController& controller, const MenuPointerEvent& event) noexcept
+{
+    MenuPointerTargetTrace trace;
+    MenuPopup* popup = FindPointerTargetPopup(controller, event);
+    if (! popup)
+    {
+        return trace;
+    }
+
+    trace.popupIndex    = TracePopupIndex(controller, popup);
+    trace.popupHwnd     = TraceHwndValue(popup->hwnd);
+    trace.hoveredIndex  = popup->hoveredIndex;
+    trace.keyboardIndex = popup->keyboardIndex;
+    const std::optional<D2D1_POINT_2F> pointDip = ResolvePointerPopupPointDip(*popup, event);
+    if (pointDip.has_value())
+    {
+        trace.hitIndex = HitTestMenuItem(*popup, pointDip.value());
+    }
+    return trace;
+}
+
+void TraceMenuPointerRoute(
+    MenuController& controller, const MenuPointerEvent& event, const MenuPointerTargetTrace& before, MenuInputDisposition disposition) noexcept
+{
+    static_cast<void>(before);
+    static_cast<void>(disposition);
+
+    const MenuPointerTargetTrace after = CaptureMenuPointerTargetTrace(controller, event);
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.pointer",
+                              L"source={} kind={} hwnd={:#x} point=({}, {}) messageTime={} keyboardRootTimeHas={} keyboardRootTime={} deliveredPopupPointHas={} deliveredPopupPoint=({:.1f}, {:.1f}) "
+                              L"hitWindow={:#x} mayInvoke={} mayDismiss={} maySwitchRoot={} "
+                              L"mayKeyboardFocus={} beforePopup={} beforePopupHwnd={:#x} beforeHitHas={} beforeHit={} beforeHoverHas={} "
+                              L"beforeHover={} beforeKeyboardHas={} beforeKeyboard={} afterPopup={} afterPopupHwnd={:#x} afterHitHas={} "
+                              L"afterHit={} afterHoverHas={} afterHover={} afterKeyboardHas={} afterKeyboard={} popups={} running={} result={} disposition={}",
+                              TraceInputSourceName(event.source),
+                              TracePointerKindName(event.kind),
+                              TraceHwndValue(event.hwnd),
+                              event.screenPoint.x,
+                              event.screenPoint.y,
+                              static_cast<unsigned int>(event.messageTime),
+                              TraceBool(controller.hasLastKeyboardRootSwitchMessageTime),
+                              static_cast<unsigned int>(controller.lastKeyboardRootSwitchMessageTime),
+                              TraceBool(event.deliveredPopupPointDip.has_value()),
+                              event.deliveredPopupPointDip.has_value() ? event.deliveredPopupPointDip->x : -1.0f,
+                              event.deliveredPopupPointDip.has_value() ? event.deliveredPopupPointDip->y : -1.0f,
+                              TraceHwndValue(WindowFromPoint(event.screenPoint)),
+                              TraceBool(event.mayInvoke),
+                              TraceBool(event.mayDismiss),
+                              TraceBool(event.maySwitchRoot),
+                              TraceBool(event.mayTakeKeyboardFocus),
+                              before.popupIndex,
+                              before.popupHwnd,
+                              TraceBool(before.hitIndex.has_value()),
+                              TraceOptionalSizeValue(before.hitIndex),
+                              TraceBool(before.hoveredIndex.has_value()),
+                              TraceOptionalSizeValue(before.hoveredIndex),
+                              TraceBool(before.keyboardIndex.has_value()),
+                              TraceOptionalSizeValue(before.keyboardIndex),
+                              after.popupIndex,
+                              after.popupHwnd,
+                              TraceBool(after.hitIndex.has_value()),
+                              TraceOptionalSizeValue(after.hitIndex),
+                              TraceBool(after.hoveredIndex.has_value()),
+                              TraceOptionalSizeValue(after.hoveredIndex),
+                              TraceBool(after.keyboardIndex.has_value()),
+                              TraceOptionalSizeValue(after.keyboardIndex),
+                              controller.popups.size(),
+                              TraceBool(controller.running),
+                              controller.result.value_or(-1),
+                              TraceDispositionName(disposition));
+}
+
+[[nodiscard]] MenuInputDisposition RouteMenuPointerHover(MenuController& controller, const MenuPointerEvent& event) noexcept
+{
+    MenuPopup* targetPopup = FindPointerTargetPopup(controller, event);
+    if (! targetPopup && ! event.maySwitchRoot)
+    {
+        return MenuInputDisposition::Ignored;
+    }
+
+    POINT routedRootSwitchPoint = event.screenPoint;
+
+    bool pointerMoved = false;
+    if (! targetPopup && event.maySwitchRoot)
+    {
+        pointerMoved = ! controller.hasLastRootSwitchPointerScreenPoint || routedRootSwitchPoint.x != controller.lastRootSwitchPointerScreenPoint.x ||
+                       routedRootSwitchPoint.y != controller.lastRootSwitchPointerScreenPoint.y;
+    }
+    else
+    {
+        pointerMoved = ! controller.hasLastPointerScreenPoint || event.screenPoint.x != controller.lastPointerScreenPoint.x ||
+                       event.screenPoint.y != controller.lastPointerScreenPoint.y;
+        controller.lastPointerScreenPoint    = event.screenPoint;
+        controller.hasLastPointerScreenPoint = true;
+    }
+
+    DXUI_MENU_TRACE(
+        L"DxUi::MenuTrace Popup route-pointer source={} kind=move hwnd={:#x} capture={:#x} screen=({}, {}) moved={} targetPopup={} popupCount={}",
+        static_cast<int>(event.source),
+        reinterpret_cast<uintptr_t>(event.hwnd),
+        reinterpret_cast<uintptr_t>(GetCapture()),
+        event.screenPoint.x,
+        event.screenPoint.y,
+        pointerMoved ? L"true" : L"false",
+        TracePopupIndex(controller, targetPopup),
+        controller.popups.size());
+
+    const bool initializeStationaryPopupHover =
+        ! pointerMoved && targetPopup && ! targetPopup->hoveredIndex.has_value() && ! targetPopup->keyboardIndex.has_value();
+    if (! pointerMoved && ! initializeStationaryPopupHover)
+    {
+        return MenuInputDisposition::Ignored;
+    }
+
+    if (! targetPopup && event.maySwitchRoot && controller.sessionCallbacks.switchRootFromPointer)
+    {
+        if (IsStaleRootSwitchPointerMoveAfterKeyboard(controller, event))
+        {
+            RememberRootSwitchPointerPoint(controller, routedRootSwitchPoint);
+            DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-stale-after-keyboard point=({}, {}) messageTime={} keyboardTime={}",
+                            routedRootSwitchPoint.x,
+                            routedRootSwitchPoint.y,
+                            static_cast<unsigned int>(event.messageTime),
+                            static_cast<unsigned int>(controller.lastKeyboardRootSwitchMessageTime));
+            return MenuInputDisposition::Consumed;
+        }
+        if (IsPointInAnyPopupInteractiveRect(controller, routedRootSwitchPoint))
+        {
+            return MenuInputDisposition::Consumed;
+        }
+        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-probe point=({}, {}) targetPopup={} activeItems={}",
+                    routedRootSwitchPoint.x,
+                    routedRootSwitchPoint.y,
+                    TracePopupIndex(controller, targetPopup),
+                    controller.rootItems.size());
+        if (auto request = controller.sessionCallbacks.switchRootFromPointer(routedRootSwitchPoint); request.has_value())
+        {
+            DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-accepted point=({}, {}) newItems={} newPoint=({}, {})",
+                        routedRootSwitchPoint.x,
+                        routedRootSwitchPoint.y,
+                        request->items.size(),
+                        request->screenPoint.x,
+                        request->screenPoint.y);
+#if defined(ENABLE_TESTS)
+            ++controller.rootPointerSwitchCount;
+#endif
+            RememberRootSwitchPointerPoint(controller, routedRootSwitchPoint);
+            ClearKeyboardRootSwitchMessageTime(controller);
+            static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-pointer", false));
+            return MenuInputDisposition::SwitchedRoot;
+        }
+        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-rejected point=({}, {})", routedRootSwitchPoint.x, routedRootSwitchPoint.y);
+        if (ShouldRememberRejectedRootSwitchPointer(event))
+        {
+            RememberRootSwitchPointerPoint(controller, routedRootSwitchPoint);
+        }
+    }
+
+    if (targetPopup)
+    {
+        if (const std::optional<D2D1_POINT_2F> pointDip = ResolvePointerPopupPointDip(*targetPopup, event); pointDip.has_value())
+        {
+            HandleMenuMouseMoveAtPointDip(controller, *targetPopup, pointDip.value(), event.mayTakeKeyboardFocus);
+        }
+        size_t targetPopupIndex = controller.popups.size();
+        for (size_t i = 0; i < controller.popups.size(); ++i)
+        {
+            if (controller.popups[i].get() == targetPopup)
+            {
+                targetPopupIndex = i;
+                break;
+            }
+        }
+
+        for (size_t i = 0; i < targetPopupIndex && i < controller.popups.size(); ++i)
+        {
+            CancelSubmenuHoverTimer(*controller.popups[i]);
+        }
+
+        if (targetPopupIndex + 1u < controller.popups.size())
+        {
+            if (PopupHoverOwnsOpenChild(controller, targetPopupIndex, *targetPopup))
+            {
+                CancelSubmenuHoverTimer(*targetPopup);
+            }
+            else if (! HasPendingSubmenuOpenTimer(*targetPopup))
+            {
+                ScheduleSubmenuCloseTimer(*targetPopup);
+            }
+        }
+
+        for (size_t i = 0; i < controller.popups.size(); ++i)
+        {
+            auto& popup = controller.popups[i];
+            if (popup.get() == targetPopup)
+            {
+                continue;
+            }
+
+            bool invalidate = false;
+            if (i < targetPopupIndex)
+            {
+                const std::optional<size_t> cascadeHighlight = controller.popups[i + 1u]->openedFromItemIndex;
+                if (popup->hoveredIndex != cascadeHighlight)
+                {
+                    popup->hoveredIndex = cascadeHighlight;
+                    invalidate          = true;
+                }
+                if (event.mayTakeKeyboardFocus && popup->keyboardIndex.has_value())
+                {
+                    popup->keyboardIndex.reset();
+                    invalidate = true;
+                }
+            }
+            else
+            {
+                if (popup->hoveredIndex.has_value())
+                {
+                    popup->hoveredIndex.reset();
+                    invalidate = true;
+                }
+                if (event.mayTakeKeyboardFocus && popup->keyboardIndex.has_value())
+                {
+                    popup->keyboardIndex.reset();
+                    invalidate = true;
+                }
+            }
+
+            if (invalidate && popup->hwnd)
+            {
+                InvalidatePopup(*popup);
+            }
+        }
+
+        return MenuInputDisposition::HoverChanged;
+    }
+
+    for (auto& popup : controller.popups)
+    {
+        if (popup->hoveredIndex.has_value())
+        {
+            popup->hoveredIndex.reset();
+            InvalidatePopup(*popup);
+        }
+    }
+
+    if (controller.popups.size() > 1)
+    {
+        for (size_t i = 1; i < controller.popups.size(); ++i)
+        {
+            CancelSubmenuHoverTimer(*controller.popups[i]);
+        }
+        ScheduleSubmenuCloseTimer(*controller.popups.front());
+    }
+    else if (! controller.popups.empty())
+    {
+        CancelSubmenuHoverTimer(*controller.popups.front());
+    }
+
+    return MenuInputDisposition::Consumed;
+}
+
+[[nodiscard]] MenuInputDisposition RouteMenuPointerEvent(MenuController& controller, const MenuPointerEvent& event) noexcept
+{
+    const bool traceEnabled = IsMenuDiagnosticsTraceEnabled();
+    const MenuPointerTargetTrace traceBefore = traceEnabled ? CaptureMenuPointerTargetTrace(controller, event) : MenuPointerTargetTrace{};
+    const auto finish = [&](MenuInputDisposition disposition) noexcept
+    {
+        if (traceEnabled)
+        {
+            TraceMenuPointerRoute(controller, event, traceBefore, disposition);
+        }
+        return disposition;
+    };
+
+    if (! controller.running)
+    {
+        return finish(MenuInputDisposition::Ignored);
+    }
+
+    if (event.kind == MenuPointerKind::Move)
+    {
+        return finish(RouteMenuPointerHover(controller, event));
+    }
+
+    MenuPopup* targetPopup = FindPointerTargetPopup(controller, event);
+    if (event.kind == MenuPointerKind::Wheel)
+    {
+        if (targetPopup && targetPopup->NeedsScrollbar())
+        {
+            const short wheelDelta = GET_WHEEL_DELTA_WPARAM(event.wParam);
+            const float steps      = static_cast<float>(wheelDelta) / static_cast<float>(WHEEL_DELTA);
+            targetPopup->scrollOffsetDip -= steps * ResolveMenuItemHeightDip(targetPopup->host.GetTheme());
+            targetPopup->ClampScrollOffset();
+            InvalidatePopup(*targetPopup);
+            return finish(MenuInputDisposition::Consumed);
+        }
+
+        return finish(targetPopup ? MenuInputDisposition::Consumed : MenuInputDisposition::Ignored);
+    }
+
+    if (event.kind == MenuPointerKind::LeftDown || event.kind == MenuPointerKind::RightDown)
+    {
+        if (! targetPopup)
+        {
+            if (event.mayDismiss)
+            {
+                controller.Dismiss();
+                return finish(MenuInputDisposition::Dismissed);
+            }
+            return finish(MenuInputDisposition::Ignored);
+        }
+
+        if (event.kind == MenuPointerKind::LeftDown)
+        {
+            controller.leftButtonDownInPopup = true;
+        }
+        else
+        {
+            controller.rightButtonDownInPopup = true;
+        }
+
+        const std::optional<D2D1_POINT_2F> pointDip = ResolvePointerPopupPointDip(*targetPopup, event);
+        if (pointDip.has_value())
+        {
+            HandleMenuMouseMoveAtPointDip(controller, *targetPopup, pointDip.value(), event.mayTakeKeyboardFocus);
+        }
+        if (event.kind == MenuPointerKind::LeftDown)
+        {
+            if (pointDip.has_value() && targetPopup->NeedsScrollbar() && PointInRect(targetPopup->GetScrollbarTrackRect(), pointDip.value()))
+            {
+                const D2D1_RECT_F thumb = targetPopup->GetScrollbarThumbRect();
+                if (PointInRect(thumb, pointDip.value()))
+                {
+                    targetPopup->draggingScrollbarThumb = true;
+                    targetPopup->scrollbarDragOffsetDip = pointDip->y - thumb.top;
+                    targetPopup->scrollbarHotPart       = MenuPopup::ScrollbarHotPart::Thumb;
+                }
+                else
+                {
+                    const float pageStep = targetPopup->menuHeightDip * 0.8f;
+                    targetPopup->scrollOffsetDip += pointDip->y < thumb.top ? -pageStep : pageStep;
+                    targetPopup->ClampScrollOffset();
+                    targetPopup->scrollbarHotPart = MenuPopup::ScrollbarHotPart::Track;
+                }
+                InvalidatePopup(*targetPopup);
+            }
+        }
+        return finish(MenuInputDisposition::Consumed);
+    }
+
+    if (event.kind == MenuPointerKind::LeftUp || event.kind == MenuPointerKind::RightUp)
+    {
+        const bool isLeftButton      = event.kind == MenuPointerKind::LeftUp;
+        const bool buttonDownInPopup = isLeftButton ? controller.leftButtonDownInPopup : controller.rightButtonDownInPopup;
+        if (isLeftButton && controller.ignoreInitialLeftButtonUp && ! buttonDownInPopup)
+        {
+            controller.ignoreInitialLeftButtonUp = false;
+            return finish(MenuInputDisposition::Consumed);
+        }
+        if (! isLeftButton && controller.ignoreInitialRightButtonUp && ! buttonDownInPopup)
+        {
+            controller.ignoreInitialRightButtonUp = false;
+            return finish(MenuInputDisposition::Consumed);
+        }
+
+        if (isLeftButton)
+        {
+            controller.leftButtonDownInPopup = false;
+        }
+        else
+        {
+            controller.rightButtonDownInPopup = false;
+        }
+
+        if (targetPopup && targetPopup->draggingScrollbarThumb)
+        {
+            targetPopup->draggingScrollbarThumb = false;
+            return finish(MenuInputDisposition::Consumed);
+        }
+
+        std::optional<size_t> targetIndex = targetPopup ? targetPopup->hoveredIndex : std::nullopt;
+        if (targetPopup && ! targetIndex.has_value())
+        {
+            const std::optional<D2D1_POINT_2F> pointDip = ResolvePointerPopupPointDip(*targetPopup, event);
+            if (pointDip.has_value())
+            {
+                targetIndex = HitTestMenuItem(*targetPopup, pointDip.value());
+                if (targetIndex != targetPopup->hoveredIndex)
+                {
+                    targetPopup->hoveredIndex = targetIndex;
+                    if (event.mayTakeKeyboardFocus)
+                    {
+                        targetPopup->keyboardIndex.reset();
+                    }
+                    InvalidatePopup(*targetPopup);
+                }
+            }
+        }
+
+        if (targetPopup && targetIndex.has_value())
+        {
+            const size_t idx = targetIndex.value();
+            const auto& item = targetPopup->items[idx];
+            if (item.kind == MenuItemKind::Slider && item.enabled)
+            {
+                const std::optional<D2D1_POINT_2F> pointDip = ResolvePointerPopupPointDip(*targetPopup, event);
+                if (pointDip.has_value())
+                {
+                    const D2D1_RECT_F itemRect = GetVisibleItemRect(*targetPopup, idx);
+                    const uint32_t stopIndex   = HitTestSliderStop(item, itemRect, pointDip.value());
+                    const int commandId        = GetSliderCommandId(item, stopIndex);
+                    if (commandId != 0)
+                    {
+                        controller.InvokeItem(commandId);
+                        return finish(MenuInputDisposition::Invoked);
+                    }
+                }
+            }
+            else if (! item.children.empty() && item.enabled)
+            {
+                OpenSubmenu(controller, *targetPopup, idx, false);
+            }
+            else if (event.mayInvoke && IsInvokableMenuItem(item))
+            {
+                controller.InvokeItem(item.commandId);
+                return finish(MenuInputDisposition::Invoked);
+            }
+        }
+        else if (! targetPopup && event.mayDismiss)
+        {
+            controller.Dismiss();
+            return finish(MenuInputDisposition::Dismissed);
+        }
+
+        return finish(MenuInputDisposition::Consumed);
+    }
+
+    return finish(MenuInputDisposition::Ignored);
+}
+
+[[nodiscard]] std::optional<MenuPointerKind> MenuPointerKindFromMessage(UINT message) noexcept
+{
+    switch (message)
+    {
+        case WM_MOUSEMOVE: return MenuPointerKind::Move;
+        case WM_LBUTTONDOWN: return MenuPointerKind::LeftDown;
+        case WM_LBUTTONUP: return MenuPointerKind::LeftUp;
+        case WM_RBUTTONDOWN: return MenuPointerKind::RightDown;
+        case WM_RBUTTONUP: return MenuPointerKind::RightUp;
+        case WM_MOUSEWHEEL:
+        case WM_MOUSEHWHEEL: return MenuPointerKind::Wheel;
+        default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] MenuInputDisposition RouteMenuKeyboardEvent(MenuController& controller, const MenuKeyboardEvent& event) noexcept
+{
+    MenuPopup* topmost = controller.GetTopmostPopup();
+    if (! topmost || ! controller.running)
+    {
+        return MenuInputDisposition::Ignored;
+    }
+
+    const auto focusedIndex = [&]() noexcept -> std::optional<size_t>
+    {
+        auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
+        if (! idx.has_value() || idx.value() >= topmost->itemCount)
+        {
+            return std::nullopt;
+        }
+        return idx;
+    };
+    const auto invokeFocusedSliderStop = [&](uint32_t stopIndex) -> bool
+    {
+        const auto idx = focusedIndex();
+        if (! idx.has_value())
+        {
+            return false;
+        }
+        const auto& item = topmost->items[idx.value()];
+        if (item.kind != MenuItemKind::Slider || ! item.enabled)
+        {
+            return false;
+        }
+        const int commandId = GetSliderCommandId(item, stopIndex);
+        if (commandId == 0)
+        {
+            return true;
+        }
+        controller.InvokeItem(commandId);
+        return true;
+    };
+    const auto invokeFocusedSliderDelta = [&](int delta) -> bool
+    {
+        const auto idx = focusedIndex();
+        if (! idx.has_value())
+        {
+            return false;
+        }
+        const auto& item = topmost->items[idx.value()];
+        if (item.kind != MenuItemKind::Slider || ! item.enabled || item.sliderStops.empty())
+        {
+            return false;
+        }
+        const int current = static_cast<int>(ClampSliderValue(item));
+        const int maxStop = static_cast<int>(item.sliderStops.size() - 1u);
+        return invokeFocusedSliderStop(static_cast<uint32_t>(std::clamp(current + delta, 0, maxStop)));
+    };
+
+    switch (event.kind)
+    {
+        case MenuKeyboardKind::Up:
+        {
+            auto cur  = topmost->keyboardIndex.value_or(topmost->hoveredIndex.value_or(SIZE_MAX));
+            auto next = (cur == SIZE_MAX) ? topmost->FindLastNavigableItem() : topmost->FindNextNavigableItem(cur, false);
+            if (next.has_value())
+            {
+                topmost->keyboardIndex = next;
+                topmost->hoveredIndex.reset();
+                topmost->EnsureItemVisible(next.value());
+                InvalidatePopup(*topmost);
+            }
+            return MenuInputDisposition::Consumed;
+        }
+        case MenuKeyboardKind::Down:
+        {
+            auto cur  = topmost->keyboardIndex.value_or(topmost->hoveredIndex.value_or(SIZE_MAX));
+            auto next = (cur == SIZE_MAX) ? topmost->FindFirstNavigableItem() : topmost->FindNextNavigableItem(cur, true);
+            if (next.has_value())
+            {
+                topmost->keyboardIndex = next;
+                topmost->hoveredIndex.reset();
+                topmost->EnsureItemVisible(next.value());
+                InvalidatePopup(*topmost);
+            }
+            return MenuInputDisposition::Consumed;
+        }
+        case MenuKeyboardKind::Home:
+        {
+            if (invokeFocusedSliderStop(0u))
+            {
+                return controller.running ? MenuInputDisposition::Consumed : MenuInputDisposition::Invoked;
+            }
+            auto first = topmost->FindFirstNavigableItem();
+            if (first.has_value())
+            {
+                topmost->keyboardIndex = first;
+                topmost->hoveredIndex.reset();
+                topmost->EnsureItemVisible(first.value());
+                InvalidatePopup(*topmost);
+            }
+            return MenuInputDisposition::Consumed;
+        }
+        case MenuKeyboardKind::End:
+        {
+            const auto idx = focusedIndex();
+            if (idx.has_value())
+            {
+                const auto& item = topmost->items[idx.value()];
+                if (item.kind == MenuItemKind::Slider && ! item.sliderStops.empty() && item.enabled)
+                {
+                    static_cast<void>(invokeFocusedSliderStop(static_cast<uint32_t>(item.sliderStops.size() - 1u)));
+                    return controller.running ? MenuInputDisposition::Consumed : MenuInputDisposition::Invoked;
+                }
+            }
+            auto last = topmost->FindLastNavigableItem();
+            if (last.has_value())
+            {
+                topmost->keyboardIndex = last;
+                topmost->hoveredIndex.reset();
+                topmost->EnsureItemVisible(last.value());
+                InvalidatePopup(*topmost);
+            }
+            return MenuInputDisposition::Consumed;
+        }
+        case MenuKeyboardKind::Enter:
+        case MenuKeyboardKind::Space:
+        {
+            auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
+            if (idx.has_value() && idx.value() < topmost->itemCount)
+            {
+                const auto& item = topmost->items[idx.value()];
+                if (item.kind == MenuItemKind::Slider && item.enabled)
+                {
+                    static_cast<void>(invokeFocusedSliderStop(ClampSliderValue(item)));
+                    return controller.running ? MenuInputDisposition::Consumed : MenuInputDisposition::Invoked;
+                }
+                if (! item.children.empty() && item.enabled)
+                {
+                    OpenSubmenu(controller, *topmost, idx.value(), true);
+                }
+                else if (IsInvokableMenuItem(item))
+                {
+                    controller.InvokeItem(item.commandId);
+                    return MenuInputDisposition::Invoked;
+                }
+            }
+            return MenuInputDisposition::Consumed;
+        }
+        case MenuKeyboardKind::Escape:
+            if (controller.popups.size() > 1)
+            {
+                controller.CloseTopmostSubmenu();
+                return MenuInputDisposition::Consumed;
+            }
+            controller.Dismiss();
+            return MenuInputDisposition::Dismissed;
+        case MenuKeyboardKind::Tab:
+        case MenuKeyboardKind::F10:
+        case MenuKeyboardKind::Alt:
+            controller.Dismiss();
+            return MenuInputDisposition::Dismissed;
+        case MenuKeyboardKind::Right:
+        {
+            if (invokeFocusedSliderDelta(1))
+            {
+                return controller.running ? MenuInputDisposition::Consumed : MenuInputDisposition::Invoked;
+            }
+            auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
+            if (idx.has_value() && idx.value() < topmost->itemCount && ! topmost->items[idx.value()].children.empty() &&
+                topmost->items[idx.value()].enabled)
+            {
+                OpenSubmenu(controller, *topmost, idx.value(), true);
+                return MenuInputDisposition::Consumed;
+            }
+
+            if (controller.sessionCallbacks.switchRootFromDirection)
+            {
+                if (auto request = controller.sessionCallbacks.switchRootFromDirection(true); request.has_value())
+                {
+                    if (SwitchRootPopup(controller, std::move(request.value()), L"root-switch-keyboard", true))
+                    {
+                        RememberKeyboardRootSwitchMessageTime(controller, event.messageTime);
+                        return MenuInputDisposition::SwitchedRoot;
+                    }
+                }
+            }
+            return MenuInputDisposition::Consumed;
+        }
+        case MenuKeyboardKind::Left:
+        {
+            if (invokeFocusedSliderDelta(-1))
+            {
+                return controller.running ? MenuInputDisposition::Consumed : MenuInputDisposition::Invoked;
+            }
+            if (controller.popups.size() > 1)
+            {
+                controller.CloseTopmostSubmenu();
+            }
+            else if (controller.sessionCallbacks.switchRootFromDirection)
+            {
+                if (auto request = controller.sessionCallbacks.switchRootFromDirection(false); request.has_value())
+                {
+                    if (SwitchRootPopup(controller, std::move(request.value()), L"root-switch-keyboard", true))
+                    {
+                        RememberKeyboardRootSwitchMessageTime(controller, event.messageTime);
+                        return MenuInputDisposition::SwitchedRoot;
+                    }
+                }
+            }
+            return MenuInputDisposition::Consumed;
+        }
+        case MenuKeyboardKind::Mnemonic:
+        {
+            auto match = topmost->FindMnemonicItem(event.mnemonic);
+            if (match.has_value())
+            {
+                const auto& item = topmost->items[match.value()];
+                if (! item.children.empty() && item.enabled)
+                {
+                    topmost->keyboardIndex = match;
+                    InvalidatePopup(*topmost);
+                    OpenSubmenu(controller, *topmost, match.value(), true);
+                }
+                else if (IsInvokableMenuItem(item))
+                {
+                    controller.InvokeItem(item.commandId);
+                    return MenuInputDisposition::Invoked;
+                }
+            }
+            return MenuInputDisposition::Consumed;
+        }
+    }
+
+    return MenuInputDisposition::Ignored;
+}
+
+[[nodiscard]] std::optional<MenuKeyboardKind> MenuKeyboardKindFromVirtualKey(UINT virtualKey) noexcept
+{
+    switch (virtualKey)
+    {
+        case VK_UP: return MenuKeyboardKind::Up;
+        case VK_DOWN: return MenuKeyboardKind::Down;
+        case VK_LEFT: return MenuKeyboardKind::Left;
+        case VK_RIGHT: return MenuKeyboardKind::Right;
+        case VK_HOME: return MenuKeyboardKind::Home;
+        case VK_END: return MenuKeyboardKind::End;
+        case VK_RETURN: return MenuKeyboardKind::Enter;
+        case VK_SPACE: return MenuKeyboardKind::Space;
+        case VK_ESCAPE: return MenuKeyboardKind::Escape;
+        case VK_TAB: return MenuKeyboardKind::Tab;
+        case VK_F10: return MenuKeyboardKind::F10;
+        case VK_MENU: return MenuKeyboardKind::Alt;
+        default:
+            if (virtualKey >= 'A' && virtualKey <= 'Z')
+            {
+                return MenuKeyboardKind::Mnemonic;
+            }
+            return std::nullopt;
+    }
+}
+
+struct MenuKeyboardTargetTrace
+{
+    int popupIndex = -1;
+    uintptr_t popupHwnd = 0u;
+    std::optional<size_t> hoveredIndex;
+    std::optional<size_t> keyboardIndex;
+};
+
+[[nodiscard]] MenuKeyboardTargetTrace CaptureMenuKeyboardTargetTrace(const MenuController& controller) noexcept
+{
+    MenuKeyboardTargetTrace trace;
+    const MenuPopup* popup = controller.GetTopmostPopup();
+    if (! popup)
+    {
+        return trace;
+    }
+
+    trace.popupIndex    = TracePopupIndex(controller, popup);
+    trace.popupHwnd     = TraceHwndValue(popup->hwnd);
+    trace.hoveredIndex  = popup->hoveredIndex;
+    trace.keyboardIndex = popup->keyboardIndex;
+    return trace;
+}
+
+void TraceMenuKeyboardRoute(
+    const MenuController& controller, const MenuKeyboardEvent& event, const MenuKeyboardTargetTrace& before, MenuInputDisposition disposition) noexcept
+{
+    static_cast<void>(event);
+    static_cast<void>(before);
+    static_cast<void>(disposition);
+
+    const MenuKeyboardTargetTrace after = CaptureMenuKeyboardTargetTrace(controller);
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.keyboard",
+                              L"source={} kind={} hwnd={:#x} virtualKey={:#x} mnemonic={:#x} messageTime={} keyboardRootTimeHas={} keyboardRootTime={} beforePopup={} beforePopupHwnd={:#x} "
+                              L"beforeHoverHas={} beforeHover={} beforeKeyboardHas={} beforeKeyboard={} afterPopup={} afterPopupHwnd={:#x} "
+                              L"afterHoverHas={} afterHover={} afterKeyboardHas={} afterKeyboard={} popups={} running={} result={} disposition={}",
+                              TraceInputSourceName(event.source),
+                              TraceKeyboardKindName(event.kind),
+                              TraceHwndValue(event.hwnd),
+                              static_cast<unsigned int>(event.virtualKey),
+                              static_cast<unsigned int>(event.mnemonic),
+                              static_cast<unsigned int>(event.messageTime),
+                              TraceBool(controller.hasLastKeyboardRootSwitchMessageTime),
+                              static_cast<unsigned int>(controller.lastKeyboardRootSwitchMessageTime),
+                              before.popupIndex,
+                              before.popupHwnd,
+                              TraceBool(before.hoveredIndex.has_value()),
+                              TraceOptionalSizeValue(before.hoveredIndex),
+                              TraceBool(before.keyboardIndex.has_value()),
+                              TraceOptionalSizeValue(before.keyboardIndex),
+                              after.popupIndex,
+                              after.popupHwnd,
+                              TraceBool(after.hoveredIndex.has_value()),
+                              TraceOptionalSizeValue(after.hoveredIndex),
+                              TraceBool(after.keyboardIndex.has_value()),
+                              TraceOptionalSizeValue(after.keyboardIndex),
+                              controller.popups.size(),
+                              TraceBool(controller.running),
+                              controller.result.value_or(-1),
+                              TraceDispositionName(disposition));
+}
+
+[[nodiscard]] bool ProcessMenuPopupMessage(MenuController& controller, HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    if (! controller.running)
+    {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-message",
+                                  L"msg={} msgId={:#x} hwnd={:#x} wParam={:#x} lParam={:#x} running=false handled=false",
+                                  TraceMenuMessageName(msg),
+                                  static_cast<unsigned int>(msg),
+                                  TraceHwndValue(hwnd),
+                                  static_cast<uintptr_t>(wp),
+                                  static_cast<uintptr_t>(lp));
+        return false;
+    }
+
+    if (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST)
+    {
+        const std::optional<MenuPointerKind> kind = MenuPointerKindFromMessage(msg);
+        if (! kind.has_value())
+        {
+            DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-message",
+                                      L"msg={} msgId={:#x} hwnd={:#x} wParam={:#x} lParam={:#x} supported=false handled=false",
+                                      TraceMenuMessageName(msg),
+                                      static_cast<unsigned int>(msg),
+                                      TraceHwndValue(hwnd),
+                                      static_cast<uintptr_t>(wp),
+                                      static_cast<uintptr_t>(lp));
+            return false;
+        }
+
+        std::optional<D2D1_POINT_2F> deliveredPopupPointDip;
+        if (msg != WM_MOUSEWHEEL && msg != WM_MOUSEHWHEEL)
+        {
+            if (const MenuPopup* deliveredPopup = controller.FindPopupForHwnd(hwnd))
+            {
+                deliveredPopupPointDip = PopupClientPointToDip(*deliveredPopup, UnpackMousePoint(lp));
+            }
+        }
+
+        const MSG syntheticMessage{.hwnd = hwnd, .message = msg, .wParam = wp, .lParam = lp, .time = CurrentMessageTime()};
+        const MenuPointerEvent event{
+            .source                = MenuInputSource::PopupWndProc,
+            .kind                  = kind.value(),
+            .hwnd                  = hwnd,
+            .screenPoint           = ResolveMouseScreenPoint(syntheticMessage),
+            .messageTime           = syntheticMessage.time,
+            .deliveredPopupPointDip = deliveredPopupPointDip,
+            .wParam                = wp,
+            .lParam                = lp,
+            .mayInvoke             = true,
+            .mayDismiss            = true,
+            .maySwitchRoot         = msg == WM_MOUSEMOVE,
+            .mayTakeKeyboardFocus  = true,
+        };
+        const MenuInputDisposition disposition = RouteMenuPointerEvent(controller, event);
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-message",
+                                  L"msg={} msgId={:#x} hwnd={:#x} wParam={:#x} lParam={:#x} handled={} disposition={}",
+                                  TraceMenuMessageName(msg),
+                                  static_cast<unsigned int>(msg),
+                                  TraceHwndValue(hwnd),
+                                  static_cast<uintptr_t>(wp),
+                                  static_cast<uintptr_t>(lp),
+                                  TraceBool(disposition != MenuInputDisposition::Ignored),
+                                  TraceDispositionName(disposition));
+        return disposition != MenuInputDisposition::Ignored;
+    }
+
+    if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+    {
+        const UINT virtualKey = static_cast<UINT>(wp);
+        const std::optional<MenuKeyboardKind> kind = MenuKeyboardKindFromVirtualKey(virtualKey);
+        if (! kind.has_value())
+        {
+            DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-message",
+                                      L"msg={} msgId={:#x} hwnd={:#x} virtualKey={:#x} supported=false handled=false",
+                                      TraceMenuMessageName(msg),
+                                      static_cast<unsigned int>(msg),
+                                      TraceHwndValue(hwnd),
+                                      static_cast<unsigned int>(virtualKey));
+            return false;
+        }
+
+        const MenuKeyboardEvent event{
+            .source     = MenuInputSource::PopupWndProc,
+            .kind       = kind.value(),
+            .hwnd       = hwnd,
+            .virtualKey = virtualKey,
+            .mnemonic   = static_cast<wchar_t>(virtualKey),
+            .messageTime = CurrentMessageTime(),
+            .lParam     = lp,
+        };
+        const bool traceEnabled = IsMenuDiagnosticsTraceEnabled();
+        const MenuKeyboardTargetTrace traceBefore = traceEnabled ? CaptureMenuKeyboardTargetTrace(controller) : MenuKeyboardTargetTrace{};
+        const MenuInputDisposition disposition    = RouteMenuKeyboardEvent(controller, event);
+        if (traceEnabled)
+        {
+            TraceMenuKeyboardRoute(controller, event, traceBefore, disposition);
+        }
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-message",
+                                  L"msg={} msgId={:#x} hwnd={:#x} virtualKey={:#x} handled={} disposition={}",
+                                  TraceMenuMessageName(msg),
+                                  static_cast<unsigned int>(msg),
+                                  TraceHwndValue(hwnd),
+                                  static_cast<unsigned int>(virtualKey),
+                                  TraceBool(disposition != MenuInputDisposition::Ignored),
+                                  TraceDispositionName(disposition));
+        return disposition != MenuInputDisposition::Ignored;
+    }
+
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.popup-message",
+                              L"msg={} msgId={:#x} hwnd={:#x} wParam={:#x} lParam={:#x} handled=false",
+                              TraceMenuMessageName(msg),
+                              static_cast<unsigned int>(msg),
+                              TraceHwndValue(hwnd),
+                              static_cast<uintptr_t>(wp),
+                              static_cast<uintptr_t>(lp));
+    return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -2711,42 +4386,128 @@ void RunMenuModalLoop(MenuController& controller)
                 reinterpret_cast<uintptr_t>(GetCapture()),
                 controller.popups.size(),
                 controller.rootItems.size());
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-start",
+                              L"owner={:#x} root={:#x} previousCapture={:#x} previousFocus={:#x} currentCapture={:#x} popupCount={} items={}",
+                              TraceHwndValue(controller.ownerHwnd),
+                              TraceHwndValue(root->hwnd),
+                              TraceHwndValue(previousCapture),
+                              TraceHwndValue(previousFocus),
+                              TraceHwndValue(GetCapture()),
+                              controller.popups.size(),
+                              controller.rootItems.size());
 
-    bool ignoreInitialLeftButtonUp  = controller.sessionCallbacks.ignoreInitialLeftButtonUp || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
-    bool ignoreInitialRightButtonUp = controller.sessionCallbacks.ignoreInitialRightButtonUp || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
-    bool leftButtonDownInPopup      = false;
-    bool rightButtonDownInPopup     = false;
+    controller.ignoreInitialLeftButtonUp  = controller.sessionCallbacks.ignoreInitialLeftButtonUp || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+    controller.ignoreInitialRightButtonUp = controller.sessionCallbacks.ignoreInitialRightButtonUp || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+    controller.leftButtonDownInPopup      = false;
+    controller.rightButtonDownInPopup     = false;
     DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-initial-up-filter left={} right={} asyncLeft={} asyncRight={}",
-                ignoreInitialLeftButtonUp ? L"true" : L"false",
-                ignoreInitialRightButtonUp ? L"true" : L"false",
+                controller.ignoreInitialLeftButtonUp ? L"true" : L"false",
+                controller.ignoreInitialRightButtonUp ? L"true" : L"false",
                 (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 ? L"down" : L"up",
                 (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0 ? L"down" : L"up");
-    POINT lastMouseScreenPoint{};
-    bool hasLastMouseScreenPoint = GetCursorPos(&lastMouseScreenPoint) != FALSE;
-    if (hasLastMouseScreenPoint)
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-initial-up-filter",
+                              L"ignoreLeft={} ignoreRight={} asyncLeftDown={} asyncRightDown={}",
+                              TraceBool(controller.ignoreInitialLeftButtonUp),
+                              TraceBool(controller.ignoreInitialRightButtonUp),
+                              TraceBool((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0),
+                              TraceBool((GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0));
+    MSG msg{};
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
+    struct MenuLoopRepeatedMessageTrace
     {
-        for (auto it = controller.popups.rbegin(); it != controller.popups.rend(); ++it)
+        UINT message              = 0;
+        HWND hwnd                 = nullptr;
+        WPARAM wParam             = 0;
+        LPARAM lParam             = 0;
+        bool popupMessage         = false;
+        bool ownerOrPopupMessage  = false;
+        uint64_t count            = 0u;
+    };
+    MenuLoopRepeatedMessageTrace repeatedMessageTrace{};
+    const auto flushRepeatedMessageTrace = [&]() noexcept
+    {
+        if (repeatedMessageTrace.count == 0u)
         {
-            const RECT wr = (*it)->GetInteractiveScreenRect();
-            if (PtInRect(&wr, lastMouseScreenPoint))
-            {
-                HandleMenuMouseMove(controller, *(*it), lastMouseScreenPoint);
-                break;
-            }
+            return;
         }
-    }
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-message-repeat",
+                                  L"msg={} msgId={:#x} hwnd={:#x} wParam={:#x} lParam={:#x} popup={} ownerOrPopup={} count={}",
+                                  TraceMenuMessageName(repeatedMessageTrace.message),
+                                  static_cast<unsigned int>(repeatedMessageTrace.message),
+                                  TraceHwndValue(repeatedMessageTrace.hwnd),
+                                  static_cast<uintptr_t>(repeatedMessageTrace.wParam),
+                                  static_cast<uintptr_t>(repeatedMessageTrace.lParam),
+                                  TraceBool(repeatedMessageTrace.popupMessage),
+                                  TraceBool(repeatedMessageTrace.ownerOrPopupMessage),
+                                  repeatedMessageTrace.count);
+        repeatedMessageTrace = {};
+    };
+    const auto traceLoopMessage = [&](const MSG& loopMessage, bool popupMessage, bool ownerOrPopupMessage) noexcept
+    {
+        if (ShouldTraceMenuLoopMessageImmediately(loopMessage.message, popupMessage))
+        {
+            flushRepeatedMessageTrace();
+            DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-message",
+                                      L"msg={} msgId={:#x} hwnd={:#x} wParam={:#x} lParam={:#x} popup={} ownerOrPopup={}",
+                                      TraceMenuMessageName(loopMessage.message),
+                                      static_cast<unsigned int>(loopMessage.message),
+                                      TraceHwndValue(loopMessage.hwnd),
+                                      static_cast<uintptr_t>(loopMessage.wParam),
+                                      static_cast<uintptr_t>(loopMessage.lParam),
+                                      TraceBool(popupMessage),
+                                      TraceBool(ownerOrPopupMessage));
+            return;
+        }
 
-    MSG msg;
+        if (repeatedMessageTrace.count == 0u || repeatedMessageTrace.message != loopMessage.message || repeatedMessageTrace.hwnd != loopMessage.hwnd ||
+            repeatedMessageTrace.wParam != loopMessage.wParam || repeatedMessageTrace.lParam != loopMessage.lParam ||
+            repeatedMessageTrace.popupMessage != popupMessage || repeatedMessageTrace.ownerOrPopupMessage != ownerOrPopupMessage)
+        {
+            flushRepeatedMessageTrace();
+            repeatedMessageTrace.message             = loopMessage.message;
+            repeatedMessageTrace.hwnd                = loopMessage.hwnd;
+            repeatedMessageTrace.wParam              = loopMessage.wParam;
+            repeatedMessageTrace.lParam              = loopMessage.lParam;
+            repeatedMessageTrace.popupMessage        = popupMessage;
+            repeatedMessageTrace.ownerOrPopupMessage = ownerOrPopupMessage;
+        }
+        ++repeatedMessageTrace.count;
+        if (repeatedMessageTrace.count >= kMenuLoopTraceRepeatFlushCount)
+        {
+            flushRepeatedMessageTrace();
+        }
+    };
+#else
+    const auto flushRepeatedMessageTrace = []() noexcept {};
+    const auto traceLoopMessage = [](const MSG& /*loopMessage*/, bool /*popupMessage*/, bool /*ownerOrPopupMessage*/) noexcept {};
+#endif
     while (controller.running)
     {
-        if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) == FALSE)
+        if (! PeekMenuPriorityMessage(msg) && PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) == FALSE)
         {
+            MenuPopup* currentRoot = controller.GetRootPopup();
+            if (currentRoot && currentRoot->hwnd && IsWindow(currentRoot->hwnd) != FALSE && GetCapture() != currentRoot->hwnd)
+            {
+                const HWND previousPopupCapture = GetCapture();
+                SetCapture(currentRoot->hwnd);
+                DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-recapture root={:#x} previousCapture={:#x} currentCapture={:#x}",
+                            reinterpret_cast<uintptr_t>(currentRoot->hwnd),
+                            reinterpret_cast<uintptr_t>(previousPopupCapture),
+                            reinterpret_cast<uintptr_t>(GetCapture()));
+                DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-recapture",
+                                          L"root={:#x} previousCapture={:#x} currentCapture={:#x}",
+                                          TraceHwndValue(currentRoot->hwnd),
+                                          TraceHwndValue(previousPopupCapture),
+                                          TraceHwndValue(GetCapture()));
+            }
+
             static_cast<void>(MsgWaitForMultipleObjectsEx(0, nullptr, INFINITE, QS_ALLINPUT, MWMO_INPUTAVAILABLE));
             continue;
         }
 
         if (msg.message == WM_QUIT)
         {
+            flushRepeatedMessageTrace();
             PostQuitMessage(static_cast<int>(msg.wParam));
             break;
         }
@@ -2754,42 +4515,32 @@ void RunMenuModalLoop(MenuController& controller)
         const HWND originalMessageHwnd = msg.hwnd;
         if (originalMessageHwnd && IsWindow(originalMessageHwnd) == FALSE)
         {
+            flushRepeatedMessageTrace();
+            DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-message-stale",
+                                      L"msg={} msgId={:#x} hwnd={:#x} wParam={:#x} lParam={:#x}",
+                                      TraceMenuMessageName(msg.message),
+                                      static_cast<unsigned int>(msg.message),
+                                      TraceHwndValue(originalMessageHwnd),
+                                      static_cast<uintptr_t>(msg.wParam),
+                                      static_cast<uintptr_t>(msg.lParam));
             continue;
         }
 
         if (msg.message == WndMsg::kDxUiContextMenuRootHoverChanged)
         {
-            POINT liveCursor{};
-            if (GetCursorPos(&liveCursor) != FALSE)
-            {
-                bool cursorInsidePopup = false;
-                for (auto it = controller.popups.rbegin(); it != controller.popups.rend(); ++it)
-                {
-                    const RECT wr = (*it)->GetInteractiveScreenRect();
-                    if (PtInRect(&wr, liveCursor))
-                    {
-                        cursorInsidePopup = true;
-                        break;
-                    }
-                }
-                if (cursorInsidePopup)
-                {
-                    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-menu-bar-hover-skipped-popup point=({}, {})", liveCursor.x, liveCursor.y);
-                    continue;
-                }
-            }
-
+            flushRepeatedMessageTrace();
             if (controller.sessionCallbacks.switchRootFromMenuBarHover)
             {
                 if (auto request = controller.sessionCallbacks.switchRootFromMenuBarHover(); request.has_value())
                 {
                     DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-menu-bar-hover-accepted newItems={} newPoint=({}, {})",
-                                request->items.size(),
-                                request->screenPoint.x,
-                                request->screenPoint.y);
+                                    request->items.size(),
+                                    request->screenPoint.x,
+                                    request->screenPoint.y);
 #if defined(ENABLE_TESTS)
                     ++controller.rootPointerSwitchCount;
 #endif
+                    ClearKeyboardRootSwitchMessageTime(controller);
                     static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-menu-bar-hover", false));
                 }
             }
@@ -2799,14 +4550,16 @@ void RunMenuModalLoop(MenuController& controller)
         if (msg.message == WM_CAPTURECHANGED || msg.message == WM_CANCELMODE)
         {
             DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup message msg={} hwnd={:#x} wParam={:#x} lParam={:#x} capture={:#x}",
-                        TraceMenuMessageName(msg.message),
-                        reinterpret_cast<uintptr_t>(msg.hwnd),
-                        static_cast<uintptr_t>(msg.wParam),
-                        static_cast<uintptr_t>(msg.lParam),
-                        reinterpret_cast<uintptr_t>(GetCapture()));
+                            TraceMenuMessageName(msg.message),
+                            reinterpret_cast<uintptr_t>(msg.hwnd),
+                            static_cast<uintptr_t>(msg.wParam),
+                            static_cast<uintptr_t>(msg.lParam),
+                            reinterpret_cast<uintptr_t>(GetCapture()));
         }
 
-        const bool ownerOrPopupMessage = msg.hwnd == controller.ownerHwnd || controller.FindPopupForHwnd(msg.hwnd) != nullptr;
+        const bool popupMessage        = controller.FindPopupForHwnd(msg.hwnd) != nullptr;
+        const bool ownerOrPopupMessage = msg.hwnd == controller.ownerHwnd || popupMessage;
+        traceLoopMessage(msg, popupMessage, ownerOrPopupMessage);
         if (ownerOrPopupMessage)
         {
             if ((msg.message == WM_ACTIVATEAPP && msg.wParam == FALSE) ||
@@ -2818,577 +4571,29 @@ void RunMenuModalLoop(MenuController& controller)
                             reinterpret_cast<uintptr_t>(msg.hwnd),
                             reinterpret_cast<uintptr_t>(controller.ownerHwnd),
                             reinterpret_cast<uintptr_t>(GetCapture()));
+                DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-dismiss-activation",
+                                          L"msg={} msgId={:#x} hwnd={:#x} owner={:#x} capture={:#x}",
+                                          TraceMenuMessageName(msg.message),
+                                          static_cast<unsigned int>(msg.message),
+                                          TraceHwndValue(msg.hwnd),
+                                          TraceHwndValue(controller.ownerHwnd),
+                                          TraceHwndValue(GetCapture()));
                 controller.Dismiss();
                 break;
             }
         }
 
-        // Route mouse messages to the correct popup
-        if (msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST)
-        {
-            const POINT screenPt = ResolveMouseScreenPoint(msg);
-
-            // Find which popup (if any) the mouse is over
-            MenuPopup* targetPopup = nullptr;
-            for (auto it = controller.popups.rbegin(); it != controller.popups.rend(); ++it)
-            {
-                const RECT wr = (*it)->GetInteractiveScreenRect();
-                if (PtInRect(&wr, screenPt))
-                {
-                    targetPopup = it->get();
-                    break;
-                }
-            }
-            if (! targetPopup)
-            {
-                for (auto& popup : controller.popups)
-                {
-                    if (popup->draggingScrollbarThumb)
-                    {
-                        targetPopup = popup.get();
-                        break;
-                    }
-                }
-            }
-
-            if (msg.message == WM_MOUSEMOVE)
-            {
-                const bool mouseMoved   = ! hasLastMouseScreenPoint || screenPt.x != lastMouseScreenPoint.x || screenPt.y != lastMouseScreenPoint.y;
-                lastMouseScreenPoint    = screenPt;
-                hasLastMouseScreenPoint = true;
-                POINT liveCursor{};
-                const bool hasLiveCursor = GetCursorPos(&liveCursor) != FALSE;
-                DXUI_MENU_TRACE(
-                    L"DxUi::MenuTrace Popup mouse-move msgHwnd={:#x} capture={:#x} msgScreen=({}, {}) liveCursor=({}, {}) hasLiveCursor={} moved={} targetPopup={} popupCount={}",
-                    reinterpret_cast<uintptr_t>(msg.hwnd),
-                    reinterpret_cast<uintptr_t>(GetCapture()),
-                    screenPt.x,
-                    screenPt.y,
-                    liveCursor.x,
-                    liveCursor.y,
-                    hasLiveCursor ? L"true" : L"false",
-                    mouseMoved ? L"true" : L"false",
-                    TracePopupIndex(controller, targetPopup),
-                    controller.popups.size());
-                const bool initializeStationaryPopupHover =
-                    ! mouseMoved && targetPopup && ! targetPopup->hoveredIndex.has_value() && ! targetPopup->keyboardIndex.has_value();
-                if (! mouseMoved && ! initializeStationaryPopupHover)
-                {
-                    continue;
-                }
-
-                if (! targetPopup && controller.sessionCallbacks.switchRootFromPointer)
-                {
-                    POINT rootSwitchScreenPt = screenPt;
-                    if (hasLiveCursor)
-                    {
-                        rootSwitchScreenPt = liveCursor;
-                    }
-                    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-probe point=({}, {}) fromLiveCursor={} targetPopup={} activeItems={}",
-                                rootSwitchScreenPt.x,
-                                rootSwitchScreenPt.y,
-                                hasLiveCursor ? L"true" : L"false",
-                                TracePopupIndex(controller, targetPopup),
-                                controller.rootItems.size());
-                    if (auto request = controller.sessionCallbacks.switchRootFromPointer(rootSwitchScreenPt); request.has_value())
-                    {
-                        DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-accepted point=({}, {}) newItems={} newPoint=({}, {})",
-                                    rootSwitchScreenPt.x,
-                                    rootSwitchScreenPt.y,
-                                    request->items.size(),
-                                    request->screenPoint.x,
-                                    request->screenPoint.y);
-#if defined(ENABLE_TESTS)
-                        ++controller.rootPointerSwitchCount;
-#endif
-                        static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-pointer", false));
-                        continue;
-                    }
-                    DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-rejected point=({}, {})", rootSwitchScreenPt.x, rootSwitchScreenPt.y);
-                }
-
-                if (targetPopup)
-                {
-                    HandleMenuMouseMove(controller, *targetPopup, screenPt);
-                    size_t targetPopupIndex = controller.popups.size();
-                    for (size_t i = 0; i < controller.popups.size(); ++i)
-                    {
-                        if (controller.popups[i].get() == targetPopup)
-                        {
-                            targetPopupIndex = i;
-                            break;
-                        }
-                    }
-
-                    for (size_t i = 0; i < targetPopupIndex && i < controller.popups.size(); ++i)
-                    {
-                        CancelSubmenuHoverTimer(*controller.popups[i]);
-                    }
-
-                    if (targetPopupIndex + 1u < controller.popups.size())
-                    {
-                        if (PopupHoverOwnsOpenChild(controller, targetPopupIndex, *targetPopup))
-                        {
-                            CancelSubmenuHoverTimer(*targetPopup);
-                        }
-                        else if (! HasPendingSubmenuOpenTimer(*targetPopup))
-                        {
-                            ScheduleSubmenuCloseTimer(*targetPopup);
-                        }
-                    }
-
-                    for (size_t i = 0; i < controller.popups.size(); ++i)
-                    {
-                        auto& popup = controller.popups[i];
-                        if (popup.get() == targetPopup)
-                        {
-                            continue;
-                        }
-
-                        bool invalidate = false;
-                        if (i < targetPopupIndex)
-                        {
-                            const std::optional<size_t> cascadeHighlight = controller.popups[i + 1u]->openedFromItemIndex;
-                            if (popup->hoveredIndex != cascadeHighlight)
-                            {
-                                popup->hoveredIndex = cascadeHighlight;
-                                invalidate          = true;
-                            }
-                            if (popup->keyboardIndex.has_value())
-                            {
-                                popup->keyboardIndex.reset();
-                                invalidate = true;
-                            }
-                        }
-                        else
-                        {
-                            if (popup->hoveredIndex.has_value())
-                            {
-                                popup->hoveredIndex.reset();
-                                invalidate = true;
-                            }
-                            if (popup->keyboardIndex.has_value())
-                            {
-                                popup->keyboardIndex.reset();
-                                invalidate = true;
-                            }
-                        }
-
-                        if (invalidate && popup->hwnd)
-                        {
-                            InvalidateRect(popup->hwnd, nullptr, FALSE);
-                        }
-                    }
-                }
-                else
-                {
-                    // Mouse outside all menus — clear all hovers
-                    for (auto& popup : controller.popups)
-                    {
-                        if (popup->hoveredIndex.has_value())
-                        {
-                            popup->hoveredIndex.reset();
-                            InvalidateRect(popup->hwnd, nullptr, FALSE);
-                        }
-                    }
-
-                    if (controller.popups.size() > 1)
-                    {
-                        for (size_t i = 1; i < controller.popups.size(); ++i)
-                        {
-                            CancelSubmenuHoverTimer(*controller.popups[i]);
-                        }
-                        // Outside every menu surface, a pending root open is stale; replace it with the standard delayed close.
-                        ScheduleSubmenuCloseTimer(*controller.popups.front());
-                    }
-                    else if (! controller.popups.empty())
-                    {
-                        CancelSubmenuHoverTimer(*controller.popups.front());
-                    }
-                }
-                continue; // Consumed
-            }
-
-            if (msg.message == WM_LBUTTONDOWN || msg.message == WM_RBUTTONDOWN)
-            {
-                if (! targetPopup)
-                {
-                    // Click outside all menus — dismiss
-                    controller.Dismiss();
-                    break;
-                }
-                if (msg.message == WM_LBUTTONDOWN)
-                {
-                    leftButtonDownInPopup = true;
-                }
-                else
-                {
-                    rightButtonDownInPopup = true;
-                }
-                HandleMenuMouseMove(controller, *targetPopup, screenPt);
-                if (msg.message == WM_LBUTTONDOWN)
-                {
-                    RECT wr{};
-                    GetWindowRect(targetPopup->hwnd, &wr);
-                    const D2D1_POINT_2F pointDip = D2D1::Point2F(targetPopup->PixelToDip(static_cast<float>(screenPt.x - wr.left)),
-                                                                 targetPopup->PixelToDip(static_cast<float>(screenPt.y - wr.top)));
-                    if (targetPopup->NeedsScrollbar() && PointInRect(targetPopup->GetScrollbarTrackRect(), pointDip))
-                    {
-                        const D2D1_RECT_F thumb = targetPopup->GetScrollbarThumbRect();
-                        if (PointInRect(thumb, pointDip))
-                        {
-                            targetPopup->draggingScrollbarThumb = true;
-                            targetPopup->scrollbarDragOffsetDip = pointDip.y - thumb.top;
-                            targetPopup->scrollbarHotPart       = MenuPopup::ScrollbarHotPart::Thumb;
-                        }
-                        else
-                        {
-                            const float pageStep = targetPopup->menuHeightDip * 0.8f;
-                            targetPopup->scrollOffsetDip += pointDip.y < thumb.top ? -pageStep : pageStep;
-                            targetPopup->ClampScrollOffset();
-                            targetPopup->scrollbarHotPart = MenuPopup::ScrollbarHotPart::Track;
-                        }
-                        InvalidateRect(targetPopup->hwnd, nullptr, FALSE);
-                        continue;
-                    }
-                }
-                continue; // Don't dispatch — we handle on button up
-            }
-
-            if (msg.message == WM_LBUTTONUP || msg.message == WM_RBUTTONUP)
-            {
-                const bool buttonDownInPopup = msg.message == WM_LBUTTONUP ? leftButtonDownInPopup : rightButtonDownInPopup;
-                if (msg.message == WM_LBUTTONUP && ignoreInitialLeftButtonUp && ! buttonDownInPopup)
-                {
-                    ignoreInitialLeftButtonUp = false;
-                    continue;
-                }
-                if (msg.message == WM_RBUTTONUP && ignoreInitialRightButtonUp && ! buttonDownInPopup)
-                {
-                    ignoreInitialRightButtonUp = false;
-                    continue;
-                }
-                if (msg.message == WM_LBUTTONUP)
-                {
-                    leftButtonDownInPopup = false;
-                }
-                else
-                {
-                    rightButtonDownInPopup = false;
-                }
-
-                if (targetPopup && targetPopup->draggingScrollbarThumb)
-                {
-                    targetPopup->draggingScrollbarThumb = false;
-                    continue;
-                }
-
-                std::optional<size_t> targetIndex = targetPopup ? targetPopup->hoveredIndex : std::nullopt;
-                if (targetPopup && ! targetIndex.has_value())
-                {
-                    RECT wr{};
-                    if (GetWindowRect(targetPopup->hwnd, &wr) != FALSE)
-                    {
-                        const D2D1_POINT_2F pointDip =
-                            D2D1::Point2F(targetPopup->PixelToDip(static_cast<float>(screenPt.x - wr.left)),
-                                          targetPopup->PixelToDip(static_cast<float>(screenPt.y - wr.top)));
-                        targetIndex = HitTestMenuItem(*targetPopup, pointDip);
-                        if (targetIndex != targetPopup->hoveredIndex)
-                        {
-                            targetPopup->hoveredIndex = targetIndex;
-                            targetPopup->keyboardIndex.reset();
-                            InvalidateRect(targetPopup->hwnd, nullptr, FALSE);
-                        }
-                    }
-                }
-
-                if (targetPopup && targetIndex.has_value())
-                {
-                    const size_t idx = targetIndex.value();
-                    const auto& item = targetPopup->items[idx];
-                    if (item.kind == MenuItemKind::Slider && item.enabled)
-                    {
-                        RECT wr{};
-                        if (GetWindowRect(targetPopup->hwnd, &wr) != FALSE)
-                        {
-                            const D2D1_POINT_2F pointDip =
-                                D2D1::Point2F(targetPopup->PixelToDip(static_cast<float>(screenPt.x - wr.left)),
-                                              targetPopup->PixelToDip(static_cast<float>(screenPt.y - wr.top)));
-                            const D2D1_RECT_F itemRect = GetVisibleItemRect(*targetPopup, idx);
-                            const uint32_t stopIndex   = HitTestSliderStop(item, itemRect, pointDip);
-                            const int commandId        = GetSliderCommandId(item, stopIndex);
-                            if (commandId != 0)
-                            {
-                                controller.InvokeItem(commandId);
-                            }
-                        }
-                    }
-                    else if (! item.children.empty() && item.enabled)
-                    {
-                        // Click on submenu item → open submenu
-                        OpenSubmenu(controller, *targetPopup, idx, false);
-                    }
-                    else if (IsInvokableMenuItem(item))
-                    {
-                        // Invoke the item
-                        controller.InvokeItem(item.commandId);
-                    }
-                }
-                else if (! targetPopup)
-                {
-                    // Click released outside — dismiss
-                    controller.Dismiss();
-                }
-                continue;
-            }
-
-            if ((msg.message == WM_MOUSEWHEEL || msg.message == WM_MOUSEHWHEEL) && targetPopup && targetPopup->NeedsScrollbar())
-            {
-                const short wheelDelta = GET_WHEEL_DELTA_WPARAM(msg.wParam);
-                const float steps      = static_cast<float>(wheelDelta) / static_cast<float>(WHEEL_DELTA);
-                targetPopup->scrollOffsetDip -= steps * ResolveMenuItemHeightDip(targetPopup->host.GetTheme());
-                targetPopup->ClampScrollOffset();
-                InvalidateRect(targetPopup->hwnd, nullptr, FALSE);
-                continue;
-            }
-
-            continue;
-        }
-
-        // Keyboard messages — route to topmost popup
-        if (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN)
-        {
-            MenuPopup* topmost = controller.GetTopmostPopup();
-            if (! topmost)
-            {
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-                continue;
-            }
-
-            const UINT vk = static_cast<UINT>(msg.wParam);
-            const auto focusedIndex = [&]() noexcept -> std::optional<size_t>
-            {
-                auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
-                if (! idx.has_value() || idx.value() >= topmost->itemCount)
-                {
-                    return std::nullopt;
-                }
-                return idx;
-            };
-            const auto invokeFocusedSliderStop = [&](uint32_t stopIndex) -> bool
-            {
-                const auto idx = focusedIndex();
-                if (! idx.has_value())
-                {
-                    return false;
-                }
-                const auto& item = topmost->items[idx.value()];
-                if (item.kind != MenuItemKind::Slider || ! item.enabled)
-                {
-                    return false;
-                }
-                const int commandId = GetSliderCommandId(item, stopIndex);
-                if (commandId == 0)
-                {
-                    return true;
-                }
-                controller.InvokeItem(commandId);
-                return true;
-            };
-            const auto invokeFocusedSliderDelta = [&](int delta) -> bool
-            {
-                const auto idx = focusedIndex();
-                if (! idx.has_value())
-                {
-                    return false;
-                }
-                const auto& item = topmost->items[idx.value()];
-                if (item.kind != MenuItemKind::Slider || ! item.enabled || item.sliderStops.empty())
-                {
-                    return false;
-                }
-                const int current = static_cast<int>(ClampSliderValue(item));
-                const int maxStop = static_cast<int>(item.sliderStops.size() - 1u);
-                return invokeFocusedSliderStop(static_cast<uint32_t>(std::clamp(current + delta, 0, maxStop)));
-            };
-            switch (vk)
-            {
-                case VK_UP:
-                {
-                    auto cur  = topmost->keyboardIndex.value_or(topmost->hoveredIndex.value_or(SIZE_MAX));
-                    auto next = (cur == SIZE_MAX) ? topmost->FindLastNavigableItem() : topmost->FindNextNavigableItem(cur, false);
-                    if (next.has_value())
-                    {
-                        topmost->keyboardIndex = next;
-                        topmost->hoveredIndex.reset();
-                        topmost->EnsureItemVisible(next.value());
-                        RepaintPopupNow(*topmost);
-                    }
-                    continue;
-                }
-                case VK_DOWN:
-                {
-                    auto cur  = topmost->keyboardIndex.value_or(topmost->hoveredIndex.value_or(SIZE_MAX));
-                    auto next = (cur == SIZE_MAX) ? topmost->FindFirstNavigableItem() : topmost->FindNextNavigableItem(cur, true);
-                    if (next.has_value())
-                    {
-                        topmost->keyboardIndex = next;
-                        topmost->hoveredIndex.reset();
-                        topmost->EnsureItemVisible(next.value());
-                        RepaintPopupNow(*topmost);
-                    }
-                    continue;
-                }
-                case VK_HOME:
-                {
-                    if (invokeFocusedSliderStop(0u))
-                    {
-                        continue;
-                    }
-                    auto first = topmost->FindFirstNavigableItem();
-                    if (first.has_value())
-                    {
-                        topmost->keyboardIndex = first;
-                        topmost->hoveredIndex.reset();
-                        topmost->EnsureItemVisible(first.value());
-                        RepaintPopupNow(*topmost);
-                    }
-                    continue;
-                }
-                case VK_END:
-                {
-                    const auto idx = focusedIndex();
-                    if (idx.has_value())
-                    {
-                        const auto& item = topmost->items[idx.value()];
-                        if (item.kind == MenuItemKind::Slider && ! item.sliderStops.empty() && item.enabled)
-                        {
-                            static_cast<void>(invokeFocusedSliderStop(static_cast<uint32_t>(item.sliderStops.size() - 1u)));
-                            continue;
-                        }
-                    }
-                    auto last = topmost->FindLastNavigableItem();
-                    if (last.has_value())
-                    {
-                        topmost->keyboardIndex = last;
-                        topmost->hoveredIndex.reset();
-                        topmost->EnsureItemVisible(last.value());
-                        RepaintPopupNow(*topmost);
-                    }
-                    continue;
-                }
-                case VK_RETURN:
-                case VK_SPACE:
-                {
-                    auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
-                    if (idx.has_value() && idx.value() < topmost->itemCount)
-                    {
-                        const auto& item = topmost->items[idx.value()];
-                        if (item.kind == MenuItemKind::Slider && item.enabled)
-                        {
-                            static_cast<void>(invokeFocusedSliderStop(ClampSliderValue(item)));
-                        }
-                        else if (! item.children.empty() && item.enabled)
-                        {
-                            OpenSubmenu(controller, *topmost, idx.value(), true);
-                        }
-                        else if (IsInvokableMenuItem(item))
-                        {
-                            controller.InvokeItem(item.commandId);
-                        }
-                    }
-                    continue;
-                }
-                case VK_ESCAPE:
-                {
-                    if (controller.popups.size() > 1)
-                        controller.CloseTopmostSubmenu();
-                    else
-                        controller.Dismiss();
-                    continue;
-                }
-                case VK_TAB:
-                case VK_F10:
-                case VK_MENU:
-                {
-                    controller.Dismiss();
-                    continue;
-                }
-                case VK_RIGHT:
-                {
-                    if (invokeFocusedSliderDelta(1))
-                    {
-                        continue;
-                    }
-                    auto idx = topmost->keyboardIndex.has_value() ? topmost->keyboardIndex : topmost->hoveredIndex;
-                    if (idx.has_value() && idx.value() < topmost->itemCount && ! topmost->items[idx.value()].children.empty() &&
-                        topmost->items[idx.value()].enabled)
-                    {
-                        OpenSubmenu(controller, *topmost, idx.value(), true);
-                        continue;
-                    }
-
-                    if (controller.sessionCallbacks.switchRootFromDirection)
-                    {
-                        if (auto request = controller.sessionCallbacks.switchRootFromDirection(true); request.has_value())
-                        {
-                            static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-keyboard", true));
-                        }
-                    }
-                    continue;
-                }
-                case VK_LEFT:
-                {
-                    if (invokeFocusedSliderDelta(-1))
-                    {
-                        continue;
-                    }
-                    if (controller.popups.size() > 1)
-                    {
-                        controller.CloseTopmostSubmenu();
-                    }
-                    else if (controller.sessionCallbacks.switchRootFromDirection)
-                    {
-                        if (auto request = controller.sessionCallbacks.switchRootFromDirection(false); request.has_value())
-                        {
-                            static_cast<void>(SwitchRootPopup(controller, std::move(request.value()), L"root-switch-keyboard", true));
-                        }
-                    }
-                    continue;
-                }
-                default: break;
-            }
-
-            // Mnemonic: try character key
-            if (vk >= 'A' && vk <= 'Z')
-            {
-                auto match = topmost->FindMnemonicItem(static_cast<wchar_t>(vk));
-                if (match.has_value())
-                {
-                    const auto& item = topmost->items[match.value()];
-                    if (! item.children.empty() && item.enabled)
-                    {
-                        topmost->keyboardIndex = match;
-                        RepaintPopupNow(*topmost);
-                        OpenSubmenu(controller, *topmost, match.value(), true);
-                    }
-                    else if (IsInvokableMenuItem(item))
-                    {
-                        controller.InvokeItem(item.commandId);
-                    }
-                }
-                continue;
-            }
-
-            // Fall through for unhandled keys
-        }
-
-        // Timer messages for submenu hover delay
+        // Timer messages for submenu hover delay stay in the menu loop because
+        // they mutate the popup cascade, not the individual popup window.
         if (msg.message == WM_TIMER && msg.wParam == kSubmenuHoverTimerId)
         {
             MenuPopup* popup = controller.FindPopupForHwnd(msg.hwnd);
-            if (popup && popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingOpen && popup->hoverTimerItemIndex < popup->itemCount)
+            if (! popup || popup->hoverTimerId == 0 || popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::None)
+            {
+                continue;
+            }
+
+            if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingOpen && popup->hoverTimerItemIndex < popup->itemCount)
             {
                 KillTimer(popup->hwnd, kSubmenuHoverTimerId);
                 popup->hoverTimerId   = 0;
@@ -3396,7 +4601,7 @@ void RunMenuModalLoop(MenuController& controller)
                 OpenSubmenu(controller, *popup, popup->hoverTimerItemIndex, false);
                 popup->hoverTimerItemIndex = SIZE_MAX;
             }
-            else if (popup)
+            else if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingClose)
             {
                 KillTimer(popup->hwnd, kSubmenuHoverTimerId);
                 popup->hoverTimerId        = 0;
@@ -3407,10 +4612,104 @@ void RunMenuModalLoop(MenuController& controller)
             continue;
         }
 
+        if (popupMessage)
+        {
+            DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-dispatch-popup",
+                                      L"msg={} msgId={:#x} hwnd={:#x}",
+                                      TraceMenuMessageName(msg.message),
+                                      static_cast<unsigned int>(msg.message),
+                                      TraceHwndValue(msg.hwnd));
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+            continue;
+        }
+
+        // Route non-popup mouse messages through the shared menu input router.
+        if (IsMenuClientMouseMessage(msg.message))
+        {
+            const std::optional<MenuPointerKind> pointerKind = MenuPointerKindFromMessage(msg.message);
+            if (! pointerKind.has_value())
+            {
+                continue;
+            }
+            const MenuPointerEvent event{
+                .source               = MenuInputSource::ModalMessage,
+                .kind                 = pointerKind.value(),
+                .hwnd                 = msg.hwnd,
+                .screenPoint          = ResolveMouseScreenPoint(msg),
+                .messageTime          = msg.time,
+                .wParam               = msg.wParam,
+                .lParam               = msg.lParam,
+                .mayInvoke            = true,
+                .mayDismiss           = true,
+                .maySwitchRoot        = msg.message == WM_MOUSEMOVE,
+                .mayTakeKeyboardFocus = true,
+            };
+            const MenuInputDisposition disposition = RouteMenuPointerEvent(controller, event);
+            DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-nonpopup-pointer",
+                                      L"msg={} msgId={:#x} hwnd={:#x} disposition={} running={}",
+                                      TraceMenuMessageName(msg.message),
+                                      static_cast<unsigned int>(msg.message),
+                                      TraceHwndValue(msg.hwnd),
+                                      TraceDispositionName(disposition),
+                                      TraceBool(controller.running));
+            if (disposition == MenuInputDisposition::Dismissed || disposition == MenuInputDisposition::Invoked)
+            {
+                break;
+            }
+            continue;
+        }
+
+        // Keyboard messages — route to topmost popup
+        if (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN)
+        {
+            const UINT virtualKey = static_cast<UINT>(msg.wParam);
+            const std::optional<MenuKeyboardKind> keyboardKind = MenuKeyboardKindFromVirtualKey(virtualKey);
+            if (keyboardKind.has_value())
+            {
+                const MenuKeyboardEvent event{
+                    .source     = MenuInputSource::ModalMessage,
+                    .kind       = keyboardKind.value(),
+                    .hwnd       = msg.hwnd,
+                    .virtualKey = virtualKey,
+                    .mnemonic   = static_cast<wchar_t>(virtualKey),
+                    .messageTime = msg.time,
+                    .lParam     = msg.lParam,
+                };
+                const bool traceEnabled = IsMenuDiagnosticsTraceEnabled();
+                const MenuKeyboardTargetTrace traceBefore = traceEnabled ? CaptureMenuKeyboardTargetTrace(controller) : MenuKeyboardTargetTrace{};
+                const MenuInputDisposition disposition = RouteMenuKeyboardEvent(controller, event);
+                if (traceEnabled)
+                {
+                    TraceMenuKeyboardRoute(controller, event, traceBefore, disposition);
+                }
+                DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-keyboard",
+                                          L"msg={} msgId={:#x} hwnd={:#x} virtualKey={:#x} disposition={} running={}",
+                                          TraceMenuMessageName(msg.message),
+                                          static_cast<unsigned int>(msg.message),
+                                          TraceHwndValue(msg.hwnd),
+                                          static_cast<unsigned int>(virtualKey),
+                                          TraceDispositionName(disposition),
+                                          TraceBool(controller.running));
+                if (disposition == MenuInputDisposition::Dismissed || disposition == MenuInputDisposition::Invoked)
+                {
+                    break;
+                }
+                if (disposition != MenuInputDisposition::Ignored)
+                {
+                    continue;
+                }
+            }
+
+            // Fall through for unhandled keys
+        }
+
         // All WM_PAINT/WM_ERASEBKGND handled by MenuWndProc → WindowHost::HandleMessage
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
+
+    flushRepeatedMessageTrace();
 
     // Release capture
     if (const HWND captured = GetCapture(); captured && controller.FindPopupForHwnd(captured))
@@ -3418,17 +4717,32 @@ void RunMenuModalLoop(MenuController& controller)
         DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-release-capture captured={:#x} owner={:#x}",
                     reinterpret_cast<uintptr_t>(captured),
                     reinterpret_cast<uintptr_t>(controller.ownerHwnd));
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-release-capture",
+                                  L"captured={:#x} owner={:#x}",
+                                  TraceHwndValue(captured),
+                                  TraceHwndValue(controller.ownerHwnd));
         ReleaseCapture();
     }
     DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup loop-end owner={:#x} result={} capture={:#x}",
                 reinterpret_cast<uintptr_t>(controller.ownerHwnd),
                 controller.result.value_or(-1),
                 reinterpret_cast<uintptr_t>(GetCapture()));
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-end",
+                              L"owner={:#x} result={} capture={:#x} focus={:#x} previousFocus={:#x}",
+                              TraceHwndValue(controller.ownerHwnd),
+                              controller.result.value_or(-1),
+                              TraceHwndValue(GetCapture()),
+                              TraceHwndValue(GetFocus()),
+                              TraceHwndValue(previousFocus));
 
     const HWND currentFocus = GetFocus();
     if (previousFocus && IsWindow(previousFocus) != FALSE && currentFocus && controller.FindPopupForHwnd(currentFocus))
     {
         SetFocus(previousFocus);
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.loop-restore-focus",
+                                  L"previousFocus={:#x} focusAfter={:#x}",
+                                  TraceHwndValue(previousFocus),
+                                  TraceHwndValue(GetFocus()));
     }
 }
 
@@ -3437,6 +4751,16 @@ void RunMenuModalLoop(MenuController& controller)
 // ---------------------------------------------------------------------------
 // ContextMenu::Show — public API
 // ---------------------------------------------------------------------------
+
+bool IsContextMenuDiagnosticsEnabled() noexcept
+{
+    return IsMenuDiagnosticsTraceEnabled();
+}
+
+void TraceContextMenuDiagnostics(std::wstring_view eventName, std::wstring_view details) noexcept
+{
+    WriteMenuDiagnosticsTraceLine(eventName, details);
+}
 
 std::optional<int> ContextMenu::Show(
     HWND ownerHwnd, POINT screenPoint, std::span<const MenuFlyoutItem> items, const ThemePalette& theme, const ContextMenuSessionCallbacks& sessionCallbacks)
@@ -3454,12 +4778,31 @@ std::optional<int> ContextMenu::Show(
         sessionCallbacks.ignoreInitialLeftButtonUp ? L"true" : L"false",
         sessionCallbacks.ignoreInitialRightButtonUp ? L"true" : L"false",
         reinterpret_cast<uintptr_t>(GetCapture()));
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.show-begin",
+                              L"owner={:#x} point=({}, {}) items={} focusFirst={} ignoreInitialLeftUp={} ignoreInitialRightUp={} maxRootHeightDip={:.1f} "
+                              L"captureBefore={:#x} focusBefore={:#x} activeBefore={:#x} hitWindow={:#x}",
+                              TraceHwndValue(ownerHwnd),
+                              screenPoint.x,
+                              screenPoint.y,
+                              items.size(),
+                              TraceBool(sessionCallbacks.focusFirstNavigableItem),
+                              TraceBool(sessionCallbacks.ignoreInitialLeftButtonUp),
+                              TraceBool(sessionCallbacks.ignoreInitialRightButtonUp),
+                              sessionCallbacks.maxRootHeightDip,
+                              TraceHwndValue(GetCapture()),
+                              TraceHwndValue(GetFocus()),
+                              TraceHwndValue(GetActiveWindow()),
+                              TraceHwndValue(WindowFromPoint(screenPoint)));
 
     MenuController controller;
     controller.ownerHwnd        = ownerHwnd;
     controller.theme            = theme; // Copy
     controller.style            = ResolveMenuVisualStyle(theme);
     controller.sessionCallbacks = sessionCallbacks;
+    if (sessionCallbacks.focusFirstNavigableItem)
+    {
+        RememberKeyboardRootSwitchMessageTime(controller, CurrentMessageTime());
+    }
 
     // Copy items so they outlive the caller's temporaries
     controller.rootItems.assign(items.begin(), items.end());
@@ -3475,6 +4818,12 @@ std::optional<int> ContextMenu::Show(
                                 true,
                                 sessionCallbacks.focusFirstNavigableItem))
     {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.show-create-failed",
+                                  L"owner={:#x} point=({}, {}) items={}",
+                                  TraceHwndValue(ownerHwnd),
+                                  screenPoint.x,
+                                  screenPoint.y,
+                                  items.size());
         return std::nullopt;
     }
     Debug::Perf::Emit(L"DxUI::PopupShow", L"root", Debug::Perf::ElapsedUs(startedAt), static_cast<uint64_t>(controller.rootItems.size()), 0u);
@@ -3488,6 +4837,12 @@ std::optional<int> ContextMenu::Show(
                 reinterpret_cast<uintptr_t>(ownerHwnd),
                 controller.result.value_or(-1),
                 reinterpret_cast<uintptr_t>(GetCapture()));
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.show-end",
+                              L"owner={:#x} result={} captureAfter={:#x} focusAfter={:#x}",
+                              TraceHwndValue(ownerHwnd),
+                              controller.result.value_or(-1),
+                              TraceHwndValue(GetCapture()),
+                              TraceHwndValue(GetFocus()));
 
     return controller.result;
 }
@@ -3499,46 +4854,48 @@ bool DebugGetContextMenuItemDisplayText(const MenuFlyoutItem& item, std::wstring
     return true;
 }
 
-bool DebugGetContextMenuPopupState(HWND hwnd, ContextMenuPopupDebugState& outState) noexcept
+bool TryGetMenuPopupState(const MenuPopup& popup, ContextMenuPopupDebugState& outState) noexcept
 {
     outState          = {};
-    const auto* popup = reinterpret_cast<const MenuPopup*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    if (! popup || popup->hwnd != hwnd)
-    {
-        return false;
-    }
 
-    outState.hasScrollbar          = popup->NeedsScrollbar();
-    outState.usesSystemBackdrop    = popup->usesSystemBackdrop;
-    outState.usesAppBackdropBlur   = popup->usesAppBackdropBlur;
-    outState.dpi                   = popup->dpi;
-    outState.visibleWidthDip       = popup->menuWidthDip;
-    outState.visibleHeightDip      = popup->menuHeightDip;
-    outState.contentHeightDip      = popup->contentHeightDip;
-    outState.scrollOffsetDip       = popup->scrollOffsetDip;
-    outState.viewportRectDip       = popup->GetViewportRect();
-    outState.scrollbarTrackRectDip = popup->NeedsScrollbar() ? popup->GetScrollbarTrackRect() : D2D1::RectF();
-    outState.scrollbarThumbRectDip = popup->NeedsScrollbar() ? popup->GetScrollbarThumbRect() : D2D1::RectF();
-    outState.surfaceRectPx         = popup->surfaceRectPx;
-    outState.windowRectPx          = popup->windowRectPx;
-    outState.hoveredIndex          = popup->hoveredIndex;
-    outState.keyboardIndex         = popup->keyboardIndex;
-    outState.itemTexts.reserve(popup->itemCount);
-    outState.itemKinds.reserve(popup->itemCount);
-    outState.itemEnabled.reserve(popup->itemCount);
-    outState.sliderValues.reserve(popup->itemCount);
-    outState.sliderStopCounts.reserve(popup->itemCount);
-    for (size_t itemIndex = 0; itemIndex < popup->itemCount; ++itemIndex)
+    outState.hasScrollbar          = popup.NeedsScrollbar();
+    outState.usesSystemBackdrop    = popup.usesSystemBackdrop;
+    outState.usesAppBackdropBlur   = popup.usesAppBackdropBlur;
+    outState.dpi                   = popup.dpi;
+    outState.visibleWidthDip       = popup.menuWidthDip;
+    outState.visibleHeightDip      = popup.menuHeightDip;
+    outState.contentHeightDip      = popup.contentHeightDip;
+    outState.scrollOffsetDip       = popup.scrollOffsetDip;
+    outState.viewportRectDip       = popup.GetViewportRect();
+    outState.scrollbarTrackRectDip = popup.NeedsScrollbar() ? popup.GetScrollbarTrackRect() : D2D1::RectF();
+    outState.scrollbarThumbRectDip = popup.NeedsScrollbar() ? popup.GetScrollbarThumbRect() : D2D1::RectF();
+    outState.surfaceRectPx         = popup.surfaceRectPx;
+    outState.windowRectPx          = popup.windowRectPx;
+    outState.hoveredIndex          = popup.hoveredIndex;
+    outState.keyboardIndex         = popup.keyboardIndex;
+    outState.hoverTimerActive      = popup.hoverTimerId != 0;
+    outState.hoverTimerPendingOpen = popup.hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingOpen;
+    outState.hoverTimerPendingClose = popup.hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingClose;
+    outState.hoverTimerItemIndex =
+        popup.hoverTimerItemIndex != SIZE_MAX ? std::optional<size_t>{popup.hoverTimerItemIndex} : std::nullopt;
+    outState.itemTexts.reserve(popup.itemCount);
+    outState.itemAcceleratorTexts.reserve(popup.itemCount);
+    outState.itemKinds.reserve(popup.itemCount);
+    outState.itemEnabled.reserve(popup.itemCount);
+    outState.sliderValues.reserve(popup.itemCount);
+    outState.sliderStopCounts.reserve(popup.itemCount);
+    for (size_t itemIndex = 0; itemIndex < popup.itemCount; ++itemIndex)
     {
         std::wstring text;
-        static_cast<void>(DebugGetContextMenuItemDisplayText(popup->items[itemIndex], text));
+        static_cast<void>(DebugGetContextMenuItemDisplayText(popup.items[itemIndex], text));
         outState.itemTexts.push_back(std::move(text));
-        outState.itemKinds.push_back(popup->items[itemIndex].kind);
-        outState.itemEnabled.push_back(popup->items[itemIndex].enabled);
-        if (popup->items[itemIndex].kind == MenuItemKind::Slider)
+        outState.itemAcceleratorTexts.push_back(std::wstring(DecodeMenuItemText(popup.items[itemIndex]).acceleratorText));
+        outState.itemKinds.push_back(popup.items[itemIndex].kind);
+        outState.itemEnabled.push_back(popup.items[itemIndex].enabled);
+        if (popup.items[itemIndex].kind == MenuItemKind::Slider)
         {
-            outState.sliderValues.push_back(ClampSliderValue(popup->items[itemIndex]));
-            outState.sliderStopCounts.push_back(static_cast<uint32_t>(popup->items[itemIndex].sliderStops.size()));
+            outState.sliderValues.push_back(ClampSliderValue(popup.items[itemIndex]));
+            outState.sliderStopCounts.push_back(static_cast<uint32_t>(popup.items[itemIndex].sliderStops.size()));
         }
         else
         {
@@ -3546,26 +4903,116 @@ bool DebugGetContextMenuPopupState(HWND hwnd, ContextMenuPopupDebugState& outSta
             outState.sliderStopCounts.push_back(0u);
         }
     }
-    outState.renderCount           = popup->host.DebugGetRenderCount();
-    if (popup->controller)
+    outState.renderCount = popup.host.DebugGetRenderCount();
+    if (popup.controller)
     {
-        outState.rootPointerSwitchCount          = popup->controller->rootPointerSwitchCount;
-        outState.rootSwitchImmediateRenderCount = popup->controller->rootSwitchImmediateRenderCount;
+        outState.rootPointerSwitchCount          = popup.controller->rootPointerSwitchCount;
+        outState.rootSwitchImmediateRenderCount = popup.controller->rootSwitchImmediateRenderCount;
     }
     return true;
 }
 
-bool DebugGetContextMenuPopupItemRect(HWND hwnd, size_t itemIndex, D2D1_RECT_F& outRectDip) noexcept
+bool DebugGetContextMenuPopupState(HWND hwnd, ContextMenuPopupDebugState& outState) noexcept
 {
-    outRectDip        = D2D1::RectF();
     const auto* popup = reinterpret_cast<const MenuPopup*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    if (! popup || popup->hwnd != hwnd || itemIndex >= popup->itemCount)
+    if (! popup || popup->hwnd != hwnd)
+    {
+        outState = {};
+        return false;
+    }
+
+    if (GetWindowThreadProcessId(hwnd, nullptr) == GetCurrentThreadId())
+    {
+        return TryGetMenuPopupState(*popup, outState);
+    }
+
+    return SendMessageW(hwnd, kMenuDebugGetStateMessage, 0, reinterpret_cast<LPARAM>(&outState)) != FALSE;
+}
+
+bool DebugFireContextMenuPopupHoverTimer(HWND hwnd) noexcept
+{
+    const auto* popup = reinterpret_cast<const MenuPopup*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! popup || popup->hwnd != hwnd)
     {
         return false;
     }
 
-    outRectDip = GetVisibleItemRect(*popup, itemIndex);
+    return PostMessageW(hwnd, WM_TIMER, kSubmenuHoverTimerId, 0) != FALSE;
+}
+
+bool TryGetMenuPopupItemRect(const MenuPopup& popup, size_t itemIndex, D2D1_RECT_F& outRectDip) noexcept
+{
+    outRectDip = D2D1::RectF();
+    if (itemIndex >= popup.itemCount)
+    {
+        return false;
+    }
+
+    outRectDip = GetVisibleItemRect(popup, itemIndex);
     return outRectDip.right > outRectDip.left && outRectDip.bottom > outRectDip.top;
+}
+
+bool DebugGetContextMenuPopupItemRect(HWND hwnd, size_t itemIndex, D2D1_RECT_F& outRectDip) noexcept
+{
+    const auto* popup = reinterpret_cast<const MenuPopup*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! popup || popup->hwnd != hwnd)
+    {
+        outRectDip = D2D1::RectF();
+        return false;
+    }
+
+    if (GetWindowThreadProcessId(hwnd, nullptr) == GetCurrentThreadId())
+    {
+        return TryGetMenuPopupItemRect(*popup, itemIndex, outRectDip);
+    }
+
+    MenuDebugGetItemRectRequest request{.itemIndex = itemIndex, .outRectDip = &outRectDip};
+    return SendMessageW(hwnd, kMenuDebugGetItemRectMessage, 0, reinterpret_cast<LPARAM>(&request)) != FALSE;
+}
+
+bool TryGetMenuPopupItemPaint(const MenuPopup& popup, size_t itemIndex, ContextMenuPopupItemPaintDebugState& outState) noexcept
+{
+    outState = {};
+    if (itemIndex >= popup.itemCount || ! popup.controller)
+    {
+        return false;
+    }
+
+    const auto& item              = popup.items[itemIndex];
+    const bool isHovered          = (popup.hoveredIndex.has_value() && popup.hoveredIndex.value() == itemIndex) ||
+                                    (popup.keyboardIndex.has_value() && popup.keyboardIndex.value() == itemIndex);
+    const ParsedMenuLabel label   = ParseMenuLabel(DecodeMenuItemText(item).labelText);
+    const auto itemPaint          = ResolveMenuItemPaintStyle(popup.controller->theme, popup.controller->style, item, label.displayText, isHovered);
+    outState.hovered              = isHovered;
+    outState.disabled             = ! item.enabled;
+    outState.usesHighlightFill    = itemPaint.showHighlightFill;
+    outState.usesRainbowHighlight = itemPaint.usesRainbowHighlight;
+    outState.fillColor            = itemPaint.fill;
+    outState.compositeFillColor   = itemPaint.compositeFill;
+    outState.textColor            = itemPaint.text;
+    outState.acceleratorColor     = itemPaint.accelText;
+    outState.iconColor            = itemPaint.iconColor;
+    outState.checkColor           = itemPaint.checkColor;
+    outState.chevronColor         = itemPaint.chevronColor;
+    return true;
+}
+
+bool DebugGetContextMenuPopupItemPaint(HWND hwnd, size_t itemIndex, ContextMenuPopupItemPaintDebugState& outState) noexcept
+{
+    const auto* popup = reinterpret_cast<const MenuPopup*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! popup || popup->hwnd != hwnd)
+    {
+        outState = {};
+        return false;
+    }
+
+    if (GetWindowThreadProcessId(hwnd, nullptr) == GetCurrentThreadId())
+    {
+        return TryGetMenuPopupItemPaint(*popup, itemIndex, outState);
+    }
+
+    MenuDebugGetItemPaintRequest request{.itemIndex = itemIndex, .outState = &outState};
+    return SendMessageW(hwnd, kMenuDebugGetItemPaintMessage, 0, reinterpret_cast<LPARAM>(&request)) != FALSE;
 }
 
 bool DebugGetContextMenuPopupItemText(HWND hwnd, size_t itemIndex, std::wstring& outText) noexcept
@@ -3603,34 +5050,6 @@ bool DebugGetContextMenuPopupItemLayout(HWND hwnd, size_t itemIndex, ContextMenu
     outState.chevronRectDip          = layout.chevronRectDip;
     outState.hasBitmapIcon           = popup->items[itemIndex].iconBitmap != nullptr;
     return outState.itemRectDip.right > outState.itemRectDip.left && outState.itemRectDip.bottom > outState.itemRectDip.top;
-}
-
-bool DebugGetContextMenuPopupItemPaint(HWND hwnd, size_t itemIndex, ContextMenuPopupItemPaintDebugState& outState) noexcept
-{
-    outState          = {};
-    const auto* popup = reinterpret_cast<const MenuPopup*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    if (! popup || popup->hwnd != hwnd || itemIndex >= popup->itemCount || ! popup->controller)
-    {
-        return false;
-    }
-
-    const auto& item              = popup->items[itemIndex];
-    const bool isHovered          = (popup->hoveredIndex.has_value() && popup->hoveredIndex.value() == itemIndex) ||
-                                    (popup->keyboardIndex.has_value() && popup->keyboardIndex.value() == itemIndex);
-    const ParsedMenuLabel label   = ParseMenuLabel(DecodeMenuItemText(item).labelText);
-    const auto itemPaint          = ResolveMenuItemPaintStyle(popup->controller->theme, popup->controller->style, item, label.displayText, isHovered);
-    outState.hovered              = isHovered;
-    outState.disabled             = ! item.enabled;
-    outState.usesHighlightFill    = itemPaint.showHighlightFill;
-    outState.usesRainbowHighlight = itemPaint.usesRainbowHighlight;
-    outState.fillColor            = itemPaint.fill;
-    outState.compositeFillColor   = itemPaint.compositeFill;
-    outState.textColor            = itemPaint.text;
-    outState.acceleratorColor     = itemPaint.accelText;
-    outState.iconColor            = itemPaint.iconColor;
-    outState.checkColor           = itemPaint.checkColor;
-    outState.chevronColor         = itemPaint.chevronColor;
-    return true;
 }
 
 bool DebugSetContextMenuPopupBackdropCapture(HWND hwnd, const WindowHostBitmapCapture& capture) noexcept

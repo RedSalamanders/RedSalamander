@@ -372,7 +372,8 @@ while (entry != nullptr)
 **Supported Clipboard Formats:**
 - `CF_HDROP`: Shell-compatible file list (most important)
 - `CFSTR_SHELLIDLIST`: Shell ID list for advanced operations
-- `CFSTR_PREFERREDDROPEFFECT`: Suggests copy vs. move
+- `CFSTR_PREFERREDDROPEFFECT`: Suggests copy vs. move. FolderView paste MUST honor `DROPEFFECT_MOVE` as a real file-operation move and treat `DROPEFFECT_COPY`, missing metadata, or unsupported metadata as copy.
+- When a `FileOperationRequestCallback` is installed by `FolderWindow`, FolderView copy/move/paste/drop paths MUST delegate copy and move work without showing a local pre-confirmation. The shared File Operations layer owns the single OK/Cancel confirmation for those delegated operations. FolderView may show the same confirmation locally only for direct plugin fallback paths where no callback is installed.
 
 **Drag Initiation:**
 ```cpp
@@ -398,6 +399,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - **Move**: Default (no modifiers)
 - **Link**: Ctrl+Shift keys held
 - **Cancel**: Escape key
+- Delegated copy/move drops follow the same confirmation ownership as clipboard paste: exactly one shared File Operations prompt, not an additional FolderView prompt.
 
 **Drop Validation:**
 - Check if drop target is a folder
@@ -426,6 +428,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 **Runtime behavior:**
 - Items are enabled/disabled based on selection state (or `Current item` when selection is empty) and clipboard state.
 - Menu rendering uses the active `MenuTheme` (owner-draw for themed background/selection colors).
+- DxUI context menus opened from right-click or keyboard context-menu commands MUST share the common `DxUi::ContextMenu::Show(...)` input contract: pointer hover highlights visible rows, enabled item clicks invoke immediately, outside clicks and Escape dismiss, arrow keys move the keyboard highlight, Enter/Space invoke, and focus returns to the owning pane when the menu exits.
 ### 4. Keyboard Navigation
 
 **Canonical shortcut map**: `Specs/UI/UI_CommandMenuKeyboard.md` is the source of truth for global shortcuts and routing; this section focuses on FolderView-specific behavior.
@@ -469,7 +472,9 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 
 **Clipboard Keys:**
 - **Ctrl+C**: Copy selected items to clipboard (or `Current item` when selection is empty) *(default chord binding is settings-backed)*
-- **Ctrl+V**: Paste from clipboard to current folder *(default chord binding is settings-backed)*
+- **Ctrl+X**: Cut selected items to the shell clipboard (or `Current item` when selection is empty) *(default chord binding is settings-backed)*
+- **Ctrl+V**: Paste from clipboard to current folder, moving instead of copying when the shell clipboard carries `Preferred DropEffect = DROPEFFECT_MOVE` *(default chord binding is settings-backed)*
+- Ctrl+X followed by Ctrl+V in a normal hosted pane MUST request exactly one shared move confirmation before the File Operations task starts.
 
 **View/Sort Commands (FolderWindow Integration):**
 - **Ctrl+F2**: Sort by **None** (restore initial order)

@@ -149,24 +149,12 @@ void SkipWhitespace(std::wstring_view text, size_t& pos) noexcept
             const wchar_t escaped = text[pos++];
             switch (escaped)
             {
-            case L'n':
-                outText.push_back(L'\n');
-                break;
-            case L'r':
-                outText.push_back(L'\r');
-                break;
-            case L't':
-                outText.push_back(L'\t');
-                break;
-            case L'"':
-                outText.push_back(L'"');
-                break;
-            case L'\\':
-                outText.push_back(L'\\');
-                break;
-            default:
-                outText.push_back(escaped);
-                break;
+                case L'n': outText.push_back(L'\n'); break;
+                case L'r': outText.push_back(L'\r'); break;
+                case L't': outText.push_back(L'\t'); break;
+                case L'"': outText.push_back(L'"'); break;
+                case L'\\': outText.push_back(L'\\'); break;
+                default: outText.push_back(escaped); break;
             }
             continue;
         }
@@ -444,15 +432,15 @@ HRESULT ParseRcStringTables(std::wstring_view text, RcParseResult& outResult)
 {
     outResult = {};
 
-    bool inBlockComment       = false;
-    bool awaitingStringBegin  = false;
-    bool awaitingMenuBegin    = false;
-    bool awaitingDialogBegin  = false;
-    bool inStringTable        = false;
-    bool inMenu               = false;
-    bool inDialog             = false;
-    size_t menuDepth          = 0u;
-    size_t dialogDepth        = 0u;
+    bool inBlockComment      = false;
+    bool awaitingStringBegin = false;
+    bool awaitingMenuBegin   = false;
+    bool awaitingDialogBegin = false;
+    bool inStringTable       = false;
+    bool inMenu              = false;
+    bool inDialog            = false;
+    size_t menuDepth         = 0u;
+    size_t dialogDepth       = 0u;
     std::wstring activeMenuId;
     std::wstring activeDialogId;
     std::unordered_set<std::wstring> seenIds;
@@ -473,7 +461,7 @@ HRESULT ParseRcStringTables(std::wstring_view text, RcParseResult& outResult)
             rawLine.remove_suffix(1u);
         }
 
-        const std::wstring stripped = StripComments(rawLine, inBlockComment);
+        const std::wstring stripped  = StripComments(rawLine, inBlockComment);
         const std::wstring_view line = Trim(stripped);
 
         if (inStringTable)
@@ -599,12 +587,12 @@ HRESULT ParseRcStringTables(std::wstring_view text, RcParseResult& outResult)
             {
                 if (EqualsToken(resourceType, L"MENU") || EqualsToken(resourceType, L"MENUEX"))
                 {
-                    activeMenuId     = std::move(resourceId);
+                    activeMenuId      = std::move(resourceId);
                     awaitingMenuBegin = true;
                 }
                 else if (EqualsToken(resourceType, L"DIALOG") || EqualsToken(resourceType, L"DIALOGEX"))
                 {
-                    activeDialogId     = std::move(resourceId);
+                    activeDialogId      = std::move(resourceId);
                     awaitingDialogBegin = true;
                 }
             }

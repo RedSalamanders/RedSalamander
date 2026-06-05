@@ -30,8 +30,11 @@ struct FindFilesPaneContext
 void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept;
 
 [[nodiscard]] HWND GetFindFilesWindowHandle() noexcept;
+[[nodiscard]] bool IsFindFilesWindowHandle(HWND hwnd) noexcept;
 
 #ifdef ENABLE_TESTS
+[[nodiscard]] size_t DebugGetFindFilesWindowCount() noexcept;
+
 enum class FindFilesDebugOperation : uint8_t
 {
     Find,
@@ -63,7 +66,17 @@ enum class FindFilesDebugFocusTarget : uint8_t
     CancelButton,
     OpenButton,
     ParentButton,
+    HelpButton,
     ResultsGrid,
+};
+
+enum class FindFilesDebugOpenDisposition : uint8_t
+{
+    None,
+    NavigateToResult,
+    NavigateToParent,
+    NavigateToParentAndOpen,
+    DefaultOpenFile,
 };
 
 struct FindFilesDebugSnapshot
@@ -78,12 +91,15 @@ struct FindFilesDebugSnapshot
     bool cancelButtonEnabled         = false;
     bool openButtonEnabled           = false;
     bool parentButtonEnabled         = false;
+    bool helpButtonEnabled           = false;
     bool rootComboEnabled            = false;
     bool nameComboEnabled            = false;
     bool nameModeComboEnabled        = false;
     bool contentComboEnabled         = false;
     bool contentModeComboEnabled     = false;
     bool matchCaseContentEnabled     = false;
+    bool preferIndexEnabled          = false;
+    bool preferIndexChecked          = false;
     bool wantSnippetsEnabled         = false;
     bool recursiveChecked            = false;
     size_t resultCount               = 0;
@@ -91,11 +107,31 @@ struct FindFilesDebugSnapshot
     size_t visibleChildWindowCount   = 0;
     bool hasStatusStrip              = false;
     bool statusStripVisible          = false;
+    bool statusStripBlendsWithWindowBackground = false;
     uint32_t statusStripSectionCount = 0u;
     float statusStripHeightDip       = 0.0f;
+    bool rootNavigationVisible       = false;
+    D2D1_RECT_F rootNavigationRect   = D2D1::RectF();
+    bool rootNavigationEmbedded      = false;
+    bool rootNavigationEditMode      = false;
+    size_t rootNavigationHistoryCount = 0u;
+    bool destinationNavigationVisible = false;
+    D2D1_RECT_F destinationNavigationRect = D2D1::RectF();
+    bool destinationNavigationEmbedded = false;
+    bool destinationNavigationEditMode = false;
+    bool destinationNavigationMenuHovered = false;
+    bool destinationNavigationHistoryHovered = false;
+    bool destinationNavigationDiskHovered = false;
+    int destinationNavigationHoveredSegmentIndex = -1;
+    int destinationNavigationHoveredSeparatorIndex = -1;
+    size_t destinationNavigationHistoryCount = 0u;
+    bool destinationNavigationHistoryDropdownVisible = false;
+    RECT destinationNavigationHistoryRect = {};
     bool rootPopupOpen               = false;
     bool nameModePopupOpen           = false;
     bool contentModePopupOpen        = false;
+    bool hasWin32Focus               = false;
+    bool isForegroundWindow          = false;
     std::optional<size_t> nameModeSelectedIndex;
     std::optional<size_t> contentModeSelectedIndex;
     FindFilesDebugFocusTarget focusTarget             = FindFilesDebugFocusTarget::None;
@@ -107,6 +143,7 @@ struct FindFilesDebugSnapshot
     uint32_t resultListFullRebuildCount               = 0;
     uint32_t incrementalResultRefreshCount            = 0;
     uint32_t incrementalVisibleResultRefreshCount     = 0;
+    uint64_t debugResultActionFocusRestoreRequestCount = 0u;
     size_t visibleResultRowCount                      = 0u;
     size_t visibleResultColumnCount                   = 0u;
     size_t visibleResultCellCount                     = 0u;
@@ -132,10 +169,13 @@ struct FindFilesDebugSnapshot
     uint32_t selectedResultRowFillArgb                = 0u;
     uint32_t selectedResultRowTextArgb                = 0u;
     bool selectedResultRowUsesRainbow                 = false;
+    bool resultsGridFolderViewMode                    = false;
     std::vector<std::wstring> resultColumnIds;
     std::vector<float> resultColumnWidthsDip;
     std::vector<std::wstring> fullPaths;
     std::vector<std::wstring> resultPathTexts;
+    std::vector<int> resultIconIndices;
+    std::wstring selectedResultFullPath;
     std::wstring rootText;
     std::wstring namePatternText;
     std::wstring contentPatternText;
@@ -154,6 +194,9 @@ struct FindFilesDebugSnapshot
     std::wstring submittedNamePatternText;
     std::wstring submittedContentPatternText;
     std::wstring statusText;
+    std::wstring destinationStatusText;
+    std::wstring rootNavigationText;
+    std::wstring destinationNavigationText;
     std::wstring backendStatusText;
 };
 
@@ -174,6 +217,7 @@ struct FindFilesDebugGridHit
 [[nodiscard]] bool DebugSetFindFilesWindowOptions(bool recursive, bool includeFiles, bool includeDirectories, bool preferIndex, bool wantSnippets) noexcept;
 
 [[nodiscard]] bool DebugSetFindFilesWindowComboText(FindFilesDebugFocusTarget target, std::wstring text) noexcept;
+[[nodiscard]] bool DebugSetFindFilesWindowDestinationPath(std::wstring path) noexcept;
 
 [[nodiscard]] bool DebugStartFindFilesWindowSearch(FindFilesDebugOperation operation) noexcept;
 
@@ -191,12 +235,15 @@ struct FindFilesDebugGridHit
 [[nodiscard]] bool DebugApplyFindFilesWindowResultsLayoutFromSettings() noexcept;
 
 [[nodiscard]] bool DebugSelectFindFilesWindowResult(std::wstring fullPath) noexcept;
+[[nodiscard]] bool DebugSelectFindFilesWindowResults(std::vector<std::wstring> fullPaths) noexcept;
 
 [[nodiscard]] bool DebugActivateSelectedFindFilesWindowResult() noexcept;
 
 [[nodiscard]] bool DebugOpenSelectedFindFilesWindowResultParent() noexcept;
+[[nodiscard]] bool DebugGetSelectedFindFilesWindowOpenDisposition(bool parentOnly, FindFilesDebugOpenDisposition& out) noexcept;
 
 [[nodiscard]] bool DebugWaitForFindFilesWindowIdle(uint32_t timeoutMs) noexcept;
 
 [[nodiscard]] bool DebugScrollFindFilesWindowResultsByWheelDetents(int detents) noexcept;
+[[nodiscard]] bool DebugFindFilesIsNextQueuedMessage(HWND targetHwnd, UINT targetMessage) noexcept;
 #endif

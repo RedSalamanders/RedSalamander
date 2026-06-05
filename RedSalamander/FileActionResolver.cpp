@@ -58,8 +58,7 @@ namespace
 
     while (textIndex < text.size())
     {
-        if (patternIndex < pattern.size() &&
-            (pattern[patternIndex] == L'?' || ToLower(pattern[patternIndex]) == ToLower(text[textIndex])))
+        if (patternIndex < pattern.size() && (pattern[patternIndex] == L'?' || ToLower(pattern[patternIndex]) == ToLower(text[textIndex])))
         {
             ++patternIndex;
             ++textIndex;
@@ -95,12 +94,9 @@ namespace
 {
     switch (match.kind)
     {
-        case Common::Settings::FileActionMatchKind::Default:
-            return true;
-        case Common::Settings::FileActionMatchKind::Extension:
-            return ! match.value.empty() && EqualsNoCase(NormalizeExtension(itemPath), match.value);
-        case Common::Settings::FileActionMatchKind::Pattern:
-            return ! match.value.empty() && WildcardMatchNoCase(match.value, itemPath.filename().wstring());
+        case Common::Settings::FileActionMatchKind::Default: return true;
+        case Common::Settings::FileActionMatchKind::Extension: return ! match.value.empty() && EqualsNoCase(NormalizeExtension(itemPath), match.value);
+        case Common::Settings::FileActionMatchKind::Pattern: return ! match.value.empty() && WildcardMatchNoCase(match.value, itemPath.filename().wstring());
     }
 
     return false;
@@ -133,37 +129,26 @@ namespace
         case FileActionResolver::Reason::NoAssociation:
         case FileActionResolver::Reason::ActionMissing:
         case FileActionResolver::Reason::ActionDisabled:
-        case FileActionResolver::Reason::ActionNotApplicable:
-            return std::numeric_limits<uint32_t>::max();
+        case FileActionResolver::Reason::ActionNotApplicable: return std::numeric_limits<uint32_t>::max();
     }
     return std::numeric_limits<uint32_t>::max();
 }
 
-[[nodiscard]] std::wstring DescribeReason(FileActionResolver::Reason reason,
-                                          const Common::Settings::FileActionMatch& match,
-                                          std::wstring_view computerName)
+[[nodiscard]] std::wstring DescribeReason(FileActionResolver::Reason reason, const Common::Settings::FileActionMatch& match, std::wstring_view computerName)
 {
     const std::wstring matchText = match.kind == Common::Settings::FileActionMatchKind::Default ? L"*" : match.value;
     switch (reason)
     {
         case FileActionResolver::Reason::ComputerExtensionRule:
             return FormatStringResource(nullptr, IDS_FILEACTION_REASON_COMPUTER_RULE_FMT, computerName, matchText);
-        case FileActionResolver::Reason::GlobalExtensionRule:
-            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_GLOBAL_RULE_FMT, matchText);
-        case FileActionResolver::Reason::ComputerDefaultRule:
-            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_COMPUTER_DEFAULT_FMT, computerName);
-        case FileActionResolver::Reason::GlobalDefaultRule:
-            return LoadStringResource(nullptr, IDS_FILEACTION_REASON_GLOBAL_DEFAULT);
-        case FileActionResolver::Reason::ActionMissing:
-            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_MISSING_FMT, matchText);
-        case FileActionResolver::Reason::ActionDisabled:
-            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_DISABLED_FMT, matchText);
-        case FileActionResolver::Reason::ActionNotApplicable:
-            return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_NOT_APPLICABLE_FMT, matchText);
-        case FileActionResolver::Reason::NoAssociation:
-            return LoadStringResource(nullptr, IDS_FILEACTION_REASON_NO_ASSOCIATION);
-        case FileActionResolver::Reason::None:
-            break;
+        case FileActionResolver::Reason::GlobalExtensionRule: return FormatStringResource(nullptr, IDS_FILEACTION_REASON_GLOBAL_RULE_FMT, matchText);
+        case FileActionResolver::Reason::ComputerDefaultRule: return FormatStringResource(nullptr, IDS_FILEACTION_REASON_COMPUTER_DEFAULT_FMT, computerName);
+        case FileActionResolver::Reason::GlobalDefaultRule: return LoadStringResource(nullptr, IDS_FILEACTION_REASON_GLOBAL_DEFAULT);
+        case FileActionResolver::Reason::ActionMissing: return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_MISSING_FMT, matchText);
+        case FileActionResolver::Reason::ActionDisabled: return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_DISABLED_FMT, matchText);
+        case FileActionResolver::Reason::ActionNotApplicable: return FormatStringResource(nullptr, IDS_FILEACTION_REASON_ACTION_NOT_APPLICABLE_FMT, matchText);
+        case FileActionResolver::Reason::NoAssociation: return LoadStringResource(nullptr, IDS_FILEACTION_REASON_NO_ASSOCIATION);
+        case FileActionResolver::Reason::None: break;
     }
     return {};
 }
@@ -198,28 +183,25 @@ namespace
         case FileActionResolver::Reason::ComputerExtensionRule:
         case FileActionResolver::Reason::GlobalExtensionRule:
         case FileActionResolver::Reason::ComputerDefaultRule:
-        case FileActionResolver::Reason::GlobalDefaultRule:
-            return E_FAIL;
+        case FileActionResolver::Reason::GlobalDefaultRule: return E_FAIL;
     }
     return E_FAIL;
 }
 
-[[nodiscard]] const Common::Settings::FileActionDefinition* FindActionById(
-    const std::vector<Common::Settings::FileActionDefinition>& actions, std::wstring_view actionId) noexcept
+[[nodiscard]] const Common::Settings::FileActionDefinition* FindActionById(const std::vector<Common::Settings::FileActionDefinition>& actions,
+                                                                           std::wstring_view actionId) noexcept
 {
     if (actionId.empty())
     {
         return nullptr;
     }
 
-    const auto it = std::find_if(actions.begin(), actions.end(), [&](const Common::Settings::FileActionDefinition& action) noexcept {
-        return EqualsNoCase(action.id, actionId);
-    });
+    const auto it = std::find_if(
+        actions.begin(), actions.end(), [&](const Common::Settings::FileActionDefinition& action) noexcept { return EqualsNoCase(action.id, actionId); });
     return it == actions.end() ? nullptr : &(*it);
 }
 
-template <typename Rule>
-[[nodiscard]] bool RuleMatchesContext(const Rule& rule, const std::filesystem::path& itemPath, std::wstring_view computerName)
+template <typename Rule> [[nodiscard]] bool RuleMatchesContext(const Rule& rule, const std::filesystem::path& itemPath, std::wstring_view computerName)
 {
     if (! rule.computerName.empty() && ! EqualsNoCase(rule.computerName, computerName))
     {
@@ -233,14 +215,11 @@ template <typename Rule>
 {
     switch (command)
     {
-        case FileActionResolver::Command::View:
-            return rule.viewActionId;
-        case FileActionResolver::Command::AlternateView:
-            return rule.alternateViewActionId;
+        case FileActionResolver::Command::View: return rule.viewActionId;
+        case FileActionResolver::Command::AlternateView: return rule.alternateViewActionId;
         case FileActionResolver::Command::Edit:
         case FileActionResolver::Command::AlternateEdit:
-        case FileActionResolver::Command::EditNew:
-            return {};
+        case FileActionResolver::Command::EditNew: return {};
     }
     return {};
 }
@@ -249,25 +228,20 @@ template <typename Rule>
 {
     switch (command)
     {
-        case FileActionResolver::Command::Edit:
-            return rule.editActionId;
-        case FileActionResolver::Command::AlternateEdit:
-            return rule.alternateEditActionId;
-        case FileActionResolver::Command::EditNew:
-            return rule.editNewActionId;
+        case FileActionResolver::Command::Edit: return rule.editActionId;
+        case FileActionResolver::Command::AlternateEdit: return rule.alternateEditActionId;
+        case FileActionResolver::Command::EditNew: return rule.editNewActionId;
         case FileActionResolver::Command::View:
-        case FileActionResolver::Command::AlternateView:
-            return {};
+        case FileActionResolver::Command::AlternateView: return {};
     }
     return {};
 }
 
-template <typename Settings>
-[[nodiscard]] FileActionResolver::Resolution ResolveAction(const Settings& settings, const FileActionResolver::Request& request)
+template <typename Settings> [[nodiscard]] FileActionResolver::Resolution ResolveAction(const Settings& settings, const FileActionResolver::Request& request)
 {
     struct Candidate
     {
-        size_t index = 0;
+        size_t index                      = 0;
         FileActionResolver::Reason reason = FileActionResolver::Reason::None;
     };
 
@@ -295,7 +269,7 @@ template <typename Settings>
         return resolution;
     }
 
-    const auto& rule = settings.associations[best.value().index];
+    const auto& rule    = settings.associations[best.value().index];
     resolution.reason   = best.value().reason;
     resolution.actionId = SelectActionId(rule, request.command);
     if (resolution.actionId.empty())
@@ -334,9 +308,7 @@ template <typename Settings>
 
 namespace FileActionResolver
 {
-bool ActionAppliesToContext(const Common::Settings::FileActionDefinition& action,
-                            const std::filesystem::path& itemPath,
-                            std::wstring_view computerName)
+bool ActionAppliesToContext(const Common::Settings::FileActionDefinition& action, const std::filesystem::path& itemPath, std::wstring_view computerName)
 {
     if (! action.appliesTo.computerNames.empty() && ! ContainsNoCase(action.appliesTo.computerNames, computerName))
     {
@@ -345,9 +317,8 @@ bool ActionAppliesToContext(const Common::Settings::FileActionDefinition& action
 
     if (! action.appliesTo.matches.empty())
     {
-        return std::ranges::any_of(action.appliesTo.matches, [&](const Common::Settings::FileActionMatch& match) {
-            return MatchFileActionRule(match, itemPath);
-        });
+        return std::ranges::any_of(action.appliesTo.matches,
+                                   [&](const Common::Settings::FileActionMatch& match) { return MatchFileActionRule(match, itemPath); });
     }
 
     return true;
@@ -355,7 +326,7 @@ bool ActionAppliesToContext(const Common::Settings::FileActionDefinition& action
 
 Resolution ResolveViewerAction(const Common::Settings::ViewerFileActionsSettings& settings, const Request& request)
 {
-    const auto startedAt = std::chrono::steady_clock::now();
+    const auto startedAt  = std::chrono::steady_clock::now();
     Resolution resolution = ResolveAction(settings, request);
     Debug::Perf::Emit(L"fileaction.resolve_us",
                       CommandMetricDetail(request.command),
@@ -368,7 +339,7 @@ Resolution ResolveViewerAction(const Common::Settings::ViewerFileActionsSettings
 
 Resolution ResolveEditorAction(const Common::Settings::EditorFileActionsSettings& settings, const Request& request)
 {
-    const auto startedAt = std::chrono::steady_clock::now();
+    const auto startedAt  = std::chrono::steady_clock::now();
     Resolution resolution = ResolveAction(settings, request);
     Debug::Perf::Emit(L"fileaction.resolve_us",
                       CommandMetricDetail(request.command),
@@ -379,15 +350,14 @@ Resolution ResolveEditorAction(const Common::Settings::EditorFileActionsSettings
     return resolution;
 }
 
-std::vector<const Common::Settings::FileActionDefinition*> CollectAssociatedEditorActions(
-    const Common::Settings::EditorFileActionsSettings& settings,
-    const Request& request)
+std::vector<const Common::Settings::FileActionDefinition*> CollectAssociatedEditorActions(const Common::Settings::EditorFileActionsSettings& settings,
+                                                                                          const Request& request)
 {
     struct Candidate final
     {
         const Common::Settings::FileActionDefinition* action = nullptr;
-        uint32_t priority                                     = std::numeric_limits<uint32_t>::max();
-        size_t associationIndex                               = 0u;
+        uint32_t priority                                    = std::numeric_limits<uint32_t>::max();
+        size_t associationIndex                              = 0u;
     };
 
     std::vector<Candidate> candidates;
@@ -407,16 +377,14 @@ std::vector<const Common::Settings::FileActionDefinition*> CollectAssociatedEdit
             continue;
         }
 
-        const Common::Settings::FileActionDefinition* action =
-            FindApplicableActionById(settings.actions, actionId, request.filePath, request.computerName);
+        const Common::Settings::FileActionDefinition* action = FindApplicableActionById(settings.actions, actionId, request.filePath, request.computerName);
         if (! action)
         {
             continue;
         }
 
-        const bool alreadyIncluded = std::ranges::any_of(candidates, [&](const Candidate& candidate) noexcept {
-            return candidate.action && EqualsNoCase(candidate.action->id, action->id);
-        });
+        const bool alreadyIncluded = std::ranges::any_of(
+            candidates, [&](const Candidate& candidate) noexcept { return candidate.action && EqualsNoCase(candidate.action->id, action->id); });
         if (alreadyIncluded)
         {
             continue;
@@ -429,7 +397,10 @@ std::vector<const Common::Settings::FileActionDefinition*> CollectAssociatedEdit
         });
     }
 
-    std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate& lhs, const Candidate& rhs) noexcept {
+    std::stable_sort(candidates.begin(),
+                     candidates.end(),
+                     [](const Candidate& lhs, const Candidate& rhs) noexcept
+    {
         if (lhs.priority != rhs.priority)
         {
             return lhs.priority < rhs.priority;
@@ -460,10 +431,9 @@ const Common::Settings::FileActionDefinition* FindApplicableActionById(const std
     return action;
 }
 
-std::vector<const Common::Settings::FileActionDefinition*> CollectApplicableActions(
-    const std::vector<Common::Settings::FileActionDefinition>& actions,
-    const std::filesystem::path& itemPath,
-    std::wstring_view computerName)
+std::vector<const Common::Settings::FileActionDefinition*> CollectApplicableActions(const std::vector<Common::Settings::FileActionDefinition>& actions,
+                                                                                    const std::filesystem::path& itemPath,
+                                                                                    std::wstring_view computerName)
 {
     const auto startedAt = std::chrono::steady_clock::now();
 

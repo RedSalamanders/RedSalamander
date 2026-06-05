@@ -748,47 +748,37 @@ bool DebugCancelPreferencesThemesNextBrowseImpl() noexcept
 
     switch (error)
     {
-    case Common::Settings::ThemeDefinitionIoError::EmptyInput:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FILE_EMPTY);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::ParseFailed:
-        outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage;
-        break;
-    case Common::Settings::ThemeDefinitionIoError::RootNotObject:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_ROOT_NOT_OBJECT);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidId:
-        outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"id");
-        break;
-    case Common::Settings::ThemeDefinitionIoError::InvalidId:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_INVALID_ID);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidName:
-        outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"name");
-        break;
-    case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidBaseThemeId:
-        outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"baseThemeId");
-        break;
-    case Common::Settings::ThemeDefinitionIoError::InvalidBaseThemeId:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_BASE_NOT_BUILTIN);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::ColorsMissingOrNotObject:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLORS_MISSING_OR_NOT_OBJECT);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::InvalidColorKey:
-    case Common::Settings::ThemeDefinitionIoError::InvalidColorValue:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_INVALID_COLOR_VALUE);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::ColorValueNotString:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLOR_VALUES_MUST_BE_STRINGS);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::OutOfMemory:
-        outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_OOM_PARSE);
-        break;
-    case Common::Settings::ThemeDefinitionIoError::None:
-    default:
-        outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage;
-        break;
+        case Common::Settings::ThemeDefinitionIoError::EmptyInput: outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FILE_EMPTY); break;
+        case Common::Settings::ThemeDefinitionIoError::ParseFailed:
+            outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage;
+            break;
+        case Common::Settings::ThemeDefinitionIoError::RootNotObject: outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_ROOT_NOT_OBJECT); break;
+        case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidId:
+            outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"id");
+            break;
+        case Common::Settings::ThemeDefinitionIoError::InvalidId: outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_INVALID_ID); break;
+        case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidName:
+            outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"name");
+            break;
+        case Common::Settings::ThemeDefinitionIoError::MissingOrInvalidBaseThemeId:
+            outError = FormatStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT, L"baseThemeId");
+            break;
+        case Common::Settings::ThemeDefinitionIoError::InvalidBaseThemeId:
+            outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_BASE_NOT_BUILTIN);
+            break;
+        case Common::Settings::ThemeDefinitionIoError::ColorsMissingOrNotObject:
+            outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLORS_MISSING_OR_NOT_OBJECT);
+            break;
+        case Common::Settings::ThemeDefinitionIoError::InvalidColorKey:
+        case Common::Settings::ThemeDefinitionIoError::InvalidColorValue:
+            outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_INVALID_COLOR_VALUE);
+            break;
+        case Common::Settings::ThemeDefinitionIoError::ColorValueNotString:
+            outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_COLOR_VALUES_MUST_BE_STRINGS);
+            break;
+        case Common::Settings::ThemeDefinitionIoError::OutOfMemory: outError = LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_OOM_PARSE); break;
+        case Common::Settings::ThemeDefinitionIoError::None:
+        default: outError = parserMessage.empty() ? LoadStringResource(nullptr, IDS_PREFS_THEMES_IMPORT_PARSE_FAILED) : parserMessage; break;
     }
 
     return false;

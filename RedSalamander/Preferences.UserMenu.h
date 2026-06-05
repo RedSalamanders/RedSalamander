@@ -6,9 +6,9 @@
 class UserMenuPane final
 {
 public:
-    UserMenuPane()                                = default;
-    UserMenuPane(const UserMenuPane&)             = delete;
-    UserMenuPane& operator=(const UserMenuPane&)  = delete;
+    UserMenuPane()                               = default;
+    UserMenuPane(const UserMenuPane&)            = delete;
+    UserMenuPane& operator=(const UserMenuPane&) = delete;
 
     void OnVisibilityChanged(bool visible) noexcept;
     void Destroy(PreferencesDialogState& state) noexcept;

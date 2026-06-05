@@ -3162,7 +3162,7 @@
     const float secondHeaderWidth = snapshot.secondResultHeaderRect.right - snapshot.secondResultHeaderRect.left;
     const float selectedRowWidth  = snapshot.selectedResultRowRect.right - snapshot.selectedResultRowRect.left;
 
-    return std::format(L"host={} active={} visibleChildren={} results={} selected={} visibleRows={} visibleCols={} visibleCells={} cols=[{}] widths=[{}] "
+    return std::format(L"host={} active={} winFocus={} foreground={} visibleChildren={} results={} selected={} visibleRows={} visibleCols={} visibleCells={} cols=[{}] widths=[{}] "
                        L"paths=[{}] firstHeaderW={:.1f} secondHeaderW={:.1f} "
                        L"selectedRowW={:.1f} focus={} root='{}' name='{}' content='{}' setTarget={} setRequested='{}' setObserved='{}' "
                        L"debugStartRoot='{}' debugStartName='{}' debugStartContent='{}' "
@@ -3171,6 +3171,8 @@
                        L"dbgResizeObserved={:.1f} dbgSettingsFirst={:.1f} dbgResizeOk={} status='{}' backend='{}'",
                        snapshot.usesDxUiHost ? 1 : 0,
                        snapshot.searchActive ? 1 : 0,
+                       snapshot.hasWin32Focus ? 1 : 0,
+                       snapshot.isForegroundWindow ? 1 : 0,
                        snapshot.visibleChildWindowCount,
                        snapshot.resultCount,
                        snapshot.selectedResultCount,

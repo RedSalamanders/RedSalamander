@@ -69,6 +69,19 @@ void SendScaledShortcutsHeaderResizeDrag(HWND shortcuts, const D2D1_RECT_F& head
     return uiASelectedName == rowName || (! rowName.empty() && uiASelectedName.find(rowName) != std::wstring::npos);
 }
 
+void SendShortcutsHeaderClick(HWND shortcuts, D2D1_RECT_F headerRect) noexcept
+{
+    const int dpi = std::max(static_cast<int>(GetDpiForWindow(shortcuts)), USER_DEFAULT_SCREEN_DPI);
+    const auto dipToPx = [dpi](const float valueDip) noexcept -> LONG
+    {
+        return static_cast<LONG>(MulDiv(static_cast<int>(std::lround(valueDip)), dpi, USER_DEFAULT_SCREEN_DPI));
+    };
+    const LONG clickX = dipToPx((headerRect.left + headerRect.right) * 0.5f);
+    const LONG clickY = dipToPx((headerRect.top + headerRect.bottom) * 0.5f);
+    SendMessageW(shortcuts, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
+    SendMessageW(shortcuts, WM_LBUTTONUP, 0, MAKELPARAM(clickX, clickY));
+}
+
 [[nodiscard]] std::wstring FormatShortcutsSnapshotSummary(const ShortcutsWindowDebugSnapshot& snapshot)
 {
     return std::format(L"usesDxUi={} childWindows={} rows={} visibleRows={} visibleColumns={} groups={} visibleHeaders={} collapsed=({},{}) "
@@ -1429,8 +1442,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     const uint8_t initialSortDirection                = snapshot.sortDirection;
     const std::wstring baselineSelectedNameBeforeSort = snapshot.selectedRowName;
     const bool baselineSelectedHasIconBeforeSort      = snapshot.selectedRowCommandCellHasIcon;
-    state.Require(DebugCycleShortcutsWindowGridSortByColumn(sortHeaderColumnIndex),
-                  L"Failed to cycle Shortcuts grid sort through the initial column-header click.");
+    SendShortcutsHeaderClick(shortcuts, snapshot.secondColumnHeaderRect);
     state.Require(waitForSnapshot([&](const ShortcutsWindowDebugSnapshot& value) noexcept
     { return value.sortColumnIndex == sortHeaderColumnIndex && value.sortDirection != initialSortDirection; },
                                   snapshot),
@@ -1446,8 +1458,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     }
 
     const uint8_t firstSortDirection = snapshot.sortDirection;
-    state.Require(DebugCycleShortcutsWindowGridSortByColumn(sortHeaderColumnIndex),
-                  L"Failed to cycle Shortcuts grid sort through the second column-header click.");
+    SendShortcutsHeaderClick(shortcuts, snapshot.secondColumnHeaderRect);
     state.Require(waitForSnapshot([&](const ShortcutsWindowDebugSnapshot& value) noexcept
     { return value.sortColumnIndex == sortHeaderColumnIndex && value.sortDirection != firstSortDirection; },
                                   snapshot),

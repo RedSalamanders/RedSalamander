@@ -1514,7 +1514,7 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
         *wasPresent = false;
     }
 
-    HRESULT hr = S_OK;
+    HRESULT hr                                 = S_OK;
     const std::optional<std::string_view> text = TryReadOptionalString(obj, key, hr);
     if (FAILED(hr))
     {
@@ -1549,7 +1549,7 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
 
 [[nodiscard]] HRESULT ReadRequiredUtf8String(yyjson_val* obj, const char* key, std::string_view& out) noexcept
 {
-    HRESULT hr = S_OK;
+    HRESULT hr                                 = S_OK;
     const std::optional<std::string_view> text = TryReadOptionalString(obj, key, hr);
     if (FAILED(hr))
     {
@@ -1940,8 +1940,7 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
     return S_OK;
 }
 
-template <typename Rule>
-[[nodiscard]] HRESULT ParseAssociationRuleBase(yyjson_val* item, Rule& rule) noexcept
+template <typename Rule> [[nodiscard]] HRESULT ParseAssociationRuleBase(yyjson_val* item, Rule& rule) noexcept
 {
     if (! item || ! yyjson_is_obj(item))
     {
@@ -2716,7 +2715,7 @@ void ParseFolders(yyjson_val* root, Common::Settings::Settings& out)
                 pane.view.thumbnailsVisible = yyjson_get_bool(thumbnailsVisible);
                 if (pane.view.thumbnailsVisible)
                 {
-                    pane.view.display = Common::Settings::FolderDisplayMode::Thumbnails;
+                    pane.view.display           = Common::Settings::FolderDisplayMode::Thumbnails;
                     pane.view.thumbnailsVisible = false;
                 }
             }
@@ -3583,8 +3582,8 @@ void SanitizeSearchHistory(std::vector<std::wstring>& history)
             continue;
         }
 
-        const bool duplicate =
-            std::any_of(sanitized.begin(), sanitized.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, entry); });
+        const bool duplicate = std::any_of(
+            sanitized.begin(), sanitized.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, entry); });
         if (duplicate)
         {
             continue;
@@ -4050,10 +4049,7 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
     return S_OK;
 }
 
-[[nodiscard]] HRESULT AddStringArrayObjectMember(yyjson_mut_doc* doc,
-                                                 yyjson_mut_val* object,
-                                                 const char* key,
-                                                 const std::vector<std::wstring>& values) noexcept
+[[nodiscard]] HRESULT AddStringArrayObjectMember(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const std::vector<std::wstring>& values) noexcept
 {
     if (values.empty())
     {
@@ -4406,9 +4402,7 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
     return S_OK;
 }
 
-[[nodiscard]] HRESULT AddFileActionsObjectMember(yyjson_mut_doc* doc,
-                                                 yyjson_mut_val* root,
-                                                 const Common::Settings::FileActionsSettings& settings) noexcept
+[[nodiscard]] HRESULT AddFileActionsObjectMember(yyjson_mut_doc* doc, yyjson_mut_val* root, const Common::Settings::FileActionsSettings& settings) noexcept
 {
     const Common::Settings::FileActionsSettings defaults = Common::Settings::DefaultFileActionsSettings();
     if (settings == defaults)
@@ -4471,9 +4465,7 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
     return S_OK;
 }
 
-[[nodiscard]] HRESULT AddUserMenuObjectMember(yyjson_mut_doc* doc,
-                                              yyjson_mut_val* root,
-                                              const Common::Settings::UserMenuSettings& settings) noexcept
+[[nodiscard]] HRESULT AddUserMenuObjectMember(yyjson_mut_doc* doc, yyjson_mut_val* root, const Common::Settings::UserMenuSettings& settings) noexcept
 {
     const Common::Settings::UserMenuSettings defaults{};
     if (settings == defaults)
@@ -4493,9 +4485,7 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
     return AddFileActionDefinitionsObjectMember(doc, section, settings.actions);
 }
 
-[[nodiscard]] HRESULT AddMakeFileListObjectMember(yyjson_mut_doc* doc,
-                                                  yyjson_mut_val* root,
-                                                  const Common::Settings::MakeFileListSettings& settings) noexcept
+[[nodiscard]] HRESULT AddMakeFileListObjectMember(yyjson_mut_doc* doc, yyjson_mut_val* root, const Common::Settings::MakeFileListSettings& settings) noexcept
 {
     const Common::Settings::MakeFileListSettings defaults{};
     if (settings == defaults)
@@ -4513,8 +4503,7 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
         return E_OUTOFMEMORY;
     }
 
-    if (settings.sourceMode != defaults.sourceMode &&
-        ! yyjson_mut_obj_add_str(doc, section, "sourceMode", MakeFileListSourceModeToString(settings.sourceMode)))
+    if (settings.sourceMode != defaults.sourceMode && ! yyjson_mut_obj_add_str(doc, section, "sourceMode", MakeFileListSourceModeToString(settings.sourceMode)))
     {
         return E_OUTOFMEMORY;
     }
@@ -4565,7 +4554,8 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
     {
         return E_OUTOFMEMORY;
     }
-    if (settings.includeDirectories != defaults.includeDirectories && ! yyjson_mut_obj_add_bool(doc, section, "includeDirectories", settings.includeDirectories))
+    if (settings.includeDirectories != defaults.includeDirectories &&
+        ! yyjson_mut_obj_add_bool(doc, section, "includeDirectories", settings.includeDirectories))
     {
         return E_OUTOFMEMORY;
     }
@@ -4848,11 +4838,8 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
     return S_FALSE;
 }
 
-[[nodiscard]] HRESULT LoadSettingsFromResolvedPath(const std::filesystem::path& path,
-                                                   Settings& out,
-                                                   bool backupBadFile,
-                                                   bool fallbackToDefaults,
-                                                   SettingsLoadRecoveryInfo* recovery) noexcept
+[[nodiscard]] HRESULT LoadSettingsFromResolvedPath(
+    const std::filesystem::path& path, Settings& out, bool backupBadFile, bool fallbackToDefaults, SettingsLoadRecoveryInfo* recovery) noexcept
 {
     std::string bytes;
     const HRESULT readHr = ReadFileBytes(path, bytes);
@@ -4866,13 +4853,8 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
     if (! doc)
     {
         LogJsonParseError(L"settings file", path, err);
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::InvalidJson,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::InvalidJson, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery);
     }
 
     auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
@@ -4881,26 +4863,16 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
     if (! root || ! yyjson_is_obj(root))
     {
         Debug::Error(L"Failed to parse settings file '{}': expected object at root", path.c_str());
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::InvalidRoot,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::InvalidRoot, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery);
     }
 
     yyjson_val* schema = yyjson_obj_get(root, "schemaVersion");
     if (! schema || ! yyjson_is_int(schema))
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::MissingSchemaVersion,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::MissingSchemaVersion, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery);
     }
 
     const int64_t schemaVersion = yyjson_get_int(schema);
@@ -4920,17 +4892,11 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
     out.schemaVersion = static_cast<uint32_t>(schemaVersion);
 
     yyjson_val* extensions = GetObj(root, "extensions");
-    if (yyjson_obj_get(root, "viewers") || yyjson_obj_get(root, "editors") ||
-        (extensions && yyjson_obj_get(extensions, "openWithViewerByExtension")))
+    if (yyjson_obj_get(root, "viewers") || yyjson_obj_get(root, "editors") || (extensions && yyjson_obj_get(extensions, "openWithViewerByExtension")))
     {
         Debug::Error(L"Settings v16 contains legacy viewer/editor action shape in '{}'", path.c_str());
-        return RecoverSettingsLoadFailure(path,
-                                          out,
-                                          SettingsLoadRecoveryReason::LegacyShape,
-                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                          backupBadFile,
-                                          fallbackToDefaults,
-                                          recovery);
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::LegacyShape, HRESULT_FROM_WIN32(ERROR_INVALID_DATA), backupBadFile, fallbackToDefaults, recovery);
     }
 
     ParseWindows(root, out);
@@ -5565,7 +5531,6 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                     return hr;
                 }
             }
-
         }
     }
 

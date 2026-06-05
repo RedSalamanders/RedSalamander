@@ -32,9 +32,9 @@ namespace
     state.readingDirection     = ResolveReadingDirection(state.flowDirection);
     if (const auto* textField = dynamic_cast<const TextField*>(&control))
     {
-        state.passwordRevealMode   = textField->GetPasswordRevealMode();
-        state.passwordRevealState  = textField->GetPasswordRevealState();
-        state.maskLengthPolicy     = textField->GetPasswordMaskLengthPolicy();
+        state.passwordRevealMode    = textField->GetPasswordRevealMode();
+        state.passwordRevealState   = textField->GetPasswordRevealState();
+        state.maskLengthPolicy      = textField->GetPasswordMaskLengthPolicy();
         state.secretVisibleDotCount = textField->GetSecretVisibleDotCount();
     }
     return state;
@@ -200,8 +200,8 @@ void SetTextInputSelectionRange(TextInputState& state, size_t start, size_t end)
     }
 
     auto [selectionStart, selectionEnd] = GetTextInputSelectionRange(state);
-    selectionStart = std::min(selectionStart, state.text.size());
-    selectionEnd   = std::min(selectionEnd, state.text.size());
+    selectionStart                      = std::min(selectionStart, state.text.size());
+    selectionEnd                        = std::min(selectionEnd, state.text.size());
     if (selectionEnd < selectionStart)
     {
         std::swap(selectionStart, selectionEnd);
@@ -226,14 +226,12 @@ void SetTextInputSelectionRange(TextInputState& state, size_t start, size_t end)
 [[nodiscard]] bool NativeTextInputCompositionChanged(const NativeTextInputState& previous, const NativeTextInputState& current) noexcept
 {
     return previous.compositionStartIndex != current.compositionStartIndex || previous.compositionEndIndex != current.compositionEndIndex ||
-           previous.compositionCursorIndex != current.compositionCursorIndex ||
-           previous.compositionClauseBoundaries != current.compositionClauseBoundaries;
+           previous.compositionCursorIndex != current.compositionCursorIndex || previous.compositionClauseBoundaries != current.compositionClauseBoundaries;
 }
 
 [[nodiscard]] bool NativeTextInputConversionTargetChanged(const NativeTextInputState& previous, const NativeTextInputState& current) noexcept
 {
-    return previous.conversionTargetStartIndex != current.conversionTargetStartIndex ||
-           previous.conversionTargetEndIndex != current.conversionTargetEndIndex;
+    return previous.conversionTargetStartIndex != current.conversionTargetStartIndex || previous.conversionTargetEndIndex != current.conversionTargetEndIndex;
 }
 
 [[nodiscard]] std::pair<size_t, size_t> ResolveImeBaseCompositionRange(const TextInputState& state) noexcept
@@ -324,9 +322,7 @@ void ReplaceNativeTextInputRange(TextInputState& state, size_t rangeStart, size_
     return attribute == ATTR_TARGET_CONVERTED || attribute == ATTR_TARGET_NOTCONVERTED;
 }
 
-[[nodiscard]] std::vector<size_t> ResolveImeClauseBoundaries(size_t compositionStartIndex,
-                                                             size_t compositionLength,
-                                                             const NativeTextInputImePayload& payload)
+[[nodiscard]] std::vector<size_t> ResolveImeClauseBoundaries(size_t compositionStartIndex, size_t compositionLength, const NativeTextInputImePayload& payload)
 {
     std::vector<size_t> boundaries;
     boundaries.reserve(payload.compositionClauses.size());
@@ -472,8 +468,8 @@ void WindowHost::ActivateNativeTextInputSession(Control* control) noexcept
     {
         ClearNativeTextInputCompositionState();
     }
-    _nativeTextInputControl   = control;
-    _nativeTextInputStateCache = ToNativeTextInputState(*control, controlState);
+    _nativeTextInputControl         = control;
+    _nativeTextInputStateCache      = ToNativeTextInputState(*control, controlState);
     _nativeTextInputStateCacheValid = true;
     ApplyNativeTextInputCompositionStateToCache();
     if (controlChanged)
@@ -555,7 +551,7 @@ bool WindowHost::ActivateNativeTextInputTsf(Control* control) noexcept
         }
 
         _nativeTextInputTsfComInitialized = true;
-        hr = CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(threadMgr.put()));
+        hr                                = CoCreateInstance(CLSID_TF_ThreadMgr, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(threadMgr.put()));
     }
 
     if (FAILED(hr) || ! threadMgr)
@@ -585,13 +581,12 @@ bool WindowHost::ActivateNativeTextInputTsf(Control* control) noexcept
     _nativeTextInputTsfClientId = clientId;
     static_cast<void>(threadMgr.query_to(_nativeTextInputTsfThreadMgr.put()));
 
-    auto failActivation =
-        [this]() noexcept
-        {
-            DeactivateNativeTextInputTsf();
-            ++_nativeTextInputEventCounters.tsfActivationFailureCount;
-            return false;
-        };
+    auto failActivation = [this]() noexcept
+    {
+        DeactivateNativeTextInputTsf();
+        ++_nativeTextInputEventCounters.tsfActivationFailureCount;
+        return false;
+    };
 
     wil::com_ptr_nothrow<ITfDocumentMgr> documentMgr;
     hr = threadMgr->CreateDocumentMgr(documentMgr.put());
@@ -602,7 +597,7 @@ bool WindowHost::ActivateNativeTextInputTsf(Control* control) noexcept
 
     wil::com_ptr_nothrow<ITfContext> context;
     TfEditCookie editCookie = 0u;
-    hr = documentMgr->CreateContext(clientId, 0u, textStore.get(), context.put(), &editCookie);
+    hr                      = documentMgr->CreateContext(clientId, 0u, textStore.get(), context.put(), &editCookie);
     if (FAILED(hr) || ! context)
     {
         return failActivation();
@@ -701,13 +696,9 @@ void WindowHost::RaiseNativeTextInputAccessibilityEvent(TextInputAutomationEvent
     {
         case TextInputAutomationEventKind::TextChanged: ++_nativeTextInputEventCounters.uiaTextChangedCount; break;
         case TextInputAutomationEventKind::TextSelectionChanged: ++_nativeTextInputEventCounters.uiaTextSelectionChangedCount; break;
-        case TextInputAutomationEventKind::ActiveTextPositionChanged:
-            ++_nativeTextInputEventCounters.uiaActiveTextPositionChangedCount;
-            break;
+        case TextInputAutomationEventKind::ActiveTextPositionChanged: ++_nativeTextInputEventCounters.uiaActiveTextPositionChangedCount; break;
         case TextInputAutomationEventKind::TextEditCompositionChanged: ++_nativeTextInputEventCounters.uiaTextEditTextChangedCount; break;
-        case TextInputAutomationEventKind::TextEditConversionTargetChanged:
-            ++_nativeTextInputEventCounters.uiaTextEditConversionTargetChangedCount;
-            break;
+        case TextInputAutomationEventKind::TextEditConversionTargetChanged: ++_nativeTextInputEventCounters.uiaTextEditConversionTargetChangedCount; break;
         default: break;
     }
 }
@@ -760,12 +751,12 @@ void WindowHost::ApplyNativeTextInputCompositionStateToCache() noexcept
         return;
     }
 
-    _nativeTextInputStateCache.compositionStartIndex        = _nativeTextInputCompositionStartIndex;
-    _nativeTextInputStateCache.compositionEndIndex          = _nativeTextInputCompositionEndIndex;
-    _nativeTextInputStateCache.conversionTargetStartIndex   = _nativeTextInputConversionTargetStartIndex;
-    _nativeTextInputStateCache.conversionTargetEndIndex     = _nativeTextInputConversionTargetEndIndex;
-    _nativeTextInputStateCache.compositionCursorIndex       = _nativeTextInputCompositionCursorIndex;
-    _nativeTextInputStateCache.compositionClauseBoundaries  = _nativeTextInputCompositionClauseBoundaries;
+    _nativeTextInputStateCache.compositionStartIndex       = _nativeTextInputCompositionStartIndex;
+    _nativeTextInputStateCache.compositionEndIndex         = _nativeTextInputCompositionEndIndex;
+    _nativeTextInputStateCache.conversionTargetStartIndex  = _nativeTextInputConversionTargetStartIndex;
+    _nativeTextInputStateCache.conversionTargetEndIndex    = _nativeTextInputConversionTargetEndIndex;
+    _nativeTextInputStateCache.compositionCursorIndex      = _nativeTextInputCompositionCursorIndex;
+    _nativeTextInputStateCache.compositionClauseBoundaries = _nativeTextInputCompositionClauseBoundaries;
 }
 
 void WindowHost::ClearNativeTextInputCompositionState() noexcept
@@ -976,12 +967,10 @@ bool WindowHost::HandleNativeTextInputEditMessage(UINT msg, WPARAM wp, LPARAM lp
             }
 
             const auto [selectionStart, selectionEnd] = GetTextInputSelectionRange(state);
-            const DWORD startIndex =
-                static_cast<DWORD>((std::min)(MapControlIndexToWin32EditIndex(state.text, selectionStart, state.multiline),
-                                              static_cast<size_t>(std::numeric_limits<DWORD>::max())));
-            const DWORD endIndex =
-                static_cast<DWORD>((std::min)(MapControlIndexToWin32EditIndex(state.text, selectionEnd, state.multiline),
-                                              static_cast<size_t>(std::numeric_limits<DWORD>::max())));
+            const DWORD startIndex = static_cast<DWORD>((std::min)(MapControlIndexToWin32EditIndex(state.text, selectionStart, state.multiline),
+                                                                   static_cast<size_t>(std::numeric_limits<DWORD>::max())));
+            const DWORD endIndex   = static_cast<DWORD>(
+                (std::min)(MapControlIndexToWin32EditIndex(state.text, selectionEnd, state.multiline), static_cast<size_t>(std::numeric_limits<DWORD>::max())));
             if (wp != 0)
             {
                 *reinterpret_cast<DWORD*>(wp) = startIndex;
@@ -1004,7 +993,7 @@ bool WindowHost::HandleNativeTextInputEditMessage(UINT msg, WPARAM wp, LPARAM lp
             }
 
             const std::wstring win32EditText = NormalizeWin32EditTextFromControlText(state.text, state.multiline);
-            const auto mapSelectionIndex = [&win32EditText, &state](uint64_t unsignedValue, LPARAM signedValue) noexcept
+            const auto mapSelectionIndex     = [&win32EditText, &state](uint64_t unsignedValue, LPARAM signedValue) noexcept
             {
                 constexpr uint64_t kWin32EditEndSentinel = static_cast<uint64_t>(std::numeric_limits<UINT>::max());
                 if (signedValue < 0 || unsignedValue == kWin32EditEndSentinel || unsignedValue == static_cast<uint64_t>((std::numeric_limits<WPARAM>::max)()))
@@ -1015,8 +1004,8 @@ bool WindowHost::HandleNativeTextInputEditMessage(UINT msg, WPARAM wp, LPARAM lp
                 return MapWin32EditIndexToControlIndex(win32EditText, static_cast<size_t>(unsignedValue), state.multiline);
             };
 
-            SetTextInputSelectionRange(state, mapSelectionIndex(static_cast<uint64_t>(wp), static_cast<LPARAM>(wp)),
-                                       mapSelectionIndex(static_cast<uint64_t>(lp), lp));
+            SetTextInputSelectionRange(
+                state, mapSelectionIndex(static_cast<uint64_t>(wp), static_cast<LPARAM>(wp)), mapSelectionIndex(static_cast<uint64_t>(lp), lp));
             outResult = syncImportedState(state, false, false) ? TRUE : FALSE;
             return true;
         }
@@ -1028,7 +1017,7 @@ bool WindowHost::HandleNativeTextInputEditMessage(UINT msg, WPARAM wp, LPARAM lp
                 return false;
             }
 
-            const wchar_t* const replacementText = (lp != 0) ? reinterpret_cast<const wchar_t*>(lp) : L"";
+            const wchar_t* const replacementText     = (lp != 0) ? reinterpret_cast<const wchar_t*>(lp) : L"";
             const std::wstring normalizedReplacement = NormalizeControlTextFromWin32EditText(replacementText, state.multiline);
             if (! ReplaceTextInputSelection(state, normalizedReplacement))
             {
@@ -1105,188 +1094,174 @@ bool WindowHost::HandleNativeTextInputImeMessage(UINT msg, WPARAM wp, LPARAM lp)
     if (_nativeTextInputStateCache.readOnly)
     {
         ClearNativeTextInputCompositionState();
-        Debug::Perf::Emit(L"dxui.textinput.ime_update_us",
-                          L"native-ime-lifecycle",
-                          Debug::Perf::ElapsedUs(inputStartedAt),
-                          0u,
-                          static_cast<uint64_t>(msg),
-                          S_OK);
+        Debug::Perf::Emit(
+            L"dxui.textinput.ime_update_us", L"native-ime-lifecycle", Debug::Perf::ElapsedUs(inputStartedAt), 0u, static_cast<uint64_t>(msg), S_OK);
         return true;
     }
 
-    auto startCompositionFromCurrentRange =
-        [this, editTarget]()
+    auto startCompositionFromCurrentRange = [this, editTarget]()
+    {
+        const NativeTextInputState previousState = _nativeTextInputStateCache;
+        TextInputState baseState;
+        if (editTarget->ExportTextInputState(baseState))
         {
-            const NativeTextInputState previousState = _nativeTextInputStateCache;
-            TextInputState baseState;
-            if (editTarget->ExportTextInputState(baseState))
-            {
-                _nativeTextInputImeBaseState = baseState;
-            }
-            else
-            {
-                _nativeTextInputImeBaseState.reset();
-            }
-
-            const TextInputState& rangeState = _nativeTextInputImeBaseState.has_value() ? _nativeTextInputImeBaseState.value()
-                                                                                              : TextInputState{
-                                                                                                    .text                 = _nativeTextInputStateCache.text,
-                                                                                                    .selectionAnchorIndex = _nativeTextInputStateCache.selectionAnchorIndex,
-                                                                                                    .caretIndex           = _nativeTextInputStateCache.caretIndex,
-                                                                                                    .firstVisibleLine     = _nativeTextInputStateCache.firstVisibleLine,
-                                                                                                    .readOnly             = _nativeTextInputStateCache.readOnly,
-                                                                                                    .masked               = _nativeTextInputStateCache.masked,
-                                                                                                    .multiline            = _nativeTextInputStateCache.multiline,
-                                                                                                };
-            const auto [compositionStartIndex, compositionEndIndex] = ResolveImeBaseCompositionRange(rangeState);
-
-            _nativeTextInputImeComposing               = true;
-            _nativeTextInputCompositionStartIndex      = compositionStartIndex;
-            _nativeTextInputCompositionEndIndex        = compositionEndIndex;
-            _nativeTextInputConversionTargetStartIndex.reset();
-            _nativeTextInputConversionTargetEndIndex.reset();
-            _nativeTextInputCompositionCursorIndex.reset();
-            _nativeTextInputCompositionClauseBoundaries.clear();
-            ApplyNativeTextInputCompositionStateToCache();
-            RaiseNativeTextInputAccessibilityEvents(previousState);
-        };
-
-    auto ensureCompositionBaseState =
-        [this, editTarget]() -> bool
-        {
-            if (_nativeTextInputImeBaseState.has_value())
-            {
-                return true;
-            }
-
-            TextInputState baseState;
-            if (! editTarget->ExportTextInputState(baseState))
-            {
-                return false;
-            }
             _nativeTextInputImeBaseState = baseState;
+        }
+        else
+        {
+            _nativeTextInputImeBaseState.reset();
+        }
+
+        const TextInputState& rangeState                        = _nativeTextInputImeBaseState.has_value()
+                                                                      ? _nativeTextInputImeBaseState.value()
+                                                                      : TextInputState{
+                                                                            .text                 = _nativeTextInputStateCache.text,
+                                                                            .selectionAnchorIndex = _nativeTextInputStateCache.selectionAnchorIndex,
+                                                                            .caretIndex           = _nativeTextInputStateCache.caretIndex,
+                                                                            .firstVisibleLine     = _nativeTextInputStateCache.firstVisibleLine,
+                                                                            .readOnly             = _nativeTextInputStateCache.readOnly,
+                                                                            .masked               = _nativeTextInputStateCache.masked,
+                                                                            .multiline            = _nativeTextInputStateCache.multiline,
+                                                                        };
+        const auto [compositionStartIndex, compositionEndIndex] = ResolveImeBaseCompositionRange(rangeState);
+
+        _nativeTextInputImeComposing          = true;
+        _nativeTextInputCompositionStartIndex = compositionStartIndex;
+        _nativeTextInputCompositionEndIndex   = compositionEndIndex;
+        _nativeTextInputConversionTargetStartIndex.reset();
+        _nativeTextInputConversionTargetEndIndex.reset();
+        _nativeTextInputCompositionCursorIndex.reset();
+        _nativeTextInputCompositionClauseBoundaries.clear();
+        ApplyNativeTextInputCompositionStateToCache();
+        RaiseNativeTextInputAccessibilityEvents(previousState);
+    };
+
+    auto ensureCompositionBaseState = [this, editTarget]() -> bool
+    {
+        if (_nativeTextInputImeBaseState.has_value())
+        {
             return true;
-        };
+        }
+
+        TextInputState baseState;
+        if (! editTarget->ExportTextInputState(baseState))
+        {
+            return false;
+        }
+        _nativeTextInputImeBaseState = baseState;
+        return true;
+    };
 
     auto updateConversionTargetFromAttributes =
         [this](size_t compositionStartIndex, size_t compositionLength, const NativeTextInputImePayload& payload) noexcept
+    {
+        _nativeTextInputConversionTargetStartIndex.reset();
+        _nativeTextInputConversionTargetEndIndex.reset();
+
+        const size_t attributeCount = std::min(payload.compositionAttributes.size(), compositionLength);
+        std::optional<size_t> targetStart;
+        size_t targetEnd = 0u;
+        for (size_t index = 0u; index < attributeCount; ++index)
         {
-            _nativeTextInputConversionTargetStartIndex.reset();
-            _nativeTextInputConversionTargetEndIndex.reset();
-
-            const size_t attributeCount = std::min(payload.compositionAttributes.size(), compositionLength);
-            std::optional<size_t> targetStart;
-            size_t targetEnd = 0u;
-            for (size_t index = 0u; index < attributeCount; ++index)
+            if (IsImeTargetAttribute(payload.compositionAttributes[index]))
             {
-                if (IsImeTargetAttribute(payload.compositionAttributes[index]))
+                if (! targetStart.has_value())
                 {
-                    if (! targetStart.has_value())
-                    {
-                        targetStart = index;
-                    }
-                    targetEnd = index + 1u;
+                    targetStart = index;
                 }
-                else if (targetStart.has_value())
-                {
-                    break;
-                }
+                targetEnd = index + 1u;
             }
-
-            if (targetStart.has_value())
+            else if (targetStart.has_value())
             {
-                _nativeTextInputConversionTargetStartIndex = compositionStartIndex + targetStart.value();
-                _nativeTextInputConversionTargetEndIndex   = compositionStartIndex + targetEnd;
+                break;
             }
-        };
+        }
+
+        if (targetStart.has_value())
+        {
+            _nativeTextInputConversionTargetStartIndex = compositionStartIndex + targetStart.value();
+            _nativeTextInputConversionTargetEndIndex   = compositionStartIndex + targetEnd;
+        }
+    };
 
     auto applyCompositionPayload =
         [this, editTarget, &ensureCompositionBaseState, &updateConversionTargetFromAttributes](const NativeTextInputImePayload& payload) -> bool
+    {
+        if (! payload.hasCompositionString || ! ensureCompositionBaseState())
         {
-            if (! payload.hasCompositionString || ! ensureCompositionBaseState())
-            {
-                return false;
-            }
+            return false;
+        }
 
-            TextInputState previewState = _nativeTextInputImeBaseState.value();
-            const auto [compositionStartIndex, compositionEndIndex] = ResolveImeBaseCompositionRange(previewState);
-            ReplaceNativeTextInputRange(previewState, compositionStartIndex, compositionEndIndex, payload.compositionString);
-            if (payload.hasCursorPosition)
-            {
-                previewState.caretIndex = compositionStartIndex + std::min(payload.cursorPosition, payload.compositionString.size());
-            }
-
-            if (! editTarget->ImportTextInputState(*this, previewState, false))
-            {
-                return false;
-            }
-
-            SyncNativeTextInputSession(editTarget);
-            const NativeTextInputState previousState = _nativeTextInputStateCache;
-            _nativeTextInputImeComposing          = true;
-            _nativeTextInputCompositionStartIndex = compositionStartIndex;
-            _nativeTextInputCompositionEndIndex   = compositionStartIndex + payload.compositionString.size();
-            updateConversionTargetFromAttributes(compositionStartIndex, payload.compositionString.size(), payload);
-            _nativeTextInputCompositionCursorIndex =
-                payload.hasCursorPosition
-                    ? std::optional<size_t>{compositionStartIndex + std::min(payload.cursorPosition, payload.compositionString.size())}
-                    : std::nullopt;
-            _nativeTextInputCompositionClauseBoundaries =
-                ResolveImeClauseBoundaries(compositionStartIndex, payload.compositionString.size(), payload);
-            ApplyNativeTextInputCompositionStateToCache();
-            RaiseNativeTextInputAccessibilityEvents(previousState);
-            UpdateNativeTextInputCaret();
-            const uint64_t conversionTargetLength =
-                _nativeTextInputConversionTargetStartIndex.has_value() && _nativeTextInputConversionTargetEndIndex.has_value()
-                    ? static_cast<uint64_t>(_nativeTextInputConversionTargetEndIndex.value() - _nativeTextInputConversionTargetStartIndex.value())
-                    : 0u;
-            Debug::Perf::Emit(L"dxui.textinput.composition_length",
-                              L"native-ime-composition",
-                              0u,
-                              static_cast<uint64_t>(payload.compositionString.size()),
-                              conversionTargetLength,
-                              S_OK);
-            return true;
-        };
-
-    auto applyResultPayload =
-        [this, editTarget, &ensureCompositionBaseState](const NativeTextInputImePayload& payload) -> bool
+        TextInputState previewState                             = _nativeTextInputImeBaseState.value();
+        const auto [compositionStartIndex, compositionEndIndex] = ResolveImeBaseCompositionRange(previewState);
+        ReplaceNativeTextInputRange(previewState, compositionStartIndex, compositionEndIndex, payload.compositionString);
+        if (payload.hasCursorPosition)
         {
-            if (! payload.hasResultString || ! ensureCompositionBaseState())
-            {
-                return false;
-            }
+            previewState.caretIndex = compositionStartIndex + std::min(payload.cursorPosition, payload.compositionString.size());
+        }
 
-            TextInputState committedState = _nativeTextInputImeBaseState.value();
-            const auto [compositionStartIndex, compositionEndIndex] = ResolveImeBaseCompositionRange(committedState);
-            ReplaceNativeTextInputRange(committedState, compositionStartIndex, compositionEndIndex, payload.resultString);
-            if (! editTarget->ImportTextInputState(*this, committedState, true))
-            {
-                return false;
-            }
-
-            SyncNativeTextInputSession(editTarget);
-            _nativeTextInputImeBaseState = committedState;
-            Debug::Perf::Emit(L"dxui.textinput.composition_length",
-                              L"native-ime-result",
-                              0u,
-                              static_cast<uint64_t>(payload.resultString.size()),
-                              0u,
-                              S_OK);
-            return true;
-        };
-
-    auto restoreCompositionBaseState =
-        [this, editTarget]()
+        if (! editTarget->ImportTextInputState(*this, previewState, false))
         {
-            if (! _nativeTextInputImeBaseState.has_value())
-            {
-                return;
-            }
+            return false;
+        }
 
-            static_cast<void>(editTarget->ImportTextInputState(*this, _nativeTextInputImeBaseState.value(), false));
-            SyncNativeTextInputSession(editTarget);
-        };
+        SyncNativeTextInputSession(editTarget);
+        const NativeTextInputState previousState = _nativeTextInputStateCache;
+        _nativeTextInputImeComposing             = true;
+        _nativeTextInputCompositionStartIndex    = compositionStartIndex;
+        _nativeTextInputCompositionEndIndex      = compositionStartIndex + payload.compositionString.size();
+        updateConversionTargetFromAttributes(compositionStartIndex, payload.compositionString.size(), payload);
+        _nativeTextInputCompositionCursorIndex =
+            payload.hasCursorPosition ? std::optional<size_t>{compositionStartIndex + std::min(payload.cursorPosition, payload.compositionString.size())}
+                                      : std::nullopt;
+        _nativeTextInputCompositionClauseBoundaries = ResolveImeClauseBoundaries(compositionStartIndex, payload.compositionString.size(), payload);
+        ApplyNativeTextInputCompositionStateToCache();
+        RaiseNativeTextInputAccessibilityEvents(previousState);
+        UpdateNativeTextInputCaret();
+        const uint64_t conversionTargetLength =
+            _nativeTextInputConversionTargetStartIndex.has_value() && _nativeTextInputConversionTargetEndIndex.has_value()
+                ? static_cast<uint64_t>(_nativeTextInputConversionTargetEndIndex.value() - _nativeTextInputConversionTargetStartIndex.value())
+                : 0u;
+        Debug::Perf::Emit(L"dxui.textinput.composition_length",
+                          L"native-ime-composition",
+                          0u,
+                          static_cast<uint64_t>(payload.compositionString.size()),
+                          conversionTargetLength,
+                          S_OK);
+        return true;
+    };
+
+    auto applyResultPayload = [this, editTarget, &ensureCompositionBaseState](const NativeTextInputImePayload& payload) -> bool
+    {
+        if (! payload.hasResultString || ! ensureCompositionBaseState())
+        {
+            return false;
+        }
+
+        TextInputState committedState                           = _nativeTextInputImeBaseState.value();
+        const auto [compositionStartIndex, compositionEndIndex] = ResolveImeBaseCompositionRange(committedState);
+        ReplaceNativeTextInputRange(committedState, compositionStartIndex, compositionEndIndex, payload.resultString);
+        if (! editTarget->ImportTextInputState(*this, committedState, true))
+        {
+            return false;
+        }
+
+        SyncNativeTextInputSession(editTarget);
+        _nativeTextInputImeBaseState = committedState;
+        Debug::Perf::Emit(L"dxui.textinput.composition_length", L"native-ime-result", 0u, static_cast<uint64_t>(payload.resultString.size()), 0u, S_OK);
+        return true;
+    };
+
+    auto restoreCompositionBaseState = [this, editTarget]()
+    {
+        if (! _nativeTextInputImeBaseState.has_value())
+        {
+            return;
+        }
+
+        static_cast<void>(editTarget->ImportTextInputState(*this, _nativeTextInputImeBaseState.value(), false));
+        SyncNativeTextInputSession(editTarget);
+    };
 
     switch (msg)
     {
@@ -1371,19 +1346,17 @@ bool WindowHost::TryGetNativeTextInputCaretRects(D2D1_RECT_F& outRectDip, RECT& 
         return false;
     }
 
-    const std::optional<D2D1_RECT_F> caretRectDip =
-        _nativeTextInputControl->GetTextInputCaretRect(*this, _nativeTextInputStateCache.caretIndex);
+    const std::optional<D2D1_RECT_F> caretRectDip = _nativeTextInputControl->GetTextInputCaretRect(*this, _nativeTextInputStateCache.caretIndex);
     if (! caretRectDip.has_value())
     {
         return false;
     }
 
-    outRectDip = caretRectDip.value();
-    outClientRectPx =
-        NormalizeCaretRectPx(RECT{static_cast<LONG>(std::lround(DipsToPixels(outRectDip.left))),
-                                  static_cast<LONG>(std::lround(DipsToPixels(outRectDip.top))),
-                                  static_cast<LONG>(std::lround(DipsToPixels(outRectDip.right))),
-                                  static_cast<LONG>(std::lround(DipsToPixels(outRectDip.bottom)))});
+    outRectDip      = caretRectDip.value();
+    outClientRectPx = NormalizeCaretRectPx(RECT{static_cast<LONG>(std::lround(DipsToPixels(outRectDip.left))),
+                                                static_cast<LONG>(std::lround(DipsToPixels(outRectDip.top))),
+                                                static_cast<LONG>(std::lround(DipsToPixels(outRectDip.right))),
+                                                static_cast<LONG>(std::lround(DipsToPixels(outRectDip.bottom)))});
 
     outScreenRectPx = outClientRectPx;
     MapWindowPoints(_hwnd, nullptr, reinterpret_cast<POINT*>(&outScreenRectPx), 2);
@@ -1401,10 +1374,10 @@ void WindowHost::UpdateNativeTextInputCaret() noexcept
         return;
     }
 
-    _nativeTextInputCaretRectDip       = caretRectDip;
-    _nativeTextInputCaretClientRectPx  = caretClientRectPx;
-    _nativeTextInputCaretScreenRectPx  = caretScreenRectPx;
-    _nativeTextInputCaretRectValid     = true;
+    _nativeTextInputCaretRectDip      = caretRectDip;
+    _nativeTextInputCaretClientRectPx = caretClientRectPx;
+    _nativeTextInputCaretScreenRectPx = caretScreenRectPx;
+    _nativeTextInputCaretRectValid    = true;
     ++_nativeTextInputEventCounters.caretUpdateCount;
 
     if (! _hwnd || GetFocus() != _hwnd)
@@ -1433,8 +1406,8 @@ void WindowHost::UpdateNativeTextInputCaret() noexcept
 void WindowHost::DestroyNativeTextInputCaret() noexcept
 {
     _nativeTextInputCaret.Reset();
-    _nativeTextInputCaretRectValid = false;
-    _nativeTextInputCaretRectDip   = D2D1::RectF();
+    _nativeTextInputCaretRectValid    = false;
+    _nativeTextInputCaretRectDip      = D2D1::RectF();
     _nativeTextInputCaretClientRectPx = RECT{};
     _nativeTextInputCaretScreenRectPx = RECT{};
 }

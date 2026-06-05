@@ -1221,7 +1221,7 @@ namespace
                                   label,
                                   HotPathsFocusTargetName(expectedTarget),
                                   HotPathsFocusTargetName(snapshot.hotPathsFocusTarget),
-                                   static_cast<int>(snapshot.currentCategory),
+                                  static_cast<int>(snapshot.currentCategory),
                                   reinterpret_cast<uintptr_t>(nativeFocusBefore),
                                   reinterpret_cast<uintptr_t>(nativeFocusAfter),
                                   reinterpret_cast<uintptr_t>(currentActivePage),
@@ -2893,12 +2893,11 @@ namespace
         const bool hasSnapshot = DebugGetPreferencesDialogSnapshot(debugSnapshot);
         const HWND activePage  = DebugGetPreferencesActivePageHandle();
 
-        const auto valueState = (activePage && IsWindow(activePage) != FALSE)
-                                    ? CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName)
-                                    : std::nullopt;
-        const auto allEditStates =
-            (activePage && IsWindow(activePage) != FALSE) ? CollectVisibleDescendantControlValueStates(activePage, UIA_EditControlTypeId)
-                                                          : std::vector<UiaControlValueState>{};
+        const auto valueState    = (activePage && IsWindow(activePage) != FALSE)
+                                       ? CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName)
+                                       : std::nullopt;
+        const auto allEditStates = (activePage && IsWindow(activePage) != FALSE) ? CollectVisibleDescendantControlValueStates(activePage, UIA_EditControlTypeId)
+                                                                                 : std::vector<UiaControlValueState>{};
         std::wstring editSummary;
         const size_t summaryCount = std::min<size_t>(allEditStates.size(), 4u);
         for (size_t i = 0; i < summaryCount; ++i)
@@ -2907,14 +2906,13 @@ namespace
             {
                 editSummary += L"; ";
             }
-            editSummary +=
-                std::format(L"#{} name='{}' value='{}' readOnly={} hasValuePattern={} hasValueProperty={}",
-                            i,
-                            allEditStates[i].name,
-                            allEditStates[i].value,
-                            allEditStates[i].isReadOnly,
-                            allEditStates[i].hasValuePattern,
-                            allEditStates[i].hasValueProperty);
+            editSummary += std::format(L"#{} name='{}' value='{}' readOnly={} hasValuePattern={} hasValueProperty={}",
+                                       i,
+                                       allEditStates[i].name,
+                                       allEditStates[i].value,
+                                       allEditStates[i].isReadOnly,
+                                       allEditStates[i].hasValuePattern,
+                                       allEditStates[i].hasValueProperty);
         }
 
         if (allEditStates.size() > summaryCount)
@@ -3085,10 +3083,10 @@ namespace
         return false;
     }
 
-    state.Require(waitForEditValue(editName, initialEditValue),
-                  std::format(
-                      L"Preferences Keyboard page visible DX search edit did not discard the pending search value after shell Cancel reopened the page.{}",
-                      describeKeyboardLiveSearchState(editName)));
+    state.Require(
+        waitForEditValue(editName, initialEditValue),
+        std::format(L"Preferences Keyboard page visible DX search edit did not discard the pending search value after shell Cancel reopened the page.{}",
+                    describeKeyboardLiveSearchState(editName)));
     state.Require(waitForSnapshot(
                       [&](const PreferencesDebugSnapshot& value) noexcept
     {

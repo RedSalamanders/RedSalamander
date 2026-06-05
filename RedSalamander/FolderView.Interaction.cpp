@@ -77,8 +77,8 @@ void FolderView::OnMouseLeave()
 
 void FolderView::OnKeyDownMessage(WPARAM key, LPARAM keyInfo)
 {
-    const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-    const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    const bool ctrl                         = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool shift                        = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     const bool translatedSpaceCharMayFollow = key == VK_SPACE && keyInfo != 0;
     OnKeyDown(key, ctrl, shift, translatedSpaceCharMayFollow);
 }
@@ -100,8 +100,8 @@ bool FolderView::OnSysKeyDownMessage(WPARAM key, LPARAM keyInfo)
         return false;
     }
 
-    const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-    const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    const bool ctrl                         = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool shift                        = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     const bool translatedSpaceCharMayFollow = key == VK_SPACE && keyInfo != 0;
     OnKeyDown(key, ctrl, shift, translatedSpaceCharMayFollow);
     return true;
@@ -196,12 +196,9 @@ void FolderView::OnHScrollMessage(UINT scrollRequest)
         case SB_PAGERIGHT:
             newOffsetDip = FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset + pageWidthDip, maxHorizontalOffset, _columnLayout);
             break;
-        case SB_THUMBTRACK:
-            newOffsetDip = DipFromPx(static_cast<int>(si.nTrackPos));
-            break;
+        case SB_THUMBTRACK: newOffsetDip = DipFromPx(static_cast<int>(si.nTrackPos)); break;
         case SB_THUMBPOSITION:
-            newOffsetDip = FolderViewColumnLayout::ResolveNearestScrollStop(
-                DipFromPx(static_cast<int>(si.nTrackPos)), maxHorizontalOffset, _columnLayout);
+            newOffsetDip = FolderViewColumnLayout::ResolveNearestScrollStop(DipFromPx(static_cast<int>(si.nTrackPos)), maxHorizontalOffset, _columnLayout);
             break;
         case SB_LEFT: newOffsetDip = 0.0f; break;
         case SB_RIGHT: newOffsetDip = maxHorizontalOffset; break;
@@ -267,6 +264,22 @@ void FolderView::OnCommandMessage(UINT commandId)
                 if (root && PostMessageW(root, WM_COMMAND, MAKEWPARAM(IDM_PANE_VIEW_SPACE, 0), 0) != 0)
                 {
                     break;
+                }
+            }
+            break;
+        }
+        case IDM_PANE_VIEW:
+        case IDM_PANE_ALTERNATE_VIEW:
+        case IDM_PANE_EDIT:
+        case IDM_PANE_ALTERNATE_EDIT:
+        {
+            if (_hWnd)
+            {
+                SetFocus(_hWnd.get());
+                const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
+                if (root)
+                {
+                    PostMessageW(root, WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
                 }
             }
             break;
@@ -345,11 +358,11 @@ void FolderView::OnCommandMessage(UINT commandId)
 void FolderView::OnMouseWheel(int delta, bool horizontal)
 {
     const float maxHorizontal = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
-    const int wheelClicks = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
+    const int wheelClicks     = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
     for (int click = 0; click < std::abs(wheelClicks); ++click)
     {
-        _horizontalOffset = wheelClicks > 0 ? FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset, maxHorizontal, _columnLayout) :
-                                              FolderViewColumnLayout::ResolvePreviousScrollStop(_horizontalOffset, maxHorizontal, _columnLayout);
+        _horizontalOffset = wheelClicks > 0 ? FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset, maxHorizontal, _columnLayout)
+                                            : FolderViewColumnLayout::ResolvePreviousScrollStop(_horizontalOffset, maxHorizontal, _columnLayout);
     }
 
     _horizontalOffset = std::clamp(_horizontalOffset, 0.0f, maxHorizontal);
@@ -853,10 +866,10 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
             const float viewWidthDip        = std::max(0.0f, DipFromPx(_clientSize.cx));
             const float maxHorizontalOffset = std::max(0.0f, _contentWidth - viewWidthDip);
             const int visibleColumns        = visibleColumnCount();
-            _horizontalOffset               = std::clamp(FolderViewColumnLayout::ResolvePreviousScrollStop(
-                                           _horizontalOffset - std::max(1.0f, viewWidthDip), maxHorizontalOffset, _columnLayout),
-                                       0.0f,
-                                       maxHorizontalOffset);
+            _horizontalOffset               = std::clamp(
+                FolderViewColumnLayout::ResolvePreviousScrollStop(_horizontalOffset - std::max(1.0f, viewWidthDip), maxHorizontalOffset, _columnLayout),
+                0.0f,
+                maxHorizontalOffset);
 
             // Move focus left by visible columns
             if (hasFocus && ! _columnCounts.empty())
@@ -880,13 +893,13 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
         {
             ExitIncrementalSearch();
             // Scroll right by visible columns
-            const float viewWidthDip = std::max(0.0f, DipFromPx(_clientSize.cx));
-            const int visibleColumns = visibleColumnCount();
+            const float viewWidthDip  = std::max(0.0f, DipFromPx(_clientSize.cx));
+            const int visibleColumns  = visibleColumnCount();
             const float maxHorizontal = std::max(0.0f, _contentWidth - viewWidthDip);
-            _horizontalOffset         = std::clamp(FolderViewColumnLayout::ResolveNextScrollStop(
-                                           _horizontalOffset + std::max(1.0f, viewWidthDip), maxHorizontal, _columnLayout),
-                                       0.0f,
-                                       maxHorizontal);
+            _horizontalOffset =
+                std::clamp(FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset + std::max(1.0f, viewWidthDip), maxHorizontal, _columnLayout),
+                           0.0f,
+                           maxHorizontal);
 
             // Move focus right by visible columns
             if (hasFocus && ! _columnCounts.empty())
@@ -1119,8 +1132,8 @@ void FolderView::ExitIncrementalSearch() noexcept
     {
         return;
     }
-    const std::wstring previousQuery = _incrementalSearch.query;
-    _incrementalSearch.active        = false;
+    const std::wstring previousQuery         = _incrementalSearch.query;
+    _incrementalSearch.active                = false;
     _incrementalSearch.suppressNextSpaceChar = false;
     _incrementalSearch.query.clear();
     ClearIncrementalSearchHighlight();
@@ -1281,7 +1294,7 @@ void FolderView::ActivateIncrementalSearch()
 {
     const auto quickSearchStart = std::chrono::steady_clock::now();
 
-    _incrementalSearch.active = true;
+    _incrementalSearch.active                = true;
     _incrementalSearch.suppressNextSpaceChar = false;
     _incrementalSearch.query.clear();
     ClearIncrementalSearchHighlight();
@@ -1310,9 +1323,9 @@ void FolderView::UpdateIncrementalSearchHighlightForFocusedItem()
         return;
     }
 
-    const FolderItem& item                  = _items[_focusedIndex];
+    const FolderItem& item                    = _items[_focusedIndex];
     const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
-    const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(visualDisplayName);
+    const std::optional<UINT32> matchOffset   = FindIncrementalSearchMatchOffset(visualDisplayName);
     if (! matchOffset.has_value())
     {
         ClearIncrementalSearchHighlight();
@@ -1517,7 +1530,7 @@ std::optional<size_t> FolderView::FindNextIncrementalSearchPrefixMatch(size_t st
 #ifdef ENABLE_TESTS
 bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapshot& out) const noexcept
 {
-    out = {};
+    out        = {};
     out.active = _incrementalSearch.active;
     out.query  = _incrementalSearch.query;
 
@@ -1541,7 +1554,7 @@ bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapsho
     for (const FolderItem& item : _items)
     {
         const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
-        const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(visualDisplayName);
+        const std::optional<UINT32> matchOffset   = FindIncrementalSearchMatchOffset(visualDisplayName);
         if (! matchOffset.has_value())
         {
             continue;

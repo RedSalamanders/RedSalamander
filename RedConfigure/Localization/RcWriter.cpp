@@ -13,24 +13,12 @@ namespace
     {
         switch (ch)
         {
-        case L'"':
-            result.append(L"\"\"");
-            break;
-        case L'\r':
-            result.append(L"\\r");
-            break;
-        case L'\n':
-            result.append(L"\\n");
-            break;
-        case L'\t':
-            result.append(L"\\t");
-            break;
-        case L'\\':
-            result.append(L"\\\\");
-            break;
-        default:
-            result.push_back(ch);
-            break;
+            case L'"': result.append(L"\"\""); break;
+            case L'\r': result.append(L"\\r"); break;
+            case L'\n': result.append(L"\\n"); break;
+            case L'\t': result.append(L"\\t"); break;
+            case L'\\': result.append(L"\\\\"); break;
+            default: result.push_back(ch); break;
         }
     }
     return result;

@@ -13,14 +13,8 @@ public:
     void Destroy(PreferencesDialogState& state) noexcept;
     void InitializePage(HWND parent, PreferencesDialogState& state) noexcept;
     void Refresh(HWND host, PreferencesDialogState& state) noexcept;
-    void LayoutPage(HWND host,
-                    PreferencesDialogState& state,
-                    int x,
-                    int& y,
-                    int width,
-                    int margin,
-                    int gapY,
-                    const PreferencesTypographyContext& typography) noexcept;
+    void LayoutPage(
+        HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept;
     [[nodiscard]] bool HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept;
 
 #ifdef ENABLE_TESTS

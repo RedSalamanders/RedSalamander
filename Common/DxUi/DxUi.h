@@ -48,6 +48,12 @@ enum class GridSelectionMode : uint8_t
     Extended,
 };
 
+enum class GridVisualMode : uint8_t
+{
+    Standard,
+    FolderView,
+};
+
 enum class ComboBoxVariant : uint8_t
 {
     Window,
@@ -101,6 +107,7 @@ enum class FontRole : uint8_t
     Body,
     BodyStrong, // 14/20 Semibold
     BodyLarge,  // 18/24 Regular
+    ListItem,   // 12 Regular, dense file/list rows
     Title,
     Subtitle,   // 20/28 Semibold
     TitleLarge, // 40/52 Semibold
@@ -183,9 +190,9 @@ struct MenuFlyoutItem
     };
     std::vector<SliderStop> sliderStops;
     uint32_t sliderValue = 0u;
-    bool enabled  = true;
-    bool checked  = false;
-    int commandId = 0;
+    bool enabled         = true;
+    bool checked         = false;
+    int commandId        = 0;
     std::vector<MenuFlyoutItem> children; // Non-empty → has submenu
 };
 
@@ -251,6 +258,7 @@ struct ContextMenuSessionCallbacks
     std::function<std::optional<ContextMenuRootSwitchRequest>()> switchRootFromMenuBarHover;
     ContextMenuRootHorizontalAlignment rootHorizontalAlignment = ContextMenuRootHorizontalAlignment::Start;
     ContextMenuRootVerticalPlacement rootVerticalPlacement     = ContextMenuRootVerticalPlacement::Below;
+    float maxRootHeightDip                                     = 0.0f;
     bool focusFirstNavigableItem                               = false;
     bool ignoreInitialLeftButtonUp                             = false;
     bool ignoreInitialRightButtonUp                            = false;
@@ -272,6 +280,13 @@ public:
                                                  const ContextMenuSessionCallbacks& sessionCallbacks = {});
 };
 
+// Persistent menu file tracing is compiled out of retail builds. To reactivate
+// it for a support build, define ENABLE_DXUI_MENU_DIAGNOSTICS at compile time
+// and set REDSALAMANDER_DXUI_MENU_TRACE=1 at runtime. Debug/test builds also
+// keep it available while NDEBUG is not defined.
+[[nodiscard]] bool IsContextMenuDiagnosticsEnabled() noexcept;
+void TraceContextMenuDiagnostics(std::wstring_view eventName, std::wstring_view details = {}) noexcept;
+
 #if defined(ENABLE_TESTS)
 struct ContextMenuPopupDebugState
 {
@@ -290,14 +305,19 @@ struct ContextMenuPopupDebugState
     RECT windowRectPx{};
     std::optional<size_t> hoveredIndex;
     std::optional<size_t> keyboardIndex;
+    bool hoverTimerActive = false;
+    bool hoverTimerPendingOpen = false;
+    bool hoverTimerPendingClose = false;
+    std::optional<size_t> hoverTimerItemIndex;
     std::vector<std::wstring> itemTexts;
+    std::vector<std::wstring> itemAcceleratorTexts;
     std::vector<MenuItemKind> itemKinds;
     std::vector<bool> itemEnabled;
     std::vector<uint32_t> sliderValues;
     std::vector<uint32_t> sliderStopCounts;
-    uint64_t rootPointerSwitchCount = 0;
+    uint64_t rootPointerSwitchCount         = 0;
     uint64_t rootSwitchImmediateRenderCount = 0;
-    uint64_t renderCount = 0;
+    uint64_t renderCount                    = 0;
 };
 
 struct ContextMenuPopupItemLayoutDebugState
@@ -335,6 +355,7 @@ struct WindowHostBitmapCapture;
 [[nodiscard]] bool DebugGetContextMenuPopupItemPaint(HWND hwnd, size_t itemIndex, ContextMenuPopupItemPaintDebugState& outState) noexcept;
 [[nodiscard]] bool DebugSetContextMenuPopupBackdropCapture(HWND hwnd, const WindowHostBitmapCapture& capture) noexcept;
 [[nodiscard]] bool DebugCaptureContextMenuPopupBitmap(HWND hwnd, WindowHostBitmapCapture& outCapture) noexcept;
+[[nodiscard]] bool DebugFireContextMenuPopupHoverTimer(HWND hwnd) noexcept;
 [[nodiscard]] bool DebugComputeContextMenuPopupPosition(POINT screenPoint,
                                                         float widthDip,
                                                         float heightDip,
@@ -425,12 +446,12 @@ struct NativeTextInputState
     std::optional<size_t> conversionTargetEndIndex;
     std::optional<size_t> compositionCursorIndex;
     std::vector<size_t> compositionClauseBoundaries;
-    FlowDirection flowDirection                 = FlowDirection::LeftToRight;
-    DWRITE_READING_DIRECTION readingDirection   = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT;
-    PasswordRevealMode passwordRevealMode       = PasswordRevealMode::Peek;
-    PasswordRevealState passwordRevealState     = PasswordRevealState::Hidden;
-    PasswordMaskLengthPolicy maskLengthPolicy   = PasswordMaskLengthPolicy::Exact;
-    size_t secretVisibleDotCount                = 0u;
+    FlowDirection flowDirection               = FlowDirection::LeftToRight;
+    DWRITE_READING_DIRECTION readingDirection = DWRITE_READING_DIRECTION_LEFT_TO_RIGHT;
+    PasswordRevealMode passwordRevealMode     = PasswordRevealMode::Peek;
+    PasswordRevealState passwordRevealState   = PasswordRevealState::Hidden;
+    PasswordMaskLengthPolicy maskLengthPolicy = PasswordMaskLengthPolicy::Exact;
+    size_t secretVisibleDotCount              = 0u;
 };
 
 enum class TextInputAutomationEventKind : uint8_t
@@ -466,7 +487,7 @@ struct NativeTextInputImePayload
     bool hasResultString = false;
     std::wstring resultString;
     bool hasCursorPosition = false;
-    size_t cursorPosition = 0u;
+    size_t cursorPosition  = 0u;
     std::vector<uint8_t> compositionAttributes;
     std::vector<uint32_t> compositionClauses;
 };
@@ -512,16 +533,17 @@ struct VisibleSpan
 
 struct GridVisibleWorkMetrics
 {
-    uint64_t visibleRowCount         = 0;
-    uint64_t visibleGroupHeaderCount = 0;
-    size_t visibleColumnCount        = 0;
-    uint64_t visibleCellCount        = 0;
-    uint64_t visibleIconCellCount    = 0;
-    uint64_t visibleBadgeCellCount   = 0;
-    float verticalScrollDip          = 0.0f;
-    float horizontalScrollDip        = 0.0f;
-    bool hasVerticalScrollbar        = false;
-    bool hasHorizontalScrollbar      = false;
+    uint64_t visibleRowCount            = 0;
+    uint64_t visibleGroupHeaderCount    = 0;
+    size_t visibleColumnCount           = 0;
+    uint64_t visibleCellCount           = 0;
+    uint64_t visibleIconCellCount       = 0;
+    uint64_t visibleBitmapIconCellCount = 0;
+    uint64_t visibleBadgeCellCount      = 0;
+    float verticalScrollDip             = 0.0f;
+    float horizontalScrollDip           = 0.0f;
+    bool hasVerticalScrollbar           = false;
+    bool hasHorizontalScrollbar         = false;
 };
 
 struct GridDebugRowVisualState
@@ -546,6 +568,8 @@ struct GridDebugCellVisualState
     uint32_t badgeFillArgb               = 0u;
     uint32_t badgeTextArgb               = 0u;
     bool hasCheckbox                     = false;
+    bool hasIcon                         = false;
+    bool iconUsesIconFont                = false;
     bool hasSwatch                       = false;
     bool hasBadge                        = false;
     bool selected                        = false;
@@ -983,9 +1007,12 @@ struct GridCellData
 {
     std::wstring text;
     std::wstring iconText;
+    wil::com_ptr<ID2D1Bitmap1> iconBitmap;
     std::wstring badgeText;
     std::wstring tooltipText;
+    int iconIndex                         = -1;
     GridCellKind kind                   = GridCellKind::Text;
+    FontRole iconFontRole               = FontRole::Small;
     DWRITE_TEXT_ALIGNMENT textAlignment = DWRITE_TEXT_ALIGNMENT_LEADING;
     bool multiline                      = false;
     bool checked                        = false;
@@ -1014,6 +1041,7 @@ struct GridRowStyle
 {
     GridRowTone tone = GridRowTone::None;
     std::wstring rainbowSeed;
+    std::optional<uint32_t> folderViewRainbowHash32;
 };
 
 struct GridGroupDesc
@@ -1060,6 +1088,8 @@ public:
     virtual void OnGridContextMenu(size_t rowIndex, POINT screenPoint);
     virtual void OnGridGroupToggled(Grid& sender, uint64_t groupStableId, bool collapsed);
     virtual void OnGridGroupToggled(uint64_t groupStableId, bool collapsed);
+    [[nodiscard]] virtual wil::com_ptr<ID2D1Bitmap1> GetGridIconBitmap(
+        const Grid& sender, int iconIndex, float targetDipSize, ID2D1DeviceContext* d2dContext);
 };
 
 class IDxTreeModel
@@ -1143,8 +1173,9 @@ public:
     [[nodiscard]] virtual D2D1_RECT_F GetHitBounds() const noexcept;
     [[nodiscard]] std::optional<D2D1_RECT_F> TryGetTextInputViewportRect() const noexcept;
     [[nodiscard]] std::optional<D2D1_RECT_F> TryGetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept;
-    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> TryGetTextInputRangeRects(
-        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const;
+    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> TryGetTextInputRangeRects(const WindowHost& host,
+                                                                                    size_t controlTextStartIndex,
+                                                                                    size_t controlTextEndIndex) const;
     [[nodiscard]] std::optional<size_t> TryHitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept;
 
     void SetVisible(bool visible) noexcept;
@@ -1213,6 +1244,10 @@ protected:
     [[nodiscard]] WindowHost* GetHost() const noexcept;
     void Invalidate(WindowHost& host) const;
     void RequestInvalidate() const noexcept;
+    [[nodiscard]] std::weak_ptr<int> GetLifetimeToken() const noexcept
+    {
+        return _lifetimeToken;
+    }
     virtual void PropagateHost(WindowHost* host) noexcept;
     void SetParent(Panel* parent) noexcept;
     [[nodiscard]] Panel* GetParent() const noexcept;
@@ -1227,8 +1262,9 @@ protected:
     [[nodiscard]] virtual bool SupportsTextInput() const noexcept;
     [[nodiscard]] virtual std::optional<D2D1_RECT_F> GetTextInputViewportRect() const noexcept;
     [[nodiscard]] virtual std::optional<D2D1_RECT_F> GetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept;
-    [[nodiscard]] virtual std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(
-        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const;
+    [[nodiscard]] virtual std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(const WindowHost& host,
+                                                                                         size_t controlTextStartIndex,
+                                                                                         size_t controlTextEndIndex) const;
     [[nodiscard]] virtual std::optional<size_t> HitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept;
     virtual bool ExportTextInputState(TextInputState& outState) const;
     virtual bool ImportTextInputState(WindowHost& host, const TextInputState& state, bool notifyChange);
@@ -1249,6 +1285,7 @@ private:
     std::wstring _accessibleName;
     std::wstring _accessibleHelpText;
     std::function<void(POINT screenPoint, bool keyboardInvocation)> _onContextMenu;
+    std::shared_ptr<int> _lifetimeToken = std::make_shared<int>(0);
 };
 
 class Panel : public Control
@@ -1419,6 +1456,7 @@ public:
     void SetOnClick(std::function<void()> onClick);
     void SetOnDropDownClick(std::function<void()> onDropDownClick);
     bool Invoke(WindowHost& host, bool focusSelf);
+    void SetPressedVisual(bool pressed) noexcept;
     [[nodiscard]] float DebugGetHoverAnimationProgress() const noexcept;
     [[nodiscard]] float DebugGetFocusAnimationProgress() const noexcept;
 #if defined(ENABLE_TESTS)
@@ -1661,7 +1699,7 @@ public:
 class MenuBar final : public Control
 {
 public:
-    using OpenItemCallback = std::function<void(size_t index, POINT screenPoint, bool keyboardInvocation)>;
+    using OpenItemCallback     = std::function<void(size_t index, POINT screenPoint, bool keyboardInvocation)>;
     using HoverChangedCallback = std::function<void(std::optional<size_t> hoveredIndex)>;
 
     MenuBar();
@@ -1920,8 +1958,9 @@ protected:
     [[nodiscard]] bool SupportsTextInput() const noexcept override;
     [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputViewportRect() const noexcept override;
     [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept override;
-    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(
-        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const override;
+    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(const WindowHost& host,
+                                                                                 size_t controlTextStartIndex,
+                                                                                 size_t controlTextEndIndex) const override;
     [[nodiscard]] std::optional<size_t> HitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept override;
     bool ExportTextInputState(TextInputState& outState) const override;
     bool ImportTextInputState(WindowHost& host, const TextInputState& state, bool notifyChange) override;
@@ -1980,33 +2019,33 @@ private:
     mutable float _horizontalScrollDip = 0.0f;
     mutable wil::com_ptr<IDWriteTextLayout> _cachedMultilineLayout;
     mutable std::wstring _cachedLayoutText;
-    mutable D2D1_SIZE_F _cachedLayoutSize = D2D1::SizeF(0.0f, 0.0f);
-    mutable bool _multilineLayoutDirty    = true;
-    size_t _multilineFirstVisibleLine     = 0u;
-    float _multilineWheelDeltaRemainder   = 0.0f;
-    bool _multiline                       = false;
-    bool _readOnly                        = false;
-    bool _masked                          = false;
-    PasswordRevealMode _passwordRevealMode   = PasswordRevealMode::Peek;
-    PasswordRevealState _passwordRevealState = PasswordRevealState::Hidden;
-    PasswordMaskLengthPolicy _maskLengthPolicy = PasswordMaskLengthPolicy::Exact;
-    std::wstring _passwordRevealAccessibleName = L"Show password";
-    mutable uint64_t _concealedMaskEpoch       = 0u;
-    mutable size_t _concealedMaskBucketStart   = 0u;
-    mutable size_t _concealedMaskBucketEnd     = 0u;
-    mutable size_t _concealedMaskVisibleDotCount = 0u;
+    mutable D2D1_SIZE_F _cachedLayoutSize           = D2D1::SizeF(0.0f, 0.0f);
+    mutable bool _multilineLayoutDirty              = true;
+    size_t _multilineFirstVisibleLine               = 0u;
+    float _multilineWheelDeltaRemainder             = 0.0f;
+    bool _multiline                                 = false;
+    bool _readOnly                                  = false;
+    bool _masked                                    = false;
+    PasswordRevealMode _passwordRevealMode          = PasswordRevealMode::Peek;
+    PasswordRevealState _passwordRevealState        = PasswordRevealState::Hidden;
+    PasswordMaskLengthPolicy _maskLengthPolicy      = PasswordMaskLengthPolicy::Exact;
+    std::wstring _passwordRevealAccessibleName      = L"Show password";
+    mutable uint64_t _concealedMaskEpoch            = 0u;
+    mutable size_t _concealedMaskBucketStart        = 0u;
+    mutable size_t _concealedMaskBucketEnd          = 0u;
+    mutable size_t _concealedMaskVisibleDotCount    = 0u;
     mutable bool _concealedMaskVisibleDotCountValid = false;
-    bool _dragSelecting                   = false;
-    bool _clearButtonHovered              = false;
-    bool _clearButtonEnabled              = true;
-    bool _passwordRevealButtonHovered     = false;
-    bool _passwordRevealButtonPressed     = false;
-    bool _passwordRevealKeyboardFocused   = false;
+    bool _dragSelecting                             = false;
+    bool _clearButtonHovered                        = false;
+    bool _clearButtonEnabled                        = true;
+    bool _passwordRevealButtonHovered               = false;
+    bool _passwordRevealButtonPressed               = false;
+    bool _passwordRevealKeyboardFocused             = false;
     std::optional<D2D1_COLOR_F> _caretColorOverride;
-    float _textPaddingLeftDip   = 8.0f;
-    float _textPaddingRightDip  = 8.0f;
-    float _textPaddingTopDip    = 4.0f;
-    float _textPaddingBottomDip = 4.0f;
+    float _textPaddingLeftDip              = 8.0f;
+    float _textPaddingRightDip             = 8.0f;
+    float _textPaddingTopDip               = 4.0f;
+    float _textPaddingBottomDip            = 4.0f;
     bool _hasExplicitHorizontalTextPadding = false;
     bool _hasExplicitVerticalTextPadding   = false;
     SingleLineSelectionClickSequence _selectionClickSequence;
@@ -2089,8 +2128,9 @@ protected:
     [[nodiscard]] bool SupportsTextInput() const noexcept override;
     [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputViewportRect() const noexcept override;
     [[nodiscard]] std::optional<D2D1_RECT_F> GetTextInputCaretRect(const WindowHost& host, size_t controlTextIndex) const noexcept override;
-    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(
-        const WindowHost& host, size_t controlTextStartIndex, size_t controlTextEndIndex) const override;
+    [[nodiscard]] std::optional<std::vector<D2D1_RECT_F>> GetTextInputRangeRects(const WindowHost& host,
+                                                                                 size_t controlTextStartIndex,
+                                                                                 size_t controlTextEndIndex) const override;
     [[nodiscard]] std::optional<size_t> HitTestTextInputPoint(const WindowHost& host, D2D1_POINT_2F point) const noexcept override;
     bool ExportTextInputState(TextInputState& outState) const override;
     bool ImportTextInputState(WindowHost& host, const TextInputState& state, bool notifyChange) override;
@@ -2180,12 +2220,12 @@ private:
     bool _dragSelecting         = false;
     bool _popupUsesBackdropBlur = false;
     SingleLineSelectionClickSequence _selectionClickSequence;
-    float _popupScrollbarDragOffsetDip = 0.0f;
-    ComboBoxVariant _variant           = ComboBoxVariant::Modern;
-    bool _editable                     = false;
-    bool _autoOpenOnTextInput          = false;
-    bool _open                         = false;
-    size_t _maxVisibleItemsOverride    = 0u;
+    float _popupScrollbarDragOffsetDip             = 0.0f;
+    ComboBoxVariant _variant                       = ComboBoxVariant::Modern;
+    bool _editable                                 = false;
+    bool _autoOpenOnTextInput                      = false;
+    bool _open                                     = false;
+    size_t _maxVisibleItemsOverride                = 0u;
     static constexpr size_t kMaxEditHistoryEntries = 64u;
 };
 
@@ -2198,22 +2238,34 @@ public:
     {
         std::wstring text;
         float widthDip = 0.0f; // 0 = stretch to fill remaining space
+        DWRITE_TEXT_ALIGNMENT alignment = DWRITE_TEXT_ALIGNMENT_LEADING;
+        bool leadingEllipsis            = false;
     };
 
     void SetText(std::wstring text);
     [[nodiscard]] std::wstring_view GetText() const noexcept;
     void SetFontRole(FontRole fontRole) noexcept;
+    void SetBlendWithWindowBackground(bool blend) noexcept;
+    [[nodiscard]] bool GetBlendWithWindowBackground() const noexcept;
     void SetSections(std::vector<Section> sections);
     void SetSectionText(size_t index, std::wstring text);
     [[nodiscard]] size_t GetSectionCount() const noexcept;
     [[nodiscard]] std::wstring_view GetSectionText(size_t index) const noexcept;
+    [[nodiscard]] DWRITE_TEXT_ALIGNMENT GetSectionAlignment(size_t index) const noexcept;
+    [[nodiscard]] bool GetSectionLeadingEllipsis(size_t index) const noexcept;
+    [[nodiscard]] static std::wstring DebugElideLeadingForWidth(
+        const WindowHost* host, std::wstring_view text, FontRole fontRole, float widthDip, float heightDip) noexcept;
 
     void Paint(WindowHost& host) const override;
 
 private:
+    [[nodiscard]] static std::wstring ElideLeadingForWidth(
+        const WindowHost* host, std::wstring_view text, FontRole fontRole, float widthDip, float heightDip) noexcept;
+
     std::wstring _text;
     std::vector<Section> _sections;
     FontRole _fontRole = FontRole::Small;
+    bool _blendWithWindowBackground = false;
 };
 
 class PopupLayer final : public Panel
@@ -2352,9 +2404,9 @@ public:
     void OnCaptureLost(WindowHost& host) override;
 
 private:
-    float _contentHeightDip = 0.0f;
-    float _scrollOffsetDip  = 0.0f;
-    float _scrollStepDip    = 40.0f;
+    float _contentHeightDip        = 0.0f;
+    float _scrollOffsetDip         = 0.0f;
+    float _scrollStepDip           = 40.0f;
     bool _internalScrollbarEnabled = true;
 
     bool _dragThumb           = false;
@@ -2368,7 +2420,7 @@ private:
     };
     HotPart _scrollbarHotPart = HotPart::None;
 
-    Control* _innerHoveredChild = nullptr;
+    Control* _innerHoveredChild  = nullptr;
     Control* _innerCapturedChild = nullptr;
 
     [[nodiscard]] float GetScrollableExtent() const noexcept;
@@ -2421,7 +2473,7 @@ private:
     [[nodiscard]] D2D1_RECT_F ComputeBoundsDip(const WindowHost& host) const noexcept;
     std::wstring _text;
     std::wstring _pendingText;
-    D2D1_POINT_2F _originDip = D2D1::Point2F();
+    D2D1_POINT_2F _originDip        = D2D1::Point2F();
     D2D1_POINT_2F _pendingOriginDip = D2D1::Point2F();
     mutable LayoutCache _layoutCache{};
     bool _showScheduled  = false;
@@ -2583,8 +2635,24 @@ public:
     {
         return _selectionMode;
     }
+    void SetVisualMode(GridVisualMode mode) noexcept;
+    [[nodiscard]] GridVisualMode GetVisualMode() const noexcept
+    {
+        return _visualMode;
+    }
     void SetRowHeightDip(float rowHeightDip) noexcept;
+    void SetEffectiveRowHeightDip(float rowHeightDip) noexcept;
     void SetHeaderHeightDip(float headerHeightDip) noexcept;
+    void SetCellTextFontRole(FontRole fontRole) noexcept;
+    [[nodiscard]] FontRole GetCellTextFontRole() const noexcept
+    {
+        return _cellTextFontRole;
+    }
+    void SetIconSizeDip(float iconSizeDip) noexcept;
+    [[nodiscard]] float GetIconSizeDip() const noexcept
+    {
+        return _iconSizeDip;
+    }
     void SetLineClamp(uint32_t lineClamp) noexcept;
     void SetEmptyStateText(std::wstring text);
     [[nodiscard]] std::wstring_view GetEmptyStateText() const noexcept;
@@ -2622,6 +2690,7 @@ public:
     [[nodiscard]] std::optional<D2D1_RECT_F> GetVisibleCellRect(size_t rowIndex, size_t columnIndex) const;
     [[nodiscard]] bool IsRowSelected(size_t rowIndex) const noexcept;
     [[nodiscard]] std::optional<size_t> GetPrimarySelectedRow() const noexcept;
+    [[nodiscard]] std::wstring BuildSelectionTsv() const;
 #if defined(ENABLE_TESTS)
     struct GridDebugHitInfo
     {
@@ -2635,22 +2704,22 @@ public:
     };
     struct GridDebugPointerState
     {
-        uint64_t headerResizeDownCount = 0u;
-        uint64_t resizeMoveCount       = 0u;
-        bool resizeActive              = false;
-        float lastResizeDeltaDip       = 0.0f;
-        float lastResizeWidthDip       = 0.0f;
-        bool pressedHeaderActive       = false;
-        size_t pressedHeaderColumn     = 0u;
-        bool reorderActive             = false;
-        size_t reorderColumn           = 0u;
-        size_t reorderTargetDisplayIndex = 0u;
-        uint64_t headerReorderStartCount = 0u;
-        uint64_t headerReorderCommitCount = 0u;
-        uint64_t headerReorderNoOpCount = 0u;
-        size_t lastHeaderReorderColumn = 0u;
-        size_t lastHeaderReorderFromDisplayIndex = 0u;
-        size_t lastHeaderReorderRawTargetDisplayIndex = 0u;
+        uint64_t headerResizeDownCount                       = 0u;
+        uint64_t resizeMoveCount                             = 0u;
+        bool resizeActive                                    = false;
+        float lastResizeDeltaDip                             = 0.0f;
+        float lastResizeWidthDip                             = 0.0f;
+        bool pressedHeaderActive                             = false;
+        size_t pressedHeaderColumn                           = 0u;
+        bool reorderActive                                   = false;
+        size_t reorderColumn                                 = 0u;
+        size_t reorderTargetDisplayIndex                     = 0u;
+        uint64_t headerReorderStartCount                     = 0u;
+        uint64_t headerReorderCommitCount                    = 0u;
+        uint64_t headerReorderNoOpCount                      = 0u;
+        size_t lastHeaderReorderColumn                       = 0u;
+        size_t lastHeaderReorderFromDisplayIndex             = 0u;
+        size_t lastHeaderReorderRawTargetDisplayIndex        = 0u;
         size_t lastHeaderReorderNormalizedTargetDisplayIndex = 0u;
     };
 
@@ -2739,7 +2808,6 @@ private:
     void SelectRow(size_t rowIndex, UINT modifiers);
     [[nodiscard]] std::optional<size_t> ResolveCheckboxToggleColumn(size_t rowIndex) const;
     [[nodiscard]] bool ToggleCheckboxCell(WindowHost& host, size_t rowIndex, size_t columnIndex);
-    [[nodiscard]] std::wstring BuildSelectionTsv() const;
     [[nodiscard]] std::optional<size_t> FindNearestVisibleRow(std::span<const GridGroupDesc> groups, size_t preferredRowIndex) const noexcept;
     void ReconcileSelectionForVisibleRows(std::span<const GridGroupDesc> groups);
     [[nodiscard]] size_t CountGroupHeadersBeforeRow(std::span<const GridGroupDesc> groups, size_t rowIndex) const noexcept;
@@ -2789,6 +2857,7 @@ private:
     mutable std::vector<VisibleBodyItem> _cachedVisibleItems;
     GridSelectionModel _selectionModel;
     GridSelectionMode _selectionMode = GridSelectionMode::Extended;
+    GridVisualMode _visualMode       = GridVisualMode::Standard;
     GridSortSpec _sortSpec{};
     std::optional<size_t> _headerBusyColumn;
     float _rowHeightBaseDip         = 28.0f;
@@ -2799,6 +2868,9 @@ private:
     float _headerHeightDip          = 32.0f;
     float _verticalScrollDip        = 0.0f;
     float _horizontalScrollDip      = 0.0f;
+    std::optional<float> _effectiveRowHeightDip;
+    FontRole _cellTextFontRole      = FontRole::Body;
+    float _iconSizeDip              = 18.0f;
     uint32_t _lineClamp             = 2;
     std::optional<size_t> _hoveredRow;
     std::optional<size_t> _hoveredColumn;
@@ -2821,17 +2893,17 @@ private:
     std::wstring _emptyStateText;
     // Keep test counters in the layout for all builds so ENABLE_TESTS only
     // affects helper APIs, not the object ABI across project boundaries.
-    mutable uint64_t _debugPaintCount    = 0u;
-    uint64_t _debugHeaderResizeDownCount = 0u;
-    uint64_t _debugResizeMoveCount       = 0u;
-    float _debugLastResizeDeltaDip       = 0.0f;
-    float _debugLastResizeWidthDip       = 0.0f;
-    uint64_t _debugHeaderReorderStartCount = 0u;
-    uint64_t _debugHeaderReorderCommitCount = 0u;
-    uint64_t _debugHeaderReorderNoOpCount = 0u;
-    size_t _debugLastHeaderReorderColumn = 0u;
-    size_t _debugLastHeaderReorderFromDisplayIndex = 0u;
-    size_t _debugLastHeaderReorderRawTargetDisplayIndex = 0u;
+    mutable uint64_t _debugPaintCount                          = 0u;
+    uint64_t _debugHeaderResizeDownCount                       = 0u;
+    uint64_t _debugResizeMoveCount                             = 0u;
+    float _debugLastResizeDeltaDip                             = 0.0f;
+    float _debugLastResizeWidthDip                             = 0.0f;
+    uint64_t _debugHeaderReorderStartCount                     = 0u;
+    uint64_t _debugHeaderReorderCommitCount                    = 0u;
+    uint64_t _debugHeaderReorderNoOpCount                      = 0u;
+    size_t _debugLastHeaderReorderColumn                       = 0u;
+    size_t _debugLastHeaderReorderFromDisplayIndex             = 0u;
+    size_t _debugLastHeaderReorderRawTargetDisplayIndex        = 0u;
     size_t _debugLastHeaderReorderNormalizedTargetDisplayIndex = 0u;
     struct SortGlyphTransitionState final
     {
@@ -2993,6 +3065,7 @@ public:
 
     void Invalidate() const noexcept;
     [[nodiscard]] bool PrimeForShow() noexcept;
+    [[nodiscard]] bool RenderInitialFrameForShow() noexcept;
     void RequestAnimation() noexcept;
     void SetDefaultButton(Button* button) noexcept;
     [[nodiscard]] Button* GetDefaultButton() const noexcept;
@@ -3091,9 +3164,9 @@ private:
     void DiscardSizeDependentResources(std::wstring_view reason = {}) noexcept;
     void DiscardDeviceResources() noexcept;
     void RecreateBrushCache() const;
-    void Render(const RECT* dirtyRectPx = nullptr) noexcept;
+    void Render(const RECT* dirtyRectPx = nullptr, bool allowHidden = false) noexcept;
 #if defined(ENABLE_TESTS)
-    void Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* capture) noexcept;
+    void Render(const RECT* dirtyRectPx, WindowHostBitmapCapture* capture, bool allowHidden = false) noexcept;
     [[nodiscard]] bool CaptureCurrentBackBuffer(WindowHostBitmapCapture& out) noexcept;
 #endif
     void OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggestedRect) noexcept;
@@ -3120,11 +3193,8 @@ private:
     void ResetRootInteractionState() noexcept;
     [[nodiscard]] bool HandleTabNavigation(bool reverse) noexcept;
     [[nodiscard]] bool RouteFocusedCharInput(wchar_t ch, UINT modifiers, const wchar_t* perfDetail) noexcept;
-    void RecordNativeTextInputKeyToStateMetric(std::chrono::steady_clock::time_point inputStartedAt,
-                                               const wchar_t* detail,
-                                               uint64_t value0,
-                                               uint64_t value1,
-                                               bool armPaintMetric = true) noexcept;
+    void RecordNativeTextInputKeyToStateMetric(
+        std::chrono::steady_clock::time_point inputStartedAt, const wchar_t* detail, uint64_t value0, uint64_t value1, bool armPaintMetric = true) noexcept;
     void EmitPendingNativeTextInputPaintMetric(HRESULT hr) noexcept;
     [[nodiscard]] bool HandleNativeTextInputEditMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT& outResult) noexcept;
     [[nodiscard]] bool HandleNativeTextInputImeMessage(UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -3184,6 +3254,7 @@ private:
     mutable wil::com_ptr<IDWriteTextFormat> _bodyTextFormat;
     mutable wil::com_ptr<IDWriteTextFormat> _bodyStrongTextFormat;
     mutable wil::com_ptr<IDWriteTextFormat> _bodyLargeTextFormat;
+    mutable wil::com_ptr<IDWriteTextFormat> _listItemTextFormat;
     mutable wil::com_ptr<IDWriteTextFormat> _titleTextFormat;
     mutable wil::com_ptr<IDWriteTextFormat> _subtitleTextFormat;
     mutable wil::com_ptr<IDWriteTextFormat> _titleLargeTextFormat;
@@ -3219,9 +3290,9 @@ private:
     mutable std::vector<uint32_t> _brushFailureLogKeys;
     // Keep test-only storage unconditional so WindowHost layout stays stable
     // even when ENABLE_TESTS differs between a DxUi producer and consumer.
-    bool _debugForceNullSolidBrushes = false;
-    TextInputBackend _textInputBackend       = TextInputBackend::Native;
-    Control* _nativeTextInputControl = nullptr;
+    bool _debugForceNullSolidBrushes   = false;
+    TextInputBackend _textInputBackend = TextInputBackend::Native;
+    Control* _nativeTextInputControl   = nullptr;
     NativeTextInputState _nativeTextInputStateCache;
     bool _nativeTextInputStateCacheValid = false;
     NativeTextInputEventCounters _nativeTextInputEventCounters;
@@ -3232,7 +3303,7 @@ private:
     DWORD _nativeTextInputTsfClientId      = 0u;
     bool _nativeTextInputTsfActive         = false;
     bool _nativeTextInputTsfComInitialized = false;
-    bool _nativeTextInputImeComposing = false;
+    bool _nativeTextInputImeComposing      = false;
     std::optional<size_t> _nativeTextInputCompositionStartIndex;
     std::optional<size_t> _nativeTextInputCompositionEndIndex;
     std::optional<size_t> _nativeTextInputConversionTargetStartIndex;
@@ -3242,7 +3313,7 @@ private:
     std::optional<TextInputState> _nativeTextInputImeBaseState;
     std::optional<NativeTextInputImePayload> _debugNativeTextInputImePayload;
     NativeSystemCaret _nativeTextInputCaret;
-    bool _nativeTextInputCaretRectValid = false;
+    bool _nativeTextInputCaretRectValid      = false;
     D2D1_RECT_F _nativeTextInputCaretRectDip = D2D1::RectF();
     RECT _nativeTextInputCaretClientRectPx{};
     RECT _nativeTextInputCaretScreenRectPx{};
@@ -3257,12 +3328,12 @@ private:
 
     std::unique_ptr<Control> _root;
     TooltipLayer _tooltipLayer;
-    mutable uint64_t _debugInvalidateCount     = 0u;
-    mutable uint64_t _debugRenderCount         = 0u;
-    mutable uint64_t _debugResizeCount         = 0u;
-    mutable uint64_t _debugResizeFailureCount  = 0u;
+    mutable uint64_t _debugInvalidateCount                      = 0u;
+    mutable uint64_t _debugRenderCount                          = 0u;
+    mutable uint64_t _debugResizeCount                          = 0u;
+    mutable uint64_t _debugResizeFailureCount                   = 0u;
     mutable uint64_t _debugSwapChainPrepareD2DFlushFailureCount = 0u;
-    mutable uint64_t _debugPresentFailureCount = 0u;
+    mutable uint64_t _debugPresentFailureCount                  = 0u;
     // Non-owning observers into the current retained control tree. Ownership stays with
     // `_root` / `Panel::_children`, so these pointers must be cleared or ignored before
     // the observed tree is replaced or destroyed.
@@ -3274,11 +3345,11 @@ private:
         uint64_t tickMs = 0u;
     };
 
-    Control* _hoveredControl         = nullptr;
-    Control* _capturedControl        = nullptr;
-    Control* _focusedControl         = nullptr;
-    Button* _defaultButton           = nullptr;
-    Button* _cancelButton            = nullptr;
+    Control* _hoveredControl  = nullptr;
+    Control* _capturedControl = nullptr;
+    Control* _focusedControl  = nullptr;
+    Button* _defaultButton    = nullptr;
+    Button* _cancelButton     = nullptr;
     PointerDoubleClickCandidate _pendingPointerDoubleClick;
     std::function<bool(bool reverse)> _onTabBoundary;
     std::function<bool()> _onEscape;

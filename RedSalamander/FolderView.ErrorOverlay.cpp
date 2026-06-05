@@ -188,12 +188,12 @@ RECT FolderView::GetIncrementalSearchIndicatorInvalidationRectPx() const noexcep
         return {};
     }
 
-    constexpr float kMarginDip             = 10.0f;
-    constexpr float kHeightDip             = 30.0f;
-    constexpr float kPaddingXDip           = 12.0f;
-    constexpr float kIconSizeDip           = 14.0f;
-    constexpr float kPillIconTextGapDip    = 8.0f;
-    constexpr float kShadowOffsetDip       = 2.0f;
+    constexpr float kMarginDip              = 10.0f;
+    constexpr float kHeightDip              = 30.0f;
+    constexpr float kPaddingXDip            = 12.0f;
+    constexpr float kIconSizeDip            = 14.0f;
+    constexpr float kPillIconTextGapDip     = 8.0f;
+    constexpr float kShadowOffsetDip        = 2.0f;
     constexpr float kInvalidationPaddingDip = 4.0f;
 
     const float maxPillWidthDip = std::max(0.0f, clientWidthDip - 2.0f * kMarginDip);
@@ -233,11 +233,10 @@ RECT FolderView::GetIncrementalSearchIndicatorInvalidationRectPx() const noexcep
     x += slide * 18.0f;
     y -= slide * 10.0f;
 
-    const D2D1_RECT_F indicatorRect =
-        D2D1::RectF(x - kInvalidationPaddingDip,
-                    y - kInvalidationPaddingDip,
-                    x + pillWidthDip + kShadowOffsetDip + kInvalidationPaddingDip,
-                    y + kHeightDip + kShadowOffsetDip + kInvalidationPaddingDip);
+    const D2D1_RECT_F indicatorRect = D2D1::RectF(x - kInvalidationPaddingDip,
+                                                  y - kInvalidationPaddingDip,
+                                                  x + pillWidthDip + kShadowOffsetDip + kInvalidationPaddingDip,
+                                                  y + kHeightDip + kShadowOffsetDip + kInvalidationPaddingDip);
     return ClampInvalidationRect(ToPixelRect(indicatorRect, _dpi), _clientSize);
 }
 
@@ -264,8 +263,8 @@ void FolderView::InvalidateOverlayVisuals(bool forceFullClient) const noexcept
         }
     }
 
-    const uint64_t realNowTickMs = GetTickCount64();
-    const uint64_t overlayElapsedMs = hasOverlay && realNowTickMs >= overlay.startTick ? (realNowTickMs - overlay.startTick) : 0;
+    const uint64_t realNowTickMs     = GetTickCount64();
+    const uint64_t overlayElapsedMs  = hasOverlay && realNowTickMs >= overlay.startTick ? (realNowTickMs - overlay.startTick) : 0;
     const bool overlayShowIsSettling = hasOverlay && overlayElapsedMs <= (kShowAnimationMs + kSettledFrameGraceMs);
     if (forceFullClient || overlayShowIsSettling)
     {
@@ -277,21 +276,19 @@ void FolderView::InvalidateOverlayVisuals(bool forceFullClient) const noexcept
     RECT dirty = MakeEmptyRect();
     if (hasOverlay && _alertOverlay && _alertOverlay->HasLayout())
     {
-        const D2D1_RECT_F panel = _alertOverlay->GetPanelRect();
-        const D2D1_RECT_F paddedPanel =
-            D2D1::RectF(panel.left - kInvalidationPaddingDip,
-                        panel.top - kInvalidationPaddingDip,
-                        panel.right + kInvalidationPaddingDip,
-                        panel.bottom + kInvalidationPaddingDip);
-        dirty = UnionInvalidationRect(dirty, ClampInvalidationRect(ToPixelRect(paddedPanel, _dpi), _clientSize));
+        const D2D1_RECT_F panel       = _alertOverlay->GetPanelRect();
+        const D2D1_RECT_F paddedPanel = D2D1::RectF(panel.left - kInvalidationPaddingDip,
+                                                    panel.top - kInvalidationPaddingDip,
+                                                    panel.right + kInvalidationPaddingDip,
+                                                    panel.bottom + kInvalidationPaddingDip);
+        dirty                         = UnionInvalidationRect(dirty, ClampInvalidationRect(ToPixelRect(paddedPanel, _dpi), _clientSize));
     }
     else if (hasOverlay)
     {
         dirty = clientRect;
     }
 
-    if (std::clamp(_incrementalSearchIndicatorVisibility, 0.0f, 1.0f) > 0.001f ||
-        std::clamp(_incrementalSearchIndicatorVisibilityTo, 0.0f, 1.0f) > 0.001f)
+    if (std::clamp(_incrementalSearchIndicatorVisibility, 0.0f, 1.0f) > 0.001f || std::clamp(_incrementalSearchIndicatorVisibilityTo, 0.0f, 1.0f) > 0.001f)
     {
         dirty = UnionInvalidationRect(dirty, GetIncrementalSearchIndicatorInvalidationRectPx());
     }
@@ -1022,7 +1019,7 @@ void FolderView::DrawErrorOverlay()
     }
 
     _alertOverlay->SetStartTick(overlay.startTick);
-    const uint64_t nowTick = GetTickCount64();
+    const uint64_t nowTick              = GetTickCount64();
     constexpr uint64_t kShowAnimationMs = 220;
     const uint64_t elapsed              = nowTick >= overlay.startTick ? (nowTick - overlay.startTick) : 0;
     if (overlay.severity == OverlaySeverity::Busy || elapsed < kShowAnimationMs)

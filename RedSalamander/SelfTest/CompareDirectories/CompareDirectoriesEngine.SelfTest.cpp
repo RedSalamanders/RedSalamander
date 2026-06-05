@@ -4023,11 +4023,8 @@ private:
     return RunIndexedNameQuery(repository, rootPath, namePattern, FILESYSTEM_SEARCH_NAME_WILDCARD, outStats, outCandidates);
 }
 
-[[nodiscard]] bool TryPrepareDirectSqliteCursorForSelfTest(SelfTest::CaseState& state,
-                                                           const std::filesystem::path& caseRoot,
-                                                           std::wstring_view label,
-                                                           uint64_t& outJournalId,
-                                                           uint64_t& outNextUsn) noexcept
+[[nodiscard]] bool TryPrepareDirectSqliteCursorForSelfTest(
+    SelfTest::CaseState& state, const std::filesystem::path& caseRoot, std::wstring_view label, uint64_t& outJournalId, uint64_t& outNextUsn) noexcept
 {
     outJournalId = 0u;
     outNextUsn   = 0u;
@@ -4042,8 +4039,7 @@ private:
         LocalSearchIndexCore::QueryStats cursorStats{};
         std::vector<LocalSearchIndexCore::Candidate> cursorCandidates;
         const HRESULT cursorHr = RunIndexedNameQuery(cursorRepository, caseRoot.wstring(), L"*", cursorStats, cursorCandidates);
-        state.Require(SUCCEEDED(cursorHr),
-                      std::format(L"{} cursor probe query failed. hr=0x{:08X}", label, static_cast<unsigned long>(cursorHr)));
+        state.Require(SUCCEEDED(cursorHr), std::format(L"{} cursor probe query failed. hr=0x{:08X}", label, static_cast<unsigned long>(cursorHr)));
         if (FAILED(cursorHr))
         {
             return false;

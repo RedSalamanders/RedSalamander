@@ -332,8 +332,8 @@ void FolderWindow::DestroyCommandLineControls() noexcept
         _hCommandLineHost.reset();
     }
 
-    _commandLineLabel = nullptr;
-    _commandLineField = nullptr;
+    _commandLineLabel   = nullptr;
+    _commandLineField   = nullptr;
     _commandLineVisible = false;
     _commandLineWorkingDirectory.clear();
 }
@@ -374,7 +374,7 @@ void FolderWindow::HideCommandLine(bool restoreFocus) noexcept
         return;
     }
 
-    const Pane pane = _commandLinePane;
+    const Pane pane     = _commandLinePane;
     _commandLineVisible = false;
 
     if (_hCommandLineHost)
@@ -429,8 +429,8 @@ void FolderWindow::InsertCommandLineText(std::wstring_view text)
     }
 
     const std::wstring current = GetCommandLineText();
-    size_t start = _commandLineField->GetCaretIndex();
-    size_t end   = start;
+    size_t start               = _commandLineField->GetCaretIndex();
+    size_t end                 = start;
     if (const std::optional<std::pair<size_t, size_t>> selection = _commandLineField->GetSelectionRange(); selection.has_value())
     {
         start = selection.value().first;
@@ -447,10 +447,8 @@ void FolderWindow::InsertCommandLineText(std::wstring_view text)
 
     std::wstring replacement;
     replacement.reserve(text.size() + 2u);
-    const bool needsLeadingSpace =
-        start > 0 && ! std::iswspace(current[static_cast<size_t>(start) - 1u]) && ! std::iswspace(text.front());
-    const bool needsTrailingSpace =
-        end < maxIndex && ! std::iswspace(current[static_cast<size_t>(end)]) && ! std::iswspace(text.back());
+    const bool needsLeadingSpace  = start > 0 && ! std::iswspace(current[static_cast<size_t>(start) - 1u]) && ! std::iswspace(text.front());
+    const bool needsTrailingSpace = end < maxIndex && ! std::iswspace(current[static_cast<size_t>(end)]) && ! std::iswspace(text.back());
 
     if (needsLeadingSpace)
     {
@@ -501,7 +499,7 @@ HRESULT FolderWindow::LaunchCommandLine(std::wstring_view commandLine, const std
     const std::wstring comSpec        = GetCommandProcessorPath();
     const std::wstring workingDirText = NormalizeShellDirectoryText(workingDirectory);
 
-    std::wstring directory = workingDirText;
+    std::wstring directory  = workingDirText;
     std::wstring parameters = L"/D /S /C ";
     if (LooksLikeUncPath(workingDirText) && IsCmdExecutable(comSpec))
     {
@@ -593,16 +591,13 @@ void FolderWindow::CommandBringFilenameToCommandLine(Pane pane)
         return;
     }
 
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state                                 = pane == Pane::Left ? _leftPane : _rightPane;
     std::vector<std::filesystem::path> selectedPaths = state.folderView.GetSelectedPaths();
     if (! selectedPaths.empty())
     {
         if (const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath(); focusedPath.has_value())
         {
-            const auto focusedIt = std::find_if(selectedPaths.begin(),
-                                                selectedPaths.end(),
-                                                [&](const std::filesystem::path& selected)
-            {
+            const auto focusedIt = std::find_if(selectedPaths.begin(), selectedPaths.end(), [&](const std::filesystem::path& selected) {
                 return OrdinalString::EqualsNoCasePath(selected, focusedPath.value());
             });
             if (focusedIt != selectedPaths.end())
@@ -665,10 +660,10 @@ bool FolderWindow::DebugGetCommandLineSnapshot(CommandLineDebugSnapshot& out) co
     out.usesNativeTextInput =
         _commandLineHost.GetTextInputBackend() == RedSalamander::DxUi::TextInputBackend::Native && _commandLineHost.HasActiveNativeTextInputSession();
     out.visibleNativeChildControlCount = 0u;
-    out.pane             = _commandLinePane;
-    out.editHwnd         = _commandLineHost.GetTextInputHwnd() ? _commandLineHost.GetTextInputHwnd() : _hCommandLineHost.get();
-    out.text             = GetCommandLineText();
-    out.workingDirectory = _commandLineWorkingDirectory;
+    out.pane                           = _commandLinePane;
+    out.editHwnd                       = _commandLineHost.GetTextInputHwnd() ? _commandLineHost.GetTextInputHwnd() : _hCommandLineHost.get();
+    out.text                           = GetCommandLineText();
+    out.workingDirectory               = _commandLineWorkingDirectory;
     return true;
 }
 
@@ -905,10 +900,8 @@ bool DebugSetFolderViewPaneFilterPromptTextAndNotify(std::wstring_view text) noe
         const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
         g_folderViewPaneFilterPromptDebugText.assign(text);
     }
-    return SendMessageW(hwnd,
-                        WndMsg::kFolderViewPaneFilterPromptDebug,
-                        static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetTextAndNotify),
-                        0) != FALSE;
+    return SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetTextAndNotify), 0) !=
+           FALSE;
 }
 
 bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
@@ -1105,15 +1098,13 @@ bool DebugSelectFolderViewEditNewPromptEditor(std::wstring_view actionId) noexce
 bool DebugConfirmFolderViewEditNewPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm), 0) != FALSE;
+    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm), 0) != FALSE;
 }
 
 bool DebugCancelFolderViewEditNewPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewEditNewPromptHandle();
-    return hwnd &&
-           SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel), 0) != FALSE;
+    return hwnd && SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel), 0) != FALSE;
 }
 
 HWND GetFolderViewChangeCasePromptHandle() noexcept
@@ -1455,11 +1446,10 @@ void FolderWindow::CommandOpenCommandShell(Pane pane)
         terminalExecutable = FindWindowsTerminalExecutable();
     }
 
-    CommandShellLaunchPlan launchPlan = terminalExecutable.has_value()
-                                            ? BuildWindowsTerminalCommandShellLaunchPlan(terminalExecutable.value(), workingDirText)
-                                            : BuildCmdCommandShellLaunchPlan(workingDirText);
+    CommandShellLaunchPlan launchPlan = terminalExecutable.has_value() ? BuildWindowsTerminalCommandShellLaunchPlan(terminalExecutable.value(), workingDirText)
+                                                                       : BuildCmdCommandShellLaunchPlan(workingDirText);
 
-    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    HWND ownerWindow        = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
     auto launchCommandShell = [&](const CommandShellLaunchPlan& plan) -> HRESULT
     {
 #ifdef ENABLE_TESTS

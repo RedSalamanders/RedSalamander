@@ -66,9 +66,9 @@ struct ShellActionProbeState final
         return false;
     }
 
-    const std::wstring leftPluginBefore                        = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftPathBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const auto restorePane                                     = wil::scope_exit([&]
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
     {
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftPathBefore.has_value())
@@ -91,13 +91,12 @@ struct ShellActionProbeState final
     }
 
     ShellActionProbeState probe{};
-    g_folderWindow.DebugSetShellActionCallback(
-        [&](const FolderWindow::DebugShellAction& action) noexcept -> HRESULT
-        {
-            ++probe.callCount;
-            probe.lastAction = action;
-            return probe.result;
-        });
+    g_folderWindow.DebugSetShellActionCallback([&](const FolderWindow::DebugShellAction& action) noexcept -> HRESULT
+    {
+        ++probe.callCount;
+        probe.lastAction = action;
+        return probe.result;
+    });
     const auto restoreProbe = wil::scope_exit([&] { g_folderWindow.DebugSetShellActionCallback({}); });
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
@@ -169,13 +168,12 @@ struct ShellActionProbeState final
     }
 
     ShellActionProbeState probe{};
-    g_folderWindow.DebugSetShellActionCallback(
-        [&](const FolderWindow::DebugShellAction& action) noexcept -> HRESULT
-        {
-            ++probe.callCount;
-            probe.lastAction = action;
-            return probe.result;
-        });
+    g_folderWindow.DebugSetShellActionCallback([&](const FolderWindow::DebugShellAction& action) noexcept -> HRESULT
+    {
+        ++probe.callCount;
+        probe.lastAction = action;
+        return probe.result;
+    });
     const auto restoreProbe = wil::scope_exit([&] { g_folderWindow.DebugSetShellActionCallback({}); });
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
@@ -279,14 +277,11 @@ struct ShellActionProbeState final
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for change-attributes test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for change-attributes test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for change-attributes test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta.txt", L"gamma.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for change-attributes test.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left,
-        [](std::wstring_view name) noexcept { return name == L"alpha.txt" || name == L"beta.txt"; },
-        true);
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"alpha.txt" || name == L"beta.txt"; }, true);
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 2u,
                   L"Expected alpha.txt and beta.txt selected before change-attributes command.");
     if (! state.failure.empty())
@@ -308,8 +303,7 @@ struct ShellActionProbeState final
     const DWORD alphaAttrs = ::GetFileAttributesW(alphaPath.c_str());
     const DWORD betaAttrs  = ::GetFileAttributesW(betaPath.c_str());
     const DWORD gammaAttrs = ::GetFileAttributesW(gammaPath.c_str());
-    state.Require(alphaAttrs != INVALID_FILE_ATTRIBUTES && (alphaAttrs & FILE_ATTRIBUTE_READONLY) != 0,
-                  L"alpha.txt should become read-only.");
+    state.Require(alphaAttrs != INVALID_FILE_ATTRIBUTES && (alphaAttrs & FILE_ATTRIBUTE_READONLY) != 0, L"alpha.txt should become read-only.");
     state.Require(betaAttrs != INVALID_FILE_ATTRIBUTES && (betaAttrs & FILE_ATTRIBUTE_READONLY) != 0, L"beta.txt should become read-only.");
     state.Require(alphaAttrs != INVALID_FILE_ATTRIBUTES && (alphaAttrs & FILE_ATTRIBUTE_HIDDEN) == 0, L"alpha.txt hidden bit should be cleared.");
     state.Require(gammaAttrs != INVALID_FILE_ATTRIBUTES && (gammaAttrs & FILE_ATTRIBUTE_READONLY) == 0,
@@ -328,8 +322,8 @@ struct ShellActionProbeState final
         state.Require(report->timesChanged == 0u, std::format(L"Expected no changed date/time records; saw {}.", report->timesChanged));
         state.Require(report->streamsRemoved == 2u, std::format(L"Expected 2 removed streams; saw {}.", report->streamsRemoved));
         state.Require(report->failures == 0u, std::format(L"Expected no failures; saw {}.", report->failures));
-        state.Require(SUCCEEDED(report->firstFailure), std::format(L"Expected firstFailure success; saw 0x{0:08X}.",
-                                                                   static_cast<unsigned long>(report->firstFailure)));
+        state.Require(SUCCEEDED(report->firstFailure),
+                      std::format(L"Expected firstFailure success; saw 0x{0:08X}.", static_cast<unsigned long>(report->firstFailure)));
     }
 
     return state.failure.empty();
@@ -442,8 +436,7 @@ struct ShellActionProbeState final
                   L"Failed to set left pane path for recursive change-attributes test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"folder", L"outside.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for recursive change-attributes test.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"folder"; }, true);
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"folder"; }, true);
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
                   L"Expected folder selected before recursive change-attributes command.");
     if (! state.failure.empty())
@@ -452,9 +445,9 @@ struct ShellActionProbeState final
     }
 
     FolderWindow::ChangeAttributesOptions options{};
-    options.modifiedTime.enabled   = true;
-    options.modifiedTime.value     = targetWriteTime;
-    options.includeSubdirectories  = true;
+    options.modifiedTime.enabled  = true;
+    options.modifiedTime.value    = targetWriteTime;
+    options.includeSubdirectories = true;
     g_folderWindow.DebugSetNextChangeAttributesOptions(options);
     const auto clearDebugOptions = wil::scope_exit([&] { g_folderWindow.DebugSetNextChangeAttributesOptions(std::nullopt); });
 
@@ -484,9 +477,9 @@ struct ShellActionProbeState final
         state.Require(report->failures == 0u, std::format(L"Expected no failures; saw {}.", report->failures));
     }
 
-    const std::optional<int64_t> folderWriteTime = GetLastWriteFileTimeTicksForShellCommandTest(folder);
-    const std::optional<int64_t> childWriteTime  = GetLastWriteFileTimeTicksForShellCommandTest(childFile);
-    const std::optional<int64_t> nestedWriteTime = GetLastWriteFileTimeTicksForShellCommandTest(nestedFile);
+    const std::optional<int64_t> folderWriteTime       = GetLastWriteFileTimeTicksForShellCommandTest(folder);
+    const std::optional<int64_t> childWriteTime        = GetLastWriteFileTimeTicksForShellCommandTest(childFile);
+    const std::optional<int64_t> nestedWriteTime       = GetLastWriteFileTimeTicksForShellCommandTest(nestedFile);
     const std::optional<int64_t> outsideWriteTimeAfter = GetLastWriteFileTimeTicksForShellCommandTest(outsideFile);
     state.Require(folderWriteTime.has_value() && FileTimeTicksCloseEnoughForShellCommandTest(folderWriteTime.value(), targetWriteTime),
                   L"Recursive Change Attributes should change the selected folder write time.");
@@ -494,8 +487,7 @@ struct ShellActionProbeState final
                   L"Recursive Change Attributes should change child file write time.");
     state.Require(nestedWriteTime.has_value() && FileTimeTicksCloseEnoughForShellCommandTest(nestedWriteTime.value(), targetWriteTime),
                   L"Recursive Change Attributes should change nested child file write time.");
-    state.Require(outsideWriteTimeAfter.has_value() && outsideWriteTimeBefore.has_value() &&
-                      outsideWriteTimeAfter.value() == outsideWriteTimeBefore.value(),
+    state.Require(outsideWriteTimeAfter.has_value() && outsideWriteTimeBefore.has_value() && outsideWriteTimeAfter.value() == outsideWriteTimeBefore.value(),
                   L"Recursive Change Attributes should not change files outside the selected folder.");
 
     return state.failure.empty();
@@ -519,7 +511,7 @@ struct ShellActionProbeState final
 
 [[nodiscard]] HRESULT CreateShellLinkForShellCommandTest(const std::filesystem::path& linkPath, const std::filesystem::path& targetPath) noexcept
 {
-    const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    const HRESULT coHr      = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     const bool uninitialize = SUCCEEDED(coHr);
     const auto coCleanup    = wil::scope_exit([&]
     {
@@ -558,13 +550,13 @@ struct ShellActionProbeState final
 
 struct MountPointReparseDataBufferForShellCommandTest final
 {
-    ULONG ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
-    USHORT ReparseDataLength = 0;
-    USHORT Reserved = 0;
+    ULONG ReparseTag            = IO_REPARSE_TAG_MOUNT_POINT;
+    USHORT ReparseDataLength    = 0;
+    USHORT Reserved             = 0;
     USHORT SubstituteNameOffset = 0;
     USHORT SubstituteNameLength = 0;
-    USHORT PrintNameOffset = 0;
-    USHORT PrintNameLength = 0;
+    USHORT PrintNameOffset      = 0;
+    USHORT PrintNameLength      = 0;
     wchar_t PathBuffer[1]{};
 };
 
@@ -600,10 +592,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
     }
 
     std::vector<std::byte> storage(totalBytes);
-    auto* buffer = reinterpret_cast<MountPointReparseDataBufferForShellCommandTest*>(storage.data());
-    buffer->ReparseTag          = IO_REPARSE_TAG_MOUNT_POINT;
-    buffer->ReparseDataLength   = static_cast<USHORT>((4u * sizeof(USHORT)) + pathBufferBytes);
-    buffer->Reserved            = 0;
+    auto* buffer                 = reinterpret_cast<MountPointReparseDataBufferForShellCommandTest*>(storage.data());
+    buffer->ReparseTag           = IO_REPARSE_TAG_MOUNT_POINT;
+    buffer->ReparseDataLength    = static_cast<USHORT>((4u * sizeof(USHORT)) + pathBufferBytes);
+    buffer->Reserved             = 0;
     buffer->SubstituteNameOffset = 0;
     buffer->SubstituteNameLength = static_cast<USHORT>(substituteBytes);
     buffer->PrintNameOffset      = static_cast<USHORT>(substituteBytes + sizeof(wchar_t));
@@ -612,31 +604,20 @@ struct MountPointReparseDataBufferForShellCommandTest final
     auto* pathBuffer = reinterpret_cast<wchar_t*>(storage.data() + kHeaderBytes);
     memcpy(pathBuffer, substituteName.data(), substituteBytes);
     pathBuffer[substituteName.size()] = L'\0';
-    auto* printBuffer = reinterpret_cast<wchar_t*>(reinterpret_cast<std::byte*>(pathBuffer) + buffer->PrintNameOffset);
+    auto* printBuffer                 = reinterpret_cast<wchar_t*>(reinterpret_cast<std::byte*>(pathBuffer) + buffer->PrintNameOffset);
     memcpy(printBuffer, printName.data(), printBytes);
     printBuffer[printName.size()] = L'\0';
 
-    wil::unique_hfile junctionHandle(CreateFileW(junctionPath.c_str(),
-                                                 GENERIC_WRITE,
-                                                 0,
-                                                 nullptr,
-                                                 OPEN_EXISTING,
-                                                 FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                                 nullptr));
+    wil::unique_hfile junctionHandle(
+        CreateFileW(junctionPath.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
     if (! junctionHandle)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
     DWORD bytesReturned = 0;
-    if (DeviceIoControl(junctionHandle.get(),
-                        FSCTL_SET_REPARSE_POINT,
-                        storage.data(),
-                        static_cast<DWORD>(storage.size()),
-                        nullptr,
-                        0,
-                        &bytesReturned,
-                        nullptr) == FALSE)
+    if (DeviceIoControl(
+            junctionHandle.get(), FSCTL_SET_REPARSE_POINT, storage.data(), static_cast<DWORD>(storage.size()), nullptr, 0, &bytesReturned, nullptr) == FALSE)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -662,12 +643,10 @@ struct MountPointReparseDataBufferForShellCommandTest final
         return {};
     }
 
-    const char* jsonUtf8 = nullptr;
+    const char* jsonUtf8  = nullptr;
     const HRESULT propsHr = fileIo->GetItemProperties(itemPath.c_str(), &jsonUtf8);
     state.Require(SUCCEEDED(propsHr) && jsonUtf8 != nullptr,
-                  std::format(L"GetItemProperties should return JSON for '{0}'. hr=0x{1:08X}",
-                              itemPath.wstring(),
-                              static_cast<unsigned long>(propsHr)));
+                  std::format(L"GetItemProperties should return JSON for '{0}'. hr=0x{1:08X}", itemPath.wstring(), static_cast<unsigned long>(propsHr)));
     if (FAILED(propsHr) || jsonUtf8 == nullptr)
     {
         return {};
@@ -710,7 +689,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
 
     for (int pos = 0; pos < itemCount; ++pos)
     {
-        const HMENU subMenu = GetSubMenu(menu, pos);
+        const HMENU subMenu     = GetSubMenu(menu, pos);
         const std::wstring text = GetMenuItemTextByPosition(menu, pos);
         if (subMenu && text.find(textFragment) != std::wstring::npos)
         {
@@ -779,10 +758,8 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for go-to-link-target test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for go-to-link-target test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target.url"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for go-to-link-target test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for go-to-link-target test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target.url"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for go-to-link-target test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"target.url"),
                   L"Failed to focus target.url for go-to-link-target test.");
     if (! state.failure.empty())
@@ -833,8 +810,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SelfTest::EnsureDirectory(targetRoot), L"Failed to create .lnk file-target target root.");
     state.Require(SelfTest::WriteTextFile(targetFile, "target"), L"Failed to create .lnk file-target file.");
     const HRESULT createLinkHr = CreateShellLinkForShellCommandTest(linkFile, targetFile);
-    state.Require(SUCCEEDED(createLinkHr),
-                  std::format(L"Failed to create .lnk file-target fixture: 0x{0:08X}.", static_cast<unsigned long>(createLinkHr)));
+    state.Require(SUCCEEDED(createLinkHr), std::format(L"Failed to create .lnk file-target fixture: 0x{0:08X}.", static_cast<unsigned long>(createLinkHr)));
     if (! state.failure.empty())
     {
         return false;
@@ -854,10 +830,8 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for .lnk file-target test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for .lnk file-target test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target.lnk"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for .lnk file-target test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for .lnk file-target test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"target.lnk"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for .lnk file-target test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"target.lnk"),
                   L"Failed to focus target.lnk for .lnk file-target test.");
     if (! state.failure.empty())
@@ -930,10 +904,8 @@ struct MountPointReparseDataBufferForShellCommandTest final
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set left pane path for .lnk directory-target test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"d.lnk"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for .lnk directory-target test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"d.lnk"),
-                  L"Failed to focus d.lnk for .lnk directory-target test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"d.lnk"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for .lnk directory-target test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"d.lnk"), L"Failed to focus d.lnk for .lnk directory-target test.");
     if (! state.failure.empty())
     {
         return false;
@@ -977,8 +949,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
 
     state.Require(SelfTest::EnsureDirectory(linksRoot), L"Failed to create broken .lnk links root.");
     const HRESULT createLinkHr = CreateShellLinkForShellCommandTest(linkFile, missingTarget);
-    state.Require(SUCCEEDED(createLinkHr), std::format(L"Failed to create broken .lnk fixture: 0x{0:08X}.",
-                                                       static_cast<unsigned long>(createLinkHr)));
+    state.Require(SUCCEEDED(createLinkHr), std::format(L"Failed to create broken .lnk fixture: 0x{0:08X}.", static_cast<unsigned long>(createLinkHr)));
     if (! state.failure.empty())
     {
         return false;
@@ -998,12 +969,9 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for broken .lnk test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for broken .lnk test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"missing.lnk"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for broken .lnk test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"missing.lnk"),
-                  L"Failed to focus missing.lnk for broken .lnk test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for broken .lnk test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"missing.lnk"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for broken .lnk test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"missing.lnk"), L"Failed to focus missing.lnk for broken .lnk test.");
     if (! state.failure.empty())
     {
         return false;
@@ -1014,8 +982,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET, 0), 0);
     PumpPendingMessages();
 
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(1000ms)),
-                  L"Broken .lnk should keep the pane in the source folder.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(1000ms)), L"Broken .lnk should keep the pane in the source folder.");
     state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == std::wstring_view(L"missing.lnk"),
                   L"Broken .lnk should keep focus on the source shortcut.");
 
@@ -1053,8 +1020,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     ec.clear();
 
     state.Require(SelfTest::EnsureDirectory(linksRoot), L"Failed to create web .url links root.");
-    state.Require(SelfTest::WriteTextFile(linkFile, "[InternetShortcut]\r\nURL=https://example.invalid/path\r\n"),
-                  L"Failed to create web .url fixture.");
+    state.Require(SelfTest::WriteTextFile(linkFile, "[InternetShortcut]\r\nURL=https://example.invalid/path\r\n"), L"Failed to create web .url fixture.");
     if (! state.failure.empty())
     {
         return false;
@@ -1074,8 +1040,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for web .url test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for web .url test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for web .url test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"web.url"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for web .url test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"web.url"), L"Failed to focus web.url for web .url test.");
     if (! state.failure.empty())
@@ -1088,8 +1053,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET, 0), 0);
     PumpPendingMessages();
 
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(1000ms)),
-                  L"Web .url should keep the pane in the source folder.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(1000ms)), L"Web .url should keep the pane in the source folder.");
 
     FolderView::AlertOverlayDebugSnapshot alert{};
     state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert), L"Web .url alert snapshot should be available.");
@@ -1130,8 +1094,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SelfTest::EnsureDirectory(targetRoot), L"Failed to create junction target folder.");
     state.Require(SelfTest::WriteTextFile(targetRoot / L"inside.txt", "inside"), L"Failed to create junction target child file.");
     const HRESULT createJunctionHr = CreateJunctionForShellCommandTest(junctionPath, targetRoot);
-    state.Require(SUCCEEDED(createJunctionHr),
-                  std::format(L"Failed to create junction fixture: 0x{0:08X}.", static_cast<unsigned long>(createJunctionHr)));
+    state.Require(SUCCEEDED(createJunctionHr), std::format(L"Failed to create junction fixture: 0x{0:08X}.", static_cast<unsigned long>(createJunctionHr)));
     if (! state.failure.empty())
     {
         return false;
@@ -1151,12 +1114,9 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for junction test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, linksRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for junction test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"j"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for junction test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"j"),
-                  L"Failed to focus j for junction test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, linksRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for junction test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"j"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for junction test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"j"), L"Failed to focus j for junction test.");
     if (! state.failure.empty())
     {
         return false;
@@ -1203,8 +1163,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SelfTest::WriteTextFile(targetRoot / L"inside.txt", "inside"), L"Failed to create execute-open junction target child file.");
     const HRESULT createJunctionHr = CreateJunctionForShellCommandTest(junctionPath, targetRoot);
     state.Require(SUCCEEDED(createJunctionHr),
-                  std::format(L"Failed to create execute-open junction fixture: 0x{0:08X}.",
-                              static_cast<unsigned long>(createJunctionHr)));
+                  std::format(L"Failed to create execute-open junction fixture: 0x{0:08X}.", static_cast<unsigned long>(createJunctionHr)));
     if (! state.failure.empty())
     {
         return false;
@@ -1226,10 +1185,8 @@ struct MountPointReparseDataBufferForShellCommandTest final
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceRoot);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set left pane path for execute-open junction test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"j"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for execute-open junction test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"j"),
-                  L"Failed to focus j for execute-open junction test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"j"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for execute-open junction test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"j"), L"Failed to focus j for execute-open junction test.");
     if (! state.failure.empty())
     {
         return false;
@@ -1279,8 +1236,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(SelfTest::WriteTextFile(urlFile, BuildFileUrlShortcutPayloadForShellCommandTest(targetFile)),
                   L"Failed to create item-properties .url fixture.");
     const HRESULT createLinkHr = CreateShellLinkForShellCommandTest(linkFile, targetFile);
-    state.Require(SUCCEEDED(createLinkHr),
-                  std::format(L"Failed to create item-properties .lnk fixture: 0x{0:08X}.", static_cast<unsigned long>(createLinkHr)));
+    state.Require(SUCCEEDED(createLinkHr), std::format(L"Failed to create item-properties .lnk fixture: 0x{0:08X}.", static_cast<unsigned long>(createLinkHr)));
     const HRESULT createJunctionHr = CreateJunctionForShellCommandTest(junctionPath, targetRoot);
     state.Require(SUCCEEDED(createJunctionHr),
                   std::format(L"Failed to create item-properties junction fixture: 0x{0:08X}.", static_cast<unsigned long>(createJunctionHr)));
@@ -1314,21 +1270,17 @@ struct MountPointReparseDataBufferForShellCommandTest final
 
     const std::wstring linkContent = BuildBuiltinItemPropertiesTextForShellCommandTest(linkFile, state);
     state.Require(linkContent.find(L"Shortcut\r\n") != std::wstring::npos, L".lnk item properties should include a Shortcut section.");
-    state.Require(linkContent.find(L"Target: " + targetFile.wstring()) != std::wstring::npos,
-                  L".lnk item properties should include the shortcut target path.");
+    state.Require(linkContent.find(L"Target: " + targetFile.wstring()) != std::wstring::npos, L".lnk item properties should include the shortcut target path.");
 
     const std::wstring urlContent = BuildBuiltinItemPropertiesTextForShellCommandTest(urlFile, state);
-    state.Require(urlContent.find(L"Internet Shortcut\r\n") != std::wstring::npos,
-                  L".url item properties should include an Internet Shortcut section.");
+    state.Require(urlContent.find(L"Internet Shortcut\r\n") != std::wstring::npos, L".url item properties should include an Internet Shortcut section.");
     state.Require(urlContent.find(L"URL: file:///") != std::wstring::npos, L".url item properties should include the original URL.");
     state.Require(urlContent.find(L"Target: " + targetFile.wstring()) != std::wstring::npos,
                   L".url item properties should include the resolved local target path.");
 
     const std::wstring junctionContent = BuildBuiltinItemPropertiesTextForShellCommandTest(junctionPath, state);
-    state.Require(junctionContent.find(L"Reparse Point\r\n") != std::wstring::npos,
-                  L"Junction item properties should include a Reparse Point section.");
-    state.Require(junctionContent.find(L"Kind: Mount point") != std::wstring::npos,
-                  L"Junction item properties should identify the mount-point reparse tag.");
+    state.Require(junctionContent.find(L"Reparse Point\r\n") != std::wstring::npos, L"Junction item properties should include a Reparse Point section.");
+    state.Require(junctionContent.find(L"Kind: Mount point") != std::wstring::npos, L"Junction item properties should identify the mount-point reparse tag.");
     state.Require(junctionContent.find(L"Target: " + targetRoot.wstring()) != std::wstring::npos,
                   L"Junction item properties should include the resolved target path.");
 
@@ -1366,22 +1318,22 @@ struct MountPointReparseDataBufferForShellCommandTest final
     }
 
     std::vector<FolderWindow::DebugShellNewTemplateDefinition> templates;
-    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id = L"text",
-                                                                      .displayName = L"Text Document",
-                                                                      .extension = L".txt",
+    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id              = L"text",
+                                                                      .displayName     = L"Text Document",
+                                                                      .extension       = L".txt",
                                                                       .defaultFileName = L"New Text Document.txt",
-                                                                      .kind = FolderWindow::DebugShellNewTemplateKind::NullFile});
-    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id = L"data",
-                                                                      .displayName = L"Data Document",
-                                                                      .extension = L".dat",
+                                                                      .kind            = FolderWindow::DebugShellNewTemplateKind::NullFile});
+    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id              = L"data",
+                                                                      .displayName     = L"Data Document",
+                                                                      .extension       = L".dat",
                                                                       .defaultFileName = L"New Data Document.dat",
-                                                                      .kind = FolderWindow::DebugShellNewTemplateKind::Data,
-                                                                      .data = BytesForShellCommandTest("data-template-payload")});
-    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id = L"file",
-                                                                      .displayName = L"File Template",
-                                                                      .extension = L".bin",
-                                                                      .defaultFileName = L"New File Template.bin",
-                                                                      .kind = FolderWindow::DebugShellNewTemplateKind::FileName,
+                                                                      .kind            = FolderWindow::DebugShellNewTemplateKind::Data,
+                                                                      .data            = BytesForShellCommandTest("data-template-payload")});
+    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id               = L"file",
+                                                                      .displayName      = L"File Template",
+                                                                      .extension        = L".bin",
+                                                                      .defaultFileName  = L"New File Template.bin",
+                                                                      .kind             = FolderWindow::DebugShellNewTemplateKind::FileName,
                                                                       .templateFilePath = templateFile});
     g_folderWindow.DebugSetShellNewTemplatesForTest(std::move(templates));
     const auto clearTemplates = wil::scope_exit([&]
@@ -1473,16 +1425,16 @@ struct MountPointReparseDataBufferForShellCommandTest final
     }
 
     std::vector<FolderWindow::DebugShellNewTemplateDefinition> templates;
-    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id = L"alpha",
-                                                                      .displayName = L"Alpha Document",
-                                                                      .extension = L".alpha",
+    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id              = L"alpha",
+                                                                      .displayName     = L"Alpha Document",
+                                                                      .extension       = L".alpha",
                                                                       .defaultFileName = L"New Alpha Document.alpha",
-                                                                      .kind = FolderWindow::DebugShellNewTemplateKind::NullFile});
-    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id = L"beta",
-                                                                      .displayName = L"Beta Document",
-                                                                      .extension = L".beta",
+                                                                      .kind            = FolderWindow::DebugShellNewTemplateKind::NullFile});
+    templates.push_back(FolderWindow::DebugShellNewTemplateDefinition{.id              = L"beta",
+                                                                      .displayName     = L"Beta Document",
+                                                                      .extension       = L".beta",
                                                                       .defaultFileName = L"New Beta Document.beta",
-                                                                      .kind = FolderWindow::DebugShellNewTemplateKind::NullFile});
+                                                                      .kind            = FolderWindow::DebugShellNewTemplateKind::NullFile});
     g_folderWindow.DebugSetShellNewTemplatesForTest(std::move(templates));
     const auto clearTemplates = wil::scope_exit([&]
     {
@@ -1546,8 +1498,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
     state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert), L"Missing ShellNew template alert snapshot should be available.");
     state.Require(alert.visible, L"Missing ShellNew template should show a pane alert.");
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Missing ShellNew template alert should be a warning.");
-    state.Require(alert.message.find(L"missing-template") != std::wstring::npos,
-                  L"Missing ShellNew template alert should include the requested template id.");
+    state.Require(alert.message.find(L"missing-template") != std::wstring::npos, L"Missing ShellNew template alert should include the requested template id.");
 
     return state.failure.empty();
 }
@@ -1617,7 +1568,9 @@ struct MountPointReparseDataBufferForShellCommandTest final
 }
 #pragma warning(pop)
 
-[[nodiscard]] bool SetClipboardDropPathsForShellCommandTest(HWND ownerWindow, const std::vector<std::filesystem::path>& paths) noexcept
+[[nodiscard]] bool SetClipboardDropPathsForShellCommandTest(HWND ownerWindow,
+                                                            const std::vector<std::filesystem::path>& paths,
+                                                            DWORD preferredDropEffect = DROPEFFECT_COPY) noexcept
 {
     wil::unique_hglobal hdrop = BuildHDropForShellCommandTest(paths);
     if (! hdrop)
@@ -1625,7 +1578,7 @@ struct MountPointReparseDataBufferForShellCommandTest final
         return false;
     }
 
-    wil::unique_hglobal effect = BuildPreferredDropEffectForShellCommandTest(DROPEFFECT_COPY);
+    wil::unique_hglobal effect = BuildPreferredDropEffectForShellCommandTest(preferredDropEffect);
     if (! effect)
     {
         return false;
@@ -1677,9 +1630,8 @@ struct ClipboardDropEffectReadStatus
     bool locked              = false;
 };
 
-[[nodiscard]] std::vector<std::filesystem::path> ReadClipboardDropPathsForShellCommandTest(
-    HWND ownerWindow,
-    ClipboardDropPathsReadStatus* status = nullptr) noexcept
+[[nodiscard]] std::vector<std::filesystem::path> ReadClipboardDropPathsForShellCommandTest(HWND ownerWindow,
+                                                                                           ClipboardDropPathsReadStatus* status = nullptr) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -1749,9 +1701,8 @@ struct ClipboardDropEffectReadStatus
     return result;
 }
 
-[[nodiscard]] std::optional<DWORD> ReadClipboardPreferredDropEffectForShellCommandTest(
-    HWND ownerWindow,
-    ClipboardDropEffectReadStatus* status = nullptr) noexcept
+[[nodiscard]] std::optional<DWORD> ReadClipboardPreferredDropEffectForShellCommandTest(HWND ownerWindow,
+                                                                                       ClipboardDropEffectReadStatus* status = nullptr) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -1830,9 +1781,7 @@ struct ClipboardDropEffectReadStatus
 
 [[nodiscard]] bool ContainsPathForShellCommandTest(const std::vector<std::filesystem::path>& paths, const std::filesystem::path& expected) noexcept
 {
-    return std::any_of(paths.begin(),
-                       paths.end(),
-                       [&](const std::filesystem::path& path) noexcept { return OrdinalString::EqualsNoCasePath(path, expected); });
+    return std::any_of(paths.begin(), paths.end(), [&](const std::filesystem::path& path) noexcept { return OrdinalString::EqualsNoCasePath(path, expected); });
 }
 
 [[nodiscard]] HRESULT ReadShortcutTargetForShellCommandTest(const std::filesystem::path& linkPath, std::filesystem::path& targetPath) noexcept
@@ -1942,55 +1891,161 @@ struct ClipboardDropEffectReadStatus
         return false;
     }
     const FolderWindow::Pane focusedPaneBeforeCommand = g_folderWindow.GetFocusedPane();
-    const HWND focusedViewBeforeCommand              = g_folderWindow.GetFocusedFolderViewHwnd();
-    const size_t leftSelectedBeforeCommand           = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
-    const size_t rightSelectedBeforeCommand          = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right);
+    const HWND focusedViewBeforeCommand               = g_folderWindow.GetFocusedFolderViewHwnd();
+    const size_t leftSelectedBeforeCommand            = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+    const size_t rightSelectedBeforeCommand           = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right);
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_CUT, 0), 0);
     PumpPendingMessages();
 
     const FolderWindow::Pane focusedPaneAfterCommand = g_folderWindow.GetFocusedPane();
-    const HWND focusedViewAfterCommand              = g_folderWindow.GetFocusedFolderViewHwnd();
-    const size_t leftSelectedAfterCommand           = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
-    const size_t rightSelectedAfterCommand          = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right);
+    const HWND focusedViewAfterCommand               = g_folderWindow.GetFocusedFolderViewHwnd();
+    const size_t leftSelectedAfterCommand            = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+    const size_t rightSelectedAfterCommand           = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right);
     ClipboardDropPathsReadStatus dropReadStatus{};
     const std::vector<std::filesystem::path> dropPaths = ReadClipboardDropPathsForShellCommandTest(mainWindow, &dropReadStatus);
-    state.Require(
-        dropPaths.size() == 2u,
-        std::format(L"Clipboard Cut should write two CF_HDROP paths; got {}; opened={}, openError={}, openOwner={:#x}, hasHdrop={}, fileCount={}, "
-                    L"focusedPaneBefore={}, focusedPaneAfter={}, focusedViewBefore={:#x}, focusedViewAfter={:#x}, leftView={:#x}, "
-                    L"leftSelectedBefore={}, leftSelectedAfter={}, rightSelectedBefore={}, rightSelectedAfter={}.",
-                    dropPaths.size(),
-                    dropReadStatus.opened ? 1 : 0,
-                    dropReadStatus.openError,
-                    reinterpret_cast<uintptr_t>(dropReadStatus.openClipboardWindow),
-                    dropReadStatus.hasHdrop ? 1 : 0,
-                    dropReadStatus.fileCount,
-                    static_cast<int>(focusedPaneBeforeCommand),
-                    static_cast<int>(focusedPaneAfterCommand),
-                    reinterpret_cast<uintptr_t>(focusedViewBeforeCommand),
-                    reinterpret_cast<uintptr_t>(focusedViewAfterCommand),
-                    reinterpret_cast<uintptr_t>(leftView),
-                    leftSelectedBeforeCommand,
-                    leftSelectedAfterCommand,
-                    rightSelectedBeforeCommand,
-                    rightSelectedAfterCommand));
+    state.Require(dropPaths.size() == 2u,
+                  std::format(L"Clipboard Cut should write two CF_HDROP paths; got {}; opened={}, openError={}, openOwner={:#x}, hasHdrop={}, fileCount={}, "
+                              L"focusedPaneBefore={}, focusedPaneAfter={}, focusedViewBefore={:#x}, focusedViewAfter={:#x}, leftView={:#x}, "
+                              L"leftSelectedBefore={}, leftSelectedAfter={}, rightSelectedBefore={}, rightSelectedAfter={}.",
+                              dropPaths.size(),
+                              dropReadStatus.opened ? 1 : 0,
+                              dropReadStatus.openError,
+                              reinterpret_cast<uintptr_t>(dropReadStatus.openClipboardWindow),
+                              dropReadStatus.hasHdrop ? 1 : 0,
+                              dropReadStatus.fileCount,
+                              static_cast<int>(focusedPaneBeforeCommand),
+                              static_cast<int>(focusedPaneAfterCommand),
+                              reinterpret_cast<uintptr_t>(focusedViewBeforeCommand),
+                              reinterpret_cast<uintptr_t>(focusedViewAfterCommand),
+                              reinterpret_cast<uintptr_t>(leftView),
+                              leftSelectedBeforeCommand,
+                              leftSelectedAfterCommand,
+                              rightSelectedBeforeCommand,
+                              rightSelectedAfterCommand));
     state.Require(ContainsPathForShellCommandTest(dropPaths, alphaPath), L"Clipboard Cut should include alpha.txt in CF_HDROP.");
     state.Require(ContainsPathForShellCommandTest(dropPaths, betaPath), L"Clipboard Cut should include beta.txt in CF_HDROP.");
 
     ClipboardDropEffectReadStatus effectReadStatus{};
     const std::optional<DWORD> effect = ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow, &effectReadStatus);
-    state.Require(
-        effect.has_value(),
-        std::format(L"Clipboard Cut should publish Preferred DropEffect metadata; opened={}, openError={}, openOwner={:#x}, format={}, available={}, "
-                    L"hasHandle={}, locked={}.",
-                    effectReadStatus.opened ? 1 : 0,
-                    effectReadStatus.openError,
-                    reinterpret_cast<uintptr_t>(effectReadStatus.openClipboardWindow),
-                    effectReadStatus.format,
-                    effectReadStatus.formatAvailable ? 1 : 0,
-                    effectReadStatus.hasHandle ? 1 : 0,
-                    effectReadStatus.locked ? 1 : 0));
+    state.Require(effect.has_value(),
+                  std::format(L"Clipboard Cut should publish Preferred DropEffect metadata; opened={}, openError={}, openOwner={:#x}, format={}, available={}, "
+                              L"hasHandle={}, locked={}.",
+                              effectReadStatus.opened ? 1 : 0,
+                              effectReadStatus.openError,
+                              reinterpret_cast<uintptr_t>(effectReadStatus.openClipboardWindow),
+                              effectReadStatus.format,
+                              effectReadStatus.formatAvailable ? 1 : 0,
+                              effectReadStatus.hasHandle ? 1 : 0,
+                              effectReadStatus.locked ? 1 : 0));
     state.Require(effect.value_or(DROPEFFECT_NONE) == DROPEFFECT_MOVE, L"Clipboard Cut should publish Preferred DropEffect = DROPEFFECT_MOVE.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneClipboardPasteUsesPreferredMoveEffect(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_paste_move_" + NewGuidText());
+    const std::filesystem::path sourceA    = root / L"source-a";
+    const std::filesystem::path sourceB    = root / L"source-b";
+    const std::filesystem::path destRoot   = root / L"dest";
+    const std::filesystem::path alphaPath  = sourceA / L"alpha.txt";
+    const std::filesystem::path betaPath   = sourceB / L"beta.txt";
+    const std::filesystem::path movedAlpha = destRoot / L"alpha.txt";
+    const std::filesystem::path movedBeta  = destRoot / L"beta.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceA), L"Failed to create clipboard move source-a directory.");
+    state.Require(SelfTest::EnsureDirectory(sourceB), L"Failed to create clipboard move source-b directory.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create clipboard move destination directory.");
+    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create alpha.txt move source.");
+    state.Require(SelfTest::WriteTextFile(betaPath, "beta"), L"Failed to create beta.txt move source.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for clipboard paste-move test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for clipboard paste-move test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath, betaPath}, DROPEFFECT_MOVE),
+                  L"Failed to seed CF_HDROP clipboard paths with Preferred DropEffect MOVE.");
+    const std::optional<DWORD> seededDropEffect = ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow);
+    state.Require(seededDropEffect.value_or(DROPEFFECT_NONE) == DROPEFFECT_MOVE,
+                  L"Paste Move clipboard seed should expose Preferred DropEffect = DROPEFFECT_MOVE.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before Paste Move.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
+    PumpPendingMessages();
+    state.Require(HostGetTestPromptRequestCount() == 1u,
+                  std::format(L"Paste after Ctrl+X should show exactly one move confirmation prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
+
+    const bool refreshed = WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta.txt"}, SelfTest::Scale(3000ms));
+    state.Require(refreshed,
+                  std::format(L"Paste after Ctrl+X should refresh destination with moved files; focusedPane={} focusedView=0x{:X} expectedView=0x{:X}; "
+                              L"destEntries='{}'.",
+                              static_cast<int>(g_folderWindow.GetFocusedPane()),
+                              reinterpret_cast<UINT_PTR>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                              reinterpret_cast<UINT_PTR>(leftView),
+                              DescribeDirectoryEntriesForShellCommandTest(destRoot)));
+    state.Require(std::filesystem::exists(movedAlpha, ec), L"Paste after Ctrl+X should create alpha.txt in the destination.");
+    ec.clear();
+    state.Require(std::filesystem::exists(movedBeta, ec), L"Paste after Ctrl+X should create beta.txt in the destination.");
+    ec.clear();
+    state.Require(! std::filesystem::exists(alphaPath, ec), L"Paste after Ctrl+X should move alpha.txt out of source-a, not copy it.");
+    ec.clear();
+    state.Require(! std::filesystem::exists(betaPath, ec), L"Paste after Ctrl+X should move beta.txt out of source-b, not copy it.");
 
     return state.failure.empty();
 }
@@ -2082,9 +2137,8 @@ struct ClipboardDropEffectReadStatus
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE_SHORTCUT, 0), 0);
     PumpPendingMessages();
 
-    const bool refreshed = WaitForPaneItems(FolderWindow::Pane::Left,
-                                            {L"alpha - Shortcut.lnk", L"alpha - Shortcut (2).lnk", L"beta - Shortcut.lnk"},
-                                            SelfTest::Scale(3000ms));
+    const bool refreshed =
+        WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha - Shortcut.lnk", L"alpha - Shortcut (2).lnk", L"beta - Shortcut.lnk"}, SelfTest::Scale(3000ms));
     state.Require(refreshed,
                   std::format(L"Paste Shortcut should refresh the pane with unique .lnk files; focusedPane={} focusedView=0x{:X} expectedView=0x{:X}; "
                               L"destEntries='{}'.",
@@ -2157,8 +2211,7 @@ struct ClipboardDropEffectReadStatus
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for empty Paste Shortcut test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for empty Paste Shortcut test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for empty Paste Shortcut test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"keep.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for empty Paste Shortcut test.");
     if (! state.failure.empty())
@@ -2173,7 +2226,8 @@ struct ClipboardDropEffectReadStatus
     PumpPendingMessages();
 
     FolderView::AlertOverlayDebugSnapshot alert{};
-    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert), L"Paste Shortcut empty-source alert snapshot should be available.");
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert),
+                  L"Paste Shortcut empty-source alert snapshot should be available.");
     state.Require(alert.visible, L"Paste Shortcut without clipboard file paths should show a pane alert.");
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Paste Shortcut empty-source alert should be a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_CMD_CLIPBOARD_PASTE_SHORTCUT),
@@ -2217,6 +2271,8 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     { return TestPaneNewFromShellTemplateMenuAndMissingTemplateFeedback(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardCut_sets_move_drop_effect", [=](CaseState& state) noexcept
     { return TestPaneClipboardCutSetsMoveDropEffect(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_uses_preferred_move_effect", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteUsesPreferredMoveEffect(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept
     { return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths", [=](CaseState& state) noexcept

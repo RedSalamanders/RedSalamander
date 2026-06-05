@@ -44,11 +44,10 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
 
 [[nodiscard]] bool TestWriteTinyBmpFile(const std::filesystem::path& path) noexcept
 {
-    static constexpr std::array<unsigned char, 58> kBmp{{
-        0x42, 0x4D, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x28, 0x00,
-        0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x18, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00}};
+    static constexpr std::array<unsigned char, 58> kBmp{{0x42, 0x4D, 0x3A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x36, 0x00, 0x00, 0x00, 0x28,
+                                                         0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x18, 0x00,
+                                                         0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x13, 0x0B, 0x00, 0x00, 0x13, 0x0B, 0x00,
+                                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00}};
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (! output)
     {
@@ -72,13 +71,8 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
     streamPath.push_back(L':');
     streamPath.append(streamName);
 
-    wil::unique_handle stream(CreateFileW(streamPath.c_str(),
-                                          GENERIC_WRITE,
-                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                          nullptr,
-                                          CREATE_ALWAYS,
-                                          FILE_ATTRIBUTE_NORMAL,
-                                          nullptr));
+    wil::unique_handle stream(CreateFileW(
+        streamPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! stream)
     {
         const DWORD lastError = GetLastError();
@@ -94,7 +88,7 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    DWORD written = 0u;
+    DWORD written            = 0u;
     const DWORD bytesToWrite = static_cast<DWORD>(payload.size());
     if (WriteFile(stream.get(), payload.data(), bytesToWrite, &written, nullptr) == 0 || written != bytesToWrite)
     {
@@ -116,8 +110,7 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
-        if (g_folderWindow.DebugGetPreviewPaneSnapshot(outSnapshot) &&
-            outSnapshot.previewText.find(expected) != std::wstring::npos &&
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(outSnapshot) && outSnapshot.previewText.find(expected) != std::wstring::npos &&
             (forbidden.empty() || outSnapshot.previewText.find(forbidden) == std::wstring::npos))
         {
             return true;
@@ -132,7 +125,7 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
 [[nodiscard]] Common::Settings::EditorAssociationRule TestEditorAssociation(std::wstring extension,
                                                                             std::wstring editActionId,
                                                                             std::wstring alternateEditActionId = {},
-                                                                            std::wstring editNewActionId = {})
+                                                                            std::wstring editNewActionId       = {})
 {
     Common::Settings::EditorAssociationRule rule{};
     rule.match                 = TestExtensionMatch(std::move(extension));
@@ -144,7 +137,7 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
 
 [[nodiscard]] Common::Settings::EditorAssociationRule TestDefaultEditorAssociation(std::wstring editActionId,
                                                                                    std::wstring alternateEditActionId = {},
-                                                                                   std::wstring editNewActionId = {})
+                                                                                   std::wstring editNewActionId       = {})
 {
     Common::Settings::EditorAssociationRule rule{};
     rule.match.kind            = Common::Settings::FileActionMatchKind::Default;
@@ -156,7 +149,7 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
 
 void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*, const wchar_t*>> rows)
 {
-    auto defaultViewers = Common::Settings::DefaultViewerFileActionsSettings();
+    auto defaultViewers                    = Common::Settings::DefaultViewerFileActionsSettings();
     g_settings.fileActions.viewers.actions = std::move(defaultViewers.actions);
     g_settings.fileActions.viewers.associations.clear();
     g_settings.fileActions.viewers.associations.reserve(rows.size());
@@ -451,15 +444,11 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
         return value;
     };
     const auto containsControl = [](std::wstring_view text)
-    {
-        return std::any_of(text.begin(), text.end(), [](const wchar_t ch) noexcept { return std::iswcntrl(static_cast<wint_t>(ch)) != 0; });
-    };
+    { return std::any_of(text.begin(), text.end(), [](const wchar_t ch) noexcept { return std::iswcntrl(static_cast<wint_t>(ch)) != 0; }); };
     const auto searchContainsControl = [&](const Common::Settings::SearchDialogSettings& value)
     {
         const auto historyContainsControl = [&](const std::vector<std::wstring>& history)
-        {
-            return std::any_of(history.begin(), history.end(), [&](const std::wstring& entry) { return containsControl(entry); });
-        };
+        { return std::any_of(history.begin(), history.end(), [&](const std::wstring& entry) { return containsControl(entry); }); };
 
         return historyContainsControl(value.recentRoots) || historyContainsControl(value.recentNamePatterns) ||
                historyContainsControl(value.recentContentPatterns) || containsControl(value.lastRoot) || containsControl(value.lastNamePattern) ||
@@ -468,8 +457,10 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
 
     Common::Settings::Settings dirtySettings{};
     Common::Settings::SearchDialogSettings dirtySearch{};
-    dirtySearch.recentRoots           = {appendHiddenControl(L"C:\\dirty-root"), std::wstring(1, static_cast<wchar_t>(0x7F)),
-                                         appendHiddenControl(L"C:\\DIRTY-ROOT"), appendHiddenControl(L"D:\\dirty-root")};
+    dirtySearch.recentRoots           = {appendHiddenControl(L"C:\\dirty-root"),
+                                         std::wstring(1, static_cast<wchar_t>(0x7F)),
+                                         appendHiddenControl(L"C:\\DIRTY-ROOT"),
+                                         appendHiddenControl(L"D:\\dirty-root")};
     dirtySearch.recentNamePatterns    = {appendHiddenControl(L"*"), std::wstring(1, static_cast<wchar_t>(0x7F)), appendHiddenControl(L"*.txt")};
     dirtySearch.recentContentPatterns = {appendHiddenControl(L"needle"), std::wstring(1, static_cast<wchar_t>(0x7F))};
     dirtySearch.lastRoot              = appendHiddenControl(L"C:\\dirty-root");
@@ -552,29 +543,28 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     settings.schemaVersion = 16u;
 
     Common::Settings::FileActionDefinition textViewer{};
-    textViewer.id                         = L"builtin/viewer-text";
-    textViewer.displayName                = L"Text Viewer";
-    textViewer.kind                       = Common::Settings::FileActionKind::ViewerPlugin;
-    textViewer.pluginId                   = L"builtin/viewer-text";
-    textViewer.appliesTo.matches          = {{Common::Settings::FileActionMatchKind::Extension, L".txt"},
-                                             {Common::Settings::FileActionMatchKind::Extension, L".md"}};
-    textViewer.appliesTo.computerNames    = {L"DEV-PC"};
+    textViewer.id                = L"builtin/viewer-text";
+    textViewer.displayName       = L"Text Viewer";
+    textViewer.kind              = Common::Settings::FileActionKind::ViewerPlugin;
+    textViewer.pluginId          = L"builtin/viewer-text";
+    textViewer.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Extension, L".txt"}, {Common::Settings::FileActionMatchKind::Extension, L".md"}};
+    textViewer.appliesTo.computerNames = {L"DEV-PC"};
 
     Common::Settings::FileActionDefinition hexViewer{};
-    hexViewer.id                 = L"hex-viewer";
-    hexViewer.displayName        = L"Hex Viewer";
-    hexViewer.kind               = Common::Settings::FileActionKind::ViewerPlugin;
-    hexViewer.pluginId           = L"builtin/viewer-hex";
-    hexViewer.appliesTo.matches  = {{Common::Settings::FileActionMatchKind::Default, L""}};
+    hexViewer.id                = L"hex-viewer";
+    hexViewer.displayName       = L"Hex Viewer";
+    hexViewer.kind              = Common::Settings::FileActionKind::ViewerPlugin;
+    hexViewer.pluginId          = L"builtin/viewer-hex";
+    hexViewer.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Default, L""}};
 
     Common::Settings::FileActionDefinition externalPngViewer{};
-    externalPngViewer.id               = L"irfanview";
-    externalPngViewer.displayName      = L"IrfanView";
-    externalPngViewer.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    externalPngViewer.executablePath   = L"C:\\Tools\\IrfanView\\i_view64.exe";
-    externalPngViewer.arguments        = L"{FullPath}";
-    externalPngViewer.workingDirectory = L"{Path}";
-    externalPngViewer.enabled          = false;
+    externalPngViewer.id                = L"irfanview";
+    externalPngViewer.displayName       = L"IrfanView";
+    externalPngViewer.kind              = Common::Settings::FileActionKind::ExternalProgram;
+    externalPngViewer.executablePath    = L"C:\\Tools\\IrfanView\\i_view64.exe";
+    externalPngViewer.arguments         = L"{FullPath}";
+    externalPngViewer.workingDirectory  = L"{Path}";
+    externalPngViewer.enabled           = false;
     externalPngViewer.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Extension, L".png"},
                                            {Common::Settings::FileActionMatchKind::Extension, L".jpg"}};
 
@@ -595,34 +585,34 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     settings.fileActions.viewers.associations = {txtViewerRule, defaultViewerRule};
 
     Common::Settings::FileActionDefinition notepad{};
-    notepad.id                 = L"notepad";
-    notepad.displayName        = L"Notepad";
-    notepad.kind               = Common::Settings::FileActionKind::ExternalProgram;
-    notepad.executablePath     = L"notepad.exe";
-    notepad.arguments          = L"{FullPath}";
-    notepad.workingDirectory   = L"{Path}";
-    notepad.appliesTo.matches  = {{Common::Settings::FileActionMatchKind::Default, L""}};
+    notepad.id                = L"notepad";
+    notepad.displayName       = L"Notepad";
+    notepad.kind              = Common::Settings::FileActionKind::ExternalProgram;
+    notepad.executablePath    = L"notepad.exe";
+    notepad.arguments         = L"{FullPath}";
+    notepad.workingDirectory  = L"{Path}";
+    notepad.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Default, L""}};
 
     Common::Settings::FileActionDefinition vscode{};
-    vscode.id                 = L"vscode";
-    vscode.displayName        = L"VS Code";
-    vscode.kind               = Common::Settings::FileActionKind::ExternalProgram;
-    vscode.executablePath     = L"code.cmd";
-    vscode.arguments          = L"--reuse-window {FullPath}";
-    vscode.workingDirectory   = L"{Path}";
-    vscode.appliesTo.matches  = {{Common::Settings::FileActionMatchKind::Default, L""}};
+    vscode.id                = L"vscode";
+    vscode.displayName       = L"VS Code";
+    vscode.kind              = Common::Settings::FileActionKind::ExternalProgram;
+    vscode.executablePath    = L"code.cmd";
+    vscode.arguments         = L"--reuse-window {FullPath}";
+    vscode.workingDirectory  = L"{Path}";
+    vscode.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Default, L""}};
 
     Common::Settings::FileActionDefinition visualStudio{};
-    visualStudio.id                         = L"Visual-Studio";
-    visualStudio.displayName                = L"Visual Studio";
-    visualStudio.kind                       = Common::Settings::FileActionKind::ExternalProgram;
-    visualStudio.executablePath             = L"C:\\Program Files\\Microsoft Visual Studio\\Common7\\IDE\\devenv.exe";
-    visualStudio.arguments                  = L"{FullPath}";
-    visualStudio.workingDirectory           = L"{Path}";
-    visualStudio.appliesTo.matches          = {{Common::Settings::FileActionMatchKind::Extension, L".cpp"},
-                                               {Common::Settings::FileActionMatchKind::Extension, L".h"},
-                                               {Common::Settings::FileActionMatchKind::Extension, L".vcxproj"}};
-    visualStudio.appliesTo.computerNames    = {L"DEV-PC"};
+    visualStudio.id                      = L"Visual-Studio";
+    visualStudio.displayName             = L"Visual Studio";
+    visualStudio.kind                    = Common::Settings::FileActionKind::ExternalProgram;
+    visualStudio.executablePath          = L"C:\\Program Files\\Microsoft Visual Studio\\Common7\\IDE\\devenv.exe";
+    visualStudio.arguments               = L"{FullPath}";
+    visualStudio.workingDirectory        = L"{Path}";
+    visualStudio.appliesTo.matches       = {{Common::Settings::FileActionMatchKind::Extension, L".cpp"},
+                                            {Common::Settings::FileActionMatchKind::Extension, L".h"},
+                                            {Common::Settings::FileActionMatchKind::Extension, L".vcxproj"}};
+    visualStudio.appliesTo.computerNames = {L"DEV-PC"};
 
     settings.fileActions.editors.actions = {notepad, vscode, visualStudio};
 
@@ -677,10 +667,8 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     state.Require(loaded.schemaVersion == 16u, L"File Actions should persist through settings schema v16.");
     state.Require(loaded.fileActions.viewers.actions.size() == 3, L"Viewer actions did not round-trip through fileActions.");
     state.Require(loaded.fileActions.viewers.associations.size() == 2, L"Viewer associations did not round-trip.");
-    state.Require(loaded.fileActions.viewers.associations.at(0).alternateViewActionId == L"hex-viewer",
-                  L"Alternate viewer association did not round-trip.");
-    state.Require(loaded.fileActions.viewers.actions.at(0).appliesTo.matches.size() == 2,
-                  L"Viewer action applicability matches did not round-trip.");
+    state.Require(loaded.fileActions.viewers.associations.at(0).alternateViewActionId == L"hex-viewer", L"Alternate viewer association did not round-trip.");
+    state.Require(loaded.fileActions.viewers.actions.at(0).appliesTo.matches.size() == 2, L"Viewer action applicability matches did not round-trip.");
     state.Require(loaded.fileActions.viewers.actions.at(0).appliesTo.computerNames == std::vector<std::wstring>{L"DEV-PC"},
                   L"Viewer action computer applicability did not round-trip.");
 
@@ -691,11 +679,10 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     state.Require(loaded.fileActions.editors.actions.at(2).appliesTo.matches.at(2).value == L".vcxproj",
                   L"Editor action extension applicability did not round-trip.");
     FileActionResolver::Request cppRequest{};
-    cppRequest.command      = FileActionResolver::Command::Edit;
-    cppRequest.filePath     = std::filesystem::path(L"C:\\Src\\main.cpp");
-    cppRequest.computerName = L"dev-pc";
-    const FileActionResolver::Resolution loadedCppResolution =
-        FileActionResolver::ResolveEditorAction(loaded.fileActions.editors, cppRequest);
+    cppRequest.command                                       = FileActionResolver::Command::Edit;
+    cppRequest.filePath                                      = std::filesystem::path(L"C:\\Src\\main.cpp");
+    cppRequest.computerName                                  = L"dev-pc";
+    const FileActionResolver::Resolution loadedCppResolution = FileActionResolver::ResolveEditorAction(loaded.fileActions.editors, cppRequest);
     state.Require(loadedCppResolution.action && loadedCppResolution.action->id == L"Visual-Studio",
                   L"Persisted editor action references should resolve case-insensitively.");
 
@@ -707,10 +694,8 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     state.Require(schema.find("\"associations\"") != std::string_view::npos, L"Settings schema should expose action associations.");
     state.Require(schema.find("\"editNewActionId\"") != std::string_view::npos, L"Settings schema should expose Edit New mappings.");
     state.Require(schema.find("\"appliesTo\"") != std::string_view::npos, L"Settings schema should expose action applicability.");
-    state.Require(schema.find("openWithViewerByExtension") == std::string_view::npos,
-                  L"Settings schema should not expose legacy viewer extension mappings.");
-    state.Require(schema.find("defaultPrimaryActionId") == std::string_view::npos,
-                  L"Settings schema should not expose legacy primary default action ids.");
+    state.Require(schema.find("openWithViewerByExtension") == std::string_view::npos, L"Settings schema should not expose legacy viewer extension mappings.");
+    state.Require(schema.find("defaultPrimaryActionId") == std::string_view::npos, L"Settings schema should not expose legacy primary default action ids.");
 
     return state.failure.empty();
 }
@@ -755,8 +740,7 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     Common::Settings::Settings loaded{};
     const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
     state.Require(FAILED(loadHr), L"v16 settings with legacy root viewers/editors should be rejected.");
-    state.Require(loadHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                  L"Legacy v16 File Actions shape should surface ERROR_INVALID_DATA.");
+    state.Require(loadHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Legacy v16 File Actions shape should surface ERROR_INVALID_DATA.");
 
     return state.failure.empty();
 }
@@ -837,8 +821,7 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     try
     {
         constexpr std::wstring_view kInvalidFormat = L"0x{0:08X}: {1";
-        const std::wstring details = FormatLoadedStringResource(
-            0u, kInvalidFormat, 0x80070002u, std::wstring(L"The system cannot find the file specified."));
+        const std::wstring details = FormatLoadedStringResource(0u, kInvalidFormat, 0x80070002u, std::wstring(L"The system cannot find the file specified."));
         state.Require(details == kInvalidFormat, L"Invalid runtime resource format strings should fall back to the raw resource text.");
     }
     catch (const std::format_error&)
@@ -984,8 +967,7 @@ void ScanResourceLineForFormatFields(const std::filesystem::path& path,
         std::error_code ec;
         while (! cursor.empty())
         {
-            if (std::filesystem::exists(cursor / L"RedSalamander.sln", ec) && ! ec
-                && std::filesystem::exists(cursor / L"Specs" / L"TestRuns", ec) && ! ec)
+            if (std::filesystem::exists(cursor / L"RedSalamander.sln", ec) && ! ec && std::filesystem::exists(cursor / L"Specs" / L"TestRuns", ec) && ! ec)
             {
                 return cursor;
             }
@@ -1147,8 +1129,8 @@ void ScanResourceDialogCaptions(const std::filesystem::path& path, std::vector<L
     std::ifstream input(path, std::ios::binary);
     std::string line;
     std::string dialogId;
-    size_t lineNumber       = 0;
-    bool inDialog           = false;
+    size_t lineNumber = 0;
+    bool inDialog     = false;
 
     while (std::getline(input, line))
     {
@@ -1157,8 +1139,8 @@ void ScanResourceDialogCaptions(const std::filesystem::path& path, std::vector<L
         if (IsResourceDialogDefinitionLine(line))
         {
             const size_t firstSpace = line.find_first_of(" \t");
-            dialogId               = firstSpace == std::string::npos ? line : line.substr(0, firstSpace);
-            inDialog               = true;
+            dialogId                = firstSpace == std::string::npos ? line : line.substr(0, firstSpace);
+            inDialog                = true;
             continue;
         }
 
@@ -1297,7 +1279,8 @@ void ScanEmbeddedViewerContextMenuContracts(const std::filesystem::path& repoRoo
         }
         if (compact.find(menuLoadPattern) == std::string::npos)
         {
-            findings.push_back({path, 0, std::format(L"Embedded-capable viewer does not load its localized {} menu model.", WidenAscii(target.menuResourceId))});
+            findings.push_back(
+                {path, 0, std::format(L"Embedded-capable viewer does not load its localized {} menu model.", WidenAscii(target.menuResourceId))});
         }
         if (compact.find("ShowNativeHMenuContextMenu(hwnd,screenPt,menu,") == std::string::npos)
         {
@@ -1320,7 +1303,8 @@ void ScanEmbeddedViewerContextMenuContracts(const std::filesystem::path& repoRoo
             const std::string_view commandId = target.previewExcludedCommands[index];
             if (compact.find(commandId) == std::string::npos)
             {
-                findings.push_back({path, 0, std::format(L"Embedded Preview context menu does not exclude standalone-only command {}.", WidenAscii(commandId))});
+                findings.push_back(
+                    {path, 0, std::format(L"Embedded Preview context menu does not exclude standalone-only command {}.", WidenAscii(commandId))});
             }
         }
     }
@@ -1336,20 +1320,28 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
         return;
     }
 
-    if (compact.find("libvlc_media_add_option") == std::string::npos ||
-        compact.find("\":audio-visual={}\"") == std::string::npos ||
+    if (compact.find("libvlc_media_add_option") == std::string::npos || compact.find("\":audio-visual={}\"") == std::string::npos ||
         compact.find("_isAudioFile&&!_config.audioVisualization.empty()&&_config.audioVisualization!=\"off\"") == std::string::npos)
     {
-        findings.push_back({path, 0, L"Embedded VLC audio previews must apply audio visualization as an audio-file media option so video previews do not get an extra visualizer vout."});
+        findings.push_back({path,
+                            0,
+                            L"Embedded VLC audio previews must apply audio visualization as an audio-file media option so video previews do not get an extra "
+                            L"visualizer vout."});
     }
     if (compact.find("\"--audio-visual={}\"") != std::string::npos ||
         compact.find("constboolenableAudioVisualization=!_config.audioVisualization.empty()&&_config.audioVisualization!=\"off\";") != std::string::npos)
     {
-        findings.push_back({path, 0, L"ViewerVLC must not pass audio visualization as a global VLC instance argument because that can create top-level vout windows for video preview."});
+        findings.push_back({path,
+                            0,
+                            L"ViewerVLC must not pass audio visualization as a global VLC instance argument because that can create top-level vout windows for "
+                            L"video preview."});
     }
     if (compact.find("!_embeddedMode&&_isAudioFile&&") != std::string::npos)
     {
-        findings.push_back({path, 0, L"Embedded VLC audio previews must not suppress audio visualization to avoid top-level windows; contain playback inside Preview instead."});
+        findings.push_back(
+            {path,
+             0,
+             L"Embedded VLC audio previews must not suppress audio visualization to avoid top-level windows; contain playback inside Preview instead."});
     }
 }
 
@@ -1395,11 +1387,10 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     if (! findings.empty())
     {
         const LocalizedWindowTitleFinding& first = findings.front();
-        state.Require(false,
-                      std::format(L"Popup and dialog titles must be localized and non-empty. First offender: {}:{} {}",
-                                  first.path.wstring(),
-                                  first.lineNumber,
-                                  first.message));
+        state.Require(
+            false,
+            std::format(
+                L"Popup and dialog titles must be localized and non-empty. First offender: {}:{} {}", first.path.wstring(), first.lineNumber, first.message));
     }
 
     return state.failure.empty();
@@ -1445,11 +1436,10 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     if (! findings.empty())
     {
         const LocalizedWindowTitleFinding& first = findings.front();
-        state.Require(false,
-                      std::format(L"Embedded VLC audio preview must stay inside Preview. First offender: {}:{} {}",
-                                  first.path.wstring(),
-                                  first.lineNumber,
-                                  first.message));
+        state.Require(
+            false,
+            std::format(
+                L"Embedded VLC audio preview must stay inside Preview. First offender: {}:{} {}", first.path.wstring(), first.lineNumber, first.message));
     }
 
     return state.failure.empty();
@@ -1685,8 +1675,7 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     state.Require(SelfTest::WriteTextFile(longPatternPath, longPatternJson), L"Failed to write long-pattern File Actions settings.");
     Common::Settings::Settings longPatternLoaded{};
     const HRESULT longPatternHr = Common::Settings::TryLoadSettingsNoRecovery(kLongPatternAppId, longPatternLoaded);
-    state.Require(longPatternHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                  L"pattern file-action matches longer than 512 characters should be rejected.");
+    state.Require(longPatternHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"pattern file-action matches longer than 512 characters should be rejected.");
 
     return state.failure.empty();
 }
@@ -1728,26 +1717,26 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     Common::Settings::EditorFileActionsSettings editors{};
 
     Common::Settings::FileActionDefinition globalDefault{};
-    globalDefault.id        = L"global-default";
-    globalDefault.enabled   = true;
+    globalDefault.id                = L"global-default";
+    globalDefault.enabled           = true;
     globalDefault.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Default, L""}};
 
     Common::Settings::FileActionDefinition computerDefault{};
-    computerDefault.id                         = L"computer-default";
-    computerDefault.enabled                    = true;
-    computerDefault.appliesTo.matches          = {{Common::Settings::FileActionMatchKind::Default, L""}};
-    computerDefault.appliesTo.computerNames    = {L"DEV-PC"};
+    computerDefault.id                      = L"computer-default";
+    computerDefault.enabled                 = true;
+    computerDefault.appliesTo.matches       = {{Common::Settings::FileActionMatchKind::Default, L""}};
+    computerDefault.appliesTo.computerNames = {L"DEV-PC"};
 
     Common::Settings::FileActionDefinition globalCpp{};
-    globalCpp.id                 = L"global-cpp";
-    globalCpp.enabled            = true;
-    globalCpp.appliesTo.matches  = {{Common::Settings::FileActionMatchKind::Extension, L".cpp"}};
+    globalCpp.id                = L"global-cpp";
+    globalCpp.enabled           = true;
+    globalCpp.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Extension, L".cpp"}};
 
     Common::Settings::FileActionDefinition computerCpp{};
-    computerCpp.id                         = L"computer-cpp";
-    computerCpp.enabled                    = true;
-    computerCpp.appliesTo.matches          = {{Common::Settings::FileActionMatchKind::Extension, L".cpp"}};
-    computerCpp.appliesTo.computerNames    = {L"DEV-PC"};
+    computerCpp.id                      = L"computer-cpp";
+    computerCpp.enabled                 = true;
+    computerCpp.appliesTo.matches       = {{Common::Settings::FileActionMatchKind::Extension, L".cpp"}};
+    computerCpp.appliesTo.computerNames = {L"DEV-PC"};
 
     editors.actions = {globalDefault, computerDefault, globalCpp, computerCpp};
 
@@ -1787,22 +1776,22 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
                       computerCppResolution.reasonText.find(L"DEV-PC") != std::wstring::npos,
                   L"Editor resolution explanation should include the extension and computer.");
 
-    request.computerName = L"OTHER-PC";
+    request.computerName                                     = L"OTHER-PC";
     const FileActionResolver::Resolution globalCppResolution = FileActionResolver::ResolveEditorAction(editors, request);
     state.Require(globalCppResolution.action && globalCppResolution.action->id == L"global-cpp",
                   L"Global extension association should win when the computer override does not match.");
     state.Require(globalCppResolution.reason == FileActionResolver::Reason::GlobalExtensionRule,
                   L"Global extension editor resolution should explain the winning priority.");
 
-    request.filePath     = std::filesystem::path(L"C:\\Src\\README.md");
-    request.computerName = L"DEV-PC";
+    request.filePath                                               = std::filesystem::path(L"C:\\Src\\README.md");
+    request.computerName                                           = L"DEV-PC";
     const FileActionResolver::Resolution computerDefaultResolution = FileActionResolver::ResolveEditorAction(editors, request);
     state.Require(computerDefaultResolution.action && computerDefaultResolution.action->id == L"computer-default",
                   L"Computer default association should win when no extension association matches.");
     state.Require(computerDefaultResolution.reason == FileActionResolver::Reason::ComputerDefaultRule,
                   L"Computer default editor resolution should explain the winning priority.");
 
-    request.computerName = L"OTHER-PC";
+    request.computerName                                         = L"OTHER-PC";
     const FileActionResolver::Resolution globalDefaultResolution = FileActionResolver::ResolveEditorAction(editors, request);
     state.Require(globalDefaultResolution.action && globalDefaultResolution.action->id == L"global-default",
                   L"Global default association should be the final editor fallback.");
@@ -1842,17 +1831,13 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     request.computerName = L"dev-pc";
 
     const FileActionResolver::Resolution resolution = FileActionResolver::ResolveEditorAction(editors, request);
-    state.Require(resolution.action && resolution.action->id == L"CaseTool",
-                  L"Editor association action IDs should resolve case-insensitively.");
+    state.Require(resolution.action && resolution.action->id == L"CaseTool", L"Editor association action IDs should resolve case-insensitively.");
 
-    const std::vector<const Common::Settings::FileActionDefinition*> actions =
-        FileActionResolver::CollectAssociatedEditorActions(editors, request);
-    state.Require(actions.size() == 1u,
-                  L"Editor action collection should collapse case-only action-id references to the same logical action.");
+    const std::vector<const Common::Settings::FileActionDefinition*> actions = FileActionResolver::CollectAssociatedEditorActions(editors, request);
+    state.Require(actions.size() == 1u, L"Editor action collection should collapse case-only action-id references to the same logical action.");
     if (actions.size() == 1u)
     {
-        state.Require(actions[0] && actions[0]->id == L"CaseTool",
-                      L"Editor action collection should preserve the configured action definition casing.");
+        state.Require(actions[0] && actions[0]->id == L"CaseTool", L"Editor action collection should preserve the configured action definition casing.");
     }
 
     return state.failure.empty();
@@ -1863,12 +1848,12 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     Common::Settings::ViewerFileActionsSettings viewers{};
 
     Common::Settings::FileActionDefinition textViewer{};
-    textViewer.id        = L"text-viewer";
-    textViewer.enabled   = true;
+    textViewer.id      = L"text-viewer";
+    textViewer.enabled = true;
 
     Common::Settings::FileActionDefinition hexViewer{};
-    hexViewer.id        = L"hex-viewer";
-    hexViewer.enabled   = true;
+    hexViewer.id      = L"hex-viewer";
+    hexViewer.enabled = true;
 
     viewers.actions = {textViewer, hexViewer};
 
@@ -1884,8 +1869,8 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     viewerRequest.filePath     = std::filesystem::path(L"C:\\Temp\\note.txt");
     viewerRequest.computerName = L"DEV-PC";
 
-    const FileActionResolver::Resolution viewResolution = FileActionResolver::ResolveViewerAction(viewers, viewerRequest);
-    viewerRequest.command = FileActionResolver::Command::AlternateView;
+    const FileActionResolver::Resolution viewResolution          = FileActionResolver::ResolveViewerAction(viewers, viewerRequest);
+    viewerRequest.command                                        = FileActionResolver::Command::AlternateView;
     const FileActionResolver::Resolution alternateViewResolution = FileActionResolver::ResolveViewerAction(viewers, viewerRequest);
     state.Require(viewResolution.action && viewResolution.action->id == L"text-viewer", L"F3 View should resolve to the primary viewer action.");
     state.Require(alternateViewResolution.action && alternateViewResolution.action->id == L"hex-viewer",
@@ -1920,11 +1905,11 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     editorRequest.filePath     = std::filesystem::path(L"C:\\Src\\new.cpp");
     editorRequest.computerName = L"DEV-PC";
 
-    const FileActionResolver::Resolution editResolution = FileActionResolver::ResolveEditorAction(editors, editorRequest);
-    editorRequest.command = FileActionResolver::Command::AlternateEdit;
+    const FileActionResolver::Resolution editResolution          = FileActionResolver::ResolveEditorAction(editors, editorRequest);
+    editorRequest.command                                        = FileActionResolver::Command::AlternateEdit;
     const FileActionResolver::Resolution alternateEditResolution = FileActionResolver::ResolveEditorAction(editors, editorRequest);
-    editorRequest.command = FileActionResolver::Command::EditNew;
-    const FileActionResolver::Resolution editNewResolution = FileActionResolver::ResolveEditorAction(editors, editorRequest);
+    editorRequest.command                                        = FileActionResolver::Command::EditNew;
+    const FileActionResolver::Resolution editNewResolution       = FileActionResolver::ResolveEditorAction(editors, editorRequest);
 
     state.Require(editResolution.action && editResolution.action->id == L"visual-studio", L"F4 Edit should resolve to editActionId.");
     state.Require(alternateEditResolution.action && alternateEditResolution.action->id == L"vscode",
@@ -1944,30 +1929,27 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     request.filePath     = std::filesystem::path(L"C:\\Images\\photo.PNG");
     request.computerName = L"DEV-PC";
 
-    const FileActionResolver::Resolution imageResolution =
-        FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
+    const FileActionResolver::Resolution imageResolution = FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
     state.Require(imageResolution.action && imageResolution.action->pluginId == L"builtin/viewer-imgraw",
                   L"Fresh v16 settings should route default image extensions through fileActions viewer associations.");
 
-    request.filePath = std::filesystem::path(L"C:\\Windows\\System32\\notepad.EXE");
+    request.filePath                                  = std::filesystem::path(L"C:\\Windows\\System32\\notepad.EXE");
     const FileActionResolver::Resolution peResolution = FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
     state.Require(peResolution.action && peResolution.action->pluginId == L"builtin/viewer-pe",
                   L"Fresh v16 settings should route default Windows executable extensions through the PE viewer.");
 
-    request.filePath = std::filesystem::path(L"C:\\Media\\clip.MP4");
+    request.filePath                                     = std::filesystem::path(L"C:\\Media\\clip.MP4");
     const FileActionResolver::Resolution mediaResolution = FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
     state.Require(mediaResolution.action && mediaResolution.action->pluginId == L"builtin/viewer-vlc",
                   L"Fresh v16 settings should route default media extensions through the VLC viewer.");
 
-    request.filePath = std::filesystem::path(L"C:\\Temp\\unknown.noassociation");
-    const FileActionResolver::Resolution fallbackResolution =
-        FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
+    request.filePath                                        = std::filesystem::path(L"C:\\Temp\\unknown.noassociation");
+    const FileActionResolver::Resolution fallbackResolution = FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
     state.Require(fallbackResolution.action && fallbackResolution.action->pluginId == L"builtin/viewer-text",
                   L"Fresh v16 settings should keep the default text-viewer fallback in fileActions.");
 
-    request.command = FileActionResolver::Command::AlternateView;
-    const FileActionResolver::Resolution alternateResolution =
-        FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
+    request.command                                          = FileActionResolver::Command::AlternateView;
+    const FileActionResolver::Resolution alternateResolution = FileActionResolver::ResolveViewerAction(settings.fileActions.viewers, request);
     state.Require(! alternateResolution.IsResolved(), L"Fresh v16 settings should not invent an Alternate View default.");
 
     return state.failure.empty();
@@ -1976,10 +1958,11 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
 [[nodiscard]] bool TestFileActionExternalLaunchPlanMacros(CaseState& state) noexcept
 {
     Common::Settings::FileActionDefinition action{};
-    action.id               = L"external-viewer";
-    action.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    action.executablePath   = L"C:\\Tools\\Viewer.exe";
-    action.arguments        = L"--dir {Path} --file {Filename} --full {FullPath} --same {PathAndFilename} --selected {SelectedPathsFile} --other {OppositePanePath} --pc {ComputerName} --literal {{FullPath}}";
+    action.id             = L"external-viewer";
+    action.kind           = Common::Settings::FileActionKind::ExternalProgram;
+    action.executablePath = L"C:\\Tools\\Viewer.exe";
+    action.arguments = L"--dir {Path} --file {Filename} --full {FullPath} --same {PathAndFilename} --selected {SelectedPathsFile} --other {OppositePanePath} "
+                       L"--pc {ComputerName} --literal {{FullPath}}";
     action.workingDirectory = L"{Path}";
 
     FileActionLauncher::MacroContext context{};
@@ -2022,7 +2005,7 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     }
 
     Common::Settings::FileActionDefinition injectionAction = action;
-    injectionAction.arguments = L"--full {FullPath} --file {Filename}";
+    injectionAction.arguments                              = L"--full {FullPath} --file {Filename}";
     FileActionLauncher::MacroContext injectionContext{};
     injectionContext.itemPath = std::filesystem::path(L"C:\\Data Set\\foo\" & calc.exe & \"bar.txt");
     FileActionLauncher::LaunchPlan injectionPlan{};
@@ -2125,7 +2108,8 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
 
     FileActionLauncher::LaunchResult result{};
     const HRESULT launchHr = FileActionLauncher::LaunchExternalPlan(plan, options, &result);
-    state.Require(SUCCEEDED(launchHr), std::format(L"External launch action should start and wait successfully (hr=0x{:08X}).", static_cast<unsigned>(launchHr)));
+    state.Require(SUCCEEDED(launchHr),
+                  std::format(L"External launch action should start and wait successfully (hr=0x{:08X}).", static_cast<unsigned>(launchHr)));
     state.Require(result.exitCodeAvailable && result.exitCode == 0u, L"External launch action should expose a zero process exit code.");
     state.Require(std::filesystem::exists(marker, ec), L"External launch action should create the marker file.");
     ec.clear();
@@ -2168,11 +2152,11 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     action.workingDirectory = L"{Path}";
 
     FileActionLauncher::MacroContext context{};
-    context.itemPath          = firstFile;
-    context.currentDirectory  = root;
-    context.selectedPaths     = {firstFile, secondFile};
-    context.oppositePanePath  = root;
-    context.computerName      = L"BUILD-BOX";
+    context.itemPath         = firstFile;
+    context.currentDirectory = root;
+    context.selectedPaths    = {firstFile, secondFile};
+    context.oppositePanePath = root;
+    context.computerName     = L"BUILD-BOX";
 
     FileActionLauncher::LaunchPlan plan{};
     const HRESULT buildHr = FileActionLauncher::BuildExternalLaunchPlan(action, context, plan);
@@ -2191,15 +2175,14 @@ void ScanEmbeddedVlcAudioPreviewContracts(const std::filesystem::path& repoRoot,
     std::ifstream selectedInput(selectedPathsFile, std::ios::binary);
     std::string selectedBytes((std::istreambuf_iterator<char>(selectedInput)), std::istreambuf_iterator<char>());
     selectedInput.close();
-    state.Require(selectedBytes.size() >= 2u && static_cast<unsigned char>(selectedBytes[0]) == 0xFFu &&
-                      static_cast<unsigned char>(selectedBytes[1]) == 0xFEu,
+    state.Require(selectedBytes.size() >= 2u && static_cast<unsigned char>(selectedBytes[0]) == 0xFFu && static_cast<unsigned char>(selectedBytes[1]) == 0xFEu,
                   L"Selected paths file should be UTF-16LE with a BOM.");
 
     std::wstring selectedText;
     for (size_t index = 2u; index + 1u < selectedBytes.size(); index += 2u)
     {
-        const wchar_t ch = static_cast<wchar_t>(static_cast<unsigned char>(selectedBytes[index]) |
-                                               (static_cast<unsigned char>(selectedBytes[index + 1u]) << 8u));
+        const wchar_t ch =
+            static_cast<wchar_t>(static_cast<unsigned char>(selectedBytes[index]) | (static_cast<unsigned char>(selectedBytes[index + 1u]) << 8u));
         selectedText.push_back(ch);
     }
     state.Require(selectedText.find(firstFile.wstring()) != std::wstring::npos, L"Selected paths file should contain the first selected path.");
@@ -2296,9 +2279,8 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
 {
     bindings.erase(std::remove_if(bindings.begin(),
                                   bindings.end(),
-                                  [=](const Common::Settings::ShortcutBinding& binding) noexcept {
-        return binding.vk == vk && (binding.modifiers & 0x7u) == (modifiers & 0x7u);
-    }),
+                                  [=](const Common::Settings::ShortcutBinding& binding) noexcept
+    { return binding.vk == vk && (binding.modifiers & 0x7u) == (modifiers & 0x7u); }),
                    bindings.end());
 }
 
@@ -2339,16 +2321,14 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     RemoveTestShortcutBinding(shortcuts.folderView, VK_RETURN, 0u);
     RemoveTestShortcutBinding(shortcuts.folderView, static_cast<uint32_t>('1'), ShortcutManager::kModCtrl);
 
-    Common::Settings::ShortcutBinding* unassignedFunction =
-        FindTestShortcutBinding(shortcuts.functionBar, VK_F5, 0u);
+    Common::Settings::ShortcutBinding* unassignedFunction = FindTestShortcutBinding(shortcuts.functionBar, VK_F5, 0u);
     state.Require(unassignedFunction != nullptr, L"Shortcut default fixture should include plain F5 before marking it unassigned.");
     if (unassignedFunction)
     {
         unassignedFunction->commandId = kUnassignedCommandId;
     }
 
-    Common::Settings::ShortcutBinding* unassignedFolder =
-        FindTestShortcutBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl);
+    Common::Settings::ShortcutBinding* unassignedFolder = FindTestShortcutBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl);
     state.Require(unassignedFolder != nullptr, L"Shortcut default fixture should include Ctrl+Insert before marking it unassigned.");
     if (unassignedFolder)
     {
@@ -2366,8 +2346,7 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     manager.Load(settings.shortcuts.value());
 
     const auto f4Command = manager.FindFunctionBarCommand(VK_F4, 0u);
-    state.Require(f4Command.has_value() && f4Command.value() == std::wstring_view{L"cmd/pane/edit"},
-                  L"Missing plain F4 should be restored to cmd/pane/edit.");
+    state.Require(f4Command.has_value() && f4Command.value() == std::wstring_view{L"cmd/pane/edit"}, L"Missing plain F4 should be restored to cmd/pane/edit.");
 
     const auto ctrlF12Command = manager.FindFunctionBarCommand(VK_F12, ShortcutManager::kModCtrl);
     state.Require(ctrlF12Command.has_value() && ctrlF12Command.value() == std::wstring_view{L"cmd/pane/filter"},
@@ -2397,8 +2376,8 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
 
 [[nodiscard]] bool TestSettingsStoreShortcutUnassignedSentinelRoundTrip(CaseState& state) noexcept
 {
-    static constexpr std::wstring_view kTestAppId             = L"RedSalamanderSelfTestShortcutUnassignedSentinelRoundTrip";
-    static constexpr std::wstring_view kUnassignedCommandId   = L"cmd/shortcut/unassigned";
+    static constexpr std::wstring_view kTestAppId           = L"RedSalamanderSelfTestShortcutUnassignedSentinelRoundTrip";
+    static constexpr std::wstring_view kUnassignedCommandId = L"cmd/shortcut/unassigned";
     CleanupSettingsArtifacts(kTestAppId);
     const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
 
@@ -2644,7 +2623,7 @@ void RemoveTestShortcutBinding(std::vector<Common::Settings::ShortcutBinding>& b
     state.Require(! standardTheme.compactMode, L"Explicit ui.compactMode=false should opt runtime theme back into standard density.");
 
     Common::Settings::Settings explicitDefaults{};
-    explicitDefaults.ui                                = defaults;
+    explicitDefaults.ui                               = defaults;
     const Common::Settings::Settings preparedExplicit = SettingsSave::PrepareForSave(explicitDefaults);
     state.Require(! preparedExplicit.ui.has_value(), L"Explicit default UI settings should be omitted by canonical save.");
 
@@ -2948,35 +2927,6 @@ template <typename GetWindowFunc> [[nodiscard]] HWND WaitForWindow(GetWindowFunc
     return counter.count;
 }
 
-[[nodiscard]] HWND FindFirstVisibleChildWindow(HWND hwnd) noexcept
-{
-    if (! hwnd || IsWindow(hwnd) == FALSE)
-    {
-        return nullptr;
-    }
-
-    struct FirstVisibleChildContext
-    {
-        HWND found = nullptr;
-    } context{};
-
-    static_cast<void>(EnumChildWindows(hwnd,
-                                       [](HWND child, LPARAM lParam) noexcept -> BOOL
-    {
-        auto& contextRef = *reinterpret_cast<FirstVisibleChildContext*>(lParam);
-        if (! IsActuallyVisibleChildWindow(child))
-        {
-            return TRUE;
-        }
-
-        contextRef.found = child;
-        return FALSE;
-    },
-                                       reinterpret_cast<LPARAM>(&context)));
-
-    return context.found;
-}
-
 [[nodiscard]] HWND FindDescendantWindowByClass(HWND hwnd, std::wstring_view className) noexcept
 {
     if (! hwnd || IsWindow(hwnd) == FALSE || className.empty())
@@ -3031,35 +2981,9 @@ template <typename GetWindowFunc> [[nodiscard]] HWND WaitForWindow(GetWindowFunc
     return MAKELPARAM(x, y);
 }
 
-[[nodiscard]] HWND ResolveEffectiveMouseInputWindow(HWND hwnd) noexcept
-{
-    if (const HWND child = FindFirstVisibleChildWindow(hwnd); child && IsWindow(child) != FALSE)
-    {
-        return child;
-    }
-    return hwnd;
-}
-
-[[nodiscard]] LPARAM DipPointToEffectiveMouseInputLParam(HWND hwnd, float xDip, float yDip) noexcept
-{
-    const HWND targetWindow  = ResolveEffectiveMouseInputWindow(hwnd);
-    const LPARAM pointInHost = DipPointToClientLParam(hwnd, xDip, yDip);
-    return MapClientPointLParam(hwnd, targetWindow, pointInHost);
-}
-
 [[maybe_unused]] [[nodiscard]] LPARAM DipPointToWindowLParam(HWND hwnd, float xDip, float yDip) noexcept
 {
     return DipPointToClientLParam(hwnd, xDip, yDip);
-}
-
-void SendMouseDragToWindow(HWND hwnd, LPARAM startPoint, LPARAM targetPoint) noexcept
-{
-    const HWND targetWindow = ResolveEffectiveMouseInputWindow(hwnd);
-    SendMessageW(targetWindow, WM_MOUSEMOVE, 0, startPoint);
-    SendMessageW(targetWindow, WM_LBUTTONDOWN, MK_LBUTTON, startPoint);
-    SendMessageW(targetWindow, WM_MOUSEMOVE, MK_LBUTTON, targetPoint);
-    SendMessageW(targetWindow, WM_LBUTTONUP, 0, targetPoint);
-    PumpPendingMessages();
 }
 
 [[nodiscard]] HWND ResolveMouseInputWindowForHostPoint(HWND hwnd, LPARAM hostPoint) noexcept
@@ -3122,17 +3046,6 @@ void SendMouseDragToDirectWindow(HWND hwnd, LPARAM startPoint, LPARAM targetPoin
     SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, startPoint);
     SendMessageW(hwnd, WM_MOUSEMOVE, MK_LBUTTON, targetPoint);
     SendMessageW(hwnd, WM_LBUTTONUP, 0, targetPoint);
-    PumpPendingMessages();
-}
-
-void SendMouseDoubleClickToWindow(HWND hwnd, LPARAM point) noexcept
-{
-    const HWND targetWindow = ResolveEffectiveMouseInputWindow(hwnd);
-    SendMessageW(targetWindow, WM_MOUSEMOVE, 0, point);
-    SendMessageW(targetWindow, WM_LBUTTONDOWN, MK_LBUTTON, point);
-    SendMessageW(targetWindow, WM_LBUTTONUP, 0, point);
-    SendMessageW(targetWindow, WM_LBUTTONDBLCLK, MK_LBUTTON, point);
-    SendMessageW(targetWindow, WM_LBUTTONUP, 0, point);
     PumpPendingMessages();
 }
 
@@ -3327,6 +3240,62 @@ void SendMouseDoubleClickToWindow(HWND hwnd, LPARAM point) noexcept
         return FALSE;
     },
                                        reinterpret_cast<LPARAM>(&context)));
+
+    if (context.found)
+    {
+        return context.found;
+    }
+
+    struct OwnedWindowClassSearchContext
+    {
+        std::wstring_view expectedClassName;
+        HWND ownerRoot = nullptr;
+        HWND found     = nullptr;
+    } ownedContext{expectedClassName, GetAncestor(hwnd, GA_ROOT), nullptr};
+
+    const DWORD ownerThreadId = GetWindowThreadProcessId(hwnd, nullptr);
+    if (ownerThreadId != 0u)
+    {
+        static_cast<void>(EnumThreadWindows(ownerThreadId,
+                                            [](HWND candidate, LPARAM lParam) noexcept -> BOOL
+        {
+            auto& contextRef = *reinterpret_cast<OwnedWindowClassSearchContext*>(lParam);
+            if (! IsActuallyVisibleChildWindow(candidate))
+            {
+                return TRUE;
+            }
+
+            const HWND owner = GetWindow(candidate, GW_OWNER);
+            if (! owner || GetAncestor(owner, GA_ROOT) != contextRef.ownerRoot)
+            {
+                return TRUE;
+            }
+
+            std::array<wchar_t, 128> className{};
+            const int classLen = GetClassNameW(candidate, className.data(), static_cast<int>(className.size()));
+            if (classLen <= 0)
+            {
+                return TRUE;
+            }
+
+            const std::wstring_view actualClassName(className.data(), static_cast<size_t>(classLen));
+            const bool matchesExpected =
+                actualClassName == contextRef.expectedClassName || (contextRef.expectedClassName == L"Edit" && actualClassName == L"RICHEDIT50W");
+            if (! matchesExpected)
+            {
+                return TRUE;
+            }
+
+            contextRef.found = candidate;
+            return FALSE;
+        },
+                                            reinterpret_cast<LPARAM>(&ownedContext)));
+    }
+
+    if (ownedContext.found)
+    {
+        return ownedContext.found;
+    }
 
     return context.found;
 }
@@ -3677,17 +3646,34 @@ struct UiaThreadContext final
 
     ~UiaThreadContext() noexcept
     {
+        Release();
+    }
+
+    void Release() noexcept
+    {
+        automation.reset();
         if (shouldUninitialize)
         {
             CoUninitialize();
+            shouldUninitialize = false;
         }
     }
 };
 
-[[nodiscard]] IUIAutomation* GetThreadUiAutomation() noexcept
+[[nodiscard]] UiaThreadContext& GetThreadUiAutomationContext() noexcept
 {
     thread_local UiaThreadContext context{};
-    return context.automation.get();
+    return context;
+}
+
+[[nodiscard]] IUIAutomation* GetThreadUiAutomation() noexcept
+{
+    return GetThreadUiAutomationContext().automation.get();
+}
+
+void ReleaseThreadUiAutomationForSelfTest() noexcept
+{
+    GetThreadUiAutomationContext().Release();
 }
 
 [[nodiscard]] bool TryGetUiAutomationRootElement(HWND hwnd, wil::com_ptr<IUIAutomationElement>& root) noexcept
@@ -5126,7 +5112,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 
     FocusFolderViewPane(pane);
 
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    const auto deadline  = std::chrono::steady_clock::now() + timeout;
     size_t stableSamples = 0u;
     while (std::chrono::steady_clock::now() < deadline)
     {
@@ -5820,9 +5806,7 @@ struct CreatedFileSystemInstance final
     }
 
     const auto requireRegisteredCommand = [&](std::wstring_view commandId) noexcept
-    {
-        state.Require(FindCommandInfo(commandId) != nullptr, std::format(L"{} should be registered in the command registry.", commandId));
-    };
+    { state.Require(FindCommandInfo(commandId) != nullptr, std::format(L"{} should be registered in the command registry.", commandId)); };
     requireRegisteredCommand(L"cmd/pane/alternateEdit");
     requireRegisteredCommand(L"cmd/app/theme/selectNext");
     requireRegisteredCommand(L"cmd/app/theme/selectPrev");
@@ -5840,11 +5824,10 @@ struct CreatedFileSystemInstance final
     {
         const std::wstring permanentDeleteName = LoadStringResource(nullptr, permanentDelete->displayNameStringId);
         state.Require(permanentDeleteName == L"Permanent Delete", L"Permanent Delete should be displayed as 'Permanent Delete'.");
-        state.Require(permanentDeleteName.find(L"Validation") == std::wstring::npos,
-                      L"Permanent Delete display name should not include validation wording.");
+        state.Require(permanentDeleteName.find(L"Validation") == std::wstring::npos, L"Permanent Delete display name should not include validation wording.");
     }
 
-    using CanonicalizationExpectation = std::pair<std::wstring_view, std::wstring_view>;
+    using CanonicalizationExpectation                                                    = std::pair<std::wstring_view, std::wstring_view>;
     constexpr std::array<CanonicalizationExpectation, 13> kParameterizedCanonicalization = {
         CanonicalizationExpectation{L"cmd/app/openFileExplorerKnownFolder/downloads", L"cmd/app/openFileExplorerKnownFolder"},
         CanonicalizationExpectation{L"cmd/app/plugins/configure/builtin-file-system", L"cmd/app/plugins/configure"},
@@ -6074,7 +6057,7 @@ struct CreatedFileSystemInstance final
         return false;
     }
 
-    using MenuLabelExpectation = std::pair<UINT, std::wstring_view>;
+    using MenuLabelExpectation                                              = std::pair<UINT, std::wstring_view>;
     constexpr std::array<MenuLabelExpectation, 26> kImplementedMenuCommands = {
         MenuLabelExpectation{IDM_PANE_PERMANENT_DELETE, std::wstring_view{L"cmd/pane/permanentDelete"}},
         MenuLabelExpectation{IDM_PANE_SELECTION_SELECT_SAME_NAME, std::wstring_view{L"cmd/pane/selection/selectSameName"}},
@@ -6128,7 +6111,7 @@ struct CreatedFileSystemInstance final
             state.Require(text.find(L"Validation") == std::wstring::npos, L"Permanent Delete menu item should not include validation wording.");
         }
     }
-    using PopupLabelExpectation = std::pair<std::wstring_view, std::wstring_view>;
+    using PopupLabelExpectation                                            = std::pair<std::wstring_view, std::wstring_view>;
     constexpr std::array<PopupLabelExpectation, 2> kImplementedPopupLabels = {
         PopupLabelExpectation{std::wstring_view{L"View &With"}, std::wstring_view{L"cmd/pane/viewWith popup"}},
         PopupLabelExpectation{std::wstring_view{L"Edit &With"}, std::wstring_view{L"cmd/pane/editWith popup"}},
@@ -6281,30 +6264,30 @@ struct CreatedFileSystemInstance final
             return;
         }
 
-        const int changeDrivePos    = FindMenuItemPosById(paneMenu, changeDriveId);
-        const int briefPos          = FindMenuItemPosById(paneMenu, briefId);
-        const int detailedPos       = FindMenuItemPosById(paneMenu, detailedId);
-        const int extraDetailedPos  = FindMenuItemPosById(paneMenu, extraDetailedId);
-        const int thumbnailsPos     = FindMenuItemPosById(paneMenu, thumbnailsId);
-        const int previewPanePos    = FindMenuItemPosById(paneMenu, previewPaneId);
-        const int zoomPos           = FindMenuItemPosById(paneMenu, zoomId);
-        const int swapPos           = FindMenuItemPosById(paneMenu, IDM_APP_SWAP_PANES);
-        const int pathFromOtherPanePos = FindMenuItemPosById(paneMenu, pathFromOtherPaneId);
-        const int refreshPos        = FindMenuItemPosById(paneMenu, refreshId);
-        const int filterPos         = FindMenuItemPosById(paneMenu, filterId);
-        const int paneFilterBarPos     = FindMenuItemPosById(paneMenu, filterBarId);
-        const int paneNavigationBarPos = FindMenuItemPosById(paneMenu, navigationBarId);
-        const int paneStatusBarPos     = FindMenuItemPosById(paneMenu, statusBarId);
-        const HMENU goToMenu        = FindMenuContainingCommandId(paneMenu, goToAnchorId);
-        const HMENU sortMenu        = FindMenuContainingCommandId(paneMenu, sortAnchorId);
-        const HMENU showMenu        = FindMenuContainingCommandId(paneMenu, hiddenFilesId);
+        const int changeDrivePos           = FindMenuItemPosById(paneMenu, changeDriveId);
+        const int briefPos                 = FindMenuItemPosById(paneMenu, briefId);
+        const int detailedPos              = FindMenuItemPosById(paneMenu, detailedId);
+        const int extraDetailedPos         = FindMenuItemPosById(paneMenu, extraDetailedId);
+        const int thumbnailsPos            = FindMenuItemPosById(paneMenu, thumbnailsId);
+        const int previewPanePos           = FindMenuItemPosById(paneMenu, previewPaneId);
+        const int zoomPos                  = FindMenuItemPosById(paneMenu, zoomId);
+        const int swapPos                  = FindMenuItemPosById(paneMenu, IDM_APP_SWAP_PANES);
+        const int pathFromOtherPanePos     = FindMenuItemPosById(paneMenu, pathFromOtherPaneId);
+        const int refreshPos               = FindMenuItemPosById(paneMenu, refreshId);
+        const int filterPos                = FindMenuItemPosById(paneMenu, filterId);
+        const int paneFilterBarPos         = FindMenuItemPosById(paneMenu, filterBarId);
+        const int paneNavigationBarPos     = FindMenuItemPosById(paneMenu, navigationBarId);
+        const int paneStatusBarPos         = FindMenuItemPosById(paneMenu, statusBarId);
+        const HMENU goToMenu               = FindMenuContainingCommandId(paneMenu, goToAnchorId);
+        const HMENU sortMenu               = FindMenuContainingCommandId(paneMenu, sortAnchorId);
+        const HMENU showMenu               = FindMenuContainingCommandId(paneMenu, hiddenFilesId);
         const int goToPathFromOtherPanePos = FindMenuItemPosById(goToMenu, pathFromOtherPaneId);
-        const int hiddenFilesPos    = FindMenuItemPosById(showMenu, hiddenFilesId);
-        const int systemFilesPos    = FindMenuItemPosById(showMenu, systemFilesId);
-        const int fileExtensionsPos = FindMenuItemPosById(showMenu, fileExtensionsId);
-        const int filterBarPos      = FindMenuItemPosById(showMenu, filterBarId);
-        const int navigationBarPos  = FindMenuItemPosById(showMenu, navigationBarId);
-        const int statusBarPos      = FindMenuItemPosById(showMenu, statusBarId);
+        const int hiddenFilesPos           = FindMenuItemPosById(showMenu, hiddenFilesId);
+        const int systemFilesPos           = FindMenuItemPosById(showMenu, systemFilesId);
+        const int fileExtensionsPos        = FindMenuItemPosById(showMenu, fileExtensionsId);
+        const int filterBarPos             = FindMenuItemPosById(showMenu, filterBarId);
+        const int navigationBarPos         = FindMenuItemPosById(showMenu, navigationBarId);
+        const int statusBarPos             = FindMenuItemPosById(showMenu, statusBarId);
 
         state.Require(changeDrivePos >= 0, std::format(L"{} menu should start with Change Drive.", paneName));
         state.Require(goToMenu != nullptr && goToMenu != paneMenu, std::format(L"{} menu should contain Go to submenu.", paneName));
@@ -6392,14 +6375,13 @@ void RequireFunctionBarBinding(
     }
 }
 
-void RequireFolderViewBinding(
-    CaseState& state,
-    const ShortcutManager& manager,
-    uint32_t vk,
-    uint32_t modifiers,
-    std::wstring_view expectedCommandId,
-    std::wstring_view label,
-    bool requireReverseLookup = true) noexcept
+void RequireFolderViewBinding(CaseState& state,
+                              const ShortcutManager& manager,
+                              uint32_t vk,
+                              uint32_t modifiers,
+                              std::wstring_view expectedCommandId,
+                              std::wstring_view label,
+                              bool requireReverseLookup = true) noexcept
 {
     if (const auto cmd = manager.FindFolderViewCommand(vk, modifiers))
     {
@@ -6526,7 +6508,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(manager.GetFunctionBarConflicts().empty(), L"Default function bar shortcuts have conflicts.");
     state.Require(manager.GetFolderViewConflicts().empty(), L"Default folder view shortcuts have conflicts.");
 
-    using ShortcutBindingExpectation                                         = std::tuple<uint32_t, uint32_t, std::wstring_view, std::wstring_view>;
+    using ShortcutBindingExpectation                                          = std::tuple<uint32_t, uint32_t, std::wstring_view, std::wstring_view>;
     constexpr std::array<ShortcutBindingExpectation, 14> kFunctionBarBindings = {
         ShortcutBindingExpectation{VK_F3, 0u, std::wstring_view{L"cmd/pane/view"}, std::wstring_view{L"F3 default shortcut"}},
         ShortcutBindingExpectation{VK_F2, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/none"}, std::wstring_view{L"Ctrl+F2 default shortcut"}},
@@ -6544,10 +6526,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
         ShortcutBindingExpectation{VK_F5, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/time"}, std::wstring_view{L"Ctrl+F5 default shortcut"}},
         ShortcutBindingExpectation{VK_F6, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/size"}, std::wstring_view{L"Ctrl+F6 default shortcut"}},
         ShortcutBindingExpectation{VK_F12, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/filter"}, std::wstring_view{L"Ctrl+F12 default shortcut"}},
-        ShortcutBindingExpectation{VK_F11,
-                                   ShortcutManager::kModShift,
-                                   std::wstring_view{L"cmd/app/theme/selectPrev"},
-                                   std::wstring_view{L"Shift+F11 default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_F11, ShortcutManager::kModShift, std::wstring_view{L"cmd/app/theme/selectPrev"}, std::wstring_view{L"Shift+F11 default shortcut"}},
         ShortcutBindingExpectation{
             VK_F12, ShortcutManager::kModShift, std::wstring_view{L"cmd/app/theme/selectNext"}, std::wstring_view{L"Shift+F12 default shortcut"}},
         ShortcutBindingExpectation{VK_F5,
@@ -6558,10 +6538,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                                    ShortcutManager::kModCtrl | ShortcutManager::kModShift,
                                    std::wstring_view{L"cmd/pane/selection/restore"},
                                    std::wstring_view{L"Ctrl+Shift+F6 default shortcut"}},
-        ShortcutBindingExpectation{VK_F8,
-                                   ShortcutManager::kModShift,
-                                   std::wstring_view{L"cmd/pane/permanentDelete"},
-                                   std::wstring_view{L"Shift+F8 default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_F8, ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/permanentDelete"}, std::wstring_view{L"Shift+F8 default shortcut"}},
     };
     for (const auto& [vk, modifiers, commandId, label] : kFunctionBarBindings)
     {
@@ -6571,7 +6549,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(! manager.FindFunctionBarCommand(VK_F2, ShortcutManager::kModCtrl | ShortcutManager::kModShift).has_value(),
                   L"Ctrl+Shift+F2 should not have a default shortcut binding.");
 
-    constexpr std::array<ShortcutBindingExpectation, 20> kFolderViewBindings = {
+    constexpr std::array<ShortcutBindingExpectation, 21> kFolderViewBindings = {
         ShortcutBindingExpectation{
             static_cast<uint32_t>('U'), ShortcutManager::kModCtrl, std::wstring_view{L"cmd/app/swapPanes"}, std::wstring_view{L"Ctrl+U default shortcut"}},
         ShortcutBindingExpectation{
@@ -6593,6 +6571,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
             VK_BACK, ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/goRootDirectory"}, std::wstring_view{L"Shift+Backspace default shortcut"}},
         ShortcutBindingExpectation{
             VK_OEM_PERIOD, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/setPathFromOtherPane"}, std::wstring_view{L"Ctrl+. default shortcut"}},
+        ShortcutBindingExpectation{
+            static_cast<uint32_t>('X'), ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/clipboardCut"}, std::wstring_view{L"Ctrl+X default shortcut"}},
         ShortcutBindingExpectation{
             VK_UP, ShortcutManager::kModAlt, std::wstring_view{L"cmd/pane/selection/goToPreviousSelectedName"}, std::wstring_view{L"Alt+Up default shortcut"}},
         ShortcutBindingExpectation{
@@ -6620,10 +6600,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                                    ShortcutManager::kModCtrl | ShortcutManager::kModShift,
                                    std::wstring_view{L"cmd/pane/copyUncPathAndNameAsText"},
                                    std::wstring_view{L"Ctrl+Shift+Insert default shortcut"}},
-        ShortcutBindingExpectation{VK_DELETE,
-                                   ShortcutManager::kModShift,
-                                   std::wstring_view{L"cmd/pane/permanentDelete"},
-                                   std::wstring_view{L"Shift+Del default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_DELETE, ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/permanentDelete"}, std::wstring_view{L"Shift+Del default shortcut"}},
     };
     for (const auto& [vk, modifiers, commandId, label] : kFolderViewBindings)
     {
@@ -6766,11 +6744,13 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     PumpPendingMessages();
     state.Require(g_settings.theme.currentThemeId == L"builtin/system", L"Theme cycle setup should select the built-in system theme.");
 
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"), L"cmd/app/theme/selectNext should dispatch through the shortcut path.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectNext"),
+                  L"cmd/app/theme/selectNext should dispatch through the shortcut path.");
     PumpPendingMessages();
     state.Require(g_settings.theme.currentThemeId == L"builtin/light", L"cmd/app/theme/selectNext should advance from System to Light.");
 
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectPrev"), L"cmd/app/theme/selectPrev should dispatch through the shortcut path.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/app/theme/selectPrev"),
+                  L"cmd/app/theme/selectPrev should dispatch through the shortcut path.");
     PumpPendingMessages();
     state.Require(g_settings.theme.currentThemeId == L"builtin/system", L"cmd/app/theme/selectPrev should return from Light to System.");
 
@@ -6828,14 +6808,14 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     folders.active = L"right";
 
     Common::Settings::FolderPane left{};
-    left.slot                            = L"left";
-    left.current                         = std::filesystem::path(L"C:\\pane-left");
-    left.view.display                    = Common::Settings::FolderDisplayMode::Thumbnails;
-    left.view.fileExtensionsVisible      = false;
-    left.view.thumbnailsVisible          = false;
-    left.view.navigationBarVisible       = false;
-    left.view.filterBarVisible           = true;
-    left.view.statusBarVisible           = false;
+    left.slot                       = L"left";
+    left.current                    = std::filesystem::path(L"C:\\pane-left");
+    left.view.display               = Common::Settings::FolderDisplayMode::Thumbnails;
+    left.view.fileExtensionsVisible = false;
+    left.view.thumbnailsVisible     = false;
+    left.view.navigationBarVisible  = false;
+    left.view.filterBarVisible      = true;
+    left.view.statusBarVisible      = false;
     folders.items.push_back(std::move(left));
 
     Common::Settings::FolderPane right{};
@@ -6880,9 +6860,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
 
     const auto findPane = [&](std::wstring_view slot) noexcept -> const Common::Settings::FolderPane*
     {
-        const auto it = std::find_if(actualFolders.items.begin(), actualFolders.items.end(), [&](const Common::Settings::FolderPane& pane) noexcept {
-            return pane.slot == slot;
-        });
+        const auto it = std::find_if(
+            actualFolders.items.begin(), actualFolders.items.end(), [&](const Common::Settings::FolderPane& pane) noexcept { return pane.slot == slot; });
         return it == actualFolders.items.end() ? nullptr : std::addressof(*it);
     };
 
@@ -6903,8 +6882,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(actualLeft->view.filterBarVisible, L"Left filterBarVisible flag did not round-trip.");
     state.Require(! actualLeft->view.statusBarVisible, L"Left statusBarVisible flag should still round-trip.");
 
-    state.Require(actualRight->view.display == Common::Settings::FolderDisplayMode::ExtraDetailed,
-                  L"Right extra-detailed display mode did not round-trip.");
+    state.Require(actualRight->view.display == Common::Settings::FolderDisplayMode::ExtraDetailed, L"Right extra-detailed display mode did not round-trip.");
     state.Require(actualRight->view.fileExtensionsVisible, L"Right fileExtensionsVisible flag did not round-trip.");
     state.Require(! actualRight->view.thumbnailsVisible, L"Right thumbnailsVisible flag did not round-trip.");
     state.Require(actualRight->view.navigationBarVisible, L"Right navigationBarVisible flag did not round-trip.");
@@ -6946,7 +6924,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     settings.folders = std::move(folders);
 
     const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
-    const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
+    const HRESULT saveHr                      = Common::Settings::SaveSettings(kTestAppId, prepared);
     state.Require(SUCCEEDED(saveHr), L"Failed to save thumbnail size settings.");
     if (FAILED(saveHr))
     {
@@ -6963,11 +6941,10 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     }
 
     const auto& actualFolders = loaded.folders.value();
-    const auto findPane = [&](std::wstring_view slot) noexcept -> const Common::Settings::FolderPane*
+    const auto findPane       = [&](std::wstring_view slot) noexcept -> const Common::Settings::FolderPane*
     {
-        const auto it = std::find_if(actualFolders.items.begin(), actualFolders.items.end(), [&](const Common::Settings::FolderPane& pane) noexcept {
-            return pane.slot == slot;
-        });
+        const auto it = std::find_if(
+            actualFolders.items.begin(), actualFolders.items.end(), [&](const Common::Settings::FolderPane& pane) noexcept { return pane.slot == slot; });
         return it == actualFolders.items.end() ? nullptr : std::addressof(*it);
     };
 
@@ -7051,7 +7028,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
 
     Common::Settings::Settings settings{};
     Common::Settings::MakeFileListSettings makeFileList{};
-    makeFileList.format = Common::Settings::MakeFileListFormat::Csv;
+    makeFileList.format   = Common::Settings::MakeFileListFormat::Csv;
     settings.makeFileList = makeFileList;
 
     const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
@@ -7177,8 +7154,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for pane view-options test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for pane view-options test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for pane view-options test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"readme", L"folder.name"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for pane view-options test.");
     const uint64_t paneViewOptionsItemCount = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
@@ -7199,10 +7175,8 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                   L"Could not capture left pane state after right file-extension menu command.");
     state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Right, rightAfterRightExtensionsMenu),
                   L"Could not capture right pane state after right file-extension menu command.");
-    state.Require(leftAfterRightExtensionsMenu.fileExtensionsVisible,
-                  L"Right file-extension menu command should leave the inactive left pane unchanged.");
-    state.Require(! rightAfterRightExtensionsMenu.fileExtensionsVisible,
-                  L"Right file-extension menu command should hide extensions in the right pane.");
+    state.Require(leftAfterRightExtensionsMenu.fileExtensionsVisible, L"Right file-extension menu command should leave the inactive left pane unchanged.");
+    state.Require(! rightAfterRightExtensionsMenu.fileExtensionsVisible, L"Right file-extension menu command should hide extensions in the right pane.");
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
 
     const auto dispatchShortcut = [&](std::wstring_view commandId) noexcept -> std::chrono::microseconds
@@ -7226,17 +7200,14 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"readme"),
                   L"Failed to focus extensionless file while extensions are hidden.");
     FolderWindow::PaneViewOptionsDebugSnapshot leftExtensionless{};
-    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, leftExtensionless),
-                  L"Could not capture extensionless-file state.");
-    state.Require(leftExtensionless.focusedItemVisualDisplayName == L"readme",
-                  L"Extensionless file labels should not change when file extensions are hidden.");
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, leftExtensionless), L"Could not capture extensionless-file state.");
+    state.Require(leftExtensionless.focusedItemVisualDisplayName == L"readme", L"Extensionless file labels should not change when file extensions are hidden.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"folder.name"),
                   L"Failed to focus dotted folder while extensions are hidden.");
     FolderWindow::PaneViewOptionsDebugSnapshot leftFolder{};
     state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, leftFolder), L"Could not capture dotted-folder state.");
-    state.Require(leftFolder.focusedItemVisualDisplayName == L"folder.name",
-                  L"Folder labels should keep dotted names when file extensions are hidden.");
+    state.Require(leftFolder.focusedItemVisualDisplayName == L"folder.name", L"Folder labels should keep dotted names when file extensions are hidden.");
 
     g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
     const std::chrono::microseconds navigationToggleUs = dispatchShortcut(L"cmd/pane/viewOptions/toggleNavigationBar");
@@ -7248,16 +7219,14 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                   L"Could not capture right pane state after navigation toggle.");
     state.Require(leftAfterNavigation.navigationBarVisible, L"Generic navigation-bar shortcut should leave the inactive left pane unchanged.");
     state.Require(! rightAfterNavigation.navigationBarVisible, L"Generic navigation-bar shortcut should hide the active right pane navigation bar.");
-    state.Require(! rightAfterNavigation.navigationViewWindowVisible,
-                  L"Hiding the navigation bar should hide its NavigationView child window.");
+    state.Require(! rightAfterNavigation.navigationViewWindowVisible, L"Hiding the navigation bar should hide its NavigationView child window.");
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_LEFT_NAVIGATION_BAR, 0), 0);
     PumpPendingMessages();
     FolderWindow::PaneViewOptionsDebugSnapshot leftAfterExplicitNavigation{};
     state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, leftAfterExplicitNavigation),
                   L"Could not capture left pane state after explicit navigation-bar menu command.");
-    state.Require(! leftAfterExplicitNavigation.navigationBarVisible,
-                  L"Explicit left navigation-bar menu command should toggle the left pane.");
+    state.Require(! leftAfterExplicitNavigation.navigationBarVisible, L"Explicit left navigation-bar menu command should toggle the left pane.");
 
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.txt"}, false /* refresh */);
@@ -7271,8 +7240,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(leftAfterFilter.filterBarUsesDxUiHost, L"Visible filter bar should be rendered by the themed DxUi host.");
     state.Require(leftAfterFilter.filterEnabled && leftAfterFilter.filterText == L"*.txt",
                   L"Showing the filter bar should preserve and expose the current pane filter.");
-    state.Require(leftAfterFilter.filterBarText.find(L"*.txt") != std::wstring::npos,
-                  L"Filter bar text should include the active filter text.");
+    state.Require(leftAfterFilter.filterBarText.find(L"*.txt") != std::wstring::npos, L"Filter bar text should include the active filter text.");
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_RIGHT_FILTER_BAR, 0), 0);
     PumpPendingMessages();
@@ -7282,20 +7250,19 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(rightAfterExplicitFilter.filterBarVisible, L"Right filter-bar menu command should show the right pane filter bar.");
     state.Require(rightAfterExplicitFilter.filterBarUsesDxUiHost, L"Right filter bar should use the themed DxUi host.");
 
-    const std::wstring perfArtifactText =
-        std::format(L"{{\n"
-                    L"  \"case\": \"pane_view_options_toggle_file_extensions_navigation_filter_bar\",\n"
-                    L"  \"itemCount\": {},\n"
-                    L"  \"metrics\": {{\n"
-                    L"    \"paneViewOptions.fileExtensionsToggleUs\": {},\n"
-                    L"    \"paneViewOptions.navigationToggleUs\": {},\n"
-                    L"    \"paneViewOptions.filterToggleUs\": {}\n"
-                    L"  }}\n"
-                    L"}}\n",
-                    paneViewOptionsItemCount,
-                    fileExtensionsToggleUs.count(),
-                    navigationToggleUs.count(),
-                    filterToggleUs.count());
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"case\": \"pane_view_options_toggle_file_extensions_navigation_filter_bar\",\n"
+                                                           L"  \"itemCount\": {},\n"
+                                                           L"  \"metrics\": {{\n"
+                                                           L"    \"paneViewOptions.fileExtensionsToggleUs\": {},\n"
+                                                           L"    \"paneViewOptions.navigationToggleUs\": {},\n"
+                                                           L"    \"paneViewOptions.filterToggleUs\": {}\n"
+                                                           L"  }}\n"
+                                                           L"}}\n",
+                                                           paneViewOptionsItemCount,
+                                                           fileExtensionsToggleUs.count(),
+                                                           navigationToggleUs.count(),
+                                                           filterToggleUs.count());
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"pane_view_options_toggle_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write pane view-options toggle perf artifact.");
@@ -7365,10 +7332,10 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     FolderWindow::PaneViewOptionsDebugSnapshot originalLeft{};
     state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, originalLeft),
                   L"Could not capture original left pane view-options state.");
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const FolderView::NameFilterState filterBefore        = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> leftBefore                     = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const FolderView::NameFilterState filterBefore                            = g_folderWindow.DebugGetNameFilterState(FolderWindow::Pane::Left);
     const std::optional<Common::Settings::SelectionMasksSettings> masksBefore = g_settings.selectionMasks;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                                   = wil::scope_exit([&]
     {
         g_folderWindow.SetFilterBarVisible(FolderWindow::Pane::Left, originalLeft.filterBarVisible);
         g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, filterBefore);
@@ -7388,8 +7355,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for pane filter-bar inline test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for pane filter-bar inline test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for pane filter-bar inline test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready before filter-bar inline test.");
     if (! state.failure.empty())
@@ -7427,8 +7393,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, barSnapshot),
                   L"Could not capture visible filter-bar snapshot before inline edit.");
     state.Require(barSnapshot.filterBarComboVisible, L"Filter bar should show the editable history combo.");
-    state.Require(! barSnapshot.filterBarLabelVisible,
-                  L"Filter bar should not show a redundant static Filter label when the combo already has a placeholder.");
+    state.Require(! barSnapshot.filterBarLabelVisible, L"Filter bar should not show a redundant static Filter label when the combo already has a placeholder.");
     state.Require(barSnapshot.filterBarToggleVisible, L"Filter bar should show the Use Filter toggle.");
     state.Require(barSnapshot.filterBarHistoryItemCount >= 2u, L"Filter bar should load the same filter history entries as the dialog.");
     state.Require(barSnapshot.filterBarHistoryItems == masks.filterHistory,
@@ -7458,8 +7423,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(barSnapshot.filterBarToggleChecked, L"Filter bar toggle should be checked after typing a non-empty filter.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"b.log"}, SelfTest::Scale(3000ms)),
                   L"Filter bar typed mask should refresh the pane and keep b.log visible.");
-    state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"),
-                  L"Filter bar typed mask should hide a.txt.");
+    state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Filter bar typed mask should hide a.txt.");
 
     const auto toggleOn = CollectVisibleDescendantTogglePatternStateByName(filterBar, useFilterLabel);
     state.Require(toggleOn.has_value(), L"Filter bar should expose the Use Filter toggle by name.");
@@ -7661,13 +7625,12 @@ void AppendZipFixtureLe32(std::vector<unsigned char>& bytes, uint32_t value)
 struct StoredZipDeclaredEntryForCommandSelfTest
 {
     std::string_view rawEntryName;
-    uint16_t flags = 0u;
+    uint16_t flags        = 0u;
     uint32_t declaredSize = 0u;
 };
 
-[[nodiscard]] bool WriteStoredZipDeclaredSizeFixtureForCommandSelfTest(
-    const std::filesystem::path& archivePath,
-    std::initializer_list<StoredZipDeclaredEntryForCommandSelfTest> entries) noexcept
+[[nodiscard]] bool WriteStoredZipDeclaredSizeFixtureForCommandSelfTest(const std::filesystem::path& archivePath,
+                                                                       std::initializer_list<StoredZipDeclaredEntryForCommandSelfTest> entries) noexcept
 {
     if (entries.size() == 0u || entries.size() > static_cast<size_t>((std::numeric_limits<uint16_t>::max)()))
     {
@@ -7677,8 +7640,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     struct CentralRecord
     {
         std::string rawEntryName;
-        uint16_t flags = 0u;
-        uint32_t declaredSize = 0u;
+        uint16_t flags             = 0u;
+        uint32_t declaredSize      = 0u;
         uint32_t localHeaderOffset = 0u;
     };
 
@@ -7710,10 +7673,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         AppendZipFixtureLe16(bytes, 0u);
         bytes.insert(bytes.end(), entry.rawEntryName.begin(), entry.rawEntryName.end());
 
-        records.push_back(CentralRecord{.rawEntryName       = std::string(entry.rawEntryName),
-                                        .flags              = entry.flags,
-                                        .declaredSize       = entry.declaredSize,
-                                        .localHeaderOffset  = localHeaderOffset});
+        records.push_back(CentralRecord{
+            .rawEntryName = std::string(entry.rawEntryName), .flags = entry.flags, .declaredSize = entry.declaredSize, .localHeaderOffset = localHeaderOffset});
     }
 
     if (bytes.size() > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()))
@@ -7843,9 +7804,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Make File List should save last JSON options.");
 
     Common::Settings::MakeFileListSettings csvOptions = jsonOptions;
-    csvOptions.format                                = Common::Settings::MakeFileListFormat::Csv;
-    csvOptions.recursive                             = false;
-    csvOptions.outputFile                            = root / L"out.csv";
+    csvOptions.format                                 = Common::Settings::MakeFileListFormat::Csv;
+    csvOptions.recursive                              = false;
+    csvOptions.outputFile                             = root / L"out.csv";
     DebugSetMakeFileListAutomation(csvOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/makeFileList"), L"cmd/pane/makeFileList CSV should dispatch.");
     PumpPendingMessages();
@@ -7854,23 +7815,22 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(csvText.find(L"nested.log") == std::wstring::npos, L"Make File List CSV should respect non-recursive current-folder scope.");
 
     Common::Settings::MakeFileListSettings textOptions = jsonOptions;
-    textOptions.format                                = Common::Settings::MakeFileListFormat::Text;
-    textOptions.outputFile                            = root / L"out.txt";
-    textOptions.textMacro                             = L"{filename}|{size}|{attributes}";
+    textOptions.format                                 = Common::Settings::MakeFileListFormat::Text;
+    textOptions.outputFile                             = root / L"out.txt";
+    textOptions.textMacro                              = L"{filename}|{size}|{attributes}";
     DebugSetMakeFileListAutomation(textOptions);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/makeFileList"), L"cmd/pane/makeFileList text should dispatch.");
     PumpPendingMessages();
     const std::wstring textOutput = ReadUtf8TextFileForCommandSelfTest(textOptions.outputFile);
     state.Require(textOutput.find(L"alpha.txt|5|") != std::wstring::npos, L"Make File List text macro should expand filename, size, and attributes.");
 
-    const std::wstring perfArtifactText =
-        std::format(L"{{\n"
-                    L"  \"scenario\": \"cmd/pane/makeFileList\",\n"
-                    L"  \"makeFileList.generate_json_us\": {},\n"
-                    L"  \"entryCount\": {}\n"
-                    L"}}\n",
-                    jsonUs.count(),
-                    4u);
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"scenario\": \"cmd/pane/makeFileList\",\n"
+                                                           L"  \"makeFileList.generate_json_us\": {},\n"
+                                                           L"  \"entryCount\": {}\n"
+                                                           L"}}\n",
+                                                           jsonUs.count(),
+                                                           4u);
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"make_file_list_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write Make File List perf artifact.");
@@ -7909,11 +7869,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const AppTheme themeBefore = g_folderWindow.GetTheme();
-    const auto restoreState = wil::scope_exit([&]
+    const AppTheme themeBefore                                      = g_folderWindow.GetTheme();
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.DebugCloseOpenedFilesDialogForTest();
         g_folderWindow.DebugClearOpenedExternalEditorsForTest();
@@ -7984,12 +7944,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for List Opened Files.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for List Opened Files.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for List Opened Files.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"editor.opened", L"beta-preview.txt", L"gamma.opened"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for List Opened Files.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"beta-preview.txt"),
-                  L"Failed to focus beta preview item.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"beta-preview.txt"), L"Failed to focus beta preview item.");
     if (! state.failure.empty())
     {
         return false;
@@ -8007,8 +7965,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(previewSnapshot) && previewSnapshot.active,
                   L"Preview pane should be active before List Opened Files.");
 
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"gamma.opened"),
-                  L"Failed to focus viewer fixture.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"gamma.opened"), L"Failed to focus viewer fixture.");
     const size_t viewerBaseline = g_folderWindow.DebugGetViewerInstanceCount();
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/view"), L"cmd/pane/view should open the configured viewer for List Opened Files.");
     const auto viewerDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
@@ -8019,8 +7976,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() > viewerBaseline, L"List Opened Files setup should create an internal viewer instance.");
 
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"beta-preview.txt"),
-                  L"Failed to restore preview fixture focus.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"beta-preview.txt"), L"Failed to restore preview fixture focus.");
     PumpPendingMessages();
 
     const auto listStarted = std::chrono::steady_clock::now();
@@ -8078,8 +8034,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to move away from the opened file before focusing its row.");
     state.Require(g_folderWindow.DebugSelectOpenedFilesDialogRow(editorIndex.value()), L"Failed to select external editor row.");
     state.Require(g_folderWindow.DebugInvokeOpenedFilesDialogFocusItem(), L"Failed to invoke List Opened Files focus action.");
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Focusing an opened file should navigate back to its folder.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Focusing an opened file should navigate back to its folder.");
     state.Require(OrdinalString::EqualsNoCase(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left), L"editor.opened"),
                   L"Focusing an opened file should select the matching pane item.");
     PumpPendingMessages();
@@ -8087,14 +8042,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(! g_folderWindow.DebugGetOpenedFilesDialogSnapshot(closedSnapshot),
                   L"List Opened Files should close after Focus Item without leaving a stale dialog state.");
 
-    const std::wstring perfArtifactText =
-        std::format(L"{{\n"
-                    L"  \"scenario\": \"cmd/pane/listOpenedFiles\",\n"
-                    L"  \"listOpenedFiles.open_us\": {},\n"
-                    L"  \"rowCount\": {}\n"
-                    L"}}\n",
-                    listUs.count(),
-                    static_cast<unsigned long long>(snapshot.rows.size()));
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"scenario\": \"cmd/pane/listOpenedFiles\",\n"
+                                                           L"  \"listOpenedFiles.open_us\": {},\n"
+                                                           L"  \"rowCount\": {}\n"
+                                                           L"}}\n",
+                                                           listUs.count(),
+                                                           static_cast<unsigned long long>(snapshot.rows.size()));
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"list_opened_files_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write List Opened Files perf artifact.");
@@ -8146,8 +8100,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for Shared Directories.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Shared Directories.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Shared Directories.");
     if (! state.failure.empty())
     {
         return false;
@@ -8173,8 +8126,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.DebugSetSharedDirectoriesProviderResultForTest(providerResult);
 
     const auto started = std::chrono::steady_clock::now();
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/shares"),
-                  L"cmd/pane/shares should dispatch through the shortcut path.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/shares"), L"cmd/pane/shares should dispatch through the shortcut path.");
     PumpPendingMessages();
     const auto openUs = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started);
 
@@ -8183,8 +8135,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(snapshot.visible, L"Shared Directories should show a dialog.");
     state.Require(snapshot.usesDxUiHost, L"Shared Directories should use the DxUi host instead of a native common-control list.");
     state.Require(snapshot.visibleNativeChildControlCount == 0u,
-                  std::format(L"Shared Directories should not expose visible native child controls; got {}.",
-                              snapshot.visibleNativeChildControlCount));
+                  std::format(L"Shared Directories should not expose visible native child controls; got {}.", snapshot.visibleNativeChildControlCount));
     state.Require(! OrdinalString::EqualsNoCase(snapshot.dialogClassName, L"#32770"),
                   L"Shared Directories should not use a native dialog-template window class.");
     state.Require(! snapshot.emptyStateVisible, L"Shared Directories populated dialog should hide the empty state.");
@@ -8192,8 +8143,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(snapshot.rows.size() == 2u, std::format(L"Shared Directories should show two synthetic rows; got {}.", snapshot.rows.size()));
     if (snapshot.rows.size() == 2u)
     {
-        state.Require(OrdinalString::EqualsNoCase(snapshot.rows[0].name, L"AlphaShare"),
-                      L"Shared Directories rows should be sorted by share name.");
+        state.Require(OrdinalString::EqualsNoCase(snapshot.rows[0].name, L"AlphaShare"), L"Shared Directories rows should be sorted by share name.");
         state.Require(snapshot.rows[0].localPath == sharePath.wstring(), L"Shared Directories should preserve local share path.");
         state.Require(snapshot.rows[0].remark == L"Primary synthetic share", L"Shared Directories should display share remarks.");
         state.Require(snapshot.rows[0].openable, L"Shared Directories row with an existing local path should be openable.");
@@ -8211,27 +8161,24 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     FolderWindow::SharedDirectoriesDebugProviderResult accessDenied{};
     accessDenied.hr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     g_folderWindow.DebugSetSharedDirectoriesProviderResultForTest(accessDenied);
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/shares"),
-                  L"cmd/pane/shares should dispatch for access denied provider result.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/shares"), L"cmd/pane/shares should dispatch for access denied provider result.");
     PumpPendingMessages();
 
     FolderWindow::SharedDirectoriesDebugSnapshot deniedSnapshot{};
-    state.Require(g_folderWindow.DebugGetSharedDirectoriesDialogSnapshot(deniedSnapshot),
-                  L"Shared Directories access denied snapshot should be available.");
+    state.Require(g_folderWindow.DebugGetSharedDirectoriesDialogSnapshot(deniedSnapshot), L"Shared Directories access denied snapshot should be available.");
     state.Require(deniedSnapshot.visible, L"Shared Directories access denied path should keep the dialog visible.");
     state.Require(deniedSnapshot.emptyStateVisible, L"Shared Directories access denied path should show the empty/error state.");
     state.Require(deniedSnapshot.rows.empty(), L"Shared Directories access denied path should not show stale rows.");
     state.Require(deniedSnapshot.lastError == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED),
                   L"Shared Directories should report access denied through the debug snapshot.");
 
-    const std::wstring perfArtifactText =
-        std::format(L"{{\n"
-                    L"  \"scenario\": \"cmd/pane/shares\",\n"
-                    L"  \"sharedDirectories.open_us\": {},\n"
-                    L"  \"rowCount\": {}\n"
-                    L"}}\n",
-                    openUs.count(),
-                    2u);
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"scenario\": \"cmd/pane/shares\",\n"
+                                                           L"  \"sharedDirectories.open_us\": {},\n"
+                                                           L"  \"rowCount\": {}\n"
+                                                           L"}}\n",
+                                                           openUs.count(),
+                                                           2u);
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"shared_directories_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write Shared Directories perf artifact.");
@@ -8294,16 +8241,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to set local file-system plugin for archive commands.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceRoot);
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set pane path for archive commands.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceRoot, SelfTest::Scale(3000ms)), L"Failed to set pane path for archive commands.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"nested", L"empty-dir"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for archive commands.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left,
-        [](std::wstring_view displayName) noexcept
-        {
-            return displayName == L"alpha.txt" || displayName == L"nested" || displayName == L"empty-dir";
-        });
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view displayName) noexcept {
+        return displayName == L"alpha.txt" || displayName == L"nested" || displayName == L"empty-dir";
+    });
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 3u, L"Archive pack test should select three top-level items.");
     if (! state.failure.empty())
     {
@@ -8311,9 +8254,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
 
     const auto containsEntry = [](const std::vector<std::wstring>& entries, std::wstring_view expected) noexcept
-    {
-        return std::find_if(entries.begin(), entries.end(), [&](const std::wstring& entry) noexcept { return entry == expected; }) != entries.end();
-    };
+    { return std::find_if(entries.begin(), entries.end(), [&](const std::wstring& entry) noexcept { return entry == expected; }) != entries.end(); };
     const auto entriesAreSorted = [](const std::vector<std::wstring>& entries) noexcept
     {
         for (size_t index = 1u; index < entries.size(); ++index)
@@ -8344,7 +8285,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         state.Require(packResult->operation == L"pack", L"Pack command debug result should identify the operation.");
         state.Require(SUCCEEDED(packResult->hr), L"Pack command should succeed for local selected items.");
         state.Require(packResult->archivePath == archivePath, L"Pack command should write the requested archive path.");
-        state.Require(packResult->entryCount >= 15u, std::format(L"Pack command should include files and empty folders; got {} entries.", packResult->entryCount));
+        state.Require(packResult->entryCount >= 15u,
+                      std::format(L"Pack command should include files and empty folders; got {} entries.", packResult->entryCount));
         state.Require(packResult->bytesProcessed >= 11u, L"Pack command should report processed payload bytes.");
         state.Require(entriesAreSorted(packResult->entries), L"Pack command should emit deterministic sorted archive entries.");
         state.Require(containsEntry(packResult->entries, L"alpha.txt"), L"Pack command should include selected root file.");
@@ -8365,19 +8307,17 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(noOverwritePackResult.has_value(), L"Pack overwrite validation should record a debug result.");
     if (noOverwritePackResult.has_value())
     {
-        state.Require(noOverwritePackResult->hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS), L"Pack command should reject existing archives when overwrite is off.");
+        state.Require(noOverwritePackResult->hr == HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),
+                      L"Pack command should reject existing archives when overwrite is off.");
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(existingArchivePath) == L"old", L"Pack overwrite rejection should preserve the existing archive.");
 
     const std::filesystem::path extractRoot = root / L"extracted";
     state.Require(SelfTest::EnsureDirectory(extractRoot), L"Failed to create archive extraction root.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, outputRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to navigate to archive output folder.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"selected.zip"}, SelfTest::Scale(3000ms)),
-                  L"Archive output folder did not show selected.zip.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"selected.zip"),
-                  L"Failed to focus selected.zip for unpack command.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, outputRoot, SelfTest::Scale(3000ms)), L"Failed to navigate to archive output folder.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"selected.zip"}, SelfTest::Scale(3000ms)), L"Archive output folder did not show selected.zip.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"selected.zip"), L"Failed to focus selected.zip for unpack command.");
     if (! state.failure.empty())
     {
         return false;
@@ -8427,18 +8367,15 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Unpack overwrite rejection should preserve existing destination file.");
 
     const std::filesystem::path cp437ArchivePath = outputRoot / L"cp437.zip";
-    std::string cp437EntryName = "caf";
+    std::string cp437EntryName                   = "caf";
     cp437EntryName.push_back(static_cast<char>(0x82u));
     cp437EntryName.append(".txt");
-    state.Require(WriteStoredZipFixtureForCommandSelfTest(cp437ArchivePath, cp437EntryName, 0u, "cp437"),
-                  L"Failed to create CP437 ZIP fixture.");
+    state.Require(WriteStoredZipFixtureForCommandSelfTest(cp437ArchivePath, cp437EntryName, 0u, "cp437"), L"Failed to create CP437 ZIP fixture.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, outputRoot, SelfTest::Scale(3000ms)),
                   L"Failed to refresh archive output folder for CP437 ZIP fixture.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"cp437.zip"}, SelfTest::Scale(3000ms)),
-                  L"Archive output folder did not show cp437.zip.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"cp437.zip"),
-                  L"Failed to focus CP437 ZIP fixture.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"cp437.zip"}, SelfTest::Scale(3000ms)), L"Archive output folder did not show cp437.zip.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"cp437.zip"), L"Failed to focus CP437 ZIP fixture.");
     const std::filesystem::path cp437ExtractRoot = root / L"cp437-extracted";
     FolderWindow::ArchiveCommandDebugOptions cp437UnpackOptions{};
     cp437UnpackOptions.destinationPath = cp437ExtractRoot;
@@ -8465,42 +8402,35 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"cp437_a_ring.zip"}, SelfTest::Scale(3000ms)),
                   L"Archive output folder did not show cp437_a_ring.zip.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"cp437_a_ring.zip"),
-                  L"Failed to focus CP437 A-ring ZIP fixture.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"cp437_a_ring.zip"), L"Failed to focus CP437 A-ring ZIP fixture.");
     const std::filesystem::path cp437ARingExtractRoot = root / L"cp437-a-ring-extracted";
     FolderWindow::ArchiveCommandDebugOptions cp437ARingUnpackOptions{};
     cp437ARingUnpackOptions.destinationPath = cp437ARingExtractRoot;
     cp437ARingUnpackOptions.overwrite       = true;
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(cp437ARingUnpackOptions);
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"),
-                  L"cmd/pane/unpack should dispatch for CP437 A-ring ZIP fixture.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch for CP437 A-ring ZIP fixture.");
     PumpPendingMessages();
     const std::optional<FolderWindow::ArchiveCommandDebugResult> cp437ARingUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
     state.Require(cp437ARingUnpackResult.has_value(), L"CP437 A-ring ZIP unpack should record a debug result.");
     if (cp437ARingUnpackResult.has_value())
     {
         state.Require(SUCCEEDED(cp437ARingUnpackResult->hr),
-                      std::format(L"CP437 A-ring ZIP extraction should succeed; hr=0x{:08X}.",
-                                  static_cast<unsigned long>(cp437ARingUnpackResult->hr)));
+                      std::format(L"CP437 A-ring ZIP extraction should succeed; hr=0x{:08X}.", static_cast<unsigned long>(cp437ARingUnpackResult->hr)));
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(cp437ARingExtractRoot / L"\x00C5ngstrom.txt") == L"aring",
                   L"Stored ZIP extraction should decode non-UTF-8 CP437 A-ring paths.");
 
     const std::filesystem::path reservedArchivePath = outputRoot / L"reserved.zip";
-    state.Require(WriteStoredZipFixtureForCommandSelfTest(reservedArchivePath, "CON.txt", 0x0800u, "reserved"),
-                  L"Failed to create reserved-name ZIP fixture.");
+    state.Require(WriteStoredZipFixtureForCommandSelfTest(reservedArchivePath, "CON.txt", 0x0800u, "reserved"), L"Failed to create reserved-name ZIP fixture.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"reserved.zip"}, SelfTest::Scale(3000ms)),
-                  L"Archive output folder did not show reserved.zip.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"reserved.zip"),
-                  L"Failed to focus reserved-name ZIP fixture.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"reserved.zip"}, SelfTest::Scale(3000ms)), L"Archive output folder did not show reserved.zip.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"reserved.zip"), L"Failed to focus reserved-name ZIP fixture.");
     const std::filesystem::path reservedExtractRoot = root / L"reserved-extracted";
     FolderWindow::ArchiveCommandDebugOptions reservedUnpackOptions{};
     reservedUnpackOptions.destinationPath = reservedExtractRoot;
     reservedUnpackOptions.overwrite       = true;
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(reservedUnpackOptions);
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"),
-                  L"cmd/pane/unpack should dispatch for reserved-name ZIP fixture.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch for reserved-name ZIP fixture.");
     PumpPendingMessages();
     const std::optional<FolderWindow::ArchiveCommandDebugResult> reservedUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
     state.Require(reservedUnpackResult.has_value(), L"Reserved-name ZIP unpack should record a debug result.");
@@ -8509,33 +8439,23 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         state.Require(reservedUnpackResult->hr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME),
                       L"Stored ZIP extraction should reject reserved DOS device names before writing.");
     }
-    state.Require(! SelfTest::PathExists(reservedExtractRoot / L"CON.txt"),
-                  L"Reserved-name ZIP extraction should not create the reserved target.");
+    state.Require(! SelfTest::PathExists(reservedExtractRoot / L"CON.txt"), L"Reserved-name ZIP extraction should not create the reserved target.");
 
     const std::filesystem::path bombArchivePath = outputRoot / L"zip-bomb.zip";
     state.Require(WriteStoredZipDeclaredSizeFixtureForCommandSelfTest(bombArchivePath,
-                                                                      {{.rawEntryName = "huge-a.bin",
-                                                                        .flags = 0x0800u,
-                                                                        .declaredSize = 0xFFFFFFFFu},
-                                                                       {.rawEntryName = "huge-b.bin",
-                                                                        .flags = 0x0800u,
-                                                                        .declaredSize = 0xFFFFFFFFu},
-                                                                       {.rawEntryName = "huge-c.bin",
-                                                                        .flags = 0x0800u,
-                                                                        .declaredSize = 0xFFFFFFFFu}}),
+                                                                      {{.rawEntryName = "huge-a.bin", .flags = 0x0800u, .declaredSize = 0xFFFFFFFFu},
+                                                                       {.rawEntryName = "huge-b.bin", .flags = 0x0800u, .declaredSize = 0xFFFFFFFFu},
+                                                                       {.rawEntryName = "huge-c.bin", .flags = 0x0800u, .declaredSize = 0xFFFFFFFFu}}),
                   L"Failed to create declared-size ZIP bomb fixture.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"zip-bomb.zip"}, SelfTest::Scale(3000ms)),
-                  L"Archive output folder did not show zip-bomb.zip.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"zip-bomb.zip"),
-                  L"Failed to focus declared-size ZIP bomb fixture.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"zip-bomb.zip"}, SelfTest::Scale(3000ms)), L"Archive output folder did not show zip-bomb.zip.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"zip-bomb.zip"), L"Failed to focus declared-size ZIP bomb fixture.");
     const std::filesystem::path bombExtractRoot = root / L"zip-bomb-extracted";
     FolderWindow::ArchiveCommandDebugOptions bombUnpackOptions{};
     bombUnpackOptions.destinationPath = bombExtractRoot;
     bombUnpackOptions.overwrite       = true;
     g_folderWindow.DebugSetNextArchiveCommandOptionsForTest(bombUnpackOptions);
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"),
-                  L"cmd/pane/unpack should dispatch for declared-size ZIP bomb fixture.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/unpack"), L"cmd/pane/unpack should dispatch for declared-size ZIP bomb fixture.");
     PumpPendingMessages();
     const std::optional<FolderWindow::ArchiveCommandDebugResult> bombUnpackResult = g_folderWindow.DebugGetLastArchiveCommandResultForTest();
     state.Require(bombUnpackResult.has_value(), L"Declared-size ZIP bomb unpack should record a debug result.");
@@ -8544,8 +8464,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         state.Require(bombUnpackResult->hr == HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE),
                       L"Stored ZIP extraction should reject archives whose decompressed size exceeds the cap.");
     }
-    state.Require(! SelfTest::PathExists(bombExtractRoot / L"huge-a.bin"),
-                  L"Declared-size ZIP bomb extraction should not create output files.");
+    state.Require(! SelfTest::PathExists(bombExtractRoot / L"huge-a.bin"), L"Declared-size ZIP bomb extraction should not create output files.");
 
     FolderWindow::ArchiveCommandDebugOptions invalidDestinationOptions{};
     invalidDestinationOptions.destinationPath.clear();
@@ -8557,8 +8476,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(invalidDestinationResult.has_value(), L"Unpack invalid destination validation should record a debug result.");
     if (invalidDestinationResult.has_value())
     {
-        state.Require(invalidDestinationResult->hr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME),
-                      L"Unpack command should reject missing destination path.");
+        state.Require(invalidDestinationResult->hr == HRESULT_FROM_WIN32(ERROR_INVALID_NAME), L"Unpack command should reject missing destination path.");
     }
 
     if (SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system-dummy")))
@@ -8581,18 +8499,17 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Archive unsupported provider should report a warning.");
     }
 
-    const std::wstring perfArtifactText =
-        std::format(L"{{\n"
-                    L"  \"scenario\": \"cmd/pane/archive\",\n"
-                    L"  \"archive.pack_us\": {},\n"
-                    L"  \"archive.unpack_us\": {},\n"
-                    L"  \"entryCount\": {},\n"
-                    L"  \"bytesProcessed\": {}\n"
-                    L"}}\n",
-                    packUs.count(),
-                    unpackUs.count(),
-                    packResult.has_value() ? packResult->entryCount : 0u,
-                    packResult.has_value() ? packResult->bytesProcessed : 0u);
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"scenario\": \"cmd/pane/archive\",\n"
+                                                           L"  \"archive.pack_us\": {},\n"
+                                                           L"  \"archive.unpack_us\": {},\n"
+                                                           L"  \"entryCount\": {},\n"
+                                                           L"  \"bytesProcessed\": {}\n"
+                                                           L"}}\n",
+                                                           packUs.count(),
+                                                           unpackUs.count(),
+                                                           packResult.has_value() ? packResult->entryCount : 0u,
+                                                           packResult.has_value() ? packResult->bytesProcessed : 0u);
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"archive_commands_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write archive command perf artifact.");
@@ -8632,8 +8549,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
 
     FolderWindow::PaneViewOptionsDebugSnapshot originalLeft{};
-    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, originalLeft),
-                  L"Could not capture original thumbnail pane state.");
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, originalLeft), L"Could not capture original thumbnail pane state.");
     const FolderView::DisplayMode originalLeftDisplayMode = g_folderWindow.GetDisplayMode(FolderWindow::Pane::Left);
 
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
@@ -8662,7 +8578,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     const uint64_t itemCount = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
-    const auto started      = std::chrono::steady_clock::now();
+    const auto started       = std::chrono::steady_clock::now();
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/toggleThumbnails"),
                   L"cmd/pane/viewOptions/toggleThumbnails should dispatch through the shortcut path.");
     PumpPendingMessages();
@@ -8680,9 +8596,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     FolderWindow::PaneViewOptionsDebugSnapshot settled{};
     state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
-                                            [](const FolderWindow::PaneViewOptionsDebugSnapshot& snapshot) noexcept {
-                                                return snapshot.thumbnailPendingCount == 0 && snapshot.thumbnailFallbackCount > 0;
-                                            },
+                                            [](const FolderWindow::PaneViewOptionsDebugSnapshot& snapshot) noexcept
+    { return snapshot.thumbnailPendingCount == 0 && snapshot.thumbnailFallbackCount > 0; },
                                             SelfTest::Scale(5000ms),
                                             &settled),
                   L"Thumbnail fallback work did not settle deterministically.");
@@ -8701,24 +8616,23 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(! afterDetailed.thumbnailsVisible, L"Detailed display mode should not keep thumbnail visuals layered on top.");
     state.Require(afterDetailed.thumbnailPendingCount == 0, L"Leaving thumbnail display mode should cancel pending thumbnail work.");
 
-    const std::wstring perfArtifactText =
-        std::format(L"{{\n"
-                    L"  \"case\": \"pane_view_options_toggle_thumbnails\",\n"
-                    L"  \"itemCount\": {},\n"
-                    L"  \"metrics\": {{\n"
-                    L"    \"paneViewOptions.thumbnailsToggleUs\": {},\n"
-                    L"    \"thumbnails.queued\": {},\n"
-                    L"    \"thumbnails.completed\": {},\n"
-                    L"    \"thumbnails.fallback\": {},\n"
-                    L"    \"thumbnails.staleDrops\": {}\n"
-                    L"  }}\n"
-                    L"}}\n",
-                    itemCount,
-                    toggleUs.count(),
-                    settled.thumbnailQueuedCount,
-                    settled.thumbnailCompletedCount,
-                    settled.thumbnailFallbackCount,
-                    settled.thumbnailStaleDropCount);
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"case\": \"pane_view_options_toggle_thumbnails\",\n"
+                                                           L"  \"itemCount\": {},\n"
+                                                           L"  \"metrics\": {{\n"
+                                                           L"    \"paneViewOptions.thumbnailsToggleUs\": {},\n"
+                                                           L"    \"thumbnails.queued\": {},\n"
+                                                           L"    \"thumbnails.completed\": {},\n"
+                                                           L"    \"thumbnails.fallback\": {},\n"
+                                                           L"    \"thumbnails.staleDrops\": {}\n"
+                                                           L"  }}\n"
+                                                           L"}}\n",
+                                                           itemCount,
+                                                           toggleUs.count(),
+                                                           settled.thumbnailQueuedCount,
+                                                           settled.thumbnailCompletedCount,
+                                                           settled.thumbnailFallbackCount,
+                                                           settled.thumbnailStaleDropCount);
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"pane_view_options_thumbnails_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write thumbnail pane view-options perf artifact.");
@@ -8764,7 +8678,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const bool functionBarBefore                           = g_folderWindow.GetFunctionBarVisible();
-    const auto restoreState                               = wil::scope_exit([&]
+    const auto restoreState                                = wil::scope_exit([&]
     {
         FolderWindow::PreviewPaneDebugSnapshot preview{};
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && preview.active)
@@ -8794,16 +8708,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to set local file-system plugin for preview host pane.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for preview test.");
-    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set right pane path for preview test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for preview test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)), L"Failed to set right pane path for preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha-preview.txt", L"beta-preview.txt"}, SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"right-folder.txt"}, SelfTest::Scale(3000ms)),
                   L"Right pane contents not ready for preview test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha-preview.txt"),
-                  L"Failed to focus alpha preview item.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha-preview.txt"), L"Failed to focus alpha preview item.");
     if (! state.failure.empty())
     {
         return false;
@@ -8837,12 +8748,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left),
                   L"Embedded text preview should not take keyboard focus from the source pane.");
 
-    const auto previewTextContains = [](const FolderWindow::PreviewPaneDebugSnapshot& snapshot, std::wstring_view expected) noexcept {
-        return snapshot.previewText.find(expected) != std::wstring::npos;
-    };
-    const auto waitForPreviewText = [&](std::wstring_view expected,
-                                        std::wstring_view forbidden,
-                                        FolderWindow::PreviewPaneDebugSnapshot& outSnapshot) noexcept
+    const auto previewTextContains = [](const FolderWindow::PreviewPaneDebugSnapshot& snapshot, std::wstring_view expected) noexcept
+    { return snapshot.previewText.find(expected) != std::wstring::npos; };
+    const auto waitForPreviewText = [&](std::wstring_view expected, std::wstring_view forbidden, FolderWindow::PreviewPaneDebugSnapshot& outSnapshot) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
         do
@@ -8865,13 +8773,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(alphaPreview.previewEmbeddedViewerHwnd != nullptr, L"Embedded text preview should expose its hosted viewer HWND.");
     state.Require(alphaPreview.previewTabsHwnd != nullptr, L"Embedded preview should expose its tab strip HWND for pointer validation.");
 
-    const auto rectIsUsable = [](const RECT& rect) noexcept {
-        return rect.right > rect.left && rect.bottom > rect.top;
-    };
-    const auto rectCenterPoint = [](const RECT& rect) noexcept {
-        return MAKELPARAM(rect.left + ((rect.right - rect.left) / 2), rect.top + ((rect.bottom - rect.top) / 2));
-    };
-    const auto clickPreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept {
+    const auto rectIsUsable    = [](const RECT& rect) noexcept { return rect.right > rect.left && rect.bottom > rect.top; };
+    const auto rectCenterPoint = [](const RECT& rect) noexcept
+    { return MAKELPARAM(rect.left + ((rect.right - rect.left) / 2), rect.top + ((rect.bottom - rect.top) / 2)); };
+    const auto clickPreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept
+    {
         POINT screenPoint{GET_X_LPARAM(point), GET_Y_LPARAM(point)};
         ClientToScreen(hwnd, &screenPoint);
         SetCursorPos(screenPoint.x, screenPoint.y);
@@ -8880,7 +8786,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         SendMessageW(hwnd, WM_LBUTTONUP, 0, point);
         PumpPendingMessages();
     };
-    const auto movePreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept {
+    const auto movePreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept
+    {
         POINT screenPoint{GET_X_LPARAM(point), GET_Y_LPARAM(point)};
         ClientToScreen(hwnd, &screenPoint);
         SetCursorPos(screenPoint.x, screenPoint.y);
@@ -8904,7 +8811,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(! folderTab.previewCloseButtonVisible, L"Inactive Preview tab should hide its close button when it is not hovered.");
     movePreviewTabsPoint(folderTab.previewTabsHwnd, rectCenterPoint(folderTab.folderTabClientRect));
     FolderWindow::PreviewPaneDebugSnapshot folderTabImmediateHover{};
-    state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(folderTabImmediateHover), L"Could not capture preview-pane state immediately after hovering Folder tab.");
+    state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(folderTabImmediateHover),
+                  L"Could not capture preview-pane state immediately after hovering Folder tab.");
     state.Require(folderTabImmediateHover.previewTabsTooltipText.empty(), L"Folder tab tooltip should wait for the standard hover delay before appearing.");
     state.Require(folderTabImmediateHover.previewTabsPendingTooltipText == rightRoot.wstring(),
                   std::format(L"Folder tab hover should schedule the delayed host path tooltip. Expected='{}' Actual='{}'",
@@ -8955,18 +8863,17 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(! afterClose.tabsVisible, L"Closing preview from the tab strip should remove the preview tab strip.");
     state.Require(afterClose.folderViewVisible, L"Closing preview from the tab strip should restore the host pane folder view.");
 
-    const std::wstring perfArtifactText =
-        std::format(L"{{\n"
-                    L"  \"case\": \"pane_view_options_toggle_preview_pane_tabs_and_selection\",\n"
-                    L"  \"metrics\": {{\n"
-                    L"    \"paneViewOptions.previewToggleUs\": {},\n"
-                    L"    \"paneViewOptions.previewSwitchTabUs\": {},\n"
-                    L"    \"preview.bytes\": {}\n"
-                    L"  }}\n"
-                    L"}}\n",
-                    toggleUs.count(),
-                    switchUs.count(),
-                    betaPreview.previewBytes);
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"case\": \"pane_view_options_toggle_preview_pane_tabs_and_selection\",\n"
+                                                           L"  \"metrics\": {{\n"
+                                                           L"    \"paneViewOptions.previewToggleUs\": {},\n"
+                                                           L"    \"paneViewOptions.previewSwitchTabUs\": {},\n"
+                                                           L"    \"preview.bytes\": {}\n"
+                                                           L"  }}\n"
+                                                           L"}}\n",
+                                                           toggleUs.count(),
+                                                           switchUs.count(),
+                                                           betaPreview.previewBytes);
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"pane_view_options_preview_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write preview pane perf artifact.");
@@ -8999,29 +8906,25 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     std::filesystem::remove_all(rightRoot, ec);
     state.Require(SelfTest::EnsureDirectory(leftRoot), L"Failed to create configured preview source folder.");
     state.Require(SelfTest::EnsureDirectory(rightRoot), L"Failed to create configured preview host folder.");
-    state.Require(TestWriteTinyBmpFile(leftRoot / L"image-preview.bmp"),
-                  L"Failed to create configured preview fixture.");
-    state.Require(TestWriteTinyBmpFile(leftRoot / L"image-preview-next.bmp"),
-                  L"Failed to create second configured image preview fixture.");
-    state.Require(SelfTest::WriteTextFile(leftRoot / L"media-preview.mp4", "dummy media preview body"),
-                  L"Failed to create configured media preview fixture.");
+    state.Require(TestWriteTinyBmpFile(leftRoot / L"image-preview.bmp"), L"Failed to create configured preview fixture.");
+    state.Require(TestWriteTinyBmpFile(leftRoot / L"image-preview-next.bmp"), L"Failed to create second configured image preview fixture.");
+    state.Require(SelfTest::WriteTextFile(leftRoot / L"media-preview.mp4", "dummy media preview body"), L"Failed to create configured media preview fixture.");
     state.Require(SelfTest::WriteTextFile(leftRoot / L"media-preview-next.mp4", "dummy media preview next body"),
                   L"Failed to create second configured media preview fixture.");
-    state.Require(SelfTest::WriteTextFile(leftRoot / L"audio-preview.m4a", "dummy audio preview body"),
-                  L"Failed to create configured audio preview fixture.");
+    state.Require(SelfTest::WriteTextFile(leftRoot / L"audio-preview.m4a", "dummy audio preview body"), L"Failed to create configured audio preview fixture.");
     state.Require(SelfTest::WriteTextFile(rightRoot / L"host.txt", "host"), L"Failed to create configured preview host fixture.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
-    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                            = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore          = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto pluginConfigurationsBefore = g_settings.plugins.configurationByPluginId;
-    const auto restoreState = wil::scope_exit([&]
+    const auto pluginConfigurationsBefore                           = g_settings.plugins.configurationByPluginId;
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         FolderWindow::PreviewPaneDebugSnapshot preview{};
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && preview.active)
@@ -9032,7 +8935,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
 
         g_folderWindow.CloseAllViewers();
-        g_settings.fileActions.viewers = viewersBefore;
+        g_settings.fileActions.viewers             = viewersBefore;
         g_settings.plugins.configurationByPluginId = pluginConfigurationsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
@@ -9073,22 +8976,16 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to set local file-system plugin for configured preview host pane.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for configured preview test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for configured preview test.");
     state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set right pane path for configured preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left,
-                                   {L"image-preview.bmp",
-                                    L"image-preview-next.bmp",
-                                    L"media-preview.mp4",
-                                    L"media-preview-next.mp4",
-                                    L"audio-preview.m4a"},
+                                   {L"image-preview.bmp", L"image-preview-next.bmp", L"media-preview.mp4", L"media-preview-next.mp4", L"audio-preview.m4a"},
                                    SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for configured preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"host.txt"}, SelfTest::Scale(3000ms)),
                   L"Right pane contents not ready for configured preview test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"image-preview.bmp"),
-                  L"Failed to focus configured preview item.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"image-preview.bmp"), L"Failed to focus configured preview item.");
     if (! state.failure.empty())
     {
         return false;
@@ -9106,8 +9003,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9123,22 +9019,21 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Configured embedded preview should not take keyboard focus from the source pane.");
 
     const uintptr_t firstImagePreviewInstanceId = snapshot.previewViewerInstanceId;
-    const HWND firstImagePreviewHwnd = snapshot.previewEmbeddedViewerHwnd;
+    const HWND firstImagePreviewHwnd            = snapshot.previewEmbeddedViewerHwnd;
     state.Require(firstImagePreviewInstanceId != 0, L"Configured image preview should expose a stable embedded viewer instance id.");
     state.Require(firstImagePreviewHwnd != nullptr, L"Configured image preview should expose its hosted viewer HWND.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"image-preview-next.bmp"),
                   L"Failed to focus second configured image preview item.");
 
-    snapshot = {};
+    snapshot                     = {};
     const auto nextImageDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < nextImageDeadline)
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
             OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
-            snapshot.previewedPath.filename() == L"image-preview-next.bmp" &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            snapshot.previewedPath.filename() == L"image-preview-next.bmp" && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9146,8 +9041,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
 
     state.Require(snapshot.active, L"Configured second image preview should remain active.");
-    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-imgraw",
-                  L"Second image preview should keep using the configured image viewer plugin.");
+    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-imgraw", L"Second image preview should keep using the configured image viewer plugin.");
     state.Require(snapshot.previewedPath.filename() == L"image-preview-next.bmp", L"Second image preview should load the newly focused image file.");
     state.Require(snapshot.previewViewerInstanceId == firstImagePreviewInstanceId,
                   L"Switching between image files that resolve to ViewerImgRaw should reuse the embedded image preview instance.");
@@ -9159,14 +9053,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"media-preview.mp4"),
                   L"Failed to focus configured media preview item.");
 
-    snapshot = {};
+    snapshot                 = {};
     const auto mediaDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < mediaDeadline)
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9178,8 +9071,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc",
                   L"Preview should use the configured media viewer plugin instead of forcing ViewerText.");
     state.Require(snapshot.previewedPath.filename() == L"media-preview.mp4", L"Configured media preview should load the focused file.");
-    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
-                  L"Configured media preview should not take keyboard focus from the source pane.");
+    state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus, L"Configured media preview should not take keyboard focus from the source pane.");
 
     const uintptr_t firstVlcPreviewInstanceId = snapshot.previewViewerInstanceId;
     state.Require(firstVlcPreviewInstanceId != 0, L"Configured media preview should expose a stable embedded viewer instance id.");
@@ -9213,23 +9105,21 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     WndMsg::ViewerVlcDebugStopDelay slowVlcStop{};
     slowVlcStop.delayMs = 1200;
-    state.Require(vlcWindow != nullptr &&
-                      SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugSetStopDelay, 0, reinterpret_cast<LPARAM>(&slowVlcStop)) == TRUE,
+    state.Require(vlcWindow != nullptr && SendMessageW(vlcWindow, WndMsg::kViewerVlcDebugSetStopDelay, 0, reinterpret_cast<LPARAM>(&slowVlcStop)) == TRUE,
                   L"Failed to enable slow VLC stop simulation for preview responsiveness coverage.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"media-preview-next.mp4"),
                   L"Failed to focus second configured media preview item.");
 
     const auto samePluginSwitchStarted = std::chrono::steady_clock::now();
-    snapshot = {};
-    const auto nextMediaDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    snapshot                           = {};
+    const auto nextMediaDeadline       = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < nextMediaDeadline)
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
             OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
-            snapshot.previewedPath.filename() == L"media-preview-next.mp4" &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            snapshot.previewedPath.filename() == L"media-preview-next.mp4" && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9237,8 +9127,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
 
     state.Require(snapshot.active, L"Configured second media preview should remain active.");
-    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc",
-                  L"Second media preview should keep using the configured media viewer plugin.");
+    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc", L"Second media preview should keep using the configured media viewer plugin.");
     state.Require(snapshot.previewedPath.filename() == L"media-preview-next.mp4", L"Second media preview should load the newly focused media file.");
     state.Require(snapshot.previewViewerInstanceId == firstVlcPreviewInstanceId,
                   L"Switching between media files that resolve to VLC should reuse the embedded VLC preview instance.");
@@ -9269,14 +9158,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to focus configured audio preview item.");
 
     const auto audioSwitchStarted = std::chrono::steady_clock::now();
-    snapshot = {};
-    const auto audioDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    snapshot                      = {};
+    const auto audioDeadline      = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < audioDeadline)
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
-            snapshot.previewedPath.filename() == L"audio-preview.m4a" &&
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") && snapshot.previewedPath.filename() == L"audio-preview.m4a" &&
             g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
@@ -9286,8 +9174,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     state.Require(snapshot.active, L"Configured audio preview should remain active.");
     state.Require(snapshot.previewUsesEmbeddedViewer, L"Configured audio preview should use an embedded viewer instance.");
-    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc",
-                  L"Audio preview should keep using the configured VLC preview plugin.");
+    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc", L"Audio preview should keep using the configured VLC preview plugin.");
     state.Require(snapshot.previewedPath.filename() == L"audio-preview.m4a", L"Audio preview should load the newly focused audio file.");
     state.Require(snapshot.previewViewerInstanceId == firstVlcPreviewInstanceId,
                   L"Switching from video to audio that resolves to VLC should reuse the embedded VLC preview instance.");
@@ -9307,8 +9194,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                       L"Failed to read audio VLC preview snapshot.");
         state.Require(audioVlcSnapshot.hasVideoChild, L"Audio VLC preview should keep the embedded video child available.");
         state.Require(audioVlcSnapshot.videoChildIsChildWindow, L"Audio VLC preview video surface should stay a child window.");
-        state.Require(audioVlcSnapshot.videoChildParentIsViewer,
-                      L"Audio-only VLC preview must keep media output parented to the embedded viewer window.");
+        state.Require(audioVlcSnapshot.videoChildParentIsViewer, L"Audio-only VLC preview must keep media output parented to the embedded viewer window.");
 
         WndMsg::ViewerVlcDebugPlaybackState volumeState{};
         volumeState.timeMs   = 5'000;
@@ -9323,15 +9209,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to focus image preview item after media preview.");
 
     const auto crossPluginSwitchStarted = std::chrono::steady_clock::now();
-    snapshot = {};
-    const auto crossPluginDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    snapshot                            = {};
+    const auto crossPluginDeadline      = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < crossPluginDeadline)
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
             OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
-            snapshot.previewedPath.filename() == L"image-preview.bmp" &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            snapshot.previewedPath.filename() == L"image-preview.bmp" && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9346,15 +9231,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"media-preview-next.mp4"),
                   L"Failed to refocus media preview before close/reopen persistence check.");
-    snapshot = {};
+    snapshot                        = {};
     const auto mediaRefocusDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < mediaRefocusDeadline)
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
             OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
-            snapshot.previewedPath.filename() == L"media-preview-next.mp4" &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            snapshot.previewedPath.filename() == L"media-preview-next.mp4" && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9376,14 +9260,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/viewOptions/togglePreviewPane"),
                   L"Preview pane toggle should reopen the configured media preview.");
 
-    snapshot = {};
+    snapshot                    = {};
     const auto restoredDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < restoredDeadline)
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-vlc") && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9391,8 +9274,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     }
 
     state.Require(snapshot.active, L"Reopened configured media preview should become active.");
-    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc",
-                  L"Reopened media preview should use the configured VLC viewer.");
+    state.Require(snapshot.previewViewerPluginId == L"builtin/viewer-vlc", L"Reopened media preview should use the configured VLC viewer.");
     vlcWindow = FindDescendantWindowByClass(snapshot.previewContentHwnd, L"RedSalamander.ViewerVLC");
     state.Require(vlcWindow != nullptr, L"Reopened media preview should host a VLC viewer window.");
     if (vlcWindow)
@@ -9439,21 +9321,20 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     std::filesystem::remove_all(rightRoot, ec);
     state.Require(SelfTest::EnsureDirectory(leftRoot), L"Failed to create built-in preview source folder.");
     state.Require(SelfTest::EnsureDirectory(rightRoot), L"Failed to create built-in preview host folder.");
-    state.Require(TestWriteTinyBmpFile(leftRoot / L"builtin-image-preview.bmp"),
-                  L"Failed to create built-in image preview fixture.");
+    state.Require(TestWriteTinyBmpFile(leftRoot / L"builtin-image-preview.bmp"), L"Failed to create built-in image preview fixture.");
     state.Require(SelfTest::WriteTextFile(rightRoot / L"host.txt", "host"), L"Failed to create built-in preview host fixture.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
-    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                            = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore          = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto pluginConfigurationsBefore = g_settings.plugins.configurationByPluginId;
-    const auto restoreState = wil::scope_exit([&]
+    const auto pluginConfigurationsBefore                           = g_settings.plugins.configurationByPluginId;
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         FolderWindow::PreviewPaneDebugSnapshot preview{};
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && preview.active)
@@ -9464,7 +9345,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
 
         g_folderWindow.CloseAllViewers();
-        g_settings.fileActions.viewers = viewersBefore;
+        g_settings.fileActions.viewers             = viewersBefore;
         g_settings.plugins.configurationByPluginId = pluginConfigurationsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
@@ -9486,10 +9367,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to set local file-system plugin for built-in preview host pane.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for built-in preview test.");
-    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set right pane path for built-in preview test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for built-in preview test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)), L"Failed to set right pane path for built-in preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"builtin-image-preview.bmp"}, SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for built-in preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"host.txt"}, SelfTest::Scale(3000ms)),
@@ -9513,8 +9392,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         PumpPendingMessages();
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(snapshot) && snapshot.active &&
-            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") &&
-            g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
+            OrdinalString::EqualsNoCase(snapshot.previewViewerPluginId, L"builtin/viewer-imgraw") && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus)
         {
             break;
         }
@@ -9549,9 +9427,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::filesystem::path leftRoot  = suiteRoot / L"work" / (L"pane_preview_properties_left_" + NewGuidText());
-    const std::filesystem::path rightRoot = suiteRoot / L"work" / (L"pane_preview_properties_right_" + NewGuidText());
-    const std::filesystem::path noPreviewFile = leftRoot / L"mystery.no-preview-props";
+    const std::filesystem::path leftRoot        = suiteRoot / L"work" / (L"pane_preview_properties_left_" + NewGuidText());
+    const std::filesystem::path rightRoot       = suiteRoot / L"work" / (L"pane_preview_properties_right_" + NewGuidText());
+    const std::filesystem::path noPreviewFile   = leftRoot / L"mystery.no-preview-props";
     const std::filesystem::path noPreviewFolder = leftRoot / L"folder-no-preview-props";
     std::error_code ec;
     std::filesystem::remove_all(leftRoot, ec);
@@ -9559,8 +9437,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     std::filesystem::remove_all(rightRoot, ec);
     state.Require(SelfTest::EnsureDirectory(leftRoot), L"Failed to create properties-preview source folder.");
     state.Require(SelfTest::EnsureDirectory(rightRoot), L"Failed to create properties-preview host folder.");
-    state.Require(SelfTest::WriteTextFile(noPreviewFile, "content that should not be the fallback preview"),
-                  L"Failed to create no-preview file fixture.");
+    state.Require(SelfTest::WriteTextFile(noPreviewFile, "content that should not be the fallback preview"), L"Failed to create no-preview file fixture.");
     state.Require(SelfTest::EnsureDirectory(noPreviewFolder), L"Failed to create no-preview folder fixture.");
     state.Require(SelfTest::WriteTextFile(rightRoot / L"host.txt", "host"), L"Failed to create properties-preview host fixture.");
     if (! state.failure.empty())
@@ -9568,13 +9445,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
-    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                            = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore          = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto pluginConfigurationsBefore = g_settings.plugins.configurationByPluginId;
-    const auto restoreState = wil::scope_exit([&]
+    const auto pluginConfigurationsBefore                           = g_settings.plugins.configurationByPluginId;
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         FolderWindow::PreviewPaneDebugSnapshot preview{};
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && preview.active)
@@ -9585,7 +9462,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
 
         g_folderWindow.CloseAllViewers();
-        g_settings.fileActions.viewers = viewersBefore;
+        g_settings.fileActions.viewers             = viewersBefore;
         g_settings.plugins.configurationByPluginId = pluginConfigurationsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
@@ -9607,16 +9484,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to set local file-system plugin for properties-preview host pane.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for properties-preview test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for properties-preview test.");
     state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
                   L"Failed to set right pane path for properties-preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"folder-no-preview-props", L"mystery.no-preview-props"}, SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for properties-preview test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"host.txt"}, SelfTest::Scale(3000ms)),
                   L"Right pane contents not ready for properties-preview test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"mystery.no-preview-props"),
-                  L"Failed to focus no-preview file item.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"mystery.no-preview-props"), L"Failed to focus no-preview file item.");
     if (! state.failure.empty())
     {
         return false;
@@ -9629,8 +9504,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Preview pane toggle should dispatch for properties fallback test.");
 
     FolderWindow::PreviewPaneDebugSnapshot fileSnapshot{};
-    state.Require(WaitForPreviewPaneText(L"Name: mystery.no-preview-props", L"content that should not be the fallback preview", fileSnapshot, SelfTest::Scale(5000ms)),
-                  L"No-preview file should fall back to item properties text.");
+    state.Require(
+        WaitForPreviewPaneText(L"Name: mystery.no-preview-props", L"content that should not be the fallback preview", fileSnapshot, SelfTest::Scale(5000ms)),
+        L"No-preview file should fall back to item properties text.");
     state.Require(fileSnapshot.active, L"Properties fallback preview should be active for the no-preview file.");
     state.Require(! fileSnapshot.previewUsesEmbeddedViewer, L"No-preview file properties fallback should not host an embedded viewer.");
     state.Require(fileSnapshot.previewViewerPluginId.empty(), L"No-preview file properties fallback should not retain an embedded viewer plugin id.");
@@ -9640,8 +9516,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(g_folderWindow.GetFocusedFolderViewHwnd() == expectedFocus,
                   L"No-preview file properties fallback should not take keyboard focus from the source pane.");
 
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"folder-no-preview-props"),
-                  L"Failed to focus no-preview folder item.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"folder-no-preview-props"), L"Failed to focus no-preview folder item.");
 
     FolderWindow::PreviewPaneDebugSnapshot folderSnapshot{};
     state.Require(WaitForPreviewPaneText(L"Name: folder-no-preview-props", L"Folder: folder-no-preview-props", folderSnapshot, SelfTest::Scale(5000ms)),
@@ -9675,8 +9550,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::filesystem::path leftRoot  = suiteRoot / L"work" / (L"pane_preview_properties_cards_left_" + NewGuidText());
-    const std::filesystem::path rightRoot = suiteRoot / L"work" / (L"pane_preview_properties_cards_right_" + NewGuidText());
+    const std::filesystem::path leftRoot      = suiteRoot / L"work" / (L"pane_preview_properties_cards_left_" + NewGuidText());
+    const std::filesystem::path rightRoot     = suiteRoot / L"work" / (L"pane_preview_properties_cards_right_" + NewGuidText());
     const std::filesystem::path noPreviewFile = leftRoot / L"rainbow-properties.no-preview-cards";
     std::error_code ec;
     std::filesystem::remove_all(leftRoot, ec);
@@ -9692,12 +9567,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    constexpr size_t kStreamCount = 28u;
+    constexpr size_t kStreamCount             = 28u;
     constexpr std::string_view kStreamPayload = "stream payload for preview properties card scroll validation";
     for (size_t index = 0u; index < kStreamCount; ++index)
     {
         const std::wstring streamName = std::format(L"preview-stream-{0:02}", index);
-        const HRESULT hr = WriteAlternateStreamForPreviewPropertiesTest(noPreviewFile, streamName, kStreamPayload);
+        const HRESULT hr              = WriteAlternateStreamForPreviewPropertiesTest(noPreviewFile, streamName, kStreamPayload);
         if (index == 0u && HRESULT_CODE(hr) == ERROR_INVALID_NAME)
         {
             return state.Skip(L"Alternate data streams are not supported by the temporary filesystem.");
@@ -9712,14 +9587,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const AppTheme themeBefore = g_folderWindow.GetTheme();
-    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
-    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const AppTheme themeBefore                                      = g_folderWindow.GetTheme();
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                            = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore          = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto pluginConfigurationsBefore = g_settings.plugins.configurationByPluginId;
-    const auto restoreState = wil::scope_exit([&]
+    const auto pluginConfigurationsBefore                           = g_settings.plugins.configurationByPluginId;
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         FolderWindow::PreviewPaneDebugSnapshot preview{};
         if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && preview.active)
@@ -9731,7 +9606,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
         g_folderWindow.CloseAllViewers();
         g_folderWindow.ApplyTheme(themeBefore);
-        g_settings.fileActions.viewers = viewersBefore;
+        g_settings.fileActions.viewers             = viewersBefore;
         g_settings.plugins.configurationByPluginId = pluginConfigurationsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
@@ -9776,8 +9651,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Preview pane toggle should dispatch for preview properties-card test.");
 
     FolderWindow::PreviewPaneDebugSnapshot snapshot{};
-    state.Require(WaitForPreviewPaneText(L"Name: rainbow-properties.no-preview-cards", L"preview card fallback should render", snapshot, SelfTest::Scale(5000ms)),
-                  L"Preview properties-card content did not load.");
+    state.Require(
+        WaitForPreviewPaneText(L"Name: rainbow-properties.no-preview-cards", L"preview card fallback should render", snapshot, SelfTest::Scale(5000ms)),
+        L"Preview properties-card content did not load.");
     state.Require(snapshot.previewPropertiesCardMode, L"Default properties preview should use card mode instead of the plain fallback label.");
     state.Require(snapshot.previewPropertiesUsesScrollPanel, L"Default properties preview should use the DxUi ScrollPanel.");
     state.Require(snapshot.previewPropertiesCanScroll, L"Long default properties preview should expose a vertical scrollbar.");
@@ -9831,9 +9707,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const bool functionBarBefore                           = g_folderWindow.GetFunctionBarVisible();
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const bool functionBarBefore                          = g_folderWindow.GetFunctionBarVisible();
     const auto restoreState                               = wil::scope_exit([&]
     {
         FolderWindow::PreviewPaneDebugSnapshot preview{};
@@ -9856,12 +9732,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for preview function-bar test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for preview function-bar test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for preview function-bar test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"bottom-preview.txt"}, SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for preview function-bar test.");
-    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"bottom-preview.txt"),
-                  L"Failed to focus bottom preview item.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"bottom-preview.txt"), L"Failed to focus bottom preview item.");
     if (! state.failure.empty())
     {
         return false;
@@ -9909,10 +9783,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.CloseAllViewers();
         g_settings.fileActions.viewers = viewersBefore;
@@ -9937,8 +9811,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for alternate-view action test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for alternate-view action test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for alternate-view action test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.altview"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for alternate-view action test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.altview"),
@@ -9950,12 +9823,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
     const size_t baselineViewerCount = g_folderWindow.DebugGetViewerInstanceCount();
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateView"),
-                  L"cmd/pane/alternateView should dispatch through the shortcut path.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateView"), L"cmd/pane/alternateView should dispatch through the shortcut path.");
 
     const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < deadline &&
-           !(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u && g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text")))
+           ! (g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u && g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text")))
     {
         PumpPendingMessages();
         std::this_thread::sleep_for(20ms);
@@ -9963,8 +9835,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u,
                   L"Alternate View should open one viewer instance from the configured alternate action.");
-    state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text"),
-                  L"Alternate View should use the configured ViewerText action.");
+    state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text"), L"Alternate View should use the configured ViewerText action.");
 
     return state.failure.empty();
 }
@@ -9998,10 +9869,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.CloseAllViewers();
         g_settings.fileActions.viewers = viewersBefore;
@@ -10082,14 +9953,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                         = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore       = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const Common::Settings::ExtensionsSettings extensionsBefore = g_settings.extensions;
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const Common::Settings::ExtensionsSettings extensionsBefore     = g_settings.extensions;
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.CloseAllViewers();
-        g_settings.extensions = extensionsBefore;
+        g_settings.extensions          = extensionsBefore;
         g_settings.fileActions.viewers = viewersBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftBefore.has_value())
@@ -10115,8 +9986,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for primary-view action test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for primary-view action test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for primary-view action test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"eta.primaryview"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for primary-view action test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"eta.primaryview"),
@@ -10168,10 +10038,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_settings.fileActions.viewers = viewersBefore;
@@ -10220,10 +10090,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Disabled View With action should report a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_FILEACTION_VIEWER_UNAVAILABLE_TITLE),
                   L"Disabled View With action should use the localized viewer-unavailable title.");
-    state.Require(alert.message.find(L"disabled-viewer") != std::wstring::npos,
-                  L"Disabled View With alert should name the unavailable viewer action id.");
-    state.Require(alert.message.find(L"zeta.disabledview") != std::wstring::npos,
-                  L"Disabled View With alert should name the focused file.");
+    state.Require(alert.message.find(L"disabled-viewer") != std::wstring::npos, L"Disabled View With alert should name the unavailable viewer action id.");
+    state.Require(alert.message.find(L"zeta.disabledview") != std::wstring::npos, L"Disabled View With alert should name the focused file.");
 
     return state.failure.empty();
 }
@@ -10249,17 +10117,16 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create missing alternate-view alert test folder.");
-    state.Require(SelfTest::WriteTextFile(root / L"omega.noaltview", "missing alternate view"),
-                  L"Failed to create missing alternate-view alert test file.");
+    state.Require(SelfTest::WriteTextFile(root / L"omega.noaltview", "missing alternate view"), L"Failed to create missing alternate-view alert test file.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_folderWindow.CloseAllViewers();
@@ -10290,8 +10157,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     FocusFolderViewPane(FolderWindow::Pane::Left);
     g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
     const size_t baselineViewerCount = g_folderWindow.DebugGetViewerInstanceCount();
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateView"),
-                  L"cmd/pane/alternateView should dispatch through the shortcut path.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateView"), L"cmd/pane/alternateView should dispatch through the shortcut path.");
     PumpPendingMessages();
 
     FolderView::AlertOverlayDebugSnapshot alert{};
@@ -10302,8 +10168,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Missing Alternate View action should report a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_FILEACTION_VIEWER_UNAVAILABLE_TITLE),
                   L"Missing Alternate View action should use the localized viewer-unavailable title.");
-    state.Require(alert.message.find(L"omega.noaltview") != std::wstring::npos,
-                  L"Missing Alternate View alert should name the focused file.");
+    state.Require(alert.message.find(L"omega.noaltview") != std::wstring::npos, L"Missing Alternate View alert should name the focused file.");
 
     return state.failure.empty();
 }
@@ -10336,10 +10201,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_settings.fileActions.editors = editorsBefore;
@@ -10388,10 +10253,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Disabled Edit With action should report a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_FILEACTION_EDITOR_UNAVAILABLE_TITLE),
                   L"Disabled Edit With action should use the localized editor-unavailable title.");
-    state.Require(alert.message.find(L"disabled-editor") != std::wstring::npos,
-                  L"Disabled Edit With alert should name the unavailable editor action id.");
-    state.Require(alert.message.find(L"lambda.disablededit") != std::wstring::npos,
-                  L"Disabled Edit With alert should name the focused file.");
+    state.Require(alert.message.find(L"disabled-editor") != std::wstring::npos, L"Disabled Edit With alert should name the unavailable editor action id.");
+    state.Require(alert.message.find(L"lambda.disablededit") != std::wstring::npos, L"Disabled Edit With alert should name the focused file.");
 
     return state.failure.empty();
 }
@@ -10417,17 +10280,16 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create View With launch-failure alert test folder.");
-    state.Require(SelfTest::WriteTextFile(root / L"rho.brokenview", "view with broken action"),
-                  L"Failed to create View With launch-failure alert test file.");
+    state.Require(SelfTest::WriteTextFile(root / L"rho.brokenview", "view with broken action"), L"Failed to create View With launch-failure alert test file.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_settings.fileActions.viewers = viewersBefore;
@@ -10504,17 +10366,16 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create Edit With launch-failure alert test folder.");
-    state.Require(SelfTest::WriteTextFile(root / L"tau.brokenedit", "edit with broken action"),
-                  L"Failed to create Edit With launch-failure alert test file.");
+    state.Require(SelfTest::WriteTextFile(root / L"tau.brokenedit", "edit with broken action"), L"Failed to create Edit With launch-failure alert test file.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_settings.fileActions.editors = editorsBefore;
@@ -10591,17 +10452,16 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create missing alternate-edit alert test folder.");
-    state.Require(SelfTest::WriteTextFile(root / L"sigma.noaltedit", "missing alternate edit"),
-                  L"Failed to create missing alternate-edit alert test file.");
+    state.Require(SelfTest::WriteTextFile(root / L"sigma.noaltedit", "missing alternate edit"), L"Failed to create missing alternate-edit alert test file.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_settings.fileActions.editors = editorsBefore;
@@ -10630,8 +10490,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
     g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateEdit"),
-                  L"cmd/pane/alternateEdit should dispatch through the shortcut path.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateEdit"), L"cmd/pane/alternateEdit should dispatch through the shortcut path.");
     PumpPendingMessages();
 
     FolderView::AlertOverlayDebugSnapshot alert{};
@@ -10640,8 +10499,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Missing Alternate Edit action should report a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_FILEACTION_EDITOR_UNAVAILABLE_TITLE),
                   L"Missing Alternate Edit action should use the localized editor-unavailable title.");
-    state.Require(alert.message.find(L"sigma.noaltedit") != std::wstring::npos,
-                  L"Missing Alternate Edit alert should name the focused file.");
+    state.Require(alert.message.find(L"sigma.noaltedit") != std::wstring::npos, L"Missing Alternate Edit alert should name the focused file.");
 
     return state.failure.empty();
 }
@@ -10674,14 +10532,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                         = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore       = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const Common::Settings::ExtensionsSettings extensionsBefore = g_settings.extensions;
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const Common::Settings::ExtensionsSettings extensionsBefore     = g_settings.extensions;
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.CloseAllViewers();
-        g_settings.extensions = extensionsBefore;
+        g_settings.extensions          = extensionsBefore;
         g_settings.fileActions.viewers = viewersBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftBefore.has_value())
@@ -10745,7 +10603,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const UINT commandId = GetMenuItemID(viewWithMenu, 0);
+    const UINT commandId        = GetMenuItemID(viewWithMenu, 0);
     const std::wstring menuText = GetMenuItemTextByPosition(viewWithMenu, 0);
     state.Require(commandId == IDM_PANE_VIEW_WITH_BASE, L"First View With action should use the dynamic View With command-id range.");
     state.Require(menuText.find(L"Menu Marker Viewer") != std::wstring::npos, L"View With menu should display the configured action name.");
@@ -10792,14 +10650,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const Common::Settings::ExtensionsSettings extensionsBefore = g_settings.extensions;
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const Common::Settings::ExtensionsSettings extensionsBefore     = g_settings.extensions;
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.CloseAllViewers();
-        g_settings.extensions = extensionsBefore;
+        g_settings.extensions          = extensionsBefore;
         g_settings.fileActions.viewers = viewersBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftBefore.has_value())
@@ -10821,8 +10679,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for view-with action test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for view-with action test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for view-with action test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"beta.viewwith"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for view-with action test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"beta.viewwith"),
@@ -10839,7 +10696,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < deadline &&
-           !(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u && g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text")))
+           ! (g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u && g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text")))
     {
         PumpPendingMessages();
         std::this_thread::sleep_for(20ms);
@@ -10847,8 +10704,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u,
                   L"cmd/pane/viewWith/<viewerId> should open one viewer instance from the named configured action.");
-    state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text"),
-                  L"cmd/pane/viewWith/<viewerId> should use the named ViewerText action.");
+    state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text"), L"cmd/pane/viewWith/<viewerId> should use the named ViewerText action.");
 
     return state.failure.empty();
 }
@@ -10881,14 +10737,14 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-    const Common::Settings::ExtensionsSettings extensionsBefore = g_settings.extensions;
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const Common::Settings::ExtensionsSettings extensionsBefore     = g_settings.extensions;
     const Common::Settings::ViewerFileActionsSettings viewersBefore = g_settings.fileActions.viewers;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_folderWindow.CloseAllViewers();
-        g_settings.extensions = extensionsBefore;
+        g_settings.extensions          = extensionsBefore;
         g_settings.fileActions.viewers = viewersBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftBefore.has_value())
@@ -10899,12 +10755,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
     Common::Settings::FileActionDefinition externalViewer{};
-    externalViewer.id             = L"External-Marker";
-    externalViewer.displayName    = L"External Marker Viewer";
-    externalViewer.enabled        = true;
-    externalViewer.kind           = Common::Settings::FileActionKind::ExternalProgram;
-    externalViewer.executablePath = ResolveCommandProcessorPath();
-    externalViewer.arguments      = L"/C if exist {FullPath} echo external-viewer>external-viewer-marker.txt";
+    externalViewer.id               = L"External-Marker";
+    externalViewer.displayName      = L"External Marker Viewer";
+    externalViewer.enabled          = true;
+    externalViewer.kind             = Common::Settings::FileActionKind::ExternalProgram;
+    externalViewer.executablePath   = ResolveCommandProcessorPath();
+    externalViewer.arguments        = L"/C if exist {FullPath} echo external-viewer>external-viewer-marker.txt";
     externalViewer.workingDirectory = L"{Path}";
     TestSetActionExtensions(externalViewer, {L".viewext"});
     g_settings.fileActions.viewers.actions.push_back(std::move(externalViewer));
@@ -10966,10 +10822,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_settings.fileActions.editors = editorsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -11046,10 +10902,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_settings.fileActions.editors = editorsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -11080,9 +10936,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Pane contents not ready for primary edit action test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"focused.editcmd"),
                   L"Failed to focus focused.editcmd for primary edit action test.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
-                                                          [](std::wstring_view name) noexcept { return name == L"selected.editcmd"; },
-                                                          true);
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"selected.editcmd"; }, true);
     state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"selected.editcmd"),
                   L"Expected selected.editcmd to stay selected for primary edit action test.");
     state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"focused.editcmd",
@@ -11137,10 +10992,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_settings.fileActions.editors = editorsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -11183,13 +11038,12 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     {
         return false;
     }
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateEdit"),
-                  L"cmd/pane/alternateEdit should dispatch through the shortcut path.");
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/alternateEdit"), L"cmd/pane/alternateEdit should dispatch through the shortcut path.");
 
     std::string markerText;
-    state.Require(WaitForTextFileFirstLine(markerPath, "alternate-edit", SelfTest::Scale(5000ms), markerText),
-                  std::format(L"Alternate Edit should receive expanded macros; marker first line was '{}'.",
-                              std::wstring(markerText.begin(), markerText.end())));
+    state.Require(
+        WaitForTextFileFirstLine(markerPath, "alternate-edit", SelfTest::Scale(5000ms), markerText),
+        std::format(L"Alternate Edit should receive expanded macros; marker first line was '{}'.", std::wstring(markerText.begin(), markerText.end())));
 
     return state.failure.empty();
 }
@@ -11222,10 +11076,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_settings.fileActions.editors = editorsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -11263,8 +11117,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to set local file-system plugin for Edit With menu test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Edit With menu test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"zeta.menuedit"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for Edit With menu test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"zeta.menuedit"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for Edit With menu test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"zeta.menuedit"),
                   L"Failed to focus zeta.menuedit for Edit With menu test.");
     if (! state.failure.empty())
@@ -11290,7 +11143,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const UINT commandId = GetMenuItemID(editWithMenu, 0);
+    const UINT commandId        = GetMenuItemID(editWithMenu, 0);
     const std::wstring menuText = GetMenuItemTextByPosition(editWithMenu, 0);
     state.Require(commandId == IDM_PANE_EDIT_WITH_BASE, L"First Edit With action should use the dynamic Edit With command-id range.");
     state.Require(menuText.find(L"Menu Marker Editor") != std::wstring::npos, L"Edit With menu should display the configured action name.");
@@ -11339,10 +11192,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                     = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore   = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::UserMenuSettings userMenuBefore = g_settings.userMenu;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                 = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_settings.userMenu = userMenuBefore;
@@ -11391,8 +11244,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for User Menu dispatch test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for User Menu dispatch test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for User Menu dispatch test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.usermenu"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for User Menu dispatch test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.usermenu"),
@@ -11415,10 +11267,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         directItemIds.append(item.id);
         directItemIds.push_back(item.enabled ? L'+' : L'-');
     }
-    state.Require(directItems.size() == 2u,
-                  std::format(L"User Menu collection should expose two applicable actions before popup rebuild; got {} ({})",
-                              directItems.size(),
-                              directItemIds));
+    state.Require(
+        directItems.size() == 2u,
+        std::format(L"User Menu collection should expose two applicable actions before popup rebuild; got {} ({})", directItems.size(), directItemIds));
     if (! state.failure.empty())
     {
         return false;
@@ -11440,9 +11291,9 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const UINT launchCommandId = GetMenuItemID(userMenu, 0);
-    const UINT missingCommandId = GetMenuItemID(userMenu, 1);
-    const std::wstring launchText = GetMenuItemTextByPosition(userMenu, 0);
+    const UINT launchCommandId     = GetMenuItemID(userMenu, 0);
+    const UINT missingCommandId    = GetMenuItemID(userMenu, 1);
+    const std::wstring launchText  = GetMenuItemTextByPosition(userMenu, 0);
     const std::wstring missingText = GetMenuItemTextByPosition(userMenu, 1);
     state.Require(launchCommandId == IDM_PANE_USER_MENU_BASE, L"First User Menu action should use the dynamic User Menu command-id range.");
     state.Require(missingCommandId == IDM_PANE_USER_MENU_BASE + 1u, L"Second User Menu action should use the next dynamic User Menu command id.");
@@ -11494,10 +11345,10 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                     = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore   = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::UserMenuSettings userMenuBefore = g_settings.userMenu;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                 = wil::scope_exit([&]
     {
         g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
         g_settings.userMenu = userMenuBefore;
@@ -11523,8 +11374,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for User Menu unavailable test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for User Menu unavailable test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for User Menu unavailable test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"disabled.usermenu"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for User Menu unavailable test.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"disabled.usermenu"),
@@ -11546,8 +11396,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(alert.severity == FolderView::OverlaySeverity::Warning, L"Disabled User Menu action should report a warning.");
     state.Require(alert.title == LoadStringResource(nullptr, IDS_USER_MENU_UNAVAILABLE_TITLE),
                   L"Disabled User Menu action should use the localized unavailable title.");
-    state.Require(alert.message.find(L"Disabled-User-Menu") != std::wstring::npos,
-                  L"Disabled User Menu alert should name the unavailable action id.");
+    state.Require(alert.message.find(L"Disabled-User-Menu") != std::wstring::npos, L"Disabled User Menu alert should name the unavailable action id.");
     state.Require(alert.message.find(L"disabled.usermenu") != std::wstring::npos, L"Disabled User Menu alert should name the focused file.");
 
     return state.failure.empty();
@@ -11585,13 +11434,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         return false;
     }
 
-    const Common::Settings::Settings settingsBefore = g_settings;
-    const FolderWindow::Pane activePaneBefore       = g_folderWindow.GetActivePane();
-    const std::wstring leftPluginBefore             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::wstring rightPluginBefore            = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const Common::Settings::Settings settingsBefore        = g_settings;
+    const FolderWindow::Pane activePaneBefore              = g_folderWindow.GetActivePane();
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
     const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                = wil::scope_exit([&]
     {
         DebugSetRereadAssociationsSettingsForTest(nullptr);
         DebugResetRereadAssociationsSnapshot();
@@ -11615,10 +11464,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                   L"Failed to set right pane to the local file system for Reread Associations.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftRoot);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Reread Associations.");
-    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set right pane path for Reread Associations.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, leftRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Reread Associations.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, rightRoot, SelfTest::Scale(3000ms)), L"Failed to set right pane path for Reread Associations.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.reread"}, SelfTest::Scale(3000ms)),
                   L"Left pane contents not ready for Reread Associations.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"beta.reread"}, SelfTest::Scale(3000ms)),
@@ -11654,8 +11501,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     editorAction.workingDirectory = L"{Path}";
     TestSetActionExtensions(editorAction, {L".reread"});
     diskSettings.fileActions.editors.actions.push_back(std::move(editorAction));
-    diskSettings.fileActions.editors.associations.push_back(
-        TestEditorAssociation(L".reread", L"reread-editor", L"reread-editor", L"reread-editor"));
+    diskSettings.fileActions.editors.associations.push_back(TestEditorAssociation(L".reread", L"reread-editor", L"reread-editor", L"reread-editor"));
 
     diskSettings.userMenu = Common::Settings::UserMenuSettings{};
     Common::Settings::FileActionDefinition userMenuAction{};
@@ -11726,10 +11572,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     const auto viewerMappingIt = std::find_if(g_settings.fileActions.viewers.associations.begin(),
                                               g_settings.fileActions.viewers.associations.end(),
-                                              [](const Common::Settings::ViewerAssociationRule& rule) noexcept {
-                                                  return rule.match.kind == Common::Settings::FileActionMatchKind::Extension &&
-                                                         rule.match.value == L".reread" && rule.viewActionId == L"reread-viewer";
-                                              });
+                                              [](const Common::Settings::ViewerAssociationRule& rule) noexcept
+    { return rule.match.kind == Common::Settings::FileActionMatchKind::Extension && rule.match.value == L".reread" && rule.viewActionId == L"reread-viewer"; });
     state.Require(viewerMappingIt != g_settings.fileActions.viewers.associations.end(),
                   L"Reread Associations should apply viewer extension associations from disk settings.");
     const auto fsMappingIt = g_settings.extensions.openWithFileSystemByExtension.find(L".archive");
@@ -11742,9 +11586,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(g_settings.userMenu.actions.size() == 1u && g_settings.userMenu.actions.front().id == L"reread-user-menu",
                   L"Reread Associations should apply User Menu actions from disk settings.");
 
-    const auto settingsContainPanePath = [](const std::optional<Common::Settings::FoldersSettings>& folders,
-                                            std::wstring_view slot,
-                                            const std::filesystem::path& expected) noexcept
+    const auto settingsContainPanePath =
+        [](const std::optional<Common::Settings::FoldersSettings>& folders, std::wstring_view slot, const std::filesystem::path& expected) noexcept
     {
         if (! folders.has_value())
         {
@@ -11763,22 +11606,21 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(settingsContainPanePath(g_settings.folders, L"left", leftRoot), L"Reread Associations should keep the live left pane path.");
     state.Require(settingsContainPanePath(g_settings.folders, L"right", rightRoot), L"Reread Associations should keep the live right pane path.");
 
-    const std::wstring perfArtifactText = std::format(
-        L"{{\n"
-        L"  \"scenario\": \"cmd/app/rereadAssociations\",\n"
-        L"  \"rereadAssociations.total_us\": {},\n"
-        L"  \"associationIconCacheSizeBefore\": {},\n"
-        L"  \"associationIconCacheSizeAfterClear\": {},\n"
-        L"  \"viewerActionCount\": {},\n"
-        L"  \"editorActionCount\": {},\n"
-        L"  \"userMenuActionCount\": {}\n"
-        L"}}\n",
-        totalUs.count(),
-        snapshot.associationIconCacheSizeBefore,
-        snapshot.associationIconCacheSizeAfterClear,
-        snapshot.viewerActionCount,
-        snapshot.editorActionCount,
-        snapshot.userMenuActionCount);
+    const std::wstring perfArtifactText      = std::format(L"{{\n"
+                                                           L"  \"scenario\": \"cmd/app/rereadAssociations\",\n"
+                                                           L"  \"rereadAssociations.total_us\": {},\n"
+                                                           L"  \"associationIconCacheSizeBefore\": {},\n"
+                                                           L"  \"associationIconCacheSizeAfterClear\": {},\n"
+                                                           L"  \"viewerActionCount\": {},\n"
+                                                           L"  \"editorActionCount\": {},\n"
+                                                           L"  \"userMenuActionCount\": {}\n"
+                                                           L"}}\n",
+                                                           totalUs.count(),
+                                                           snapshot.associationIconCacheSizeBefore,
+                                                           snapshot.associationIconCacheSizeAfterClear,
+                                                           snapshot.viewerActionCount,
+                                                           snapshot.editorActionCount,
+                                                           snapshot.userMenuActionCount);
     const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"reread_associations_metrics.json");
     const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, perfArtifactText);
     state.Require(artifactWriteOk && SelfTest::PathExists(artifactPath), L"Failed to write Reread Associations perf artifact.");
@@ -11817,9 +11659,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"resource_format_placeholders_are_positional", [](CaseState& state) noexcept {
         return TestResourceFormatPlaceholdersArePositional(state);
     });
-    SelfTest::RunCase(options, suite, L"popup_dialog_titles_are_localized", [](CaseState& state) noexcept {
-        return TestPopupAndDialogTitlesAreLocalized(state);
-    });
+    SelfTest::RunCase(
+        options, suite, L"popup_dialog_titles_are_localized", [](CaseState& state) noexcept { return TestPopupAndDialogTitlesAreLocalized(state); });
     SelfTest::RunCase(options, suite, L"embedded_viewer_context_menus_expose_menu_actions", [](CaseState& state) noexcept {
         return TestEmbeddedViewerContextMenusExposeMenuActions(state);
     });
@@ -11844,9 +11685,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"file_action_defaults_v16_route_viewer_extensions", [](CaseState& state) noexcept {
         return TestFileActionDefaultsV16RouteViewerExtensions(state);
     });
-    SelfTest::RunCase(options, suite, L"file_action_external_launch_plan_macros", [](CaseState& state) noexcept {
-        return TestFileActionExternalLaunchPlanMacros(state);
-    });
+    SelfTest::RunCase(
+        options, suite, L"file_action_external_launch_plan_macros", [](CaseState& state) noexcept { return TestFileActionExternalLaunchPlanMacros(state); });
     SelfTest::RunCase(options, suite, L"file_action_external_launch_starts_process", [](CaseState& state) noexcept {
         return TestFileActionExternalLaunchStartsProcess(state);
     });
@@ -11896,16 +11736,15 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"shortcut_defaults_restore_missing_defaults_and_preserve_unassigned", [](CaseState& state) noexcept {
         return TestShortcutDefaultsRestoreMissingDefaultsAndPreserveUnassigned(state);
     });
-    SelfTest::RunCase(options, suite, L"implemented_menu_labels_not_todo", [](CaseState& state) noexcept { return TestImplementedCommandMenuLabelsAreNotMarkedTodo(state); });
+    SelfTest::RunCase(
+        options, suite, L"implemented_menu_labels_not_todo", [](CaseState& state) noexcept { return TestImplementedCommandMenuLabelsAreNotMarkedTodo(state); });
     SelfTest::RunCase(options, suite, L"pane_view_options_live_in_left_right_menus", [](CaseState& state) noexcept {
         return TestPaneViewOptionsLiveInLeftRightMenus(state);
     });
-    SelfTest::RunCase(options, suite, L"theme_menu_navigation_commands_are_last", [](CaseState& state) noexcept {
-        return TestThemeMenuNavigationCommandsAreLast(state);
-    });
-    SelfTest::RunCase(options, suite, L"help_menu_links_external_documentation", [](CaseState& state) noexcept {
-        return TestHelpMenuLinksExternalDocumentation(state);
-    });
+    SelfTest::RunCase(
+        options, suite, L"theme_menu_navigation_commands_are_last", [](CaseState& state) noexcept { return TestThemeMenuNavigationCommandsAreLast(state); });
+    SelfTest::RunCase(
+        options, suite, L"help_menu_links_external_documentation", [](CaseState& state) noexcept { return TestHelpMenuLinksExternalDocumentation(state); });
     SelfTest::RunCase(options, suite, L"cmd_app_rereadAssociations_reloads_actions_and_refreshes_panes", [=](CaseState& state) noexcept {
         return TestRereadAssociationsReloadsActionsAndRefreshesPanes(mainWindow, state);
     });
@@ -11916,12 +11755,10 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"settings_store_pane_view_options_roundtrip", [](CaseState& state) noexcept {
         return TestSettingsStorePaneViewOptionsRoundTrip(state);
     });
-    SelfTest::RunCase(options, suite, L"folderView_thumbnail_settings_roundtrip", [](CaseState& state) noexcept {
-        return TestFolderViewThumbnailSettingsRoundTrip(state);
-    });
-    SelfTest::RunCase(options, suite, L"settings_store_make_file_list_roundtrip", [](CaseState& state) noexcept {
-        return TestSettingsStoreMakeFileListRoundTrip(state);
-    });
+    SelfTest::RunCase(
+        options, suite, L"folderView_thumbnail_settings_roundtrip", [](CaseState& state) noexcept { return TestFolderViewThumbnailSettingsRoundTrip(state); });
+    SelfTest::RunCase(
+        options, suite, L"settings_store_make_file_list_roundtrip", [](CaseState& state) noexcept { return TestSettingsStoreMakeFileListRoundTrip(state); });
     SelfTest::RunCase(options, suite, L"settings_store_make_file_list_suppresses_default_fields", [](CaseState& state) noexcept {
         return TestSettingsStoreMakeFileListSuppressesDefaultFields(state);
     });
@@ -11940,9 +11777,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"pane_view_options_toggle_file_extensions_navigation_filter_bar", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsToggleFileExtensionsNavigationAndFilterBar(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"pane_filter_bar_inline_workflow", [=](CaseState& state) noexcept {
-        return TestPaneFilterBarInlineWorkflow(mainWindow, state);
-    });
+    SelfTest::RunCase(
+        options, suite, L"pane_filter_bar_inline_workflow", [=](CaseState& state) noexcept { return TestPaneFilterBarInlineWorkflow(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"pane_view_options_toggle_thumbnails", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsToggleThumbnailsSchedulesBoundedAsyncWork(mainWindow, state);
     });
@@ -11955,7 +11791,8 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(options, suite, L"pane_view_options_preview_uses_builtin_embedded_viewer_with_empty_associations", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsPreviewUsesBuiltInEmbeddedViewerWhenAssociationsAreEmpty(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"pane_view_options_preview_falls_back_to_item_properties_when_no_embedded_preview_matches", [=](CaseState& state) noexcept {
+    SelfTest::RunCase(
+        options, suite, L"pane_view_options_preview_falls_back_to_item_properties_when_no_embedded_preview_matches", [=](CaseState& state) noexcept {
         return TestPaneViewOptionsPreviewFallsBackToItemPropertiesWhenNoEmbeddedPreviewMatches(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"pane_view_options_preview_properties_card_scrolls_and_uses_rainbow_theme", [=](CaseState& state) noexcept {

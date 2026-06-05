@@ -523,10 +523,7 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
             }
 
             const FileSystemOperation operationType = effect == DROPEFFECT_COPY ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
-            if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), operationType, paths, _currentFolder.value()))
-            {
-                return DRAGDROP_S_CANCEL;
-            }
+            const FileSystemFlags flags            = FILESYSTEM_FLAG_RECURSIVE;
 
             if (_fileOperationRequestCallback)
             {
@@ -537,10 +534,15 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
                 request.sourcePluginId         = std::move(sourcePluginId);
                 request.sourceInstanceContext  = std::move(sourceInstanceContext);
                 request.destinationFolder      = _currentFolder.value();
-                request.flags                  = FILESYSTEM_FLAG_RECURSIVE;
+                request.flags                  = flags;
 
                 operationHr = _fileOperationRequestCallback(std::move(request));
                 break;
+            }
+
+            if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), operationType, paths, _currentFolder.value()))
+            {
+                return DRAGDROP_S_CANCEL;
             }
 
             FileSystemArenaOwner arenaOwner;
@@ -555,13 +557,11 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
 
             if (effect == DROPEFFECT_COPY)
             {
-                const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-                operationHr                 = _fileSystem->CopyItems(sourcePaths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
+                operationHr = _fileSystem->CopyItems(sourcePaths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
             }
             else
             {
-                const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
-                operationHr                 = _fileSystem->MoveItems(sourcePaths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
+                operationHr = _fileSystem->MoveItems(sourcePaths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
             }
             break;
         }

@@ -26,9 +26,9 @@ static_assert(! RedSalamanderMonitor::kInvalidRectVisualizationEnabled,
 // to avoid cross-DLL symbol conflicts. The GUID is the same as Common.dll
 // so external trace sessions will receive events from both.
 #define REDSAL_DEFINE_TRACE_PROVIDER
-#include "ExceptionHelpers.h"
 #include "ColorTextScrollBars.h"
 #include "Document.h"
+#include "ExceptionHelpers.h"
 #include "Helpers.h"
 #include "MonitorDiagnostics.h"
 
@@ -77,32 +77,33 @@ namespace
     using RedSalamanderMonitor::ComputeColorTextViewScrollBars;
 
     const auto coupled = ComputeColorTextViewScrollBars(ColorTextScrollBarInputs{
-        .clientWidthDip             = 100.0f,
-        .clientHeightDip            = 100.0f,
-        .contentWidthDip            = 90.1f,
-        .contentHeightDip           = 120.0f,
-        .textChromeWidthDip         = 10.0f,
-        .verticalScrollbarWidthDip  = 10.0f,
+        .clientWidthDip               = 100.0f,
+        .clientHeightDip              = 100.0f,
+        .contentWidthDip              = 90.1f,
+        .contentHeightDip             = 120.0f,
+        .textChromeWidthDip           = 10.0f,
+        .verticalScrollbarWidthDip    = 10.0f,
         .horizontalScrollbarHeightDip = 10.0f,
-        .currentVerticalVisible     = false,
-        .currentHorizontalVisible   = false,
+        .currentVerticalVisible       = false,
+        .currentHorizontalVisible     = false,
     });
 
     const bool coupledStable = coupled.verticalVisible && coupled.horizontalVisible && coupled.verticalPageDip == 90.0f && coupled.horizontalPageDip == 80.0f;
 
     const auto cleared = ComputeColorTextViewScrollBars(ColorTextScrollBarInputs{
-        .clientWidthDip             = 90.0f,
-        .clientHeightDip            = 90.0f,
-        .contentWidthDip            = 50.0f,
-        .contentHeightDip           = 50.0f,
-        .textChromeWidthDip         = 10.0f,
-        .verticalScrollbarWidthDip  = 10.0f,
+        .clientWidthDip               = 90.0f,
+        .clientHeightDip              = 90.0f,
+        .contentWidthDip              = 50.0f,
+        .contentHeightDip             = 50.0f,
+        .textChromeWidthDip           = 10.0f,
+        .verticalScrollbarWidthDip    = 10.0f,
         .horizontalScrollbarHeightDip = 10.0f,
-        .currentVerticalVisible     = true,
-        .currentHorizontalVisible   = true,
+        .currentVerticalVisible       = true,
+        .currentHorizontalVisible     = true,
     });
 
-    const bool clearsStaleBars = ! cleared.verticalVisible && ! cleared.horizontalVisible && cleared.verticalPageDip == 100.0f && cleared.horizontalPageDip == 90.0f;
+    const bool clearsStaleBars =
+        ! cleared.verticalVisible && ! cleared.horizontalVisible && cleared.verticalPageDip == 100.0f && cleared.horizontalPageDip == 90.0f;
 
     return coupledStable && clearsStaleBars;
 }
@@ -130,11 +131,11 @@ namespace
 
     document.SetFilterMask(Debug::FilterBitForType(Debug::InfoParam::Type::Error) | Debug::FilterBitForType(Debug::InfoParam::Type::Warning));
 
-    const auto firstVisibleSource  = document.SourceLineForDisplayRow(0u);
+    const auto firstVisibleSource   = document.SourceLineForDisplayRow(0u);
     const auto wrappedVisibleSource = document.SourceLineForDisplayRow(2u);
-    const auto forwardAnchor       = document.ClosestVisibleSourceLine(0u);
-    const auto exactAnchor         = document.ClosestVisibleSourceLine(2u);
-    const auto backwardAnchor      = document.ClosestVisibleSourceLine(3u);
+    const auto forwardAnchor        = document.ClosestVisibleSourceLine(0u);
+    const auto exactAnchor          = document.ClosestVisibleSourceLine(2u);
+    const auto backwardAnchor       = document.ClosestVisibleSourceLine(3u);
 
     constexpr size_t kNoSourceLine = std::numeric_limits<size_t>::max();
     return batchAppended && document.VisibleLineCount() == 2u && document.TotalDisplayRows() == 3u && firstVisibleSource.value_or(kNoSourceLine) == 1u &&

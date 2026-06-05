@@ -1,7 +1,7 @@
 #include "RedConfigureApp.h"
 
-#include "resource.h"
 #include "SettingsStore.h"
+#include "resource.h"
 
 #include <algorithm>
 #include <array>
@@ -115,15 +115,12 @@ std::vector<std::wstring> FilterThemeColorKeys(std::span<const std::wstring> key
     return filtered;
 }
 
-std::wstring SelectThemePreviewHitKey(std::span<const ThemePreviewHitCandidate> candidates,
-                                      float x,
-                                      float y,
-                                      std::wstring_view previousKey)
+std::wstring SelectThemePreviewHitKey(std::span<const ThemePreviewHitCandidate> candidates, float x, float y, std::wstring_view previousKey)
 {
     struct Match
     {
         std::wstring_view key;
-        float area = 0.0f;
+        float area   = 0.0f;
         size_t order = 0u;
     };
 
@@ -150,13 +147,13 @@ std::wstring SelectThemePreviewHitKey(std::span<const ThemePreviewHitCandidate> 
     std::stable_sort(matches.begin(),
                      matches.end(),
                      [](const Match& lhs, const Match& rhs) noexcept
-                     {
-                         if (lhs.area != rhs.area)
-                         {
-                             return lhs.area < rhs.area;
-                         }
-                         return lhs.order < rhs.order;
-                     });
+    {
+        if (lhs.area != rhs.area)
+        {
+            return lhs.area < rhs.area;
+        }
+        return lhs.order < rhs.order;
+    });
 
     if (! previousKey.empty())
     {
@@ -172,9 +169,7 @@ std::wstring SelectThemePreviewHitKey(std::span<const ThemePreviewHitCandidate> 
     return std::wstring(matches.front().key);
 }
 
-std::vector<std::wstring> BuildThemeColorSuggestions(std::wstring_view selectedKey,
-                                                     std::wstring_view previousKey,
-                                                     std::optional<uint32_t> currentColor)
+std::vector<std::wstring> BuildThemeColorSuggestions(std::wstring_view selectedKey, std::wstring_view previousKey, std::optional<uint32_t> currentColor)
 {
     std::vector<std::wstring> suggestions;
     std::set<std::wstring> added;

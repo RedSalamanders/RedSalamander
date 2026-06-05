@@ -160,7 +160,7 @@ void ApplyScrollDelta(HWND pageHostWindow, int dy, bool syncScrollPanel) noexcep
 
 #ifdef ENABLE_TESTS
     uint64_t dxMovedControlCount = 0u;
-    const auto recordApply = [&]() noexcept
+    const auto recordApply       = [&]() noexcept
     {
         if (! state)
         {
@@ -303,7 +303,7 @@ void RequestScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int new
         return;
     }
 
-    state.pageHostPendingScrollY      = newScrollY;
+    state.pageHostPendingScrollY     = newScrollY;
     state.pageHostScrollApplyPending = true;
     if (PostMessageW(pageHostWindow, WndMsg::kPreferencesApplyPageHostScroll, 0, 0) == FALSE)
     {
@@ -319,7 +319,7 @@ void FlushPendingScroll(HWND pageHostWindow, PreferencesDialogState& state) noex
         return;
     }
 
-    const int pendingScrollY          = state.pageHostPendingScrollY;
+    const int pendingScrollY         = state.pageHostPendingScrollY;
     state.pageHostScrollApplyPending = false;
     ApplyScrollToPosition(pageHostWindow, state, pendingScrollY);
 }

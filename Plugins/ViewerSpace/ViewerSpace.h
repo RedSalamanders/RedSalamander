@@ -43,12 +43,13 @@
 #include "PlugInterfaces/Viewer.h"
 
 [[nodiscard]] const char* GetViewerSpaceStaticConfigurationSchema() noexcept;
+void ShutdownViewerSpaceModuleState() noexcept;
 
 class ViewerSpace final : public EmbeddedViewerBase<ViewerSpace>, public IInformations
 {
 public:
     ViewerSpace();
-    ~ViewerSpace() = default;
+    ~ViewerSpace();
 
     void SetHost(IHost* host) noexcept;
 
@@ -166,6 +167,7 @@ private:
     };
 
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
+    static void UnregisterWndClassIfIdle() noexcept;
     static constexpr wchar_t kClassName[] = L"RedSalamander.ViewerSpace";
 
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -368,6 +370,11 @@ private:
     D2D1_POINT_2F _tooltipAnchorDip      = D2D1::Point2F(0.0f, 0.0f);
 #ifdef ENABLE_TESTS
     uint64_t _tooltipPaintCount = 0u;
+    bool _debugHasLastMouseMoveClientPoint = false;
+    POINT _debugLastMouseMoveClientPoint{};
+    bool _debugHasLastContextMenuScreenPoint = false;
+    POINT _debugLastContextMenuScreenPoint{};
+    uint32_t _debugLastContextMenuHitNodeId = 0;
 #endif
 
     bool _trackingMouse       = false;

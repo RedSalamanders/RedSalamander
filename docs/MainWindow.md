@@ -51,10 +51,20 @@ Display and sort (defaults):
 
 - `Alt+2`: Brief mode
 - `Alt+3`: Detailed mode
+- `Alt+4`: Extra Detailed mode
+- `Alt+5`: Thumbnails mode
 - `Ctrl+F2`: Sort = None
 - `Ctrl+F3..F6`: Sort by Name/Ext/Time/Size
 
 ![Folder view](res/folder-view.png)
+
+Brief keeps the pane dense for keyboard work, Detailed adds common metadata,
+Extra Detailed gives each item a second metadata line, and Thumbnails uses
+larger visuals for image-heavy folders.
+
+![Brief and Detailed folder views](res/folder-view-brief-detailed.png)
+
+![Extra Detailed and Thumbnails folder views](res/folder-view-extra-thumbnails.png)
 
 ### File properties
 
@@ -87,6 +97,8 @@ The properties dialog can show local or plugin-provided fields: general identity
 - **Left/Right → Navigation Bar**: show or hide the named pane's navigation bar. Address-bar commands show it automatically before focusing the address edit.
 
 ![Preview pane showing an embedded Image/RAW viewer](res/preview-pane-image.png)
+
+![Preview pane showing an embedded text preview](res/preview-pane-text.png)
 
 ## Status bar (per pane)
 

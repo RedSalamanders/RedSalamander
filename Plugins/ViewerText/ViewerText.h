@@ -757,5 +757,13 @@ private:
     size_t _debugHexUniqueColorBucketCount   = 0u;
     bool _debugHexHighContrastFallback       = false;
     uint64_t _debugDiffParseCount            = 0u;
+#if defined(ENABLE_TESTS)
+    bool _debugHasLastContextMenuScreenPoint       = false;
+    POINT _debugLastContextMenuScreenPoint{};
+    bool _debugHasLastTextViewMouseMoveClientPoint = false;
+    POINT _debugLastTextViewMouseMoveClientPoint{};
+    bool _debugLastTextViewMouseMoveHit           = false;
+    size_t _debugLastTextViewMouseMoveLogicalLine = static_cast<size_t>(-1);
+#endif
 #endif
 };

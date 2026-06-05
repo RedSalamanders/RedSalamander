@@ -699,9 +699,17 @@ public:
     void PumpMessages() const
     {
         MSG msg{};
+        size_t processedCount = 0u;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) != FALSE)
         {
             static_cast<void>(DispatchQueuedMessageForTest(msg));
+            ++processedCount;
+            // Keep a transient animation/timer burst from turning a test helper
+            // pump into an unbounded loop.
+            if (processedCount >= 4096u)
+            {
+                break;
+            }
         }
     }
 

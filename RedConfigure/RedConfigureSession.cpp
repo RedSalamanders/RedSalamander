@@ -1,9 +1,9 @@
 #include "RedConfigureSession.h"
 
+#include "Helpers.h"
 #include "Localization/RcParser.h"
 #include "Localization/RcWriter.h"
 #include "ThemeDefinitionIo.h"
-#include "Helpers.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -60,8 +60,7 @@ namespace fs = std::filesystem;
     return false;
 }
 
-[[nodiscard]] std::wstring_view TranslationColumnText(const RedConfigure::TranslationEntry& entry,
-                                                      RedConfigure::LocalizationViewColumn column) noexcept
+[[nodiscard]] std::wstring_view TranslationColumnText(const RedConfigure::TranslationEntry& entry, RedConfigure::LocalizationViewColumn column) noexcept
 {
     switch (column)
     {
@@ -76,10 +75,10 @@ namespace fs = std::filesystem;
 [[nodiscard]] int CompareTextIgnoreCase(std::wstring_view lhs, std::wstring_view rhs) noexcept
 {
     const int result = ::CompareStringOrdinal(lhs.data(),
-                                             static_cast<int>((std::min)(lhs.size(), static_cast<size_t>((std::numeric_limits<int>::max)()))),
-                                             rhs.data(),
-                                             static_cast<int>((std::min)(rhs.size(), static_cast<size_t>((std::numeric_limits<int>::max)()))),
-                                             TRUE);
+                                              static_cast<int>((std::min)(lhs.size(), static_cast<size_t>((std::numeric_limits<int>::max)()))),
+                                              rhs.data(),
+                                              static_cast<int>((std::min)(rhs.size(), static_cast<size_t>((std::numeric_limits<int>::max)()))),
+                                              TRUE);
     if (result == CSTR_LESS_THAN)
     {
         return -1;
@@ -91,8 +90,7 @@ namespace fs = std::filesystem;
     return 0;
 }
 
-[[nodiscard]] bool TranslationMatchesViewFilters(const RedConfigure::TranslationEntry& entry,
-                                                 const RedConfigure::LocalizationViewOptions& options) noexcept
+[[nodiscard]] bool TranslationMatchesViewFilters(const RedConfigure::TranslationEntry& entry, const RedConfigure::LocalizationViewOptions& options) noexcept
 {
     if (! options.idFilterText.empty() && ! ContainsIgnoreCase(entry.id, options.idFilterText))
     {
@@ -138,17 +136,15 @@ namespace fs = std::filesystem;
         return false;
     }
 
-    const DWORD flags = (codePage == CP_UTF8) ? MB_ERR_INVALID_CHARS : 0u;
-    const int required =
-        ::MultiByteToWideChar(codePage, flags, reinterpret_cast<const char*>(bytes), static_cast<int>(byteCount), nullptr, 0);
+    const DWORD flags  = (codePage == CP_UTF8) ? MB_ERR_INVALID_CHARS : 0u;
+    const int required = ::MultiByteToWideChar(codePage, flags, reinterpret_cast<const char*>(bytes), static_cast<int>(byteCount), nullptr, 0);
     if (required <= 0)
     {
         return false;
     }
 
     std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = ::MultiByteToWideChar(
-        codePage, flags, reinterpret_cast<const char*>(bytes), static_cast<int>(byteCount), result.data(), required);
+    const int written = ::MultiByteToWideChar(codePage, flags, reinterpret_cast<const char*>(bytes), static_cast<int>(byteCount), result.data(), required);
     if (written != required)
     {
         return false;
@@ -276,12 +272,11 @@ enum class BomlessUtf16Guess : uint8_t
             }
             break;
         case BomlessUtf16Guess::None:
-        default:
-            break;
+        default: break;
     }
 
     const uint8_t* textBytes = bytes.data();
-    size_t textSize         = bytes.size();
+    size_t textSize          = bytes.size();
     if (bytes.size() >= 3u && bytes[0] == 0xEFu && bytes[1] == 0xBBu && bytes[2] == 0xBFu)
     {
         textBytes += 3u;
@@ -423,7 +418,9 @@ std::vector<size_t> BuildTranslationView(std::span<const TranslationEntry> trans
         return result;
     }
 
-    std::stable_sort(result.begin(), result.end(), [&](size_t lhsIndex, size_t rhsIndex) noexcept
+    std::stable_sort(result.begin(),
+                     result.end(),
+                     [&](size_t lhsIndex, size_t rhsIndex) noexcept
     {
         const TranslationEntry& lhs = translations[lhsIndex];
         const TranslationEntry& rhs = translations[rhsIndex];
@@ -456,14 +453,14 @@ std::vector<size_t> BuildTranslationView(std::span<const TranslationEntry> trans
 HRESULT RedConfigureSession::LoadWorkspace(const std::filesystem::path& root, std::wstring cultureName)
 {
     _workspace                = {};
-    _themeCatalog            = {};
-    _themePreview            = {};
-    _translations            = {};
-    _inventoryEntries        = {};
-    _activeResourceOwnerName = {};
+    _themeCatalog             = {};
+    _themePreview             = {};
+    _translations             = {};
+    _inventoryEntries         = {};
+    _activeResourceOwnerName  = {};
     _activeResourceOwnerIndex = 0u;
     _activeThemeIndex         = 0u;
-    _cultureName             = cultureName.empty() ? std::wstring(L"en-US") : std::move(cultureName);
+    _cultureName              = cultureName.empty() ? std::wstring(L"en-US") : std::move(cultureName);
 
     if (const HRESULT hr = Workspace::DiscoverWorkspace(root, _workspace); FAILED(hr))
     {
@@ -568,7 +565,7 @@ bool RedConfigureSession::UpdateTranslation(size_t rowIndex, std::wstring_view t
     }
 
     TranslationEntry& entry = _translations[rowIndex];
-    const auto validation  = Localization::ValidatePlaceholders(entry.sourceText, targetText);
+    const auto validation   = Localization::ValidatePlaceholders(entry.sourceText, targetText);
     if (validation.status != Localization::PlaceholderStatus::Ok)
     {
         return false;
@@ -592,7 +589,7 @@ std::filesystem::path RedConfigureSession::GetDefaultLocalizationExportPath() co
 
 std::filesystem::path RedConfigureSession::GetDefaultThemeExportPath() const
 {
-    std::wstring themePart = _themePreview.GetTheme().id;
+    std::wstring themePart                 = _themePreview.GetTheme().id;
     constexpr std::wstring_view userPrefix = L"user/";
     if (themePart.rfind(userPrefix, 0u) == 0u)
     {

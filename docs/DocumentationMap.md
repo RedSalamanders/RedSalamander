@@ -9,7 +9,7 @@ developer docs, or both.
 | Area | Primary page | Status | Notes |
 | --- | --- | --- | --- |
 | Getting started and first run | [GettingStarted.md](GettingStarted.md) | Covered | Keep screenshots and default shortcuts aligned with resource changes. |
-| Main window, panes, navigation, preview | [MainWindow.md](MainWindow.md), [NavigationAndPaths.md](NavigationAndPaths.md) | Covered | Includes menu-by-menu command map. Update when pane layout, path syntax, history, filters, preview behavior, or main menu labels change. |
+| Main window, panes, navigation, preview | [MainWindow.md](MainWindow.md), [NavigationAndPaths.md](NavigationAndPaths.md) | Covered | Includes menu-by-menu command map plus current screenshots for Brief, Detailed, Extra Detailed, Thumbnails, and Preview Pane. Update when pane layout, path syntax, history, filters, preview behavior, or main menu labels change. |
 | File operations | [FileOperations.md](FileOperations.md) | Covered | Update for copy/move/delete queue behavior, conflict policy, ShellNew, ZIP pack/unpack, and operation diagnostics. |
 | Find files | [FindFiles.md](FindFiles.md) | Covered | Add backend-specific limits when new search providers land. |
 | Compare directories | [CompareDirectories.md](CompareDirectories.md) | Covered | Keep option names, sync behavior, and performance notes aligned with selftests/specs. |
@@ -34,8 +34,15 @@ developer docs, or both.
   ETW traces once the command-line workflow is stable.
 - Developer docs now cover DxUi, but plugin authoring and viewer authoring still
   deserve dedicated guides if those interfaces become public extension points.
-- Screenshot upkeep is manual. [res/README.md](res/README.md) now tracks both
-  current assets and the named backlog of missing captures.
+- Screenshot upkeep is manual. [res/README.md](res/README.md) tracks current
+  assets, the latest sanitized capture pass, and the named backlog of missing
+  captures.
+- User-facing command coverage is broad but some implemented workflows are still
+  visually thin: selection masks, pane filter and Quick Search, command-line
+  insertion, View Width, Change Attributes, Change Case, Make File List, List of
+  Opened Files, Shared Directories, ShellNew, User Menu, and network-drive flows.
+  Keep these as screenshot/documentation follow-ups unless the command behavior
+  changes first.
 - User docs should be re-audited against `RedSalamander.rc` whenever menu labels
   or Preferences resource strings change.
 

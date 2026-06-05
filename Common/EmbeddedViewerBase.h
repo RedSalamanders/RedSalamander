@@ -28,12 +28,12 @@ public:
     }
 
 protected:
-    EmbeddedViewerBase()                                                = default;
-    ~EmbeddedViewerBase()                                               = default;
-    EmbeddedViewerBase(const EmbeddedViewerBase&)                       = delete;
-    EmbeddedViewerBase(EmbeddedViewerBase&&)                            = delete;
-    EmbeddedViewerBase& operator=(const EmbeddedViewerBase&)            = delete;
-    EmbeddedViewerBase& operator=(EmbeddedViewerBase&&)                 = delete;
+    EmbeddedViewerBase()                                     = default;
+    ~EmbeddedViewerBase()                                    = default;
+    EmbeddedViewerBase(const EmbeddedViewerBase&)            = delete;
+    EmbeddedViewerBase(EmbeddedViewerBase&&)                 = delete;
+    EmbeddedViewerBase& operator=(const EmbeddedViewerBase&) = delete;
+    EmbeddedViewerBase& operator=(EmbeddedViewerBase&&)      = delete;
 
     [[nodiscard]] static bool IsEmbeddedOpen(const ViewerOpenContext& context) noexcept
     {

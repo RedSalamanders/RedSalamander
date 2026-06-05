@@ -1221,11 +1221,8 @@ void AppendCaseResult(SelfTestSuiteResult& suite, SelfTestCaseResult result) noe
     }
 }
 
-void AppendCaseResult(SelfTestSuiteResult& suite,
-                      std::wstring_view name,
-                      SelfTestCaseResult::Status status,
-                      std::wstring_view reason,
-                      uint64_t durationMs) noexcept
+void AppendCaseResult(
+    SelfTestSuiteResult& suite, std::wstring_view name, SelfTestCaseResult::Status status, std::wstring_view reason, uint64_t durationMs) noexcept
 {
     SelfTestCaseResult result{};
     result.name       = std::wstring(name);

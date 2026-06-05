@@ -25,6 +25,12 @@ Deployment:
 Runtime requirements:
 - Microsoft Edge **WebView2 Runtime** must be installed on the target machine.
 
+Module lifetime:
+- ViewerWeb owns a DLL-global shared `ICoreWebView2Environment` so multiple viewer instances do not each pay WebView2 environment startup cost.
+- ViewerWeb exports `RedSalamanderPluginShutdown()` to reset that shared environment as the module quiet point. The hook is idempotent; `DllMain` process detach only repeats the same cleanup as a fallback.
+- WebView2 environment/controller creation callbacks keep `ViewerWeb.dll` pinned while the callback object can still be invoked, and callbacks capture a shared-environment generation so stale callbacks self-drop after module shutdown or rediscovery.
+- ViewerWeb does not request `RedSalamanderPluginRetainModuleUntilProcessExit()`: after viewers are closed and the shared environment quiet point has run, the host may explicitly unload the module.
+
 ## Supported Extensions
 
 Intended associations:

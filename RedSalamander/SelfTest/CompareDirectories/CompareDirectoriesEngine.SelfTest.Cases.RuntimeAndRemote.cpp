@@ -1915,8 +1915,10 @@ const auto runRemoteFtpPartialContinue = [&](std::wstring_view caseName) noexcep
         const std::optional<std::string_view> ftpModifiedTime = findPropertyValue("lastWriteTime");
         state.Require(ftpModifiedTime.has_value() && ftpModifiedTime.value() != "0",
                       L"Remote FTP partial: item properties should expose a non-zero modified timestamp.");
-        state.Require(! findPropertyValue("creationTime").has_value(), L"Remote FTP partial: item properties should not expose an unavailable zero creation time.");
-        state.Require(! findPropertyValue("lastAccessTime").has_value(), L"Remote FTP partial: item properties should not expose an unavailable zero access time.");
+        state.Require(! findPropertyValue("creationTime").has_value(),
+                      L"Remote FTP partial: item properties should not expose an unavailable zero creation time.");
+        state.Require(! findPropertyValue("lastAccessTime").has_value(),
+                      L"Remote FTP partial: item properties should not expose an unavailable zero access time.");
         state.Require(! findPropertyValue("changeTime").has_value(), L"Remote FTP partial: item properties should not expose an unavailable zero change time.");
         if (! state.failure.empty())
         {

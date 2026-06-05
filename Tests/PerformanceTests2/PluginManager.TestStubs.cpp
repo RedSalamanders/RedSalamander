@@ -1,5 +1,7 @@
 #include "pch.h"
 
+#include <string_view>
+
 #include "HostServices.h"
 #include "PlugInterfaces/Host.h"
 #include "SessionState.h"
@@ -76,6 +78,13 @@ bool TryHandleHostServicesWindowMessage(UINT, WPARAM, LPARAM, LRESULT&) noexcept
 {
     return false;
 }
+
+namespace SelfTest
+{
+void AppendSelfTestTrace(std::wstring_view) noexcept
+{
+}
+} // namespace SelfTest
 
 namespace SessionState
 {

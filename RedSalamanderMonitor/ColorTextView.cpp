@@ -67,7 +67,7 @@ namespace
 {
 constexpr uint64_t kMonitorAutoScrollModeValue = 1u;
 constexpr uint64_t kMonitorScrollBackModeValue = 2u;
-}
+} // namespace
 
 static inline bool IsKeyDown(int vk)
 {
@@ -900,7 +900,7 @@ void ColorTextView::UpdateScrollBarsCore()
     const float clientHeight = static_cast<float>(clientRect.bottom - clientRect.top) * 96.f / static_cast<float>(_dpi);
 
     const float textChromeWidth = _padding * 2.f + (_displayLineNumbers ? _gutterDipW : 0.f);
-    const auto state = RedSalamanderMonitor::ComputeColorTextViewScrollBars(RedSalamanderMonitor::ColorTextScrollBarInputs{
+    const auto state            = RedSalamanderMonitor::ComputeColorTextViewScrollBars(RedSalamanderMonitor::ColorTextScrollBarInputs{
         .clientWidthDip               = clientWidth,
         .clientHeightDip              = clientHeight,
         .contentWidthDip              = std::max(0.f, _approxContentWidth),
@@ -2371,9 +2371,10 @@ void ColorTextView::DrawScene(bool clearTarget)
     {
         // COLD PATH: Full virtualization mode (scroll-back through history)
         // TRACER_CTX(L"ScrollBackMode");
-        const bool emitScrollbackSliceMetric = _renderMode == RenderMode::SCROLL_BACK;
+        const bool emitScrollbackSliceMetric                        = _renderMode == RenderMode::SCROLL_BACK;
         const RedSalamander::DxUi::FrameTimestamp scrollbackStarted = _frameClock.Now();
-        const auto emitScrollbackSliceMetricOnExit = wil::scope_exit([&] {
+        const auto emitScrollbackSliceMetricOnExit                  = wil::scope_exit([&]
+        {
             if (emitScrollbackSliceMetric)
             {
                 RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.scrollback_slice_us", _frameClock.ElapsedUs(scrollbackStarted, _frameClock.Now()));
@@ -2804,7 +2805,7 @@ void ColorTextView::OnPaint()
         params.pScrollOffset   = &scrollOffset;
     }
 
-    const UINT syncInterval = _inSizeMove ? 0u : 1u;
+    const UINT syncInterval                                  = _inSizeMove ? 0u : 1u;
     const RedSalamander::DxUi::FrameTimestamp presentStarted = _frameClock.Now();
     HRESULT presentHr                                        = S_OK;
     {
@@ -3042,9 +3043,8 @@ void ColorTextView::RebuildTailLayout()
     // TRACER;
     const RedSalamander::DxUi::FrameTimestamp tailLayoutStarted = _frameClock.Now();
     RedSalamander::DxUi::FrameStageScope layoutStage(_frameStage, RedSalamander::DxUi::FrameStage::Layout);
-    const auto emitTailLayoutMetric = wil::scope_exit([&] {
-        RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.tail_layout_us", _frameClock.ElapsedUs(tailLayoutStarted, _frameClock.Now()));
-    });
+    const auto emitTailLayoutMetric = wil::scope_exit([&]
+    { RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.tail_layout_us", _frameClock.ElapsedUs(tailLayoutStarted, _frameClock.Now())); });
 
     if (! _dwriteFactory || ! _textFormat)
     {
@@ -5332,13 +5332,13 @@ LRESULT ColorTextView::OnAppEtwBatch()
     // The queue keeps overflow in place so producers do not contend with a front insert under the lock.
     constexpr size_t kMaxBatchSize = 200;
     std::vector<Document::InfoLineInput> batch;
-    size_t queueDepthAtDrain = 0;
+    size_t queueDepthAtDrain     = 0;
     size_t drainedCountForMetric = 0;
-    size_t remainingAfterDrain = 0;
+    size_t remainingAfterDrain   = 0;
     {
-        auto lock = _etwQueueCS.lock();
+        auto lock               = _etwQueueCS.lock();
         const size_t drainCount = std::min(kMaxBatchSize, _etwEventQueue.size());
-        queueDepthAtDrain = _etwEventQueue.size();
+        queueDepthAtDrain       = _etwEventQueue.size();
         batch.reserve(drainCount);
         drainedCountForMetric = drainCount;
 

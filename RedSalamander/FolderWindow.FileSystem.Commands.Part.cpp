@@ -183,8 +183,8 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
 
 [[nodiscard]] std::optional<std::wstring> ReadRegistryStringValue(HKEY key, const wchar_t* valueName)
 {
-    DWORD type      = 0;
-    DWORD byteCount = 0;
+    DWORD type               = 0;
+    DWORD byteCount          = 0;
     const LSTATUS sizeStatus = RegQueryValueExW(key, valueName, nullptr, &type, nullptr, &byteCount);
     if (sizeStatus != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ) || byteCount == 0u)
     {
@@ -224,8 +224,8 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
 
 [[nodiscard]] std::optional<std::vector<std::byte>> ReadRegistryBinaryValue(HKEY key, const wchar_t* valueName)
 {
-    DWORD type      = 0;
-    DWORD byteCount = 0;
+    DWORD type               = 0;
+    DWORD byteCount          = 0;
     const LSTATUS sizeStatus = RegQueryValueExW(key, valueName, nullptr, &type, nullptr, &byteCount);
     if (sizeStatus != ERROR_SUCCESS || type != REG_BINARY)
     {
@@ -488,12 +488,12 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
         }
     }
 
-    std::sort(templates.begin(), templates.end(), [](const ShellNewTemplateDefinition& left, const ShellNewTemplateDefinition& right) noexcept {
-        const int nameCompare = CompareStringOrdinal(left.displayName.c_str(),
-                                                     static_cast<int>(left.displayName.size()),
-                                                     right.displayName.c_str(),
-                                                     static_cast<int>(right.displayName.size()),
-                                                     TRUE);
+    std::sort(templates.begin(),
+              templates.end(),
+              [](const ShellNewTemplateDefinition& left, const ShellNewTemplateDefinition& right) noexcept
+    {
+        const int nameCompare = CompareStringOrdinal(
+            left.displayName.c_str(), static_cast<int>(left.displayName.size()), right.displayName.c_str(), static_cast<int>(right.displayName.size()), TRUE);
         if (nameCompare != CSTR_EQUAL)
         {
             return nameCompare == CSTR_LESS_THAN;
@@ -502,12 +502,7 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
                CSTR_LESS_THAN;
     });
 
-    Debug::Perf::Emit(L"shellnew.enumerate_us",
-                      L"registry",
-                      Debug::Perf::ElapsedUs(startedAt),
-                      extensionKeys,
-                      static_cast<uint64_t>(templates.size()),
-                      S_OK);
+    Debug::Perf::Emit(L"shellnew.enumerate_us", L"registry", Debug::Perf::ElapsedUs(startedAt), extensionKeys, static_cast<uint64_t>(templates.size()), S_OK);
     return templates;
 }
 
@@ -525,7 +520,7 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
 [[nodiscard]] HRESULT WriteShellNewTemplateBytes(IFileWriter& writer, const void* data, size_t byteCount) noexcept
 {
     const auto* cursor = static_cast<const std::byte*>(data);
-    size_t remaining  = byteCount;
+    size_t remaining   = byteCount;
     while (remaining > 0u)
     {
         const unsigned long chunk = static_cast<unsigned long>((std::min)(remaining, static_cast<size_t>((std::numeric_limits<unsigned long>::max)())));
@@ -550,13 +545,8 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
     bytesCopied = 0u;
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile sourceFile(CreateFileW(sourcePath.c_str(),
-                                             GENERIC_READ,
-                                             FILE_SHARE_READ | FILE_SHARE_DELETE,
-                                             nullptr,
-                                             OPEN_EXISTING,
-                                             FILE_ATTRIBUTE_NORMAL,
-                                             nullptr));
+    wil::unique_hfile sourceFile(
+        CreateFileW(sourcePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
 #pragma warning(pop)
     if (! sourceFile)
     {
@@ -739,12 +729,7 @@ using ShellNewTemplateKind       = FolderWindow::ShellNewTemplateKind;
         return invalidDataHr;
     }
 
-    Debug::Perf::Emit(L"fileattrs.stream_enumerate_us",
-                      L"",
-                      Debug::Perf::ElapsedUs(startedAt),
-                      static_cast<uint64_t>(outStreams.size()),
-                      0u,
-                      S_OK);
+    Debug::Perf::Emit(L"fileattrs.stream_enumerate_us", L"", Debug::Perf::ElapsedUs(startedAt), static_cast<uint64_t>(outStreams.size()), 0u, S_OK);
     return S_OK;
 }
 
@@ -758,8 +743,8 @@ void RecordChangeAttributesFailure(FolderWindow::ChangeAttributesReport& report,
 }
 
 constexpr wchar_t kChangeAttributesOptionsPromptClassName[] = L"RedSalamander.ChangeAttributesOptionsPrompt";
-constexpr wchar_t kOpenedFilesWindowClassName[]              = L"RedSalamander.OpenedFilesWindow";
-constexpr wchar_t kSharedDirectoriesWindowClassName[]        = L"RedSalamander.SharedDirectoriesWindow";
+constexpr wchar_t kOpenedFilesWindowClassName[]             = L"RedSalamander.OpenedFilesWindow";
+constexpr wchar_t kSharedDirectoriesWindowClassName[]       = L"RedSalamander.SharedDirectoriesWindow";
 
 #ifdef ENABLE_TESTS
 std::atomic<HWND> g_changeAttributesOptionsPromptWindow{nullptr};
@@ -775,10 +760,10 @@ enum class ChangeAttributesOptionsPromptDebugCommand : uintptr_t
 
 struct ChangeAttributesOptionsPromptDebugStatePayload final
 {
-    uint8_t readOnly = 0u;
-    uint8_t hidden   = 0u;
-    uint8_t system   = 0u;
-    uint8_t archive  = 0u;
+    uint8_t readOnly                = 0u;
+    uint8_t hidden                  = 0u;
+    uint8_t system                  = 0u;
+    uint8_t archive                 = 0u;
     bool removeAlternateDataStreams = false;
 };
 
@@ -947,16 +932,14 @@ void ApplyAttributeCheckboxState(RedSalamander::DxUi::Checkbox* checkbox, Folder
     WORD year  = 0;
     if (text[2] == L'/' && text[5] == L'/')
     {
-        if (! TryParseFixedDigits(text, 0, 2, day) || ! TryParseFixedDigits(text, 3, 2, month) ||
-            ! TryParseFixedDigits(text, 6, 4, year))
+        if (! TryParseFixedDigits(text, 0, 2, day) || ! TryParseFixedDigits(text, 3, 2, month) || ! TryParseFixedDigits(text, 6, 4, year))
         {
             return false;
         }
     }
     else if (text[4] == L'-' && text[7] == L'-')
     {
-        if (! TryParseFixedDigits(text, 0, 4, year) || ! TryParseFixedDigits(text, 5, 2, month) ||
-            ! TryParseFixedDigits(text, 8, 2, day))
+        if (! TryParseFixedDigits(text, 0, 4, year) || ! TryParseFixedDigits(text, 5, 2, month) || ! TryParseFixedDigits(text, 8, 2, day))
         {
             return false;
         }
@@ -1044,7 +1027,7 @@ public:
     ChangeAttributesOptionsPromptWindow(HWND ownerWindow,
                                         const AppTheme& theme,
                                         FolderWindow::ChangeAttributesOptions initialOptions = {},
-                                        bool allowSubdirectories = false) noexcept
+                                        bool allowSubdirectories                             = false) noexcept
         : _ownerWindow(GetOwnerWindowOrSelf(ownerWindow)),
           _restoreFocusWindow(ownerWindow && IsWindow(ownerWindow) != FALSE ? ownerWindow : nullptr),
           _theme(theme),
@@ -1109,17 +1092,17 @@ public:
 
         const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_CHANGE_ATTRIBUTES);
         const HWND hwnd            = CreateWindowExW(exStyle,
-                                          kChangeAttributesOptionsPromptClassName,
-                                          caption.c_str(),
-                                          style,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          bounds.right - bounds.left,
-                                          bounds.bottom - bounds.top,
-                                          _ownerWindow,
-                                          nullptr,
-                                          GetModuleHandleW(nullptr),
-                                          this);
+                                                     kChangeAttributesOptionsPromptClassName,
+                                                     caption.c_str(),
+                                                     style,
+                                                     CW_USEDEFAULT,
+                                                     CW_USEDEFAULT,
+                                                     bounds.right - bounds.left,
+                                                     bounds.bottom - bounds.top,
+                                                     _ownerWindow,
+                                                     nullptr,
+                                                     GetModuleHandleW(nullptr),
+                                                     this);
         if (! hwnd)
         {
             return std::nullopt;
@@ -1323,13 +1306,13 @@ private:
         _attributesSectionLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         _attributesSectionLabel->SetFontRole(FontRole::BodyStrong);
 
-        _archiveCheckbox = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_ARCHIVE), _options.archive);
-        _hiddenCheckbox  = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_HIDDEN), _options.hidden);
+        _archiveCheckbox    = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_ARCHIVE), _options.archive);
+        _hiddenCheckbox     = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_HIDDEN), _options.hidden);
         _compressedCheckbox = _root->AddChild<Checkbox>(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_COMPRESSED));
         _compressedCheckbox->SetEnabled(false);
 
-        _readOnlyCheckbox = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_READONLY), _options.readOnly);
-        _systemCheckbox   = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_SYSTEM), _options.system);
+        _readOnlyCheckbox  = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_READONLY), _options.readOnly);
+        _systemCheckbox    = BuildAttributeCheckbox(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_SYSTEM), _options.system);
         _encryptedCheckbox = _root->AddChild<Checkbox>(LoadStringResource(nullptr, IDS_CHANGE_ATTR_LABEL_ENCRYPTED));
         _encryptedCheckbox->SetEnabled(false);
 
@@ -1371,10 +1354,7 @@ private:
 
         Checkbox* checkbox = _root->AddChild<Checkbox>(std::move(text));
         ApplyAttributeCheckboxState(checkbox, state);
-        checkbox->SetOnToggled([this, checkbox](bool) noexcept
-        {
-            CycleAttributeCheckbox(checkbox);
-        });
+        checkbox->SetOnToggled([this, checkbox](bool) noexcept { CycleAttributeCheckbox(checkbox); });
         return checkbox;
     }
 
@@ -1478,18 +1458,18 @@ private:
             return;
         }
 
-        const auto startedAt   = std::chrono::steady_clock::now();
+        const auto startedAt     = std::chrono::steady_clock::now();
         const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
         _root->SetBounds(client);
 
-        constexpr float kMarginDip         = 20.0f;
-        constexpr float kGapDip            = 8.0f;
-        constexpr float kSectionHeightDip  = 22.0f;
-        constexpr float kCheckboxHeightDip = 28.0f;
+        constexpr float kMarginDip            = 20.0f;
+        constexpr float kGapDip               = 8.0f;
+        constexpr float kSectionHeightDip     = 22.0f;
+        constexpr float kCheckboxHeightDip    = 28.0f;
         constexpr float kDateTimeRowHeightDip = 32.0f;
         constexpr float kSetCurrentWidthDip   = 116.0f;
-        constexpr float kButtonWidthDip    = 110.0f;
-        constexpr float kButtonHeightDip   = 34.0f;
+        constexpr float kButtonWidthDip       = 110.0f;
+        constexpr float kButtonHeightDip      = 34.0f;
 
         const float left        = client.left + kMarginDip;
         const float right       = std::max(left, client.right - kMarginDip);
@@ -1502,23 +1482,9 @@ private:
         }
         y += kSectionHeightDip + (kGapDip * 0.5f);
 
-        LayoutCheckboxGridRow(_archiveCheckbox,
-                              _hiddenCheckbox,
-                              _compressedCheckbox,
-                              left,
-                              columnWidth,
-                              right,
-                              y,
-                              kCheckboxHeightDip);
+        LayoutCheckboxGridRow(_archiveCheckbox, _hiddenCheckbox, _compressedCheckbox, left, columnWidth, right, y, kCheckboxHeightDip);
         y += kCheckboxHeightDip;
-        LayoutCheckboxGridRow(_readOnlyCheckbox,
-                              _systemCheckbox,
-                              _encryptedCheckbox,
-                              left,
-                              columnWidth,
-                              right,
-                              y,
-                              kCheckboxHeightDip);
+        LayoutCheckboxGridRow(_readOnlyCheckbox, _systemCheckbox, _encryptedCheckbox, left, columnWidth, right, y, kCheckboxHeightDip);
         y += kCheckboxHeightDip + (kGapDip * 2.0f);
 
         if (_dateTimeSectionLabel)
@@ -1643,8 +1609,7 @@ private:
         }
     }
 
-    [[nodiscard]] bool ReadDateTimeRow(const DateTimeRowControls& row,
-                                       FolderWindow::ChangeAttributesOptions::TimestampOption& option) const noexcept
+    [[nodiscard]] bool ReadDateTimeRow(const DateTimeRowControls& row, FolderWindow::ChangeAttributesOptions::TimestampOption& option) const noexcept
     {
         option.enabled = row.checkbox && row.checkbox->IsChecked();
         if (! option.enabled)
@@ -1753,7 +1718,7 @@ private:
                 snapshot->includeSubdirectoriesVisible   = _includeSubdirectoriesCheckbox && _includeSubdirectoriesCheckbox->IsVisible();
                 snapshot->includeSubdirectoriesEnabled   = _includeSubdirectoriesCheckbox && _includeSubdirectoriesCheckbox->IsEnabled();
                 snapshot->includeSubdirectoriesChecked   = options.includeSubdirectories;
-                snapshot->removeAlternateDataStreams = options.removeAlternateDataStreams;
+                snapshot->removeAlternateDataStreams     = options.removeAlternateDataStreams;
                 return TRUE;
             }
             case ChangeAttributesOptionsPromptDebugCommand::SetState:
@@ -1771,9 +1736,7 @@ private:
                          payload->removeAlternateDataStreams);
                 return TRUE;
             }
-            case ChangeAttributesOptionsPromptDebugCommand::CycleArchive:
-                CycleAttributeCheckbox(_archiveCheckbox);
-                return TRUE;
+            case ChangeAttributesOptionsPromptDebugCommand::CycleArchive: CycleAttributeCheckbox(_archiveCheckbox); return TRUE;
             case ChangeAttributesOptionsPromptDebugCommand::Confirm: Confirm(); return TRUE;
             case ChangeAttributesOptionsPromptDebugCommand::Cancel: Cancel(); return TRUE;
         }
@@ -1792,25 +1755,25 @@ private:
     RedSalamander::DxUi::WindowHost _dxHost;
     RedSalamander::DxUi::ThemePalette _palette{};
     std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root                = nullptr;
+    RedSalamander::DxUi::Panel* _root                   = nullptr;
     RedSalamander::DxUi::Label* _attributesSectionLabel = nullptr;
-    RedSalamander::DxUi::Label* _dateTimeSectionLabel = nullptr;
-    RedSalamander::DxUi::Label* _optionsSectionLabel = nullptr;
-    RedSalamander::DxUi::Checkbox* _archiveCheckbox  = nullptr;
-    RedSalamander::DxUi::Checkbox* _hiddenCheckbox   = nullptr;
-    RedSalamander::DxUi::Checkbox* _compressedCheckbox = nullptr;
-    RedSalamander::DxUi::Checkbox* _readOnlyCheckbox = nullptr;
-    RedSalamander::DxUi::Checkbox* _systemCheckbox   = nullptr;
-    RedSalamander::DxUi::Checkbox* _encryptedCheckbox = nullptr;
+    RedSalamander::DxUi::Label* _dateTimeSectionLabel   = nullptr;
+    RedSalamander::DxUi::Label* _optionsSectionLabel    = nullptr;
+    RedSalamander::DxUi::Checkbox* _archiveCheckbox     = nullptr;
+    RedSalamander::DxUi::Checkbox* _hiddenCheckbox      = nullptr;
+    RedSalamander::DxUi::Checkbox* _compressedCheckbox  = nullptr;
+    RedSalamander::DxUi::Checkbox* _readOnlyCheckbox    = nullptr;
+    RedSalamander::DxUi::Checkbox* _systemCheckbox      = nullptr;
+    RedSalamander::DxUi::Checkbox* _encryptedCheckbox   = nullptr;
     DateTimeRowControls _modifiedTimeRow;
     DateTimeRowControls _createdTimeRow;
     DateTimeRowControls _accessedTimeRow;
-    RedSalamander::DxUi::Button* _setCurrentButton = nullptr;
+    RedSalamander::DxUi::Button* _setCurrentButton                = nullptr;
     RedSalamander::DxUi::Checkbox* _includeSubdirectoriesCheckbox = nullptr;
-    RedSalamander::DxUi::Checkbox* _removeStreamsCheckbox = nullptr;
-    RedSalamander::DxUi::Button* _okButton           = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton       = nullptr;
-    bool _done                                       = false;
+    RedSalamander::DxUi::Checkbox* _removeStreamsCheckbox         = nullptr;
+    RedSalamander::DxUi::Button* _okButton                        = nullptr;
+    RedSalamander::DxUi::Button* _cancelButton                    = nullptr;
+    bool _done                                                    = false;
     std::optional<FolderWindow::ChangeAttributesOptions> _result;
 };
 
@@ -1825,22 +1788,18 @@ private:
 
 [[nodiscard]] bool IsChangeAttributesNoop(const FolderWindow::ChangeAttributesOptions& options) noexcept
 {
-    return options.readOnly == FolderWindow::AttributeChangeState::LeaveUnchanged &&
-           options.hidden == FolderWindow::AttributeChangeState::LeaveUnchanged &&
-           options.system == FolderWindow::AttributeChangeState::LeaveUnchanged &&
-           options.archive == FolderWindow::AttributeChangeState::LeaveUnchanged && ! options.modifiedTime.enabled && ! options.createdTime.enabled &&
-           ! options.accessedTime.enabled && ! options.removeAlternateDataStreams;
+    return options.readOnly == FolderWindow::AttributeChangeState::LeaveUnchanged && options.hidden == FolderWindow::AttributeChangeState::LeaveUnchanged &&
+           options.system == FolderWindow::AttributeChangeState::LeaveUnchanged && options.archive == FolderWindow::AttributeChangeState::LeaveUnchanged &&
+           ! options.modifiedTime.enabled && ! options.createdTime.enabled && ! options.accessedTime.enabled && ! options.removeAlternateDataStreams;
 }
 
-[[nodiscard]] unsigned long ApplyAttributeChange(unsigned long attributes,
-                                                 FolderWindow::AttributeChangeState state,
-                                                 unsigned long attributeFlag) noexcept
+[[nodiscard]] unsigned long ApplyAttributeChange(unsigned long attributes, FolderWindow::AttributeChangeState state, unsigned long attributeFlag) noexcept
 {
     switch (state)
     {
-    case FolderWindow::AttributeChangeState::Set: return attributes | attributeFlag;
-    case FolderWindow::AttributeChangeState::Clear: return attributes & ~attributeFlag;
-    case FolderWindow::AttributeChangeState::LeaveUnchanged: return attributes;
+        case FolderWindow::AttributeChangeState::Set: return attributes | attributeFlag;
+        case FolderWindow::AttributeChangeState::Clear: return attributes & ~attributeFlag;
+        case FolderWindow::AttributeChangeState::LeaveUnchanged: return attributes;
     }
 
     return attributes;
@@ -1849,10 +1808,10 @@ private:
 [[nodiscard]] unsigned long ResolveDesiredAttributes(unsigned long attributes, const FolderWindow::ChangeAttributesOptions& options) noexcept
 {
     unsigned long desired = attributes;
-    desired              = ApplyAttributeChange(desired, options.readOnly, FILE_ATTRIBUTE_READONLY);
-    desired              = ApplyAttributeChange(desired, options.hidden, FILE_ATTRIBUTE_HIDDEN);
-    desired              = ApplyAttributeChange(desired, options.system, FILE_ATTRIBUTE_SYSTEM);
-    desired              = ApplyAttributeChange(desired, options.archive, FILE_ATTRIBUTE_ARCHIVE);
+    desired               = ApplyAttributeChange(desired, options.readOnly, FILE_ATTRIBUTE_READONLY);
+    desired               = ApplyAttributeChange(desired, options.hidden, FILE_ATTRIBUTE_HIDDEN);
+    desired               = ApplyAttributeChange(desired, options.system, FILE_ATTRIBUTE_SYSTEM);
+    desired               = ApplyAttributeChange(desired, options.archive, FILE_ATTRIBUTE_ARCHIVE);
     return desired;
 }
 
@@ -1912,12 +1871,8 @@ void ApplyTimestampOptionsForChangeAttributes(FileSystemBasicInformation& info, 
 {
     if (report.failures == 0u)
     {
-        return FormatStringResource(nullptr,
-                                    IDS_FMT_CHANGE_ATTRIBUTES_REPORT,
-                                    report.itemsProcessed,
-                                    report.attributesChanged,
-                                    report.timesChanged,
-                                    report.streamsRemoved);
+        return FormatStringResource(
+            nullptr, IDS_FMT_CHANGE_ATTRIBUTES_REPORT, report.itemsProcessed, report.attributesChanged, report.timesChanged, report.streamsRemoved);
     }
 
     return FormatStringResource(nullptr,
@@ -1938,7 +1893,7 @@ struct ChangeAttributesTaskPayload final
 struct ChangeAttributesCompletedPayload final
 {
     FolderWindow::Pane pane = FolderWindow::Pane::Left;
-    HRESULT hr             = S_OK;
+    HRESULT hr              = S_OK;
     FolderWindow::ChangeAttributesReport report{};
     bool refreshNeeded = false;
 };
@@ -1974,7 +1929,7 @@ struct ChangeAttributesCompletedPayload final
 }
 
 [[nodiscard]] FolderWindow::ChangeAttributesOptions BuildInitialChangeAttributesOptions(IFileSystemIO* fileIo,
-                                                                                       const std::vector<std::filesystem::path>& paths) noexcept
+                                                                                        const std::vector<std::filesystem::path>& paths) noexcept
 {
     FolderWindow::ChangeAttributesOptions options{};
     int64_t timestamp = GetCurrentFileTimeTicksForChangeAttributes();
@@ -2057,12 +2012,8 @@ void ApplyChangeAttributesToPath(IFileSystemIO* fileIo,
                 {
                     const auto streamStartedAt = std::chrono::steady_clock::now();
                     const HRESULT deleteHr     = streamOps->DeleteItemStream(path.c_str(), streamName.c_str());
-                    Debug::Perf::Emit(L"fileattrs.stream_remove_us",
-                                      streamName,
-                                      Debug::Perf::ElapsedUs(streamStartedAt),
-                                      1u,
-                                      SUCCEEDED(deleteHr) ? 1u : 0u,
-                                      deleteHr);
+                    Debug::Perf::Emit(
+                        L"fileattrs.stream_remove_us", streamName, Debug::Perf::ElapsedUs(streamStartedAt), 1u, SUCCEEDED(deleteHr) ? 1u : 0u, deleteHr);
                     if (FAILED(deleteHr))
                     {
                         RecordChangeAttributesFailure(report, deleteHr);
@@ -2101,16 +2052,16 @@ struct ChangeAttributesProgressState final
     HWND hwnd               = nullptr;
     FolderWindow::Pane pane = FolderWindow::Pane::Left;
     std::wstring title;
-    uint64_t taskId = 0;
+    uint64_t taskId          = 0;
     ULONGLONG lastPostedTick = 0;
 
     std::filesystem::path currentPath;
     uint64_t scannedFolders = 0;
     uint64_t scannedEntries = 0;
-    uint64_t plannedItems = 0;
+    uint64_t plannedItems   = 0;
     uint64_t completedItems = 0;
-    bool enumerating = false;
-    bool applying = false;
+    bool enumerating        = false;
+    bool applying           = false;
 
     void PostTaskUpdate(bool finished, HRESULT hr, std::wstring doneSummary = {}) noexcept
     {
@@ -2120,19 +2071,19 @@ struct ChangeAttributesProgressState final
         }
 
         FolderWindow::InformationalTaskUpdate info{};
-        info.kind                              = FolderWindow::InformationalTaskUpdate::Kind::ChangeAttributes;
-        info.taskId                            = taskId;
-        info.title                             = title;
-        info.changeAttributesCurrentPath       = currentPath;
-        info.changeAttributesScannedFolders    = scannedFolders;
-        info.changeAttributesScannedEntries    = scannedEntries;
-        info.changeAttributesPlannedItems      = plannedItems;
-        info.changeAttributesCompletedItems    = completedItems;
-        info.changeAttributesEnumerating       = ! finished && enumerating;
-        info.changeAttributesApplying          = ! finished && applying;
-        info.finished                          = finished;
-        info.resultHr                          = hr;
-        info.doneSummary                       = std::move(doneSummary);
+        info.kind                           = FolderWindow::InformationalTaskUpdate::Kind::ChangeAttributes;
+        info.taskId                         = taskId;
+        info.title                          = title;
+        info.changeAttributesCurrentPath    = currentPath;
+        info.changeAttributesScannedFolders = scannedFolders;
+        info.changeAttributesScannedEntries = scannedEntries;
+        info.changeAttributesPlannedItems   = plannedItems;
+        info.changeAttributesCompletedItems = completedItems;
+        info.changeAttributesEnumerating    = ! finished && enumerating;
+        info.changeAttributesApplying       = ! finished && applying;
+        info.finished                       = finished;
+        info.resultHr                       = hr;
+        info.doneSummary                    = std::move(doneSummary);
 
         auto payload    = std::make_unique<ChangeAttributesTaskPayload>();
         payload->update = std::move(info);
@@ -2211,7 +2162,7 @@ struct ChangeAttributesProgressState final
             return readHr;
         }
 
-        FileInfo* entry = nullptr;
+        FileInfo* entry        = nullptr;
         const HRESULT bufferHr = filesInformation ? filesInformation->GetBuffer(&entry) : E_POINTER;
         if (FAILED(bufferHr))
         {
@@ -2253,11 +2204,8 @@ struct ChangeAttributesProgressState final
     return S_OK;
 }
 
-void ShowChangeAttributesOverlay(FolderWindow& window,
-                                 FolderWindow::Pane pane,
-                                 FolderView::OverlaySeverity severity,
-                                 UINT messageStringId,
-                                 HRESULT hr = S_OK) noexcept
+void ShowChangeAttributesOverlay(
+    FolderWindow& window, FolderWindow::Pane pane, FolderView::OverlaySeverity severity, UINT messageStringId, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Scope perf(L"fileattrs.feedback_us");
     perf.SetHr(hr);
@@ -2316,11 +2264,11 @@ struct MakeFileListEntry final
     std::wstring name;
     std::wstring fullPath;
     bool isDirectory = false;
-    uint64_t size = 0u;
-    bool hasSize = false;
+    uint64_t size    = 0u;
+    bool hasSize     = false;
     FILETIME modified{};
-    bool hasModified = false;
-    DWORD attributes = 0u;
+    bool hasModified   = false;
+    DWORD attributes   = 0u;
     bool hasAttributes = false;
 };
 
@@ -2515,14 +2463,14 @@ struct MakeFileListEntry final
         return false;
     }
 
-    out              = {};
-    out.path         = path;
-    out.name         = path.filename().wstring();
-    out.fullPath     = path.wstring();
-    out.isDirectory  = isDirectory;
-    out.modified     = data.ftLastWriteTime;
-    out.hasModified  = true;
-    out.attributes   = data.dwFileAttributes;
+    out               = {};
+    out.path          = path;
+    out.name          = path.filename().wstring();
+    out.fullPath      = path.wstring();
+    out.isDirectory   = isDirectory;
+    out.modified      = data.ftLastWriteTime;
+    out.hasModified   = true;
+    out.attributes    = data.dwFileAttributes;
     out.hasAttributes = true;
 
     if (! isDirectory)
@@ -2555,11 +2503,8 @@ void AddMakeFileListPath(const std::filesystem::path& path, bool includeDirector
     }
 }
 
-void CollectMakeFileListDirectoryContents(const std::filesystem::path& root,
-                                          bool recursive,
-                                          bool includeDirectories,
-                                          std::vector<MakeFileListEntry>& entries,
-                                          uint64_t& failures) noexcept
+void CollectMakeFileListDirectoryContents(
+    const std::filesystem::path& root, bool recursive, bool includeDirectories, std::vector<MakeFileListEntry>& entries, uint64_t& failures) noexcept
 {
     constexpr std::filesystem::directory_options options = std::filesystem::directory_options::skip_permission_denied;
     std::error_code ec;
@@ -2620,11 +2565,13 @@ void CollectMakeFileListDirectoryContents(const std::filesystem::path& root,
         }
     }
 
-    std::sort(entries.begin(), entries.end(), [](const MakeFileListEntry& left, const MakeFileListEntry& right) noexcept
+    std::sort(entries.begin(),
+              entries.end(),
+              [](const MakeFileListEntry& left, const MakeFileListEntry& right) noexcept
     {
         const std::wstring leftPath  = left.fullPath;
         const std::wstring rightPath = right.fullPath;
-        const int compare = CompareStringOrdinal(leftPath.c_str(), -1, rightPath.c_str(), -1, TRUE);
+        const int compare            = CompareStringOrdinal(leftPath.c_str(), -1, rightPath.c_str(), -1, TRUE);
         if (compare == CSTR_EQUAL)
         {
             return leftPath < rightPath;
@@ -2696,15 +2643,17 @@ void CollectMakeFileListDirectoryContents(const std::filesystem::path& root,
     }
     if (options.includeModified)
     {
-        if (const HRESULT hr = AddMakeFileListJsonString(doc, item, "modified", entry.hasModified ? FormatMakeFileListTime(entry.modified) : std::wstring{}); FAILED(hr))
+        if (const HRESULT hr = AddMakeFileListJsonString(doc, item, "modified", entry.hasModified ? FormatMakeFileListTime(entry.modified) : std::wstring{});
+            FAILED(hr))
         {
             return hr;
         }
     }
     if (options.includeAttributes)
     {
-        if (const HRESULT hr = AddMakeFileListJsonString(
-                doc, item, "attributes", entry.hasAttributes ? FormatMakeFileListAttributes(entry.attributes) : std::wstring{}); FAILED(hr))
+        if (const HRESULT hr =
+                AddMakeFileListJsonString(doc, item, "attributes", entry.hasAttributes ? FormatMakeFileListAttributes(entry.attributes) : std::wstring{});
+            FAILED(hr))
         {
             return hr;
         }
@@ -2718,9 +2667,7 @@ void CollectMakeFileListDirectoryContents(const std::filesystem::path& root,
     return S_OK;
 }
 
-[[nodiscard]] HRESULT RenderMakeFileListJson(const std::vector<MakeFileListEntry>& entries,
-                                             const MakeFileListSettings& options,
-                                             std::string& outUtf8) noexcept
+[[nodiscard]] HRESULT RenderMakeFileListJson(const std::vector<MakeFileListEntry>& entries, const MakeFileListSettings& options, std::string& outUtf8) noexcept
 {
     outUtf8.clear();
 
@@ -2759,7 +2706,7 @@ void CollectMakeFileListDirectoryContents(const std::filesystem::path& root,
 
     yyjson_write_err writeErr{};
     size_t jsonLen = 0u;
-    char* json = yyjson_mut_write_opts(doc, YYJSON_WRITE_NOFLAG, nullptr, &jsonLen, &writeErr);
+    char* json     = yyjson_mut_write_opts(doc, YYJSON_WRITE_NOFLAG, nullptr, &jsonLen, &writeErr);
     if (! json)
     {
         return E_OUTOFMEMORY;
@@ -2907,9 +2854,9 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
         return (! outUtf8.empty() && outClipboardText.empty()) ? HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) : S_OK;
     }
 
-    outClipboardText =
-        options.format == Common::Settings::MakeFileListFormat::Csv ? RenderMakeFileListCsvWide(entries, options) : RenderMakeFileListTextWide(entries, options);
-    outUtf8 = Utf8FromUtf16ForMakeFileList(outClipboardText);
+    outClipboardText = options.format == Common::Settings::MakeFileListFormat::Csv ? RenderMakeFileListCsvWide(entries, options)
+                                                                                   : RenderMakeFileListTextWide(entries, options);
+    outUtf8          = Utf8FromUtf16ForMakeFileList(outClipboardText);
     return (! outClipboardText.empty() && outUtf8.empty()) ? HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION) : S_OK;
 }
 
@@ -2933,13 +2880,7 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile file(CreateFileW(path.c_str(),
-                                       GENERIC_WRITE,
-                                       FILE_SHARE_READ,
-                                       nullptr,
-                                       CREATE_ALWAYS,
-                                       FILE_ATTRIBUTE_NORMAL,
-                                       nullptr));
+    wil::unique_hfile file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
 #pragma warning(pop)
     if (! file)
     {
@@ -2947,7 +2888,7 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     }
 
     const char* cursor = bytes.data();
-    size_t remaining  = bytes.size();
+    size_t remaining   = bytes.size();
     while (remaining > 0u)
     {
         const DWORD chunk = static_cast<DWORD>((std::min)(remaining, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
@@ -2978,11 +2919,8 @@ void AppendMakeFileListCsvRow(std::wstring& output, const std::vector<std::wstri
     return L"text";
 }
 
-void ShowMakeFileListOverlay(FolderWindow& window,
-                             FolderWindow::Pane pane,
-                             FolderView::OverlaySeverity severity,
-                             std::wstring message,
-                             HRESULT hr = S_OK) noexcept
+void ShowMakeFileListOverlay(
+    FolderWindow& window, FolderWindow::Pane pane, FolderView::OverlaySeverity severity, std::wstring message, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Scope perf(L"makeFileList.feedback_us");
     perf.SetHr(hr);
@@ -2993,7 +2931,14 @@ void ShowMakeFileListOverlay(FolderWindow& window,
         title = LoadStringResource(nullptr, severity == FolderView::OverlaySeverity::Error ? IDS_CAPTION_ERROR : IDS_CAPTION_WARNING);
     }
 
-    window.ShowPaneAlertOverlay(pane, FolderView::ErrorOverlayKind::Operation, severity, std::move(title), std::move(message), hr, severity != FolderView::OverlaySeverity::Information, false);
+    window.ShowPaneAlertOverlay(pane,
+                                FolderView::ErrorOverlayKind::Operation,
+                                severity,
+                                std::move(title),
+                                std::move(message),
+                                hr,
+                                severity != FolderView::OverlaySeverity::Information,
+                                false);
 }
 
 constexpr wchar_t kMakeFileListOptionsPromptClassName[] = L"RedSalamander.MakeFileListOptionsPrompt";
@@ -3039,8 +2984,7 @@ struct MakeFileListOptionsPromptDebugStatePayload final
 
 [[nodiscard]] Common::Settings::MakeFileListSourceMode MakeFileListSourceModeFromIndex(std::optional<size_t> index) noexcept
 {
-    return index.value_or(0u) == 1u ? Common::Settings::MakeFileListSourceMode::CurrentFolder
-                                    : Common::Settings::MakeFileListSourceMode::Selection;
+    return index.value_or(0u) == 1u ? Common::Settings::MakeFileListSourceMode::CurrentFolder : Common::Settings::MakeFileListSourceMode::Selection;
 }
 
 [[nodiscard]] std::optional<size_t> MakeFileListFormatToIndex(Common::Settings::MakeFileListFormat format) noexcept
@@ -3071,16 +3015,14 @@ struct MakeFileListOptionsPromptDebugStatePayload final
 
 [[nodiscard]] Common::Settings::MakeFileListOutputTarget MakeFileListOutputTargetFromIndex(std::optional<size_t> index) noexcept
 {
-    return index.value_or(0u) == 1u ? Common::Settings::MakeFileListOutputTarget::File
-                                    : Common::Settings::MakeFileListOutputTarget::Clipboard;
+    return index.value_or(0u) == 1u ? Common::Settings::MakeFileListOutputTarget::File : Common::Settings::MakeFileListOutputTarget::Clipboard;
 }
 
 #ifdef ENABLE_TESTS
 [[nodiscard]] Common::Settings::MakeFileListSourceMode MakeFileListSourceModeFromRaw(uint8_t value) noexcept
 {
-    return value == static_cast<uint8_t>(Common::Settings::MakeFileListSourceMode::CurrentFolder)
-               ? Common::Settings::MakeFileListSourceMode::CurrentFolder
-               : Common::Settings::MakeFileListSourceMode::Selection;
+    return value == static_cast<uint8_t>(Common::Settings::MakeFileListSourceMode::CurrentFolder) ? Common::Settings::MakeFileListSourceMode::CurrentFolder
+                                                                                                  : Common::Settings::MakeFileListSourceMode::Selection;
 }
 
 [[nodiscard]] Common::Settings::MakeFileListFormat MakeFileListFormatFromRaw(uint8_t value) noexcept
@@ -3095,9 +3037,8 @@ struct MakeFileListOptionsPromptDebugStatePayload final
 
 [[nodiscard]] Common::Settings::MakeFileListOutputTarget MakeFileListOutputTargetFromRaw(uint8_t value) noexcept
 {
-    return value == static_cast<uint8_t>(Common::Settings::MakeFileListOutputTarget::File)
-               ? Common::Settings::MakeFileListOutputTarget::File
-               : Common::Settings::MakeFileListOutputTarget::Clipboard;
+    return value == static_cast<uint8_t>(Common::Settings::MakeFileListOutputTarget::File) ? Common::Settings::MakeFileListOutputTarget::File
+                                                                                           : Common::Settings::MakeFileListOutputTarget::Clipboard;
 }
 #endif
 
@@ -3201,17 +3142,17 @@ public:
 
         const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_MAKE_FILE_LIST);
         const HWND hwnd            = CreateWindowExW(exStyle,
-                                          kMakeFileListOptionsPromptClassName,
-                                          caption.c_str(),
-                                          style,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          bounds.right - bounds.left,
-                                          bounds.bottom - bounds.top,
-                                          _ownerWindow,
-                                          nullptr,
-                                          GetModuleHandleW(nullptr),
-                                          this);
+                                                     kMakeFileListOptionsPromptClassName,
+                                                     caption.c_str(),
+                                                     style,
+                                                     CW_USEDEFAULT,
+                                                     CW_USEDEFAULT,
+                                                     bounds.right - bounds.left,
+                                                     bounds.bottom - bounds.top,
+                                                     _ownerWindow,
+                                                     nullptr,
+                                                     GetModuleHandleW(nullptr),
+                                                     this);
         if (! hwnd)
         {
             return std::nullopt;
@@ -3428,12 +3369,12 @@ private:
         _textMacroField->SetMultiline(false);
         _textMacroField->SetOnSubmitted([this] { Confirm(); });
 
-        _fieldsLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FIELDS));
-        _includeNameCheckbox = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_NAME, _options.includeName);
-        _includeFullPathCheckbox = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_FULLPATH, _options.includeFullPath);
-        _includeSizeCheckbox = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_SIZE, _options.includeSize);
-        _includeModifiedCheckbox = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_MODIFIED, _options.includeModified);
-        _includeAttributesCheckbox = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_ATTRIBUTES, _options.includeAttributes);
+        _fieldsLabel                = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FIELDS));
+        _includeNameCheckbox        = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_NAME, _options.includeName);
+        _includeFullPathCheckbox    = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_FULLPATH, _options.includeFullPath);
+        _includeSizeCheckbox        = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_SIZE, _options.includeSize);
+        _includeModifiedCheckbox    = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_MODIFIED, _options.includeModified);
+        _includeAttributesCheckbox  = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_ATTRIBUTES, _options.includeAttributes);
         _includeDirectoriesCheckbox = BuildFieldCheckbox(IDS_MAKE_FILE_LIST_INCLUDE_DIRECTORIES, _options.includeDirectories);
 
         _outputLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_OUTPUT));
@@ -3503,14 +3444,14 @@ private:
         const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
         _root->SetBounds(client);
 
-        constexpr float kMarginDip        = 16.0f;
-        constexpr float kGapDip           = 8.0f;
-        constexpr float kLabelWidthDip    = 130.0f;
-        constexpr float kLabelHeightDip   = 22.0f;
-        constexpr float kRowHeightDip     = 34.0f;
+        constexpr float kMarginDip         = 16.0f;
+        constexpr float kGapDip            = 8.0f;
+        constexpr float kLabelWidthDip     = 130.0f;
+        constexpr float kLabelHeightDip    = 22.0f;
+        constexpr float kRowHeightDip      = 34.0f;
         constexpr float kCheckboxHeightDip = 28.0f;
-        constexpr float kButtonWidthDip   = 96.0f;
-        constexpr float kButtonHeightDip  = 34.0f;
+        constexpr float kButtonWidthDip    = 96.0f;
+        constexpr float kButtonHeightDip   = 34.0f;
 
         const float left      = client.left + kMarginDip;
         const float right     = std::max(left, client.right - kMarginDip);
@@ -3573,13 +3514,8 @@ private:
                           S_OK);
     }
 
-    static void LayoutFormRow(RedSalamander::DxUi::Label* label,
-                              RedSalamander::DxUi::Control* field,
-                              float left,
-                              float fieldLeft,
-                              float right,
-                              float top,
-                              float height) noexcept
+    static void LayoutFormRow(
+        RedSalamander::DxUi::Label* label, RedSalamander::DxUi::Control* field, float left, float fieldLeft, float right, float top, float height) noexcept
     {
         if (label)
         {
@@ -3612,11 +3548,11 @@ private:
     [[nodiscard]] MakeFileListSettings ReadOptionsFromUi() const
     {
         MakeFileListSettings options{};
-        options.sourceMode = MakeFileListSourceModeFromIndex(_sourceCombo ? _sourceCombo->GetSelectedIndex() : std::nullopt);
-        options.recursive  = _recursiveCheckbox && _recursiveCheckbox->IsChecked();
-        options.format     = MakeFileListFormatFromIndex(_formatCombo ? _formatCombo->GetSelectedIndex() : std::nullopt);
+        options.sourceMode   = MakeFileListSourceModeFromIndex(_sourceCombo ? _sourceCombo->GetSelectedIndex() : std::nullopt);
+        options.recursive    = _recursiveCheckbox && _recursiveCheckbox->IsChecked();
+        options.format       = MakeFileListFormatFromIndex(_formatCombo ? _formatCombo->GetSelectedIndex() : std::nullopt);
         options.outputTarget = MakeFileListOutputTargetFromIndex(_outputCombo ? _outputCombo->GetSelectedIndex() : std::nullopt);
-        options.textMacro = _textMacroField ? std::wstring(_textMacroField->GetText()) : std::wstring{};
+        options.textMacro    = _textMacroField ? std::wstring(_textMacroField->GetText()) : std::wstring{};
         options.outputFile =
             std::filesystem::path(StringUtils::TrimWhitespaceCopy(_outputFileField ? std::wstring(_outputFileField->GetText()) : std::wstring{}));
         options.includeName        = _includeNameCheckbox && _includeNameCheckbox->IsChecked();
@@ -3715,7 +3651,7 @@ private:
                     return FALSE;
                 }
 
-                const MakeFileListSettings options = ReadOptionsFromUi();
+                const MakeFileListSettings options       = ReadOptionsFromUi();
                 *snapshot                                = MakeFileListOptionsPromptDebugSnapshot{};
                 snapshot->usesDxUiHost                   = _dxHost.GetRoot() != nullptr;
                 snapshot->visibleChildWindowCount        = CountVisibleChildWindowsLocal(_hWnd.get());
@@ -3731,9 +3667,9 @@ private:
                 snapshot->includeFullPath                = options.includeFullPath;
                 snapshot->includeSize                    = options.includeSize;
                 snapshot->includeModified                = options.includeModified;
-                snapshot->includeAttributes       = options.includeAttributes;
-                snapshot->includeDirectories      = options.includeDirectories;
-                snapshot->outputFileFieldEnabled  = _outputFileField && _outputFileField->IsEnabled();
+                snapshot->includeAttributes              = options.includeAttributes;
+                snapshot->includeDirectories             = options.includeDirectories;
+                snapshot->outputFileFieldEnabled         = _outputFileField && _outputFileField->IsEnabled();
                 return TRUE;
             }
             case MakeFileListOptionsPromptDebugCommand::SetState:
@@ -3745,17 +3681,17 @@ private:
                 }
 
                 MakeFileListSettings options{};
-                options.sourceMode        = MakeFileListSourceModeFromRaw(payload->sourceMode);
-                options.recursive         = payload->recursive;
-                options.format            = MakeFileListFormatFromRaw(payload->format);
-                options.outputTarget      = MakeFileListOutputTargetFromRaw(payload->outputTarget);
-                options.textMacro         = payload->textMacro;
-                options.outputFile        = std::filesystem::path(payload->outputFile);
-                options.includeName       = payload->includeName;
-                options.includeFullPath   = payload->includeFullPath;
-                options.includeSize       = payload->includeSize;
-                options.includeModified   = payload->includeModified;
-                options.includeAttributes = payload->includeAttributes;
+                options.sourceMode         = MakeFileListSourceModeFromRaw(payload->sourceMode);
+                options.recursive          = payload->recursive;
+                options.format             = MakeFileListFormatFromRaw(payload->format);
+                options.outputTarget       = MakeFileListOutputTargetFromRaw(payload->outputTarget);
+                options.textMacro          = payload->textMacro;
+                options.outputFile         = std::filesystem::path(payload->outputFile);
+                options.includeName        = payload->includeName;
+                options.includeFullPath    = payload->includeFullPath;
+                options.includeSize        = payload->includeSize;
+                options.includeModified    = payload->includeModified;
+                options.includeAttributes  = payload->includeAttributes;
                 options.includeDirectories = payload->includeDirectories;
                 SetState(options);
                 return TRUE;
@@ -3777,28 +3713,28 @@ private:
     RedSalamander::DxUi::WindowHost _dxHost;
     RedSalamander::DxUi::ThemePalette _palette{};
     std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root = nullptr;
-    RedSalamander::DxUi::Label* _sourceLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _sourceCombo = nullptr;
-    RedSalamander::DxUi::Checkbox* _recursiveCheckbox = nullptr;
-    RedSalamander::DxUi::Label* _formatLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _formatCombo = nullptr;
-    RedSalamander::DxUi::Label* _textMacroLabel = nullptr;
-    RedSalamander::DxUi::TextField* _textMacroField = nullptr;
-    RedSalamander::DxUi::Label* _fieldsLabel = nullptr;
-    RedSalamander::DxUi::Checkbox* _includeNameCheckbox = nullptr;
-    RedSalamander::DxUi::Checkbox* _includeFullPathCheckbox = nullptr;
-    RedSalamander::DxUi::Checkbox* _includeSizeCheckbox = nullptr;
-    RedSalamander::DxUi::Checkbox* _includeModifiedCheckbox = nullptr;
-    RedSalamander::DxUi::Checkbox* _includeAttributesCheckbox = nullptr;
+    RedSalamander::DxUi::Panel* _root                          = nullptr;
+    RedSalamander::DxUi::Label* _sourceLabel                   = nullptr;
+    RedSalamander::DxUi::ComboBox* _sourceCombo                = nullptr;
+    RedSalamander::DxUi::Checkbox* _recursiveCheckbox          = nullptr;
+    RedSalamander::DxUi::Label* _formatLabel                   = nullptr;
+    RedSalamander::DxUi::ComboBox* _formatCombo                = nullptr;
+    RedSalamander::DxUi::Label* _textMacroLabel                = nullptr;
+    RedSalamander::DxUi::TextField* _textMacroField            = nullptr;
+    RedSalamander::DxUi::Label* _fieldsLabel                   = nullptr;
+    RedSalamander::DxUi::Checkbox* _includeNameCheckbox        = nullptr;
+    RedSalamander::DxUi::Checkbox* _includeFullPathCheckbox    = nullptr;
+    RedSalamander::DxUi::Checkbox* _includeSizeCheckbox        = nullptr;
+    RedSalamander::DxUi::Checkbox* _includeModifiedCheckbox    = nullptr;
+    RedSalamander::DxUi::Checkbox* _includeAttributesCheckbox  = nullptr;
     RedSalamander::DxUi::Checkbox* _includeDirectoriesCheckbox = nullptr;
-    RedSalamander::DxUi::Label* _outputLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _outputCombo = nullptr;
-    RedSalamander::DxUi::Label* _outputFileLabel = nullptr;
-    RedSalamander::DxUi::TextField* _outputFileField = nullptr;
-    RedSalamander::DxUi::Button* _okButton = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton = nullptr;
-    bool _done = false;
+    RedSalamander::DxUi::Label* _outputLabel                   = nullptr;
+    RedSalamander::DxUi::ComboBox* _outputCombo                = nullptr;
+    RedSalamander::DxUi::Label* _outputFileLabel               = nullptr;
+    RedSalamander::DxUi::TextField* _outputFileField           = nullptr;
+    RedSalamander::DxUi::Button* _okButton                     = nullptr;
+    RedSalamander::DxUi::Button* _cancelButton                 = nullptr;
+    bool _done                                                 = false;
     std::optional<MakeFileListSettings> _result;
 };
 
@@ -3810,7 +3746,7 @@ private:
     return prompt.ShowModal();
 }
 
-constexpr size_t kOpenedFilesNoSelection = static_cast<size_t>(-1);
+constexpr size_t kOpenedFilesNoSelection       = static_cast<size_t>(-1);
 constexpr size_t kSharedDirectoriesNoSelection = static_cast<size_t>(-1);
 
 [[nodiscard]] std::wstring LoadStringOrFallback(UINT stringId, std::wstring_view fallback)
@@ -3823,7 +3759,7 @@ constexpr size_t kSharedDirectoriesNoSelection = static_cast<size_t>(-1);
     return text;
 }
 
-constexpr wchar_t kArchivePackPromptClassName[] = L"RedSalamander.ArchivePackPrompt";
+constexpr wchar_t kArchivePackPromptClassName[]   = L"RedSalamander.ArchivePackPrompt";
 constexpr wchar_t kArchiveUnpackPromptClassName[] = L"RedSalamander.ArchiveUnpackPrompt";
 
 struct ArchivePackerDefinition final
@@ -3914,17 +3850,13 @@ struct ArchiveUnpackPromptTextPayload final
 
 [[nodiscard]] std::wstring ToLowerInvariant(std::wstring text)
 {
-    std::transform(text.begin(), text.end(), text.begin(), [](wchar_t ch) noexcept {
-        return static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
-    });
+    std::transform(text.begin(), text.end(), text.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch))); });
     return text;
 }
 
 [[nodiscard]] std::wstring ToUpperInvariant(std::wstring text)
 {
-    std::transform(text.begin(), text.end(), text.begin(), [](wchar_t ch) noexcept {
-        return static_cast<wchar_t>(std::towupper(static_cast<wint_t>(ch)));
-    });
+    std::transform(text.begin(), text.end(), text.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(std::towupper(static_cast<wint_t>(ch))); });
     return text;
 }
 
@@ -4183,8 +4115,8 @@ struct ArchiveUnpackPromptTextPayload final
     {
         PROPVARIANT extensionVar{};
         PropVariantInit(&extensionVar);
-        const HRESULT extensionHr = api.getHandlerProperty2(index, NArchive::NHandlerPropID::kExtension, &extensionVar);
-        auto clearExtension       = wil::scope_exit([&]
+        const HRESULT extensionHr        = api.getHandlerProperty2(index, NArchive::NHandlerPropID::kExtension, &extensionVar);
+        auto clearExtension              = wil::scope_exit([&]
         {
             if (SUCCEEDED(extensionHr))
             {
@@ -4195,8 +4127,8 @@ struct ArchiveUnpackPromptTextPayload final
 
         PROPVARIANT addExtensionVar{};
         PropVariantInit(&addExtensionVar);
-        const HRESULT addExtensionHr = api.getHandlerProperty2(index, NArchive::NHandlerPropID::kAddExtension, &addExtensionVar);
-        auto clearAddExtension       = wil::scope_exit([&]
+        const HRESULT addExtensionHr        = api.getHandlerProperty2(index, NArchive::NHandlerPropID::kAddExtension, &addExtensionVar);
+        auto clearAddExtension              = wil::scope_exit([&]
         {
             if (SUCCEEDED(addExtensionHr))
             {
@@ -4205,8 +4137,7 @@ struct ArchiveUnpackPromptTextPayload final
         });
         const std::wstring addExtensionList = SUCCEEDED(addExtensionHr) ? PropVariantToWideStringForArchive(addExtensionVar) : std::wstring{};
 
-        if (! ArchiveExtensionListContains(extensionList, extensionNoDotLower) &&
-            ! ArchiveExtensionListContains(addExtensionList, extensionNoDotLower))
+        if (! ArchiveExtensionListContains(extensionList, extensionNoDotLower) && ! ArchiveExtensionListContains(addExtensionList, extensionNoDotLower))
         {
             continue;
         }
@@ -4217,7 +4148,7 @@ struct ArchiveUnpackPromptTextPayload final
         {
             continue;
         }
-        auto clearClassId = wil::scope_exit([&] { PropVariantClear(&classIdVar); });
+        auto clearClassId                 = wil::scope_exit([&] { PropVariantClear(&classIdVar); });
         const std::optional<GUID> classId = PropVariantToGuidBinaryBstrForArchive(classIdVar);
         if (classId.has_value())
         {
@@ -4278,7 +4209,7 @@ struct ArchiveUnpackPromptTextPayload final
         {
             continue;
         }
-        auto clearExtension = wil::scope_exit([&] { PropVariantClear(&extensionVar); });
+        auto clearExtension    = wil::scope_exit([&] { PropVariantClear(&extensionVar); });
         std::wstring extension = FirstArchiveExtensionToken(PropVariantToWideStringForArchive(extensionVar));
         if (extension.empty())
         {
@@ -4308,7 +4239,7 @@ struct ArchiveUnpackPromptTextPayload final
         {
             continue;
         }
-        auto clearClassId = wil::scope_exit([&] { PropVariantClear(&classIdVar); });
+        auto clearClassId                 = wil::scope_exit([&] { PropVariantClear(&classIdVar); });
         const std::optional<GUID> classId = PropVariantToGuidBinaryBstrForArchive(classIdVar);
         if (! classId.has_value())
         {
@@ -4384,8 +4315,7 @@ struct ArchiveUnpackPromptTextPayload final
     return text.empty() ? std::wstring(L"selection") : text;
 }
 
-[[nodiscard]] std::wstring BuildArchiveSuggestedStem(const std::filesystem::path& currentFolder,
-                                                     const std::vector<std::filesystem::path>& selectedPaths)
+[[nodiscard]] std::wstring BuildArchiveSuggestedStem(const std::filesystem::path& currentFolder, const std::vector<std::filesystem::path>& selectedPaths)
 {
     std::wstring stem;
     if (selectedPaths.size() == 1u)
@@ -4434,9 +4364,7 @@ struct ArchiveUnpackPromptTextPayload final
     return folder / filename;
 }
 
-[[nodiscard]] std::filesystem::path ResolveUniqueArchivePath(const std::filesystem::path& folder,
-                                                             std::wstring_view stem,
-                                                             std::wstring_view extensionNoDot)
+[[nodiscard]] std::filesystem::path ResolveUniqueArchivePath(const std::filesystem::path& folder, std::wstring_view stem, std::wstring_view extensionNoDot)
 {
     const auto isTaken = [](const std::filesystem::path& candidate) noexcept
     {
@@ -4463,9 +4391,7 @@ struct ArchiveUnpackPromptTextPayload final
     return ComposeArchiveCandidatePath(folder, std::format(L"{}-{}", stem, GetTickCount64()), extensionNoDot, 0u);
 }
 
-[[nodiscard]] std::filesystem::path ComposeArchiveDestinationCandidatePath(const std::filesystem::path& folder,
-                                                                           std::wstring_view stem,
-                                                                           unsigned int suffix)
+[[nodiscard]] std::filesystem::path ComposeArchiveDestinationCandidatePath(const std::filesystem::path& folder, std::wstring_view stem, unsigned int suffix)
 {
     std::wstring name(stem);
     if (suffix != 0u)
@@ -4648,17 +4574,17 @@ public:
 
         const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_PACK);
         const HWND hwnd            = CreateWindowExW(exStyle,
-                                          kArchivePackPromptClassName,
-                                          caption.c_str(),
-                                          style,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          bounds.right - bounds.left,
-                                          bounds.bottom - bounds.top,
-                                          _ownerWindow,
-                                          nullptr,
-                                          GetModuleHandleW(nullptr),
-                                          this);
+                                                     kArchivePackPromptClassName,
+                                                     caption.c_str(),
+                                                     style,
+                                                     CW_USEDEFAULT,
+                                                     CW_USEDEFAULT,
+                                                     bounds.right - bounds.left,
+                                                     bounds.bottom - bounds.top,
+                                                     _ownerWindow,
+                                                     nullptr,
+                                                     GetModuleHandleW(nullptr),
+                                                     this);
         if (! hwnd)
         {
             return std::nullopt;
@@ -4852,12 +4778,10 @@ private:
         _root        = _rootStorage.get();
 
         const std::wstring selectedName = ShortDisplayNameForArchiveSelection(_selectedPaths);
-        const UINT promptStringId       = _selectedPaths.size() == 1u
-                                      ? (IsSingleSelectedDirectory() ? IDS_ARCHIVE_PACK_DIRECTORY_FMT : IDS_ARCHIVE_PACK_FILE_FMT)
-                                      : IDS_ARCHIVE_PACK_SELECTION_FMT;
-        std::wstring promptText         = _selectedPaths.size() == 1u
-                                      ? FormatStringResource(nullptr, promptStringId, selectedName)
-                                      : LoadStringResource(nullptr, promptStringId);
+        const UINT promptStringId = _selectedPaths.size() == 1u ? (IsSingleSelectedDirectory() ? IDS_ARCHIVE_PACK_DIRECTORY_FMT : IDS_ARCHIVE_PACK_FILE_FMT)
+                                                                : IDS_ARCHIVE_PACK_SELECTION_FMT;
+        std::wstring promptText =
+            _selectedPaths.size() == 1u ? FormatStringResource(nullptr, promptStringId, selectedName) : LoadStringResource(nullptr, promptStringId);
         if (promptText.empty())
         {
             promptText = LoadStringResource(nullptr, IDS_CMD_PACK);
@@ -4931,7 +4855,7 @@ private:
     [[nodiscard]] size_t SelectedPackerIndex() const noexcept
     {
         const std::optional<size_t> selectedIndex = _packerCombo ? _packerCombo->GetSelectedIndex() : std::optional<size_t>{0u};
-        const size_t index = selectedIndex.value_or(0u);
+        const size_t index                        = selectedIndex.value_or(0u);
         return index < _packers.size() ? index : 0u;
     }
 
@@ -5081,7 +5005,7 @@ private:
             if (std::filesystem::exists(archivePath, ec) || ec)
             {
                 const std::filesystem::path parent = archivePath.parent_path().empty() ? _currentFolder : archivePath.parent_path();
-                archivePath                        = ResolveUniqueArchivePath(parent, SanitizeArchiveSuggestedStem(archivePath.stem().wstring()), result.packer.extensionNoDot);
+                archivePath = ResolveUniqueArchivePath(parent, SanitizeArchiveSuggestedStem(archivePath.stem().wstring()), result.packer.extensionNoDot);
             }
         }
         result.archivePath = std::move(archivePath);
@@ -5110,7 +5034,7 @@ private:
 
     void SetPackerIndex(size_t index) noexcept
     {
-        if (!_packerCombo || index >= _packers.size())
+        if (! _packerCombo || index >= _packers.size())
         {
             return;
         }
@@ -5137,24 +5061,22 @@ private:
                 }
 
                 const ArchivePackerDefinition& selectedPacker = SelectedPacker();
-                *snapshot                                      = ArchivePackPromptDebugSnapshot{};
-                snapshot->usesDxUiHost                         = _dxHost.GetRoot() != nullptr;
-                snapshot->visibleChildWindowCount              = CountVisibleChildWindowsLocal(_hWnd.get());
-                snapshot->visibleNativeChildControlCount       = CountVisibleNativeChildControlWindowsLocal(_hWnd.get());
-                snapshot->dialogClassName                      = GetWindowClassNameLocal(_hWnd.get());
-                snapshot->archivePathText = _archivePathCombo ? std::wstring(_archivePathCombo->GetText()) : std::wstring{};
-                snapshot->packerDisplayName = selectedPacker.displayName;
-                snapshot->packerExtension   = selectedPacker.extensionNoDot;
-                snapshot->packerCount       = _packers.size();
-                snapshot->selectedPackerIndex = SelectedPackerIndex();
-                snapshot->deleteAfterPacking  = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
-                const D2D1_RECT_F client      = _dxHost.GetClientBoundsDip();
-                snapshot->commandButtonsFitInClient = _lastButtonsBottomDip <= client.bottom;
+                *snapshot                                     = ArchivePackPromptDebugSnapshot{};
+                snapshot->usesDxUiHost                        = _dxHost.GetRoot() != nullptr;
+                snapshot->visibleChildWindowCount             = CountVisibleChildWindowsLocal(_hWnd.get());
+                snapshot->visibleNativeChildControlCount      = CountVisibleNativeChildControlWindowsLocal(_hWnd.get());
+                snapshot->dialogClassName                     = GetWindowClassNameLocal(_hWnd.get());
+                snapshot->archivePathText                     = _archivePathCombo ? std::wstring(_archivePathCombo->GetText()) : std::wstring{};
+                snapshot->packerDisplayName                   = selectedPacker.displayName;
+                snapshot->packerExtension                     = selectedPacker.extensionNoDot;
+                snapshot->packerCount                         = _packers.size();
+                snapshot->selectedPackerIndex                 = SelectedPackerIndex();
+                snapshot->deleteAfterPacking                  = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
+                const D2D1_RECT_F client                      = _dxHost.GetClientBoundsDip();
+                snapshot->commandButtonsFitInClient           = _lastButtonsBottomDip <= client.bottom;
                 return TRUE;
             }
-            case ArchivePackPromptDebugCommand::SetPackerIndex:
-                SetPackerIndex(static_cast<size_t>(lParam));
-                return TRUE;
+            case ArchivePackPromptDebugCommand::SetPackerIndex: SetPackerIndex(static_cast<size_t>(lParam)); return TRUE;
             case ArchivePackPromptDebugCommand::SetArchivePath:
             {
                 const auto* payload = reinterpret_cast<const ArchivePackPromptArchivePathPayload*>(lParam);
@@ -5191,19 +5113,19 @@ private:
     RedSalamander::DxUi::WindowHost _dxHost;
     RedSalamander::DxUi::ThemePalette _palette{};
     std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root          = nullptr;
-    RedSalamander::DxUi::Label* _promptLabel   = nullptr;
-    RedSalamander::DxUi::ComboBox* _archivePathCombo = nullptr;
-    RedSalamander::DxUi::Label* _packerLabel         = nullptr;
-    RedSalamander::DxUi::ComboBox* _packerCombo       = nullptr;
+    RedSalamander::DxUi::Panel* _root                   = nullptr;
+    RedSalamander::DxUi::Label* _promptLabel            = nullptr;
+    RedSalamander::DxUi::ComboBox* _archivePathCombo    = nullptr;
+    RedSalamander::DxUi::Label* _packerLabel            = nullptr;
+    RedSalamander::DxUi::ComboBox* _packerCombo         = nullptr;
     RedSalamander::DxUi::Checkbox* _deleteAfterCheckbox = nullptr;
     RedSalamander::DxUi::Button* _okButton              = nullptr;
     RedSalamander::DxUi::Button* _cancelButton          = nullptr;
     RedSalamander::DxUi::Button* _helpButton            = nullptr;
-    bool _done                         = false;
-    bool _archivePathUserEdited        = false;
-    bool _updatingArchivePathText      = false;
-    float _lastButtonsBottomDip        = 0.0f;
+    bool _done                                          = false;
+    bool _archivePathUserEdited                         = false;
+    bool _updatingArchivePathText                       = false;
+    float _lastButtonsBottomDip                         = 0.0f;
     std::optional<ArchivePackPromptResult> _result;
 };
 
@@ -5300,17 +5222,17 @@ public:
 
         const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_UNPACK);
         const HWND hwnd            = CreateWindowExW(exStyle,
-                                          kArchiveUnpackPromptClassName,
-                                          caption.c_str(),
-                                          style,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          bounds.right - bounds.left,
-                                          bounds.bottom - bounds.top,
-                                          _ownerWindow,
-                                          nullptr,
-                                          GetModuleHandleW(nullptr),
-                                          this);
+                                                     kArchiveUnpackPromptClassName,
+                                                     caption.c_str(),
+                                                     style,
+                                                     CW_USEDEFAULT,
+                                                     CW_USEDEFAULT,
+                                                     bounds.right - bounds.left,
+                                                     bounds.bottom - bounds.top,
+                                                     _ownerWindow,
+                                                     nullptr,
+                                                     GetModuleHandleW(nullptr),
+                                                     this);
         if (! hwnd)
         {
             return std::nullopt;
@@ -5585,7 +5507,7 @@ private:
     [[nodiscard]] size_t SelectedUnpackerIndex() const noexcept
     {
         const std::optional<size_t> selectedIndex = _unpackerCombo ? _unpackerCombo->GetSelectedIndex() : std::optional<size_t>{0u};
-        const size_t index = selectedIndex.value_or(0u);
+        const size_t index                        = selectedIndex.value_or(0u);
         return index < _unpackers.size() ? index : 0u;
     }
 
@@ -5759,7 +5681,7 @@ private:
     [[nodiscard]] ArchiveUnpackPromptResult ReadResultFromUi() const
     {
         ArchiveUnpackPromptResult result{};
-        result.unpacker = SelectedUnpacker();
+        result.unpacker      = SelectedUnpacker();
         result.deleteArchive = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
         result.destinationPath =
             std::filesystem::path(StringUtils::TrimWhitespaceCopy(_destinationCombo ? std::wstring(_destinationCombo->GetText()) : std::wstring{}));
@@ -5805,21 +5727,21 @@ private:
                 }
 
                 const ArchiveUnpackerDefinition& selectedUnpacker = SelectedUnpacker();
-                *snapshot                                      = ArchiveUnpackPromptDebugSnapshot{};
-                snapshot->usesDxUiHost                         = _dxHost.GetRoot() != nullptr;
-                snapshot->visibleChildWindowCount              = CountVisibleChildWindowsLocal(_hWnd.get());
-                snapshot->visibleNativeChildControlCount       = CountVisibleNativeChildControlWindowsLocal(_hWnd.get());
-                snapshot->dialogClassName                      = GetWindowClassNameLocal(_hWnd.get());
-                snapshot->destinationPathText                  = _destinationCombo ? std::wstring(_destinationCombo->GetText()) : std::wstring{};
-                snapshot->unpackerDisplayName                  = selectedUnpacker.displayName;
-                snapshot->unpackerExtension                    = selectedUnpacker.extensionNoDot;
-                snapshot->unpackerCount                        = _unpackers.size();
-                snapshot->selectedUnpackerIndex                = SelectedUnpackerIndex();
-                snapshot->deleteAfterUnpacking                 = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
-                snapshot->maskText                             = _maskField ? std::wstring(_maskField->GetText()) : std::wstring{};
-                snapshot->maskHelpVisible                      = _maskHelpVisible;
-                const D2D1_RECT_F client                       = _dxHost.GetClientBoundsDip();
-                snapshot->commandButtonsFitInClient            = _lastButtonsBottomDip <= client.bottom;
+                *snapshot                                         = ArchiveUnpackPromptDebugSnapshot{};
+                snapshot->usesDxUiHost                            = _dxHost.GetRoot() != nullptr;
+                snapshot->visibleChildWindowCount                 = CountVisibleChildWindowsLocal(_hWnd.get());
+                snapshot->visibleNativeChildControlCount          = CountVisibleNativeChildControlWindowsLocal(_hWnd.get());
+                snapshot->dialogClassName                         = GetWindowClassNameLocal(_hWnd.get());
+                snapshot->destinationPathText                     = _destinationCombo ? std::wstring(_destinationCombo->GetText()) : std::wstring{};
+                snapshot->unpackerDisplayName                     = selectedUnpacker.displayName;
+                snapshot->unpackerExtension                       = selectedUnpacker.extensionNoDot;
+                snapshot->unpackerCount                           = _unpackers.size();
+                snapshot->selectedUnpackerIndex                   = SelectedUnpackerIndex();
+                snapshot->deleteAfterUnpacking                    = _deleteAfterCheckbox && _deleteAfterCheckbox->IsChecked();
+                snapshot->maskText                                = _maskField ? std::wstring(_maskField->GetText()) : std::wstring{};
+                snapshot->maskHelpVisible                         = _maskHelpVisible;
+                const D2D1_RECT_F client                          = _dxHost.GetClientBoundsDip();
+                snapshot->commandButtonsFitInClient               = _lastButtonsBottomDip <= client.bottom;
                 return TRUE;
             }
             case ArchiveUnpackPromptDebugCommand::SetDestinationPath:
@@ -5868,11 +5790,11 @@ private:
     RedSalamander::DxUi::WindowHost _dxHost;
     RedSalamander::DxUi::ThemePalette _palette{};
     std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root             = nullptr;
-    RedSalamander::DxUi::Label* _promptLabel      = nullptr;
-    RedSalamander::DxUi::ComboBox* _destinationCombo = nullptr;
-    RedSalamander::DxUi::Label* _unpackerLabel       = nullptr;
-    RedSalamander::DxUi::ComboBox* _unpackerCombo     = nullptr;
+    RedSalamander::DxUi::Panel* _root                   = nullptr;
+    RedSalamander::DxUi::Label* _promptLabel            = nullptr;
+    RedSalamander::DxUi::ComboBox* _destinationCombo    = nullptr;
+    RedSalamander::DxUi::Label* _unpackerLabel          = nullptr;
+    RedSalamander::DxUi::ComboBox* _unpackerCombo       = nullptr;
     RedSalamander::DxUi::Checkbox* _deleteAfterCheckbox = nullptr;
     RedSalamander::DxUi::Label* _maskLabel              = nullptr;
     RedSalamander::DxUi::TextField* _maskField          = nullptr;
@@ -5881,9 +5803,9 @@ private:
     RedSalamander::DxUi::Button* _okButton              = nullptr;
     RedSalamander::DxUi::Button* _cancelButton          = nullptr;
     RedSalamander::DxUi::Button* _helpButton            = nullptr;
-    bool _done                   = false;
-    bool _maskHelpVisible        = false;
-    float _lastButtonsBottomDip  = 0.0f;
+    bool _done                                          = false;
+    bool _maskHelpVisible                               = false;
+    float _lastButtonsBottomDip                         = 0.0f;
     std::optional<ArchiveUnpackPromptResult> _result;
 };
 
@@ -5913,8 +5835,7 @@ constexpr uint64_t kMaxArchiveExtractTotalBytes   = 8ull * 1024ull * 1024ull * 1
 
 [[nodiscard]] HRESULT AccumulateArchiveExtractSize(uint64_t& totalBytes, uint64_t entryBytes) noexcept
 {
-    if (entryBytes > kMaxArchiveExtractEntryBytes || totalBytes > kMaxArchiveExtractTotalBytes ||
-        entryBytes > kMaxArchiveExtractTotalBytes - totalBytes)
+    if (entryBytes > kMaxArchiveExtractEntryBytes || totalBytes > kMaxArchiveExtractTotalBytes || entryBytes > kMaxArchiveExtractTotalBytes - totalBytes)
     {
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     }
@@ -5927,7 +5848,7 @@ struct ArchiveEntrySource final
 {
     std::filesystem::path sourcePath;
     std::wstring entryName;
-    bool directory = false;
+    bool directory    = false;
     uint64_t fileSize = 0u;
 };
 
@@ -5935,28 +5856,28 @@ struct ZipCentralEntry final
 {
     std::wstring entryName;
     std::string entryNameUtf8;
-    uint32_t crc32 = 0u;
-    uint32_t compressedSize = 0u;
-    uint32_t uncompressedSize = 0u;
+    uint32_t crc32             = 0u;
+    uint32_t compressedSize    = 0u;
+    uint32_t uncompressedSize  = 0u;
     uint32_t localHeaderOffset = 0u;
-    bool directory = false;
+    bool directory             = false;
 };
 
 struct ZipParsedEntry final
 {
     std::wstring entryName;
     std::filesystem::path relativePath;
-    uint32_t crc32 = 0u;
-    uint32_t compressedSize = 0u;
-    uint32_t uncompressedSize = 0u;
+    uint32_t crc32             = 0u;
+    uint32_t compressedSize    = 0u;
+    uint32_t uncompressedSize  = 0u;
     uint32_t localHeaderOffset = 0u;
-    bool directory = false;
+    bool directory             = false;
 };
 
 struct ZipEndOfCentralDirectory final
 {
-    uint16_t entryCount = 0u;
-    uint32_t centralDirectorySize = 0u;
+    uint16_t entryCount             = 0u;
+    uint32_t centralDirectorySize   = 0u;
     uint32_t centralDirectoryOffset = 0u;
 };
 
@@ -5965,7 +5886,7 @@ struct ArchiveOperationResult final
     HRESULT hr = S_OK;
     std::filesystem::path archivePath;
     std::filesystem::path destinationPath;
-    uint64_t entryCount = 0u;
+    uint64_t entryCount     = 0u;
     uint64_t bytesProcessed = 0u;
     std::vector<std::wstring> entries;
 };
@@ -5989,8 +5910,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
         return false;
     }
 
-    out = static_cast<uint16_t>(std::to_integer<uint16_t>(bytes[offset]) |
-                                static_cast<uint16_t>(std::to_integer<uint16_t>(bytes[offset + 1u]) << 8u));
+    out = static_cast<uint16_t>(std::to_integer<uint16_t>(bytes[offset]) | static_cast<uint16_t>(std::to_integer<uint16_t>(bytes[offset + 1u]) << 8u));
     return true;
 }
 
@@ -6044,11 +5964,11 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
 [[nodiscard]] uint32_t ArchiveCrc32Update(uint32_t crc, const std::byte* data, size_t size) noexcept
 {
     const auto& table = ArchiveCrc32Table();
-    uint32_t current = crc;
+    uint32_t current  = crc;
     for (size_t index = 0u; index < size; ++index)
     {
         const uint32_t byte = std::to_integer<uint32_t>(data[index]);
-        current = table[static_cast<size_t>((current ^ byte) & 0xFFu)] ^ (current >> 8u);
+        current             = table[static_cast<size_t>((current ^ byte) & 0xFFu)] ^ (current >> 8u);
     }
     return current;
 }
@@ -6086,11 +6006,11 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
 [[nodiscard]] HRESULT WriteArchiveBytes(HANDLE file, const void* data, size_t size) noexcept
 {
     const auto* cursor = static_cast<const std::byte*>(data);
-    size_t remaining = size;
+    size_t remaining   = size;
     while (remaining > 0u)
     {
         const DWORD chunk = static_cast<DWORD>((std::min)(remaining, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
-        DWORD written = 0u;
+        DWORD written     = 0u;
         if (WriteFile(file, cursor, chunk, &written, nullptr) == FALSE)
         {
             return HResultFromLastError();
@@ -6118,11 +6038,11 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     }
 
     size_t remaining = bytes.size();
-    size_t written = 0u;
+    size_t written   = 0u;
     while (remaining > 0u)
     {
         const DWORD chunk = static_cast<DWORD>((std::min)(remaining, static_cast<size_t>((std::numeric_limits<DWORD>::max)())));
-        DWORD bytesRead = 0u;
+        DWORD bytesRead   = 0u;
         if (ReadFile(file, bytes.data() + written, chunk, &bytesRead, nullptr) == FALSE)
         {
             return HResultFromLastError();
@@ -6211,8 +6131,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     return false;
 }
 
-[[nodiscard]] bool IsArchiveTargetPathInsideDestination(const std::filesystem::path& destinationPath,
-                                                        const std::filesystem::path& targetPath) noexcept
+[[nodiscard]] bool IsArchiveTargetPathInsideDestination(const std::filesystem::path& destinationPath, const std::filesystem::path& targetPath) noexcept
 {
     std::error_code ec;
     const std::filesystem::path destination = std::filesystem::absolute(destinationPath, ec).lexically_normal();
@@ -6244,9 +6163,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     return true;
 }
 
-[[nodiscard]] HRESULT MoveFileExWithTransientRetry(const std::filesystem::path& source,
-                                                   const std::filesystem::path& target,
-                                                   DWORD flags) noexcept
+[[nodiscard]] HRESULT MoveFileExWithTransientRetry(const std::filesystem::path& source, const std::filesystem::path& target, DWORD flags) noexcept
 {
     constexpr int kAttempts = 5;
     for (int attempt = 0; attempt < kAttempts; ++attempt)
@@ -6326,8 +6243,8 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
 {
     ArchiveEntrySource entry{};
     entry.sourcePath = path;
-    entry.entryName = ArchiveEntryNameFromRelativePath(relativePath, directory);
-    entry.directory = directory;
+    entry.entryName  = ArchiveEntryNameFromRelativePath(relativePath, directory);
+    entry.directory  = directory;
     if (entry.entryName.empty())
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
@@ -6371,14 +6288,14 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     const std::filesystem::path parent = root.parent_path();
     for (; it != end;)
     {
-        const std::filesystem::path itemPath = it->path();
+        const std::filesystem::path itemPath      = it->path();
         const std::filesystem::file_status status = it->symlink_status(ec);
         if (ec)
         {
             return HResultFromErrorCode(ec);
         }
 
-        const bool isDirectory = std::filesystem::is_directory(status);
+        const bool isDirectory   = std::filesystem::is_directory(status);
         const bool isRegularFile = std::filesystem::is_regular_file(status);
         if (isDirectory || isRegularFile)
         {
@@ -6437,21 +6354,18 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
         }
     }
 
-    std::sort(outEntries.begin(), outEntries.end(), [](const ArchiveEntrySource& left, const ArchiveEntrySource& right) noexcept
-    {
+    std::sort(outEntries.begin(), outEntries.end(), [](const ArchiveEntrySource& left, const ArchiveEntrySource& right) noexcept {
         return left.entryName < right.entryName;
     });
     outEntries.erase(std::unique(outEntries.begin(),
                                  outEntries.end(),
-                                 [](const ArchiveEntrySource& left, const ArchiveEntrySource& right) noexcept
-                                 {
-                                     return left.entryName == right.entryName;
-                                 }),
+                                 [](const ArchiveEntrySource& left, const ArchiveEntrySource& right) noexcept { return left.entryName == right.entryName; }),
                      outEntries.end());
     return outEntries.empty() ? HRESULT_FROM_WIN32(ERROR_NOT_FOUND) : S_OK;
 }
 
-[[nodiscard]] HRESULT WriteZipLocalHeader(HANDLE archiveFile, std::string_view entryNameUtf8, uint32_t crc32, uint32_t compressedSize, uint32_t uncompressedSize)
+[[nodiscard]] HRESULT WriteZipLocalHeader(
+    HANDLE archiveFile, std::string_view entryNameUtf8, uint32_t crc32, uint32_t compressedSize, uint32_t uncompressedSize)
 {
     if (entryNameUtf8.empty() || entryNameUtf8.size() > static_cast<size_t>((std::numeric_limits<uint16_t>::max)()))
     {
@@ -6479,7 +6393,8 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     return WriteArchiveBytes(archiveFile, header);
 }
 
-[[nodiscard]] HRESULT PatchZipLocalHeaderSizes(HANDLE archiveFile, uint64_t localHeaderOffset, uint32_t crc32, uint32_t compressedSize, uint32_t uncompressedSize)
+[[nodiscard]] HRESULT PatchZipLocalHeaderSizes(
+    HANDLE archiveFile, uint64_t localHeaderOffset, uint32_t crc32, uint32_t compressedSize, uint32_t uncompressedSize)
 {
     std::vector<std::byte> patch;
     patch.reserve(12u);
@@ -6500,7 +6415,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
 [[nodiscard]] HRESULT StreamFileIntoZip(HANDLE archiveFile, const std::filesystem::path& sourcePath, uint32_t& outCrc32, uint32_t& outSize) noexcept
 {
     outCrc32 = 0u;
-    outSize = 0u;
+    outSize  = 0u;
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
@@ -6518,7 +6433,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     }
 
     std::array<std::byte, 64u * 1024u> buffer{};
-    uint32_t crc = 0xFFFFFFFFu;
+    uint32_t crc   = 0xFFFFFFFFu;
     uint64_t total = 0u;
     for (;;)
     {
@@ -6545,7 +6460,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     }
 
     outCrc32 = crc ^ 0xFFFFFFFFu;
-    outSize = static_cast<uint32_t>(total);
+    outSize  = static_cast<uint32_t>(total);
     return S_OK;
 }
 
@@ -6687,7 +6602,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
         }
 
         uint64_t localHeaderOffset = 0u;
-        result.hr = GetArchiveFilePosition(archiveFile.get(), localHeaderOffset);
+        result.hr                  = GetArchiveFilePosition(archiveFile.get(), localHeaderOffset);
         if (FAILED(result.hr))
         {
             return result;
@@ -6704,7 +6619,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
             return result;
         }
 
-        uint32_t crc32 = 0u;
+        uint32_t crc32      = 0u;
         uint32_t storedSize = 0u;
         if (! source.directory)
         {
@@ -6716,7 +6631,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
         }
 
         uint64_t endPosition = 0u;
-        result.hr = GetArchiveFilePosition(archiveFile.get(), endPosition);
+        result.hr            = GetArchiveFilePosition(archiveFile.get(), endPosition);
         if (FAILED(result.hr))
         {
             return result;
@@ -6733,13 +6648,13 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
         }
 
         ZipCentralEntry central{};
-        central.entryName = source.entryName;
-        central.entryNameUtf8 = std::move(entryNameUtf8);
-        central.crc32 = crc32;
-        central.compressedSize = storedSize;
-        central.uncompressedSize = storedSize;
+        central.entryName         = source.entryName;
+        central.entryNameUtf8     = std::move(entryNameUtf8);
+        central.crc32             = crc32;
+        central.compressedSize    = storedSize;
+        central.uncompressedSize  = storedSize;
         central.localHeaderOffset = static_cast<uint32_t>(localHeaderOffset);
-        central.directory = source.directory;
+        central.directory         = source.directory;
         centralEntries.push_back(std::move(central));
 
         result.entries.push_back(source.entryName);
@@ -6748,7 +6663,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     }
 
     uint64_t centralDirectoryOffset = 0u;
-    result.hr = GetArchiveFilePosition(archiveFile.get(), centralDirectoryOffset);
+    result.hr                       = GetArchiveFilePosition(archiveFile.get(), centralDirectoryOffset);
     if (FAILED(result.hr))
     {
         return result;
@@ -6769,7 +6684,7 @@ void AppendLe32(std::vector<std::byte>& bytes, uint32_t value)
     }
 
     uint64_t centralDirectoryEnd = 0u;
-    result.hr = GetArchiveFilePosition(archiveFile.get(), centralDirectoryEnd);
+    result.hr                    = GetArchiveFilePosition(archiveFile.get(), centralDirectoryEnd);
     if (FAILED(result.hr))
     {
         return result;
@@ -6832,7 +6747,7 @@ void SetArchivePropVariantUInt64(PROPVARIANT* value, UInt64 number) noexcept
         return;
     }
 
-    value->vt    = VT_UI8;
+    value->vt             = VT_UI8;
     value->uhVal.QuadPart = number;
 }
 
@@ -7221,12 +7136,8 @@ public:
         const ArchiveEntrySource& source = _sources[index];
         switch (propID)
         {
-            case kpidPath:
-                SetArchivePropVariantBstr(value, SevenZipEntryPathProperty(source));
-                break;
-            case kpidIsDir:
-                SetArchivePropVariantBool(value, source.directory);
-                break;
+            case kpidPath: SetArchivePropVariantBstr(value, SevenZipEntryPathProperty(source)); break;
+            case kpidIsDir: SetArchivePropVariantBool(value, source.directory); break;
             case kpidSize:
                 if (! source.directory)
                 {
@@ -7252,8 +7163,7 @@ public:
                 }
                 break;
             }
-            default:
-                break;
+            default: break;
         }
 
         return value->vt == VT_EMPTY && propID == kpidPath ? E_OUTOFMEMORY : S_OK;
@@ -7357,7 +7267,7 @@ private:
     }
 
     SevenZipArchiveExports& api = GetSevenZipArchiveExports();
-    result.hr = LoadSevenZipArchiveExports(api);
+    result.hr                   = LoadSevenZipArchiveExports(api);
     if (FAILED(result.hr) || ! api.createObject)
     {
         return result;
@@ -7424,7 +7334,7 @@ private:
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    const size_t tailSize = static_cast<size_t>((std::min)(fileSize, static_cast<uint64_t>(kZipMaxTailSearchSize)));
+    const size_t tailSize     = static_cast<size_t>((std::min)(fileSize, static_cast<uint64_t>(kZipMaxTailSearchSize)));
     const uint64_t tailOffset = fileSize - tailSize;
     std::vector<std::byte> tail;
     if (const HRESULT hr = ReadArchiveBytesAt(archiveFile, tailOffset, tailSize, tail); FAILED(hr))
@@ -7441,20 +7351,16 @@ private:
             continue;
         }
 
-        uint16_t diskNumber = 0u;
-        uint16_t centralDisk = 0u;
-        uint16_t diskEntryCount = 0u;
+        uint16_t diskNumber      = 0u;
+        uint16_t centralDisk     = 0u;
+        uint16_t diskEntryCount  = 0u;
         uint16_t totalEntryCount = 0u;
-        uint16_t commentLength = 0u;
-        uint32_t centralSize = 0u;
-        uint32_t centralOffset = 0u;
-        if (! TryReadLe16(tail, index + 4u, diskNumber) ||
-            ! TryReadLe16(tail, index + 6u, centralDisk) ||
-            ! TryReadLe16(tail, index + 8u, diskEntryCount) ||
-            ! TryReadLe16(tail, index + 10u, totalEntryCount) ||
-            ! TryReadLe32(tail, index + 12u, centralSize) ||
-            ! TryReadLe32(tail, index + 16u, centralOffset) ||
-            ! TryReadLe16(tail, index + 20u, commentLength))
+        uint16_t commentLength   = 0u;
+        uint32_t centralSize     = 0u;
+        uint32_t centralOffset   = 0u;
+        if (! TryReadLe16(tail, index + 4u, diskNumber) || ! TryReadLe16(tail, index + 6u, centralDisk) || ! TryReadLe16(tail, index + 8u, diskEntryCount) ||
+            ! TryReadLe16(tail, index + 10u, totalEntryCount) || ! TryReadLe32(tail, index + 12u, centralSize) ||
+            ! TryReadLe32(tail, index + 16u, centralOffset) || ! TryReadLe16(tail, index + 20u, commentLength))
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
@@ -7472,8 +7378,8 @@ private:
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        outEocd.entryCount = totalEntryCount;
-        outEocd.centralDirectorySize = centralSize;
+        outEocd.entryCount             = totalEntryCount;
+        outEocd.centralDirectorySize   = centralSize;
         outEocd.centralDirectoryOffset = centralOffset;
         return S_OK;
     }
@@ -7489,7 +7395,7 @@ private:
     }
 
     const int inputBytes = static_cast<int>(text.size());
-    const int required = MultiByteToWideChar(codePage, flags, text.data(), inputBytes, nullptr, 0);
+    const int required   = MultiByteToWideChar(codePage, flags, text.data(), inputBytes, nullptr, 0);
     if (required <= 0)
     {
         return {};
@@ -7517,9 +7423,7 @@ private:
     return Utf16FromArchiveCodePage(rawName, kZipLegacyCodePageCp437, 0u);
 }
 
-[[nodiscard]] HRESULT ParseZipCentralDirectory(HANDLE archiveFile,
-                                               const ZipEndOfCentralDirectory& eocd,
-                                               std::vector<ZipParsedEntry>& outEntries)
+[[nodiscard]] HRESULT ParseZipCentralDirectory(HANDLE archiveFile, const ZipEndOfCentralDirectory& eocd, std::vector<ZipParsedEntry>& outEntries)
 {
     outEntries.clear();
     std::vector<std::byte> centralBytes;
@@ -7528,32 +7432,27 @@ private:
         return hr;
     }
 
-    size_t offset = 0u;
+    size_t offset                  = 0u;
     uint64_t totalUncompressedSize = 0u;
     outEntries.reserve(eocd.entryCount);
     for (uint16_t entryIndex = 0u; entryIndex < eocd.entryCount; ++entryIndex)
     {
-        uint32_t signature = 0u;
-        uint16_t flags = 0u;
+        uint32_t signature         = 0u;
+        uint16_t flags             = 0u;
         uint16_t compressionMethod = 0u;
-        uint32_t crc32 = 0u;
-        uint32_t compressedSize = 0u;
-        uint32_t uncompressedSize = 0u;
-        uint16_t nameLength = 0u;
-        uint16_t extraLength = 0u;
-        uint16_t commentLength = 0u;
-        uint16_t diskStart = 0u;
+        uint32_t crc32             = 0u;
+        uint32_t compressedSize    = 0u;
+        uint32_t uncompressedSize  = 0u;
+        uint16_t nameLength        = 0u;
+        uint16_t extraLength       = 0u;
+        uint16_t commentLength     = 0u;
+        uint16_t diskStart         = 0u;
         uint32_t localHeaderOffset = 0u;
-        if (! TryReadLe32(centralBytes, offset, signature) ||
-            ! TryReadLe16(centralBytes, offset + 8u, flags) ||
-            ! TryReadLe16(centralBytes, offset + 10u, compressionMethod) ||
-            ! TryReadLe32(centralBytes, offset + 16u, crc32) ||
-            ! TryReadLe32(centralBytes, offset + 20u, compressedSize) ||
-            ! TryReadLe32(centralBytes, offset + 24u, uncompressedSize) ||
-            ! TryReadLe16(centralBytes, offset + 28u, nameLength) ||
-            ! TryReadLe16(centralBytes, offset + 30u, extraLength) ||
-            ! TryReadLe16(centralBytes, offset + 32u, commentLength) ||
-            ! TryReadLe16(centralBytes, offset + 34u, diskStart) ||
+        if (! TryReadLe32(centralBytes, offset, signature) || ! TryReadLe16(centralBytes, offset + 8u, flags) ||
+            ! TryReadLe16(centralBytes, offset + 10u, compressionMethod) || ! TryReadLe32(centralBytes, offset + 16u, crc32) ||
+            ! TryReadLe32(centralBytes, offset + 20u, compressedSize) || ! TryReadLe32(centralBytes, offset + 24u, uncompressedSize) ||
+            ! TryReadLe16(centralBytes, offset + 28u, nameLength) || ! TryReadLe16(centralBytes, offset + 30u, extraLength) ||
+            ! TryReadLe16(centralBytes, offset + 32u, commentLength) || ! TryReadLe16(centralBytes, offset + 34u, diskStart) ||
             ! TryReadLe32(centralBytes, offset + 42u, localHeaderOffset))
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -7576,7 +7475,7 @@ private:
         }
 
         const size_t variableOffset = offset + 46u;
-        const size_t nextOffset = variableOffset + nameLength + extraLength + commentLength;
+        const size_t nextOffset     = variableOffset + nameLength + extraLength + commentLength;
         if (variableOffset > centralBytes.size() || nextOffset > centralBytes.size())
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -7610,13 +7509,13 @@ private:
         }
 
         ZipParsedEntry parsed{};
-        parsed.entryName = std::move(entryName);
-        parsed.relativePath = std::move(relativePath);
-        parsed.crc32 = crc32;
-        parsed.compressedSize = compressedSize;
-        parsed.uncompressedSize = uncompressedSize;
+        parsed.entryName         = std::move(entryName);
+        parsed.relativePath      = std::move(relativePath);
+        parsed.crc32             = crc32;
+        parsed.compressedSize    = compressedSize;
+        parsed.uncompressedSize  = uncompressedSize;
         parsed.localHeaderOffset = localHeaderOffset;
-        parsed.directory = directory;
+        parsed.directory         = directory;
         outEntries.push_back(std::move(parsed));
         offset = nextOffset;
     }
@@ -7628,16 +7527,13 @@ private:
 {
     outDataOffset = 0u;
     std::array<std::byte, 30u> header{};
-    if (const HRESULT hr = ReadArchiveBytesAt(archiveFile,
-                                              entry.localHeaderOffset,
-                                              std::span<std::byte>(header.data(), header.size()));
-        FAILED(hr))
+    if (const HRESULT hr = ReadArchiveBytesAt(archiveFile, entry.localHeaderOffset, std::span<std::byte>(header.data(), header.size())); FAILED(hr))
     {
         return hr;
     }
 
-    uint32_t signature = 0u;
-    uint16_t nameLength = 0u;
+    uint32_t signature   = 0u;
+    uint16_t nameLength  = 0u;
     uint16_t extraLength = 0u;
     if (! TryReadLe32(header, 0u, signature) || ! TryReadLe16(header, 26u, nameLength) || ! TryReadLe16(header, 28u, extraLength))
     {
@@ -7656,12 +7552,8 @@ private:
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ExtractStoredZipFileEntry(HANDLE archiveFile,
-                                                const ZipParsedEntry& entry,
-                                                uint64_t dataOffset,
-                                                const std::filesystem::path& targetPath,
-                                                bool overwrite,
-                                                uint32_t& outCrc32) noexcept
+[[nodiscard]] HRESULT ExtractStoredZipFileEntry(
+    HANDLE archiveFile, const ZipParsedEntry& entry, uint64_t dataOffset, const std::filesystem::path& targetPath, bool overwrite, uint32_t& outCrc32) noexcept
 {
     outCrc32 = 0u;
     std::error_code ec;
@@ -7687,13 +7579,8 @@ private:
     const std::filesystem::path tempPath(targetPath.wstring() + std::format(L".$rs-extracting-{:08X}", GetCurrentProcessId()));
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile outputFile(CreateFileW(tempPath.c_str(),
-                                             GENERIC_WRITE,
-                                             FILE_SHARE_READ,
-                                             nullptr,
-                                             CREATE_ALWAYS,
-                                             FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                             nullptr));
+    wil::unique_hfile outputFile(
+        CreateFileW(tempPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
 #pragma warning(pop)
     if (! outputFile)
     {
@@ -7707,8 +7594,8 @@ private:
     });
 
     std::array<std::byte, 64u * 1024u> buffer{};
-    uint32_t crc = 0xFFFFFFFFu;
-    uint64_t remaining = entry.compressedSize;
+    uint32_t crc        = 0xFFFFFFFFu;
+    uint64_t remaining  = entry.compressedSize;
     uint64_t readOffset = dataOffset;
     while (remaining > 0u)
     {
@@ -7766,13 +7653,10 @@ private:
     }
 
     const std::wstring fileName = relativePath.filename().wstring();
-    return (! fileName.empty() && MaskSyntax::MatchesWildcardMask(fileName, mask)) ||
-           (! entryName.empty() && MaskSyntax::MatchesWildcardMask(entryName, mask));
+    return (! fileName.empty() && MaskSyntax::MatchesWildcardMask(fileName, mask)) || (! entryName.empty() && MaskSyntax::MatchesWildcardMask(entryName, mask));
 }
 
-[[nodiscard]] bool ShouldExtractZipEntryForMask(const ZipParsedEntry& entry,
-                                                const MaskSyntax::WildcardMask& mask,
-                                                bool maskMatchesAll)
+[[nodiscard]] bool ShouldExtractZipEntryForMask(const ZipParsedEntry& entry, const MaskSyntax::WildcardMask& mask, bool maskMatchesAll)
 {
     return ShouldExtractArchiveEntryForMask(entry.entryName, entry.relativePath, mask, maskMatchesAll);
 }
@@ -7784,7 +7668,7 @@ struct SevenZipExtractEntry final
     std::filesystem::path relativePath;
     std::filesystem::path targetPath;
     uint64_t sizeBytes = 0u;
-    bool directory = false;
+    bool directory     = false;
 };
 
 class SevenZipExtractFileInStream final : public IInStream, public IStreamGetSize
@@ -7957,9 +7841,7 @@ private:
 class SevenZipExtractFileOutStream final : public ISequentialOutStream
 {
 public:
-    static HRESULT Create(const std::filesystem::path& targetPath,
-                          bool overwrite,
-                          wil::com_ptr<SevenZipExtractFileOutStream>& out) noexcept
+    static HRESULT Create(const std::filesystem::path& targetPath, bool overwrite, wil::com_ptr<SevenZipExtractFileOutStream>& out) noexcept
     {
         out.reset();
         if (targetPath.empty())
@@ -7990,13 +7872,8 @@ public:
         const std::filesystem::path tempPath(targetPath.wstring() + std::format(L".$rs-extracting-{:08X}", GetCurrentProcessId()));
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-        wil::unique_hfile file(CreateFileW(tempPath.c_str(),
-                                           GENERIC_WRITE,
-                                           FILE_SHARE_READ,
-                                           nullptr,
-                                           CREATE_ALWAYS,
-                                           FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                           nullptr));
+        wil::unique_hfile file(
+            CreateFileW(tempPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
 #pragma warning(pop)
         if (! file)
         {
@@ -8103,10 +7980,7 @@ public:
     }
 
 private:
-    SevenZipExtractFileOutStream(wil::unique_hfile file,
-                                 std::filesystem::path targetPath,
-                                 std::filesystem::path tempPath,
-                                 bool overwrite) noexcept
+    SevenZipExtractFileOutStream(wil::unique_hfile file, std::filesystem::path targetPath, std::filesystem::path tempPath, bool overwrite) noexcept
         : _file(std::move(file)),
           _targetPath(std::move(targetPath)),
           _tempPath(std::move(tempPath)),
@@ -8127,8 +8001,8 @@ private:
     wil::unique_hfile _file;
     std::filesystem::path _targetPath;
     std::filesystem::path _tempPath;
-    bool _overwrite = true;
-    bool _committed = false;
+    bool _overwrite        = true;
+    bool _committed        = false;
     uint64_t _bytesWritten = 0u;
 };
 
@@ -8229,7 +8103,7 @@ public:
             return E_POINTER;
         }
 
-        *outStream = nullptr;
+        *outStream   = nullptr;
         _activeEntry = nullptr;
         _activeFileStream.reset();
         if (askExtractMode != NArchive::NExtract::NAskMode::kExtract)
@@ -8265,7 +8139,7 @@ public:
         }
 
         _activeFileStream = stream;
-        *outStream = static_cast<ISequentialOutStream*>(stream.get());
+        *outStream        = static_cast<ISequentialOutStream*>(stream.get());
         stream->AddRef();
         return S_OK;
     }
@@ -8338,7 +8212,7 @@ public:
         }
 
         *passwordIsDefined = 0;
-        *password = nullptr;
+        *password          = nullptr;
         return S_OK;
     }
 
@@ -8359,7 +8233,7 @@ private:
     const std::vector<SevenZipExtractEntry>& _entries;
     bool _overwrite = true;
     ArchiveOperationResult& _result;
-    HRESULT _resultHr = S_OK;
+    HRESULT _resultHr                        = S_OK;
     const SevenZipExtractEntry* _activeEntry = nullptr;
     wil::com_ptr<SevenZipExtractFileOutStream> _activeFileStream;
 };
@@ -8482,7 +8356,7 @@ private:
     }
 
     UInt32 itemCount = 0u;
-    HRESULT hr = archive->GetNumberOfItems(&itemCount);
+    HRESULT hr       = archive->GetNumberOfItems(&itemCount);
     if (FAILED(hr))
     {
         return hr;
@@ -8494,7 +8368,7 @@ private:
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    const bool maskMatchesAll = ArchiveUnpackMaskMatchesAll(maskText);
+    const bool maskMatchesAll           = ArchiveUnpackMaskMatchesAll(maskText);
     const MaskSyntax::WildcardMask mask = maskMatchesAll ? MaskSyntax::WildcardMask{} : MaskSyntax::ParseWildcardMask(maskText);
     outEntries.reserve(itemCount);
 
@@ -8541,9 +8415,9 @@ private:
 
         SevenZipExtractEntry entry{};
         entry.archiveIndex = index;
-        entry.entryName = std::move(entryName);
+        entry.entryName    = std::move(entryName);
         entry.relativePath = std::move(relativePath);
-        entry.targetPath = destinationPath / entry.relativePath;
+        entry.targetPath   = destinationPath / entry.relativePath;
         if (! IsArchiveTargetPathInsideDestination(destinationPath, entry.targetPath))
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
@@ -8560,7 +8434,9 @@ private:
         outEntries.push_back(std::move(entry));
     }
 
-    std::sort(outEntries.begin(), outEntries.end(), [](const SevenZipExtractEntry& left, const SevenZipExtractEntry& right) noexcept
+    std::sort(outEntries.begin(),
+              outEntries.end(),
+              [](const SevenZipExtractEntry& left, const SevenZipExtractEntry& right) noexcept
     {
         if (left.directory != right.directory)
         {
@@ -8577,7 +8453,7 @@ private:
                                                             std::wstring_view maskText)
 {
     ArchiveOperationResult result{};
-    result.archivePath = archivePath;
+    result.archivePath     = archivePath;
     result.destinationPath = destinationPath;
     if (archivePath.empty() || destinationPath.empty())
     {
@@ -8594,14 +8470,14 @@ private:
     }
 
     SevenZipArchiveExports& api = GetSevenZipArchiveExports();
-    result.hr = LoadSevenZipArchiveExports(api);
+    result.hr                   = LoadSevenZipArchiveExports(api);
     if (FAILED(result.hr) || ! api.createObject)
     {
         return result;
     }
 
     const std::wstring extensionNoDotLower = ArchiveExtensionNoDotLower(archivePath);
-    const std::optional<GUID> classId = TryGetSevenZipArchiveClassIdForExtension(api, extensionNoDotLower);
+    const std::optional<GUID> classId      = TryGetSevenZipArchiveClassIdForExtension(api, extensionNoDotLower);
     if (! classId.has_value())
     {
         result.hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -8671,7 +8547,7 @@ private:
                                                              std::wstring_view maskText)
 {
     ArchiveOperationResult result{};
-    result.archivePath = archivePath;
+    result.archivePath     = archivePath;
     result.destinationPath = destinationPath;
     if (archivePath.empty() || destinationPath.empty())
     {
@@ -8701,13 +8577,8 @@ private:
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
-    wil::unique_hfile archiveFile(CreateFileW(archivePath.c_str(),
-                                              GENERIC_READ,
-                                              FILE_SHARE_READ,
-                                              nullptr,
-                                              OPEN_EXISTING,
-                                              FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
-                                              nullptr));
+    wil::unique_hfile archiveFile(
+        CreateFileW(archivePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr));
 #pragma warning(pop)
     if (! archiveFile)
     {
@@ -8729,7 +8600,9 @@ private:
         return result;
     }
 
-    std::sort(entries.begin(), entries.end(), [](const ZipParsedEntry& left, const ZipParsedEntry& right) noexcept
+    std::sort(entries.begin(),
+              entries.end(),
+              [](const ZipParsedEntry& left, const ZipParsedEntry& right) noexcept
     {
         if (left.directory != right.directory)
         {
@@ -8738,7 +8611,7 @@ private:
         return left.entryName < right.entryName;
     });
 
-    const bool maskMatchesAll = ArchiveUnpackMaskMatchesAll(maskText);
+    const bool maskMatchesAll           = ArchiveUnpackMaskMatchesAll(maskText);
     const MaskSyntax::WildcardMask mask = maskMatchesAll ? MaskSyntax::WildcardMask{} : MaskSyntax::ParseWildcardMask(maskText);
     for (const ZipParsedEntry& entry : entries)
     {
@@ -8765,14 +8638,14 @@ private:
         else
         {
             uint64_t dataOffset = 0u;
-            result.hr = ResolveZipEntryDataOffset(archiveFile.get(), entry, fileSize, dataOffset);
+            result.hr           = ResolveZipEntryDataOffset(archiveFile.get(), entry, fileSize, dataOffset);
             if (FAILED(result.hr))
             {
                 return result;
             }
 
             uint32_t crc32 = 0u;
-            result.hr = ExtractStoredZipFileEntry(archiveFile.get(), entry, dataOffset, targetPath, overwrite, crc32);
+            result.hr      = ExtractStoredZipFileEntry(archiveFile.get(), entry, dataOffset, targetPath, overwrite, crc32);
             if (FAILED(result.hr))
             {
                 return result;
@@ -8787,12 +8660,8 @@ private:
     return result;
 }
 
-void ShowArchiveOverlay(FolderWindow& window,
-                        FolderWindow::Pane pane,
-                        UINT titleStringId,
-                        FolderView::OverlaySeverity severity,
-                        std::wstring message,
-                        HRESULT hr) noexcept
+void ShowArchiveOverlay(
+    FolderWindow& window, FolderWindow::Pane pane, UINT titleStringId, FolderView::OverlaySeverity severity, std::wstring message, HRESULT hr) noexcept
 {
     Debug::Perf::Scope perf(L"archive.feedback_us");
     perf.SetHr(hr);
@@ -8803,7 +8672,14 @@ void ShowArchiveOverlay(FolderWindow& window,
         title = LoadStringResource(nullptr, severity == FolderView::OverlaySeverity::Information ? IDS_OVERLAY_TITLE_INFORMATION : IDS_CAPTION_WARNING);
     }
 
-    window.ShowPaneAlertOverlay(pane, FolderView::ErrorOverlayKind::Operation, severity, std::move(title), std::move(message), hr, severity != FolderView::OverlaySeverity::Information, false);
+    window.ShowPaneAlertOverlay(pane,
+                                FolderView::ErrorOverlayKind::Operation,
+                                severity,
+                                std::move(title),
+                                std::move(message),
+                                hr,
+                                severity != FolderView::OverlaySeverity::Information,
+                                false);
 }
 
 [[nodiscard]] std::wstring ArchiveFailureMessage(UINT formatStringId, const std::filesystem::path& archivePath, HRESULT hr)
@@ -8838,8 +8714,7 @@ void RefreshFolderViewIfPathMatches(FolderView& folderView, const std::filesyste
         return true;
     }
 
-    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view
-    { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
+    auto suffixFor = [](unsigned long long count) noexcept -> std::wstring_view { return count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s"); };
 
     auto ensureTrailingSeparator = [](std::wstring text) noexcept -> std::wstring
     {
@@ -9039,7 +8914,7 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
     using RedSalamander::DxUi::IDxGridDelegate::OnGridRowActivated;
     using RedSalamander::DxUi::IDxGridDelegate::OnGridSelectionChanged;
 
-    OpenedFilesDialogState() = default;
+    OpenedFilesDialogState()                                         = default;
     OpenedFilesDialogState(const OpenedFilesDialogState&)            = delete;
     OpenedFilesDialogState& operator=(const OpenedFilesDialogState&) = delete;
     OpenedFilesDialogState(OpenedFilesDialogState&&)                 = delete;
@@ -9134,9 +9009,9 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
                 auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
                 if (info)
                 {
-                    const UINT dpi                 = GetDpiForWindow(hwnd);
-                    info->ptMinTrackSize.x         = ScalePanePromptForDpi(dpi, 440);
-                    info->ptMinTrackSize.y         = ScalePanePromptForDpi(dpi, 260);
+                    const UINT dpi         = GetDpiForWindow(hwnd);
+                    info->ptMinTrackSize.x = ScalePanePromptForDpi(dpi, 440);
+                    info->ptMinTrackSize.y = ScalePanePromptForDpi(dpi, 260);
                 }
                 return 0;
             }
@@ -9167,9 +9042,7 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
                     return 0;
                 }
                 break;
-            case WM_NCDESTROY:
-                state->OnNcDestroy(hwnd);
-                break;
+            case WM_NCDESTROY: state->OnNcDestroy(hwnd); break;
         }
 
         return DefWindowProcW(hwnd, message, wParam, lParam);
@@ -9443,9 +9316,9 @@ struct FolderWindow::OpenedFilesDialogState final : RedSalamander::DxUi::IDxGrid
     AppTheme theme;
     RedSalamander::DxUi::ThemePalette palette{};
     RedSalamander::DxUi::WindowHost dxHost;
-    RedSalamander::DxUi::Panel* root     = nullptr;
-    RedSalamander::DxUi::Grid* grid      = nullptr;
-    RedSalamander::DxUi::Label* emptyLabel = nullptr;
+    RedSalamander::DxUi::Panel* root         = nullptr;
+    RedSalamander::DxUi::Grid* grid          = nullptr;
+    RedSalamander::DxUi::Label* emptyLabel   = nullptr;
     RedSalamander::DxUi::Button* focusButton = nullptr;
     RedSalamander::DxUi::Button* closeButton = nullptr;
     std::vector<RedSalamander::DxUi::GridColumnDesc> columns;
@@ -9588,9 +9461,7 @@ LRESULT CALLBACK FolderWindow::SharedDirectoriesDialogState::WndProc(HWND hwnd, 
                 return 0;
             }
             break;
-        case WM_NCDESTROY:
-            state->OnNcDestroy(hwnd);
-            break;
+        case WM_NCDESTROY: state->OnNcDestroy(hwnd); break;
     }
 
     return DefWindowProcW(hwnd, message, wParam, lParam);
@@ -9611,8 +9482,7 @@ RedSalamander::DxUi::GridColumnDesc FolderWindow::SharedDirectoriesDialogState::
     return columns.at(columnIndex);
 }
 
-void FolderWindow::SharedDirectoriesDialogState::GetCellData(
-    size_t rowIndex, size_t columnIndex, RedSalamander::DxUi::GridCellData& outCell) const
+void FolderWindow::SharedDirectoriesDialogState::GetCellData(size_t rowIndex, size_t columnIndex, RedSalamander::DxUi::GridCellData& outCell) const
 {
     outCell = {};
     if (rowIndex >= rows.size() || columnIndex >= columns.size())
@@ -9858,12 +9728,11 @@ void FolderWindow::SharedDirectoriesDialogState::UpdateEmptyState() noexcept
     }
     if (emptyLabel)
     {
-        const UINT emptyStringId =
-            lastError == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ? IDS_SHARED_DIRECTORIES_ACCESS_DENIED : IDS_SHARED_DIRECTORIES_EMPTY;
-        emptyLabel->SetText(LoadStringOrFallback(
-            emptyStringId,
-            lastError == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ? L"Shared directories could not be listed because access was denied."
-                                                                 : L"No shared directories are available."));
+        const UINT emptyStringId = lastError == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) ? IDS_SHARED_DIRECTORIES_ACCESS_DENIED : IDS_SHARED_DIRECTORIES_EMPTY;
+        emptyLabel->SetText(LoadStringOrFallback(emptyStringId,
+                                                 lastError == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)
+                                                     ? L"Shared directories could not be listed because access was denied."
+                                                     : L"No shared directories are available."));
         emptyLabel->SetVisible(empty);
     }
     if (openButton)
@@ -9903,23 +9772,19 @@ HWND GetChangeAttributesOptionsPromptHandle() noexcept
 
 bool DebugGetChangeAttributesOptionsPromptSnapshot(ChangeAttributesOptionsPromptDebugSnapshot& out) noexcept
 {
-    const HWND hwnd = GetChangeAttributesOptionsPromptHandle();
+    const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
     if (! hwnd || message == 0u)
     {
         return false;
     }
 
-    return SendMessageW(hwnd,
-                        message,
-                        static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::GetSnapshot),
-                        reinterpret_cast<LPARAM>(&out)) != FALSE;
+    return SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::GetSnapshot), reinterpret_cast<LPARAM>(&out)) != FALSE;
 }
 
-bool DebugSetChangeAttributesOptionsPromptState(
-    uint8_t readOnly, uint8_t hidden, uint8_t system, uint8_t archive, bool removeAlternateDataStreams) noexcept
+bool DebugSetChangeAttributesOptionsPromptState(uint8_t readOnly, uint8_t hidden, uint8_t system, uint8_t archive, bool removeAlternateDataStreams) noexcept
 {
-    const HWND hwnd = GetChangeAttributesOptionsPromptHandle();
+    const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
     if (! hwnd || message == 0u)
     {
@@ -9927,39 +9792,33 @@ bool DebugSetChangeAttributesOptionsPromptState(
     }
 
     ChangeAttributesOptionsPromptDebugStatePayload payload{};
-    payload.readOnly = readOnly;
-    payload.hidden = hidden;
-    payload.system = system;
-    payload.archive = archive;
+    payload.readOnly                   = readOnly;
+    payload.hidden                     = hidden;
+    payload.system                     = system;
+    payload.archive                    = archive;
     payload.removeAlternateDataStreams = removeAlternateDataStreams;
-    return SendMessageW(hwnd,
-                        message,
-                        static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::SetState),
-                        reinterpret_cast<LPARAM>(&payload)) != FALSE;
+    return SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::SetState), reinterpret_cast<LPARAM>(&payload)) != FALSE;
 }
 
 bool DebugCycleChangeAttributesOptionsPromptArchive() noexcept
 {
-    const HWND hwnd = GetChangeAttributesOptionsPromptHandle();
+    const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
-    return hwnd && message != 0u &&
-           SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::CycleArchive), 0) != FALSE;
+    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::CycleArchive), 0) != FALSE;
 }
 
 bool DebugConfirmChangeAttributesOptionsPrompt() noexcept
 {
-    const HWND hwnd = GetChangeAttributesOptionsPromptHandle();
+    const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
-    return hwnd && message != 0u &&
-           SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Confirm), 0) != FALSE;
+    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Confirm), 0) != FALSE;
 }
 
 bool DebugCancelChangeAttributesOptionsPrompt() noexcept
 {
-    const HWND hwnd = GetChangeAttributesOptionsPromptHandle();
+    const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
-    return hwnd && message != 0u &&
-           SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Cancel), 0) != FALSE;
+    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Cancel), 0) != FALSE;
 }
 
 HWND GetMakeFileListOptionsPromptHandle() noexcept
@@ -9970,17 +9829,14 @@ HWND GetMakeFileListOptionsPromptHandle() noexcept
 
 bool DebugGetMakeFileListOptionsPromptSnapshot(MakeFileListOptionsPromptDebugSnapshot& out) noexcept
 {
-    const HWND hwnd = GetMakeFileListOptionsPromptHandle();
+    const HWND hwnd    = GetMakeFileListOptionsPromptHandle();
     const UINT message = GetMakeFileListOptionsPromptDebugMessage();
     if (! hwnd || message == 0u)
     {
         return false;
     }
 
-    return SendMessageW(hwnd,
-                        message,
-                        static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::GetSnapshot),
-                        reinterpret_cast<LPARAM>(&out)) != FALSE;
+    return SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::GetSnapshot), reinterpret_cast<LPARAM>(&out)) != FALSE;
 }
 
 bool DebugSetMakeFileListOptionsPromptState(uint8_t sourceMode,
@@ -9996,7 +9852,7 @@ bool DebugSetMakeFileListOptionsPromptState(uint8_t sourceMode,
                                             bool includeAttributes,
                                             bool includeDirectories) noexcept
 {
-    const HWND hwnd = GetMakeFileListOptionsPromptHandle();
+    const HWND hwnd    = GetMakeFileListOptionsPromptHandle();
     const UINT message = GetMakeFileListOptionsPromptDebugMessage();
     if (! hwnd || message == 0u)
     {
@@ -10004,38 +9860,33 @@ bool DebugSetMakeFileListOptionsPromptState(uint8_t sourceMode,
     }
 
     MakeFileListOptionsPromptDebugStatePayload payload{};
-    payload.sourceMode = sourceMode;
-    payload.recursive = recursive;
-    payload.format = format;
+    payload.sourceMode   = sourceMode;
+    payload.recursive    = recursive;
+    payload.format       = format;
     payload.outputTarget = outputTarget;
     payload.textMacro.assign(textMacro);
     payload.outputFile.assign(outputFile);
-    payload.includeName = includeName;
-    payload.includeFullPath = includeFullPath;
-    payload.includeSize = includeSize;
-    payload.includeModified = includeModified;
-    payload.includeAttributes = includeAttributes;
+    payload.includeName        = includeName;
+    payload.includeFullPath    = includeFullPath;
+    payload.includeSize        = includeSize;
+    payload.includeModified    = includeModified;
+    payload.includeAttributes  = includeAttributes;
     payload.includeDirectories = includeDirectories;
-    return SendMessageW(hwnd,
-                        message,
-                        static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::SetState),
-                        reinterpret_cast<LPARAM>(&payload)) != FALSE;
+    return SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::SetState), reinterpret_cast<LPARAM>(&payload)) != FALSE;
 }
 
 bool DebugConfirmMakeFileListOptionsPrompt() noexcept
 {
-    const HWND hwnd = GetMakeFileListOptionsPromptHandle();
+    const HWND hwnd    = GetMakeFileListOptionsPromptHandle();
     const UINT message = GetMakeFileListOptionsPromptDebugMessage();
-    return hwnd && message != 0u &&
-           SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Confirm), 0) != FALSE;
+    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Confirm), 0) != FALSE;
 }
 
 bool DebugCancelMakeFileListOptionsPrompt() noexcept
 {
-    const HWND hwnd = GetMakeFileListOptionsPromptHandle();
+    const HWND hwnd    = GetMakeFileListOptionsPromptHandle();
     const UINT message = GetMakeFileListOptionsPromptDebugMessage();
-    return hwnd && message != 0u &&
-           SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Cancel), 0) != FALSE;
+    return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(MakeFileListOptionsPromptDebugCommand::Cancel), 0) != FALSE;
 }
 
 HWND GetArchivePackPromptHandle() noexcept
@@ -10046,7 +9897,7 @@ HWND GetArchivePackPromptHandle() noexcept
 
 bool DebugGetArchivePackPromptSnapshot(ArchivePackPromptDebugSnapshot& out) noexcept
 {
-    const HWND hwnd = GetArchivePackPromptHandle();
+    const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
     return hwnd && message != 0u &&
            SendMessageW(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::GetSnapshot), reinterpret_cast<LPARAM>(&out)) != FALSE;
@@ -10054,7 +9905,7 @@ bool DebugGetArchivePackPromptSnapshot(ArchivePackPromptDebugSnapshot& out) noex
 
 bool DebugSetArchivePackPromptPackerIndex(size_t index) noexcept
 {
-    const HWND hwnd = GetArchivePackPromptHandle();
+    const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
     return hwnd && message != 0u &&
            SendMessageW(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::SetPackerIndex), static_cast<LPARAM>(index)) != FALSE;
@@ -10062,7 +9913,7 @@ bool DebugSetArchivePackPromptPackerIndex(size_t index) noexcept
 
 bool DebugSetArchivePackPromptArchivePath(std::wstring_view path) noexcept
 {
-    const HWND hwnd = GetArchivePackPromptHandle();
+    const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
     if (! hwnd || message == 0u)
     {
@@ -10076,7 +9927,7 @@ bool DebugSetArchivePackPromptArchivePath(std::wstring_view path) noexcept
 
 bool DebugSetArchivePackPromptDeleteAfter(bool deleteAfterPacking) noexcept
 {
-    const HWND hwnd = GetArchivePackPromptHandle();
+    const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
     return hwnd && message != 0u &&
            SendMessageW(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::SetDeleteAfter), deleteAfterPacking ? 1 : 0) != FALSE;
@@ -10084,14 +9935,14 @@ bool DebugSetArchivePackPromptDeleteAfter(bool deleteAfterPacking) noexcept
 
 bool DebugConfirmArchivePackPrompt() noexcept
 {
-    const HWND hwnd = GetArchivePackPromptHandle();
+    const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
     return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::Confirm), 0) != FALSE;
 }
 
 bool DebugCancelArchivePackPrompt() noexcept
 {
-    const HWND hwnd = GetArchivePackPromptHandle();
+    const HWND hwnd    = GetArchivePackPromptHandle();
     const UINT message = GetArchivePackPromptDebugMessage();
     return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchivePackPromptDebugCommand::Cancel), 0) != FALSE;
 }
@@ -10104,7 +9955,7 @@ HWND GetArchiveUnpackPromptHandle() noexcept
 
 bool DebugGetArchiveUnpackPromptSnapshot(ArchiveUnpackPromptDebugSnapshot& out) noexcept
 {
-    const HWND hwnd = GetArchiveUnpackPromptHandle();
+    const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
     return hwnd && message != 0u &&
            SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::GetSnapshot), reinterpret_cast<LPARAM>(&out)) != FALSE;
@@ -10112,7 +9963,7 @@ bool DebugGetArchiveUnpackPromptSnapshot(ArchiveUnpackPromptDebugSnapshot& out) 
 
 bool DebugSetArchiveUnpackPromptDestinationPath(std::wstring_view path) noexcept
 {
-    const HWND hwnd = GetArchiveUnpackPromptHandle();
+    const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
     if (! hwnd || message == 0u)
     {
@@ -10126,7 +9977,7 @@ bool DebugSetArchiveUnpackPromptDestinationPath(std::wstring_view path) noexcept
 
 bool DebugSetArchiveUnpackPromptMask(std::wstring_view mask) noexcept
 {
-    const HWND hwnd = GetArchiveUnpackPromptHandle();
+    const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
     if (! hwnd || message == 0u)
     {
@@ -10140,7 +9991,7 @@ bool DebugSetArchiveUnpackPromptMask(std::wstring_view mask) noexcept
 
 bool DebugSetArchiveUnpackPromptDeleteAfter(bool deleteAfterUnpacking) noexcept
 {
-    const HWND hwnd = GetArchiveUnpackPromptHandle();
+    const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
     return hwnd && message != 0u &&
            SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::SetDeleteAfter), deleteAfterUnpacking ? 1 : 0) != FALSE;
@@ -10148,14 +9999,14 @@ bool DebugSetArchiveUnpackPromptDeleteAfter(bool deleteAfterUnpacking) noexcept
 
 bool DebugConfirmArchiveUnpackPrompt() noexcept
 {
-    const HWND hwnd = GetArchiveUnpackPromptHandle();
+    const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
     return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::Confirm), 0) != FALSE;
 }
 
 bool DebugCancelArchiveUnpackPrompt() noexcept
 {
-    const HWND hwnd = GetArchiveUnpackPromptHandle();
+    const HWND hwnd    = GetArchiveUnpackPromptHandle();
     const UINT message = GetArchiveUnpackPromptDebugMessage();
     return hwnd && message != 0u && SendMessageW(hwnd, message, static_cast<WPARAM>(ArchiveUnpackPromptDebugCommand::Cancel), 0) != FALSE;
 }
@@ -10378,7 +10229,7 @@ void FolderWindow::CommandEditNew(Pane pane)
         return;
     }
 
-    const std::wstring requestedName = promptResult->fileName;
+    const std::wstring requestedName            = promptResult->fileName;
     const std::optional<UINT> validationMessage = ResolveEditNewValidationMessageId(requestedName, base);
     if (validationMessage.has_value())
     {
@@ -10419,7 +10270,8 @@ void FolderWindow::CommandEditNew(Pane pane)
             message = FormatStringResource(nullptr, IDS_FMT_PANE_EDIT_NEW_FAILED, newFilePath.wstring(), static_cast<unsigned long>(hr));
         }
 
-        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), hr);
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), hr);
         return;
     }
 
@@ -10490,12 +10342,13 @@ void FolderWindow::CommandNewFromShellTemplate(Pane pane, std::wstring_view temp
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
-    HWND ownerWindow = GetOwnerWindowOrSelf(_hWnd.get());
+    HWND ownerWindow       = GetOwnerWindowOrSelf(_hWnd.get());
     const auto showWarning = [&](std::wstring message, HRESULT hr = S_OK) noexcept
     {
         Debug::Perf::Scope perf(L"shellnew.feedback_us");
         std::wstring title = LoadStringResource(nullptr, IDS_SHELL_ACTION_UNAVAILABLE_TITLE);
-        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr);
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr);
     };
 
     const auto folder = state.folderView.GetFolderPath();
@@ -10558,23 +10411,15 @@ void FolderWindow::CommandNewFromShellTemplate(Pane pane, std::wstring_view temp
             ownerWindow = _hWnd.get();
         }
         const std::filesystem::path displayPath = NavigationLocation::FormatHistoryPath(state.pluginShortId, state.instanceContext, base);
-        const std::wstring caption              = templateIt->displayName.empty() ? LoadStringResource(nullptr, IDS_CMD_NEW_FROM_TEMPLATE) : templateIt->displayName;
-        promptResult = PromptForEditNewFile(ownerWindow,
-                                            base,
-                                            displayPath.wstring(),
-                                            nullptr,
-                                            {},
-                                            _theme,
-                                            templateIt->defaultFileName,
-                                            caption,
-                                            false);
+        const std::wstring caption = templateIt->displayName.empty() ? LoadStringResource(nullptr, IDS_CMD_NEW_FROM_TEMPLATE) : templateIt->displayName;
+        promptResult = PromptForEditNewFile(ownerWindow, base, displayPath.wstring(), nullptr, {}, _theme, templateIt->defaultFileName, caption, false);
     }
     if (! promptResult.has_value())
     {
         return;
     }
 
-    std::wstring requestedName = EnsureShellNewExtension(promptResult->fileName, templateIt->extension);
+    std::wstring requestedName                  = EnsureShellNewExtension(promptResult->fileName, templateIt->extension);
     const std::optional<UINT> validationMessage = ResolveEditNewValidationMessageId(requestedName, base);
     if (validationMessage.has_value())
     {
@@ -10592,15 +10437,12 @@ void FolderWindow::CommandNewFromShellTemplate(Pane pane, std::wstring_view temp
     {
         switch (templateIt->kind)
         {
-            case ShellNewTemplateKind::NullFile:
-                break;
+            case ShellNewTemplateKind::NullFile: break;
             case ShellNewTemplateKind::Data:
                 bytesWritten = static_cast<uint64_t>(templateIt->data.size());
                 hr           = WriteShellNewTemplateBytes(*writer, templateIt->data.data(), templateIt->data.size());
                 break;
-            case ShellNewTemplateKind::FileName:
-                hr = WriteShellNewTemplateFile(*writer, templateIt->templateFilePath, bytesWritten);
-                break;
+            case ShellNewTemplateKind::FileName: hr = WriteShellNewTemplateFile(*writer, templateIt->templateFilePath, bytesWritten); break;
         }
     }
     if (SUCCEEDED(hr) && writer)
@@ -10608,12 +10450,7 @@ void FolderWindow::CommandNewFromShellTemplate(Pane pane, std::wstring_view temp
         hr = writer->Commit();
     }
 
-    Debug::Perf::Emit(L"shellnew.create_us",
-                      ShellNewTemplateKindDetail(templateIt->kind),
-                      Debug::Perf::ElapsedUs(createStartedAt),
-                      bytesWritten,
-                      1u,
-                      hr);
+    Debug::Perf::Emit(L"shellnew.create_us", ShellNewTemplateKindDetail(templateIt->kind), Debug::Perf::ElapsedUs(createStartedAt), bytesWritten, 1u, hr);
 
     if (FAILED(hr))
     {
@@ -10689,57 +10526,57 @@ std::wstring_view FolderWindow::DebugGetFocusedItemDisplayName(Pane pane) const 
 
 bool FolderWindow::DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDebugSnapshot& out) const
 {
-    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const PaneState& state                   = pane == Pane::Left ? _leftPane : _rightPane;
     const FolderView::NameFilterState filter = state.folderView.GetNameFilterState();
 
-    out.fileExtensionsVisible       = state.folderView.GetFileExtensionsVisible();
-    out.navigationBarVisible        = state.navigationBarVisible;
-    out.navigationViewWindowVisible = state.hNavigationView && IsWindowVisible(state.hNavigationView.get()) != FALSE;
-    out.filterBarVisible            = state.filterBarVisible;
-    out.filterBarWindowVisible      = state.hFilterBar && IsWindowVisible(state.hFilterBar.get()) != FALSE;
-    out.filterEnabled               = filter.enabled;
+    out.fileExtensionsVisible                           = state.folderView.GetFileExtensionsVisible();
+    out.navigationBarVisible                            = state.navigationBarVisible;
+    out.navigationViewWindowVisible                     = state.hNavigationView && IsWindowVisible(state.hNavigationView.get()) != FALSE;
+    out.filterBarVisible                                = state.filterBarVisible;
+    out.filterBarWindowVisible                          = state.hFilterBar && IsWindowVisible(state.hFilterBar.get()) != FALSE;
+    out.filterEnabled                                   = filter.enabled;
     const FolderView::ThumbnailDebugSnapshot thumbnails = state.folderView.DebugGetThumbnailSnapshot();
-    out.thumbnailsVisible           = thumbnails.visible;
-    out.thumbnailTargetDip          = thumbnails.targetDip;
-    out.thumbnailQueuedCount        = thumbnails.queuedCount;
-    out.thumbnailCompletedCount     = thumbnails.completedCount;
-    out.thumbnailFallbackCount      = thumbnails.fallbackCount;
-    out.thumbnailStaleDropCount     = thumbnails.staleDropCount;
-    out.thumbnailPendingCount       = thumbnails.pendingCount;
-    out.thumbnailCacheHitCount      = thumbnails.cacheHitCount;
-    out.thumbnailShellSuccessCount  = thumbnails.shellSuccessCount;
-    out.thumbnailWicSuccessCount    = thumbnails.wicSuccessCount;
-    out.thumbnailWicFactoryCreateCount = thumbnails.wicFactoryCreateCount;
-    out.thumbnailDecodeFailureCount = thumbnails.decodeFailureCount;
-    out.thumbnailVisibleApplyCount  = thumbnails.visibleApplyCount;
-    out.thumbnailVisibleItemCount = thumbnails.visibleItemCount;
-    out.thumbnailVisibleThumbnailCount = thumbnails.visibleThumbnailCount;
-    out.thumbnailTotalThumbnailCount   = thumbnails.totalThumbnailCount;
-    out.thumbnailCacheBytes         = thumbnails.cacheBytes;
-    out.thumbnailCacheEvictedCount  = thumbnails.cacheEvictedCount;
-    out.thumbnailCancelCount        = thumbnails.cancelCount;
-    out.thumbnailLastDrawSawThumbnail = thumbnails.lastDrawSawThumbnail;
-    out.thumbnailLastDrawSourceWidthPx = thumbnails.lastDrawSourceWidthPx;
-    out.thumbnailLastDrawSourceHeightPx = thumbnails.lastDrawSourceHeightPx;
-    out.thumbnailLastDrawSlotRectDip = thumbnails.lastDrawSlotRectDip;
-    out.thumbnailLastDrawRectDip    = thumbnails.lastDrawRectDip;
-    out.iconLastDrawSawIcon         = thumbnails.lastIconDrawSawIcon;
-    out.iconLastDrawSourceWidthPx   = thumbnails.lastIconDrawSourceWidthPx;
-    out.iconLastDrawSourceHeightPx  = thumbnails.lastIconDrawSourceHeightPx;
-    out.iconLastDrawSlotRectDip     = thumbnails.lastIconDrawSlotRectDip;
-    out.iconLastDrawRectDip         = thumbnails.lastIconDrawRectDip;
-    out.filterText                  = filter.text;
-    out.filterBarText               = state.filterBarText;
-    out.filterBarUsesDxUiHost       = state.filterBarHost.GetRoot() != nullptr;
-    out.filterBarLabelVisible       = state.filterBarLabel && state.filterBarLabel->IsVisible();
-    out.filterBarComboVisible       = state.filterBarCombo && state.filterBarCombo->IsVisible();
-    out.filterBarToggleVisible      = state.filterBarToggle && state.filterBarToggle->IsVisible();
-    out.filterBarToggleChecked      = state.filterBarToggle && state.filterBarToggle->IsChecked();
-    out.filterBarFieldText          = state.filterBarCombo ? std::wstring(state.filterBarCombo->GetText()) : std::wstring{};
+    out.thumbnailsVisible                               = thumbnails.visible;
+    out.thumbnailTargetDip                              = thumbnails.targetDip;
+    out.thumbnailQueuedCount                            = thumbnails.queuedCount;
+    out.thumbnailCompletedCount                         = thumbnails.completedCount;
+    out.thumbnailFallbackCount                          = thumbnails.fallbackCount;
+    out.thumbnailStaleDropCount                         = thumbnails.staleDropCount;
+    out.thumbnailPendingCount                           = thumbnails.pendingCount;
+    out.thumbnailCacheHitCount                          = thumbnails.cacheHitCount;
+    out.thumbnailShellSuccessCount                      = thumbnails.shellSuccessCount;
+    out.thumbnailWicSuccessCount                        = thumbnails.wicSuccessCount;
+    out.thumbnailWicFactoryCreateCount                  = thumbnails.wicFactoryCreateCount;
+    out.thumbnailDecodeFailureCount                     = thumbnails.decodeFailureCount;
+    out.thumbnailVisibleApplyCount                      = thumbnails.visibleApplyCount;
+    out.thumbnailVisibleItemCount                       = thumbnails.visibleItemCount;
+    out.thumbnailVisibleThumbnailCount                  = thumbnails.visibleThumbnailCount;
+    out.thumbnailTotalThumbnailCount                    = thumbnails.totalThumbnailCount;
+    out.thumbnailCacheBytes                             = thumbnails.cacheBytes;
+    out.thumbnailCacheEvictedCount                      = thumbnails.cacheEvictedCount;
+    out.thumbnailCancelCount                            = thumbnails.cancelCount;
+    out.thumbnailLastDrawSawThumbnail                   = thumbnails.lastDrawSawThumbnail;
+    out.thumbnailLastDrawSourceWidthPx                  = thumbnails.lastDrawSourceWidthPx;
+    out.thumbnailLastDrawSourceHeightPx                 = thumbnails.lastDrawSourceHeightPx;
+    out.thumbnailLastDrawSlotRectDip                    = thumbnails.lastDrawSlotRectDip;
+    out.thumbnailLastDrawRectDip                        = thumbnails.lastDrawRectDip;
+    out.iconLastDrawSawIcon                             = thumbnails.lastIconDrawSawIcon;
+    out.iconLastDrawSourceWidthPx                       = thumbnails.lastIconDrawSourceWidthPx;
+    out.iconLastDrawSourceHeightPx                      = thumbnails.lastIconDrawSourceHeightPx;
+    out.iconLastDrawSlotRectDip                         = thumbnails.lastIconDrawSlotRectDip;
+    out.iconLastDrawRectDip                             = thumbnails.lastIconDrawRectDip;
+    out.filterText                                      = filter.text;
+    out.filterBarText                                   = state.filterBarText;
+    out.filterBarUsesDxUiHost                           = state.filterBarHost.GetRoot() != nullptr;
+    out.filterBarLabelVisible                           = state.filterBarLabel && state.filterBarLabel->IsVisible();
+    out.filterBarComboVisible                           = state.filterBarCombo && state.filterBarCombo->IsVisible();
+    out.filterBarToggleVisible                          = state.filterBarToggle && state.filterBarToggle->IsVisible();
+    out.filterBarToggleChecked                          = state.filterBarToggle && state.filterBarToggle->IsChecked();
+    out.filterBarFieldText                              = state.filterBarCombo ? std::wstring(state.filterBarCombo->GetText()) : std::wstring{};
     out.filterBarHistoryItems.clear();
     if (state.filterBarCombo)
     {
-        const auto historyItems = state.filterBarCombo->GetItems();
+        const auto historyItems       = state.filterBarCombo->GetItems();
         out.filterBarHistoryItemCount = historyItems.size();
         out.filterBarHistoryItems.reserve(historyItems.size());
         for (const RedSalamander::DxUi::ComboBox::Item& item : historyItems)
@@ -10751,7 +10588,7 @@ bool FolderWindow::DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDeb
     {
         out.filterBarHistoryItemCount = 0u;
     }
-    out.focusedItemRealDisplayName  = std::wstring(state.folderView.DebugGetFocusedDisplayName());
+    out.focusedItemRealDisplayName   = std::wstring(state.folderView.DebugGetFocusedDisplayName());
     out.focusedItemVisualDisplayName = state.folderView.DebugGetFocusedVisualDisplayName();
     return true;
 }
@@ -10764,57 +10601,55 @@ void FolderWindow::DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThu
 
 bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept
 {
-    out            = {};
-    out.clientRect = {0, 0, _clientSize.cx, _clientSize.cy};
+    out                 = {};
+    out.clientRect      = {0, 0, _clientSize.cx, _clientSize.cy};
     out.functionBarRect = _functionBarRect;
 
-    const Pane sourcePane = _previewSourcePane.value_or(_activePane);
-    const Pane hostPane   = OppositePane(sourcePane);
+    const Pane sourcePane        = _previewSourcePane.value_or(_activePane);
+    const Pane hostPane          = OppositePane(sourcePane);
     const PaneState& sourceState = sourcePane == Pane::Left ? _leftPane : _rightPane;
     const PaneState& hostState   = hostPane == Pane::Left ? _leftPane : _rightPane;
 
-    out.active                = _previewSourcePane.has_value();
-    out.sourcePane            = sourcePane;
-    out.hostPane              = hostPane;
-    out.tabsVisible           = hostState.hPreviewTabs && IsWindowVisible(hostState.hPreviewTabs.get()) != FALSE;
-    out.tabsUseDxUiHost       = hostState.previewTabsHost.GetRoot() != nullptr;
-    out.previewTabSelected    = hostState.previewTabSelected;
-    out.folderTabSelected     = ! hostState.previewTabSelected;
-    out.previewContentVisible = hostState.hPreviewContent && IsWindowVisible(hostState.hPreviewContent.get()) != FALSE;
-    out.previewContentUsesDxUiHost = hostState.previewContentHost.GetRoot() != nullptr;
-    out.previewUsesEmbeddedViewer  = hostState.previewViewerInstance != nullptr;
-    out.previewPropertiesCardMode = hostState.previewPropertiesCardMode;
+    out.active                           = _previewSourcePane.has_value();
+    out.sourcePane                       = sourcePane;
+    out.hostPane                         = hostPane;
+    out.tabsVisible                      = hostState.hPreviewTabs && IsWindowVisible(hostState.hPreviewTabs.get()) != FALSE;
+    out.tabsUseDxUiHost                  = hostState.previewTabsHost.GetRoot() != nullptr;
+    out.previewTabSelected               = hostState.previewTabSelected;
+    out.folderTabSelected                = ! hostState.previewTabSelected;
+    out.previewContentVisible            = hostState.hPreviewContent && IsWindowVisible(hostState.hPreviewContent.get()) != FALSE;
+    out.previewContentUsesDxUiHost       = hostState.previewContentHost.GetRoot() != nullptr;
+    out.previewUsesEmbeddedViewer        = hostState.previewViewerInstance != nullptr;
+    out.previewPropertiesCardMode        = hostState.previewPropertiesCardMode;
     out.previewPropertiesUsesScrollPanel = hostState.previewPropertiesScroll != nullptr;
-    out.previewPropertiesUsesRainbow = hostState.previewPropertiesUsesRainbow;
-    out.previewPropertiesSectionCount = hostState.previewPropertiesSections.size();
-    out.previewPropertiesFieldCount = hostState.previewPropertiesFieldCount;
+    out.previewPropertiesUsesRainbow     = hostState.previewPropertiesUsesRainbow;
+    out.previewPropertiesSectionCount    = hostState.previewPropertiesSections.size();
+    out.previewPropertiesFieldCount      = hostState.previewPropertiesFieldCount;
     if (hostState.previewPropertiesScroll)
     {
         const D2D1_RECT_F scrollBounds = hostState.previewPropertiesScroll->GetBounds();
-        const float viewportH = (std::max)(0.0f, scrollBounds.bottom - scrollBounds.top);
-        const float scrollMaxDip = (std::max)(0.0f, hostState.previewPropertiesScroll->GetContentHeight() - viewportH);
+        const float viewportH          = (std::max)(0.0f, scrollBounds.bottom - scrollBounds.top);
+        const float scrollMaxDip       = (std::max)(0.0f, hostState.previewPropertiesScroll->GetContentHeight() - viewportH);
         out.previewPropertiesCanScroll = hostState.previewPropertiesScroll->NeedsScrollbar();
         out.previewPropertiesScrollOffsetPx =
             static_cast<int>(std::lround(hostState.previewContentHost.DipsToPixels(hostState.previewPropertiesScroll->GetScrollOffset())));
         out.previewPropertiesScrollMaxPx = static_cast<int>(std::lround(hostState.previewContentHost.DipsToPixels(scrollMaxDip)));
     }
-    out.folderViewVisible     = hostState.hFolderView && IsWindowVisible(hostState.hFolderView.get()) != FALSE;
-    out.previewTabsHwnd       = hostState.hPreviewTabs.get();
-    out.previewContentHwnd    = hostState.hPreviewContent.get();
-    out.previewEmbeddedViewerHwnd = (hostState.previewViewerInstance && hostState.hPreviewContent) ? GetWindow(hostState.hPreviewContent.get(), GW_CHILD) : nullptr;
+    out.folderViewVisible  = hostState.hFolderView && IsWindowVisible(hostState.hFolderView.get()) != FALSE;
+    out.previewTabsHwnd    = hostState.hPreviewTabs.get();
+    out.previewContentHwnd = hostState.hPreviewContent.get();
+    out.previewEmbeddedViewerHwnd =
+        (hostState.previewViewerInstance && hostState.hPreviewContent) ? GetWindow(hostState.hPreviewContent.get(), GW_CHILD) : nullptr;
     out.previewViewerInstanceId = reinterpret_cast<uintptr_t>(hostState.previewViewerInstance);
-    out.tabRect               = hostPane == Pane::Left ? _leftPreviewTabsRect : _rightPreviewTabsRect;
-    out.contentRect           = hostPane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
-    out.previewedPath         = hostState.previewedPath;
-    out.previewText           = hostState.previewText;
+    out.tabRect                 = hostPane == Pane::Left ? _leftPreviewTabsRect : _rightPreviewTabsRect;
+    out.contentRect             = hostPane == Pane::Left ? _leftPreviewContentRect : _rightPreviewContentRect;
+    out.previewedPath           = hostState.previewedPath;
+    out.previewText             = hostState.previewText;
 #if defined(ENABLE_TESTS) && defined(_DEBUG)
     if (out.previewEmbeddedViewerHwnd && hostState.previewViewerPluginId == L"builtin/viewer-text")
     {
         WndMsg::ViewerTextDebugSnapshot textSnapshot{};
-        if (SendMessageW(out.previewEmbeddedViewerHwnd,
-                         WndMsg::kViewerTextDebugGetSnapshot,
-                         0u,
-                         reinterpret_cast<LPARAM>(&textSnapshot)) != FALSE)
+        if (SendMessageW(out.previewEmbeddedViewerHwnd, WndMsg::kViewerTextDebugGetSnapshot, 0u, reinterpret_cast<LPARAM>(&textSnapshot)) != FALSE)
         {
             out.previewText = textSnapshot.textPreview;
         }
@@ -10830,10 +10665,10 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
                         static_cast<LONG>(std::lround(hostState.previewTabsHost.DipsToPixels(rect.right))),
                         static_cast<LONG>(std::lround(hostState.previewTabsHost.DipsToPixels(rect.bottom)))};
         };
-        out.folderTabClientRect   = toClientRect(hostState.previewTabsControl->DebugGetTabRect(0u));
-        out.previewTabClientRect  = toClientRect(hostState.previewTabsControl->DebugGetTabRect(1u));
-        out.previewCloseClientRect = toClientRect(hostState.previewTabsControl->DebugGetCloseButtonRect(1u));
-        out.previewCloseButtonVisible = hostState.previewTabsControl->DebugIsCloseButtonVisible(1u);
+        out.folderTabClientRect         = toClientRect(hostState.previewTabsControl->DebugGetTabRect(0u));
+        out.previewTabClientRect        = toClientRect(hostState.previewTabsControl->DebugGetTabRect(1u));
+        out.previewCloseClientRect      = toClientRect(hostState.previewTabsControl->DebugGetCloseButtonRect(1u));
+        out.previewCloseButtonVisible   = hostState.previewTabsControl->DebugIsCloseButtonVisible(1u);
         out.previewTabsHasHeaderDivider = hostState.previewTabsControl->DebugHasHeaderDivider();
     }
 #endif
@@ -10844,8 +10679,8 @@ bool FolderWindow::DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) co
 #if defined(ENABLE_TESTS)
     out.previewTabsPendingTooltipText = std::wstring(hostState.previewTabsHost.DebugGetPendingTooltipText());
 #endif
-    out.previewViewerPluginId = hostState.previewViewerPluginId;
-    out.previewBytes          = hostState.previewBytes;
+    out.previewViewerPluginId    = hostState.previewViewerPluginId;
+    out.previewBytes             = hostState.previewBytes;
     out.sourceFocusedDisplayName = std::wstring(sourceState.folderView.DebugGetFocusedDisplayName());
     return true;
 }
@@ -10886,7 +10721,7 @@ bool FolderWindow::DebugScrollPreviewPropertiesByWheelDetents(Pane hostPane, int
     }
 
     constexpr float kWheelStepDip = 48.0f;
-    const float before = host.previewPropertiesScroll->GetScrollOffset();
+    const float before            = host.previewPropertiesScroll->GetScrollOffset();
     host.previewPropertiesScroll->SetScrollOffset(before - (static_cast<float>(detents) * kWheelStepDip));
     host.previewContentHost.Invalidate();
 
@@ -10907,7 +10742,7 @@ bool FolderWindow::DebugAdvancePreviewTabsTooltipDelayForTest(Pane hostPane) noe
 
 bool FolderWindow::DebugGetOpenedFilesDialogSnapshot(OpenedFilesDebugSnapshot& out) const noexcept
 {
-    out = {};
+    out               = {};
     out.selectedIndex = kOpenedFilesNoSelection;
 
     if (! _openedFilesDialog || ! _openedFilesDialog->hwnd || IsWindow(_openedFilesDialog->hwnd.get()) == FALSE)
@@ -10915,16 +10750,16 @@ bool FolderWindow::DebugGetOpenedFilesDialogSnapshot(OpenedFilesDebugSnapshot& o
         return false;
     }
 
-    const HWND dialog = _openedFilesDialog->hwnd.get();
-    out.visible = IsWindowVisible(dialog) != FALSE;
-    out.usesDxUiHost = _openedFilesDialog->dxHost.GetRoot() != nullptr;
-    out.visibleChildWindowCount = CountVisibleChildWindowsLocal(dialog);
+    const HWND dialog                  = _openedFilesDialog->hwnd.get();
+    out.visible                        = IsWindowVisible(dialog) != FALSE;
+    out.usesDxUiHost                   = _openedFilesDialog->dxHost.GetRoot() != nullptr;
+    out.visibleChildWindowCount        = CountVisibleChildWindowsLocal(dialog);
     out.visibleNativeChildControlCount = CountVisibleNativeChildControlWindowsLocal(dialog);
-    out.dialogClassName = GetWindowClassNameLocal(dialog);
-    out.themeWindowBackground = _openedFilesDialog->theme.windowBackground;
-    out.themeText = _openedFilesDialog->theme.menu.text;
-    out.emptyStateVisible = _openedFilesDialog->emptyLabel && _openedFilesDialog->emptyLabel->IsVisible();
-    out.selectedIndex = _openedFilesDialog->selectedIndex;
+    out.dialogClassName                = GetWindowClassNameLocal(dialog);
+    out.themeWindowBackground          = _openedFilesDialog->theme.windowBackground;
+    out.themeText                      = _openedFilesDialog->theme.menu.text;
+    out.emptyStateVisible              = _openedFilesDialog->emptyLabel && _openedFilesDialog->emptyLabel->IsVisible();
+    out.selectedIndex                  = _openedFilesDialog->selectedIndex;
     out.rows.reserve(_openedFilesDialog->rows.size());
     for (const OpenedFileRow& row : _openedFilesDialog->rows)
     {
@@ -10968,11 +10803,11 @@ void FolderWindow::DebugAddOpenedExternalEditorForTest(const std::filesystem::pa
     }
 
     OpenedExternalFileEntry entry{};
-    entry.id       = _nextOpenedExternalFileId++;
-    entry.source   = OpenedFileSourceKind::Editor;
-    entry.path     = path;
-    entry.openedBy = openedBy;
-    entry.pane     = pane;
+    entry.id          = _nextOpenedExternalFileId++;
+    entry.source      = OpenedFileSourceKind::Editor;
+    entry.path        = path;
+    entry.openedBy    = openedBy;
+    entry.pane        = pane;
     entry.debugClosed = closed;
     _openedExternalFiles.push_back(std::move(entry));
 }
@@ -10984,7 +10819,7 @@ void FolderWindow::DebugClearOpenedExternalEditorsForTest() noexcept
 
 bool FolderWindow::DebugGetSharedDirectoriesDialogSnapshot(SharedDirectoriesDebugSnapshot& out) const noexcept
 {
-    out = {};
+    out               = {};
     out.selectedIndex = kSharedDirectoriesNoSelection;
 
     if (! _sharedDirectoriesDialog || ! _sharedDirectoriesDialog->hwnd || IsWindow(_sharedDirectoriesDialog->hwnd.get()) == FALSE)
@@ -10992,17 +10827,17 @@ bool FolderWindow::DebugGetSharedDirectoriesDialogSnapshot(SharedDirectoriesDebu
         return false;
     }
 
-    const HWND dialog = _sharedDirectoriesDialog->hwnd.get();
-    out.visible = IsWindowVisible(dialog) != FALSE;
-    out.usesDxUiHost = _sharedDirectoriesDialog->dxHost.GetRoot() != nullptr;
-    out.visibleChildWindowCount = CountVisibleChildWindowsLocal(dialog);
+    const HWND dialog                  = _sharedDirectoriesDialog->hwnd.get();
+    out.visible                        = IsWindowVisible(dialog) != FALSE;
+    out.usesDxUiHost                   = _sharedDirectoriesDialog->dxHost.GetRoot() != nullptr;
+    out.visibleChildWindowCount        = CountVisibleChildWindowsLocal(dialog);
     out.visibleNativeChildControlCount = CountVisibleNativeChildControlWindowsLocal(dialog);
-    out.dialogClassName = GetWindowClassNameLocal(dialog);
-    out.themeWindowBackground = _sharedDirectoriesDialog->theme.windowBackground;
-    out.themeText = _sharedDirectoriesDialog->theme.menu.text;
-    out.emptyStateVisible = _sharedDirectoriesDialog->emptyLabel && _sharedDirectoriesDialog->emptyLabel->IsVisible();
-    out.selectedIndex = _sharedDirectoriesDialog->selectedIndex;
-    out.lastError = _sharedDirectoriesDialog->lastError;
+    out.dialogClassName                = GetWindowClassNameLocal(dialog);
+    out.themeWindowBackground          = _sharedDirectoriesDialog->theme.windowBackground;
+    out.themeText                      = _sharedDirectoriesDialog->theme.menu.text;
+    out.emptyStateVisible              = _sharedDirectoriesDialog->emptyLabel && _sharedDirectoriesDialog->emptyLabel->IsVisible();
+    out.selectedIndex                  = _sharedDirectoriesDialog->selectedIndex;
+    out.lastError                      = _sharedDirectoriesDialog->lastError;
     out.rows.reserve(_sharedDirectoriesDialog->rows.size());
     for (const SharedDirectoryRow& row : _sharedDirectoriesDialog->rows)
     {
@@ -11467,11 +11302,8 @@ void FolderWindow::CommandMakeFileList(Pane pane)
     const std::optional<std::filesystem::path> currentFolder = state.folderView.GetFolderPath();
     if (! state.fileSystem || ! currentFolder.has_value() || currentFolder->empty() || ! IsFilePluginShortId(state.pluginShortId))
     {
-        ShowMakeFileListOverlay(*this,
-                                pane,
-                                FolderView::OverlaySeverity::Warning,
-                                LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_LOCAL_FOLDER_REQUIRED),
-                                S_FALSE);
+        ShowMakeFileListOverlay(
+            *this, pane, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_LOCAL_FOLDER_REQUIRED), S_FALSE);
         Debug::Perf::Emit(L"makeFileList.total_us", L"unsupported", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
         return;
     }
@@ -11507,11 +11339,8 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         selectedPaths = state.folderView.GetSelectedOrFocusedPaths();
         if (selectedPaths.empty())
         {
-            ShowMakeFileListOverlay(*this,
-                                    pane,
-                                    FolderView::OverlaySeverity::Warning,
-                                    LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_SELECTION_REQUIRED),
-                                    S_FALSE);
+            ShowMakeFileListOverlay(
+                *this, pane, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_SELECTION_REQUIRED), S_FALSE);
             Debug::Perf::Emit(L"makeFileList.total_us", L"empty-selection", Debug::Perf::ElapsedUs(totalStartedAt), 0u, 0u, S_FALSE);
             return;
         }
@@ -11529,10 +11358,9 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         return;
     }
 
-    const auto collectStartedAt = std::chrono::steady_clock::now();
-    uint64_t collectFailures    = 0u;
-    const std::vector<MakeFileListEntry> entries =
-        CollectMakeFileListEntries(currentFolder.value(), selectedPaths, options, collectFailures);
+    const auto collectStartedAt                  = std::chrono::steady_clock::now();
+    uint64_t collectFailures                     = 0u;
+    const std::vector<MakeFileListEntry> entries = CollectMakeFileListEntries(currentFolder.value(), selectedPaths, options, collectFailures);
     Debug::Perf::Emit(L"makeFileList.collect_us",
                       MakeFileListFormatDetail(options.format),
                       Debug::Perf::ElapsedUs(collectStartedAt),
@@ -11552,14 +11380,12 @@ void FolderWindow::CommandMakeFileList(Pane pane)
                       hr);
     if (FAILED(hr))
     {
-        ShowMakeFileListOverlay(*this,
-                                pane,
-                                FolderView::OverlaySeverity::Error,
-                                FormatStringResource(nullptr,
-                                                     IDS_FMT_MAKE_FILE_LIST_FAILED,
-                                                     currentFolder->wstring(),
-                                                     static_cast<unsigned long>(static_cast<uint32_t>(hr))),
-                                hr);
+        ShowMakeFileListOverlay(
+            *this,
+            pane,
+            FolderView::OverlaySeverity::Error,
+            FormatStringResource(nullptr, IDS_FMT_MAKE_FILE_LIST_FAILED, currentFolder->wstring(), static_cast<unsigned long>(static_cast<uint32_t>(hr))),
+            hr);
         Debug::Perf::Emit(L"makeFileList.total_us", MakeFileListFormatDetail(options.format), Debug::Perf::ElapsedUs(totalStartedAt), entries.size(), 0u, hr);
         return;
     }
@@ -11573,7 +11399,7 @@ void FolderWindow::CommandMakeFileList(Pane pane)
     }
     else
     {
-        hr = SetClipboardUnicodeText(GetClipboardOwnerWindow(_hWnd.get()), clipboardText) ? S_OK : HRESULT_FROM_WIN32(ERROR_CLIPBOARD_NOT_OPEN);
+        hr           = SetClipboardUnicodeText(GetClipboardOwnerWindow(_hWnd.get()), clipboardText) ? S_OK : HRESULT_FROM_WIN32(ERROR_CLIPBOARD_NOT_OPEN);
         outputTarget = LoadStringResource(nullptr, IDS_MSG_MAKE_FILE_LIST_TARGET_CLIPBOARD);
     }
 
@@ -11585,14 +11411,12 @@ void FolderWindow::CommandMakeFileList(Pane pane)
                       hr);
     if (FAILED(hr))
     {
-        const UINT messageId = options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? IDS_FMT_MAKE_FILE_LIST_FAILED
-                                                                                                        : IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED;
-        std::wstring message = options.outputTarget == Common::Settings::MakeFileListOutputTarget::File
-                                   ? FormatStringResource(nullptr,
-                                                          messageId,
-                                                          options.outputFile.wstring(),
-                                                          static_cast<unsigned long>(static_cast<uint32_t>(hr)))
-                                   : LoadStringResource(nullptr, messageId);
+        const UINT messageId =
+            options.outputTarget == Common::Settings::MakeFileListOutputTarget::File ? IDS_FMT_MAKE_FILE_LIST_FAILED : IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED;
+        std::wstring message =
+            options.outputTarget == Common::Settings::MakeFileListOutputTarget::File
+                ? FormatStringResource(nullptr, messageId, options.outputFile.wstring(), static_cast<unsigned long>(static_cast<uint32_t>(hr)))
+                : LoadStringResource(nullptr, messageId);
         ShowMakeFileListOverlay(*this, pane, FolderView::OverlaySeverity::Error, std::move(message), hr);
         Debug::Perf::Emit(L"makeFileList.total_us", MakeFileListFormatDetail(options.format), Debug::Perf::ElapsedUs(totalStartedAt), entries.size(), 0u, hr);
         return;
@@ -11603,15 +11427,13 @@ void FolderWindow::CommandMakeFileList(Pane pane)
         _settings->makeFileList = options;
     }
 
-    ShowMakeFileListOverlay(*this,
-                            pane,
-                            FolderView::OverlaySeverity::Information,
-                            FormatStringResource(nullptr,
-                                                 IDS_FMT_MAKE_FILE_LIST_COMPLETED,
-                                                 MakeFileListFormatDetail(options.format),
-                                                 static_cast<unsigned long long>(entries.size()),
-                                                 outputTarget),
-                            S_OK);
+    ShowMakeFileListOverlay(
+        *this,
+        pane,
+        FolderView::OverlaySeverity::Information,
+        FormatStringResource(
+            nullptr, IDS_FMT_MAKE_FILE_LIST_COMPLETED, MakeFileListFormatDetail(options.format), static_cast<unsigned long long>(entries.size()), outputTarget),
+        S_OK);
     Debug::Perf::Emit(L"makeFileList.total_us",
                       MakeFileListFormatDetail(options.format),
                       Debug::Perf::ElapsedUs(totalStartedAt),
@@ -11634,13 +11456,13 @@ void FolderWindow::CommandPack(Pane pane)
     const auto recordDebugResult = [&](const ArchiveOperationResult& operationResult)
     {
         ArchiveCommandDebugResult debugResult{};
-        debugResult.operation = L"pack";
-        debugResult.hr = operationResult.hr;
-        debugResult.archivePath = operationResult.archivePath;
-        debugResult.destinationPath = operationResult.destinationPath;
-        debugResult.entryCount = operationResult.entryCount;
-        debugResult.bytesProcessed = operationResult.bytesProcessed;
-        debugResult.entries = operationResult.entries;
+        debugResult.operation          = L"pack";
+        debugResult.hr                 = operationResult.hr;
+        debugResult.archivePath        = operationResult.archivePath;
+        debugResult.destinationPath    = operationResult.destinationPath;
+        debugResult.entryCount         = operationResult.entryCount;
+        debugResult.bytesProcessed     = operationResult.bytesProcessed;
+        debugResult.entries            = operationResult.entries;
         _debugLastArchiveCommandResult = std::move(debugResult);
     };
 #endif
@@ -11652,12 +11474,8 @@ void FolderWindow::CommandPack(Pane pane)
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_PACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_LOCAL_FOLDER_REQUIRED),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_LOCAL_FOLDER_REQUIRED), result.hr);
         Debug::Perf::Emit(L"archive.pack_us", L"unsupported", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
@@ -11669,12 +11487,8 @@ void FolderWindow::CommandPack(Pane pane)
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_PACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_SELECTION_REQUIRED),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_SELECTION_REQUIRED), result.hr);
         Debug::Perf::Emit(L"archive.pack_us", L"empty-selection", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
@@ -11682,13 +11496,13 @@ void FolderWindow::CommandPack(Pane pane)
     std::optional<ArchivePackPromptResult> packPromptResult;
     std::optional<std::filesystem::path> archivePath;
     ArchivePackerDefinition selectedPacker = BuildStoredZipPackerDefinition();
-    bool deleteSourcesAfterPack = false;
-    bool overwrite = true;
+    bool deleteSourcesAfterPack            = false;
+    bool overwrite                         = true;
 #ifdef ENABLE_TESTS
     if (debugOptions.has_value())
     {
-        archivePath = debugOptions->archivePath;
-        overwrite = debugOptions->overwrite;
+        archivePath    = debugOptions->archivePath;
+        overwrite      = debugOptions->overwrite;
         selectedPacker = BuildStoredZipPackerDefinition();
     }
     else
@@ -11702,10 +11516,10 @@ void FolderWindow::CommandPack(Pane pane)
         packPromptResult = PromptForArchivePackOptions(ownerWindow, _theme, currentFolder.value(), selectedPaths);
         if (packPromptResult.has_value())
         {
-            archivePath = packPromptResult->archivePath;
-            selectedPacker = packPromptResult->packer;
+            archivePath            = packPromptResult->archivePath;
+            selectedPacker         = packPromptResult->packer;
             deleteSourcesAfterPack = packPromptResult->deleteSources;
-            overwrite = false;
+            overwrite              = false;
         }
     }
 
@@ -11722,16 +11536,12 @@ void FolderWindow::CommandPack(Pane pane)
     if (archivePath->empty())
     {
         result.archivePath = archivePath.value();
-        result.hr = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        result.hr          = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_PACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_ARCHIVE_PATH_REQUIRED),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_PACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_ARCHIVE_PATH_REQUIRED), result.hr);
         Debug::Perf::Emit(L"archive.pack_us", L"missing-archive", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
@@ -11758,7 +11568,7 @@ void FolderWindow::CommandPack(Pane pane)
         if (! ConfirmPermanentDeletePaths(ownerWindow, selectedPaths))
         {
             result.archivePath = archivePath.value();
-            result.hr = S_FALSE;
+            result.hr          = S_FALSE;
 #ifdef ENABLE_TESTS
             recordDebugResult(result);
 #endif
@@ -11772,12 +11582,8 @@ void FolderWindow::CommandPack(Pane pane)
 #ifdef ENABLE_TESTS
     recordDebugResult(result);
 #endif
-    Debug::Perf::Emit(L"archive.pack_us",
-                      selectedPacker.extensionNoDot,
-                      Debug::Perf::ElapsedUs(startedAt),
-                      result.entryCount,
-                      result.bytesProcessed,
-                      result.hr);
+    Debug::Perf::Emit(
+        L"archive.pack_us", selectedPacker.extensionNoDot, Debug::Perf::ElapsedUs(startedAt), result.entryCount, result.bytesProcessed, result.hr);
 
     if (FAILED(result.hr))
     {
@@ -11795,15 +11601,14 @@ void FolderWindow::CommandPack(Pane pane)
         const HRESULT deleteHr = DeletePackedSources(selectedPaths);
         if (FAILED(deleteHr))
         {
-            ShowArchiveOverlay(*this,
-                               pane,
-                               IDS_CMD_PACK,
-                               FolderView::OverlaySeverity::Warning,
-                               FormatStringResource(nullptr,
-                                                    IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED,
-                                                    result.archivePath.wstring(),
-                                                    static_cast<unsigned long>(static_cast<uint32_t>(deleteHr))),
-                               deleteHr);
+            ShowArchiveOverlay(
+                *this,
+                pane,
+                IDS_CMD_PACK,
+                FolderView::OverlaySeverity::Warning,
+                FormatStringResource(
+                    nullptr, IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED, result.archivePath.wstring(), static_cast<unsigned long>(static_cast<uint32_t>(deleteHr))),
+                deleteHr);
             RefreshFolderViewIfPathMatches(state.folderView, result.archivePath.parent_path());
             return;
         }
@@ -11832,13 +11637,13 @@ void FolderWindow::CommandUnpack(Pane pane)
     const auto recordDebugResult = [&](const ArchiveOperationResult& operationResult)
     {
         ArchiveCommandDebugResult debugResult{};
-        debugResult.operation = L"unpack";
-        debugResult.hr = operationResult.hr;
-        debugResult.archivePath = operationResult.archivePath;
-        debugResult.destinationPath = operationResult.destinationPath;
-        debugResult.entryCount = operationResult.entryCount;
-        debugResult.bytesProcessed = operationResult.bytesProcessed;
-        debugResult.entries = operationResult.entries;
+        debugResult.operation          = L"unpack";
+        debugResult.hr                 = operationResult.hr;
+        debugResult.archivePath        = operationResult.archivePath;
+        debugResult.destinationPath    = operationResult.destinationPath;
+        debugResult.entryCount         = operationResult.entryCount;
+        debugResult.bytesProcessed     = operationResult.bytesProcessed;
+        debugResult.entries            = operationResult.entries;
         _debugLastArchiveCommandResult = std::move(debugResult);
     };
 #endif
@@ -11850,12 +11655,8 @@ void FolderWindow::CommandUnpack(Pane pane)
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_UNPACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_LOCAL_FOLDER_REQUIRED),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_LOCAL_FOLDER_REQUIRED), result.hr);
         Debug::Perf::Emit(L"archive.unpack_us", L"unsupported", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
@@ -11867,26 +11668,22 @@ void FolderWindow::CommandUnpack(Pane pane)
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_UNPACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_SELECTION_REQUIRED),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_SELECTION_REQUIRED), result.hr);
         Debug::Perf::Emit(L"archive.unpack_us", L"empty-selection", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
 
     std::optional<std::filesystem::path> destinationPath;
     ArchiveUnpackerDefinition selectedUnpacker = BuildStoredZipUnpackerDefinition();
-    bool deleteArchiveAfterUnpack = false;
-    std::wstring maskText = L"*.*";
-    bool overwrite = true;
+    bool deleteArchiveAfterUnpack              = false;
+    std::wstring maskText                      = L"*.*";
+    bool overwrite                             = true;
 #ifdef ENABLE_TESTS
     if (debugOptions.has_value())
     {
-        destinationPath = debugOptions->destinationPath;
-        overwrite = debugOptions->overwrite;
+        destinationPath  = debugOptions->destinationPath;
+        overwrite        = debugOptions->overwrite;
         selectedUnpacker = BuildStoredZipUnpackerDefinition();
     }
     else
@@ -11901,10 +11698,10 @@ void FolderWindow::CommandUnpack(Pane pane)
             PromptForArchiveUnpackOptions(ownerWindow, _theme, currentFolder.value(), selectedPaths.front());
         if (unpackPromptResult.has_value())
         {
-            destinationPath = unpackPromptResult->destinationPath;
-            selectedUnpacker = unpackPromptResult->unpacker;
+            destinationPath          = unpackPromptResult->destinationPath;
+            selectedUnpacker         = unpackPromptResult->unpacker;
             deleteArchiveAfterUnpack = unpackPromptResult->deleteArchive;
-            maskText = unpackPromptResult->maskText;
+            maskText                 = unpackPromptResult->maskText;
         }
     }
 
@@ -11920,36 +11717,28 @@ void FolderWindow::CommandUnpack(Pane pane)
 
     if (destinationPath->empty())
     {
-        result.archivePath = selectedPaths.front();
+        result.archivePath     = selectedPaths.front();
         result.destinationPath = destinationPath.value();
-        result.hr = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        result.hr              = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_UNPACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_DESTINATION_REQUIRED),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_DESTINATION_REQUIRED), result.hr);
         Debug::Perf::Emit(L"archive.unpack_us", L"missing-destination", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
 
     if (! selectedUnpacker.storedZip)
     {
-        result.archivePath = selectedPaths.front();
+        result.archivePath     = selectedPaths.front();
         result.destinationPath = destinationPath.value();
-        result.hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        result.hr              = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 #ifdef ENABLE_TESTS
         recordDebugResult(result);
 #endif
-        ShowArchiveOverlay(*this,
-                           pane,
-                           IDS_CMD_UNPACK,
-                           FolderView::OverlaySeverity::Warning,
-                           LoadStringResource(nullptr, IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT),
-                           result.hr);
+        ShowArchiveOverlay(
+            *this, pane, IDS_CMD_UNPACK, FolderView::OverlaySeverity::Warning, LoadStringResource(nullptr, IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT), result.hr);
         Debug::Perf::Emit(L"archive.unpack_us", L"unsupported-unpacker", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, result.hr);
         return;
     }
@@ -11989,12 +11778,8 @@ void FolderWindow::CommandUnpack(Pane pane)
 #ifdef ENABLE_TESTS
             recordDebugResult(result);
 #endif
-            Debug::Perf::Emit(L"archive.unpack_us",
-                              selectedUnpacker.extensionNoDot,
-                              Debug::Perf::ElapsedUs(startedAt),
-                              result.entryCount,
-                              result.bytesProcessed,
-                              result.hr);
+            Debug::Perf::Emit(
+                L"archive.unpack_us", selectedUnpacker.extensionNoDot, Debug::Perf::ElapsedUs(startedAt), result.entryCount, result.bytesProcessed, result.hr);
             const UINT messageId = result.hr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ? IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT : IDS_FMT_ARCHIVE_UNPACK_FAILED;
             const std::wstring message = messageId == IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT
                                              ? LoadStringResource(nullptr, IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT)
@@ -12016,27 +11801,22 @@ void FolderWindow::CommandUnpack(Pane pane)
 #ifdef ENABLE_TESTS
     recordDebugResult(result);
 #endif
-    Debug::Perf::Emit(L"archive.unpack_us",
-                      selectedUnpacker.extensionNoDot,
-                      Debug::Perf::ElapsedUs(startedAt),
-                      result.entryCount,
-                      result.bytesProcessed,
-                      result.hr);
+    Debug::Perf::Emit(
+        L"archive.unpack_us", selectedUnpacker.extensionNoDot, Debug::Perf::ElapsedUs(startedAt), result.entryCount, result.bytesProcessed, result.hr);
 
     if (deleteArchiveAfterUnpack)
     {
         const HRESULT deleteHr = DeleteUnpackedArchives(selectedPaths);
         if (FAILED(deleteHr))
         {
-            ShowArchiveOverlay(*this,
-                               pane,
-                               IDS_CMD_UNPACK,
-                               FolderView::OverlaySeverity::Warning,
-                               FormatStringResource(nullptr,
-                                                    IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED,
-                                                    result.archivePath.wstring(),
-                                                    static_cast<unsigned long>(static_cast<uint32_t>(deleteHr))),
-                               deleteHr);
+            ShowArchiveOverlay(
+                *this,
+                pane,
+                IDS_CMD_UNPACK,
+                FolderView::OverlaySeverity::Warning,
+                FormatStringResource(
+                    nullptr, IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED, result.archivePath.wstring(), static_cast<unsigned long>(static_cast<uint32_t>(deleteHr))),
+                deleteHr);
             RefreshFolderViewIfPathMatches(state.folderView, result.destinationPath);
             return;
         }
@@ -12261,8 +12041,7 @@ void FolderWindow::ApplyOpenedFilesDialogTheme() noexcept
 
 void FolderWindow::RequestCloseOpenedFilesDialog() noexcept
 {
-    if (_hWnd && IsWindow(_hWnd.get()) != FALSE &&
-        PostMessageW(_hWnd.get(), WndMsg::kFolderWindowCloseOpenedFilesDialog, 0, 0) != 0)
+    if (_hWnd && IsWindow(_hWnd.get()) != FALSE && PostMessageW(_hWnd.get(), WndMsg::kFolderWindowCloseOpenedFilesDialog, 0, 0) != 0)
     {
         return;
     }
@@ -12339,7 +12118,7 @@ void FolderWindow::CommandListOpenedFiles(Pane pane)
 
     if (_openedFilesDialog && _openedFilesDialog->hwnd && IsWindow(_openedFilesDialog->hwnd.get()) != FALSE)
     {
-        _openedFilesDialog->pane = pane;
+        _openedFilesDialog->pane  = pane;
         _openedFilesDialog->theme = _theme;
         _openedFilesDialog->ApplyTheme();
         RefreshOpenedFilesDialogRows();
@@ -12350,10 +12129,10 @@ void FolderWindow::CommandListOpenedFiles(Pane pane)
     }
 
     std::unique_ptr<OpenedFilesDialogState, OpenedFilesDialogStateDeleter> state{std::make_unique<OpenedFilesDialogState>().release()};
-    state->owner = this;
-    state->pane  = pane;
-    state->theme = _theme;
-    state->rows  = CollectOpenedFileRows();
+    state->owner         = this;
+    state->pane          = pane;
+    state->theme         = _theme;
+    state->rows          = CollectOpenedFileRows();
     state->selectedIndex = state->rows.empty() ? kOpenedFilesNoSelection : 0u;
 
     HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
@@ -12379,24 +12158,23 @@ void FolderWindow::CommandListOpenedFiles(Pane pane)
     {
         const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
         perf.SetHr(hr);
-        Debug::Warning(L"FolderWindow::CommandListOpenedFiles: failed to calculate opened files window bounds (hr=0x{:08X}).",
-                       static_cast<unsigned long>(hr));
+        Debug::Warning(L"FolderWindow::CommandListOpenedFiles: failed to calculate opened files window bounds (hr=0x{:08X}).", static_cast<unsigned long>(hr));
         return;
     }
 
     const std::wstring caption = LoadStringResource(nullptr, IDS_CMD_LIST_OPENED_FILES);
-    HWND dialog = CreateWindowExW(exStyle,
-                                  kOpenedFilesWindowClassName,
-                                  caption.c_str(),
-                                  style,
-                                  CW_USEDEFAULT,
-                                  CW_USEDEFAULT,
-                                  bounds.right - bounds.left,
-                                  bounds.bottom - bounds.top,
-                                  ownerWindow,
-                                  nullptr,
-                                  GetModuleHandleW(nullptr),
-                                  state.get());
+    HWND dialog                = CreateWindowExW(exStyle,
+                                                 kOpenedFilesWindowClassName,
+                                                 caption.c_str(),
+                                                 style,
+                                                 CW_USEDEFAULT,
+                                                 CW_USEDEFAULT,
+                                                 bounds.right - bounds.left,
+                                                 bounds.bottom - bounds.top,
+                                                 ownerWindow,
+                                                 nullptr,
+                                                 GetModuleHandleW(nullptr),
+                                                 state.get());
     if (! dialog)
     {
         perf.SetHr(HRESULT_FROM_WIN32(GetLastError()));
@@ -12424,7 +12202,9 @@ std::vector<FolderWindow::SharedDirectoryRow> FolderWindow::CollectSharedDirecto
 
     const auto sortRows = [](std::vector<SharedDirectoryRow>& rows) noexcept
     {
-        std::sort(rows.begin(), rows.end(), [](const SharedDirectoryRow& left, const SharedDirectoryRow& right) noexcept
+        std::sort(rows.begin(),
+                  rows.end(),
+                  [](const SharedDirectoryRow& left, const SharedDirectoryRow& right) noexcept
         {
             const int nameResult =
                 CompareStringOrdinal(left.name.data(), static_cast<int>(left.name.size()), right.name.data(), static_cast<int>(right.name.size()), TRUE);
@@ -12443,7 +12223,7 @@ std::vector<FolderWindow::SharedDirectoryRow> FolderWindow::CollectSharedDirecto
     if (_debugSharedDirectoriesProviderResult.has_value())
     {
         const SharedDirectoriesDebugProviderResult& providerResult = _debugSharedDirectoriesProviderResult.value();
-        outHr = providerResult.hr;
+        outHr                                                      = providerResult.hr;
         if (FAILED(outHr))
         {
             perf.SetHr(outHr);
@@ -12474,9 +12254,9 @@ std::vector<FolderWindow::SharedDirectoryRow> FolderWindow::CollectSharedDirecto
 
     for (;;)
     {
-        LPBYTE shareBufferRaw = nullptr;
-        DWORD entriesRead     = 0;
-        DWORD totalEntries    = 0;
+        LPBYTE shareBufferRaw       = nullptr;
+        DWORD entriesRead           = 0;
+        DWORD totalEntries          = 0;
         const NET_API_STATUS status = ::NetShareEnum(nullptr, 2, &shareBufferRaw, MAX_PREFERRED_LENGTH, &entriesRead, &totalEntries, &resumeHandle);
 
         wil::unique_any<LPBYTE, decltype(&::NetApiBufferFree), ::NetApiBufferFree> shareBuffer(shareBufferRaw);
@@ -12549,8 +12329,7 @@ void FolderWindow::ApplySharedDirectoriesDialogTheme() noexcept
 
 void FolderWindow::RequestCloseSharedDirectoriesDialog() noexcept
 {
-    if (_hWnd && IsWindow(_hWnd.get()) != FALSE &&
-        PostMessageW(_hWnd.get(), WndMsg::kFolderWindowCloseSharedDirectoriesDialog, 0, 0) != 0)
+    if (_hWnd && IsWindow(_hWnd.get()) != FALSE && PostMessageW(_hWnd.get(), WndMsg::kFolderWindowCloseSharedDirectoriesDialog, 0, 0) != 0)
     {
         return;
     }
@@ -12606,7 +12385,7 @@ bool FolderWindow::OpenSharedDirectoriesDialogSelection() noexcept
     std::error_code ec;
     if (! std::filesystem::is_directory(std::filesystem::path(row.localPath), ec))
     {
-        hr = HRESULT_FROM_WIN32(ec.value() == 0 ? ERROR_PATH_NOT_FOUND : static_cast<DWORD>(ec.value()));
+        hr                   = HRESULT_FROM_WIN32(ec.value() == 0 ? ERROR_PATH_NOT_FOUND : static_cast<DWORD>(ec.value()));
         std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
         std::wstring message = LoadStringOrFallback(IDS_SHARED_DIRECTORIES_OPEN_FAILED, L"The shared directory path could not be opened.");
         ShowPaneAlertOverlay(
@@ -12634,9 +12413,9 @@ void FolderWindow::OpenSharedDirectoriesManagement() noexcept
         return;
     }
 
-    const Pane pane       = _sharedDirectoriesDialog ? _sharedDirectoriesDialog->pane : _activePane;
-    std::wstring title    = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
-    std::wstring message  = LoadStringOrFallback(IDS_SHARED_DIRECTORIES_MANAGE_FAILED, L"Windows shared folders management could not be opened.");
+    const Pane pane        = _sharedDirectoriesDialog ? _sharedDirectoriesDialog->pane : _activePane;
+    std::wstring title     = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    std::wstring message   = LoadStringOrFallback(IDS_SHARED_DIRECTORIES_MANAGE_FAILED, L"Windows shared folders management could not be opened.");
     const HRESULT resultHr = HRESULT_FROM_WIN32(static_cast<DWORD>(reinterpret_cast<INT_PTR>(result)));
     ShowPaneAlertOverlay(
         pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), resultHr, true, false);
@@ -12649,7 +12428,7 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
 
     if (_sharedDirectoriesDialog && _sharedDirectoriesDialog->hwnd && IsWindow(_sharedDirectoriesDialog->hwnd.get()) != FALSE)
     {
-        _sharedDirectoriesDialog->pane = pane;
+        _sharedDirectoriesDialog->pane  = pane;
         _sharedDirectoriesDialog->theme = _theme;
         _sharedDirectoriesDialog->ApplyTheme();
         RefreshSharedDirectoriesDialogRows();
@@ -12660,11 +12439,11 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
         return;
     }
 
-    auto state   = std::make_unique<SharedDirectoriesDialogState>();
-    state->owner = this;
-    state->pane  = pane;
-    state->theme = _theme;
-    state->rows  = CollectSharedDirectoryRows(state->lastError);
+    auto state           = std::make_unique<SharedDirectoriesDialogState>();
+    state->owner         = this;
+    state->pane          = pane;
+    state->theme         = _theme;
+    state->rows          = CollectSharedDirectoryRows(state->lastError);
     state->selectedIndex = state->rows.empty() ? kSharedDirectoriesNoSelection : 0u;
 
     HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
@@ -12696,24 +12475,23 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
     }
 
     const std::wstring caption = LoadStringOrFallback(IDS_SHARED_DIRECTORIES_CAPTION, L"Shared Directories");
-    HWND dialog = CreateWindowExW(exStyle,
-                                  kSharedDirectoriesWindowClassName,
-                                  caption.c_str(),
-                                  style,
-                                  CW_USEDEFAULT,
-                                  CW_USEDEFAULT,
-                                  bounds.right - bounds.left,
-                                  bounds.bottom - bounds.top,
-                                  ownerWindow,
-                                  nullptr,
-                                  GetModuleHandleW(nullptr),
-                                  state.get());
+    HWND dialog                = CreateWindowExW(exStyle,
+                                                 kSharedDirectoriesWindowClassName,
+                                                 caption.c_str(),
+                                                 style,
+                                                 CW_USEDEFAULT,
+                                                 CW_USEDEFAULT,
+                                                 bounds.right - bounds.left,
+                                                 bounds.bottom - bounds.top,
+                                                 ownerWindow,
+                                                 nullptr,
+                                                 GetModuleHandleW(nullptr),
+                                                 state.get());
     if (! dialog)
     {
         const HRESULT hr = HRESULT_FROM_WIN32(GetLastError());
         perf.SetHr(hr);
-        Debug::Warning(L"FolderWindow::CommandSharedDirectories: failed to create Shared Directories dialog (hr=0x{:08X}).",
-                       static_cast<unsigned long>(hr));
+        Debug::Warning(L"FolderWindow::CommandSharedDirectories: failed to create Shared Directories dialog (hr=0x{:08X}).", static_cast<unsigned long>(hr));
         return;
     }
 
@@ -12943,7 +12721,7 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
         return;
     }
 
-    const bool allowSubdirectories = ChangeAttributesSelectionContainsDirectory(fileIo.get(), paths);
+    const bool allowSubdirectories         = ChangeAttributesSelectionContainsDirectory(fileIo.get(), paths);
     ChangeAttributesOptions initialOptions = BuildInitialChangeAttributesOptions(fileIo.get(), paths);
     initialOptions.includeSubdirectories   = false;
 
@@ -13053,8 +12831,8 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
                 }
             }
 
-            progress.enumerating = false;
-            progress.applying    = true;
+            progress.enumerating  = false;
+            progress.applying     = true;
             progress.plannedItems = static_cast<uint64_t>(workItems.size());
             progress.MaybePostTaskUpdate();
 
@@ -13088,12 +12866,8 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
                 static_cast<void>(PostMessagePayload(ownerHwnd, WndMsg::kChangeAttributesCompleted, 0, std::move(completed)));
             }
 
-            Debug::Perf::Emit(L"fileattrs.change_attributes_us",
-                              L"recursive",
-                              Debug::Perf::ElapsedUs(operationStartedAt),
-                              progress.completedItems,
-                              0u,
-                              operationHr);
+            Debug::Perf::Emit(
+                L"fileattrs.change_attributes_us", L"recursive", Debug::Perf::ElapsedUs(operationStartedAt), progress.completedItems, 0u, operationHr);
         });
         return;
     }

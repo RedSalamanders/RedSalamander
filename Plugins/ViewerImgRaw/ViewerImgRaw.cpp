@@ -101,8 +101,7 @@ LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 void UnhookFileComboHostWindow(HWND hwnd) noexcept
 {
-    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(
-        hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+    RedSalamander::ViewerFileComboHost::UnhookFileComboHostWindow(hwnd, kFileComboHostStateProp, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
 LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
@@ -1450,7 +1449,7 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
                 return;
             }
 
-            const HWND hwnd          = _hWnd.get();
+            const HWND hwnd         = _hWnd.get();
             _otherIndex             = index;
             _currentSidecarJpegPath = _otherItems[_otherIndex].sidecarJpegPath;
             _currentLabel           = _otherItems[_otherIndex].label;
@@ -1460,7 +1459,8 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
                 SetFocus(hwnd);
             }
         });
-        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost, [this]() noexcept
+        RedSalamander::ViewerFileComboHost::ConfigureFileComboKeyboard(_fileComboHost,
+                                                                       [this]() noexcept
         {
             if (_hWnd)
             {
@@ -3640,7 +3640,7 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
     _fileSystem     = context->fileSystem;
     _fileSystemName = context->fileSystemName ? context->fileSystemName : L"";
 
-    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const bool embeddedMode   = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
     {
@@ -3690,24 +3690,13 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
             h = std::max(1L, ownerRc.bottom - ownerRc.top);
         }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(
-            embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERRAW_MENU));
-        const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_HSCROLL | WS_VSCROLL)
-                                         : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL);
-        const std::wstring initialTitle = embeddedMode ? std::wstring{}
-                                                       : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERRAW_NAME) : _metaName);
-        HWND window = CreateWindowExW(0,
-                                      kClassName,
-                                      initialTitle.c_str(),
-                                      style,
-                                      x,
-                                      y,
-                                      w,
-                                      h,
-                                      embeddedMode ? embeddedParent : nullptr,
-                                      menu.get(),
-                                      g_hInstance,
-                                      this);
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(embeddedMode ? nullptr
+                                                                                          : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERRAW_MENU));
+        const DWORD style               = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_HSCROLL | WS_VSCROLL)
+                                                       : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL);
+        const std::wstring initialTitle = embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERRAW_NAME) : _metaName);
+        HWND window =
+            CreateWindowExW(0, kClassName, initialTitle.c_str(), style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, menu.get(), g_hInstance, this);
         if (! window)
         {
             return HRESULT_FROM_WIN32(GetLastError());

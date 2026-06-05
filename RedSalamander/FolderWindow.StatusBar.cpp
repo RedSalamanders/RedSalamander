@@ -6,6 +6,7 @@
 #include "SettingsStore.h"
 
 #include <d2d1.h>
+#include <windowsx.h>
 
 namespace
 {
@@ -810,10 +811,10 @@ LRESULT StatusBarOnPaint(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 
 LRESULT StatusBarOnSetCursor(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 {
-    POINT screenPt{};
-    if (GetCursorPos(&screenPt))
+    const LPARAM messagePos = static_cast<LPARAM>(GetMessagePos());
+    POINT screenPt{GET_X_LPARAM(messagePos), GET_Y_LPARAM(messagePos)};
+    if (ScreenToClient(hwnd, &screenPt) != FALSE)
     {
-        ScreenToClient(hwnd, &screenPt);
         if (IsPointInStatusBarPart(hwnd, kStatusBarPartSort, screenPt))
         {
             SetCursor(LoadCursorW(nullptr, IDC_HAND));

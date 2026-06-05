@@ -57,7 +57,7 @@ LRESULT CALLBACK NavigationView::FullPathPopupWndProcThunk(HWND hwnd, UINT msg, 
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-LRESULT NavigationView::OnFullPathPopupCreate(HWND hwnd)
+LRESULT NavigationView::OnFullPathPopupCreate([[maybe_unused]] HWND hwnd)
 {
     _fullPathPopupTrackingMouse                   = false;
     _fullPathPopupEditMode                        = false;
@@ -68,7 +68,7 @@ LRESULT NavigationView::OnFullPathPopupCreate(HWND hwnd)
     _fullPathPopupHoveredSeparatorIndex           = -1;
     _fullPathPopupScrollY                         = 0.0f;
 
-    _fullPathPopupHoverTimer = SetTimer(hwnd, HOVER_TIMER_ID, 1000 / HOVER_CHECK_FPS, nullptr);
+    _fullPathPopupHoverTimer = 0;
     return 0;
 }
 
@@ -101,89 +101,11 @@ LRESULT NavigationView::OnFullPathPopupNcDestroy(HWND hwnd)
     return 0;
 }
 
-LRESULT NavigationView::OnFullPathPopupTimer(HWND hwnd, UINT_PTR timerId)
+LRESULT NavigationView::OnFullPathPopupTimer([[maybe_unused]] HWND hwnd, UINT_PTR timerId)
 {
     if (timerId != HOVER_TIMER_ID || _fullPathPopupEditMode)
     {
         return 0;
-    }
-
-    POINT screenPt{};
-    GetCursorPos(&screenPt);
-
-    HWND windowAtPoint  = WindowFromPoint(screenPt);
-    const bool overMenu = IsWin32MenuWindow(windowAtPoint);
-
-    POINT pt = screenPt;
-    ScreenToClient(hwnd, &pt);
-
-    RECT clientRect{};
-    GetClientRect(hwnd, &clientRect);
-    const bool inClient = ! overMenu && (PtInRect(&clientRect, pt) != 0);
-
-    int newHoveredSegment   = -1;
-    int newHoveredSeparator = -1;
-
-    if (inClient)
-    {
-        const float x = static_cast<float>(pt.x);
-        const float y = static_cast<float>(pt.y) + _fullPathPopupScrollY;
-
-        for (size_t i = 0; i < _fullPathPopupSegments.size(); ++i)
-        {
-            const auto& bounds = _fullPathPopupSegments[i].bounds;
-            if (bounds.left <= x && x <= bounds.right && bounds.top <= y && y <= bounds.bottom)
-            {
-                newHoveredSegment = static_cast<int>(i);
-                break;
-            }
-        }
-
-        for (size_t i = 0; i < _fullPathPopupSeparators.size(); ++i)
-        {
-            const auto& bounds = _fullPathPopupSeparators[i].bounds;
-            if (bounds.left <= x && x <= bounds.right && bounds.top <= y && y <= bounds.bottom)
-            {
-                newHoveredSeparator = static_cast<int>(i);
-                break;
-            }
-        }
-    }
-
-    const bool hoverChanged = (newHoveredSegment != _fullPathPopupHoveredSegmentIndex) || (newHoveredSeparator != _fullPathPopupHoveredSeparatorIndex);
-    if (hoverChanged)
-    {
-        _fullPathPopupHoveredSegmentIndex   = newHoveredSegment;
-        _fullPathPopupHoveredSeparatorIndex = newHoveredSeparator;
-        InvalidateRect(hwnd, nullptr, FALSE);
-    }
-
-    if (_fullPathPopupMenuOpenForSeparator != -1 && _fullPathPopupPendingSeparatorMenuSwitchIndex == -1 && ! overMenu)
-    {
-        const int targetIndex = _fullPathPopupHoveredSeparatorIndex;
-        if (targetIndex != -1 && targetIndex != _fullPathPopupMenuOpenForSeparator)
-        {
-            const size_t separatorIndex = static_cast<size_t>(targetIndex);
-            bool eligibleForSiblings    = false;
-
-            if (separatorIndex < _fullPathPopupSeparators.size())
-            {
-                const auto& separator = _fullPathPopupSeparators[separatorIndex];
-                if (separator.rightSegmentIndex < _fullPathPopupSegments.size())
-                {
-                    const auto& segment          = _fullPathPopupSegments[separator.rightSegmentIndex];
-                    const auto normalizedSegment = NormalizeDirectoryPath(segment.fullPath);
-                    eligibleForSiblings          = ! normalizedSegment.parent_path().empty();
-                }
-            }
-
-            if (eligibleForSiblings)
-            {
-                _fullPathPopupPendingSeparatorMenuSwitchIndex = targetIndex;
-                SendMessageW(hwnd, WM_CANCELMODE, 0, 0);
-                PostMessageW(hwnd, WndMsg::kNavigationMenuShowSiblingsDropdown, static_cast<WPARAM>(separatorIndex), 0);
-            }
-        }
     }
 
     return 0;
@@ -257,6 +179,34 @@ LRESULT NavigationView::OnFullPathPopupMouseMove(HWND hwnd, POINT pt)
         _fullPathPopupHoveredSegmentIndex   = newHoveredSegment;
         _fullPathPopupHoveredSeparatorIndex = newHoveredSeparator;
         InvalidateRect(hwnd, nullptr, FALSE);
+    }
+
+    if (_fullPathPopupMenuOpenForSeparator != -1 && _fullPathPopupPendingSeparatorMenuSwitchIndex == -1)
+    {
+        const int targetIndex = newHoveredSeparator;
+        if (targetIndex != -1 && targetIndex != _fullPathPopupMenuOpenForSeparator)
+        {
+            const size_t separatorIndex = static_cast<size_t>(targetIndex);
+            bool eligibleForSiblings    = false;
+
+            if (separatorIndex < _fullPathPopupSeparators.size())
+            {
+                const auto& separator = _fullPathPopupSeparators[separatorIndex];
+                if (separator.rightSegmentIndex < _fullPathPopupSegments.size())
+                {
+                    const auto& segment          = _fullPathPopupSegments[separator.rightSegmentIndex];
+                    const auto normalizedSegment = NormalizeDirectoryPath(segment.fullPath);
+                    eligibleForSiblings          = ! normalizedSegment.parent_path().empty();
+                }
+            }
+
+            if (eligibleForSiblings)
+            {
+                _fullPathPopupPendingSeparatorMenuSwitchIndex = targetIndex;
+                SendMessageW(hwnd, WM_CANCELMODE, 0, 0);
+                PostMessageW(hwnd, WndMsg::kNavigationMenuShowSiblingsDropdown, static_cast<WPARAM>(separatorIndex), 0);
+            }
+        }
     }
 
     return 0;
@@ -724,8 +674,8 @@ void NavigationView::UpdateFullPathPopupWindow()
     const int minY = static_cast<int>(work.top);
     const int maxX = std::max(minX, static_cast<int>(work.right - winWidth));
     const int maxY = std::max(minY, static_cast<int>(work.bottom - winHeight));
-    x = std::clamp(x, minX, maxX);
-    y = std::clamp(y, minY, maxY);
+    x              = std::clamp(x, minX, maxX);
+    y              = std::clamp(y, minY, maxY);
 
     if (! _fullPathPopup)
     {

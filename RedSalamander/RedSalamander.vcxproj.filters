@@ -44,6 +44,7 @@
     <ClInclude Include="Preferences.h" />
     <ClInclude Include="Preferences.Dialog.h" />
     <ClInclude Include="Preferences.Advanced.h" />
+    <ClInclude Include="Preferences.Monitor.h" />
     <ClInclude Include="Preferences.CompareDirectories.h" />
     <ClInclude Include="Preferences.FileOperations.h" />
     <ClInclude Include="Preferences.FileActions.h" />
@@ -146,6 +147,7 @@
     <ClCompile Include="Preferences.Dialog.cpp" />
     <ClCompile Include="Preferences.Internal.cpp" />
     <ClCompile Include="Preferences.Advanced.cpp" />
+    <ClCompile Include="Preferences.Monitor.cpp" />
     <ClCompile Include="Preferences.CompareDirectories.cpp" />
     <ClCompile Include="Preferences.FileOperations.cpp" />
     <ClCompile Include="Preferences.FileActions.cpp" />

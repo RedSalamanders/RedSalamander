@@ -65,14 +65,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     const uint64_t rawIconLockWaitRows = CountPerfRowsWithMetric("iconcache.lock_wait_us", true);
     const uint64_t rawIconLockHoldRows = CountPerfRowsWithMetric("iconcache.lock_hold_us", true);
     state.Require(rawIconLockWaitRows == 0u && rawIconLockHoldRows == 0u,
-                  std::format(L"Perf runs should not emit raw per-lock IconCache rows; waitRows={} holdRows={}.",
-                              rawIconLockWaitRows,
-                              rawIconLockHoldRows));
-    const uint64_t shellAssociationRows =
-        CountPerfRowsContaining("\"metric\":\"iconcache.shgetfileinfo_us\",\"detail\":\"association\"");
-    state.Require(shellAssociationRows > 0u,
-                  std::format(L"IconCache SHGetFileInfo perf rows should identify association lookups; saw {} association detail row(s).",
-                              shellAssociationRows));
+                  std::format(L"Perf runs should not emit raw per-lock IconCache rows; waitRows={} holdRows={}.", rawIconLockWaitRows, rawIconLockHoldRows));
+    const uint64_t shellAssociationRows = CountPerfRowsContaining("\"metric\":\"iconcache.shgetfileinfo_us\",\"detail\":\"association\"");
+    state.Require(
+        shellAssociationRows > 0u,
+        std::format(L"IconCache SHGetFileInfo perf rows should identify association lookups; saw {} association detail row(s).", shellAssociationRows));
 }
 
 [[nodiscard]] bool TestPreferencesDialogFileOperationsPageUsesDxUiControls(HWND mainWindow, CaseState& state) noexcept
@@ -839,7 +836,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPreferencesDialogAdvancedFilterPresetCustomMaskLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestPreferencesDialogMonitorFilterPresetCustomMaskLiveDxInteraction(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -852,18 +849,45 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
-    Common::Settings::Settings seededSettings = baselineSettings;
-    seededSettings.monitor                    = Common::Settings::MonitorSettings{};
-    seededSettings.monitor->filter.preset     = Common::Settings::MonitorFilterPreset::ErrorsOnly;
-    seededSettings.monitor->filter.mask       = static_cast<uint32_t>(MonitorFilterBit::Error);
-    g_settings                                = seededSettings;
-
     if (const HWND existing = GetPreferencesDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
         PostMessageW(existing, WM_CLOSE, 0, 0);
         state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)),
-                      L"Existing Preferences window did not close before Advanced filter-preset validation.");
+                      L"Existing Preferences window did not close before Monitor filter-preset validation.");
     }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ScopedSettingsArtifactBackup mainSettingsBackup;
+    state.Require(mainSettingsBackup.Capture(L"RedSalamander"), L"Failed to back up the main settings artifacts for Monitor ownership validation.");
+    ScopedSettingsArtifactBackup monitorSettingsBackup;
+    state.Require(monitorSettingsBackup.Capture(kPreferencesMonitorAppId),
+                  L"Failed to back up the monitor settings artifacts for Monitor ownership validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    Common::Settings::Settings monitorSeed{};
+    monitorSeed.monitor                = Common::Settings::MonitorSettings{};
+    monitorSeed.monitor->filter.preset = Common::Settings::MonitorFilterPreset::ErrorsOnly;
+    monitorSeed.monitor->filter.mask   = static_cast<uint32_t>(MonitorFilterBit::Error);
+    const HRESULT monitorSeedHr        = SettingsHotReload::SaveSettingsAndSchema(kPreferencesMonitorAppId, monitorSeed);
+    state.Require(SUCCEEDED(monitorSeedHr),
+                  std::format(L"Failed to seed RedSalamanderMonitor settings before Monitor filter-preset validation: 0x{:08X}.",
+                              static_cast<unsigned long>(monitorSeedHr)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    Common::Settings::Settings seededSettings = baselineSettings;
+    seededSettings.monitor                    = Common::Settings::MonitorSettings{};
+    seededSettings.monitor->filter.preset     = Common::Settings::MonitorFilterPreset::AllTypes;
+    seededSettings.monitor->filter.mask       = 0u;
+    g_settings                                = seededSettings;
 
     const auto waitForPreferencesWindow = [&]() noexcept
     { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
@@ -887,31 +911,30 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return DebugGetPreferencesDialogSnapshot(outSnapshot) && predicate(outSnapshot);
     };
 
-    const auto navigateToAdvancedPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
+    const auto navigateToMonitorPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
         const HWND treeHost = GetDlgItem(targetPrefs, IDC_PREFS_CATEGORY_LIST);
-        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Advanced filter-preset validation.");
+        state.Require(treeHost != nullptr && IsWindow(treeHost) != FALSE, L"Preferences category host control missing for Monitor filter-preset validation.");
         if (! treeHost || IsWindow(treeHost) == FALSE)
         {
             return false;
         }
 
-        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Advanced filter-preset validation.");
+        state.Require(SetFocus(treeHost) == treeHost, L"Failed to focus the Preferences category host for Monitor filter-preset validation.");
         PumpPendingMessages();
 
-        SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
-        SendMessageW(treeHost, WM_KEYUP, VK_END, 0);
+        state.Require(DebugSelectPreferencesCategory(kPrefCategoryMonitor), L"Preferences did not accept debug selection of the Monitor page.");
         PumpPendingMessages();
 
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
         {
-            return value.currentCategory == kPrefCategoryAdvanced && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
                    value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
                           outSnapshot),
-                      L"Preferences Advanced page did not settle before filter-preset validation.");
+                      L"Preferences Monitor page did not settle before filter-preset validation.");
         return state.failure.empty();
     };
 
@@ -937,47 +960,47 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         {
             const HWND activePage = getActivePage();
             const auto valueState = CollectVisibleDescendantControlValueStateByName(activePage, UIA_ComboBoxControlTypeId, expectedName);
-            return value.currentCategory == kPrefCategoryAdvanced && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
                    value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u && valueState.has_value() && valueState->value == expectedValue;
         },
             comboSnapshot);
     };
 
-    const auto waitForMaskEditVisible = [&](std::wstring_view expectedName, std::wstring_view expectedValue, PreferencesDebugSnapshot& outSnapshot) noexcept
+    const auto waitForNoMaskEdit = [&](std::wstring_view expectedName) noexcept
     {
+        PreferencesDebugSnapshot noMaskSnapshot{};
         return waitForSnapshot(
             [&](const PreferencesDebugSnapshot& value) noexcept
         {
             const HWND activePage = getActivePage();
             const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
-            return value.currentCategory == kPrefCategoryAdvanced && value.advancedFocusTarget == PreferencesAdvancedDebugFocusTarget::FilterMaskEdit &&
-                   value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount <= 1u &&
-                   value.currentPageRenderedDxHostCount <= 1u && value.currentPageDxHostResizeFailureCount == 0u && valueState.has_value() &&
-                   valueState->value == expectedValue;
+            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+                   value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
+                   value.currentPageDxHostResizeFailureCount == 0u && ! valueState.has_value();
         },
-            outSnapshot);
+            noMaskSnapshot);
     };
 
-    const auto waitForEditValue = [&](std::wstring_view expectedName, std::wstring_view expectedValue) noexcept
+    const auto waitForToggleState = [&](std::wstring_view expectedName, const ToggleState expectedState) noexcept
     {
-        PreferencesDebugSnapshot editSnapshot{};
+        PreferencesDebugSnapshot toggleSnapshot{};
         return waitForSnapshot(
             [&](const PreferencesDebugSnapshot& value) noexcept
         {
             const HWND activePage = getActivePage();
-            const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, expectedName);
-            return value.currentCategory == kPrefCategoryAdvanced && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
+            const auto toggleState = CollectVisibleDescendantTogglePatternStateByName(activePage, expectedName);
+            return value.currentCategory == kPrefCategoryMonitor && value.createdPaneWindowCount == 0u && value.visiblePaneWindowCount == 0u &&
                    value.visibleCurrentPageChildWindowCount <= 1u && value.currentPageRenderedDxHostCount <= 1u &&
-                   value.currentPageDxHostResizeFailureCount == 0u && valueState.has_value() && valueState->value == expectedValue;
+                   value.currentPageDxHostResizeFailureCount == 0u && toggleState.has_value() && toggleState->toggleState == expectedState;
         },
-            editSnapshot);
+            toggleSnapshot);
     };
 
     auto prefs = HWND{};
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
-    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Advanced filter-preset validation.");
+    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Monitor filter-preset validation.");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
@@ -993,7 +1016,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     });
 
     PreferencesDebugSnapshot snapshot{};
-    if (! navigateToAdvancedPage(prefs, snapshot))
+    if (! navigateToMonitorPage(prefs, snapshot))
     {
         return false;
     }
@@ -1002,30 +1025,31 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     const std::wstring customText       = LoadStringResource(nullptr, IDS_PREFS_ADV_FILTER_CUSTOM);
     const std::wstring initialText      = LoadStringResource(nullptr, IDS_PREFS_ADV_FILTER_ERRORS_ONLY);
     const std::wstring maskName         = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_MASK);
+    const std::wstring textToggleName   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_TEXT);
+    const std::wstring errorToggleName  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_ERROR);
     const std::wstring cancelButtonText = LoadStringResource(nullptr, IDS_BTN_CANCEL);
-    state.Require(! comboName.empty() && ! customText.empty() && ! initialText.empty() && ! maskName.empty() && ! cancelButtonText.empty(),
-                  L"Preferences Advanced filter preset captions should resolve.");
+    const std::wstring applyButtonText  = LoadStringResource(nullptr, IDS_BTN_APPLY);
+    state.Require(! comboName.empty() && ! customText.empty() && ! initialText.empty() && ! maskName.empty() && ! textToggleName.empty() &&
+                      ! errorToggleName.empty() && ! cancelButtonText.empty() && ! applyButtonText.empty(),
+                  L"Preferences Monitor filter preset captions should resolve.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    state.Require(waitForComboValue(comboName, initialText), L"Preferences Advanced filter preset combo did not settle to the seeded non-custom baseline.");
+    state.Require(waitForComboValue(comboName, initialText), L"Preferences Monitor filter preset combo did not settle to the seeded non-custom baseline.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const auto initialMaskState = CollectVisibleDescendantValuePatternStateByName(getActivePage(), UIA_EditControlTypeId, maskName);
-    state.Require(initialMaskState.has_value(), L"Preferences Advanced filter mask edit should stay visible for the seeded non-custom baseline.");
-    if (! initialMaskState.has_value())
-    {
-        return false;
-    }
+    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit for the seeded baseline.");
+    state.Require(waitForToggleState(textToggleName, ToggleState_Off), L"Preferences Monitor Text filter toggle did not reflect the seeded baseline.");
+    state.Require(waitForToggleState(errorToggleName, ToggleState_On), L"Preferences Monitor Error filter toggle did not reflect the seeded baseline.");
 
     state.Require(focusVisibleDescendantByName(getActivePage(), UIA_ComboBoxControlTypeId, comboName) ||
-                      DebugSelectPreferencesAdvancedFilterPreset(initialText),
-                  L"Preferences Advanced filter preset combo did not accept focus before switching to Custom.");
+                      DebugSelectPreferencesMonitorFilterPreset(initialText),
+                  L"Preferences Monitor filter preset combo did not accept focus before switching to Custom.");
     if (! state.failure.empty())
     {
         return false;
@@ -1037,39 +1061,24 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     PumpPendingMessages();
     if (! waitForComboValue(comboName, customText))
     {
-        state.Require(DebugSelectPreferencesAdvancedFilterPreset(customText),
-                      L"Preferences Advanced filter preset combo did not switch to Custom via keyboard routing or debug fallback.");
+        state.Require(DebugSelectPreferencesMonitorFilterPreset(customText),
+                      L"Preferences Monitor filter preset combo did not switch to Custom via keyboard routing or debug fallback.");
         if (! state.failure.empty())
         {
             return false;
         }
     }
 
-    state.Require(waitForComboValue(comboName, customText), L"Preferences Advanced filter preset combo did not settle to Custom.");
+    state.Require(waitForComboValue(comboName, customText), L"Preferences Monitor filter preset combo did not settle to Custom.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const auto customMaskState = CollectVisibleDescendantValuePatternStateByName(getActivePage(), UIA_EditControlTypeId, maskName);
-    state.Require(customMaskState.has_value(), L"Preferences Advanced filter mask edit should become visible after switching the preset to Custom.");
-    if (! customMaskState.has_value())
-    {
-        return false;
-    }
-    state.Require(! customMaskState->isReadOnly, L"Preferences Advanced filter mask edit should become writable after switching the preset to Custom.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
-    const std::wstring initialMaskValue = customMaskState->value;
-    const std::wstring editedMaskValue  = initialMaskValue == L"31" ? L"1" : L"31";
-    state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, maskName, editedMaskValue),
-                  L"Preferences Advanced filter mask edit did not accept live UIA ValuePattern mutation.");
-    state.Require(waitForMaskEditVisible(maskName, editedMaskValue, snapshot),
-                  L"Preferences Advanced filter mask edit did not become the focused visible DX edit after switching the preset to Custom.");
-    state.Require(waitForEditValue(maskName, editedMaskValue), L"Preferences Advanced filter mask edit did not settle to the edited custom value.");
+    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit after switching to Custom.");
+    state.Require(ToggleVisibleDescendantByName(getActivePage(), textToggleName),
+                  L"Preferences Monitor Text filter toggle did not accept live UIA TogglePattern mutation.");
+    state.Require(waitForToggleState(textToggleName, ToggleState_On), L"Preferences Monitor Text filter toggle did not settle after live mutation.");
     if (! state.failure.empty())
     {
         return false;
@@ -1078,42 +1087,127 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     if (! InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText))
     {
         state.Require(DebugCancelPreferencesDialog(),
-                      L"Preferences shell Cancel action did not expose a visible DX button during Advanced filter-preset validation.");
+                      L"Preferences shell Cancel action did not expose a visible DX button during Monitor filter-preset validation.");
         if (! state.failure.empty())
         {
             return false;
         }
     }
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
-                  L"Preferences window did not close after canceling the Advanced filter-preset validation.");
+                  L"Preferences window did not close after canceling the Monitor filter-preset validation.");
     prefs = nullptr;
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
     prefs = waitForPreferencesWindow();
-    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not reopen for Advanced filter-preset restoration validation.");
+    state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not reopen for Monitor filter-preset restoration validation.");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
         return false;
     }
 
-    if (! navigateToAdvancedPage(prefs, snapshot))
+    if (! navigateToMonitorPage(prefs, snapshot))
     {
         return false;
     }
 
     state.Require(waitForComboValue(comboName, initialText),
-                  L"Preferences shell Cancel action did not restore the Advanced filter preset after custom-mask editing.");
+                  L"Preferences shell Cancel action did not restore the Monitor filter preset after custom toggle editing.");
     if (! state.failure.empty())
     {
         return false;
     }
 
-    const auto restoredMaskState = CollectVisibleDescendantValuePatternStateByName(getActivePage(), UIA_EditControlTypeId, maskName);
-    state.Require(restoredMaskState.has_value(), L"Preferences Advanced filter mask edit should stay visible after restoring the non-custom preset.");
-    if (restoredMaskState.has_value())
+    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit after restoring the seeded preset.");
+    state.Require(waitForToggleState(textToggleName, ToggleState_Off),
+                  L"Preferences shell Cancel action did not restore the Monitor Text filter toggle after custom editing.");
+    state.Require(waitForToggleState(errorToggleName, ToggleState_On),
+                  L"Preferences shell Cancel action did not restore the Monitor Error filter toggle after custom editing.");
+    if (! state.failure.empty())
     {
-        state.Require(restoredMaskState->value == initialMaskState->value,
-                      L"Preferences shell Cancel action did not restore the Advanced filter mask value after custom editing.");
+        return false;
+    }
+
+    state.Require(DebugSelectPreferencesMonitorFilterPreset(customText),
+                  L"Preferences Monitor filter preset combo did not accept debug switch to Custom before Apply validation.");
+    state.Require(waitForComboValue(comboName, customText),
+                  L"Preferences Monitor filter preset combo did not settle to Custom before Apply validation.");
+    state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit before Apply validation.");
+    state.Require(ToggleVisibleDescendantByName(getActivePage(), textToggleName),
+                  L"Preferences Monitor Text filter toggle did not accept the custom value before Apply validation.");
+    state.Require(waitForToggleState(textToggleName, ToggleState_On),
+                  L"Preferences Monitor Text filter toggle did not settle to the custom value before Apply validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, applyButtonText),
+                  L"Preferences shell Apply action did not expose a visible DX button during Monitor settings ownership validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    constexpr uint32_t expectedEditedMask =
+        static_cast<uint32_t>(MonitorFilterBit::Text) | static_cast<uint32_t>(MonitorFilterBit::Error);
+    const auto waitForSavedMonitorSettings = [&]() noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+
+            Common::Settings::Settings loadedMonitorSettings{};
+            const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, loadedMonitorSettings);
+            if (loadHr == S_OK && loadedMonitorSettings.monitor.has_value() &&
+                loadedMonitorSettings.monitor->filter.preset == Common::Settings::MonitorFilterPreset::Custom &&
+                loadedMonitorSettings.monitor->filter.mask == expectedEditedMask)
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        Common::Settings::Settings loadedMonitorSettings{};
+        const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, loadedMonitorSettings);
+        return loadHr == S_OK && loadedMonitorSettings.monitor.has_value() &&
+               loadedMonitorSettings.monitor->filter.preset == Common::Settings::MonitorFilterPreset::Custom &&
+               loadedMonitorSettings.monitor->filter.mask == expectedEditedMask;
+    };
+
+    state.Require(waitForSavedMonitorSettings(),
+                  L"Preferences Apply did not write the edited Monitor filter preset and mask to RedSalamanderMonitor settings.");
+
+    Common::Settings::Settings loadedMainSettings{};
+    const HRESULT mainLoadHr = Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", loadedMainSettings);
+    state.Require(mainLoadHr == S_OK,
+                  std::format(L"Failed to reload main settings after Monitor Apply ownership validation: 0x{:08X}.",
+                              static_cast<unsigned long>(mainLoadHr)));
+    if (mainLoadHr == S_OK)
+    {
+        state.Require(! loadedMainSettings.monitor.has_value(),
+                      L"Preferences Apply wrote Monitor settings into the main RedSalamander settings file.");
+    }
+    state.Require(! g_settings.monitor.has_value(), L"Preferences Apply kept Monitor settings in the main runtime settings object.");
+
+    const std::filesystem::path mainSchemaPath    = Common::Settings::GetSettingsSchemaPath(L"RedSalamander");
+    const std::filesystem::path monitorSchemaPath = Common::Settings::GetSettingsSchemaPath(kPreferencesMonitorAppId);
+    std::string mainSchemaJson;
+    std::string monitorSchemaJson;
+    state.Require(ReadSmallPreferencesSelfTestFile(mainSchemaPath, mainSchemaJson),
+                  std::format(L"Failed to read main settings schema after Monitor Apply ownership validation: {}.", mainSchemaPath.wstring()));
+    state.Require(ReadSmallPreferencesSelfTestFile(monitorSchemaPath, monitorSchemaJson),
+                  std::format(L"Failed to read monitor settings schema after Monitor Apply ownership validation: {}.", monitorSchemaPath.wstring()));
+    if (! mainSchemaJson.empty())
+    {
+        state.Require(mainSchemaJson.find("\"monitor\":") == std::string::npos,
+                      L"Main RedSalamander settings schema exposed the root Monitor settings property.");
+    }
+    if (! monitorSchemaJson.empty())
+    {
+        state.Require(monitorSchemaJson.find("\"monitor\":") != std::string::npos,
+                      L"RedSalamanderMonitor settings schema did not expose the root Monitor settings property.");
     }
 
     return state.failure.empty();
@@ -4558,8 +4652,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     }
 
     state.Require(DebugSelectPreferencesEditorsDefaultAction(false, L"editor-alt"), L"Failed to select the alternate editor as the primary editor default.");
-    state.Require(DebugSelectPreferencesEditorsDefaultAction(true, L"editor-primary"),
-                  L"Failed to select the primary editor as the alternate editor default.");
+    state.Require(DebugSelectPreferencesEditorsDefaultAction(true, L"editor-primary"), L"Failed to select the primary editor as the alternate editor default.");
     state.Require(DebugSelectPreferencesEditorsDefaultEditNewAction(L"editor-alt"), L"Failed to select the alternate editor as the Edit New default.");
     SendMessageW(prefs, WM_COMMAND, MAKEWPARAM(IDC_PREFS_APPLY, 0), 0);
     PumpPendingMessages();
@@ -4583,8 +4676,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return value.currentCategory == kPrefCategoryViewers && value.viewersActionCount == 2u && value.viewersListRowCount == 1u &&
                value.viewersActionRowCount == 2u && value.viewersPrimaryActionIdText == L"viewer-primary" &&
                value.viewersAlternateActionIdText == L"viewer-alt" && value.viewersPreviewActionIdText == L"viewer-primary" &&
-               ! value.viewersPreviewReasonText.empty() && value.visibleCurrentPageChildWindowCount == 1u &&
-               value.currentPageDxHostResizeFailureCount == 0u;
+               ! value.viewersPreviewReasonText.empty() && value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
     },
                       snapshot),
                   L"Viewers preferences did not expose the seeded primary/alternate viewer file-action defaults.");
@@ -4593,8 +4685,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    state.Require(DebugSelectPreferencesViewersDefaultAction(true, L"viewer-primary"),
-                  L"Failed to select the primary viewer as the alternate viewer default.");
+    state.Require(DebugSelectPreferencesViewersDefaultAction(true, L"viewer-primary"), L"Failed to select the primary viewer as the alternate viewer default.");
     SendMessageW(prefs, WM_COMMAND, MAKEWPARAM(IDC_PREFS_APPLY, 0), 0);
     PumpPendingMessages();
 
@@ -7027,8 +7118,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         PumpPendingMessages();
 
         PreferencesDebugSnapshot after{};
-        state.Require(WaitForPreferencesCategoryTreeRenderCountToSettle(after),
-                      L"Preferences category tree render count did not settle after category click.");
+        state.Require(WaitForPreferencesCategoryTreeRenderCountToSettle(after), L"Preferences category tree render count did not settle after category click.");
         if (! state.failure.empty())
         {
             return;
@@ -7036,8 +7126,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
         const std::wstring expectedTitle = LoadStringResource(nullptr, expectedTitleId);
         const uint64_t treeRenderDelta   = after.categoryTreeDxHostRenderCount - before.categoryTreeDxHostRenderCount;
-        SelfTest::AppendSelfTestTrace(
-            std::format(L"Preferences category churn {}: after delta={} {}", phase, treeRenderDelta, DescribePreferencesCategoryChurnSnapshotForSelfTest(after)));
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Preferences category churn {}: after delta={} {}", phase, treeRenderDelta, DescribePreferencesCategoryChurnSnapshotForSelfTest(after)));
 
         state.Require(after.currentCategory == expectedCategory, L"Preferences category click did not update the active category.");
         state.Require(after.pageTitle == expectedTitle, L"Preferences category click did not update the page title.");
@@ -7194,9 +7284,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             if (DebugGetPreferencesDialogSnapshot(snapshot))
             {
                 lastSnapshot = snapshot;
-                if (snapshot.currentCategory == expectedCategory && snapshot.pageTitle == expectedTitle &&
-                    snapshot.currentPageDxHostResizeFailureCount == 0u && snapshot.shellDxHostResizeFailureCount == 0u &&
-                    ! snapshot.categoryTreeDxHostHasResizeFailures &&
+                if (snapshot.currentCategory == expectedCategory && snapshot.pageTitle == expectedTitle && snapshot.currentPageDxHostResizeFailureCount == 0u &&
+                    snapshot.shellDxHostResizeFailureCount == 0u && ! snapshot.categoryTreeDxHostHasResizeFailures &&
                     (! expectedPageScrollY.has_value() || snapshot.pageScrollY == expectedPageScrollY.value()))
                 {
                     outSnapshot = snapshot;
@@ -7211,11 +7300,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     };
 
-    const int categoryDpi    = static_cast<int>(GetDpiForWindow(categoryTreeHost));
-    const auto clickCategory = [&](const LPARAM point,
-                                   const PrefCategory expectedCategory,
-                                   const UINT expectedTitleId,
-                                   const std::optional<int> expectedPageScrollY) noexcept
+    const int categoryDpi = static_cast<int>(GetDpiForWindow(categoryTreeHost));
+    const auto clickCategory =
+        [&](const LPARAM point, const PrefCategory expectedCategory, const UINT expectedTitleId, const std::optional<int> expectedPageScrollY) noexcept
     {
         SendMessageW(categoryTreeHost, WM_LBUTTONDOWN, MK_LBUTTON, point);
         SendMessageW(categoryTreeHost, WM_LBUTTONUP, 0, point);
@@ -7253,10 +7340,12 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         }
 
         state.Require(snapshot.currentCategory == kPrefCategoryMouse, L"Preferences Mouse short-page selection did not update the active category.");
-        state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_MOUSE), L"Preferences Mouse short-page selection did not update the page title.");
+        state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_MOUSE),
+                      L"Preferences Mouse short-page selection did not update the page title.");
         state.Require(snapshot.currentPageDxHostResizeFailureCount == 0u, L"Preferences Mouse page reported DX resize failures after category navigation.");
         state.Require(snapshot.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after Mouse category navigation.");
-        state.Require(! snapshot.categoryTreeDxHostHasResizeFailures, L"Preferences category tree host reported DX resize failures after Mouse category navigation.");
+        state.Require(! snapshot.categoryTreeDxHostHasResizeFailures,
+                      L"Preferences category tree host reported DX resize failures after Mouse category navigation.");
         return snapshot;
     };
 
@@ -7291,7 +7380,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                                    pageHostRect.top + std::max<LONG>(12, (pageHostRect.bottom - pageHostRect.top) / 3)};
         raisePreferencesForHitTesting();
 
-        const SHORT wheelDelta = static_cast<SHORT>(-WHEEL_DELTA);
+        const SHORT wheelDelta        = static_cast<SHORT>(-WHEEL_DELTA);
         const auto coldWheelStartedAt = std::chrono::steady_clock::now();
         SendMessageW(prefs,
                      WM_MOUSEWHEEL,
@@ -7300,8 +7389,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         PumpPendingMessages();
 
         PreferencesDebugSnapshot coldWheelSnapshot{};
-        state.Require(DebugGetPreferencesDialogSnapshot(coldWheelSnapshot),
-                      L"Failed to capture Preferences snapshot after cold first-wheel validation.");
+        state.Require(DebugGetPreferencesDialogSnapshot(coldWheelSnapshot), L"Failed to capture Preferences snapshot after cold first-wheel validation.");
         const uint64_t coldWheelUs = Debug::Perf::ElapsedUs(coldWheelStartedAt);
         Debug::Perf::Emit(L"preferences.page_host.cold_first_wheel_us",
                           L"viewers-page-host",
@@ -7311,9 +7399,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                           S_OK);
         state.Require(coldWheelSnapshot.currentCategory == kPrefCategoryViewers,
                       L"Cold first wheel after opening the Viewers page should keep the Viewers category active.");
-        state.Require(coldWheelSnapshot.pageScrollMaxY > 0,
-                      std::format(L"Cold first-wheel validation needs a scrollable Viewers page at compact height; saw maxY={}.",
-                                  coldWheelSnapshot.pageScrollMaxY));
+        state.Require(
+            coldWheelSnapshot.pageScrollMaxY > 0,
+            std::format(L"Cold first-wheel validation needs a scrollable Viewers page at compact height; saw maxY={}.", coldWheelSnapshot.pageScrollMaxY));
         state.Require(coldWheelSnapshot.pageScrollY > 0,
                       std::format(L"The first wheel immediately after cold Viewers page creation should move the page; saw y={}, maxY={}, "
                                   L"routeSeen={}, targetPageHost={}, dxHandled={}, fallbackCalled={}, fallbackHandled={}.",
@@ -7362,7 +7450,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             if (mouseProbe.pageScrollY == 0 && ! mouseProbe.pageHostShowsVerticalScroll && mouseProbe.pageScrollMaxY == 0)
             {
                 foundShortMouseState = true;
-                viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::nullopt);
+                viewersSnapshot      = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::nullopt);
                 if (! state.failure.empty())
                 {
                     return false;
@@ -7411,15 +7499,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     }
     if (! foundShortMouseState)
     {
-        state.Require(false,
-                      L"Preferences scroll-host test could not find a window height where Viewers scrolls while the Mouse short page has no vertical scrollbar.");
+        state.Require(
+            false, L"Preferences scroll-host test could not find a window height where Viewers scrolls while the Mouse short page has no vertical scrollbar.");
         return false;
     }
 
     state.Require(viewersSnapshot.pageScrollY == 0, L"Preferences Viewers page should begin at scroll position 0 when opened.");
 
-    const PreferencesDebugSnapshot baselineGeneralSnapshot =
-        clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::optional<int>{0});
+    const PreferencesDebugSnapshot baselineGeneralSnapshot = clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::optional<int>{0});
     if (! state.failure.empty())
     {
         return false;
@@ -7463,8 +7550,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     {
         RECT pageHostRect{};
-        state.Require(GetWindowRect(pageHost, &pageHostRect) != FALSE,
-                      L"Failed to query Preferences page-host bounds before title-area wheel validation.");
+        state.Require(GetWindowRect(pageHost, &pageHostRect) != FALSE, L"Failed to query Preferences page-host bounds before title-area wheel validation.");
         state.Require(viewersSnapshot.pageHostTopPx <= viewersSnapshot.categoryTreeTopPx + 2,
                       std::format(L"Preferences page-host should own the title area before title-wheel validation; pageHostTop={}, categoryTreeTop={}.",
                                   viewersSnapshot.pageHostTopPx,
@@ -7498,8 +7584,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         PumpPendingMessages();
 
         PreferencesDebugSnapshot headerWheelSnapshot{};
-        state.Require(DebugGetPreferencesDialogSnapshot(headerWheelSnapshot),
-                      L"Failed to capture Preferences snapshot after header wheel-routing validation.");
+        state.Require(DebugGetPreferencesDialogSnapshot(headerWheelSnapshot), L"Failed to capture Preferences snapshot after header wheel-routing validation.");
         const uint64_t headerWheelUs = Debug::Perf::ElapsedUs(headerWheelStarted);
         Debug::Perf::Emit(L"preferences.page_host.header_wheel_first_us",
                           L"viewers-header",
@@ -7523,11 +7608,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                                   headerWheelSnapshot.pageHostLastWheelFallbackCalled,
                                   headerWheelSnapshot.pageHostLastWheelFallbackHandled));
         const uint64_t dxMovedDuringHeaderWheel = headerWheelSnapshot.pageHostDxScrollMovedControlCountTotal - dxMovedBefore;
-        state.Require(dxMovedDuringHeaderWheel == 0u,
-                      std::format(L"Preferences page-host wheel scrolling should update a scroll offset, not move every retained Dx control; moved {} controls.",
-                                  dxMovedDuringHeaderWheel));
-        state.Require(headerWheelUs < 200000u,
-                      std::format(L"First Preferences header wheel routing should return promptly; saw {} us.", headerWheelUs));
+        state.Require(
+            dxMovedDuringHeaderWheel == 0u,
+            std::format(L"Preferences page-host wheel scrolling should update a scroll offset, not move every retained Dx control; moved {} controls.",
+                        dxMovedDuringHeaderWheel));
+        state.Require(headerWheelUs < 200000u, std::format(L"First Preferences header wheel routing should return promptly; saw {} us.", headerWheelUs));
         if (! state.failure.empty())
         {
             return false;
@@ -7537,9 +7622,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         PumpPendingMessages();
         state.Require(DebugGetPreferencesDialogSnapshot(viewersSnapshot),
                       L"Failed to refresh Preferences snapshot after resetting page-host scroll following header wheel-routing validation.");
-        state.Require(viewersSnapshot.pageScrollY == 0,
-                      std::format(L"Preferences Viewers page should return to the top after header wheel-routing validation; saw {}.",
-                                  viewersSnapshot.pageScrollY));
+        state.Require(
+            viewersSnapshot.pageScrollY == 0,
+            std::format(L"Preferences Viewers page should return to the top after header wheel-routing validation; saw {}.", viewersSnapshot.pageScrollY));
         if (! state.failure.empty())
         {
             return false;
@@ -7560,20 +7645,21 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return RECT{};
         }
 
-        const UINT dpi         = GetDpiForWindow(pageHost);
-        const int trackHeight  = std::max(0l, client.bottom - client.top);
-        const int thickness    = std::max(1, MulDiv(12, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-        const int minThumb     = std::min(std::max(1, MulDiv(20, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)), trackHeight);
+        const UINT dpi          = GetDpiForWindow(pageHost);
+        const int trackHeight   = std::max(0l, client.bottom - client.top);
+        const int thickness     = std::max(1, MulDiv(12, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
+        const int minThumb      = std::min(std::max(1, MulDiv(20, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)), trackHeight);
         const int contentHeight = trackHeight + std::max(0, snapshot.pageScrollMaxY);
         if (trackHeight <= 4 || contentHeight <= trackHeight || snapshot.pageScrollMaxY <= 0)
         {
             return RECT{};
         }
 
-        const int rawThumb      = MulDiv(trackHeight, trackHeight, std::max(1, contentHeight));
-        const int thumbHeight   = std::clamp(rawThumb, minThumb, trackHeight);
-        const int available     = std::max(0, trackHeight - thumbHeight);
-        const int thumbTop      = client.top + ((available > 0) ? MulDiv(std::clamp(snapshot.pageScrollY, 0, snapshot.pageScrollMaxY), available, snapshot.pageScrollMaxY) : 0);
+        const int rawThumb    = MulDiv(trackHeight, trackHeight, std::max(1, contentHeight));
+        const int thumbHeight = std::clamp(rawThumb, minThumb, trackHeight);
+        const int available   = std::max(0, trackHeight - thumbHeight);
+        const int thumbTop =
+            client.top + ((available > 0) ? MulDiv(std::clamp(snapshot.pageScrollY, 0, snapshot.pageScrollMaxY), available, snapshot.pageScrollMaxY) : 0);
         return RECT{client.right - thickness, thumbTop, client.right, thumbTop + thumbHeight};
     };
 
@@ -7585,7 +7671,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
         PreferencesDebugSnapshot beforeDrag{};
         state.Require(DebugGetPreferencesDialogSnapshot(beforeDrag), std::format(L"Failed to capture Preferences snapshot before {}.", context));
-        state.Require(beforeDrag.pageScrollY == 0, std::format(L"Preferences Viewers page should return to the top before {}; saw {}.", context, beforeDrag.pageScrollY));
+        state.Require(beforeDrag.pageScrollY == 0,
+                      std::format(L"Preferences Viewers page should return to the top before {}; saw {}.", context, beforeDrag.pageScrollY));
         state.Require(beforeDrag.pageHostDxInternalScrollbarEnabled && ! beforeDrag.pageHostHasNativeVerticalScroll,
                       std::format(L"Preferences page host must use the DxUi ScrollPanel scrollbar only before {}; internal={}, native={}.",
                                   context,
@@ -7611,10 +7698,10 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return beforeDrag;
         }
 
-        const LONG thumbCenterX  = thumbRect.left + ((thumbRect.right - thumbRect.left) / 2);
-        const LONG thumbCenterY  = thumbRect.top + ((thumbRect.bottom - thumbRect.top) / 2);
-        const LONG trackBottom   = std::max<LONG>(thumbCenterY + 1, thumbRect.bottom + std::max<LONG>(minDistancePx, (thumbRect.bottom - thumbRect.top) / 2));
-        const LONG clientBottom  = std::max<LONG>(trackBottom, thumbCenterY + 1);
+        const LONG thumbCenterX = thumbRect.left + ((thumbRect.right - thumbRect.left) / 2);
+        const LONG thumbCenterY = thumbRect.top + ((thumbRect.bottom - thumbRect.top) / 2);
+        const LONG trackBottom  = std::max<LONG>(thumbCenterY + 1, thumbRect.bottom + std::max<LONG>(minDistancePx, (thumbRect.bottom - thumbRect.top) / 2));
+        const LONG clientBottom = std::max<LONG>(trackBottom, thumbCenterY + 1);
         RECT pageClient{};
         state.Require(GetClientRect(pageHost, &pageClient) != FALSE, std::format(L"Failed to read page-host client rect before {}.", context));
         const LONG targetY = std::min<LONG>(pageClient.bottom - 2, clientBottom);
@@ -7642,14 +7729,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return beforeDrag;
         }
 
-        const auto startedAt = std::chrono::steady_clock::now();
+        const auto startedAt    = std::chrono::steady_clock::now();
         const LPARAM startPoint = MAKELPARAM(static_cast<SHORT>(thumbCenterX), static_cast<SHORT>(thumbCenterY));
         SendMessageW(pageHost, WM_MOUSEMOVE, 0, startPoint);
         SendMessageW(pageHost, WM_LBUTTONDOWN, MK_LBUTTON, startPoint);
         const HWND captureAfterDown = GetCapture();
         for (int index = 1; index <= moveCount; ++index)
         {
-            const LONG stepY = thumbCenterY + MulDiv(targetY - thumbCenterY, index, moveCount);
+            const LONG stepY       = thumbCenterY + MulDiv(targetY - thumbCenterY, index, moveCount);
             const LPARAM stepPoint = MAKELPARAM(static_cast<SHORT>(thumbCenterX), static_cast<SHORT>(stepY));
             SendMessageW(pageHost, WM_MOUSEMOVE, MK_LBUTTON, stepPoint);
         }
@@ -7669,25 +7756,27 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                       std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should not change the active category during {}; saw category={}.",
                                   context,
                                   static_cast<int>(afterDrag.currentCategory)));
-        state.Require(afterDrag.pageScrollY > beforeDrag.pageScrollY,
-                      std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should move pageScrollY during {}; before={}, after={}, applies={}, maxY={}, "
-                                  L"dxOffsetBefore={}, dxOffsetAfter={}, captureAfterDown={:#x}, thumb=({},{}-{},{}), target=({},{}).",
-                                  context,
-                                  beforeDrag.pageScrollY,
-                                  afterDrag.pageScrollY,
-                                  applyDelta,
-                                  afterDrag.pageScrollMaxY,
-                                  beforeDrag.pageHostDxScrollOffsetPx,
-                                  afterDrag.pageHostDxScrollOffsetPx,
-                                  reinterpret_cast<uintptr_t>(captureAfterDown),
-                                  thumbRect.left,
-                                  thumbRect.top,
-                                  thumbRect.right,
-                                  thumbRect.bottom,
-                                  thumbCenterX,
-                                  targetY));
+        state.Require(
+            afterDrag.pageScrollY > beforeDrag.pageScrollY,
+            std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should move pageScrollY during {}; before={}, after={}, applies={}, maxY={}, "
+                        L"dxOffsetBefore={}, dxOffsetAfter={}, captureAfterDown={:#x}, thumb=({},{}-{},{}), target=({},{}).",
+                        context,
+                        beforeDrag.pageScrollY,
+                        afterDrag.pageScrollY,
+                        applyDelta,
+                        afterDrag.pageScrollMaxY,
+                        beforeDrag.pageHostDxScrollOffsetPx,
+                        afterDrag.pageHostDxScrollOffsetPx,
+                        reinterpret_cast<uintptr_t>(captureAfterDown),
+                        thumbRect.left,
+                        thumbRect.top,
+                        thumbRect.right,
+                        thumbRect.bottom,
+                        thumbCenterX,
+                        targetY));
         state.Require(applyDelta > 0u, std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should apply scroll movement during {}.", context));
-        state.Require(! afterDrag.pageHostScrollApplyPending, std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should not leave queued scroll after {}.", context));
+        state.Require(! afterDrag.pageHostScrollApplyPending,
+                      std::format(L"Dragging the Preferences DxUi ScrollPanel thumb should not leave queued scroll after {}.", context));
         state.Require(GetCapture() != pageHost, std::format(L"Preferences page host should release capture after {}.", context));
         if (! state.failure.empty())
         {
@@ -7735,8 +7824,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         const uint64_t trackClickUs = Debug::Perf::ElapsedUs(trackClickStartedAt);
 
         PreferencesDebugSnapshot afterTrackClick{};
-        state.Require(DebugGetPreferencesDialogSnapshot(afterTrackClick),
-                      L"Failed to capture Preferences snapshot after DxUi ScrollPanel track click.");
+        state.Require(DebugGetPreferencesDialogSnapshot(afterTrackClick), L"Failed to capture Preferences snapshot after DxUi ScrollPanel track click.");
         Debug::Perf::Emit(L"preferences.page_host.dxui_track_click_us",
                           L"viewers-page-host",
                           trackClickUs,
@@ -7825,39 +7913,38 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         }
 
         state.Require(scrolledSnapshot.currentCategory == kPrefCategoryViewers, L"Scrolling the Preferences page host should not change the active category.");
-        state.Require(
-            scrolledSnapshot.pageScrollY > 0,
-            std::format(
-                L"Preferences Viewers page host should move to a positive scroll offset after routed mouse-wheel scrolling; "
-                L"saw pageScrollY={}, pageScrollMaxY={}, wheel(routeSeen={}, forwarded={}, targetPageHost={}, targetCategoryTree={}, "
-                L"targetVScroll={}, windowFromPointPageHost={}, windowFromPointCategoryTree={}, pageHostWndProcSeen={}, dxHandled={}, "
-                L"fallbackCalled={}, fallbackHandled={}, delta={}, client=({},{}), before={}/{}, after={}/{}), viewersListScrollDip={}, "
-                L"viewersListHasVScroll={}.",
-                scrolledSnapshot.pageScrollY,
-                scrolledSnapshot.pageScrollMaxY,
-                scrolledSnapshot.pageHostLastWheelRouteSeen,
-                scrolledSnapshot.pageHostLastWheelRouteForwarded,
-                scrolledSnapshot.pageHostLastWheelRouteTargetWasPageHost,
-                scrolledSnapshot.pageHostLastWheelRouteTargetWasCategoryTree,
-                scrolledSnapshot.pageHostLastWheelRouteTargetHadVerticalScroll,
-                scrolledSnapshot.pageHostLastWheelWindowFromPointWasPageHost,
-                scrolledSnapshot.pageHostLastWheelWindowFromPointWasCategoryTree,
-                scrolledSnapshot.pageHostLastWheelWndProcSeen,
-                scrolledSnapshot.pageHostLastWheelDxHandled,
-                scrolledSnapshot.pageHostLastWheelFallbackCalled,
-                scrolledSnapshot.pageHostLastWheelFallbackHandled,
-                scrolledSnapshot.pageHostLastWheelDelta,
-                scrolledSnapshot.pageHostLastWheelClientX,
-                scrolledSnapshot.pageHostLastWheelClientY,
-                scrolledSnapshot.pageHostLastWheelBeforeY,
-                scrolledSnapshot.pageHostLastWheelBeforeMaxY,
-                scrolledSnapshot.pageHostLastWheelAfterY,
-                scrolledSnapshot.pageHostLastWheelAfterMaxY,
-                scrolledSnapshot.viewersListVerticalScrollDip,
-                scrolledSnapshot.viewersListHasVerticalScrollbar));
+        state.Require(scrolledSnapshot.pageScrollY > 0,
+                      std::format(L"Preferences Viewers page host should move to a positive scroll offset after routed mouse-wheel scrolling; "
+                                  L"saw pageScrollY={}, pageScrollMaxY={}, wheel(routeSeen={}, forwarded={}, targetPageHost={}, targetCategoryTree={}, "
+                                  L"targetVScroll={}, windowFromPointPageHost={}, windowFromPointCategoryTree={}, pageHostWndProcSeen={}, dxHandled={}, "
+                                  L"fallbackCalled={}, fallbackHandled={}, delta={}, client=({},{}), before={}/{}, after={}/{}), viewersListScrollDip={}, "
+                                  L"viewersListHasVScroll={}.",
+                                  scrolledSnapshot.pageScrollY,
+                                  scrolledSnapshot.pageScrollMaxY,
+                                  scrolledSnapshot.pageHostLastWheelRouteSeen,
+                                  scrolledSnapshot.pageHostLastWheelRouteForwarded,
+                                  scrolledSnapshot.pageHostLastWheelRouteTargetWasPageHost,
+                                  scrolledSnapshot.pageHostLastWheelRouteTargetWasCategoryTree,
+                                  scrolledSnapshot.pageHostLastWheelRouteTargetHadVerticalScroll,
+                                  scrolledSnapshot.pageHostLastWheelWindowFromPointWasPageHost,
+                                  scrolledSnapshot.pageHostLastWheelWindowFromPointWasCategoryTree,
+                                  scrolledSnapshot.pageHostLastWheelWndProcSeen,
+                                  scrolledSnapshot.pageHostLastWheelDxHandled,
+                                  scrolledSnapshot.pageHostLastWheelFallbackCalled,
+                                  scrolledSnapshot.pageHostLastWheelFallbackHandled,
+                                  scrolledSnapshot.pageHostLastWheelDelta,
+                                  scrolledSnapshot.pageHostLastWheelClientX,
+                                  scrolledSnapshot.pageHostLastWheelClientY,
+                                  scrolledSnapshot.pageHostLastWheelBeforeY,
+                                  scrolledSnapshot.pageHostLastWheelBeforeMaxY,
+                                  scrolledSnapshot.pageHostLastWheelAfterY,
+                                  scrolledSnapshot.pageHostLastWheelAfterMaxY,
+                                  scrolledSnapshot.viewersListVerticalScrollDip,
+                                  scrolledSnapshot.viewersListHasVerticalScrollbar));
         state.Require(scrolledSnapshot.pageHostShowsVerticalScroll, L"Preferences Viewers page should still show a vertical scrollbar after scrolling.");
         state.Require(scrolledSnapshot.pageHostDxContentRootUsesScrollPanel,
-                      L"Preferences page-host DX content root must preserve a scroll-offset-aware content surface; moving a plain Panel wrapper does not move its retained children.");
+                      L"Preferences page-host DX content root must preserve a scroll-offset-aware content surface; moving a plain Panel wrapper does not move "
+                      L"its retained children.");
         state.Require(scrolledSnapshot.currentPageDxHostResizeFailureCount == 0u, L"Preferences Viewers page reported DX resize failures after scrolling.");
         state.Require(scrolledSnapshot.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after scrolling.");
         state.Require(! scrolledSnapshot.categoryTreeDxHostHasResizeFailures,
@@ -7868,8 +7955,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
         const int expectedViewersScrollY = scrolledSnapshot.pageScrollY;
 
-        const PreferencesDebugSnapshot generalSnapshot =
-            clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::optional<int>{0});
+        const PreferencesDebugSnapshot generalSnapshot = clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::optional<int>{0});
         if (! state.failure.empty())
         {
             return false;
@@ -7887,8 +7973,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                                   baselineGeneralSnapshot.pageScrollMaxY,
                                   generalSnapshot.pageScrollMaxY));
 
-        viewersSnapshot =
-            clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::optional<int>{expectedViewersScrollY});
+        viewersSnapshot = clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::optional<int>{expectedViewersScrollY});
         if (! state.failure.empty())
         {
             return false;

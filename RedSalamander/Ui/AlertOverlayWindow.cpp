@@ -4,6 +4,7 @@
 
 #include <UIAutomation.h>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cwctype>
@@ -11,6 +12,7 @@
 #include <new>
 #include <oleauto.h>
 #include <vector>
+#include <windowsx.h>
 
 #pragma comment(lib, "uiautomationcore.lib")
 
@@ -20,8 +22,6 @@ namespace
 {
 constexpr wchar_t kAlertOverlayWindowClassName[] = L"RedSalamander.AlertOverlayWindow";
 constexpr uint64_t kShowAnimationMs              = 220;
-constexpr BYTE kModelessLayerAlpha               = 245; // Slight transparency so the app remains visible below.
-constexpr BYTE kModalLayerAlpha                  = 230; // More transparency for modal scrim effect.
 constexpr wchar_t kParentOriginalWndProcProp[]   = L"RedSalamander.AlertOverlay.ParentOriginalWndProc";
 constexpr wchar_t kParentStateProp[]             = L"RedSalamander.AlertOverlay.ParentState";
 constexpr wchar_t kAnchorOriginalWndProcProp[]   = L"RedSalamander.AlertOverlay.AnchorOriginalWndProc";
@@ -734,6 +734,9 @@ LRESULT AlertOverlayWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) n
         case WM_MOUSEMOVE: OnMouseMove(PointFromLParam(lp)); return 0;
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_LBUTTONDOWN: OnLButtonDown(PointFromLParam(lp)); return 0;
+        case WM_LBUTTONUP: OnLButtonUp(PointFromLParam(lp)); return 0;
+        case WM_CAPTURECHANGED: OnCaptureChanged(reinterpret_cast<HWND>(lp)); return 0;
+        case WM_MOUSEACTIVATE: return MA_ACTIVATE;
         case WM_KEYDOWN: OnKeyDown(wp); return 0;
         case WM_SYSCHAR:
             if (OnSysChar(wp))
@@ -791,8 +794,17 @@ void AlertOverlayWindow::OnPaint() noexcept
         }
     });
 
-    _target->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
+    _target->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+    if (_backdropBitmap)
+    {
+        _target->DrawBitmap(_backdropBitmap.get(), D2D1::RectF(0.0f, 0.0f, widthDip, heightDip), 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+    }
     _overlay.Draw(_target.get(), _dwriteFactory.get(), widthDip, heightDip, now);
+#if defined(ENABLE_TESTS)
+    const float lastDrawOpacity = _overlay.DebugGetLastDrawOpacityForTest();
+    _debugMinimumDrawOpacity   = (_debugPaintCount == 0u) ? lastDrawOpacity : std::min(_debugMinimumDrawOpacity, lastDrawOpacity);
+    ++_debugPaintCount;
+#endif
 
     ApplyRegionFromOverlay();
 }
@@ -833,6 +845,11 @@ void AlertOverlayWindow::OnMouseMove(POINT pt) noexcept
         }
     }
 
+    if (! EnsureOverlayLayoutForInput())
+    {
+        return;
+    }
+
     const float xDip = DipFromPx(pt.x);
     const float yDip = DipFromPx(pt.y);
     if (_overlay.UpdateHotState(D2D1::Point2F(xDip, yDip)))
@@ -860,19 +877,100 @@ void AlertOverlayWindow::OnLButtonDown(POINT pt) noexcept
         return;
     }
 
+#if defined(ENABLE_TESTS)
+    ++_debugMouseDownCount;
+    _debugLastMouseDownPointPx = pt;
+    _debugLastMouseDownHitPart = -1;
+#endif
+
+    if (! EnsureOverlayLayoutForInput())
+    {
+        return;
+    }
+
     const float xDip       = DipFromPx(pt.x);
     const float yDip       = DipFromPx(pt.y);
     const AlertHitTest hit = _overlay.HitTest(D2D1::Point2F(xDip, yDip));
-    if (hit.part == AlertHitTest::Part::Close)
+#if defined(ENABLE_TESTS)
+    _debugLastMouseDownHitPart = static_cast<int>(hit.part);
+#endif
+    if (hit.part == AlertHitTest::Part::None)
+    {
+        return;
+    }
+
+    _pressedHit = hit;
+    SetCapture(_hwnd.get());
+    if (_overlay.UpdateHotState(D2D1::Point2F(xDip, yDip)))
+    {
+        InvalidateRect(_hwnd.get(), nullptr, FALSE);
+    }
+}
+
+void AlertOverlayWindow::OnLButtonUp(POINT pt) noexcept
+{
+    if (! _visible || ! _hwnd)
+    {
+        _pressedHit = {};
+        return;
+    }
+
+#if defined(ENABLE_TESTS)
+    ++_debugMouseUpCount;
+    _debugLastMouseUpPointPx = pt;
+    _debugLastMouseUpHitPart = -1;
+#endif
+
+    if (! EnsureOverlayLayoutForInput())
+    {
+        _pressedHit = {};
+        return;
+    }
+
+    const AlertHitTest pressed = _pressedHit;
+    _pressedHit               = {};
+    if (GetCapture() == _hwnd.get())
+    {
+        ReleaseCapture();
+    }
+
+    const float xDip       = DipFromPx(pt.x);
+    const float yDip       = DipFromPx(pt.y);
+    const AlertHitTest hit = _overlay.HitTest(D2D1::Point2F(xDip, yDip));
+#if defined(ENABLE_TESTS)
+    _debugLastMouseUpHitPart = static_cast<int>(hit.part);
+#endif
+    // If activation or another transient capture path consumed the mouse-down, a
+    // release on the close glyph still behaves like a standard dialog close.
+    if (pressed.part == AlertHitTest::Part::None && hit.part == AlertHitTest::Part::Close)
     {
         InvokeDismiss();
         return;
     }
 
-    if (hit.part == AlertHitTest::Part::Button)
+    if (pressed.part == AlertHitTest::Part::Close && hit.part == AlertHitTest::Part::Close)
+    {
+        InvokeDismiss();
+        return;
+    }
+
+    if (pressed.part == AlertHitTest::Part::Button && hit.part == AlertHitTest::Part::Button && pressed.buttonId == hit.buttonId)
     {
         InvokeButton(hit.buttonId);
         return;
+    }
+
+    if (_overlay.UpdateHotState(D2D1::Point2F(xDip, yDip)))
+    {
+        InvalidateRect(_hwnd.get(), nullptr, FALSE);
+    }
+}
+
+void AlertOverlayWindow::OnCaptureChanged(HWND newCapture) noexcept
+{
+    if (newCapture != _hwnd.get())
+    {
+        _pressedHit = {};
     }
 }
 
@@ -999,10 +1097,11 @@ LRESULT AlertOverlayWindow::OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mo
 
     if (hitTest == HTCLIENT)
     {
-        POINT pt{};
-        if (GetCursorPos(&pt) != 0)
+        static_cast<void>(EnsureOverlayLayoutForInput());
+        const LPARAM messagePos = static_cast<LPARAM>(GetMessagePos());
+        POINT pt{GET_X_LPARAM(messagePos), GET_Y_LPARAM(messagePos)};
+        if (ScreenToClient(_hwnd.get(), &pt) != 0)
         {
-            ScreenToClient(_hwnd.get(), &pt);
             const float xDip       = DipFromPx(pt.x);
             const float yDip       = DipFromPx(pt.y);
             const AlertHitTest hit = _overlay.HitTest(D2D1::Point2F(xDip, yDip));
@@ -1031,6 +1130,10 @@ void AlertOverlayWindow::InvokeButton(uint32_t buttonId) noexcept
 
 void AlertOverlayWindow::InvokeDismiss() noexcept
 {
+#if defined(ENABLE_TESTS)
+    ++_debugDismissCount;
+#endif
+
     if (_escapeButtonId.has_value())
     {
         InvokeButton(_escapeButtonId.value());
@@ -1124,21 +1227,51 @@ HRESULT AlertOverlayWindow::TransitionVisibility(bool show, const AlertTheme* th
         _alwaysAnimate      = false;
         _animateUntilTickMs = 0;
         _startTickMs        = 0;
+        _pressedHit         = {};
+
+        if (_hwnd && GetCapture() == _hwnd.get())
+        {
+            ReleaseCapture();
+        }
 
         _overlay.ClearHotState();
         _panelRegionPx.reset();
+        _backdropBitmap.reset();
         ClearRegion();
+
+        HWND restoreFocus = nullptr;
+        HWND restoreRoot  = nullptr;
+        if (_restoreFocus && IsWindow(_restoreFocus))
+        {
+            restoreFocus = _restoreFocus;
+            restoreRoot  = GetAncestor(_restoreFocus, GA_ROOT);
+        }
+        else if (_hostParent && IsWindow(_hostParent))
+        {
+            restoreRoot = GetAncestor(_hostParent, GA_ROOT);
+        }
 
         if (_hwnd)
         {
             ShowWindow(_hwnd.get(), SW_HIDE);
         }
 
-        if (_restoreFocus && IsWindow(_restoreFocus))
+        if (restoreRoot && IsWindow(restoreRoot))
         {
-            SetFocus(_restoreFocus);
+            SetForegroundWindow(restoreRoot);
+        }
+
+        if (restoreFocus)
+        {
+            SetFocus(restoreFocus);
         }
         _restoreFocus = nullptr;
+
+        // HostServices retains hidden overlays for reuse; release graphics/text resources
+        // immediately so debug-layer shutdown cannot see them as live process-exit objects.
+        DiscardD2DResources();
+        _d2dFactory.reset();
+        _dwriteFactory.reset();
 
         ClearCallbacks();
         _primaryButtonId.reset();
@@ -1162,41 +1295,69 @@ HRESULT AlertOverlayWindow::TransitionVisibility(bool show, const AlertTheme* th
         return hrCreate;
     }
 
+    const bool wasVisible     = _visible && _hwnd && IsWindowVisible(_hwnd.get()) != FALSE;
+    const bool wasBlocksInput = _blocksInput;
+
     _blocksInput        = blocksInput;
     _visible            = true;
     _trackingMouseLeave = false;
+    _pressedHit         = {};
     _panelRegionPx.reset();
-    if (_hwnd)
-    {
-        const BYTE alpha = _blocksInput ? kModalLayerAlpha : kModelessLayerAlpha;
-        static_cast<void>(SetLayeredWindowAttributes(_hwnd.get(), 0, alpha, LWA_ALPHA));
-    }
+#if defined(ENABLE_TESTS)
+    _debugPaintCount          = 0;
+    _debugMinimumDrawOpacity = 1.0f;
+    _debugBackdropCaptureCount = 0;
+    _debugBackdropSizePx       = {};
+    _debugMouseDownCount      = 0;
+    _debugMouseUpCount        = 0;
+    _debugDismissCount        = 0;
+    _debugLastMouseDownPointPx = {};
+    _debugLastMouseUpPointPx   = {};
+    _debugLastMouseDownHitPart = -1;
+    _debugLastMouseUpHitPart   = -1;
+#endif
 
     _overlay.SetTheme(*theme);
     _overlay.SetModel(std::move(*model));
     _overlay.ClearHotState();
 
-    const uint64_t now  = GetTickCount64();
-    _startTickMs        = now;
-    _animateUntilTickMs = now + kShowAnimationMs;
-    _overlay.SetStartTick(now);
+    const uint64_t now = GetTickCount64();
+    // Modal alerts must be readable on the first paint; otherwise they can appear blank
+    // until another input message causes a later animation frame.
+    const uint64_t visibleStartTick = _blocksInput ? ((now >= kShowAnimationMs) ? (now - kShowAnimationMs) : 0u) : now;
+    _startTickMs                    = visibleStartTick;
+    _animateUntilTickMs             = _blocksInput ? now : (now + kShowAnimationMs);
+    _overlay.SetStartTick(visibleStartTick);
 
     const AlertSeverity severity = _overlay.GetModel().severity;
     _alwaysAnimate               = severity == AlertSeverity::Busy;
-
-    ClearRegion();
-    UpdatePlacement();
 
     _restoreFocus = nullptr;
     if (_blocksInput)
     {
         _restoreFocus = GetFocus();
-        ShowWindow(_hwnd.get(), SW_SHOW);
+    }
+
+    ClearRegion();
+    UpdatePlacement();
+    if (EnsureOverlayLayoutForInput())
+    {
+        ApplyRegionFromOverlay();
+    }
+    const bool reuseVisibleBackdrop = wasVisible && wasBlocksInput && _blocksInput && _backdropBitmap;
+    if (! reuseVisibleBackdrop)
+    {
+        CaptureBackdrop(wasVisible && _blocksInput);
+    }
+
+    if (_blocksInput)
+    {
+        SetWindowPos(_hwnd.get(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
         SetFocus(_hwnd.get());
     }
     else
     {
-        ShowWindow(_hwnd.get(), SW_SHOWNOACTIVATE);
+        SetWindowPos(_hwnd.get(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     }
 
     StartAnimationTimer();
@@ -1235,8 +1396,8 @@ HRESULT AlertOverlayWindow::EnsureCreated(HWND hostParent) noexcept
     const int width  = std::max(0L, rc.right - rc.left);
     const int height = std::max(0L, rc.bottom - rc.top);
 
-    const DWORD style   = WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
-    const DWORD exStyle = WS_EX_LAYERED;
+    const DWORD style   = WS_POPUP | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
+    const DWORD exStyle = WS_EX_TOOLWINDOW;
     HWND hwnd = CreateWindowExW(exStyle, kAlertOverlayWindowClassName, L"", style, 0, 0, width, height, hostParent, nullptr, GetModuleHandleW(nullptr), this);
     if (! hwnd)
     {
@@ -1258,9 +1419,9 @@ void AlertOverlayWindow::Destroy() noexcept
 {
     Hide();
     ApplyAttachmentState(nullptr, nullptr, false, false);
+    DiscardD2DResources();
     _d2dFactory.reset();
     _dwriteFactory.reset();
-    DiscardD2DResources();
 
     _hwnd.reset();
 }
@@ -1282,7 +1443,7 @@ void AlertOverlayWindow::AttachToAnchor(HWND anchor) noexcept
         }
     }
 
-    ApplyAttachmentState(hostParent, anchor, false, true);
+    ApplyAttachmentState(hostParent, anchor, hostParent && hostParent != anchor, true);
 }
 
 void AlertOverlayWindow::ApplyAttachmentState(HWND hostParent, HWND anchor, bool trackHostParent, bool trackAnchor) noexcept
@@ -1355,45 +1516,70 @@ void AlertOverlayWindow::UpdatePlacement() noexcept
     RECT rc{};
     if (_anchor && _anchor != _hostParent && IsWindow(_anchor))
     {
-        RECT anchorRect{};
-        if (GetWindowRect(_anchor, &anchorRect) != 0)
-        {
-            POINT pts[2]{};
-            pts[0].x = anchorRect.left;
-            pts[0].y = anchorRect.top;
-            pts[1].x = anchorRect.right;
-            pts[1].y = anchorRect.bottom;
-
-            MapWindowPoints(nullptr, _hostParent, pts, 2);
-            rc.left   = pts[0].x;
-            rc.top    = pts[0].y;
-            rc.right  = pts[1].x;
-            rc.bottom = pts[1].y;
-        }
-        else
+        if (GetWindowRect(_anchor, &rc) == 0)
         {
             GetClientRect(_hostParent, &rc);
+            POINT pts[2]{{rc.left, rc.top}, {rc.right, rc.bottom}};
+            MapWindowPoints(_hostParent, nullptr, pts, 2);
+            rc = RECT{pts[0].x, pts[0].y, pts[1].x, pts[1].y};
         }
     }
     else
     {
         GetClientRect(_hostParent, &rc);
+        POINT pts[2]{{rc.left, rc.top}, {rc.right, rc.bottom}};
+        MapWindowPoints(_hostParent, nullptr, pts, 2);
+        rc = RECT{pts[0].x, pts[0].y, pts[1].x, pts[1].y};
     }
 
     const int width  = std::max(0L, rc.right - rc.left);
     const int height = std::max(0L, rc.bottom - rc.top);
 
     UINT flags = SWP_NOACTIVATE;
-    if (_visible)
+    if (! _visible)
     {
-        flags |= SWP_SHOWWINDOW;
+        flags |= SWP_NOZORDER | SWP_NOOWNERZORDER;
     }
-    else
+    else if (! _blocksInput)
     {
-        flags |= SWP_NOZORDER;
+        flags |= SWP_NOOWNERZORDER;
     }
 
     SetWindowPos(_hwnd.get(), HWND_TOP, rc.left, rc.top, width, height, flags);
+    if (_visible && _blocksInput && IsWindowVisible(_hwnd.get()) != FALSE)
+    {
+        EnsureD2DResources();
+        CaptureBackdrop(false);
+        InvalidateRect(_hwnd.get(), nullptr, FALSE);
+    }
+}
+
+bool AlertOverlayWindow::EnsureOverlayLayoutForInput() noexcept
+{
+    if (! _hwnd || ! _visible)
+    {
+        return false;
+    }
+
+    RECT clientRect{};
+    if (GetClientRect(_hwnd.get(), &clientRect) != 0)
+    {
+        _clientSizePx.cx = std::max(0L, clientRect.right - clientRect.left);
+        _clientSizePx.cy = std::max(0L, clientRect.bottom - clientRect.top);
+    }
+
+    if (_clientSizePx.cx <= 0 || _clientSizePx.cy <= 0)
+    {
+        return false;
+    }
+
+    EnsureD2DResources();
+    if (! _dwriteFactory)
+    {
+        return false;
+    }
+
+    return _overlay.EnsureLayout(_dwriteFactory.get(), DipFromPx(_clientSizePx.cx), DipFromPx(_clientSizePx.cy));
 }
 
 LRESULT CALLBACK AlertOverlayWindow::ParentWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
@@ -1540,9 +1726,133 @@ void AlertOverlayWindow::EnsureD2DResources() noexcept
 
 void AlertOverlayWindow::DiscardD2DResources() noexcept
 {
+    _backdropBitmap.reset();
     _target.reset();
     _overlay.ResetDeviceResources();
     _overlay.ResetTextResources();
+}
+
+void AlertOverlayWindow::CaptureBackdrop(bool preserveExistingOnFailure) noexcept
+{
+    wil::com_ptr<ID2D1Bitmap> capturedBackdrop;
+    const auto publishCapture = wil::scope_exit([&] noexcept
+    {
+        if (capturedBackdrop)
+        {
+            _backdropBitmap = std::move(capturedBackdrop);
+        }
+        else if (! preserveExistingOnFailure)
+        {
+            _backdropBitmap.reset();
+        }
+    });
+
+    if (! _blocksInput || ! _hwnd)
+    {
+        return;
+    }
+
+    EnsureD2DResources();
+    if (! _target)
+    {
+        return;
+    }
+
+    RECT screenRect{};
+    if (GetWindowRect(_hwnd.get(), &screenRect) == FALSE)
+    {
+        return;
+    }
+
+    const LONG widthPx  = screenRect.right - screenRect.left;
+    const LONG heightPx = screenRect.bottom - screenRect.top;
+    if (widthPx <= 0 || heightPx <= 0)
+    {
+        return;
+    }
+
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth       = widthPx;
+    bmi.bmiHeader.biHeight      = -heightPx;
+    bmi.bmiHeader.biPlanes      = 1;
+    bmi.bmiHeader.biBitCount    = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    void* bits = nullptr;
+    wil::unique_hdc_window screenDc{GetDC(nullptr)};
+    if (! screenDc)
+    {
+        return;
+    }
+
+    wil::unique_hdc memoryDc{CreateCompatibleDC(screenDc.get())};
+    if (! memoryDc)
+    {
+        return;
+    }
+
+    wil::unique_hbitmap bitmap{CreateDIBSection(screenDc.get(), &bmi, DIB_RGB_COLORS, &bits, nullptr, 0)};
+    if (! bitmap || ! bits)
+    {
+        return;
+    }
+
+    [[maybe_unused]] const auto oldBitmap = wil::SelectObject(memoryDc.get(), bitmap.get());
+    bool capturedPixels = false;
+    if (_anchor && IsWindow(_anchor) != FALSE)
+    {
+        RECT anchorRect{};
+        if (GetWindowRect(_anchor, &anchorRect) != FALSE && anchorRect.left == screenRect.left && anchorRect.top == screenRect.top &&
+            anchorRect.right == screenRect.right && anchorRect.bottom == screenRect.bottom)
+        {
+            capturedPixels = PrintWindow(_anchor, memoryDc.get(), PW_RENDERFULLCONTENT) != FALSE;
+        }
+    }
+
+    if (! capturedPixels && _hostParent && IsWindow(_hostParent) != FALSE)
+    {
+        RECT hostClient{};
+        if (GetClientRect(_hostParent, &hostClient) != FALSE)
+        {
+            std::array<POINT, 2> hostClientPoints{{
+                POINT{hostClient.left, hostClient.top},
+                POINT{hostClient.right, hostClient.bottom},
+            }};
+            if (MapWindowPoints(_hostParent, nullptr, hostClientPoints.data(), static_cast<UINT>(hostClientPoints.size())) != 0)
+            {
+                const RECT hostClientScreen{hostClientPoints[0].x, hostClientPoints[0].y, hostClientPoints[1].x, hostClientPoints[1].y};
+                if (hostClientScreen.left == screenRect.left && hostClientScreen.top == screenRect.top && hostClientScreen.right == screenRect.right &&
+                    hostClientScreen.bottom == screenRect.bottom)
+                {
+                    capturedPixels = PrintWindow(_hostParent, memoryDc.get(), PW_CLIENTONLY | PW_RENDERFULLCONTENT) != FALSE;
+                }
+            }
+        }
+    }
+
+    if (! capturedPixels)
+    {
+        capturedPixels = BitBlt(memoryDc.get(), 0, 0, widthPx, heightPx, screenDc.get(), screenRect.left, screenRect.top, SRCCOPY | CAPTUREBLT) != FALSE;
+    }
+
+    if (! capturedPixels)
+    {
+        return;
+    }
+
+    const UINT32 width  = static_cast<UINT32>(widthPx);
+    const UINT32 height = static_cast<UINT32>(heightPx);
+    const D2D1_BITMAP_PROPERTIES props =
+        D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE), static_cast<float>(_dpi), static_cast<float>(_dpi));
+    const HRESULT hr = _target->CreateBitmap(D2D1::SizeU(width, height), bits, width * 4u, props, capturedBackdrop.addressof());
+    if (SUCCEEDED(hr))
+    {
+#if defined(ENABLE_TESTS)
+        ++_debugBackdropCaptureCount;
+        _debugBackdropSizePx = SIZE{widthPx, heightPx};
+#endif
+    }
 }
 
 void AlertOverlayWindow::ApplyRegionFromOverlay() noexcept
@@ -1634,4 +1944,44 @@ int AlertOverlayWindow::PxFromDipRound(float dip) const noexcept
     const float px  = (dip * dpi) / 96.0f;
     return static_cast<int>(std::lround(px));
 }
+
+#if defined(ENABLE_TESTS)
+bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapshot& out) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* window = reinterpret_cast<AlertOverlayWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! window || window->_hwnd.get() != hwnd)
+    {
+        return false;
+    }
+
+    out.visible            = window->_visible;
+    out.hasLayout          = window->_overlay.HasLayout();
+    out.hasBackdropBitmap  = window->_backdropBitmap != nullptr;
+    out.paintCount         = window->_debugPaintCount;
+    out.lastDrawOpacity    = window->_overlay.DebugGetLastDrawOpacityForTest();
+    out.lastDrawScrimOpacity = window->_overlay.DebugGetLastDrawScrimOpacityForTest();
+    out.minimumDrawOpacity = window->_debugMinimumDrawOpacity;
+    out.backdropCaptureCount = window->_debugBackdropCaptureCount;
+    out.clientSizePx       = window->_clientSizePx;
+    out.backdropSizePx     = window->_debugBackdropSizePx;
+    const D2D1_RECT_F closeRectDip = window->_overlay.DebugGetCloseRectForTest();
+    out.closeRectPx.left           = window->PxFromDipFloor(closeRectDip.left);
+    out.closeRectPx.top            = window->PxFromDipFloor(closeRectDip.top);
+    out.closeRectPx.right          = window->PxFromDipCeil(closeRectDip.right);
+    out.closeRectPx.bottom         = window->PxFromDipCeil(closeRectDip.bottom);
+    out.mouseDownCount             = window->_debugMouseDownCount;
+    out.mouseUpCount               = window->_debugMouseUpCount;
+    out.dismissCount               = window->_debugDismissCount;
+    out.lastMouseDownPointPx       = window->_debugLastMouseDownPointPx;
+    out.lastMouseUpPointPx         = window->_debugLastMouseUpPointPx;
+    out.lastMouseDownHitPart       = window->_debugLastMouseDownHitPart;
+    out.lastMouseUpHitPart         = window->_debugLastMouseUpHitPart;
+    return true;
+}
+#endif
 } // namespace RedSalamander::Ui

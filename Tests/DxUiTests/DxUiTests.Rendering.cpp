@@ -666,8 +666,7 @@ void TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader()
     bool reachedScrollEdge = false;
     for (int stepIndex = 0; stepIndex < 8 && ! reachedScrollEdge; ++stepIndex)
     {
-        reachedScrollEdge =
-            ! grid->OnMouseWheel(window.Host(), D2D1::Point2F(24.0f, 48.0f), -static_cast<float>(WHEEL_DELTA), 0);
+        reachedScrollEdge = ! grid->OnMouseWheel(window.Host(), D2D1::Point2F(24.0f, 48.0f), -static_cast<float>(WHEEL_DELTA), 0);
     }
     Require(reachedScrollEdge, "attached grid bottom-alignment test reaches the bottom scroll edge");
 

@@ -128,6 +128,7 @@ public:
         _model = std::move(model);
         InvalidateTextLayouts();
         InvalidateButtonLayouts();
+        InvalidateLayout();
         ResetFocus();
     }
 
@@ -164,6 +165,7 @@ public:
         _dwriteIdentity = nullptr;
         InvalidateTextLayouts();
         InvalidateButtonLayouts();
+        InvalidateLayout();
     }
 
     void SetStartTick(uint64_t tickMs) noexcept
@@ -249,6 +251,180 @@ public:
         return _panelRect;
     }
 
+#if defined(ENABLE_TESTS)
+    [[nodiscard]] float DebugGetLastDrawOpacityForTest() const noexcept
+    {
+        return _debugLastDrawOpacity;
+    }
+
+    [[nodiscard]] float DebugGetLastDrawScrimOpacityForTest() const noexcept
+    {
+        return _debugLastDrawScrimOpacity;
+    }
+
+    [[nodiscard]] D2D1_RECT_F DebugGetCloseRectForTest() const noexcept
+    {
+        return _closeRect;
+    }
+#endif
+
+    [[nodiscard]] bool EnsureLayout(IDWriteFactory* dwriteFactory, float clientWidthDip, float clientHeightDip) noexcept
+    {
+        if (! dwriteFactory || clientWidthDip <= 0.0f || clientHeightDip <= 0.0f)
+        {
+            return false;
+        }
+
+        EnsureTextResources(dwriteFactory);
+        if (! _titleFormat || ! _bodyFormat || ! _buttonFormat)
+        {
+            InvalidateLayout();
+            return false;
+        }
+
+        constexpr float kOuterMarginDip       = 24.0f;
+        constexpr float kInnerPaddingDip      = 20.0f;
+        constexpr float kMaxWidthDip          = 780.0f;
+        constexpr float kMaxHeightDip         = 420.0f;
+        constexpr float kIconSizeDip          = 80.0f;
+        constexpr float kIconTextGapDip       = 18.0f;
+        constexpr float kTitleBodyGapDip      = 6.0f;
+        constexpr float kCloseSizeDip         = 22.0f;
+        constexpr float kCloseInsetDip        = 8.0f;
+        constexpr float kButtonsGapDip        = 14.0f;
+        constexpr float kButtonsRowGapDip     = 14.0f;
+        constexpr float kButtonHeightDip      = 32.0f;
+        constexpr float kButtonMinWidthDip    = 84.0f;
+        constexpr float kButtonHorzPaddingDip = 14.0f;
+
+        const float minDimDip      = std::min(clientWidthDip, clientHeightDip);
+        const float outerMarginDip = std::min(kOuterMarginDip, minDimDip * 0.06f);
+
+        const float availableWidth  = std::max(0.0f, clientWidthDip - outerMarginDip * 2.0f);
+        const float availableHeight = std::max(0.0f, clientHeightDip - outerMarginDip * 2.0f);
+
+        const float panelWidth     = std::max(0.0f, std::min(kMaxWidthDip, availableWidth));
+        const float maxPanelHeight = std::max(0.0f, std::min(kMaxHeightDip, availableHeight));
+        if (panelWidth <= 0.0f || maxPanelHeight <= 0.0f)
+        {
+            InvalidateLayout();
+            return false;
+        }
+
+        float innerPaddingDip     = kInnerPaddingDip;
+        const float maxPaddingDip = std::max(0.0f, std::min(panelWidth, maxPanelHeight) * 0.05f);
+        if (maxPaddingDip > 0.0f)
+        {
+            innerPaddingDip = std::min(innerPaddingDip, maxPaddingDip);
+        }
+        else
+        {
+            innerPaddingDip = 0.0f;
+        }
+
+        const float closeReserveDip = _model.closable ? (kCloseSizeDip + kCloseInsetDip) : 0.0f;
+        const float maxTextWidthDip = std::max(1.0f, panelWidth - innerPaddingDip * 2.0f - closeReserveDip);
+
+        const bool allowIcon = maxPanelHeight >= (innerPaddingDip * 2.0f + kIconSizeDip);
+        bool showIcon        = allowIcon;
+
+        float textWidthDip = maxTextWidthDip;
+        if (showIcon)
+        {
+            textWidthDip = std::max(1.0f, maxTextWidthDip - (kIconSizeDip + kIconTextGapDip));
+        }
+
+        constexpr float kMinTextWidthForIconDip = 120.0f;
+        if (showIcon && textWidthDip < kMinTextWidthForIconDip)
+        {
+            showIcon     = false;
+            textWidthDip = maxTextWidthDip;
+        }
+
+        EnsureTextLayouts(dwriteFactory, textWidthDip);
+        EnsureButtonLayouts(dwriteFactory);
+
+        float textHeightDip = 0.0f;
+        if (_titleLayoutHeightDip > 0.0f)
+        {
+            textHeightDip += _titleLayoutHeightDip;
+        }
+        if (_bodyLayoutHeightDip > 0.0f)
+        {
+            if (textHeightDip > 0.0f)
+            {
+                textHeightDip += kTitleBodyGapDip;
+            }
+            textHeightDip += _bodyLayoutHeightDip;
+        }
+
+        const float buttonRowHeightDip = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
+        const float contentHeightDip   = std::max(showIcon ? kIconSizeDip : 0.0f, textHeightDip);
+
+        float desiredPanelHeight = innerPaddingDip * 2.0f + contentHeightDip;
+        if (buttonRowHeightDip > 0.0f)
+        {
+            desiredPanelHeight += kButtonsRowGapDip + buttonRowHeightDip;
+        }
+
+        const float clampedPanelHeight = std::min(desiredPanelHeight, maxPanelHeight);
+        const float panelLeft          = (clientWidthDip - panelWidth) * 0.5f;
+        const float panelTop           = (clientHeightDip - clampedPanelHeight) * 0.5f;
+
+        _panelRect = D2D1::RectF(panelLeft, panelTop, panelLeft + panelWidth, panelTop + clampedPanelHeight);
+        _hasLayout = true;
+        _layoutPanelWidthDip     = panelWidth;
+        _layoutPanelHeightDip    = clampedPanelHeight;
+        _layoutButtonRowHeightDip = buttonRowHeightDip;
+        _layoutShowIcon          = showIcon;
+
+        D2D1_RECT_F contentRect = D2D1::RectF(
+            _panelRect.left + innerPaddingDip, _panelRect.top + innerPaddingDip, _panelRect.right - innerPaddingDip, _panelRect.bottom - innerPaddingDip);
+
+        if (_model.closable)
+        {
+            const float closeRight = _panelRect.right - kCloseInsetDip;
+            const float closeTop   = _panelRect.top + kCloseInsetDip;
+            _closeRect             = D2D1::RectF(closeRight - kCloseSizeDip, closeTop, closeRight, closeTop + kCloseSizeDip);
+            contentRect.right      = std::min(contentRect.right, _closeRect.left - kCloseInsetDip);
+        }
+        else
+        {
+            _closeRect = {};
+        }
+
+        if (buttonRowHeightDip > 0.0f)
+        {
+            const D2D1_RECT_F buttonsRect =
+                D2D1::RectF(contentRect.left, contentRect.bottom - buttonRowHeightDip, _panelRect.right - innerPaddingDip, contentRect.bottom);
+            LayoutButtons(buttonsRect, kButtonsGapDip, kButtonHeightDip, kButtonMinWidthDip, kButtonHorzPaddingDip);
+        }
+        else
+        {
+            _buttonRects.clear();
+        }
+
+        D2D1_RECT_F bodyTextRect = contentRect;
+        if (buttonRowHeightDip > 0.0f)
+        {
+            bodyTextRect.bottom = std::max(bodyTextRect.top, bodyTextRect.bottom - buttonRowHeightDip - kButtonsRowGapDip);
+        }
+
+        D2D1_RECT_F iconRect{};
+        D2D1_RECT_F textRect = bodyTextRect;
+        if (showIcon)
+        {
+            const float iconTop = bodyTextRect.top + (contentHeightDip - kIconSizeDip) * 0.5f;
+            iconRect            = D2D1::RectF(bodyTextRect.left, iconTop, bodyTextRect.left + kIconSizeDip, iconTop + kIconSizeDip);
+            textRect            = D2D1::RectF(iconRect.right + kIconTextGapDip, bodyTextRect.top, bodyTextRect.right, bodyTextRect.bottom);
+        }
+
+        _layoutBodyTextRect = bodyTextRect;
+        _layoutIconRect     = iconRect;
+        _layoutTextRect     = textRect;
+        return true;
+    }
+
     [[nodiscard]] bool IsPointInPanel(D2D1_POINT_2F ptDip) const noexcept
     {
         if (! _hasLayout)
@@ -318,104 +494,24 @@ public:
             return;
         }
 
-        constexpr float kOuterMarginDip       = 24.0f;
-        constexpr float kInnerPaddingDip      = 20.0f;
-        constexpr float kMaxWidthDip          = 780.0f;
-        constexpr float kMaxHeightDip         = 420.0f;
-        constexpr float kCornerRadiusDip      = 12.0f;
-        constexpr float kIconSizeDip          = 80.0f;
-        constexpr float kIconTextGapDip       = 18.0f;
-        constexpr float kTitleBodyGapDip      = 6.0f;
-        constexpr float kCardOpacity          = 0.96f;
-        constexpr float kBorderOpacity        = 0.90f;
-        constexpr float kCloseSizeDip         = 22.0f;
-        constexpr float kCloseInsetDip        = 8.0f;
-        constexpr float kButtonsGapDip        = 14.0f;
-        constexpr float kButtonsRowGapDip     = 14.0f;
-        constexpr float kButtonHeightDip      = 32.0f;
-        constexpr float kButtonMinWidthDip    = 84.0f;
-        constexpr float kButtonHorzPaddingDip = 14.0f;
-        constexpr float kButtonCornerDip      = 6.0f;
-        constexpr uint64_t kShowAnimationMs   = 220;
+        constexpr float kCornerRadiusDip    = 12.0f;
+        constexpr float kIconTextGapDip     = 18.0f;
+        constexpr float kTitleBodyGapDip    = 6.0f;
+        constexpr float kCardOpacity        = 0.96f;
+        constexpr float kBorderOpacity      = 0.90f;
+        constexpr float kButtonCornerDip    = 6.0f;
+        constexpr uint64_t kShowAnimationMs = 220;
 
-        const float minDimDip      = std::min(clientWidthDip, clientHeightDip);
-        const float outerMarginDip = std::min(kOuterMarginDip, minDimDip * 0.06f);
-
-        const float availableWidth  = std::max(0.0f, clientWidthDip - outerMarginDip * 2.0f);
-        const float availableHeight = std::max(0.0f, clientHeightDip - outerMarginDip * 2.0f);
-
-        const float panelWidth     = std::max(0.0f, std::min(kMaxWidthDip, availableWidth));
-        const float maxPanelHeight = std::max(0.0f, std::min(kMaxHeightDip, availableHeight));
-        if (panelWidth <= 0.0f || maxPanelHeight <= 0.0f)
+        if (! EnsureLayout(dwriteFactory, clientWidthDip, clientHeightDip))
         {
             return;
         }
 
-        float innerPaddingDip     = kInnerPaddingDip;
-        const float maxPaddingDip = std::max(0.0f, std::min(panelWidth, maxPanelHeight) * 0.05f);
-        if (maxPaddingDip > 0.0f)
-        {
-            innerPaddingDip = std::min(innerPaddingDip, maxPaddingDip);
-        }
-        else
-        {
-            innerPaddingDip = 0.0f;
-        }
-
-        const float closeReserveDip = _model.closable ? (kCloseSizeDip + kCloseInsetDip) : 0.0f;
-        const float maxTextWidthDip = std::max(1.0f, panelWidth - innerPaddingDip * 2.0f - closeReserveDip);
-
-        const bool allowIcon = maxPanelHeight >= (innerPaddingDip * 2.0f + kIconSizeDip);
-        bool showIcon        = allowIcon;
-
-        float textWidthDip = maxTextWidthDip;
-        if (showIcon)
-        {
-            textWidthDip = std::max(1.0f, maxTextWidthDip - (kIconSizeDip + kIconTextGapDip));
-        }
-
-        constexpr float kMinTextWidthForIconDip = 120.0f;
-        if (showIcon && textWidthDip < kMinTextWidthForIconDip)
-        {
-            showIcon     = false;
-            textWidthDip = maxTextWidthDip;
-        }
-
-        EnsureTextLayouts(dwriteFactory, textWidthDip);
-        EnsureButtonLayouts(dwriteFactory);
-
-        float titleHeightDip = _titleLayoutHeightDip;
-        float bodyHeightDip  = _bodyLayoutHeightDip;
-
-        float textHeightDip = 0.0f;
-        if (titleHeightDip > 0.0f)
-        {
-            textHeightDip += titleHeightDip;
-        }
-        if (bodyHeightDip > 0.0f)
-        {
-            if (textHeightDip > 0.0f)
-            {
-                textHeightDip += kTitleBodyGapDip;
-            }
-            textHeightDip += bodyHeightDip;
-        }
-
-        const float buttonRowHeightDip = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
-        const float contentHeightDip   = std::max(showIcon ? kIconSizeDip : 0.0f, textHeightDip);
-
-        float desiredPanelHeight = innerPaddingDip * 2.0f + contentHeightDip;
-        if (buttonRowHeightDip > 0.0f)
-        {
-            desiredPanelHeight += kButtonsRowGapDip + buttonRowHeightDip;
-        }
-
-        const float clampedPanelHeight = std::clamp(desiredPanelHeight, std::min(desiredPanelHeight, maxPanelHeight), maxPanelHeight);
-        const float panelLeft          = (clientWidthDip - panelWidth) * 0.5f;
-        const float panelTop           = (clientHeightDip - clampedPanelHeight) * 0.5f;
-
-        _panelRect = D2D1::RectF(panelLeft, panelTop, panelLeft + panelWidth, panelTop + clampedPanelHeight);
-        _hasLayout = true;
+        const float panelWidth            = _layoutPanelWidthDip;
+        const float clampedPanelHeight    = _layoutPanelHeightDip;
+        const float buttonRowHeightDip    = _layoutButtonRowHeightDip;
+        const bool showIcon               = _layoutShowIcon;
+        const float titleHeightDip        = _titleLayoutHeightDip;
 
         const uint64_t elapsedMs      = (nowTickMs >= _startTickMs) ? (nowTickMs - _startTickMs) : 0u;
         const float showT             = static_cast<float>(std::min<uint64_t>(elapsedMs, kShowAnimationMs)) / static_cast<float>(kShowAnimationMs);
@@ -423,8 +519,14 @@ public:
         const float overlayOpacity    = ease;
         const float overlayScale      = std::lerp(0.975f, 1.0f, ease);
         const float overlayTranslateY = std::lerp(10.0f, 0.0f, ease);
+#if defined(ENABLE_TESTS)
+        _debugLastDrawOpacity = overlayOpacity;
+#endif
 
         const float scrimOpacity = _theme.darkBase ? 0.65f : 0.50f;
+#if defined(ENABLE_TESTS)
+        _debugLastDrawScrimOpacity = scrimOpacity * overlayOpacity;
+#endif
         _scrimBrush->SetOpacity(scrimOpacity * overlayOpacity);
         target->FillRectangle(D2D1::RectF(0.0f, 0.0f, clientWidthDip, clientHeightDip), _scrimBrush.get());
 
@@ -449,38 +551,16 @@ public:
         _textBrush->SetOpacity(kBorderOpacity * overlayOpacity);
         target->DrawRoundedRectangle(roundedPanel, _textBrush.get(), 1.0f);
 
-        D2D1_RECT_F contentRect = D2D1::RectF(
-            _panelRect.left + innerPaddingDip, _panelRect.top + innerPaddingDip, _panelRect.right - innerPaddingDip, _panelRect.bottom - innerPaddingDip);
-
         if (_model.closable)
         {
-            const float closeRight = _panelRect.right - kCloseInsetDip;
-            const float closeTop   = _panelRect.top + kCloseInsetDip;
-            _closeRect             = D2D1::RectF(closeRight - kCloseSizeDip, closeTop, closeRight, closeTop + kCloseSizeDip);
             DrawCloseButton(target, _closeRect, accentColor, overlayOpacity);
-
-            contentRect.right = std::min(contentRect.right, _closeRect.left - kCloseInsetDip);
-        }
-        else
-        {
-            _closeRect = {};
         }
 
-        D2D1_RECT_F bodyTextRect = contentRect;
-        if (buttonRowHeightDip > 0.0f)
-        {
-            bodyTextRect.bottom = bodyTextRect.bottom - buttonRowHeightDip - kButtonsRowGapDip;
-        }
-
-        D2D1_RECT_F iconRect{};
-        D2D1_RECT_F textRect = bodyTextRect;
+        const D2D1_RECT_F bodyTextRect = _layoutBodyTextRect;
+        const D2D1_RECT_F iconRect     = _layoutIconRect;
+        const D2D1_RECT_F textRect     = _layoutTextRect;
         if (showIcon)
         {
-            const float iconTop = bodyTextRect.top + (contentHeightDip - kIconSizeDip) * 0.5f;
-            iconRect            = D2D1::RectF(bodyTextRect.left, iconTop, bodyTextRect.left + kIconSizeDip, iconTop + kIconSizeDip);
-
-            textRect = D2D1::RectF(iconRect.right + kIconTextGapDip, bodyTextRect.top, bodyTextRect.right, bodyTextRect.bottom);
-
             const float dividerX = iconRect.right + kIconTextGapDip * 0.5f;
             _textBrush->SetColor(accentColor);
             _textBrush->SetOpacity(0.15f * overlayOpacity);
@@ -515,14 +595,7 @@ public:
 
         if (buttonRowHeightDip > 0.0f)
         {
-            const D2D1_RECT_F buttonsRect =
-                D2D1::RectF(contentRect.left, contentRect.bottom - buttonRowHeightDip, _panelRect.right - innerPaddingDip, contentRect.bottom);
-            LayoutButtons(buttonsRect, kButtonsGapDip, kButtonHeightDip, kButtonMinWidthDip, kButtonHorzPaddingDip);
             DrawButtons(target, overlayOpacity, kButtonCornerDip);
-        }
-        else
-        {
-            _buttonRects.clear();
         }
 
         target->SetTransform(baseTransform);
@@ -735,6 +808,21 @@ private:
         _cachedButtonLabels.clear();
         _buttonBaseRects.clear();
         _buttonRects.clear();
+    }
+
+    void InvalidateLayout() noexcept
+    {
+        _panelRect          = {};
+        _closeRect          = {};
+        _layoutBodyTextRect = {};
+        _layoutIconRect     = {};
+        _layoutTextRect     = {};
+        _layoutPanelWidthDip = 0.0f;
+        _layoutPanelHeightDip = 0.0f;
+        _layoutButtonRowHeightDip = 0.0f;
+        _layoutShowIcon = false;
+        _buttonRects.clear();
+        _hasLayout = false;
     }
 
     void EnsureButtonLayouts(IDWriteFactory* dwriteFactory) noexcept
@@ -1134,10 +1222,21 @@ private:
 
     D2D1_RECT_F _panelRect{};
     D2D1_RECT_F _closeRect{};
+    D2D1_RECT_F _layoutBodyTextRect{};
+    D2D1_RECT_F _layoutIconRect{};
+    D2D1_RECT_F _layoutTextRect{};
+    float _layoutPanelWidthDip = 0.0f;
+    float _layoutPanelHeightDip = 0.0f;
+    float _layoutButtonRowHeightDip = 0.0f;
+    bool _layoutShowIcon = false;
     bool _hasLayout = false;
 
     AlertHitTest _hot{};
     std::optional<uint32_t> _focusedButtonId;
     uint64_t _startTickMs = 0;
+#if defined(ENABLE_TESTS)
+    float _debugLastDrawOpacity = 0.0f;
+    float _debugLastDrawScrimOpacity = 0.0f;
+#endif
 };
 } // namespace RedSalamander::Ui

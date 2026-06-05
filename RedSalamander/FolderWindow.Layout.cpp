@@ -302,25 +302,25 @@ void FolderWindow::CalculateLayout()
 
     if (width <= 0 || height <= 0)
     {
-        _leftPaneRect        = {0, 0, 0, 0};
-        _rightPaneRect       = {0, 0, 0, 0};
-        _splitterRect        = {0, 0, 0, 0};
-        _leftNavigationRect  = {0, 0, 0, 0};
-        _leftFilterBarRect   = {0, 0, 0, 0};
-        _leftFolderViewRect  = {0, 0, 0, 0};
-        _leftStatusBarRect   = {0, 0, 0, 0};
-        _leftPreviewTabsRect = {0, 0, 0, 0};
-        _leftPreviewContentRect = {0, 0, 0, 0};
-        _rightNavigationRect = {0, 0, 0, 0};
-        _rightFilterBarRect  = {0, 0, 0, 0};
-        _rightFolderViewRect = {0, 0, 0, 0};
-        _rightStatusBarRect  = {0, 0, 0, 0};
-        _rightPreviewTabsRect = {0, 0, 0, 0};
+        _leftPaneRect            = {0, 0, 0, 0};
+        _rightPaneRect           = {0, 0, 0, 0};
+        _splitterRect            = {0, 0, 0, 0};
+        _leftNavigationRect      = {0, 0, 0, 0};
+        _leftFilterBarRect       = {0, 0, 0, 0};
+        _leftFolderViewRect      = {0, 0, 0, 0};
+        _leftStatusBarRect       = {0, 0, 0, 0};
+        _leftPreviewTabsRect     = {0, 0, 0, 0};
+        _leftPreviewContentRect  = {0, 0, 0, 0};
+        _rightNavigationRect     = {0, 0, 0, 0};
+        _rightFilterBarRect      = {0, 0, 0, 0};
+        _rightFolderViewRect     = {0, 0, 0, 0};
+        _rightStatusBarRect      = {0, 0, 0, 0};
+        _rightPreviewTabsRect    = {0, 0, 0, 0};
         _rightPreviewContentRect = {0, 0, 0, 0};
-        _commandLineRect     = {0, 0, 0, 0};
-        _commandLineLabelRect = {0, 0, 0, 0};
-        _commandLineEditRect = {0, 0, 0, 0};
-        _functionBarRect     = {0, 0, 0, 0};
+        _commandLineRect         = {0, 0, 0, 0};
+        _commandLineLabelRect    = {0, 0, 0, 0};
+        _commandLineEditRect     = {0, 0, 0, 0};
+        _functionBarRect         = {0, 0, 0, 0};
         return;
     }
 
@@ -438,13 +438,12 @@ void FolderWindow::CalculateLayout()
     _commandLineRect = {0, paneHeight, width, paneHeight + commandLineHeight};
     if (commandLineHeight > 0)
     {
-        const int padX       = MulDiv(kCommandLinePaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int padY       = MulDiv(kCommandLinePaddingYDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int labelWidth = MulDiv(kCommandLineLabelWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int lineGap    = MulDiv(kCommandLineGapDip, dpi, USER_DEFAULT_SCREEN_DPI);
-        const LONG lineTop   = _commandLineRect.top + static_cast<LONG>(padY);
-        const LONG lineBottom =
-            std::max<LONG>(lineTop, _commandLineRect.bottom - static_cast<LONG>(padY));
+        const int padX        = MulDiv(kCommandLinePaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        const int padY        = MulDiv(kCommandLinePaddingYDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        const int labelWidth  = MulDiv(kCommandLineLabelWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        const int lineGap     = MulDiv(kCommandLineGapDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        const LONG lineTop    = _commandLineRect.top + static_cast<LONG>(padY);
+        const LONG lineBottom = std::max<LONG>(lineTop, _commandLineRect.bottom - static_cast<LONG>(padY));
         const LONG labelLeft  = _commandLineRect.left + static_cast<LONG>(padX);
         const LONG labelRight = std::min<LONG>(_commandLineRect.right, labelLeft + static_cast<LONG>(labelWidth));
         const LONG editLeft   = std::min<LONG>(_commandLineRect.right, labelRight + static_cast<LONG>(lineGap));
@@ -484,47 +483,47 @@ void FolderWindow::AdjustChildWindows()
     const bool rightPreviewSelected = _rightPane.previewTabsVisible && _rightPane.previewTabSelected;
 
     std::array<MoveItem, 15> items{};
-    items[0].hwnd = _leftPane.hNavigationView.get();
-    items[0].rect = _leftNavigationRect;
-    items[0].visible = _leftPane.navigationBarVisible && ! leftPreviewSelected;
-    items[1].hwnd = _leftPane.hFolderView.get();
-    items[1].rect = _leftFolderViewRect;
-    items[1].visible = ! leftPreviewSelected;
-    items[2].hwnd = _leftPane.hFilterBar.get();
-    items[2].rect = _leftFilterBarRect;
-    items[2].visible = _leftPane.filterBarVisible && ! leftPreviewSelected;
-    items[3].hwnd = _leftPane.hStatusBar.get();
-    items[3].rect = _leftStatusBarRect;
-    items[3].visible = _leftPane.statusBarVisible && ! leftPreviewSelected;
-    items[4].hwnd = _leftPane.hPreviewTabs.get();
-    items[4].rect = _leftPreviewTabsRect;
-    items[4].visible = _leftPane.previewTabsVisible;
-    items[5].hwnd = _leftPane.hPreviewContent.get();
-    items[5].rect = _leftPreviewContentRect;
-    items[5].visible = leftPreviewSelected;
-    items[6].hwnd = _rightPane.hNavigationView.get();
-    items[6].rect = _rightNavigationRect;
-    items[6].visible = _rightPane.navigationBarVisible && ! rightPreviewSelected;
-    items[7].hwnd = _rightPane.hFolderView.get();
-    items[7].rect = _rightFolderViewRect;
-    items[7].visible = ! rightPreviewSelected;
-    items[8].hwnd = _rightPane.hFilterBar.get();
-    items[8].rect = _rightFilterBarRect;
-    items[8].visible = _rightPane.filterBarVisible && ! rightPreviewSelected;
-    items[9].hwnd = _rightPane.hStatusBar.get();
-    items[9].rect = _rightStatusBarRect;
-    items[9].visible = _rightPane.statusBarVisible && ! rightPreviewSelected;
-    items[10].hwnd = _rightPane.hPreviewTabs.get();
-    items[10].rect = _rightPreviewTabsRect;
+    items[0].hwnd     = _leftPane.hNavigationView.get();
+    items[0].rect     = _leftNavigationRect;
+    items[0].visible  = _leftPane.navigationBarVisible && ! leftPreviewSelected;
+    items[1].hwnd     = _leftPane.hFolderView.get();
+    items[1].rect     = _leftFolderViewRect;
+    items[1].visible  = ! leftPreviewSelected;
+    items[2].hwnd     = _leftPane.hFilterBar.get();
+    items[2].rect     = _leftFilterBarRect;
+    items[2].visible  = _leftPane.filterBarVisible && ! leftPreviewSelected;
+    items[3].hwnd     = _leftPane.hStatusBar.get();
+    items[3].rect     = _leftStatusBarRect;
+    items[3].visible  = _leftPane.statusBarVisible && ! leftPreviewSelected;
+    items[4].hwnd     = _leftPane.hPreviewTabs.get();
+    items[4].rect     = _leftPreviewTabsRect;
+    items[4].visible  = _leftPane.previewTabsVisible;
+    items[5].hwnd     = _leftPane.hPreviewContent.get();
+    items[5].rect     = _leftPreviewContentRect;
+    items[5].visible  = leftPreviewSelected;
+    items[6].hwnd     = _rightPane.hNavigationView.get();
+    items[6].rect     = _rightNavigationRect;
+    items[6].visible  = _rightPane.navigationBarVisible && ! rightPreviewSelected;
+    items[7].hwnd     = _rightPane.hFolderView.get();
+    items[7].rect     = _rightFolderViewRect;
+    items[7].visible  = ! rightPreviewSelected;
+    items[8].hwnd     = _rightPane.hFilterBar.get();
+    items[8].rect     = _rightFilterBarRect;
+    items[8].visible  = _rightPane.filterBarVisible && ! rightPreviewSelected;
+    items[9].hwnd     = _rightPane.hStatusBar.get();
+    items[9].rect     = _rightStatusBarRect;
+    items[9].visible  = _rightPane.statusBarVisible && ! rightPreviewSelected;
+    items[10].hwnd    = _rightPane.hPreviewTabs.get();
+    items[10].rect    = _rightPreviewTabsRect;
     items[10].visible = _rightPane.previewTabsVisible;
-    items[11].hwnd = _rightPane.hPreviewContent.get();
-    items[11].rect = _rightPreviewContentRect;
+    items[11].hwnd    = _rightPane.hPreviewContent.get();
+    items[11].rect    = _rightPreviewContentRect;
     items[11].visible = rightPreviewSelected;
-    items[12].hwnd = _hCommandLineHost.get();
-    items[12].rect = _commandLineRect;
+    items[12].hwnd    = _hCommandLineHost.get();
+    items[12].rect    = _commandLineRect;
     items[12].visible = _commandLineVisible;
-    items[13].hwnd = _functionBar.GetHwnd();
-    items[13].rect = _functionBarRect;
+    items[13].hwnd    = _functionBar.GetHwnd();
+    items[13].rect    = _functionBarRect;
     items[13].visible = _functionBarVisible;
 
     int moveCount = 0;
@@ -598,10 +597,7 @@ void FolderWindow::UpdateCommandLineHostLayout() noexcept
         return;
     }
 
-    const auto toDip = [this](LONG valuePx) noexcept
-    {
-        return _commandLineHost.PixelsToDip(static_cast<float>(valuePx));
-    };
+    const auto toDip = [this](LONG valuePx) noexcept { return _commandLineHost.PixelsToDip(static_cast<float>(valuePx)); };
 
     const LONG hostLeft = _commandLineRect.left;
     const LONG hostTop  = _commandLineRect.top;
@@ -634,11 +630,11 @@ void FolderWindow::UpdateFilterBarLayout(Pane pane) noexcept
     const float rowHeight = std::min(28.0f, std::max(0.0f, heightDip - 4.0f));
     const float rowTop    = std::max(0.0f, (heightDip - rowHeight) * 0.5f);
     const float rowBottom = std::min(heightDip, rowTop + rowHeight);
-    const float toggleWidth = std::min(86.0f, std::max(70.0f, widthDip * 0.22f));
+    const float toggleWidth  = std::min(86.0f, std::max(70.0f, widthDip * 0.22f));
     const float contentRight = std::max(padX, widthDip - padX);
-    const float toggleLeft = std::max(padX, contentRight - toggleWidth);
-    const float comboLeft = padX;
-    const float comboRight = std::max(comboLeft, toggleLeft - gapDip);
+    const float toggleLeft   = std::max(padX, contentRight - toggleWidth);
+    const float comboLeft    = padX;
+    const float comboRight   = std::max(comboLeft, toggleLeft - gapDip);
 
     if (state.filterBarCombo)
     {
@@ -711,7 +707,7 @@ void FolderWindow::SetPreviewPlaceholder(Pane hostPane, std::wstring text) noexc
 
 void FolderWindow::UpdatePaneFilterBar(Pane pane)
 {
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state                         = pane == Pane::Left ? _leftPane : _rightPane;
     const FolderView::NameFilterState filter = state.folderView.GetNameFilterState();
     if (filter.enabled && ! filter.text.empty())
     {
@@ -725,7 +721,7 @@ void FolderWindow::UpdatePaneFilterBar(Pane pane)
     if (state.hFilterBar)
     {
         RefreshFilterBarHistoryItems(pane);
-        state.filterBarSyncing = true;
+        state.filterBarSyncing  = true;
         const auto clearSyncing = wil::scope_exit([&state]() noexcept { state.filterBarSyncing = false; });
         if (state.filterBarCombo && state.filterBarCombo->GetText() != filter.text)
         {
@@ -814,7 +810,8 @@ bool FolderWindow::ShowFilterBarHistoryMenu(Pane pane) noexcept
 
     SetActivePane(pane);
     state.filterBarCombo->SetText(history[selectedIndex]);
-    static_cast<void>(ApplyPaneFilterState(pane, FolderView::NameFilterState{.enabled = ! history[selectedIndex].empty(), .text = history[selectedIndex]}, true, true));
+    static_cast<void>(
+        ApplyPaneFilterState(pane, FolderView::NameFilterState{.enabled = ! history[selectedIndex].empty(), .text = history[selectedIndex]}, true, true));
     return true;
 }
 
@@ -992,11 +989,11 @@ void FolderWindow::TogglePreviewPane(Pane sourcePane)
     }
 
     const Pane hostPane = OppositePane(sourcePane);
-    PaneState& host    = hostPane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& host     = hostPane == Pane::Left ? _leftPane : _rightPane;
 
-    _previewSourcePane       = sourcePane;
-    host.previewTabsVisible  = true;
-    host.previewTabSelected  = true;
+    _previewSourcePane      = sourcePane;
+    host.previewTabsVisible = true;
+    host.previewTabSelected = true;
     UpdatePreviewTabSelection(hostPane);
     RefreshPreviewPane();
 
@@ -1053,7 +1050,7 @@ void FolderWindow::ClosePreviewPane() noexcept
     CancelPendingPreviewPaneRefresh();
 
     const Pane hostPane = OppositePane(_previewSourcePane.value());
-    PaneState& host    = hostPane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& host     = hostPane == Pane::Left ? _leftPane : _rightPane;
 
     host.previewTabsVisible = false;
     host.previewTabSelected = false;
@@ -1200,7 +1197,7 @@ std::wstring FolderWindow::BuildPreviewTextForPath(Pane sourcePane, const std::f
         return LoadStringResource(nullptr, IDS_PREVIEW_EMPTY);
     }
 
-    HRESULT propertiesHr = E_FAIL;
+    HRESULT propertiesHr        = E_FAIL;
     std::wstring propertiesText = BuildPreviewPropertiesTextForPath(sourcePane, path, propertiesHr);
     if (! propertiesText.empty())
     {

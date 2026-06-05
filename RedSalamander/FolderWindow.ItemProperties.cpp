@@ -4,8 +4,8 @@
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "Resource.h"
-#include "WindowMessages.h"
 #include "WindowMaximizeBehavior.h"
+#include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 #include "WindowSizing.h"
 
@@ -26,8 +26,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <format>
 #include <functional>
 #include <iterator>
@@ -73,7 +73,7 @@ using ItemPropertiesOpenStreamCallback = std::function<HRESULT(std::wstring_view
 struct ItemPropertiesLoadResult
 {
     uint64_t generation = 0u;
-    HRESULT hr = E_FAIL;
+    HRESULT hr          = E_FAIL;
     std::string jsonUtf8;
 };
 
@@ -81,10 +81,10 @@ class ItemPropertiesWindow;
 
 struct ItemPropertiesLoadWork
 {
-    HWND hwnd = nullptr;
+    HWND hwnd                    = nullptr;
     ItemPropertiesWindow* window = nullptr;
-    uint64_t windowToken = 0u;
-    uint64_t generation = 0u;
+    uint64_t windowToken         = 0u;
+    uint64_t generation          = 0u;
     std::filesystem::path itemPath;
     wil::com_ptr<IFileSystemIO> itemIo;
 #ifdef ENABLE_TESTS
@@ -303,10 +303,10 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc);
     return out;
 }
 
-constexpr wchar_t kItemPropertiesWindowClass[] = L"RedSalamander.ItemPropertiesWindow";
-constexpr wchar_t kItemPropertiesWindowId[]    = L"ItemPropertiesWindow";
-constexpr wchar_t kSettingsAppId[]             = L"RedSalamander";
-constexpr UINT_PTR kItemPropertiesLoadingTimerId  = 1u;
+constexpr wchar_t kItemPropertiesWindowClass[]   = L"RedSalamander.ItemPropertiesWindow";
+constexpr wchar_t kItemPropertiesWindowId[]      = L"ItemPropertiesWindow";
+constexpr wchar_t kSettingsAppId[]               = L"RedSalamander";
+constexpr UINT_PTR kItemPropertiesLoadingTimerId = 1u;
 
 #ifdef ENABLE_TESTS
 std::atomic_uint32_t g_nextItemPropertiesLoadDelayMs{0u};
@@ -429,17 +429,15 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     const std::wstring generalTitle    = LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_GENERAL, L"General");
     const std::wstring timestampsTitle = LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_TIMESTAMPS, L"Timestamps");
 
-    auto generalIt = std::find_if(doc.sections.begin(), doc.sections.end(), [&](const ItemPropertiesSection& section) {
-        return section.title == generalTitle;
-    });
+    auto generalIt =
+        std::find_if(doc.sections.begin(), doc.sections.end(), [&](const ItemPropertiesSection& section) { return section.title == generalTitle; });
     if (generalIt == doc.sections.end())
     {
         return;
     }
 
-    auto timestampsIt = std::find_if(doc.sections.begin(), doc.sections.end(), [&](const ItemPropertiesSection& section) {
-        return section.title == timestampsTitle;
-    });
+    auto timestampsIt =
+        std::find_if(doc.sections.begin(), doc.sections.end(), [&](const ItemPropertiesSection& section) { return section.title == timestampsTitle; });
     if (timestampsIt == doc.sections.end())
     {
         return;
@@ -743,8 +741,7 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     }
 
     uint64_t numericValue = 0u;
-    if ((OrdinalString::EqualsNoCase(rawKey, L"size") || OrdinalString::EqualsNoCase(rawKey, L"sizeBytes")) &&
-        TryParseUnsignedDecimal(value, numericValue))
+    if ((OrdinalString::EqualsNoCase(rawKey, L"size") || OrdinalString::EqualsNoCase(rawKey, L"sizeBytes")) && TryParseUnsignedDecimal(value, numericValue))
     {
         return FormatItemPropertiesSizeValue(numericValue);
     }
@@ -814,12 +811,7 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     }
 
     wil::com_ptr<IDWriteTextLayout> layout;
-    if (FAILED(factory->CreateTextLayout(text.data(),
-                                         static_cast<UINT32>(text.size()),
-                                         format,
-                                         (std::max)(1.0f, widthDip),
-                                         4096.0f,
-                                         layout.addressof())) ||
+    if (FAILED(factory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), format, (std::max)(1.0f, widthDip), 4096.0f, layout.addressof())) ||
         ! layout)
     {
         return kFallbackHeightDip;
@@ -987,23 +979,23 @@ private:
 
 struct ItemPropertiesFieldRowControls
 {
-    RedSalamander::DxUi::Label* key = nullptr;
+    RedSalamander::DxUi::Label* key   = nullptr;
     RedSalamander::DxUi::Label* value = nullptr;
 };
 
 struct ItemPropertiesSectionControls
 {
     RedSalamander::DxUi::CardPanel* card = nullptr;
-    RedSalamander::DxUi::Label* title = nullptr;
-    bool compact = false;
+    RedSalamander::DxUi::Label* title    = nullptr;
+    bool compact                         = false;
     std::vector<ItemPropertiesFieldRowControls> fields;
 };
 
 struct ItemPropertiesStreamRowControls
 {
-    RedSalamander::DxUi::Label* name = nullptr;
-    RedSalamander::DxUi::Label* size = nullptr;
-    RedSalamander::DxUi::Button* view = nullptr;
+    RedSalamander::DxUi::Label* name    = nullptr;
+    RedSalamander::DxUi::Label* size    = nullptr;
+    RedSalamander::DxUi::Button* view   = nullptr;
     RedSalamander::DxUi::Button* remove = nullptr;
 };
 
@@ -1400,13 +1392,13 @@ private:
             return;
         }
 
-        const D2D1_RECT_F client  = _dxHost.GetClientBoundsDip();
-        constexpr float kMargin   = 16.0f;
-        constexpr float kGap      = 10.0f;
-        constexpr float kTitleH   = 32.0f;
-        constexpr float kButtonH  = 28.0f;
-        constexpr float kButtonW  = 82.0f;
-        constexpr float kHintH    = 18.0f;
+        const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
+        constexpr float kMargin  = 16.0f;
+        constexpr float kGap     = 10.0f;
+        constexpr float kTitleH  = 32.0f;
+        constexpr float kButtonH = 28.0f;
+        constexpr float kButtonW = 82.0f;
+        constexpr float kHintH   = 18.0f;
 
         _root->SetBounds(client);
 
@@ -1520,23 +1512,17 @@ private:
             row.name->SetAccessibleName(stream.name);
             row.name->SetFontRole(RedSalamander::DxUi::FontRole::BodyStrong);
             row.name->SetMultiline(true);
-            row.size   = _streamCard->AddChild<RedSalamander::DxUi::Label>(stream.displaySize);
-            row.view   = _streamCard->AddChild<RedSalamander::DxUi::Button>(viewText);
+            row.size = _streamCard->AddChild<RedSalamander::DxUi::Label>(stream.displaySize);
+            row.view = _streamCard->AddChild<RedSalamander::DxUi::Button>(viewText);
             row.view->SetEnabled(static_cast<bool>(_openStream));
             row.remove = _streamCard->AddChild<RedSalamander::DxUi::Button>(removeText);
             row.remove->SetEnabled(_streamOps != nullptr && stream.canRemove);
 
             std::wstring viewStreamName = stream.name;
-            row.view->SetOnClick([this, streamName = std::move(viewStreamName)]() noexcept
-            {
-                static_cast<void>(OpenStreamByName(streamName, true));
-            });
+            row.view->SetOnClick([this, streamName = std::move(viewStreamName)]() noexcept { static_cast<void>(OpenStreamByName(streamName, true)); });
 
             std::wstring removeStreamName = stream.name;
-            row.remove->SetOnClick([this, streamName = std::move(removeStreamName)]() noexcept
-            {
-                QueueRemoveStreamByName(streamName);
-            });
+            row.remove->SetOnClick([this, streamName = std::move(removeStreamName)]() noexcept { QueueRemoveStreamByName(streamName); });
 
             _streamRows.emplace_back(row);
         }
@@ -1581,20 +1567,19 @@ private:
 
             if (_loadingCard)
             {
-                const float cardH = 72.0f;
+                const float cardH          = 72.0f;
                 const D2D1_RECT_F cardRect = D2D1::RectF(x, y, x + cardW, y + cardH);
                 _loadingCard->SetBounds(cardRect);
                 const float spinnerW = 38.0f;
                 if (_loadingSpinnerLabel)
                 {
-                    _loadingSpinnerLabel->SetBounds(D2D1::RectF(cardRect.left + kPadX, cardRect.top + kPadTop, cardRect.left + kPadX + spinnerW, cardRect.bottom - kPadBottom));
+                    _loadingSpinnerLabel->SetBounds(
+                        D2D1::RectF(cardRect.left + kPadX, cardRect.top + kPadTop, cardRect.left + kPadX + spinnerW, cardRect.bottom - kPadBottom));
                 }
                 if (_loadingMessageLabel)
                 {
-                    _loadingMessageLabel->SetBounds(D2D1::RectF(cardRect.left + kPadX + spinnerW + kStreamGap,
-                                                                 cardRect.top + kPadTop,
-                                                                 cardRect.right - kPadX,
-                                                                 cardRect.bottom - kPadBottom));
+                    _loadingMessageLabel->SetBounds(D2D1::RectF(
+                        cardRect.left + kPadX + spinnerW + kStreamGap, cardRect.top + kPadTop, cardRect.right - kPadX, cardRect.bottom - kPadBottom));
                 }
                 return cardH;
             }
@@ -1607,20 +1592,18 @@ private:
                 }
 
                 constexpr float kFieldColumnGap = 12.0f;
-                const float innerW = (std::max)(1.0f, sectionW - (kPadX * 2.0f));
-                const bool stacked = innerW < 260.0f;
-                const float keyW = stacked ? innerW : (controls.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f)
-                                                                         : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
+                const float innerW              = (std::max)(1.0f, sectionW - (kPadX * 2.0f));
+                const bool stacked              = innerW < 260.0f;
+                const float keyW =
+                    stacked ? innerW : (controls.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f) : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
                 const float valueW = stacked ? innerW : (std::max)(1.0f, innerW - keyW - kFieldColumnGap);
 
                 float height = kPadTop + kPadBottom;
                 for (const ItemPropertiesFieldRowControls& row : controls.fields)
                 {
-                    const float valueH = row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost,
-                                                                                                row.value->GetText(),
-                                                                                                RedSalamander::DxUi::FontRole::Body,
-                                                                                                valueW)
-                                                   : kRowH;
+                    const float valueH =
+                        row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
+                                  : kRowH;
                     height += stacked ? (kRowH + (std::max)(kRowH, valueH) + 4.0f) : (std::max)(kRowH, valueH + 4.0f);
                 }
                 return height;
@@ -1629,21 +1612,19 @@ private:
             auto layoutSectionFields = [&](ItemPropertiesSectionControls& controls, D2D1_RECT_F cardRect) noexcept
             {
                 constexpr float kFieldColumnGap = 12.0f;
-                const float innerW = (std::max)(1.0f, cardRect.right - cardRect.left - (kPadX * 2.0f));
-                const bool stacked = innerW < 260.0f;
-                const float keyW = stacked ? innerW : (controls.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f)
-                                                                         : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
+                const float innerW              = (std::max)(1.0f, cardRect.right - cardRect.left - (kPadX * 2.0f));
+                const bool stacked              = innerW < 260.0f;
+                const float keyW =
+                    stacked ? innerW : (controls.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f) : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
                 const float valueW = stacked ? innerW : (std::max)(1.0f, innerW - keyW - kFieldColumnGap);
                 controls.card->SetBounds(cardRect);
 
                 float rowY = cardRect.top + kPadTop;
                 for (ItemPropertiesFieldRowControls& row : controls.fields)
                 {
-                    const float valueH = row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost,
-                                                                                                row.value->GetText(),
-                                                                                                RedSalamander::DxUi::FontRole::Body,
-                                                                                                valueW)
-                                                   : kRowH;
+                    const float valueH =
+                        row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
+                                  : kRowH;
                     const float rowH = stacked ? (kRowH + (std::max)(kRowH, valueH) + 4.0f) : (std::max)(kRowH, valueH + 4.0f);
                     if (stacked)
                     {
@@ -1665,8 +1646,8 @@ private:
             while (sectionIndex < _sectionControls.size())
             {
                 ItemPropertiesSectionControls& controls = _sectionControls[sectionIndex];
-                const bool pairWithNext = sectionIndex + 1u < _sectionControls.size() && controls.compact &&
-                                          _sectionControls[sectionIndex + 1u].compact && cardW >= kTwoColumnMinW;
+                const bool pairWithNext =
+                    sectionIndex + 1u < _sectionControls.size() && controls.compact && _sectionControls[sectionIndex + 1u].compact && cardW >= kTwoColumnMinW;
 
                 addInterGroupGap();
                 if (pairWithNext)
@@ -1687,8 +1668,8 @@ private:
                     continue;
                 }
 
-                const float cardTop    = y + kSectionTitleH + kTitleGap;
-                const float cardH      = sectionCardHeight(controls, cardW);
+                const float cardTop        = y + kSectionTitleH + kTitleGap;
+                const float cardH          = sectionCardHeight(controls, cardW);
                 const D2D1_RECT_F cardRect = D2D1::RectF(x, cardTop, x + cardW, cardTop + cardH);
                 controls.title->SetBounds(D2D1::RectF(x, y, x + cardW, y + kSectionTitleH));
                 layoutSectionFields(controls, cardRect);
@@ -1700,23 +1681,21 @@ private:
             if (_streamCard)
             {
                 addInterGroupGap();
-                const float streamInnerW    = (std::max)(1.0f, cardW - (kPadX * 2.0f));
-                const bool stackStreams     = streamInnerW < 320.0f;
-                constexpr float kActionGap  = 8.0f;
-                const float streamButtonW   = (std::min)(kButtonW, (std::max)(1.0f, streamInnerW - kActionGap) * 0.5f);
-                const float streamActionsW  = (streamButtonW * 2.0f) + kActionGap;
-                const float streamSizeW     = stackStreams ? (std::max)(1.0f, streamInnerW - streamActionsW - kStreamGap)
-                                                           : (std::min)(150.0f, (std::max)(90.0f, cardW * 0.22f));
-                const float streamNameW     = stackStreams ? streamInnerW
-                                                           : (std::max)(1.0f, streamInnerW - streamSizeW - streamActionsW - (kStreamGap * 2.0f));
-                float streamRowsHeight      = 0.0f;
+                const float streamInnerW   = (std::max)(1.0f, cardW - (kPadX * 2.0f));
+                const bool stackStreams    = streamInnerW < 320.0f;
+                constexpr float kActionGap = 8.0f;
+                const float streamButtonW  = (std::min)(kButtonW, (std::max)(1.0f, streamInnerW - kActionGap) * 0.5f);
+                const float streamActionsW = (streamButtonW * 2.0f) + kActionGap;
+                const float streamSizeW =
+                    stackStreams ? (std::max)(1.0f, streamInnerW - streamActionsW - kStreamGap) : (std::min)(150.0f, (std::max)(90.0f, cardW * 0.22f));
+                const float streamNameW = stackStreams ? streamInnerW : (std::max)(1.0f, streamInnerW - streamSizeW - streamActionsW - (kStreamGap * 2.0f));
+                float streamRowsHeight  = 0.0f;
                 for (const ItemPropertiesStreamRowControls& row : _streamRows)
                 {
-                    const float nameH = row.name ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost,
-                                                                                              row.name->GetText(),
-                                                                                              RedSalamander::DxUi::FontRole::BodyStrong,
-                                                                                              streamNameW)
-                                                 : kRowH;
+                    const float nameH =
+                        row.name
+                            ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.name->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, streamNameW)
+                            : kRowH;
                     streamRowsHeight += stackStreams ? ((std::max)(kRowH, nameH + 4.0f) + kRowH + 4.0f) : (std::max)(kRowH, nameH + 4.0f);
                 }
 
@@ -1733,41 +1712,40 @@ private:
                 float rowY = cardRect.top + kPadTop;
                 for (ItemPropertiesStreamRowControls& row : _streamRows)
                 {
-                    const float nameH = row.name ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost,
-                                                                                              row.name->GetText(),
-                                                                                              RedSalamander::DxUi::FontRole::BodyStrong,
-                                                                                              streamNameW)
-                                                 : kRowH;
+                    const float nameH =
+                        row.name
+                            ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.name->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, streamNameW)
+                            : kRowH;
                     if (stackStreams)
                     {
                         const float nameRowH = (std::max)(kRowH, nameH + 4.0f);
                         row.name->SetBounds(D2D1::RectF(cardRect.left + kPadX, rowY, cardRect.right - kPadX, rowY + nameRowH));
-                        const float commandTop = rowY + nameRowH;
+                        const float commandTop  = rowY + nameRowH;
                         const float actionsLeft = cardRect.right - kPadX - streamActionsW;
                         row.size->SetBounds(
                             D2D1::RectF(cardRect.left + kPadX, commandTop, (std::max)(cardRect.left + kPadX, actionsLeft - kStreamGap), commandTop + kRowH));
                         const float buttonTop = commandTop + std::floor((kRowH - kButtonH) * 0.5f);
                         row.view->SetBounds(D2D1::RectF(actionsLeft, buttonTop, actionsLeft + streamButtonW, buttonTop + kButtonH));
                         row.remove->SetBounds(D2D1::RectF(actionsLeft + streamButtonW + kActionGap,
-                                                           buttonTop,
-                                                           actionsLeft + streamButtonW + kActionGap + streamButtonW,
-                                                           buttonTop + kButtonH));
+                                                          buttonTop,
+                                                          actionsLeft + streamButtonW + kActionGap + streamButtonW,
+                                                          buttonTop + kButtonH));
                         rowY += nameRowH + kRowH + 4.0f;
                     }
                     else
                     {
-                        const float rowH       = (std::max)(kRowH, nameH + 4.0f);
+                        const float rowH        = (std::max)(kRowH, nameH + 4.0f);
                         const float actionsLeft = cardRect.right - kPadX - streamActionsW;
-                        const float sizeRight  = actionsLeft - kStreamGap;
-                        const float sizeLeft   = sizeRight - streamSizeW;
+                        const float sizeRight   = actionsLeft - kStreamGap;
+                        const float sizeLeft    = sizeRight - streamSizeW;
                         row.name->SetBounds(D2D1::RectF(cardRect.left + kPadX, rowY, cardRect.left + kPadX + streamNameW, rowY + rowH));
                         row.size->SetBounds(D2D1::RectF(sizeLeft, rowY, sizeRight, rowY + rowH));
                         const float buttonTop = rowY + std::floor((rowH - kButtonH) * 0.5f);
                         row.view->SetBounds(D2D1::RectF(actionsLeft, buttonTop, actionsLeft + streamButtonW, buttonTop + kButtonH));
                         row.remove->SetBounds(D2D1::RectF(actionsLeft + streamButtonW + kActionGap,
-                                                           buttonTop,
-                                                           actionsLeft + streamButtonW + kActionGap + streamButtonW,
-                                                           buttonTop + kButtonH));
+                                                          buttonTop,
+                                                          actionsLeft + streamButtonW + kActionGap + streamButtonW,
+                                                          buttonTop + kButtonH));
                         rowY += rowH;
                     }
                 }
@@ -1837,9 +1815,9 @@ private:
             return;
         }
 
-        _loading            = true;
-        _loadFailed         = false;
-        _loadGeneration     += 1u;
+        _loading    = true;
+        _loadFailed = false;
+        _loadGeneration += 1u;
         _loadingMessageText = LoadStringResource(nullptr, IDS_PROPERTIES_LOADING);
         _contentText        = BuildItemPropertiesLoadingText();
 
@@ -1862,52 +1840,51 @@ private:
 
         const BOOL queued = ::TrySubmitThreadpoolCallback(
             [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        {
+            std::unique_ptr<ItemPropertiesLoadWork> workItem(static_cast<ItemPropertiesLoadWork*>(context));
+            if (! workItem)
             {
-                std::unique_ptr<ItemPropertiesLoadWork> workItem(static_cast<ItemPropertiesLoadWork*>(context));
-                if (! workItem)
-                {
-                    return;
-                }
+                return;
+            }
 
 #ifdef ENABLE_TESTS
-                if (workItem->delayMs > 0u)
-                {
-                    ::Sleep(workItem->delayMs);
-                }
+            if (workItem->delayMs > 0u)
+            {
+                ::Sleep(workItem->delayMs);
+            }
 #endif
 
-                auto result = std::unique_ptr<ItemPropertiesLoadResult>(new (std::nothrow) ItemPropertiesLoadResult{});
-                if (! result)
+            auto result = std::unique_ptr<ItemPropertiesLoadResult>(new (std::nothrow) ItemPropertiesLoadResult{});
+            if (! result)
+            {
+                return;
+            }
+
+            result->generation = workItem->generation;
+            result->hr         = E_FAIL;
+
+            const char* jsonUtf8 = nullptr;
+            result->hr           = workItem->itemIo ? workItem->itemIo->GetItemProperties(workItem->itemPath.c_str(), &jsonUtf8) : E_POINTER;
+            if (SUCCEEDED(result->hr))
+            {
+                if (jsonUtf8 && jsonUtf8[0] != '\0')
                 {
-                    return;
+                    result->jsonUtf8 = jsonUtf8;
                 }
-
-                result->generation = workItem->generation;
-                result->hr         = E_FAIL;
-
-                const char* jsonUtf8 = nullptr;
-                result->hr           = workItem->itemIo ? workItem->itemIo->GetItemProperties(workItem->itemPath.c_str(), &jsonUtf8) : E_POINTER;
-                if (SUCCEEDED(result->hr))
+                else
                 {
-                    if (jsonUtf8 && jsonUtf8[0] != '\0')
-                    {
-                        result->jsonUtf8 = jsonUtf8;
-                    }
-                    else
-                    {
-                        result->hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                    }
+                    result->hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
+            }
 
-                auto* window = ! workItem->hwnd ? nullptr
-                                                : reinterpret_cast<ItemPropertiesWindow*>(::GetWindowLongPtrW(workItem->hwnd, GWLP_USERDATA));
-                if (window != workItem->window || window->_windowToken != workItem->windowToken)
-                {
-                    return;
-                }
+            auto* window = ! workItem->hwnd ? nullptr : reinterpret_cast<ItemPropertiesWindow*>(::GetWindowLongPtrW(workItem->hwnd, GWLP_USERDATA));
+            if (window != workItem->window || window->_windowToken != workItem->windowToken)
+            {
+                return;
+            }
 
-                static_cast<void>(PostMessagePayload(workItem->hwnd, WndMsg::kItemPropertiesLoadComplete, 0, std::move(result)));
-            },
+            static_cast<void>(PostMessagePayload(workItem->hwnd, WndMsg::kItemPropertiesLoadComplete, 0, std::move(result)));
+        },
             work.get(),
             nullptr);
         if (queued == 0)
@@ -1943,9 +1920,9 @@ private:
             return 0;
         }
 
-        _doc                = doc.value();
-        _loading            = false;
-        _loadFailed         = false;
+        _doc        = doc.value();
+        _loading    = false;
+        _loadFailed = false;
         _loadingMessageText.clear();
         UpdateDerivedDocumentState();
         _dxHost.SetFocusControl(_root);
@@ -2151,9 +2128,8 @@ private:
             _dxHost.SetFocusControl(_root);
             RebuildCards();
             LayoutControls();
-            Debug::Warning(L"ItemProperties: stream '{}' was removed but properties refresh failed (hr=0x{:08X}).",
-                           streamNameText,
-                           static_cast<unsigned long>(hrRefresh));
+            Debug::Warning(
+                L"ItemProperties: stream '{}' was removed but properties refresh failed (hr=0x{:08X}).", streamNameText, static_cast<unsigned long>(hrRefresh));
         }
 
         return hrRemove;
@@ -2223,17 +2199,17 @@ private:
     UINT _dpi                    = USER_DEFAULT_SCREEN_DPI;
     wil::unique_hbrush _backgroundBrush;
     RedSalamander::DxUi::WindowHost _dxHost;
-    RedSalamander::DxUi::Panel* _root               = nullptr;
-    RedSalamander::DxUi::Label* _titleLabel         = nullptr;
+    RedSalamander::DxUi::Panel* _root                = nullptr;
+    RedSalamander::DxUi::Label* _titleLabel          = nullptr;
     RedSalamander::DxUi::ScrollPanel* _contentScroll = nullptr;
-    RedSalamander::DxUi::Label* _copyHintLabel      = nullptr;
-    RedSalamander::DxUi::Button* _closeButton       = nullptr;
-    RedSalamander::DxUi::CardPanel* _loadingCard    = nullptr;
+    RedSalamander::DxUi::Label* _copyHintLabel       = nullptr;
+    RedSalamander::DxUi::Button* _closeButton        = nullptr;
+    RedSalamander::DxUi::CardPanel* _loadingCard     = nullptr;
     RedSalamander::DxUi::Label* _loadingSpinnerLabel = nullptr;
     RedSalamander::DxUi::Label* _loadingMessageLabel = nullptr;
     std::vector<ItemPropertiesSectionControls> _sectionControls;
     RedSalamander::DxUi::CardPanel* _streamCard = nullptr;
-    RedSalamander::DxUi::Label* _streamTitle = nullptr;
+    RedSalamander::DxUi::Label* _streamTitle    = nullptr;
     std::vector<ItemPropertiesStreamRowControls> _streamRows;
 };
 
@@ -2308,7 +2284,7 @@ std::wstring FolderWindow::BuildPreviewPropertiesTextForPath(Pane sourcePane, co
         return {};
     }
 
-    const char* jsonUtf8 = nullptr;
+    const char* jsonUtf8       = nullptr;
     const HRESULT hrProperties = io->GetItemProperties(path.c_str(), &jsonUtf8);
     if (FAILED(hrProperties) || ! jsonUtf8)
     {
@@ -2339,10 +2315,10 @@ std::wstring FolderWindow::BuildPreviewPropertiesTextForPath(Pane sourcePane, co
 
 void FolderWindow::ClearPreviewProperties(Pane hostPane) noexcept
 {
-    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
-    host.previewPropertiesCardMode = false;
+    PaneState& host                   = hostPane == Pane::Left ? _leftPane : _rightPane;
+    host.previewPropertiesCardMode    = false;
     host.previewPropertiesUsesRainbow = false;
-    host.previewPropertiesFieldCount = 0u;
+    host.previewPropertiesFieldCount  = 0u;
     host.previewPropertiesSections.clear();
 
     if (host.previewPropertiesScroll)
@@ -2376,7 +2352,7 @@ constexpr float kPreviewPropertiesTwoColumnMinW = 460.0f;
     {
         constexpr float kHueBase = 18.0f;
         constexpr float kHueStep = 53.0f;
-        const float hue = std::fmod(kHueBase + (static_cast<float>(index) * kHueStep), 360.0f);
+        const float hue          = std::fmod(kHueBase + (static_cast<float>(index) * kHueStep), 360.0f);
         return ColorFromHSV(hue, 0.78f, theme.dark ? 0.96f : 0.62f, 1.0f);
     }
 
@@ -2396,7 +2372,7 @@ constexpr float kPreviewPropertiesTwoColumnMinW = 460.0f;
 
 void FolderWindow::UpdatePreviewPropertiesTheme(Pane hostPane) noexcept
 {
-    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& host                   = hostPane == Pane::Left ? _leftPane : _rightPane;
     host.previewPropertiesUsesRainbow = host.previewPropertiesCardMode && _theme.menu.rainbowMode && ! _theme.highContrast;
 
     const std::optional<D2D1_COLOR_F> keyColor = PreviewPropertiesKeyColor(_theme);
@@ -2446,7 +2422,7 @@ bool FolderWindow::ShowPreviewPropertiesForPath(Pane sourcePane, Pane hostPane, 
         return false;
     }
 
-    const char* jsonUtf8 = nullptr;
+    const char* jsonUtf8       = nullptr;
     const HRESULT hrProperties = io->GetItemProperties(path.c_str(), &jsonUtf8);
     if (FAILED(hrProperties) || ! jsonUtf8)
     {
@@ -2472,7 +2448,7 @@ bool FolderWindow::ShowPreviewPropertiesForPath(Pane sourcePane, Pane hostPane, 
     }
 
     ClearPreviewProperties(hostPane);
-    host.previewText = std::move(contentText);
+    host.previewText               = std::move(contentText);
     host.previewPropertiesCardMode = true;
     host.previewPropertiesScroll->SetVisible(true);
     host.previewPropertiesScroll->ScrollToTop();
@@ -2572,12 +2548,12 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
     }
 
     const D2D1_RECT_F bounds = host.previewPropertiesScroll->GetBounds();
-    const float viewportH = (std::max)(0.0f, bounds.bottom - bounds.top);
+    const float viewportH    = (std::max)(0.0f, bounds.bottom - bounds.top);
 
     auto applyLayout = [&](float width) noexcept -> float
     {
-        const float x = bounds.left;
-        float y       = bounds.top;
+        const float x     = bounds.left;
+        float y           = bounds.top;
         const float cardW = (std::max)(0.0f, width);
 
         auto addInterGroupGap = [&]() noexcept
@@ -2596,25 +2572,23 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
             }
 
             constexpr float kFieldColumnGap = 12.0f;
-            const float innerW = (std::max)(1.0f, sectionW - (kPreviewPropertiesPadX * 2.0f));
-            const bool stacked = innerW < 260.0f;
-            const float keyW = stacked ? innerW : (section.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f)
-                                                                    : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
+            const float innerW              = (std::max)(1.0f, sectionW - (kPreviewPropertiesPadX * 2.0f));
+            const bool stacked              = innerW < 260.0f;
+            const float keyW =
+                stacked ? innerW : (section.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f) : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
             const float valueW = stacked ? innerW : (std::max)(1.0f, innerW - keyW - kFieldColumnGap);
 
             float height = kPreviewPropertiesPadTop + kPreviewPropertiesPadBottom;
             for (const PreviewPropertiesFieldControls& row : section.fields)
             {
-                const float keyH = row.key ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
-                                                                                        row.key->GetText(),
-                                                                                        RedSalamander::DxUi::FontRole::BodyStrong,
-                                                                                        stacked ? innerW : keyW)
-                                           : kPreviewPropertiesRowH;
-                const float valueH = row.value ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
-                                                                                            row.value->GetText(),
-                                                                                            RedSalamander::DxUi::FontRole::Body,
-                                                                                            valueW)
-                                               : kPreviewPropertiesRowH;
+                const float keyH = row.key
+                                       ? MeasureItemPropertiesWrappedTextHeightDip(
+                                             host.previewContentHost, row.key->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, stacked ? innerW : keyW)
+                                       : kPreviewPropertiesRowH;
+                const float valueH =
+                    row.value
+                        ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
+                        : kPreviewPropertiesRowH;
                 height += stacked ? ((std::max)(kPreviewPropertiesRowH, keyH) + (std::max)(kPreviewPropertiesRowH, valueH) + 4.0f)
                                   : (std::max)(kPreviewPropertiesRowH, (std::max)(keyH, valueH) + 4.0f);
             }
@@ -2629,25 +2603,23 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
             }
 
             constexpr float kFieldColumnGap = 12.0f;
-            const float innerW = (std::max)(1.0f, cardRect.right - cardRect.left - (kPreviewPropertiesPadX * 2.0f));
-            const bool stacked = innerW < 260.0f;
-            const float keyW = stacked ? innerW : (section.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f)
-                                                                    : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
+            const float innerW              = (std::max)(1.0f, cardRect.right - cardRect.left - (kPreviewPropertiesPadX * 2.0f));
+            const bool stacked              = innerW < 260.0f;
+            const float keyW =
+                stacked ? innerW : (section.compact ? (std::clamp)(innerW * 0.34f, 72.0f, 104.0f) : (std::clamp)(innerW * 0.30f, 120.0f, 210.0f));
             const float valueW = stacked ? innerW : (std::max)(1.0f, innerW - keyW - kFieldColumnGap);
 
             float rowY = cardRect.top + kPreviewPropertiesPadTop;
             for (PreviewPropertiesFieldControls& row : section.fields)
             {
-                const float keyH = row.key ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
-                                                                                        row.key->GetText(),
-                                                                                        RedSalamander::DxUi::FontRole::BodyStrong,
-                                                                                        stacked ? innerW : keyW)
-                                           : kPreviewPropertiesRowH;
-                const float valueH = row.value ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost,
-                                                                                            row.value->GetText(),
-                                                                                            RedSalamander::DxUi::FontRole::Body,
-                                                                                            valueW)
-                                               : kPreviewPropertiesRowH;
+                const float keyH = row.key
+                                       ? MeasureItemPropertiesWrappedTextHeightDip(
+                                             host.previewContentHost, row.key->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, stacked ? innerW : keyW)
+                                       : kPreviewPropertiesRowH;
+                const float valueH =
+                    row.value
+                        ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
+                        : kPreviewPropertiesRowH;
                 const float rowH = stacked ? ((std::max)(kPreviewPropertiesRowH, keyH) + (std::max)(kPreviewPropertiesRowH, valueH) + 4.0f)
                                            : (std::max)(kPreviewPropertiesRowH, (std::max)(keyH, valueH) + 4.0f);
                 if (stacked)
@@ -2655,13 +2627,12 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
                     const float keyRowH = (std::max)(kPreviewPropertiesRowH, keyH);
                     if (row.key)
                     {
-                        row.key->SetBounds(
-                            D2D1::RectF(cardRect.left + kPreviewPropertiesPadX, rowY, cardRect.right - kPreviewPropertiesPadX, rowY + keyRowH));
+                        row.key->SetBounds(D2D1::RectF(cardRect.left + kPreviewPropertiesPadX, rowY, cardRect.right - kPreviewPropertiesPadX, rowY + keyRowH));
                     }
                     if (row.value)
                     {
-                        row.value->SetBounds(D2D1::RectF(
-                            cardRect.left + kPreviewPropertiesPadX, rowY + keyRowH, cardRect.right - kPreviewPropertiesPadX, rowY + rowH));
+                        row.value->SetBounds(
+                            D2D1::RectF(cardRect.left + kPreviewPropertiesPadX, rowY + keyRowH, cardRect.right - kPreviewPropertiesPadX, rowY + rowH));
                     }
                 }
                 else
@@ -2669,10 +2640,8 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
                     const float valueLeft = cardRect.left + kPreviewPropertiesPadX + keyW + kFieldColumnGap;
                     if (row.key)
                     {
-                        row.key->SetBounds(D2D1::RectF(cardRect.left + kPreviewPropertiesPadX,
-                                                       rowY,
-                                                       cardRect.left + kPreviewPropertiesPadX + keyW,
-                                                       rowY + rowH));
+                        row.key->SetBounds(
+                            D2D1::RectF(cardRect.left + kPreviewPropertiesPadX, rowY, cardRect.left + kPreviewPropertiesPadX + keyW, rowY + rowH));
                     }
                     if (row.value)
                     {
@@ -2687,8 +2656,8 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
         while (sectionIndex < host.previewPropertiesSections.size())
         {
             PreviewPropertiesSectionControls& section = host.previewPropertiesSections[sectionIndex];
-            const bool pairWithNext = sectionIndex + 1u < host.previewPropertiesSections.size() && section.compact &&
-                                      host.previewPropertiesSections[sectionIndex + 1u].compact && cardW >= kPreviewPropertiesTwoColumnMinW;
+            const bool pairWithNext                   = sectionIndex + 1u < host.previewPropertiesSections.size() && section.compact &&
+                                                        host.previewPropertiesSections[sectionIndex + 1u].compact && cardW >= kPreviewPropertiesTwoColumnMinW;
 
             addInterGroupGap();
             if (pairWithNext)
@@ -2716,7 +2685,7 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
             }
 
             const float cardTop = y + kPreviewPropertiesSectionTitleH + kPreviewPropertiesTitleGap;
-            const float cardH = sectionCardHeight(section, cardW);
+            const float cardH   = sectionCardHeight(section, cardW);
             if (section.title)
             {
                 section.title->SetBounds(D2D1::RectF(x, y, x + cardW, y + kPreviewPropertiesSectionTitleH));
@@ -2790,10 +2759,8 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
         }
     }
 
-    ItemPropertiesOpenStreamCallback openStream = [this,
-                                                   fileSystem,
-                                                   fileSystemName = std::move(fileSystemName),
-                                                   itemPath = path](std::wstring_view streamName) noexcept -> HRESULT
+    ItemPropertiesOpenStreamCallback openStream =
+        [this, fileSystem, fileSystemName = std::move(fileSystemName), itemPath = path](std::wstring_view streamName) noexcept -> HRESULT
     {
         if (! fileSystem)
         {

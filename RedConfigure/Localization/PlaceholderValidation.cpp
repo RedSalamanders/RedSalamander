@@ -32,8 +32,7 @@ namespace
             const wchar_t ch = text[pos];
             if (std::iswalpha(static_cast<wint_t>(ch)) != 0)
             {
-                return ch == L's' || ch == L'S' || ch == L'd' || ch == L'i' || ch == L'u' || ch == L'x' || ch == L'X' || ch == L'f' ||
-                       ch == L'c' || ch == L'C';
+                return ch == L's' || ch == L'S' || ch == L'd' || ch == L'i' || ch == L'u' || ch == L'x' || ch == L'X' || ch == L'f' || ch == L'c' || ch == L'C';
             }
             if (ch == L'{' || ch == L'}' || std::iswspace(static_cast<wint_t>(ch)) != 0)
             {

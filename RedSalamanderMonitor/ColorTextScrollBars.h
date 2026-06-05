@@ -19,21 +19,19 @@ struct ColorTextScrollBarInputs
 
 struct ColorTextScrollBarState
 {
-    bool verticalVisible      = false;
-    bool horizontalVisible    = false;
-    float viewportWidthDip    = 0.0f;
-    float viewportHeightDip   = 0.0f;
-    float verticalPageDip     = 0.0f;
-    float horizontalPageDip   = 0.0f;
-    float textAvailableDip    = 0.0f;
+    bool verticalVisible    = false;
+    bool horizontalVisible  = false;
+    float viewportWidthDip  = 0.0f;
+    float viewportHeightDip = 0.0f;
+    float verticalPageDip   = 0.0f;
+    float horizontalPageDip = 0.0f;
+    float textAvailableDip  = 0.0f;
 };
 
 [[nodiscard]] inline ColorTextScrollBarState ComputeColorTextViewScrollBars(const ColorTextScrollBarInputs& inputs) noexcept
 {
-    const float noScrollWidthDip =
-        (std::max)(0.0f, inputs.clientWidthDip + (inputs.currentVerticalVisible ? inputs.verticalScrollbarWidthDip : 0.0f));
-    const float noScrollHeightDip =
-        (std::max)(0.0f, inputs.clientHeightDip + (inputs.currentHorizontalVisible ? inputs.horizontalScrollbarHeightDip : 0.0f));
+    const float noScrollWidthDip  = (std::max)(0.0f, inputs.clientWidthDip + (inputs.currentVerticalVisible ? inputs.verticalScrollbarWidthDip : 0.0f));
+    const float noScrollHeightDip = (std::max)(0.0f, inputs.clientHeightDip + (inputs.currentHorizontalVisible ? inputs.horizontalScrollbarHeightDip : 0.0f));
 
     bool verticalVisible   = false;
     bool horizontalVisible = false;

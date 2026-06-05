@@ -29,11 +29,8 @@ struct ThemePreviewHitCandidate
 [[nodiscard]] std::span<const PageDefinition> GetPageDefinitions() noexcept;
 [[nodiscard]] std::filesystem::path ResolveWorkspaceRootForLaunchPath(const std::filesystem::path& startPath);
 [[nodiscard]] std::vector<std::wstring> FilterThemeColorKeys(std::span<const std::wstring> keys, std::wstring_view filterText);
-[[nodiscard]] std::wstring SelectThemePreviewHitKey(std::span<const ThemePreviewHitCandidate> candidates,
-                                                     float x,
-                                                     float y,
-                                                     std::wstring_view previousKey);
+[[nodiscard]] std::wstring SelectThemePreviewHitKey(std::span<const ThemePreviewHitCandidate> candidates, float x, float y, std::wstring_view previousKey);
 [[nodiscard]] std::vector<std::wstring> BuildThemeColorSuggestions(std::wstring_view selectedKey,
-                                                                    std::wstring_view previousKey,
-                                                                    std::optional<uint32_t> currentColor);
+                                                                   std::wstring_view previousKey,
+                                                                   std::optional<uint32_t> currentColor);
 } // namespace RedConfigure

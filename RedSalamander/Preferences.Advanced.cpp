@@ -32,11 +32,9 @@ using PrefsConnections::MaybeResetWorkingConnectionsSettingsIfEmpty;
 using PrefsFileOperations::EnsureWorkingFileOperationsSettings;
 using PrefsFileOperations::GetFileOperationsSettingsOrDefault;
 using PrefsFileOperations::MaybeResetWorkingFileOperationsSettingsIfEmpty;
-using PrefsMonitor::EnsureWorkingMonitorSettings;
-using PrefsMonitor::GetMonitorSettingsOrDefault;
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::ButtonVariant;
 using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
 using RedSalamander::DxUi::FontRole;
 using RedSalamander::DxUi::Label;
 using RedSalamander::DxUi::Panel;
@@ -44,109 +42,66 @@ using RedSalamander::DxUi::TextField;
 using RedSalamander::DxUi::ThemePalette;
 using RedSalamander::DxUi::Toggle;
 
-using HwndMember = wil::unique_hwnd PreferencesDialogState::*;
-
-constexpr std::array<UINT, 4> kAdvancedHeaderStringIds = {{
+constexpr std::array<UINT, 3> kAdvancedHeaderStringIds = {{
     IDS_PREFS_ADV_HEADER_CONNECTIONS_HELLO,
-    IDS_PREFS_ADV_HEADER_MONITOR,
     IDS_PREFS_ADV_HEADER_CACHE,
     IDS_PREFS_ADV_HEADER_FILEOPS,
 }};
 
-constexpr std::array<UINT, 15> kAdvancedToggleLabelStringIds = {{
+constexpr std::array<UINT, 4> kAdvancedToggleLabelStringIds = {{
     IDS_PREFS_ADV_LABEL_CONNECTIONS_BYPASS_HELLO,
     IDS_PREFS_ADV_LABEL_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION,
-    IDS_PREFS_ADV_LABEL_TOOLBAR,
-    IDS_PREFS_ADV_LABEL_LINE_NUMBERS,
-    IDS_PREFS_ADV_LABEL_ALWAYS_ON_TOP,
-    IDS_PREFS_ADV_LABEL_SHOW_IDS,
-    IDS_PREFS_ADV_LABEL_AUTO_SCROLL,
-    IDS_PREFS_ADV_LABEL_FILTER_TEXT,
-    IDS_PREFS_ADV_LABEL_FILTER_ERROR,
-    IDS_PREFS_ADV_LABEL_FILTER_WARNING,
-    IDS_PREFS_ADV_LABEL_FILTER_INFO,
-    IDS_PREFS_ADV_LABEL_FILTER_PERF,
-    IDS_PREFS_ADV_LABEL_FILTER_DEBUG,
     IDS_PREFS_ADV_LABEL_FILEOPS_DIAG_INFO,
     IDS_PREFS_ADV_LABEL_FILEOPS_DIAG_DEBUG,
 }};
 
-constexpr std::array<UINT, 15> kAdvancedToggleDescriptionStringIds = {{
+constexpr std::array<UINT, 4> kAdvancedToggleDescriptionStringIds = {{
     IDS_PREFS_ADV_DESC_CONNECTIONS_BYPASS_HELLO,
     IDS_PREFS_ADV_DESC_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION,
-    IDS_PREFS_ADV_DESC_TOOLBAR,
-    IDS_PREFS_ADV_DESC_LINE_NUMBERS,
-    IDS_PREFS_ADV_DESC_ALWAYS_ON_TOP,
-    IDS_PREFS_ADV_DESC_SHOW_IDS,
-    IDS_PREFS_ADV_DESC_AUTO_SCROLL,
-    IDS_PREFS_ADV_DESC_FILTER_TEXT,
-    IDS_PREFS_ADV_DESC_FILTER_ERROR,
-    IDS_PREFS_ADV_DESC_FILTER_WARNING,
-    IDS_PREFS_ADV_DESC_FILTER_INFO,
-    IDS_PREFS_ADV_DESC_FILTER_PERF,
-    IDS_PREFS_ADV_DESC_FILTER_DEBUG,
     IDS_PREFS_ADV_DESC_FILEOPS_DIAG_INFO,
     IDS_PREFS_ADV_DESC_FILEOPS_DIAG_DEBUG,
 }};
 
-constexpr std::array<UINT, 15> kAdvancedToggleCommandIds = {{
+constexpr std::array<UINT, 4> kAdvancedToggleCommandIds = {{
     IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE,
     IDC_PREFS_ADV_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_LINE_NUMBERS_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_ALWAYS_ON_TOP_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_SHOW_IDS_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_FILTER_ERROR_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_FILTER_WARNING_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_FILTER_INFO_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_FILTER_PERF_TOGGLE,
-    IDC_PREFS_ADV_MONITOR_FILTER_DEBUG_TOGGLE,
     IDC_PREFS_ADV_FILEOPS_DIAG_INFO_TOGGLE,
     IDC_PREFS_ADV_FILEOPS_DIAG_DEBUG_TOGGLE,
 }};
 
-constexpr std::array<UINT, 7> kAdvancedInputLabelStringIds = {{
+constexpr std::array<UINT, 5> kAdvancedInputLabelStringIds = {{
     IDS_PREFS_ADV_LABEL_CONNECTIONS_HELLO_TIMEOUT,
-    IDS_PREFS_ADV_LABEL_FILTER_PRESET,
-    IDS_PREFS_ADV_LABEL_FILTER_MASK,
     IDS_PREFS_ADV_LABEL_CACHE_DIR_MAX_BYTES,
     IDS_PREFS_ADV_LABEL_CACHE_DIR_MAX_WATCHERS,
     IDS_PREFS_ADV_LABEL_CACHE_DIR_MRU_WATCHED,
     IDS_PREFS_ADV_LABEL_FILEOPS_MAX_DIAG_LOG_FILES,
 }};
 
-constexpr std::array<UINT, 7> kAdvancedInputDescriptionStringIds = {{
+constexpr std::array<UINT, 5> kAdvancedInputDescriptionStringIds = {{
     IDS_PREFS_ADV_DESC_CONNECTIONS_HELLO_TIMEOUT,
-    IDS_PREFS_ADV_DESC_FILTER_PRESET,
-    IDS_PREFS_ADV_DESC_FILTER_MASK,
     IDS_PREFS_ADV_DESC_CACHE_DIR_MAX_BYTES,
     IDS_PREFS_ADV_DESC_CACHE_DIR_MAX_WATCHERS,
     IDS_PREFS_ADV_DESC_CACHE_DIR_MRU_WATCHED,
     IDS_PREFS_ADV_DESC_FILEOPS_MAX_DIAG_LOG_FILES,
 }};
 
-constexpr std::array<UINT, 6> kAdvancedEditCommandIds = {{
+constexpr std::array<UINT, 5> kAdvancedEditCommandIds = {{
     IDC_PREFS_ADV_CONNECTIONS_HELLO_TIMEOUT_EDIT,
-    IDC_PREFS_ADV_MONITOR_FILTER_MASK_EDIT,
     IDC_PREFS_ADV_CACHE_DIR_MAX_BYTES_EDIT,
     IDC_PREFS_ADV_CACHE_DIR_MAX_WATCHERS_EDIT,
     IDC_PREFS_ADV_CACHE_DIR_MRU_WATCHED_EDIT,
     IDC_PREFS_ADV_FILEOPS_MAX_DIAG_LOG_FILES_EDIT,
 }};
 
-constexpr std::array<size_t, 6> kAdvancedEditMaxChars = {{
+constexpr std::array<size_t, 5> kAdvancedEditMaxChars = {{
     10u,
-    2u,
     24u,
     10u,
     10u,
     10u,
 }};
 
-constexpr std::array<bool, 6> kAdvancedEditDigitsOnly = {{
-    true,
+constexpr std::array<bool, 5> kAdvancedEditDigitsOnly = {{
     true,
     false,
     true,
@@ -246,8 +201,15 @@ struct AdvancedInputCardPageDx
     CardPanel* card    = nullptr;
     Label* label       = nullptr;
     Label* description = nullptr;
-    ComboBox* combo    = nullptr;
     TextField* edit    = nullptr;
+};
+
+struct AdvancedLinkCardPageDx
+{
+    CardPanel* card    = nullptr;
+    Label* label       = nullptr;
+    Label* description = nullptr;
+    Button* link       = nullptr;
 };
 
 struct AdvancedDxPage
@@ -261,6 +223,7 @@ struct AdvancedDxPage
     std::array<Label*, kAdvancedHeaderStringIds.size()> headers{};
     std::array<AdvancedToggleCardPageDx, kAdvancedToggleLabelStringIds.size()> toggleCards{};
     std::array<AdvancedInputCardPageDx, kAdvancedInputLabelStringIds.size()> inputCards{};
+    AdvancedLinkCardPageDx settingsFileCard{};
 
     void Detach() noexcept
     {
@@ -273,6 +236,7 @@ struct AdvancedDxPage
         {
             inputCard = {};
         }
+        settingsFileCard = {};
     }
 };
 
@@ -405,52 +369,7 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
                     }
                     break;
                 }
-                default:
-                {
-                    if (auto* monitor = EnsureWorkingMonitorSettings(dialogState->workingSettings))
-                    {
-                        const auto updateFilterBit = [&](uint32_t bit) noexcept
-                        {
-                            monitor->filter.preset = Common::Settings::MonitorFilterPreset::Custom;
-                            uint32_t mask          = monitor->filter.mask & 63u;
-                            const uint32_t updated = checked ? (mask | bit) : (mask & ~bit);
-                            changed                = (mask != updated);
-                            monitor->filter.mask   = updated & 63u;
-                        };
-
-                        switch (commandId)
-                        {
-                            case IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE:
-                                changed                      = monitor->menu.toolbarVisible != checked;
-                                monitor->menu.toolbarVisible = checked;
-                                break;
-                            case IDC_PREFS_ADV_MONITOR_LINE_NUMBERS_TOGGLE:
-                                changed                          = monitor->menu.lineNumbersVisible != checked;
-                                monitor->menu.lineNumbersVisible = checked;
-                                break;
-                            case IDC_PREFS_ADV_MONITOR_ALWAYS_ON_TOP_TOGGLE:
-                                changed                   = monitor->menu.alwaysOnTop != checked;
-                                monitor->menu.alwaysOnTop = checked;
-                                break;
-                            case IDC_PREFS_ADV_MONITOR_SHOW_IDS_TOGGLE:
-                                changed               = monitor->menu.showIds != checked;
-                                monitor->menu.showIds = checked;
-                                break;
-                            case IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE:
-                                changed                  = monitor->menu.autoScroll != checked;
-                                monitor->menu.autoScroll = checked;
-                                break;
-                            case IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE: updateFilterBit(static_cast<uint32_t>(MonitorFilterBit::Text)); break;
-                            case IDC_PREFS_ADV_MONITOR_FILTER_ERROR_TOGGLE: updateFilterBit(static_cast<uint32_t>(MonitorFilterBit::Error)); break;
-                            case IDC_PREFS_ADV_MONITOR_FILTER_WARNING_TOGGLE: updateFilterBit(static_cast<uint32_t>(MonitorFilterBit::Warning)); break;
-                            case IDC_PREFS_ADV_MONITOR_FILTER_INFO_TOGGLE: updateFilterBit(static_cast<uint32_t>(MonitorFilterBit::Info)); break;
-                            case IDC_PREFS_ADV_MONITOR_FILTER_PERF_TOGGLE: updateFilterBit(static_cast<uint32_t>(MonitorFilterBit::Perf)); break;
-                            case IDC_PREFS_ADV_MONITOR_FILTER_DEBUG_TOGGLE: updateFilterBit(static_cast<uint32_t>(MonitorFilterBit::Debug)); break;
-                            default: break;
-                        }
-                    }
-                    break;
-                }
+                default: break;
             }
 
             if (changed)
@@ -466,7 +385,6 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
 
     std::array<bool*, kAdvancedEditCommandIds.size()> syncFlags = {
         &_syncingDxHelloTimeoutEdit,
-        &_syncingDxMonitorFilterMaskEdit,
         &_syncingDxCacheDirectoryInfoMaxBytesEdit,
         &_syncingDxCacheDirectoryInfoMaxWatchersEdit,
         &_syncingDxCacheDirectoryInfoMruWatchedEdit,
@@ -484,61 +402,6 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
         card.description->SetFontRole(FontRole::Small);
         card.description->SetMultiline(true);
 
-        if (i == 1u)
-        {
-            card.combo = root->AddChild<ComboBox>();
-            card.combo->SetVariant(ComboBoxVariant::Window);
-            card.combo->SetOnSelectionChanged([this, host = parent](size_t itemIndex) noexcept
-            {
-                if (_syncingDxMonitorFilterPresetCombo || ! host || IsWindow(host) == FALSE)
-                {
-                    return;
-                }
-
-                auto* dialogState = PrefsUi::GetDialogState(host);
-                if (! dialogState)
-                {
-                    return;
-                }
-
-                // Map itemIndex to MonitorFilterPreset (combo order: Custom=0, ErrorsOnly=1, ErrorsWarnings=2, AllTypes=3)
-                constexpr std::array<Common::Settings::MonitorFilterPreset, 4> kPresetOrder = {{
-                    Common::Settings::MonitorFilterPreset::Custom,
-                    Common::Settings::MonitorFilterPreset::ErrorsOnly,
-                    Common::Settings::MonitorFilterPreset::ErrorsWarnings,
-                    Common::Settings::MonitorFilterPreset::AllTypes,
-                }};
-                if (itemIndex >= kPresetOrder.size())
-                {
-                    return;
-                }
-
-                auto* monitor = EnsureWorkingMonitorSettings(dialogState->workingSettings);
-                if (! monitor)
-                {
-                    return;
-                }
-
-                const auto preset      = kPresetOrder[itemIndex];
-                monitor->filter.preset = preset;
-                switch (preset)
-                {
-                    case Common::Settings::MonitorFilterPreset::ErrorsOnly: monitor->filter.mask = static_cast<uint32_t>(MonitorFilterBit::Error); break;
-                    case Common::Settings::MonitorFilterPreset::ErrorsWarnings:
-                        monitor->filter.mask = MonitorFilterBit::Error | MonitorFilterBit::Warning;
-                        break;
-                    case Common::Settings::MonitorFilterPreset::AllTypes:
-                        monitor->filter.mask = MonitorFilterBit::Text | MonitorFilterBit::Error | MonitorFilterBit::Warning | MonitorFilterBit::Info |
-                                               MonitorFilterBit::Perf | MonitorFilterBit::Debug;
-                        break;
-                    case Common::Settings::MonitorFilterPreset::Custom:
-                    default: break;
-                }
-                SetDirty(GetParent(host), *dialogState);
-                Refresh(host, *dialogState);
-            });
-        }
-        else
         {
             const size_t currentEditIndex = editIndex;
             card.edit                     = root->AddChild<TextField>();
@@ -604,20 +467,6 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
                             changed                                      = (connections->windowsHelloReauthTimeoutMinute != value);
                             connections->windowsHelloReauthTimeoutMinute = value;
                             MaybeResetWorkingConnectionsSettingsIfEmpty(dialogState->workingSettings);
-                        }
-                        break;
-                    }
-                    case IDC_PREFS_ADV_MONITOR_FILTER_MASK_EDIT:
-                    {
-                        const auto valueOpt = PrefsUi::TryParseUInt32(normalized);
-                        if (! valueOpt.has_value() || valueOpt.value() > 63u)
-                        {
-                            break;
-                        }
-                        if (auto* monitor = EnsureWorkingMonitorSettings(dialogState->workingSettings))
-                        {
-                            changed              = (monitor->filter.mask != valueOpt.value());
-                            monitor->filter.mask = valueOpt.value();
                         }
                         break;
                     }
@@ -787,21 +636,6 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
                         }
                         break;
                     }
-                    case IDC_PREFS_ADV_MONITOR_FILTER_MASK_EDIT:
-                    {
-                        const std::wstring text{field ? field->GetText() : std::wstring_view{}};
-                        const auto valueOpt = PrefsUi::TryParseUInt32(text);
-                        if (valueOpt.has_value())
-                        {
-                            const uint32_t value = std::min(valueOpt.value(), 63u);
-                            if (auto* monitor = EnsureWorkingMonitorSettings(dialogState->workingSettings))
-                            {
-                                changed              = (monitor->filter.mask != value);
-                                monitor->filter.mask = value;
-                            }
-                        }
-                        break;
-                    }
                     case IDC_PREFS_ADV_CACHE_DIR_MAX_BYTES_EDIT:
                     {
                         const std::wstring text{field ? field->GetText() : std::wstring_view{}};
@@ -936,6 +770,34 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
     }
 
     {
+        auto& card = dxState->page.settingsFileCard;
+        card.card  = root->AddChild<CardPanel>();
+        card.label = root->AddChild<Label>();
+        card.label->SetFontRole(FontRole::Body);
+        card.description = root->AddChild<Label>();
+        card.description->SetFontRole(FontRole::Small);
+        card.description->SetMultiline(true);
+        card.link = root->AddChild<Button>();
+        card.link->SetVariant(ButtonVariant::Hyperlink);
+        card.link->SetOnClick([host = parent]() noexcept
+        {
+            if (! host || IsWindow(host) == FALSE)
+            {
+                return;
+            }
+
+            if (HWND dlg = GetParent(host))
+            {
+                if (PostMessageW(dlg, WM_COMMAND, MAKEWPARAM(IDC_PREFS_ADV_OPEN_SETTINGS_FILE, 0), 0) == FALSE)
+                {
+                    static_cast<void>(Debug::ErrorWithLastError(L"Preferences.Advanced: PostMessageW failed for settings-file link"));
+                }
+            }
+        });
+        card.label->SetMnemonicTarget(card.link);
+    }
+
+    {
         AdvancedDxPage& page = dxState->page;
         std::vector<RedSalamander::DxUi::Control*> orderedChildren;
         orderedChildren.reserve(_pageContentRoot->DebugChildCount());
@@ -955,8 +817,7 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
             orderedChildren.push_back(page.inputCards[index].card);
             orderedChildren.push_back(page.inputCards[index].label);
             orderedChildren.push_back(page.inputCards[index].description);
-            orderedChildren.push_back(page.inputCards[index].combo ? static_cast<RedSalamander::DxUi::Control*>(page.inputCards[index].combo)
-                                                                   : static_cast<RedSalamander::DxUi::Control*>(page.inputCards[index].edit));
+            orderedChildren.push_back(page.inputCards[index].edit);
         };
 
         appendHeader(0u);
@@ -965,29 +826,18 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
         appendInputCard(0u);
 
         appendHeader(1u);
-        appendToggleCard(2u);
-        appendToggleCard(3u);
-        appendToggleCard(4u);
-        appendToggleCard(5u);
-        appendToggleCard(6u);
         appendInputCard(1u);
         appendInputCard(2u);
-        appendToggleCard(7u);
-        appendToggleCard(8u);
-        appendToggleCard(9u);
-        appendToggleCard(10u);
-        appendToggleCard(11u);
-        appendToggleCard(12u);
+        appendInputCard(3u);
 
         appendHeader(2u);
-        appendInputCard(3u);
         appendInputCard(4u);
-        appendInputCard(5u);
-
-        appendHeader(3u);
-        appendInputCard(6u);
-        appendToggleCard(13u);
-        appendToggleCard(14u);
+        appendToggleCard(2u);
+        appendToggleCard(3u);
+        orderedChildren.push_back(page.settingsFileCard.card);
+        orderedChildren.push_back(page.settingsFileCard.label);
+        orderedChildren.push_back(page.settingsFileCard.description);
+        orderedChildren.push_back(page.settingsFileCard.link);
 
         ReorderPanelChildren(_pageContentRoot, orderedChildren);
     }
@@ -1035,11 +885,8 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
 
     const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
     const auto& connections    = GetConnectionsSettingsOrDefault(state.workingSettings);
-    const auto& monitor        = GetMonitorSettingsOrDefault(state.workingSettings);
     const auto& cache          = GetCacheSettingsOrDefault(state.workingSettings);
     const auto& fileOperations = GetFileOperationsSettingsOrDefault(state.workingSettings);
-    const uint32_t mask        = monitor.filter.mask & 63u;
-    const bool customFilter    = (monitor.filter.preset == Common::Settings::MonitorFilterPreset::Custom);
 
     for (size_t i = 0; i < kAdvancedHeaderStringIds.size(); ++i)
     {
@@ -1053,17 +900,6 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
     const std::array<bool, kAdvancedToggleLabelStringIds.size()> toggleChecked = {{
         connections.bypassWindowsHello,
         connections.allowInsecureTlsInAutomation,
-        monitor.menu.toolbarVisible,
-        monitor.menu.lineNumbersVisible,
-        monitor.menu.alwaysOnTop,
-        monitor.menu.showIds,
-        monitor.menu.autoScroll,
-        HasFlag(mask, MonitorFilterBit::Text),
-        HasFlag(mask, MonitorFilterBit::Error),
-        HasFlag(mask, MonitorFilterBit::Warning),
-        HasFlag(mask, MonitorFilterBit::Info),
-        HasFlag(mask, MonitorFilterBit::Perf),
-        HasFlag(mask, MonitorFilterBit::Debug),
         fileOperations.diagnosticsInfoEnabled,
         fileOperations.diagnosticsDebugEnabled,
     }};
@@ -1071,17 +907,6 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
     const std::array<bool, kAdvancedToggleLabelStringIds.size()> toggleEnabled = {{
         true,
         true,
-        true,
-        true,
-        true,
-        true,
-        true,
-        customFilter,
-        customFilter,
-        customFilter,
-        customFilter,
-        customFilter,
-        customFilter,
         true,
         true,
     }};
@@ -1114,8 +939,6 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
     const std::array<bool, kAdvancedInputLabelStringIds.size()> inputEnabled = {{
         true,
         true,
-        customFilter,
-        true,
         true,
         true,
         true,
@@ -1137,51 +960,6 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         }
     }
 
-    if (_dxState->page.inputCards[1].combo)
-    {
-        constexpr std::array<UINT, 4> kPresetStringIds = {{
-            IDS_PREFS_ADV_FILTER_CUSTOM,
-            IDS_PREFS_ADV_FILTER_ERRORS_ONLY,
-            IDS_PREFS_ADV_FILTER_ERRORS_WARNINGS,
-            IDS_PREFS_ADV_FILTER_ALL_TYPES,
-        }};
-
-        std::vector<ComboBox::Item> items;
-        items.reserve(kPresetStringIds.size());
-        for (const auto stringId : kPresetStringIds)
-        {
-            const std::wstring label = LoadStringResource(nullptr, stringId);
-            items.push_back(ComboBox::Item{label, label});
-        }
-
-        constexpr std::array<Common::Settings::MonitorFilterPreset, 4> kPresetOrder = {{
-            Common::Settings::MonitorFilterPreset::Custom,
-            Common::Settings::MonitorFilterPreset::ErrorsOnly,
-            Common::Settings::MonitorFilterPreset::ErrorsWarnings,
-            Common::Settings::MonitorFilterPreset::AllTypes,
-        }};
-
-        std::optional<size_t> selectedIndex;
-        for (size_t i = 0; i < kPresetOrder.size(); ++i)
-        {
-            if (kPresetOrder[i] == monitor.filter.preset)
-            {
-                selectedIndex = i;
-                break;
-            }
-        }
-
-        _syncingDxMonitorFilterPresetCombo = true;
-        _dxState->page.inputCards[1].combo->SetItems(std::move(items));
-        _dxState->page.inputCards[1].combo->SetSelectedIndex(selectedIndex);
-        _dxState->page.inputCards[1].combo->SetEnabled(true);
-        _syncingDxMonitorFilterPresetCombo = false;
-        if (_pageHostDx)
-        {
-            _pageHostDx->Invalidate();
-        }
-    }
-
     const auto syncEditDirect = [](TextField* field, const std::wstring& text, bool enabled, bool& syncFlag) noexcept
     {
         if (! field)
@@ -1200,16 +978,12 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         syncEditDirect(_dxState->page.inputCards[0].edit, helloTimeoutText, true, _syncingDxHelloTimeoutEdit);
     }
     {
-        const std::wstring maskText = std::to_wstring(mask);
-        syncEditDirect(_dxState->page.inputCards[2].edit, maskText, customFilter, _syncingDxMonitorFilterMaskEdit);
-    }
-    {
         std::wstring cacheBytesText;
         if (cache.directoryInfo.maxBytes.has_value() && cache.directoryInfo.maxBytes.value() > 0)
         {
             cacheBytesText = FormatCacheBytes(cache.directoryInfo.maxBytes.value());
         }
-        syncEditDirect(_dxState->page.inputCards[3].edit, cacheBytesText, true, _syncingDxCacheDirectoryInfoMaxBytesEdit);
+        syncEditDirect(_dxState->page.inputCards[1].edit, cacheBytesText, true, _syncingDxCacheDirectoryInfoMaxBytesEdit);
     }
     {
         std::wstring maxWatchersText;
@@ -1217,7 +991,7 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         {
             maxWatchersText = std::to_wstring(cache.directoryInfo.maxWatchers.value());
         }
-        syncEditDirect(_dxState->page.inputCards[4].edit, maxWatchersText, true, _syncingDxCacheDirectoryInfoMaxWatchersEdit);
+        syncEditDirect(_dxState->page.inputCards[2].edit, maxWatchersText, true, _syncingDxCacheDirectoryInfoMaxWatchersEdit);
     }
     {
         std::wstring mruWatchedText;
@@ -1225,11 +999,26 @@ void AdvancedPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         {
             mruWatchedText = std::to_wstring(cache.directoryInfo.mruWatched.value());
         }
-        syncEditDirect(_dxState->page.inputCards[5].edit, mruWatchedText, true, _syncingDxCacheDirectoryInfoMruWatchedEdit);
+        syncEditDirect(_dxState->page.inputCards[3].edit, mruWatchedText, true, _syncingDxCacheDirectoryInfoMruWatchedEdit);
     }
     {
         const std::wstring maxLogFilesText = std::to_wstring(fileOperations.maxDiagnosticsLogFiles);
-        syncEditDirect(_dxState->page.inputCards[6].edit, maxLogFilesText, true, _syncingDxFileOperationsMaxDiagnosticsLogFilesEdit);
+        syncEditDirect(_dxState->page.inputCards[4].edit, maxLogFilesText, true, _syncingDxFileOperationsMaxDiagnosticsLogFilesEdit);
+    }
+    if (_dxState->page.settingsFileCard.label)
+    {
+        _dxState->page.settingsFileCard.label->SetText(LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_SETTINGS_FILE));
+        _dxState->page.settingsFileCard.label->SetTextColor(std::nullopt);
+    }
+    if (_dxState->page.settingsFileCard.description)
+    {
+        _dxState->page.settingsFileCard.description->SetText(LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_SETTINGS_FILE));
+        _dxState->page.settingsFileCard.description->SetTextColor(palette.subduedText);
+    }
+    if (_dxState->page.settingsFileCard.link)
+    {
+        _dxState->page.settingsFileCard.link->SetText(LoadStringResource(nullptr, IDS_PREFS_ADV_OPEN_SETTINGS_FILE_LINK));
+        _dxState->page.settingsFileCard.link->SetEnabled(true);
     }
     if (_pageHostDx)
     {
@@ -1367,60 +1156,6 @@ void AdvancedPane::LayoutDxPage(
         y += cardHeight + cardSpacingY;
     };
 
-    auto layoutFramedComboCard =
-        [&](std::wstring_view labelText, std::wstring_view descText, CardPanel* dxCard, Label* dxLabel, Label* dxDescription, ComboBox* dxCombo) noexcept
-    {
-        const int desiredWidth = static_cast<int>(
-            std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
-                                                                       .preferredExtent = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
-                                                                       .maxExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMaxEditWidthDip))},
-                                                                      static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
-
-        const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - desiredWidth);
-        const int descHeight = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
-
-        const int contentHeight = std::max(0, titleHeight + cardGapY + descHeight);
-        const int cardHeight    = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
-
-        RECT card{};
-        card.left   = x;
-        card.top    = y;
-        card.right  = x + width;
-        card.bottom = y + cardHeight;
-        state.pageSettingCards.push_back(card);
-
-        if (dxCard)
-        {
-            dxCard->SetBounds(D2D1::RectF(pxToDip(card.left), pxToDip(card.top), pxToDip(card.right), pxToDip(card.bottom)));
-        }
-        if (dxLabel)
-        {
-            dxLabel->SetText(std::wstring(labelText));
-            dxLabel->SetMnemonicTarget(dxCombo);
-            dxLabel->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
-                                           pxToDip(card.top + cardPaddingY),
-                                           pxToDip(card.left + cardPaddingX + textWidth),
-                                           pxToDip(card.top + cardPaddingY + titleHeight)));
-        }
-        if (dxDescription)
-        {
-            dxDescription->SetText(std::wstring(descText));
-            dxDescription->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
-                                                 pxToDip(card.top + cardPaddingY + titleHeight + cardGapY),
-                                                 pxToDip(card.left + cardPaddingX + textWidth),
-                                                 pxToDip(card.top + cardPaddingY + titleHeight + cardGapY + descHeight)));
-        }
-        if (dxCombo)
-        {
-            dxCombo->SetBounds(D2D1::RectF(pxToDip(card.right - cardPaddingX - desiredWidth),
-                                           pxToDip(card.top + (cardHeight - rowHeight) / 2),
-                                           pxToDip(card.right - cardPaddingX),
-                                           pxToDip(card.top + (cardHeight - rowHeight) / 2 + rowHeight)));
-        }
-
-        y += cardHeight + cardSpacingY;
-    };
-
     auto layoutEditCard = [&](std::wstring_view labelText,
                               int desiredWidth,
                               std::wstring_view descText,
@@ -1477,6 +1212,62 @@ void AdvancedPane::LayoutDxPage(
         y += cardHeight + cardSpacingY;
     };
 
+    auto layoutLinkCard = [&](std::wstring_view labelText,
+                              std::wstring_view descText,
+                              std::wstring_view linkText,
+                              CardPanel* dxCard,
+                              Label* dxLabel,
+                              Label* dxDescription,
+                              Button* dxButton) noexcept
+    {
+        const int textWidth       = std::max(0, width - 2 * cardPaddingX);
+        const int descHeight      = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
+        const int measuredWidth   = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, linkText) + UiMetrics::ScaleDip(dpi, 24);
+        const int linkWidth       = std::max(1, std::min(textWidth, measuredWidth));
+        const int contentHeight   = titleHeight + cardGapY + descHeight + cardGapY + rowHeight;
+        const int cardHeight      = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
+        const int linkTop         = y + cardPaddingY + titleHeight + cardGapY + descHeight + cardGapY;
+
+        RECT card{};
+        card.left   = x;
+        card.top    = y;
+        card.right  = x + width;
+        card.bottom = y + cardHeight;
+        state.pageSettingCards.push_back(card);
+
+        if (dxCard)
+        {
+            dxCard->SetBounds(D2D1::RectF(pxToDip(card.left), pxToDip(card.top), pxToDip(card.right), pxToDip(card.bottom)));
+        }
+        if (dxLabel)
+        {
+            dxLabel->SetText(std::wstring(labelText));
+            dxLabel->SetMnemonicTarget(dxButton);
+            dxLabel->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                           pxToDip(card.top + cardPaddingY),
+                                           pxToDip(card.left + cardPaddingX + textWidth),
+                                           pxToDip(card.top + cardPaddingY + titleHeight)));
+        }
+        if (dxDescription)
+        {
+            dxDescription->SetText(std::wstring(descText));
+            dxDescription->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                 pxToDip(card.top + cardPaddingY + titleHeight + cardGapY),
+                                                 pxToDip(card.left + cardPaddingX + textWidth),
+                                                 pxToDip(card.top + cardPaddingY + titleHeight + cardGapY + descHeight)));
+        }
+        if (dxButton)
+        {
+            dxButton->SetText(std::wstring(linkText));
+            dxButton->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                            pxToDip(linkTop),
+                                            pxToDip(card.left + cardPaddingX + linkWidth),
+                                            pxToDip(linkTop + rowHeight)));
+        }
+
+        y += cardHeight + cardSpacingY;
+    };
+
     const std::wstring labelBypassHelloText                = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_BYPASS_HELLO);
     const std::wstring labelAllowInsecureTlsAutomationText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION);
     const std::wstring labelHelloTimeoutText               = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_HELLO_TIMEOUT);
@@ -1507,119 +1298,6 @@ void AdvancedPane::LayoutDxPage(
 
     y += gapY;
 
-    const std::wstring labelToolbarText      = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_TOOLBAR);
-    const std::wstring labelLineNumbersText  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_LINE_NUMBERS);
-    const std::wstring labelAlwaysOnTopText  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_ALWAYS_ON_TOP);
-    const std::wstring labelShowIdsText      = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_SHOW_IDS);
-    const std::wstring labelAutoScrollText   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_AUTO_SCROLL);
-    const std::wstring labelFilterPresetText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_PRESET);
-    const std::wstring labelFilterMaskText   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_MASK);
-    const std::wstring labelFilterTextText   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_TEXT);
-    const std::wstring labelFilterErrorText  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_ERROR);
-    const std::wstring labelFilterWarnText   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_WARNING);
-    const std::wstring labelFilterInfoText   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_INFO);
-    const std::wstring labelFilterPerfText   = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_PERF);
-    const std::wstring labelFilterDebugText  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILTER_DEBUG);
-
-    const std::wstring descToolbarText      = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_TOOLBAR);
-    const std::wstring descLineNumbersText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_LINE_NUMBERS);
-    const std::wstring descAlwaysOnTopText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_ALWAYS_ON_TOP);
-    const std::wstring descShowIdsText      = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_SHOW_IDS);
-    const std::wstring descAutoScrollText   = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_AUTO_SCROLL);
-    const std::wstring descFilterPresetText = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_PRESET);
-    const std::wstring descFilterMaskText   = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_MASK);
-    const std::wstring descFilterTextText   = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_TEXT);
-    const std::wstring descFilterErrorText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_ERROR);
-    const std::wstring descFilterWarnText   = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_WARNING);
-    const std::wstring descFilterInfoText   = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_INFO);
-    const std::wstring descFilterPerfText   = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_PERF);
-    const std::wstring descFilterDebugText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILTER_DEBUG);
-
-    layoutToggleCard(labelToolbarText,
-                     descToolbarText,
-                     dxPage.toggleCards[2].card,
-                     dxPage.toggleCards[2].label,
-                     dxPage.toggleCards[2].description,
-                     dxPage.toggleCards[2].toggle);
-    layoutToggleCard(labelLineNumbersText,
-                     descLineNumbersText,
-                     dxPage.toggleCards[3].card,
-                     dxPage.toggleCards[3].label,
-                     dxPage.toggleCards[3].description,
-                     dxPage.toggleCards[3].toggle);
-    layoutToggleCard(labelAlwaysOnTopText,
-                     descAlwaysOnTopText,
-                     dxPage.toggleCards[4].card,
-                     dxPage.toggleCards[4].label,
-                     dxPage.toggleCards[4].description,
-                     dxPage.toggleCards[4].toggle);
-    layoutToggleCard(labelShowIdsText,
-                     descShowIdsText,
-                     dxPage.toggleCards[5].card,
-                     dxPage.toggleCards[5].label,
-                     dxPage.toggleCards[5].description,
-                     dxPage.toggleCards[5].toggle);
-    layoutToggleCard(labelAutoScrollText,
-                     descAutoScrollText,
-                     dxPage.toggleCards[6].card,
-                     dxPage.toggleCards[6].label,
-                     dxPage.toggleCards[6].description,
-                     dxPage.toggleCards[6].toggle);
-
-    layoutFramedComboCard(labelFilterPresetText,
-                          descFilterPresetText,
-                          dxPage.inputCards[1].card,
-                          dxPage.inputCards[1].label,
-                          dxPage.inputCards[1].description,
-                          dxPage.inputCards[1].combo);
-
-    layoutEditCard(labelFilterMaskText,
-                   UiMetrics::ScaleDip(dpi, kMinComboWidthDip),
-                   descFilterMaskText,
-                   dxPage.inputCards[2].card,
-                   dxPage.inputCards[2].label,
-                   dxPage.inputCards[2].description,
-                   dxPage.inputCards[2].edit);
-
-    layoutToggleCard(labelFilterTextText,
-                     descFilterTextText,
-                     dxPage.toggleCards[7].card,
-                     dxPage.toggleCards[7].label,
-                     dxPage.toggleCards[7].description,
-                     dxPage.toggleCards[7].toggle);
-    layoutToggleCard(labelFilterErrorText,
-                     descFilterErrorText,
-                     dxPage.toggleCards[8].card,
-                     dxPage.toggleCards[8].label,
-                     dxPage.toggleCards[8].description,
-                     dxPage.toggleCards[8].toggle);
-    layoutToggleCard(labelFilterWarnText,
-                     descFilterWarnText,
-                     dxPage.toggleCards[9].card,
-                     dxPage.toggleCards[9].label,
-                     dxPage.toggleCards[9].description,
-                     dxPage.toggleCards[9].toggle);
-    layoutToggleCard(labelFilterInfoText,
-                     descFilterInfoText,
-                     dxPage.toggleCards[10].card,
-                     dxPage.toggleCards[10].label,
-                     dxPage.toggleCards[10].description,
-                     dxPage.toggleCards[10].toggle);
-    layoutToggleCard(labelFilterPerfText,
-                     descFilterPerfText,
-                     dxPage.toggleCards[11].card,
-                     dxPage.toggleCards[11].label,
-                     dxPage.toggleCards[11].description,
-                     dxPage.toggleCards[11].toggle);
-    layoutToggleCard(labelFilterDebugText,
-                     descFilterDebugText,
-                     dxPage.toggleCards[12].card,
-                     dxPage.toggleCards[12].label,
-                     dxPage.toggleCards[12].description,
-                     dxPage.toggleCards[12].toggle);
-
-    y += gapY;
-
     const std::wstring labelCacheMaxBytesText    = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CACHE_DIR_MAX_BYTES);
     const std::wstring labelCacheMaxWatchersText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CACHE_DIR_MAX_WATCHERS);
     const std::wstring labelCacheMruWatchedText  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CACHE_DIR_MRU_WATCHED);
@@ -1631,24 +1309,24 @@ void AdvancedPane::LayoutDxPage(
     layoutEditCard(labelCacheMaxBytesText,
                    UiMetrics::ScaleDip(dpi, kMediumComboWidthDip),
                    descCacheMaxBytesText,
+                   dxPage.inputCards[1].card,
+                   dxPage.inputCards[1].label,
+                   dxPage.inputCards[1].description,
+                   dxPage.inputCards[1].edit);
+    layoutEditCard(labelCacheMaxWatchersText,
+                   UiMetrics::ScaleDip(dpi, kMinToggleWidthDip),
+                   descCacheMaxWatchersText,
+                   dxPage.inputCards[2].card,
+                   dxPage.inputCards[2].label,
+                   dxPage.inputCards[2].description,
+                   dxPage.inputCards[2].edit);
+    layoutEditCard(labelCacheMruWatchedText,
+                   UiMetrics::ScaleDip(dpi, kMinToggleWidthDip),
+                   descCacheMruWatchedText,
                    dxPage.inputCards[3].card,
                    dxPage.inputCards[3].label,
                    dxPage.inputCards[3].description,
                    dxPage.inputCards[3].edit);
-    layoutEditCard(labelCacheMaxWatchersText,
-                   UiMetrics::ScaleDip(dpi, kMinToggleWidthDip),
-                   descCacheMaxWatchersText,
-                   dxPage.inputCards[4].card,
-                   dxPage.inputCards[4].label,
-                   dxPage.inputCards[4].description,
-                   dxPage.inputCards[4].edit);
-    layoutEditCard(labelCacheMruWatchedText,
-                   UiMetrics::ScaleDip(dpi, kMinToggleWidthDip),
-                   descCacheMruWatchedText,
-                   dxPage.inputCards[5].card,
-                   dxPage.inputCards[5].label,
-                   dxPage.inputCards[5].description,
-                   dxPage.inputCards[5].edit);
 
     y += gapY;
 
@@ -1658,28 +1336,41 @@ void AdvancedPane::LayoutDxPage(
     layoutEditCard(labelMaxDiagnosticsLogFilesText,
                    UiMetrics::ScaleDip(dpi, kMinToggleWidthDip),
                    descMaxDiagnosticsLogFilesText,
-                   dxPage.inputCards[6].card,
-                   dxPage.inputCards[6].label,
-                   dxPage.inputCards[6].description,
-                   dxPage.inputCards[6].edit);
+                   dxPage.inputCards[4].card,
+                   dxPage.inputCards[4].label,
+                   dxPage.inputCards[4].description,
+                   dxPage.inputCards[4].edit);
 
     const std::wstring labelDiagnosticsInfoText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILEOPS_DIAG_INFO);
     const std::wstring descDiagnosticsInfoText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILEOPS_DIAG_INFO);
     layoutToggleCard(labelDiagnosticsInfoText,
                      descDiagnosticsInfoText,
-                     dxPage.toggleCards[13].card,
-                     dxPage.toggleCards[13].label,
-                     dxPage.toggleCards[13].description,
-                     dxPage.toggleCards[13].toggle);
+                     dxPage.toggleCards[2].card,
+                     dxPage.toggleCards[2].label,
+                     dxPage.toggleCards[2].description,
+                     dxPage.toggleCards[2].toggle);
 
     const std::wstring labelDiagnosticsDebugText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_FILEOPS_DIAG_DEBUG);
     const std::wstring descDiagnosticsDebugText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_FILEOPS_DIAG_DEBUG);
     layoutToggleCard(labelDiagnosticsDebugText,
                      descDiagnosticsDebugText,
-                     dxPage.toggleCards[14].card,
-                     dxPage.toggleCards[14].label,
-                     dxPage.toggleCards[14].description,
-                     dxPage.toggleCards[14].toggle);
+                     dxPage.toggleCards[3].card,
+                     dxPage.toggleCards[3].label,
+                     dxPage.toggleCards[3].description,
+                     dxPage.toggleCards[3].toggle);
+
+    y += gapY;
+
+    const std::wstring labelSettingsFileText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_SETTINGS_FILE);
+    const std::wstring descSettingsFileText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_SETTINGS_FILE);
+    const std::wstring openSettingsFileText  = LoadStringResource(nullptr, IDS_PREFS_ADV_OPEN_SETTINGS_FILE_LINK);
+    layoutLinkCard(labelSettingsFileText,
+                   descSettingsFileText,
+                   openSettingsFileText,
+                   dxPage.settingsFileCard.card,
+                   dxPage.settingsFileCard.label,
+                   dxPage.settingsFileCard.description,
+                   dxPage.settingsFileCard.link);
 
     SyncDxControlsFromState(state);
     _pageHostDx->Invalidate();
@@ -1740,41 +1431,33 @@ PreferencesAdvancedDebugFocusTarget AdvancedPane::DebugGetFocusTarget() const no
     {
         return PreferencesAdvancedDebugFocusTarget::HelloTimeoutEdit;
     }
-    if (page.toggleCards[2].toggle == focused)
+    if (page.inputCards[1].edit == focused)
     {
-        return PreferencesAdvancedDebugFocusTarget::ToolbarToggle;
-    }
-    if (page.toggleCards[3].toggle == focused)
-    {
-        return PreferencesAdvancedDebugFocusTarget::LineNumbersToggle;
-    }
-    if (page.toggleCards[4].toggle == focused)
-    {
-        return PreferencesAdvancedDebugFocusTarget::AlwaysOnTopToggle;
-    }
-    if (page.toggleCards[5].toggle == focused)
-    {
-        return PreferencesAdvancedDebugFocusTarget::ShowIdsToggle;
-    }
-    if (page.toggleCards[6].toggle == focused)
-    {
-        return PreferencesAdvancedDebugFocusTarget::AutoScrollToggle;
-    }
-    if (page.inputCards[1].combo == focused)
-    {
-        return PreferencesAdvancedDebugFocusTarget::FilterPresetCombo;
+        return PreferencesAdvancedDebugFocusTarget::CacheMaxBytesEdit;
     }
     if (page.inputCards[2].edit == focused)
     {
-        return PreferencesAdvancedDebugFocusTarget::FilterMaskEdit;
+        return PreferencesAdvancedDebugFocusTarget::CacheMaxWatchersEdit;
     }
-    if (page.toggleCards[7].toggle == focused)
+    if (page.inputCards[3].edit == focused)
     {
-        return PreferencesAdvancedDebugFocusTarget::FilterTextToggle;
+        return PreferencesAdvancedDebugFocusTarget::CacheMruWatchedEdit;
     }
-    if (page.toggleCards[14].toggle == focused)
+    if (page.inputCards[4].edit == focused)
+    {
+        return PreferencesAdvancedDebugFocusTarget::FileOpsMaxDiagnosticsLogFilesEdit;
+    }
+    if (page.toggleCards[2].toggle == focused)
+    {
+        return PreferencesAdvancedDebugFocusTarget::DiagnosticsInfoToggle;
+    }
+    if (page.toggleCards[3].toggle == focused)
     {
         return PreferencesAdvancedDebugFocusTarget::DiagnosticsDebugToggle;
+    }
+    if (page.settingsFileCard.link == focused)
+    {
+        return PreferencesAdvancedDebugFocusTarget::OpenSettingsFileLink;
     }
 
     return PreferencesAdvancedDebugFocusTarget::None;
@@ -1797,30 +1480,4 @@ bool AdvancedPane::DebugFocusBypassHelloToggle() noexcept
     return _pageHostDx->GetFocusControl() == toggle;
 }
 
-bool AdvancedPane::DebugSelectFilterPresetByText(std::wstring_view displayText) noexcept
-{
-    if (! _pageHostDx || ! _dxState)
-    {
-        return false;
-    }
-
-    auto* const combo = _dxState->page.inputCards[1].combo;
-    if (! combo || ! combo->IsVisible() || ! combo->IsEnabled())
-    {
-        return false;
-    }
-
-    const auto items = combo->GetItems();
-    const auto it    = std::find_if(items.begin(), items.end(), [displayText](const ComboBox::Item& item) noexcept { return item.display == displayText; });
-    if (it == items.end())
-    {
-        return false;
-    }
-
-    const size_t itemIndex = static_cast<size_t>(std::distance(items.begin(), it));
-    _pageHostDx->SetFocusControl(combo);
-    combo->SetSelectedIndex(itemIndex);
-    _pageHostDx->Invalidate();
-    return combo->GetSelectedIndex().has_value() && combo->GetSelectedIndex().value() == itemIndex && combo->GetDisplayedText() == displayText;
-}
 #endif

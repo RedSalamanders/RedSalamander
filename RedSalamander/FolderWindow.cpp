@@ -6,8 +6,8 @@
 #endif
 #include <winsock2.h>
 
-#include "FolderWindowInternal.h"
 #include "DxUiThemePalette.h"
+#include "FolderWindowInternal.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "SelfTestCommon.h"
@@ -29,7 +29,7 @@
 
 namespace
 {
-constexpr UINT_PTR kPreviewPaneRefreshTimerId    = 0x7250;
+constexpr UINT_PTR kPreviewPaneRefreshTimerId = 0x7250;
 
 [[nodiscard]] bool EnsureFolderWindowDxHostClass(HINSTANCE instance) noexcept
 {
@@ -111,12 +111,9 @@ void ShowFileActionUnavailableOverlay(FolderWindow& window,
         title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
     }
 
-    std::wstring target = FileActionTargetText(targetPath);
-    std::wstring message =
-        FormatStringResource(nullptr,
-                             viewerAction ? IDS_FMT_FILEACTION_VIEWER_NOT_AVAILABLE : IDS_FMT_FILEACTION_EDITOR_NOT_AVAILABLE,
-                             std::wstring(actionId),
-                             target);
+    std::wstring target  = FileActionTargetText(targetPath);
+    std::wstring message = FormatStringResource(
+        nullptr, viewerAction ? IDS_FMT_FILEACTION_VIEWER_NOT_AVAILABLE : IDS_FMT_FILEACTION_EDITOR_NOT_AVAILABLE, std::wstring(actionId), target);
     if (message.empty())
     {
         message = std::wstring(actionId);
@@ -144,13 +141,12 @@ void ShowFileActionLaunchFailureOverlay(FolderWindow& window,
         title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
     }
 
-    std::wstring target = FileActionTargetText(targetPath);
-    std::wstring message =
-        FormatStringResource(nullptr,
-                             viewerAction ? IDS_FMT_FILEACTION_VIEWER_LAUNCH_FAILED : IDS_FMT_FILEACTION_EDITOR_LAUNCH_FAILED,
-                             std::wstring(actionId),
-                             target,
-                             static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+    std::wstring target  = FileActionTargetText(targetPath);
+    std::wstring message = FormatStringResource(nullptr,
+                                                viewerAction ? IDS_FMT_FILEACTION_VIEWER_LAUNCH_FAILED : IDS_FMT_FILEACTION_EDITOR_LAUNCH_FAILED,
+                                                std::wstring(actionId),
+                                                target,
+                                                static_cast<unsigned long>(static_cast<uint32_t>(hr)));
     if (message.empty())
     {
         message = std::wstring(actionId);
@@ -174,11 +170,9 @@ void ShowAlternateFileActionUnavailableOverlay(FolderWindow& window,
         title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
     }
 
-    std::wstring target = FileActionTargetText(targetPath);
-    std::wstring message =
-        FormatStringResource(nullptr,
-                             viewerAction ? IDS_FMT_FILEACTION_ALTERNATE_VIEWER_NOT_CONFIGURED : IDS_FMT_FILEACTION_ALTERNATE_EDITOR_NOT_CONFIGURED,
-                             target);
+    std::wstring target  = FileActionTargetText(targetPath);
+    std::wstring message = FormatStringResource(
+        nullptr, viewerAction ? IDS_FMT_FILEACTION_ALTERNATE_VIEWER_NOT_CONFIGURED : IDS_FMT_FILEACTION_ALTERNATE_EDITOR_NOT_CONFIGURED, target);
     if (message.empty())
     {
         message = target;
@@ -258,26 +252,26 @@ struct ShortcutTargetResolution final
 
 struct MountPointReparseDataBuffer final
 {
-    ULONG ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
-    USHORT ReparseDataLength = 0;
-    USHORT Reserved = 0;
+    ULONG ReparseTag            = IO_REPARSE_TAG_MOUNT_POINT;
+    USHORT ReparseDataLength    = 0;
+    USHORT Reserved             = 0;
     USHORT SubstituteNameOffset = 0;
     USHORT SubstituteNameLength = 0;
-    USHORT PrintNameOffset = 0;
-    USHORT PrintNameLength = 0;
+    USHORT PrintNameOffset      = 0;
+    USHORT PrintNameLength      = 0;
     wchar_t PathBuffer[1]{};
 };
 
 struct SymbolicLinkReparseDataBuffer final
 {
-    ULONG ReparseTag = IO_REPARSE_TAG_SYMLINK;
-    USHORT ReparseDataLength = 0;
-    USHORT Reserved = 0;
+    ULONG ReparseTag            = IO_REPARSE_TAG_SYMLINK;
+    USHORT ReparseDataLength    = 0;
+    USHORT Reserved             = 0;
     USHORT SubstituteNameOffset = 0;
     USHORT SubstituteNameLength = 0;
-    USHORT PrintNameOffset = 0;
-    USHORT PrintNameLength = 0;
-    ULONG Flags = 0;
+    USHORT PrintNameOffset      = 0;
+    USHORT PrintNameLength      = 0;
+    ULONG Flags                 = 0;
     wchar_t PathBuffer[1]{};
 };
 
@@ -341,8 +335,7 @@ struct SymbolicLinkReparseDataBuffer final
     outUrl.clear();
 
     std::wstring value(32768, L'\0');
-    const DWORD copied =
-        GetPrivateProfileStringW(L"InternetShortcut", L"URL", L"", value.data(), static_cast<DWORD>(value.size()), shortcutPath.c_str());
+    const DWORD copied = GetPrivateProfileStringW(L"InternetShortcut", L"URL", L"", value.data(), static_cast<DWORD>(value.size()), shortcutPath.c_str());
     if (copied == 0 || copied >= (value.size() - 1u))
     {
         return false;
@@ -383,7 +376,7 @@ struct SymbolicLinkReparseDataBuffer final
 
 [[nodiscard]] ShortcutTargetResolution ResolveShellLinkTarget(const std::filesystem::path& shortcutPath) noexcept
 {
-    const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    const HRESULT coHr      = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     const bool uninitialize = SUCCEEDED(coHr);
     const auto coCleanup    = wil::scope_exit([&]
     {
@@ -530,11 +523,10 @@ struct SymbolicLinkReparseDataBuffer final
     std::optional<std::wstring> substituteName;
     if (header->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT)
     {
-        const auto* mountPoint = reinterpret_cast<const MountPointReparseDataBuffer*>(reparseBuffer.data());
-        const size_t pathBufferBytes =
-            mountPoint->ReparseDataLength >= (4u * sizeof(USHORT)) ? mountPoint->ReparseDataLength - (4u * sizeof(USHORT)) : 0u;
-        substituteName = ExtractReparsePathBufferString(
-            mountPoint->PathBuffer, mountPoint->SubstituteNameOffset, mountPoint->SubstituteNameLength, pathBufferBytes);
+        const auto* mountPoint       = reinterpret_cast<const MountPointReparseDataBuffer*>(reparseBuffer.data());
+        const size_t pathBufferBytes = mountPoint->ReparseDataLength >= (4u * sizeof(USHORT)) ? mountPoint->ReparseDataLength - (4u * sizeof(USHORT)) : 0u;
+        substituteName =
+            ExtractReparsePathBufferString(mountPoint->PathBuffer, mountPoint->SubstituteNameOffset, mountPoint->SubstituteNameLength, pathBufferBytes);
     }
     else if (header->ReparseTag == IO_REPARSE_TAG_SYMLINK)
     {
@@ -545,11 +537,8 @@ struct SymbolicLinkReparseDataBuffer final
 
         const auto* symlink = reinterpret_cast<const SymbolicLinkReparseDataBuffer*>(reparseBuffer.data());
         const size_t pathBufferBytes =
-            symlink->ReparseDataLength >= ((4u * sizeof(USHORT)) + sizeof(ULONG))
-                ? symlink->ReparseDataLength - ((4u * sizeof(USHORT)) + sizeof(ULONG))
-                : 0u;
-        substituteName =
-            ExtractReparsePathBufferString(symlink->PathBuffer, symlink->SubstituteNameOffset, symlink->SubstituteNameLength, pathBufferBytes);
+            symlink->ReparseDataLength >= ((4u * sizeof(USHORT)) + sizeof(ULONG)) ? symlink->ReparseDataLength - ((4u * sizeof(USHORT)) + sizeof(ULONG)) : 0u;
+        substituteName = ExtractReparsePathBufferString(symlink->PathBuffer, symlink->SubstituteNameOffset, symlink->SubstituteNameLength, pathBufferBytes);
     }
     else
     {
@@ -598,11 +587,6 @@ struct SymbolicLinkReparseDataBuffer final
 [[nodiscard]] POINT ResolveShellContextMenuPoint(HWND owner) noexcept
 {
     POINT point{};
-    if (GetCursorPos(&point) != FALSE)
-    {
-        return point;
-    }
-
     RECT windowRect{};
     if (owner && IsWindow(owner) != FALSE && GetWindowRect(owner, &windowRect) != FALSE)
     {
@@ -616,7 +600,7 @@ struct SymbolicLinkReparseDataBuffer final
 {
     PIDLIST_ABSOLUTE rawPidl = nullptr;
     SFGAOF attributes        = 0;
-    HRESULT hr              = SHParseDisplayName(path.c_str(), nullptr, &rawPidl, 0, &attributes);
+    HRESULT hr               = SHParseDisplayName(path.c_str(), nullptr, &rawPidl, 0, &attributes);
     if (FAILED(hr))
     {
         Debug::Warning(L"Shell context menu: SHParseDisplayName failed for {}: {:#x}", path.wstring(), hr);
@@ -627,7 +611,7 @@ struct SymbolicLinkReparseDataBuffer final
 
     wil::com_ptr<IShellFolder> parentFolder;
     PCUITEMID_CHILD childPidl = nullptr;
-    hr                       = SHBindToParent(pidl.get(), IID_IShellFolder, parentFolder.put_void(), &childPidl);
+    hr                        = SHBindToParent(pidl.get(), IID_IShellFolder, parentFolder.put_void(), &childPidl);
     if (FAILED(hr) || ! parentFolder || ! childPidl)
     {
         Debug::Warning(L"Shell context menu: SHBindToParent failed for {}: {:#x}", path.wstring(), hr);
@@ -658,9 +642,8 @@ struct SymbolicLinkReparseDataBuffer final
         return hr;
     }
 
-    const POINT point = ResolveShellContextMenuPoint(owner);
-    const UINT chosenCommand =
-        static_cast<UINT>(TrackPopupMenuEx(menu.get(), TPM_RETURNCMD | TPM_RIGHTBUTTON, point.x, point.y, owner, nullptr));
+    const POINT point        = ResolveShellContextMenuPoint(owner);
+    const UINT chosenCommand = static_cast<UINT>(TrackPopupMenuEx(menu.get(), TPM_RETURNCMD | TPM_RIGHTBUTTON, point.x, point.y, owner, nullptr));
     if (chosenCommand == 0u)
     {
         return S_FALSE;
@@ -689,17 +672,14 @@ void FolderWindow::ClearFileActionFailure() noexcept
     _lastFileActionFailure.reset();
 }
 
-void FolderWindow::RecordFileActionLaunchFailure(bool viewerAction,
-                                                 std::wstring_view actionId,
-                                                 const std::filesystem::path& targetPath,
-                                                 HRESULT hr) noexcept
+void FolderWindow::RecordFileActionLaunchFailure(bool viewerAction, std::wstring_view actionId, const std::filesystem::path& targetPath, HRESULT hr) noexcept
 {
     FileActionFailure failure{};
-    failure.kind         = FileActionFailureKind::LaunchFailed;
-    failure.viewerAction = viewerAction;
-    failure.actionId     = std::wstring(actionId);
-    failure.targetPath   = targetPath;
-    failure.hr           = hr;
+    failure.kind           = FileActionFailureKind::LaunchFailed;
+    failure.viewerAction   = viewerAction;
+    failure.actionId       = std::wstring(actionId);
+    failure.targetPath     = targetPath;
+    failure.hr             = hr;
     _lastFileActionFailure = std::move(failure);
 }
 
@@ -723,8 +703,7 @@ bool FolderWindow::ShowRecordedFileActionFailureOverlay(Pane pane) noexcept
         return false;
     }
 
-    ShowFileActionLaunchFailureOverlay(
-        *this, pane, failure.value().viewerAction, failure.value().actionId, failure.value().targetPath, failure.value().hr);
+    ShowFileActionLaunchFailureOverlay(*this, pane, failure.value().viewerAction, failure.value().actionId, failure.value().targetPath, failure.value().hr);
     return true;
 }
 
@@ -945,8 +924,48 @@ void FolderWindow::SetPanePathChangedCallback(PanePathChangedCallback callback)
 
 void FolderWindow::SetPaneEnumerationCompletedCallback(Pane pane, FolderView::EnumerationCompletedCallback callback)
 {
+    PaneState& state                   = pane == Pane::Left ? _leftPane : _rightPane;
+    state.enumerationCompletedCallback = std::move(callback);
+    InstallFolderViewEnumerationCompletedCallback(pane);
+}
+
+void FolderWindow::InstallFolderViewEnumerationCompletedCallback(Pane pane)
+{
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
-    state.folderView.SetEnumerationCompletedCallback(std::move(callback));
+    state.folderView.SetEnumerationCompletedCallback([this, pane](const std::filesystem::path& folder) { OnFolderViewEnumerationCompleted(pane, folder); });
+}
+
+void FolderWindow::OnFolderViewEnumerationCompleted(Pane pane, const std::filesystem::path& folder)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.pendingNavigationToPaintMetric.has_value())
+    {
+        const FolderWindow::PaneState::PendingNavigationToPaintMetric& pendingRef = state.pendingNavigationToPaintMetric.value();
+        const bool folderMatches = OrdinalString::EqualsNoCasePath(folder, pendingRef.targetFolder) || folder.native() == pendingRef.targetFolder.native();
+        if (folderMatches)
+        {
+            const FolderWindow::PaneState::PendingNavigationToPaintMetric pending = std::move(state.pendingNavigationToPaintMetric.value());
+            state.pendingNavigationToPaintMetric.reset();
+            std::wstring enumeratedMetricName          = pending.metricName;
+            constexpr std::wstring_view kToPaintSuffix = L"_to_paint_us";
+            if (enumeratedMetricName.size() >= kToPaintSuffix.size() &&
+                std::wstring_view(enumeratedMetricName).substr(enumeratedMetricName.size() - kToPaintSuffix.size()) == kToPaintSuffix)
+            {
+                enumeratedMetricName.replace(enumeratedMetricName.size() - kToPaintSuffix.size(), kToPaintSuffix.size(), L"_enumerated_us");
+            }
+            else
+            {
+                enumeratedMetricName.append(L".enumerated_us");
+            }
+            Debug::Perf::Emit(enumeratedMetricName, pending.detail, Debug::Perf::ElapsedUs(pending.startedAt), pending.value0, pending.value1, S_OK);
+            state.folderView.RecordPendingInputToPaintStart(pending.startedAt, pending.metricName, pending.detail, pending.value0, pending.value1);
+        }
+    }
+
+    if (state.enumerationCompletedCallback)
+    {
+        state.enumerationCompletedCallback(folder);
+    }
 }
 
 void FolderWindow::SetPaneDetailsTextProvider(Pane pane, FolderView::DetailsTextProvider provider)
@@ -1045,6 +1064,12 @@ HWND FolderWindow::Create(HWND parent, int x, int y, int width, int height)
 
 void FolderWindow::Destroy()
 {
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: begin");
+    }
+#endif
     ShutdownFileOperations();
 
     CancelSelectionSizeComputation(Pane::Left);
@@ -1066,6 +1091,12 @@ void FolderWindow::Destroy()
 
     CloseSharedDirectoriesDialog();
     CloseOpenedFilesDialog();
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: dialogs closed");
+    }
+#endif
 
     _backgroundBrush.reset();
     _splitterBrush.reset();
@@ -1075,60 +1106,102 @@ void FolderWindow::Destroy()
     DestroyCommandLineControls();
 
     _functionBar.Destroy();
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: function bar destroyed");
+    }
+#endif
 
     if (_leftPane.hNavigationView)
     {
         _leftPane.navigationView.Destroy();
         _leftPane.hNavigationView.reset();
     }
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: left navigation destroyed");
+    }
+#endif
 
     if (_leftPane.hFolderView)
     {
         _leftPane.folderView.Destroy();
         _leftPane.hFolderView.reset();
     }
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: left folder view destroyed");
+    }
+#endif
 
     _leftPane.filterBarHost.Detach();
-    _leftPane.filterBarLabel = nullptr;
-    _leftPane.filterBarCombo = nullptr;
+    _leftPane.filterBarLabel  = nullptr;
+    _leftPane.filterBarCombo  = nullptr;
     _leftPane.filterBarToggle = nullptr;
     _leftPane.hFilterBar.reset();
     _leftPane.previewTabsHost.Detach();
     _leftPane.previewTabsControl = nullptr;
     _leftPane.hPreviewTabs.reset();
     _leftPane.previewContentHost.Detach();
-    _leftPane.previewContentLabel = nullptr;
+    _leftPane.previewContentLabel     = nullptr;
     _leftPane.previewPropertiesScroll = nullptr;
     _leftPane.previewPropertiesSections.clear();
     _leftPane.hPreviewContent.reset();
     _leftPane.hStatusBar.reset();
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: left chrome reset");
+    }
+#endif
 
     if (_rightPane.hNavigationView)
     {
         _rightPane.navigationView.Destroy();
         _rightPane.hNavigationView.reset();
     }
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: right navigation destroyed");
+    }
+#endif
 
     if (_rightPane.hFolderView)
     {
         _rightPane.folderView.Destroy();
         _rightPane.hFolderView.reset();
     }
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: right folder view destroyed");
+    }
+#endif
 
     _rightPane.filterBarHost.Detach();
-    _rightPane.filterBarLabel = nullptr;
-    _rightPane.filterBarCombo = nullptr;
+    _rightPane.filterBarLabel  = nullptr;
+    _rightPane.filterBarCombo  = nullptr;
     _rightPane.filterBarToggle = nullptr;
     _rightPane.hFilterBar.reset();
     _rightPane.previewTabsHost.Detach();
     _rightPane.previewTabsControl = nullptr;
     _rightPane.hPreviewTabs.reset();
     _rightPane.previewContentHost.Detach();
-    _rightPane.previewContentLabel = nullptr;
+    _rightPane.previewContentLabel     = nullptr;
     _rightPane.previewPropertiesScroll = nullptr;
     _rightPane.previewPropertiesSections.clear();
     _rightPane.hPreviewContent.reset();
     _rightPane.hStatusBar.reset();
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: right chrome reset");
+    }
+#endif
 
     if (_leftPane.fileSystem)
     {
@@ -1151,8 +1224,20 @@ void FolderWindow::Destroy()
     _rightPane.currentPath.reset();
     _rightPane.updatingPath = false;
 
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: resetting hwnd");
+    }
+#endif
     _hWnd.reset();
     _settings = nullptr;
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: complete");
+    }
+#endif
 }
 
 LRESULT CALLBACK FolderWindow::WndProcThunk(HWND hWindow, UINT msg, WPARAM wp, LPARAM lp)
@@ -1426,8 +1511,8 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
             }
             if (filterBar)
             {
-                PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
-                state.filterBarCombo = nullptr;
+                PaneState& state      = pane == Pane::Left ? _leftPane : _rightPane;
+                state.filterBarCombo  = nullptr;
                 state.filterBarToggle = nullptr;
             }
             if (tabs)
@@ -1454,43 +1539,28 @@ LRESULT FolderWindow::HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LP
         return handled ? std::optional<LRESULT>{result} : std::nullopt;
     };
 
-    if (const auto result =
-            dispatch(Pane::Left, _leftPane.hFilterBar, _leftPane.filterBarHost, &_leftPane.filterBarLabel, nullptr, false, true))
+    if (const auto result = dispatch(Pane::Left, _leftPane.hFilterBar, _leftPane.filterBarHost, &_leftPane.filterBarLabel, nullptr, false, true))
+    {
+        return result.value();
+    }
+    if (const auto result = dispatch(Pane::Right, _rightPane.hFilterBar, _rightPane.filterBarHost, &_rightPane.filterBarLabel, nullptr, false, true))
+    {
+        return result.value();
+    }
+    if (const auto result = dispatch(Pane::Left, _leftPane.hPreviewTabs, _leftPane.previewTabsHost, nullptr, &_leftPane.previewTabsControl, false, false))
+    {
+        return result.value();
+    }
+    if (const auto result = dispatch(Pane::Right, _rightPane.hPreviewTabs, _rightPane.previewTabsHost, nullptr, &_rightPane.previewTabsControl, false, false))
+    {
+        return result.value();
+    }
+    if (const auto result = dispatch(Pane::Left, _leftPane.hPreviewContent, _leftPane.previewContentHost, &_leftPane.previewContentLabel, nullptr, true, false))
     {
         return result.value();
     }
     if (const auto result =
-            dispatch(Pane::Right, _rightPane.hFilterBar, _rightPane.filterBarHost, &_rightPane.filterBarLabel, nullptr, false, true))
-    {
-        return result.value();
-    }
-    if (const auto result =
-            dispatch(Pane::Left, _leftPane.hPreviewTabs, _leftPane.previewTabsHost, nullptr, &_leftPane.previewTabsControl, false, false))
-    {
-        return result.value();
-    }
-    if (const auto result =
-            dispatch(Pane::Right, _rightPane.hPreviewTabs, _rightPane.previewTabsHost, nullptr, &_rightPane.previewTabsControl, false, false))
-    {
-        return result.value();
-    }
-    if (const auto result = dispatch(Pane::Left,
-                                     _leftPane.hPreviewContent,
-                                     _leftPane.previewContentHost,
-                                     &_leftPane.previewContentLabel,
-                                     nullptr,
-                                     true,
-                                     false))
-    {
-        return result.value();
-    }
-    if (const auto result = dispatch(Pane::Right,
-                                     _rightPane.hPreviewContent,
-                                     _rightPane.previewContentHost,
-                                     &_rightPane.previewContentLabel,
-                                     nullptr,
-                                     true,
-                                     false))
+            dispatch(Pane::Right, _rightPane.hPreviewContent, _rightPane.previewContentHost, &_rightPane.previewContentLabel, nullptr, true, false))
     {
         return result.value();
     }
@@ -1708,8 +1778,8 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         {
             std::wstring folderTabText  = LoadStringResource(nullptr, IDS_PREVIEW_TAB_FOLDER);
             std::wstring previewTabText = LoadStringResource(nullptr, IDS_PREVIEW_TAB_PREVIEW);
-            auto tabs                = std::make_unique<RedSalamander::DxUi::TabControl>();
-            state.previewTabsControl = tabs.get();
+            auto tabs                   = std::make_unique<RedSalamander::DxUi::TabControl>();
+            state.previewTabsControl    = tabs.get();
             tabs->SetFocusable(false);
             tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(folderTabText));
             tabs->AddTab<RedSalamander::DxUi::Panel>(std::move(previewTabText));
@@ -1754,8 +1824,8 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             return false;
         }
         {
-            auto root                    = std::make_unique<RedSalamander::DxUi::Panel>();
-            state.previewContentLabel    = root->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PREVIEW_EMPTY));
+            auto root                 = std::make_unique<RedSalamander::DxUi::Panel>();
+            state.previewContentLabel = root->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PREVIEW_EMPTY));
             state.previewContentLabel->SetFontRole(RedSalamander::DxUi::FontRole::Body);
             state.previewContentLabel->SetMultiline(true);
             state.previewPropertiesScroll = root->AddChild<RedSalamander::DxUi::ScrollPanel>();
@@ -1867,6 +1937,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             });
             state.folderView.SetIncrementalSearchChangedCallback([this, pane] { UpdatePaneStatusBar(pane); });
             state.folderView.SetSelectionSizeComputationRequestedCallback([this, pane] { RequestSelectionSizeComputation(pane); });
+            InstallFolderViewEnumerationCompletedCallback(pane);
         }
 
         {
@@ -1881,21 +1952,20 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
     {
         Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane");
         perf.SetDetail(L"Left");
-        if (! createPane(
-                Pane::Left,
-                _leftPane,
-                _leftNavigationRect,
-                _leftFilterBarRect,
-                _leftFolderViewRect,
-                _leftStatusBarRect,
-                _leftPreviewTabsRect,
-                _leftPreviewContentRect,
-                kLeftNavigationId,
-                kLeftFilterBarId,
-                kLeftFolderViewId,
-                kLeftStatusBarId,
-                kLeftPreviewTabsId,
-                kLeftPreviewContentId))
+        if (! createPane(Pane::Left,
+                         _leftPane,
+                         _leftNavigationRect,
+                         _leftFilterBarRect,
+                         _leftFolderViewRect,
+                         _leftStatusBarRect,
+                         _leftPreviewTabsRect,
+                         _leftPreviewContentRect,
+                         kLeftNavigationId,
+                         kLeftFilterBarId,
+                         kLeftFolderViewId,
+                         kLeftStatusBarId,
+                         kLeftPreviewTabsId,
+                         kLeftPreviewContentId))
         {
             Debug::Error(L"FolderWindow::OnCreate failed to create left pane.");
             return false;
@@ -2049,11 +2119,29 @@ void FolderWindow::DismissPaneAlertOverlay(Pane pane)
 
 void FolderWindow::OnDestroy()
 {
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::OnDestroy: begin");
+    }
+#endif
     CancelPendingPreviewPaneRefresh();
     _networkChangeSubscription.reset();
 
     ShutdownViewers();
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::OnDestroy: viewers shutdown");
+    }
+#endif
     ShutdownFileOperations();
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::OnDestroy: file ops shutdown");
+    }
+#endif
 
     CancelSelectionSizeComputation(Pane::Left);
     CancelSelectionSizeComputation(Pane::Right);
@@ -2097,23 +2185,23 @@ void FolderWindow::OnDestroy()
         if (state.hFilterBar)
         {
             state.filterBarHost.Detach();
-            state.filterBarLabel = nullptr;
-            state.filterBarCombo = nullptr;
+            state.filterBarLabel  = nullptr;
+            state.filterBarCombo  = nullptr;
             state.filterBarToggle = nullptr;
-            state.hFilterBar = nullptr;
+            state.hFilterBar      = nullptr;
         }
 
         if (state.hPreviewTabs)
         {
             state.previewTabsHost.Detach();
             state.previewTabsControl = nullptr;
-            state.hPreviewTabs = nullptr;
+            state.hPreviewTabs       = nullptr;
         }
 
         if (state.hPreviewContent)
         {
             state.previewContentHost.Detach();
-            state.previewContentLabel = nullptr;
+            state.previewContentLabel     = nullptr;
             state.previewPropertiesScroll = nullptr;
             state.previewPropertiesSections.clear();
             state.hPreviewContent = nullptr;
@@ -2154,7 +2242,7 @@ void FolderWindow::CommandView(Pane pane)
 void FolderWindow::CommandAlternateView(Pane pane)
 {
     SetActivePane(pane);
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state                                       = pane == Pane::Left ? _leftPane : _rightPane;
     const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
     ClearFileActionFailure();
     if (! state.folderView.CommandAlternateView())
@@ -2174,7 +2262,7 @@ void FolderWindow::CommandViewWith(Pane pane, std::wstring_view actionId)
     }
 
     SetActivePane(pane);
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state                                       = pane == Pane::Left ? _leftPane : _rightPane;
     const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
     ClearFileActionFailure();
     if (! state.folderView.CommandViewWith(actionId))
@@ -2197,7 +2285,7 @@ void FolderWindow::CommandEdit(Pane pane)
 void FolderWindow::CommandAlternateEdit(Pane pane)
 {
     SetActivePane(pane);
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state                                       = pane == Pane::Left ? _leftPane : _rightPane;
     const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
     ClearFileActionFailure();
     if (! TryEditFocusedFileWithEditor(pane, {}, true))
@@ -2217,7 +2305,7 @@ void FolderWindow::CommandEditWith(Pane pane, std::wstring_view actionId)
     }
 
     SetActivePane(pane);
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state                                       = pane == Pane::Left ? _leftPane : _rightPane;
     const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath();
     ClearFileActionFailure();
     if (! TryEditFocusedFileWithEditor(pane, actionId, false))
@@ -2315,7 +2403,7 @@ void FolderWindow::CommandOpenSecurity(Pane pane)
     if (shown == FALSE)
     {
         const DWORD lastError = GetLastError();
-        const HRESULT hr     = lastError != ERROR_SUCCESS ? HRESULT_FROM_WIN32(lastError) : E_FAIL;
+        const HRESULT hr      = lastError != ERROR_SUCCESS ? HRESULT_FROM_WIN32(lastError) : E_FAIL;
         Debug::Warning(L"Open Security: SHObjectProperties failed for {}: {:#x}", path.wstring(), hr);
         ShowShellActionFailedOverlay(*this, pane, path, hr);
     }
@@ -2339,7 +2427,7 @@ void FolderWindow::CommandGoToShortcutOrLinkTarget(Pane pane)
         return;
     }
 
-    const std::filesystem::path sourcePath = sourcePathOpt.value();
+    const std::filesystem::path sourcePath    = sourcePathOpt.value();
     const ShortcutTargetResolution resolution = ResolveShortcutOrLinkTarget(sourcePath);
     if (resolution.status == ShortcutTargetResolutionStatus::Unsupported)
     {
@@ -2381,7 +2469,7 @@ void FolderWindow::CommandGoToShortcutOrLinkTarget(Pane pane)
         return;
     }
 
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state             = pane == Pane::Left ? _leftPane : _rightPane;
     const std::wstring focusName = resolution.target.filename().wstring();
     if (! focusName.empty())
     {

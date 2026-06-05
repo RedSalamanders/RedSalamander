@@ -41,14 +41,10 @@ std::wstring PlaceholderStatusText(HINSTANCE instance, RedConfigure::Localizatio
     switch (status)
     {
         case RedConfigure::Localization::PlaceholderStatus::Ok: return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_OK);
-        case RedConfigure::Localization::PlaceholderStatus::BarePlaceholder:
-            return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_BARE_PLACEHOLDER);
-        case RedConfigure::Localization::PlaceholderStatus::UnindexedFormatSpec:
-            return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_UNINDEXED_FORMAT);
-        case RedConfigure::Localization::PlaceholderStatus::PrintfPlaceholder:
-            return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_PRINTF_FORMAT);
-        case RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch:
-            return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_PLACEHOLDER_MISMATCH);
+        case RedConfigure::Localization::PlaceholderStatus::BarePlaceholder: return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_BARE_PLACEHOLDER);
+        case RedConfigure::Localization::PlaceholderStatus::UnindexedFormatSpec: return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_UNINDEXED_FORMAT);
+        case RedConfigure::Localization::PlaceholderStatus::PrintfPlaceholder: return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_PRINTF_FORMAT);
+        case RedConfigure::Localization::PlaceholderStatus::PlaceholderMismatch: return LoadAppString(instance, IDS_REDCONFIGURE_STATUS_PLACEHOLDER_MISMATCH);
         default: return {};
     }
 }
@@ -65,4 +61,4 @@ std::wstring LocalizableKindText(HINSTANCE instance, RedConfigure::Localization:
         default: return {};
     }
 }
-}
+} // namespace RedConfigure::Ui

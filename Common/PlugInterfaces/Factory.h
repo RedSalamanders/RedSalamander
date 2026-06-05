@@ -67,4 +67,18 @@ extern "C"
     // - For single-plugin DLLs, pluginId may be nullptr or empty.
     // - The returned JSON string is owned by the DLL and remains valid until unload.
     PLUGFACTORY_API HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8);
+
+    // Optional module-level quiet-point support:
+    //
+    // - Hosts discover these exports with GetProcAddress; plugins that do not
+    //   own DLL-global schedulers, caches, window classes, or driver-backed
+    //   resources should omit them.
+    // - RedSalamanderPluginShutdown must be idempotent and non-throwing. After
+    //   it returns, no DLL-global worker may call host callbacks or touch state
+    //   that will be released before FreeLibrary.
+    // - RedSalamanderPluginRetainModuleUntilProcessExit is honored only during
+    //   process shutdown. Returning TRUE lets a plugin run its quiet point while
+    //   leaving the DLL mapped for OS process teardown.
+    PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept;
+    PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept;
 }

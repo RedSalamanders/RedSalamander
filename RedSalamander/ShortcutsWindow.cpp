@@ -715,6 +715,7 @@ public:
         }
 
         _gridModel->SortRows(sortSpec);
+        _grid->SetSortSpec(sortSpec);
         _grid->NotifyDataChanged();
         RestoreSelection();
         _dxHost.Invalidate();

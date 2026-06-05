@@ -15,15 +15,15 @@ namespace WndMsg
 // Central registry for custom Win32 messages.
 // Keep *all* WM_APP/WM_USER message IDs in this file so they stay unique and easy to audit.
 
-inline constexpr UINT kFolderViewSyncSwapChain       = WM_APP + 0x300;
-inline constexpr UINT kFolderViewEnumerateComplete   = WM_APP + 0x301;
-inline constexpr UINT kFolderViewIconLoaded          = WM_APP + 0x302;
-inline constexpr UINT kFolderViewCreateIconBitmap    = WM_APP + 0x303;
-inline constexpr UINT kFolderViewDirectoryCacheDirty = WM_APP + 0x304;
-inline constexpr UINT kFolderViewBatchIconUpdate     = WM_APP + 0x306;
-inline constexpr UINT kNetworkConnectivityChanged    = WM_APP + 0x305;
-inline constexpr UINT kFolderViewDeferredInit        = WM_APP + 0x307;
-inline constexpr UINT kFolderViewDirectoryImpact     = WM_APP + 0x308;
+inline constexpr UINT kFolderViewSyncSwapChain         = WM_APP + 0x300;
+inline constexpr UINT kFolderViewEnumerateComplete     = WM_APP + 0x301;
+inline constexpr UINT kFolderViewIconLoaded            = WM_APP + 0x302;
+inline constexpr UINT kFolderViewCreateIconBitmap      = WM_APP + 0x303;
+inline constexpr UINT kFolderViewDirectoryCacheDirty   = WM_APP + 0x304;
+inline constexpr UINT kFolderViewBatchIconUpdate       = WM_APP + 0x306;
+inline constexpr UINT kNetworkConnectivityChanged      = WM_APP + 0x305;
+inline constexpr UINT kFolderViewDeferredInit          = WM_APP + 0x307;
+inline constexpr UINT kFolderViewDirectoryImpact       = WM_APP + 0x308;
 inline constexpr UINT kFolderViewCreateThumbnailBitmap = WM_APP + 0x309;
 
 inline constexpr UINT kEditSuggestResults = WM_APP + 0x350;
@@ -37,6 +37,7 @@ inline constexpr UINT kNavigationViewShowHistoryDropdown   = WM_APP + 0x385;
 inline constexpr UINT kNavigationViewShowMenuDropdown      = WM_APP + 0x386;
 inline constexpr UINT kNavigationViewShowDiskInfoDropdown  = WM_APP + 0x387;
 inline constexpr UINT kNavigationViewShowDriveMenuDropdown = WM_APP + 0x388;
+inline constexpr UINT kNavigationViewDriveInfoLoaded       = WM_APP + 0x389;
 
 inline constexpr UINT kPaneFocusChanged          = WM_APP + 0x400;
 inline constexpr UINT kPaneSelectionSizeComputed = WM_APP + 0x401;
@@ -101,15 +102,16 @@ inline constexpr UINT kFindSearchResults         = WM_APP + 0x527;
 inline constexpr UINT kFindSearchProgress        = WM_APP + 0x528;
 inline constexpr UINT kFindSearchComplete        = WM_APP + 0x529;
 inline constexpr UINT kFindSearchDeferredRefresh = WM_APP + 0x52A;
+inline constexpr UINT kFindShowActionMenu        = WM_APP + 0x52D;
 
 // Change Attributes (background)
 inline constexpr UINT kChangeAttributesTaskUpdate = WM_APP + 0x52B;
 inline constexpr UINT kChangeAttributesCompleted  = WM_APP + 0x52C;
 
 // Preferences
-inline constexpr UINT kPreferencesApplyComboThemeDeferred   = WM_APP + 0x530;
-inline constexpr UINT kPreferencesSelectPluginDetails       = WM_APP + 0x531;
-inline constexpr UINT kPreferencesDeferredPaneAction        = WM_APP + 0x532;
+inline constexpr UINT kPreferencesApplyComboThemeDeferred = WM_APP + 0x530;
+inline constexpr UINT kPreferencesSelectPluginDetails     = WM_APP + 0x531;
+inline constexpr UINT kPreferencesDeferredPaneAction      = WM_APP + 0x532;
 // WM_APP + 0x533..0x535 were the retired DxUi text-input bridge messages; keep them reserved.
 inline constexpr UINT kPreferencesApplyPageHostScroll       = WM_APP + 0x538;
 inline constexpr UINT kPluginConfigurationDialogApplyTheme  = WM_APP + 0x536;
@@ -117,9 +119,9 @@ inline constexpr UINT kConnectionCredentialPromptApplyTheme = WM_APP + 0x537;
 inline constexpr UINT kDxUiContextMenuRootHoverChanged      = WM_APP + 0x539;
 
 // Item Properties
-inline constexpr UINT kItemPropertiesLoadComplete = WM_APP + 0x540;
-inline constexpr UINT kItemPropertiesRemoveStream = WM_APP + 0x541;
-inline constexpr UINT kFolderWindowCloseOpenedFilesDialog = WM_APP + 0x542;
+inline constexpr UINT kItemPropertiesLoadComplete               = WM_APP + 0x540;
+inline constexpr UINT kItemPropertiesRemoveStream               = WM_APP + 0x541;
+inline constexpr UINT kFolderWindowCloseOpenedFilesDialog       = WM_APP + 0x542;
 inline constexpr UINT kFolderWindowCloseSharedDirectoriesDialog = WM_APP + 0x543;
 
 // Splash screen
@@ -298,6 +300,14 @@ struct ViewerTextDebugSnapshot
     uint32_t diffBannerBackgroundArgb                = 0u;
     uint32_t diffPlaceholderBackgroundArgb           = 0u;
     uint32_t diffDividerArgb                         = 0u;
+    bool hasLastContextMenuScreenPoint               = false;
+    LONG lastContextMenuScreenX                      = 0;
+    LONG lastContextMenuScreenY                      = 0;
+    bool hasLastTextViewMouseMoveClientPoint         = false;
+    LONG lastTextViewMouseMoveClientX                = 0;
+    LONG lastTextViewMouseMoveClientY                = 0;
+    bool lastTextViewMouseMoveHit                    = false;
+    size_t lastTextViewMouseMoveLogicalLine          = static_cast<size_t>(-1);
     wchar_t firstTextLine[kViewerTextDebugTextPreviewChars]{};
     wchar_t secondTextLine[kViewerTextDebugTextPreviewChars]{};
     wchar_t topVisibleTextLine[kViewerTextDebugTextPreviewChars]{};
@@ -321,49 +331,49 @@ inline constexpr UINT kViewerVlcAsyncOpenComplete = WM_APP + 0x613;
 #ifdef ENABLE_TESTS
 struct ViewerVlcDebugSnapshot
 {
-    bool loadingActive = false;
-    bool loadingVisible = false;
-    bool missingVisible = false;
-    bool hasVideoChild = false;
-    bool videoChildIsChildWindow = false;
-    bool videoChildParentIsViewer = false;
-    bool hasVolumeMuteButton = false;
-    bool hasVolumeSlider = false;
-    bool muted = false;
-    int volume = 0;
-    int64_t timeMs = 0;
-    int64_t lengthMs = 0;
-    LONG snapshotWidth = 0;
-    LONG snapshotHeight = 0;
-    bool hudButtonsUseFilledButtonStyle = false;
-    bool hudIconsUseIconFont = false;
-    wchar_t playPauseIconGlyph = L'\0';
-    wchar_t stopIconGlyph = L'\0';
-    wchar_t snapshotIconGlyph = L'\0';
-    bool volumeIconUsesIconFont = false;
-    wchar_t volumeIconGlyph = L'\0';
-    bool loadingSpinnerUsesRainbow = false;
-    int loadingSpinnerDotCount = 0;
-    LONG loadingSpinnerOrbitPx = 0;
-    LONG loadingSpinnerDotRadiusPx = 0;
+    bool loadingActive                   = false;
+    bool loadingVisible                  = false;
+    bool missingVisible                  = false;
+    bool hasVideoChild                   = false;
+    bool videoChildIsChildWindow         = false;
+    bool videoChildParentIsViewer        = false;
+    bool hasVolumeMuteButton             = false;
+    bool hasVolumeSlider                 = false;
+    bool muted                           = false;
+    int volume                           = 0;
+    int64_t timeMs                       = 0;
+    int64_t lengthMs                     = 0;
+    LONG snapshotWidth                   = 0;
+    LONG snapshotHeight                  = 0;
+    bool hudButtonsUseFilledButtonStyle  = false;
+    bool hudIconsUseIconFont             = false;
+    wchar_t playPauseIconGlyph           = L'\0';
+    wchar_t stopIconGlyph                = L'\0';
+    wchar_t snapshotIconGlyph            = L'\0';
+    bool volumeIconUsesIconFont          = false;
+    wchar_t volumeIconGlyph              = L'\0';
+    bool loadingSpinnerUsesRainbow       = false;
+    int loadingSpinnerDotCount           = 0;
+    LONG loadingSpinnerOrbitPx           = 0;
+    LONG loadingSpinnerDotRadiusPx       = 0;
     LONG loadingSpinnerActiveDotRadiusPx = 0;
-    uint32_t loadingSpinnerFirstDotArgb = 0;
+    uint32_t loadingSpinnerFirstDotArgb  = 0;
     uint32_t loadingSpinnerSecondDotArgb = 0;
 };
 
 struct ViewerVlcDebugPlaybackState
 {
-    int64_t timeMs = 0;
+    int64_t timeMs   = 0;
     int64_t lengthMs = 0;
-    int volume = 100;
-    bool muted = false;
+    int volume       = 100;
+    bool muted       = false;
 };
 
 struct ViewerVlcDebugWheel
 {
     int wheelDelta = 0;
-    bool shift = false;
-    bool ctrl = false;
+    bool shift     = false;
+    bool ctrl      = false;
 };
 
 struct ViewerVlcDebugStopDelay
@@ -381,19 +391,27 @@ inline constexpr UINT kViewerVlcDebugSetStopDelay        = WM_APP + 0x61A;
 
 struct ViewerSpaceTooltipDebugSnapshot
 {
-    uint32_t tooltipNodeId = 0;
-    size_t tooltipTextLength = 0u;
-    float tooltipAnchorXDip = 0.0f;
-    float tooltipAnchorYDip = 0.0f;
-    float tooltipMaxWidthDip = 0.0f;
-    float tooltipMaxHeightDip = 0.0f;
+    uint32_t tooltipNodeId     = 0;
+    size_t tooltipTextLength   = 0u;
+    float tooltipAnchorXDip    = 0.0f;
+    float tooltipAnchorYDip    = 0.0f;
+    float tooltipMaxWidthDip   = 0.0f;
+    float tooltipMaxHeightDip  = 0.0f;
     uint64_t tooltipPaintCount = 0u;
     bool hasRenderTarget = false;
     bool hasTooltipFormat = false;
+    uint32_t hoverNodeId = 0;
+    bool hasLastMouseMoveClientPoint = false;
+    LONG lastMouseMoveClientX = 0;
+    LONG lastMouseMoveClientY = 0;
+    bool hasLastContextMenuScreenPoint = false;
+    LONG lastContextMenuScreenX = 0;
+    LONG lastContextMenuScreenY = 0;
+    uint32_t lastContextMenuHitNodeId = 0;
 };
 
 inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot = WM_APP + 0x61B;
-inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay  = WM_APP + 0x61C;
+inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay = WM_APP + 0x61C;
 #endif
 
 // RedSalamanderMonitor / ColorTextView

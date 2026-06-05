@@ -72,13 +72,30 @@ FolderView::~FolderView()
 
 void FolderView::RecordPendingInputToPaintStart(std::chrono::steady_clock::time_point inputStartedAt) noexcept
 {
-    _pendingInputToPaintStart = inputStartedAt;
+    RecordPendingInputToPaintStart(inputStartedAt, L"folder.frame.input_to_paint_us", {}, 0u, 0u);
+}
+
+void FolderView::RecordPendingInputToPaintStart(
+    std::chrono::steady_clock::time_point inputStartedAt, std::wstring metricName, std::wstring detail, uint64_t value0, uint64_t value1) noexcept
+{
+    if (metricName.empty())
+    {
+        metricName = L"folder.frame.input_to_paint_us";
+    }
+
+    _pendingInputToPaintMetric = PendingInputToPaintMetric{
+        .startedAt  = inputStartedAt,
+        .metricName = std::move(metricName),
+        .detail     = std::move(detail),
+        .value0     = value0,
+        .value1     = value1,
+    };
 }
 
 void FolderView::RecordInputToPaintStartIfViewportOrFocusChanged(std::chrono::steady_clock::time_point inputStartedAt,
-                                                                  float scrollBefore,
-                                                                  float horizontalBefore,
-                                                                  size_t focusedBefore) noexcept
+                                                                 float scrollBefore,
+                                                                 float horizontalBefore,
+                                                                 size_t focusedBefore) noexcept
 {
     if (_scrollOffset != scrollBefore || _horizontalOffset != horizontalBefore || _focusedIndex != focusedBefore)
     {
@@ -88,14 +105,14 @@ void FolderView::RecordInputToPaintStartIfViewportOrFocusChanged(std::chrono::st
 
 void FolderView::EmitPendingInputToPaintMetricAfterPresent() noexcept
 {
-    if (! _pendingInputToPaintStart.has_value())
+    if (! _pendingInputToPaintMetric.has_value())
     {
         return;
     }
 
-    const auto inputStartedAt = _pendingInputToPaintStart.value();
-    _pendingInputToPaintStart.reset();
-    Debug::Perf::Emit(L"folder.frame.input_to_paint_us", L"", Debug::Perf::ElapsedUs(inputStartedAt), 0u, 0u, S_OK);
+    PendingInputToPaintMetric metric = std::move(_pendingInputToPaintMetric.value());
+    _pendingInputToPaintMetric.reset();
+    Debug::Perf::Emit(metric.metricName, metric.detail, Debug::Perf::ElapsedUs(metric.startedAt), metric.value0, metric.value1, S_OK);
 }
 
 std::filesystem::path FolderView::GetItemFullPath(const FolderItem& item) const
@@ -365,8 +382,8 @@ bool FolderView::CanShowEmptyFolderState() const noexcept
 
 void FolderView::RefreshDetailsText()
 {
-    const bool includeDetailsLine  = _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed ||
-                                    _displayMode == DisplayMode::Thumbnails;
+    const bool includeDetailsLine =
+        _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
     if (! includeDetailsLine)
     {
@@ -457,6 +474,9 @@ void FolderView::OnDpiChanged(float newDpi)
 
 void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 {
+    CancelPendingEnumeration();
+    StopEnumerationThread();
+
     _directoryCachePin = DirectoryInfoCache::Pin{};
     _fileSystem        = fileSystem;
     _displayedFolder.reset();
@@ -968,15 +988,15 @@ void FolderView::SetDisplayMode(DisplayMode mode)
     }
 
     const bool thumbnailsChanged = _thumbnailsVisible != thumbnailsVisible;
-    _displayMode            = mode;
-    _thumbnailsVisible      = thumbnailsVisible;
-    _itemMetricsCached      = false;
-    _cachedMaxLabelWidth    = 0.0f;
-    _cachedMaxLabelHeight   = 0.0f;
-    _cachedMaxDetailsWidth  = 0.0f;
-    _cachedMaxMetadataWidth = 0.0f;
-    _detailsSizeSlotChars   = 0;
-    _lastLayoutWidth        = 0.0f;
+    _displayMode                 = mode;
+    _thumbnailsVisible           = thumbnailsVisible;
+    _itemMetricsCached           = false;
+    _cachedMaxLabelWidth         = 0.0f;
+    _cachedMaxLabelHeight        = 0.0f;
+    _cachedMaxDetailsWidth       = 0.0f;
+    _cachedMaxMetadataWidth      = 0.0f;
+    _detailsSizeSlotChars        = 0;
+    _lastLayoutWidth             = 0.0f;
 
     if (thumbnailsChanged)
     {
@@ -1046,7 +1066,7 @@ void FolderView::SetThumbnailSizeDip(uint32_t sizeDip)
     }
 
     CancelThumbnailLoading();
-    _iconSizeDip = static_cast<float>(_thumbnailSizeDip);
+    _iconSizeDip            = static_cast<float>(_thumbnailSizeDip);
     _itemMetricsCached      = false;
     _cachedMaxLabelWidth    = 0.0f;
     _cachedMaxLabelHeight   = 0.0f;
@@ -1085,10 +1105,10 @@ void FolderView::SetFileExtensionsVisible(bool visible)
     }
 
     _fileExtensionsVisible = visible;
-    _itemMetricsCached      = false;
-    _cachedMaxLabelWidth    = 0.0f;
-    _cachedMaxLabelHeight   = 0.0f;
-    _lastLayoutWidth        = 0.0f;
+    _itemMetricsCached     = false;
+    _cachedMaxLabelWidth   = 0.0f;
+    _cachedMaxLabelHeight  = 0.0f;
+    _lastLayoutWidth       = 0.0f;
 
     for (auto& item : _items)
     {

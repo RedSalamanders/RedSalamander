@@ -36,24 +36,24 @@ struct LaunchPlan
 
 struct LaunchOptions
 {
-    HWND ownerWindow = nullptr;
-    int showCommand = SW_SHOWNORMAL;
-    bool waitForExit = false;
-    DWORD waitTimeoutMs = INFINITE;
+    HWND ownerWindow          = nullptr;
+    int showCommand           = SW_SHOWNORMAL;
+    bool waitForExit          = false;
+    DWORD waitTimeoutMs       = INFINITE;
     bool captureProcessHandle = false;
 };
 
 struct LaunchResult
 {
-    LaunchResult() = default;
-    LaunchResult(const LaunchResult&) = delete;
-    LaunchResult& operator=(const LaunchResult&) = delete;
-    LaunchResult(LaunchResult&&) noexcept = default;
+    LaunchResult()                                   = default;
+    LaunchResult(const LaunchResult&)                = delete;
+    LaunchResult& operator=(const LaunchResult&)     = delete;
+    LaunchResult(LaunchResult&&) noexcept            = default;
     LaunchResult& operator=(LaunchResult&&) noexcept = default;
 
     bool exitCodeAvailable = false;
-    DWORD exitCode = 0;
-    DWORD processId = 0;
+    DWORD exitCode         = 0;
+    DWORD processId        = 0;
     wil::unique_handle processHandle;
 };
 

@@ -798,6 +798,14 @@ LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
 
 LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept
 {
+#if defined(ENABLE_TESTS) && defined(_DEBUG)
+    _debugHasLastTextViewMouseMoveClientPoint = true;
+    _debugLastTextViewMouseMoveClientPoint    = pt;
+    const auto debugHit                       = HitTestTextView(hwnd, pt);
+    _debugLastTextViewMouseMoveHit            = debugHit.has_value();
+    _debugLastTextViewMouseMoveLogicalLine    = debugHit.has_value() ? debugHit->logicalLine : static_cast<size_t>(-1);
+#endif
+
     if (! _textSelecting || (GetKeyState(VK_LBUTTON) & 0x8000) == 0)
     {
         return 0;
@@ -835,8 +843,9 @@ LRESULT ViewerText::OnTextViewSetCursor(HWND hwnd, LPARAM lParam) noexcept
         return FALSE;
     }
 
-    POINT pt{};
-    if (GetCursorPos(&pt) == 0 || ScreenToClient(hwnd, &pt) == 0)
+    const DWORD messagePos = GetMessagePos();
+    POINT pt{static_cast<LONG>(static_cast<short>(LOWORD(messagePos))), static_cast<LONG>(static_cast<short>(HIWORD(messagePos)))};
+    if (ScreenToClient(hwnd, &pt) == 0)
     {
         return FALSE;
     }

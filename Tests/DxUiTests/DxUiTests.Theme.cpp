@@ -758,8 +758,8 @@ void TestPrimaryButtonVisualStyleFallsBackToReadableText()
 {
     using namespace RedSalamander::DxUi;
 
-    ThemePalette theme = MakeDefaultThemePalette(false);
-    theme.buttonFill   = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
+    ThemePalette theme  = MakeDefaultThemePalette(false);
+    theme.buttonFill    = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
     theme.selectionFill = D2D1::ColorF(0.58f, 0.78f, 0.92f, 1.0f);
     theme.selectionText = D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
     theme.text          = D2D1::ColorF(0.02f, 0.02f, 0.02f, 1.0f);

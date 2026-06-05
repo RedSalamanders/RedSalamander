@@ -9,6 +9,32 @@ namespace RedSalamander::Ui
 {
 class AlertOverlayUiaProvider;
 
+#if defined(ENABLE_TESTS)
+struct AlertOverlayWindowDebugSnapshot
+{
+    bool visible = false;
+    bool hasLayout = false;
+    bool hasBackdropBitmap = false;
+    uint64_t paintCount = 0;
+    float lastDrawOpacity = 0.0f;
+    float lastDrawScrimOpacity = 0.0f;
+    float minimumDrawOpacity = 1.0f;
+    uint64_t backdropCaptureCount = 0;
+    SIZE clientSizePx{};
+    SIZE backdropSizePx{};
+    RECT closeRectPx{};
+    uint64_t mouseDownCount = 0;
+    uint64_t mouseUpCount = 0;
+    uint64_t dismissCount = 0;
+    POINT lastMouseDownPointPx{};
+    POINT lastMouseUpPointPx{};
+    int lastMouseDownHitPart = -1;
+    int lastMouseUpHitPart = -1;
+};
+
+[[nodiscard]] bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapshot& out) noexcept;
+#endif
+
 struct AlertOverlayWindowCallbacks
 {
     void* context                                               = nullptr;
@@ -19,6 +45,9 @@ struct AlertOverlayWindowCallbacks
 class AlertOverlayWindow final
 {
     friend class AlertOverlayUiaProvider;
+#if defined(ENABLE_TESTS)
+    friend bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapshot& out) noexcept;
+#endif
 
 public:
     AlertOverlayWindow() noexcept = default;
@@ -54,6 +83,8 @@ private:
     void OnMouseMove(POINT pt) noexcept;
     void OnMouseLeave() noexcept;
     void OnLButtonDown(POINT pt) noexcept;
+    void OnLButtonUp(POINT pt) noexcept;
+    void OnCaptureChanged(HWND newCapture) noexcept;
     void OnKeyDown(WPARAM key) noexcept;
     [[nodiscard]] bool OnSysChar(WPARAM key) noexcept;
     LRESULT OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg) noexcept;
@@ -75,12 +106,14 @@ private:
     void AttachToAnchor(HWND anchor) noexcept;
 
     void UpdatePlacement() noexcept;
+    [[nodiscard]] bool EnsureOverlayLayoutForInput() noexcept;
 
     static LRESULT CALLBACK ParentWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     static LRESULT CALLBACK AnchorWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
     void EnsureD2DResources() noexcept;
     void DiscardD2DResources() noexcept;
+    void CaptureBackdrop(bool preserveExistingOnFailure = false) noexcept;
 
     void ApplyRegionFromOverlay() noexcept;
     void ClearRegion() noexcept;
@@ -114,14 +147,29 @@ private:
 
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<ID2D1HwndRenderTarget> _target;
+    wil::com_ptr<ID2D1Bitmap> _backdropBitmap;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
 
     AlertOverlay _overlay;
+    AlertHitTest _pressedHit{};
 
     std::optional<RECT> _panelRegionPx;
 
     AlertOverlayWindowCallbacks _callbacks{};
     std::optional<uint32_t> _primaryButtonId;
     std::optional<uint32_t> _escapeButtonId;
+#if defined(ENABLE_TESTS)
+    uint64_t _debugPaintCount = 0;
+    float _debugMinimumDrawOpacity = 1.0f;
+    uint64_t _debugBackdropCaptureCount = 0;
+    SIZE _debugBackdropSizePx{};
+    uint64_t _debugMouseDownCount = 0;
+    uint64_t _debugMouseUpCount = 0;
+    uint64_t _debugDismissCount = 0;
+    POINT _debugLastMouseDownPointPx{};
+    POINT _debugLastMouseUpPointPx{};
+    int _debugLastMouseDownHitPart = -1;
+    int _debugLastMouseUpHitPart = -1;
+#endif
 };
 } // namespace RedSalamander::Ui

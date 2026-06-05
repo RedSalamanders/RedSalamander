@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <cwchar>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <limits>
@@ -239,23 +240,49 @@ struct ViewerSpaceClassBackgroundBrushState
     bool classRegistered = false;
 };
 
-ViewerSpaceClassBackgroundBrushState g_viewerSpaceClassBackgroundBrush;
+ViewerSpaceClassBackgroundBrushState* g_viewerSpaceClassBackgroundBrush = []() noexcept
+{
+    auto* state = new (std::nothrow) ViewerSpaceClassBackgroundBrushState();
+    if (state == nullptr)
+    {
+        std::terminate();
+    }
+    return state;
+}();
+std::atomic_uint32_t g_viewerSpaceWindowCount{0};
+ATOM g_viewerSpaceClassAtom = 0;
+
+void DestroyViewerSpaceClassBackgroundBrushState() noexcept
+{
+    if (g_viewerSpaceClassBackgroundBrush == nullptr)
+    {
+        return;
+    }
+
+    g_viewerSpaceClassBackgroundBrush->classRegistered = false;
+    g_viewerSpaceClassBackgroundBrush->pendingBrush.reset();
+    g_viewerSpaceClassBackgroundBrush->pendingColor = CLR_INVALID;
+    g_viewerSpaceClassBackgroundBrush->activeBrush.reset();
+    g_viewerSpaceClassBackgroundBrush->activeColor = CLR_INVALID;
+    delete g_viewerSpaceClassBackgroundBrush;
+    g_viewerSpaceClassBackgroundBrush = nullptr;
+}
 
 HBRUSH GetActiveViewerSpaceClassBackgroundBrush() noexcept
 {
-    if (g_viewerSpaceClassBackgroundBrush.pendingBrush)
+    if (g_viewerSpaceClassBackgroundBrush->pendingBrush)
     {
-        return g_viewerSpaceClassBackgroundBrush.pendingBrush.get();
+        return g_viewerSpaceClassBackgroundBrush->pendingBrush.get();
     }
 
-    if (! g_viewerSpaceClassBackgroundBrush.activeBrush)
+    if (! g_viewerSpaceClassBackgroundBrush->activeBrush)
     {
-        const COLORREF fallback                       = GetSysColor(COLOR_WINDOW);
-        g_viewerSpaceClassBackgroundBrush.activeColor = fallback;
-        g_viewerSpaceClassBackgroundBrush.activeBrush.reset(CreateSolidBrush(fallback));
+        const COLORREF fallback                        = GetSysColor(COLOR_WINDOW);
+        g_viewerSpaceClassBackgroundBrush->activeColor = fallback;
+        g_viewerSpaceClassBackgroundBrush->activeBrush.reset(CreateSolidBrush(fallback));
     }
 
-    return g_viewerSpaceClassBackgroundBrush.activeBrush.get();
+    return g_viewerSpaceClassBackgroundBrush->activeBrush.get();
 }
 
 void RequestViewerSpaceClassBackgroundColor(COLORREF color) noexcept
@@ -265,7 +292,7 @@ void RequestViewerSpaceClassBackgroundColor(COLORREF color) noexcept
         return;
     }
 
-    if (g_viewerSpaceClassBackgroundBrush.pendingBrush && g_viewerSpaceClassBackgroundBrush.pendingColor == color)
+    if (g_viewerSpaceClassBackgroundBrush->pendingBrush && g_viewerSpaceClassBackgroundBrush->pendingColor == color)
     {
         return;
     }
@@ -276,23 +303,23 @@ void RequestViewerSpaceClassBackgroundColor(COLORREF color) noexcept
         return;
     }
 
-    g_viewerSpaceClassBackgroundBrush.pendingColor = color;
-    g_viewerSpaceClassBackgroundBrush.pendingBrush = std::move(brush);
+    g_viewerSpaceClassBackgroundBrush->pendingColor = color;
+    g_viewerSpaceClassBackgroundBrush->pendingBrush = std::move(brush);
 }
 
 void ApplyPendingViewerSpaceClassBackgroundBrush(HWND hwnd) noexcept
 {
-    if (! hwnd || ! g_viewerSpaceClassBackgroundBrush.pendingBrush || ! g_viewerSpaceClassBackgroundBrush.classRegistered)
+    if (! hwnd || ! g_viewerSpaceClassBackgroundBrush->pendingBrush || ! g_viewerSpaceClassBackgroundBrush->classRegistered)
     {
         return;
     }
 
-    const LONG_PTR newBrush = reinterpret_cast<LONG_PTR>(g_viewerSpaceClassBackgroundBrush.pendingBrush.get());
+    const LONG_PTR newBrush = reinterpret_cast<LONG_PTR>(g_viewerSpaceClassBackgroundBrush->pendingBrush.get());
     SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, newBrush);
 
-    g_viewerSpaceClassBackgroundBrush.activeBrush  = std::move(g_viewerSpaceClassBackgroundBrush.pendingBrush);
-    g_viewerSpaceClassBackgroundBrush.activeColor  = g_viewerSpaceClassBackgroundBrush.pendingColor;
-    g_viewerSpaceClassBackgroundBrush.pendingColor = CLR_INVALID;
+    g_viewerSpaceClassBackgroundBrush->activeBrush  = std::move(g_viewerSpaceClassBackgroundBrush->pendingBrush);
+    g_viewerSpaceClassBackgroundBrush->activeColor  = g_viewerSpaceClassBackgroundBrush->pendingColor;
+    g_viewerSpaceClassBackgroundBrush->pendingColor = CLR_INVALID;
 }
 
 constexpr char kViewerSpaceSchemaJson[] = R"json({
@@ -1288,6 +1315,28 @@ public:
         return {};
     }
 
+    void Shutdown() noexcept
+    {
+        std::vector<std::shared_ptr<VolumeEntry>> entries;
+        {
+            std::scoped_lock lock(_mutex);
+            entries.reserve(_byVolume.size());
+            for (const auto& item : _byVolume)
+            {
+                if (item.second)
+                {
+                    entries.push_back(item.second);
+                }
+            }
+            _byVolume.clear();
+        }
+
+        for (const auto& entry : entries)
+        {
+            entry->cv.notify_all();
+        }
+    }
+
 private:
     static std::wstring TryGetVolumeKey(const std::filesystem::path& path) noexcept
     {
@@ -1321,10 +1370,31 @@ private:
     std::unordered_map<std::wstring, std::shared_ptr<VolumeEntry>> _byVolume;
 };
 
+ScanScheduler* g_scanScheduler = nullptr;
+
 ScanScheduler& GetScanScheduler() noexcept
 {
-    static ScanScheduler scheduler;
-    return scheduler;
+    if (g_scanScheduler == nullptr)
+    {
+        g_scanScheduler = new (std::nothrow) ScanScheduler();
+        if (g_scanScheduler == nullptr)
+        {
+            std::terminate();
+        }
+    }
+    return *g_scanScheduler;
+}
+
+void ShutdownScanScheduler() noexcept
+{
+    if (g_scanScheduler == nullptr)
+    {
+        return;
+    }
+
+    g_scanScheduler->Shutdown();
+    delete g_scanScheduler;
+    g_scanScheduler = nullptr;
 }
 
 struct ScanResultCacheKey final
@@ -1402,6 +1472,11 @@ public:
     {
         std::scoped_lock lock(_mutex);
         _entries.clear();
+    }
+
+    void Shutdown() noexcept
+    {
+        Clear();
     }
 
     void TrimTo(uint32_t maxEntries) noexcept
@@ -1533,10 +1608,38 @@ private:
     std::vector<Entry> _entries;
 };
 
+ScanResultCache* g_scanResultCache = nullptr;
+
 ScanResultCache& GetScanResultCache() noexcept
 {
-    static ScanResultCache cache;
-    return cache;
+    if (g_scanResultCache == nullptr)
+    {
+        g_scanResultCache = new (std::nothrow) ScanResultCache();
+        if (g_scanResultCache == nullptr)
+        {
+            std::terminate();
+        }
+    }
+    return *g_scanResultCache;
+}
+
+void ShutdownScanResultCache() noexcept
+{
+    if (g_scanResultCache == nullptr)
+    {
+        return;
+    }
+
+    g_scanResultCache->Shutdown();
+    delete g_scanResultCache;
+    g_scanResultCache = nullptr;
+}
+
+void ShutdownViewerSpaceModuleStateImpl() noexcept
+{
+    ShutdownScanResultCache();
+    ShutdownScanScheduler();
+    DestroyViewerSpaceClassBackgroundBrushState();
 }
 
 } // namespace
@@ -1544,6 +1647,11 @@ ScanResultCache& GetScanResultCache() noexcept
 const char* GetViewerSpaceStaticConfigurationSchema() noexcept
 {
     return GetViewerSpaceStaticConfigurationSchemaImpl();
+}
+
+void ShutdownViewerSpaceModuleState() noexcept
+{
+    ShutdownViewerSpaceModuleStateImpl();
 }
 
 ViewerSpace::ViewerSpace()
@@ -1563,6 +1671,20 @@ ViewerSpace::ViewerSpace()
     _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     static_cast<void>(SetConfiguration(nullptr));
+}
+
+ViewerSpace::~ViewerSpace()
+{
+    CancelScanAndWait();
+    CancelScanCacheBuild();
+
+    {
+        std::scoped_lock lock(_updateMutex);
+        _pendingUpdates.clear();
+    }
+
+    _fileSystem.reset();
+    _hostPaneExecute.reset();
 }
 
 void ViewerSpace::SetHost(IHost* host) noexcept
@@ -1809,11 +1931,10 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::SomethingToSave(BOOL* pSomethingToSave) n
 
 ATOM ViewerSpace::RegisterWndClass(HINSTANCE instance) noexcept
 {
-    static ATOM atom = 0;
-    if (atom)
+    if (g_viewerSpaceClassAtom)
     {
-        g_viewerSpaceClassBackgroundBrush.classRegistered = true;
-        return atom;
+        g_viewerSpaceClassBackgroundBrush->classRegistered = true;
+        return g_viewerSpaceClassAtom;
     }
 
     WNDCLASSEXW wc{};
@@ -1824,20 +1945,40 @@ ATOM ViewerSpace::RegisterWndClass(HINSTANCE instance) noexcept
     wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = GetActiveViewerSpaceClassBackgroundBrush();
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-    atom             = RegisterClassExW(&wc);
-    if (atom == 0)
+    g_viewerSpaceClassAtom = RegisterClassExW(&wc);
+    if (g_viewerSpaceClassAtom == 0)
     {
         const DWORD lastError = GetLastError();
         if (lastError == ERROR_CLASS_ALREADY_EXISTS)
         {
-            atom = 1;
+            g_viewerSpaceClassAtom = 1;
         }
     }
-    if (atom)
+    if (g_viewerSpaceClassAtom)
     {
-        g_viewerSpaceClassBackgroundBrush.classRegistered = true;
+        g_viewerSpaceClassBackgroundBrush->classRegistered = true;
     }
-    return atom;
+    return g_viewerSpaceClassAtom;
+}
+
+void ViewerSpace::UnregisterWndClassIfIdle() noexcept
+{
+    if (g_viewerSpaceWindowCount.load(std::memory_order_acquire) != 0 || ! g_viewerSpaceClassAtom)
+    {
+        return;
+    }
+
+    if (UnregisterClassW(kClassName, g_hInstance) == 0)
+    {
+        return;
+    }
+
+    g_viewerSpaceClassAtom = 0;
+    g_viewerSpaceClassBackgroundBrush->classRegistered = false;
+    g_viewerSpaceClassBackgroundBrush->pendingBrush.reset();
+    g_viewerSpaceClassBackgroundBrush->pendingColor = CLR_INVALID;
+    g_viewerSpaceClassBackgroundBrush->activeBrush.reset();
+    g_viewerSpaceClassBackgroundBrush->activeColor = CLR_INVALID;
 }
 
 LRESULT CALLBACK ViewerSpace::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
@@ -1848,6 +1989,7 @@ LRESULT CALLBACK ViewerSpace::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARA
         auto* self     = static_cast<ViewerSpace*>(cs ? cs->lpCreateParams : nullptr);
         if (self)
         {
+            g_viewerSpaceWindowCount.fetch_add(1, std::memory_order_acq_rel);
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
         }
     }
@@ -1886,22 +2028,30 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            *snapshot                 = {};
-            snapshot->tooltipNodeId   = _tooltipNodeId;
-            snapshot->tooltipTextLength = _tooltipText.size();
-            snapshot->tooltipAnchorXDip = _tooltipAnchorDip.x;
-            snapshot->tooltipAnchorYDip = _tooltipAnchorDip.y;
-            snapshot->tooltipMaxWidthDip = kTooltipMaxWidthDip;
+            *snapshot                     = {};
+            snapshot->tooltipNodeId       = _tooltipNodeId;
+            snapshot->tooltipTextLength   = _tooltipText.size();
+            snapshot->tooltipAnchorXDip   = _tooltipAnchorDip.x;
+            snapshot->tooltipAnchorYDip   = _tooltipAnchorDip.y;
+            snapshot->tooltipMaxWidthDip  = kTooltipMaxWidthDip;
             snapshot->tooltipMaxHeightDip = kTooltipMaxHeightDip;
             snapshot->tooltipPaintCount = _tooltipPaintCount;
             snapshot->hasRenderTarget = _renderTarget != nullptr;
             snapshot->hasTooltipFormat = _tooltipFormat != nullptr;
+            snapshot->hoverNodeId = _hoverNodeId;
+            snapshot->hasLastMouseMoveClientPoint = _debugHasLastMouseMoveClientPoint;
+            snapshot->lastMouseMoveClientX = _debugLastMouseMoveClientPoint.x;
+            snapshot->lastMouseMoveClientY = _debugLastMouseMoveClientPoint.y;
+            snapshot->hasLastContextMenuScreenPoint = _debugHasLastContextMenuScreenPoint;
+            snapshot->lastContextMenuScreenX = _debugLastContextMenuScreenPoint.x;
+            snapshot->lastContextMenuScreenY = _debugLastContextMenuScreenPoint.y;
+            snapshot->lastContextMenuHitNodeId = _debugLastContextMenuHitNodeId;
             return TRUE;
         }
         case WndMsg::kViewerSpaceDebugShowTooltipOverlay:
         {
-            _tooltipNodeId  = 1u;
-            _tooltipText    = L"ViewerSpace debug tooltip overlay text that wraps through Direct2D.";
+            _tooltipNodeId    = 1u;
+            _tooltipText      = L"ViewerSpace debug tooltip overlay text that wraps through Direct2D.";
             _tooltipAnchorDip = D2D1::Point2F(40.0f, GetHeaderBottomDip() + 24.0f);
             if (_hWnd)
             {
@@ -1969,10 +2119,16 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             POINT screenPt{static_cast<LONG>(static_cast<short>(LOWORD(lp))), static_cast<LONG>(static_cast<short>(HIWORD(lp)))};
             if (screenPt.x == -1 && screenPt.y == -1)
             {
-                if (GetCursorPos(&screenPt) == 0)
+                RECT client{};
+                if (GetClientRect(hwnd, &client) != 0)
                 {
-                    screenPt = POINT{};
+                    screenPt.x = client.left + ((client.right - client.left) / 2);
+                    screenPt.y = client.top + ((client.bottom - client.top) / 2);
                     ClientToScreen(hwnd, &screenPt);
+                }
+                else
+                {
+                    screenPt = {};
                 }
             }
             OnContextMenu(hwnd, screenPt);
@@ -3427,6 +3583,11 @@ void ViewerSpace::OnMouseMove(int x, int y) noexcept
         return;
     }
 
+#if defined(ENABLE_TESTS)
+    _debugHasLastMouseMoveClientPoint = true;
+    _debugLastMouseMoveClientPoint    = POINT{x, y};
+#endif
+
     if (! _trackingMouse)
     {
         TRACKMOUSEEVENT tme{};
@@ -3728,6 +3889,12 @@ void ViewerSpace::OnLButtonDblClk(int x, int y) noexcept
 
 void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 {
+#if defined(ENABLE_TESTS)
+    _debugHasLastContextMenuScreenPoint = true;
+    _debugLastContextMenuScreenPoint    = screenPt;
+    _debugLastContextMenuHitNodeId      = 0;
+#endif
+
     if (! hwnd)
     {
         return;
@@ -3763,6 +3930,9 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     const float yDip = DipFromPx(clientPt.y);
 
     const std::optional<uint32_t> hit = HitTestTreemap(xDip, yDip);
+#if defined(ENABLE_TESTS)
+    _debugLastContextMenuHitNodeId = hit.value_or(0);
+#endif
     if (! hit.has_value())
     {
         HMENU menu = viewerMenu;
@@ -3771,12 +3941,12 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
             return;
         }
 
-        const auto result = RedSalamander::DxUi::ShowNativeHMenuContextMenu(
-            hwnd,
-            screenPt,
-            menu,
-            _hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false),
-            previewMenuOptions);
+        const auto result = RedSalamander::DxUi::ShowNativeHMenuContextMenu(hwnd,
+                                                                            screenPt,
+                                                                            menu,
+                                                                            _hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme)
+                                                                                      : RedSalamander::DxUi::MakeDefaultThemePalette(false),
+                                                                            previewMenuOptions);
         if (result.has_value() && result.value() > 0)
         {
             OnCommand(hwnd, static_cast<UINT>(result.value()));
@@ -4050,9 +4220,7 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     {
         case IDM_VIEWERSPACE_FILE_REFRESH:
         case IDM_VIEWERSPACE_NAV_UP:
-        case IDM_VIEWERSPACE_FILE_EXIT:
-            OnCommand(hwnd, commandId);
-            return;
+        case IDM_VIEWERSPACE_FILE_EXIT: OnCommand(hwnd, commandId); return;
         default: break;
     }
 
@@ -4090,8 +4258,16 @@ LRESULT ViewerSpace::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _hWnd.release();
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
+    const LRESULT result = DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
+    const uint32_t previousWindowCount = g_viewerSpaceWindowCount.load(std::memory_order_acquire);
+    if (previousWindowCount != 0 &&
+        g_viewerSpaceWindowCount.fetch_sub(1, std::memory_order_acq_rel) == 1u)
+    {
+        UnregisterWndClassIfIdle();
+    }
+
     Release();
-    return DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
+    return result;
 }
 
 void ViewerSpace::OnTimer(UINT_PTR timerId) noexcept
@@ -4104,15 +4280,6 @@ void ViewerSpace::OnTimer(UINT_PTR timerId) noexcept
     ReapFinishedScanWorkers(false);
     DrainUpdates();
     MaybeRebuildLayout();
-
-    if (_trackingMouse)
-    {
-        POINT pt{};
-        if (GetCursorPos(&pt) != 0 && ScreenToClient(_hWnd.get(), &pt) != 0)
-        {
-            OnMouseMove(static_cast<int>(pt.x), static_cast<int>(pt.y));
-        }
-    }
 
     const double now = NowSeconds();
 
@@ -4655,8 +4822,8 @@ void ViewerSpace::PaintTooltipOverlay() noexcept
         return;
     }
 
-    constexpr float kPadXDip     = 10.0f;
-    constexpr float kPadYDip     = 7.0f;
+    constexpr float kPadXDip      = 10.0f;
+    constexpr float kPadYDip      = 7.0f;
     constexpr float kScreenGapDip = 8.0f;
     const float textWidthDip      = std::clamp(metrics.widthIncludingTrailingWhitespace, 48.0f, maxWidthDip);
     const float textHeightDip     = std::clamp(metrics.height, 16.0f, maxHeightDip);
@@ -7281,7 +7448,7 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
         return E_INVALIDARG;
     }
 
-    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const bool embeddedMode   = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (! embeddedParent || IsWindow(embeddedParent) == FALSE))
     {
@@ -7343,23 +7510,13 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
 
         HMENU loadedMenu = embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERSPACE_MENU);
         wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(loadedMenu);
-        const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : WS_OVERLAPPEDWINDOW;
+        const DWORD style               = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : WS_OVERLAPPEDWINDOW;
         const bool previousEmbeddedMode = _embeddedMode;
         _embeddedMode                   = embeddedMode;
-        const std::wstring initialTitle = embeddedMode ? std::wstring{}
-                                                       : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERSPACE_NAME) : _metaName);
-        HWND window = CreateWindowExW(0,
-                                      kClassName,
-                                      initialTitle.c_str(),
-                                      style,
-                                      x,
-                                      y,
-                                      w,
-                                      h,
-                                      embeddedMode ? embeddedParent : nullptr,
-                                      menu.get(),
-                                      g_hInstance,
-                                      this);
+        const std::wstring initialTitle =
+            embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERSPACE_NAME) : _metaName);
+        HWND window =
+            CreateWindowExW(0, kClassName, initialTitle.c_str(), style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, menu.get(), g_hInstance, this);
         if (! window)
         {
             _embeddedMode = previousEmbeddedMode;

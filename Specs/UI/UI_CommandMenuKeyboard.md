@@ -36,6 +36,11 @@ When an **edit control** is focused, the host MUST bypass (2) and (3) and MUST N
 
 Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST follow standard Windows directional behavior:
 - Opening a root popup or submenu from the keyboard MUST move the keyboard highlight to the first navigable item in that newly opened popup.
+- `ContextMenu::Show(...)` is the single owner for active DxUi menu hover, keyboard highlight, invocation, dismissal, submenu, and root-switch state. Popup window procedures translate popup input into that router; the modal-loop pump dispatches popup traffic and may handle only non-popup/global coordination such as activation loss, menu-bar root switching, and submenu timers.
+- Active DxUi menus must invalidate and repaint popup hover/keyboard changes through the normal popup `WM_PAINT` path while the menu loop is running. Popup invocation and dismissal must end the active menu loop from the popup message route itself, so selected commands return without an extra title-bar click or activation change.
+- Delivered popup and owner mouse messages MUST use the message coordinate as the authoritative pointer location. Production input routing MUST NOT call `GetCursorPos()` or replace a delivered `WM_MOUSEMOVE`, button, or wheel point with the live cursor. `GetCursorPos()` is permitted only in diagnostic logging and selftest/repro harness code that records evidence; it must not affect hover, invocation, dismissal, root switching, stale classification, or repaint state. This preserves normal Win32 queue semantics when a captured popup receives a delayed message whose `lParam` no longer matches the current cursor position.
+- The active menu loop MUST route non-popup owner/child `WM_MOUSEMOVE`, button, and wheel messages through the same menu input router instead of discarding them until another popup or title-bar message arrives. This is required for split-button menus, top menu-bar root switching, and embedded NavigationView dropdowns hosted in modeless windows such as Find.
+- Root-switch duplicate suppression is part of the menu-loop contract: rejected owner mouse moves may record the delivered root-hover point, but rejected popup-captured moves outside the popup MUST NOT overwrite that point. A queued owner move that predates a keyboard root switch is consumed and recorded without switching back. After a pointer-driven root switch, later owner moves are accepted or rejected from delivered-message metadata such as message time/order, source hwnd, capture/menu ownership, root-switch generation, and delivered coordinates; they must not be compared with `GetCursorPos()`. These stale-message guards must not block a fresh owner move when no pointer-driven root switch has occurred.
 - `Right` on a highlighted item with a submenu MUST open that submenu and move the keyboard highlight to its first navigable item.
 - `Right` on a highlighted leaf item inside a top-level menu session MUST switch to the next enabled top-level menu and move the keyboard highlight to that popup's first navigable item.
 - `Left` inside a submenu MUST close only the current submenu and restore the highlight to the parent item that opened it.
@@ -51,6 +56,20 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - During an active top-level menu session, the menu bar highlight MUST stay on the root menu whose popup is currently open, including while focus is held by the popup window. A stale hover from the cursor's pre-existing position MUST NOT leave a previous top-level item highlighted after another root popup opens.
 - Exiting a DxUi top-level menu session without transferring focus to another control MUST restore keyboard focus to the pane/control that owned focus before menu mode started.
 - Pressing `Escape` while a top-level menu bar, menu popup, or pane-owned context menu has keyboard ownership MUST dismiss that transient UI first, then restore keyboard focus to the active pane's `FolderView` unless the chosen command intentionally opens another focus-owning surface.
+
+### Transient Overlay Routing
+
+App-owned DxUi transient overlays such as alert/help messages MUST be real input-routing windows while visible. They MUST NOT rely on `WM_PAINT`, `UpdateWindow`, pointer movement, title-bar activation, or owner-window messages to make hover, close, button, or keyboard dismissal become active.
+
+- Overlay hit geometry for close glyphs and buttons MUST be prepared synchronously before the first visible frame and before the first possible pointer hit test.
+- Pointer actions MUST use normal press/release semantics with capture for clickable overlay parts, and the action MUST run from the overlay's own delivered mouse messages.
+- The first click after an overlay gains activation MUST still be actionable. If activation or OS routing causes a clickable release to arrive without a matching local press, releasing over the close glyph MUST close the overlay instead of waiting for later mouse movement, title-bar focus changes, or owner-window traffic.
+- `Escape` MUST close a keyboard-owned modal overlay immediately and restore the intended previous focus target.
+- Keyboard dismissal and focus reclaim MUST include owned top-level overlay popups as well as child windows of the owner root.
+- If a custom overlay surface needs shaped or translucent visuals, the implementation must still preserve reliable Win32 pointer delivery; child layered windows are not acceptable when they drop real `SendInput`/mouse traffic or delay delivery until unrelated owner messages arrive.
+- Owned top-level modal overlays that draw a translucent scrim MUST compose that scrim over a captured owner/screen backdrop, or an equivalent live composition surface, before the first visible paint. Anchored window overlays should prefer an owner/anchor render capture before falling back to screen capture so another desktop surface cannot turn the modal backdrop black or leave it missing. They MUST NOT draw a semi-transparent scrim over an uninitialized or black top-level HWND surface.
+- Regression coverage for overlay input MUST deliver the close path's normal mouse messages and MUST prove no title-bar movement or extra activation message is needed.
+- Every popup/overlay destroy path MUST cancel pending timers, detach its `WindowHost`, clear `GWLP_USERDATA` on `WM_NCDESTROY`, and forget stale `HWND` values so no dead window can keep receiving routed menu or graphics messages.
 
 ### Scope and focus
 
@@ -107,11 +126,11 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - Text edit controls keep ownership of ordinary text clipboard commands. When a navigation edit owns focus, `Ctrl+C`, `Ctrl+X`, and `Ctrl+V` MUST copy, cut, and paste text in that edit control before pane file commands are considered.
 - `cmd/pane/clipboardCopy` writes selected or focused local file-system items as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_COPY`.
 - `cmd/pane/clipboardCut` writes selected or focused local file-system items as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_MOVE`. It does not delete or move files immediately.
-- `cmd/pane/clipboardPaste` copies clipboard file-drop paths into the current local folder using the file-operation copy path.
+- `cmd/pane/clipboardPaste` reads clipboard file-drop paths and the shell `Preferred DropEffect`. A `DROPEFFECT_MOVE` preference MUST move the source paths into the current local folder through the file-operation move path; `DROPEFFECT_COPY`, missing metadata, or unsupported metadata MUST copy through the file-operation copy path. The shared File Operations layer owns the copy/move confirmation prompt for delegated pane operations, so a Ctrl+X then Ctrl+V move MUST show exactly one OK/Cancel confirmation before execution. The source and destination panes must refresh through the normal file-operation/cache notification path after an accepted move.
 - `cmd/pane/clipboardPasteShortcut` reads clipboard file-drop paths and creates `.lnk` shortcuts in the current local folder. Shortcut names MUST be unique in the destination folder, the pane MUST refresh after creation, and the last created shortcut SHOULD become the focused item when visible.
 - Copy-as-text commands (`cmd/pane/copyPathAndNameAsText`, `cmd/pane/copyNameAsText`, `cmd/pane/copyPathAsText`, and `cmd/pane/copyUncPathAndNameAsText`) write `CF_UNICODETEXT` for the selected items, or the focused item when nothing is selected. Clipboard writes MUST tolerate short-lived clipboard contention by retrying `OpenClipboard(...)` for a bounded period before showing localized pane feedback.
 - Unsupported providers, empty selections, clipboard contents without file paths, and shortcut creation failures keep the pane in place and show localized pane feedback instead of falling through to a generic not-implemented command.
-- Command selftests MUST keep correctness and responsiveness visible with `clipboard.cut_us`, `clipboard.paste_shortcut_us`, and `clipboard.feedback_us` metrics.
+- Command selftests MUST keep correctness and responsiveness visible with `clipboard.cut_us`, `clipboard.paste_shortcut_us`, and `clipboard.feedback_us` metrics. `cmd_pane_clipboardPaste_uses_preferred_move_effect` covers the real `cmd/pane/clipboardPaste` dispatch using `CF_HDROP` plus `Preferred DropEffect = DROPEFFECT_MOVE` so Ctrl+X then Ctrl+V moves instead of copying and requests only one move confirmation.
 
 ### Quick Search
 
@@ -187,7 +206,7 @@ Pane view option commands target the focused pane, or the active pane when focus
 - Each row shows the display file name, source (`Viewer`, `Editor`, or `Preview Pane`), opener/action name when known, and the full path.
 - External process rows with captured handles are pruned once the process exits. Viewer rows are removed when their viewer window closes. Preview rows follow the current preview item and disappear when Preview is closed.
 - When no rows exist, the dialog remains visible and shows a localized empty state.
-- Double-click and **Focus Item** navigate the owning pane to the row path when the item is still reachable, then focus/select it in the folder view.
+- Double-click and **Focus** navigate the owning pane to the row path when the item is still reachable, then focus/select it in the folder view.
 - The dialog MUST be a modeless DxUi-hosted app window, inherit the active app theme and themed window chrome, and avoid visible native dialog-template controls in DxUi mode.
 - Command selftests MUST keep correctness and responsiveness visible with themed DxUi-host coverage, viewer/editor/preview source coverage, closed-process pruning, focus navigation, `listOpenedFiles.open_us`, and an archived `list_opened_files_metrics.json` artifact.
 
@@ -720,11 +739,20 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 
 #### Find Files and Directories (`cmd/pane/find`)
 
-- Invoking the command MUST open or activate the modeless host-owned `Find Files and Directories` window.
+- Invoking the command MUST open a new independent modeless host-owned `Find Files and Directories` window.
 - The command MUST target the focused pane when focus is inside a pane; otherwise it MUST target the active pane.
 - The initial search scope MUST come from the target pane's current plugin, instance context, and current path.
-- If the Find window is already open, invoking the command again MUST reuse that window and refresh its context instead of opening a duplicate.
+- Multiple Find windows MAY be open simultaneously. The newest instance is the debug/test target for Find-window debug helpers, but each live window remains independently usable until closed.
 - Search execution MUST remain off the UI thread, and the dialog MUST support `Find`, `Append`, `Intersect`, `Subtract`, and `Cancel`.
+- The `Look in:` field MUST be presented as the shared `NavigationView` address bar, using the target pane's path/history contract for breadcrumbs, full-path editing, autosuggest, validation, and history menus.
+- While the results grid has focus, key presses MUST be resolved through the configured shortcut tables to stable command IDs before Find performs any result action. Find MUST NOT keep private hard-coded shortcut behavior for these commands.
+- The result-grid context menu MUST expose the same action set as the keyboard/command path and dispatch by stable command IDs into the existing Find result handlers. Its visible shortcut text MUST be resolved from the effective shortcut settings; it MUST NOT use private hard-coded shortcut labels.
+- When multiple results are selected and the context-clicked row is selected, the result-grid context menu MUST split actions into a clicked-item section and a whole-selection section. Clicked-item actions operate only on the hit row; selection actions operate on the current selected result set.
+- `cmd/pane/clipboardCopy` MUST publish selected local results as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_COPY`; `cmd/pane/clipboardCut` MUST publish `CF_HDROP` with Preferred DropEffect `DROPEFFECT_MOVE` and a full-path Unicode text fallback that supports selections from multiple subfolders.
+- `cmd/pane/copyToOtherPane` and `cmd/pane/moveToOtherPane` MUST start the shared File Operations copy/move path for selected Find results, using the opposite pane as the destination. Accepted operations MUST show the resolved destination folder in the Find status line, and accepted move operations MUST remove the moved rows from the current Find result set.
+- `cmd/pane/view`, `cmd/pane/alternateView`, `cmd/pane/edit`, and `cmd/pane/alternateEdit` MUST dispatch the selected file through the same configured viewer/editor resolution paths used by pane commands. Directory results retain navigation behavior. File dispatch from the Find result grid MUST keep the Find window as the action owner instead of first focusing the main pane; closing the launched viewer/editor should return focus to Find.
+- `cmd/pane/delete` / `cmd/pane/moveToRecycleBin` and `cmd/pane/permanentDelete` MUST start the shared File Operations delete path for selected Find results. Permanent delete MUST show the same warning confirmation used by pane permanent delete.
+- The Find result action row MUST expose a compact help button whose text summarizes the result-list keyboard and button actions. Its modal help overlay MUST be visibly painted on the first show path without requiring pointer movement, and its dimmed scrim MUST preserve a visible backdrop instead of turning the owner area black.
 - See `Specs/Core/Core_Search.md` for backend selection, result-set behavior, and persistence rules.
 
 #### Rename (`cmd/pane/rename`)
@@ -903,6 +931,7 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 | =         | ⊘                                  | Select...                        | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | -         | ⊘                                  | Unselect...                      | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | C         | ⊘                                  | Clipboard Copy                   | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| X         | ⊘                                  | Clipboard Cut                    | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | V         | ⊘                                  | Clipboard Paste                  | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | L         | ⊘                                  | Focus Address Bar                | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | T         | ⊘                                  | ⊘                                | ⊘                        | ⊘                                  | ⊘                                 | Command Shell     | ⊘                     |
@@ -963,6 +992,7 @@ Notes:
 - `Ctrl+A`: select all
 - `Ctrl+F`: open Find Files and Directories for the focused pane
 - `Ctrl+C`: copy `Selected items` to clipboard (or `Current item` when selection is empty)
+- `Ctrl+X`: cut `Selected items` to the shell clipboard (or `Current item` when selection is empty)
 - `Ctrl+V`: paste from clipboard
 - `Enter`: open `Current item`
 - `Backspace`: go to parent folder. When you are on a mount file system root, go to the parent folder of the mount point.

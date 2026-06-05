@@ -22,21 +22,21 @@
 
 namespace
 {
-constexpr wchar_t kTargetExeName[] = L"RedSalamander.exe";
-constexpr wchar_t kErrorCaption[]  = L"RedSalamander Launcher";
-constexpr DWORD kMinimumWindowsMajorVersion = 10u;
-constexpr DWORD kMinimumWindowsMinorVersion = 0u;
-constexpr DWORD kMinimumWindowsBuildNumber   = 22000u;
-constexpr DWORD kMinimumWindowsBuildRevision = 2600u;
-constexpr wchar_t kUnsupportedWindowsMessage[] = L"RedSalamander requires Windows 11 build 22000.2600 or later.";
-constexpr wchar_t kWindowsCurrentVersionSubKey[] = LR"(SOFTWARE\Microsoft\Windows NT\CurrentVersion)";
+constexpr wchar_t kTargetExeName[]                   = L"RedSalamander.exe";
+constexpr wchar_t kErrorCaption[]                    = L"RedSalamander Launcher";
+constexpr DWORD kMinimumWindowsMajorVersion          = 10u;
+constexpr DWORD kMinimumWindowsMinorVersion          = 0u;
+constexpr DWORD kMinimumWindowsBuildNumber           = 22000u;
+constexpr DWORD kMinimumWindowsBuildRevision         = 2600u;
+constexpr wchar_t kUnsupportedWindowsMessage[]       = L"RedSalamander requires Windows 11 build 22000.2600 or later.";
+constexpr wchar_t kWindowsCurrentVersionSubKey[]     = LR"(SOFTWARE\Microsoft\Windows NT\CurrentVersion)";
 constexpr wchar_t kWindowsUpdateBuildRevisionValue[] = L"UBR";
 
 using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
 
 [[nodiscard]] bool TryGetWindowsVersion(OSVERSIONINFOW& version) noexcept
 {
-    version                      = {};
+    version                     = {};
     version.dwOSVersionInfoSize = sizeof(version);
 
     const HMODULE ntdll = ::GetModuleHandleW(L"ntdll.dll");
@@ -55,15 +55,10 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
 {
     revision = 0u;
 
-    DWORD value = 0u;
-    DWORD size  = sizeof(value);
-    const LSTATUS status = ::RegGetValueW(HKEY_LOCAL_MACHINE,
-                                          kWindowsCurrentVersionSubKey,
-                                          kWindowsUpdateBuildRevisionValue,
-                                          RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY,
-                                          nullptr,
-                                          &value,
-                                          &size);
+    DWORD value          = 0u;
+    DWORD size           = sizeof(value);
+    const LSTATUS status = ::RegGetValueW(
+        HKEY_LOCAL_MACHINE, kWindowsCurrentVersionSubKey, kWindowsUpdateBuildRevisionValue, RRF_RT_REG_DWORD | RRF_SUBKEY_WOW6464KEY, nullptr, &value, &size);
     if (status != ERROR_SUCCESS || size != sizeof(value))
     {
         return false;
@@ -144,8 +139,7 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
     std::wstring path(MAX_PATH, L'\0');
     for (;;)
     {
-        const DWORD written =
-            ::GetFinalPathNameByHandleW(file, path.data(), static_cast<DWORD>(path.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+        const DWORD written = ::GetFinalPathNameByHandleW(file, path.data(), static_cast<DWORD>(path.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
         if (written == 0u)
         {
             return {};
@@ -258,8 +252,7 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
 
 [[nodiscard]] bool EqualsNoCase(std::wstring_view left, std::wstring_view right) noexcept
 {
-    if (left.size() > static_cast<size_t>((std::numeric_limits<int>::max)()) ||
-        right.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    if (left.size() > static_cast<size_t>((std::numeric_limits<int>::max)()) || right.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
     {
         return false;
     }
@@ -269,11 +262,7 @@ using RtlGetVersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
         return left.empty() && right.empty();
     }
 
-    return ::CompareStringOrdinal(left.data(),
-                                  static_cast<int>(left.size()),
-                                  right.data(),
-                                  static_cast<int>(right.size()),
-                                  TRUE) == CSTR_EQUAL;
+    return ::CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
 }
 
 [[nodiscard]] bool ShouldWaitForTargetExit(int argc, wchar_t** argv) noexcept

@@ -144,7 +144,7 @@ struct Utf16CodePoint
     }
 
     const Utf16CodePoint first = ReadCodePointAt(text, start);
-    size_t boundary           = ConsumeEmojiSuffix(text, first.end);
+    size_t boundary            = ConsumeEmojiSuffix(text, first.end);
 
     if (IsRegionalIndicatorCodePoint(first.value) && boundary < text.size())
     {
@@ -286,9 +286,8 @@ struct Utf16CodePoint
 [[nodiscard]] bool IsRtlOrBiDiControlCodeUnit(wchar_t ch) noexcept
 {
     const uint32_t codeUnit = static_cast<uint32_t>(ch);
-    return codeUnit == 0x061Cu || codeUnit == 0x200Fu || (codeUnit >= 0x0590u && codeUnit <= 0x08FFu) ||
-           (codeUnit >= 0x202Au && codeUnit <= 0x202Eu) || (codeUnit >= 0x2066u && codeUnit <= 0x2069u) ||
-           (codeUnit >= 0xFB1Du && codeUnit <= 0xFDFFu) || (codeUnit >= 0xFE70u && codeUnit <= 0xFEFFu);
+    return codeUnit == 0x061Cu || codeUnit == 0x200Fu || (codeUnit >= 0x0590u && codeUnit <= 0x08FFu) || (codeUnit >= 0x202Au && codeUnit <= 0x202Eu) ||
+           (codeUnit >= 0x2066u && codeUnit <= 0x2069u) || (codeUnit >= 0xFB1Du && codeUnit <= 0xFDFFu) || (codeUnit >= 0xFE70u && codeUnit <= 0xFEFFu);
 }
 
 [[nodiscard]] bool ShouldEmitSingleLineBiDiTextMetric(std::wstring_view text, DWRITE_READING_DIRECTION readingDirection) noexcept
@@ -472,11 +471,8 @@ struct Utf16CodePoint
     return caret;
 }
 
-[[nodiscard]] float MeasureSingleLineTextWidthDip(const WindowHost* host,
-                                                  std::wstring_view text,
-                                                  FontRole role,
-                                                  float heightDip,
-                                                  DWRITE_READING_DIRECTION readingDirection) noexcept
+[[nodiscard]] float MeasureSingleLineTextWidthDip(
+    const WindowHost* host, std::wstring_view text, FontRole role, float heightDip, DWRITE_READING_DIRECTION readingDirection) noexcept
 {
     if (text.empty())
     {
@@ -486,8 +482,7 @@ struct Utf16CodePoint
     if (host)
     {
         auto* factory = host->GetWriteFactory();
-        auto* format  = host->GetTextFormat(
-            role, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, readingDirection);
+        auto* format  = host->GetTextFormat(role, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, readingDirection);
         if (factory && format)
         {
             wil::com_ptr<IDWriteTextLayout> layout;
@@ -505,12 +500,8 @@ struct Utf16CodePoint
     return static_cast<float>(text.size()) * 7.0f;
 }
 
-[[nodiscard]] float ResolveSingleLineLayoutWidthDip(const WindowHost* host,
-                                                    std::wstring_view text,
-                                                    FontRole role,
-                                                    float heightDip,
-                                                    float minimumWidthDip,
-                                                    DWRITE_READING_DIRECTION readingDirection) noexcept
+[[nodiscard]] float ResolveSingleLineLayoutWidthDip(
+    const WindowHost* host, std::wstring_view text, FontRole role, float heightDip, float minimumWidthDip, DWRITE_READING_DIRECTION readingDirection) noexcept
 {
     const float measuredTextWidthDip = MeasureSingleLineTextWidthDip(host, text, role, heightDip, readingDirection);
     return std::max({1.0f, minimumWidthDip, measuredTextWidthDip + 32.0f});
@@ -549,9 +540,8 @@ struct Utf16CodePoint
                                           DWRITE_READING_DIRECTION readingDirection,
                                           float layoutWidthDip) noexcept
 {
-    const size_t clampedCaret = std::min(caretIndex, text.size());
-    const float resolvedLayoutWidth =
-        ResolveSingleLineLayoutWidthDip(host, text, role, heightDip, std::max(1.0f, layoutWidthDip), readingDirection);
+    const size_t clampedCaret       = std::min(caretIndex, text.size());
+    const float resolvedLayoutWidth = ResolveSingleLineLayoutWidthDip(host, text, role, heightDip, std::max(1.0f, layoutWidthDip), readingDirection);
     if (wil::com_ptr<IDWriteTextLayout> layout = CreateSingleLineTextLayout(host, text, role, resolvedLayoutWidth, heightDip, readingDirection))
     {
         float x = 0.0f;
@@ -568,17 +558,16 @@ struct Utf16CodePoint
     return static_cast<float>(clampedCaret) * 7.0f;
 }
 
-[[nodiscard]] size_t HitTestCaretIndexDip(
-    const WindowHost* host,
-    std::wstring_view text,
-    FontRole role,
-    const D2D1_RECT_F& textRect,
-    float scrollDip,
-    D2D1_POINT_2F point,
-    DWRITE_READING_DIRECTION readingDirection) noexcept
+[[nodiscard]] size_t HitTestCaretIndexDip(const WindowHost* host,
+                                          std::wstring_view text,
+                                          FontRole role,
+                                          const D2D1_RECT_F& textRect,
+                                          float scrollDip,
+                                          D2D1_POINT_2F point,
+                                          DWRITE_READING_DIRECTION readingDirection) noexcept
 {
-    const bool perfEnabled = Debug::Perf::IsCaptureEnabled();
-    const auto startedAt   = perfEnabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    const bool perfEnabled    = Debug::Perf::IsCaptureEnabled();
+    const auto startedAt      = perfEnabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     const bool emitBiDiMetric = perfEnabled && ShouldEmitSingleLineBiDiTextMetric(text, readingDirection);
     const auto finish         = [perfEnabled, emitBiDiMetric, startedAt, text, readingDirection](size_t result) noexcept
     {
@@ -588,8 +577,7 @@ struct Utf16CodePoint
             Debug::Perf::Emit(L"dxui.textinput.hit_test_us", L"single-line", elapsedUs, text.size(), result, S_OK);
             if (emitBiDiMetric)
             {
-                const std::wstring_view detail =
-                    readingDirection == DWRITE_READING_DIRECTION_RIGHT_TO_LEFT ? L"single-line-rtl" : L"single-line-ltr";
+                const std::wstring_view detail = readingDirection == DWRITE_READING_DIRECTION_RIGHT_TO_LEFT ? L"single-line-rtl" : L"single-line-ltr";
                 Debug::Perf::Emit(L"dxui.textinput.bidi_hit_test_us", detail, elapsedUs, text.size(), result, S_OK);
             }
         }
@@ -601,12 +589,11 @@ struct Utf16CodePoint
         return finish(0u);
     }
 
-    const float localX = std::max(0.0f, point.x - textRect.left + scrollDip);
-    const float localY = std::clamp(point.y - textRect.top, 0.0f, std::max(1.0f, textRect.bottom - textRect.top) - 1.0f);
+    const float localX               = std::max(0.0f, point.x - textRect.left + scrollDip);
+    const float localY               = std::clamp(point.y - textRect.top, 0.0f, std::max(1.0f, textRect.bottom - textRect.top) - 1.0f);
     const float heightDip            = std::max(1.0f, textRect.bottom - textRect.top);
     const float measuredTextWidthDip = MeasureSingleLineTextWidthDip(host, text, role, heightDip, readingDirection);
-    const float layoutWidthDip =
-        std::max({1.0f, textRect.right - textRect.left + scrollDip, localX + 1.0f, measuredTextWidthDip + 32.0f});
+    const float layoutWidthDip       = std::max({1.0f, textRect.right - textRect.left + scrollDip, localX + 1.0f, measuredTextWidthDip + 32.0f});
     if (wil::com_ptr<IDWriteTextLayout> layout = CreateSingleLineTextLayout(host, text, role, layoutWidthDip, heightDip, readingDirection))
     {
         BOOL isTrailingHit = FALSE;
@@ -650,14 +637,13 @@ struct Utf16CodePoint
     return finish(SnapCaretIndexToTextElementBoundary(text, static_cast<size_t>(fallbackValue)));
 }
 
-void DrawSingleLineTextClipped(
-    WindowHost& host,
-    std::wstring_view text,
-    const D2D1_RECT_F& rect,
-    FontRole role,
-    const D2D1_COLOR_F& color,
-    float scrollDip,
-    DWRITE_READING_DIRECTION readingDirection) noexcept
+void DrawSingleLineTextClipped(WindowHost& host,
+                               std::wstring_view text,
+                               const D2D1_RECT_F& rect,
+                               FontRole role,
+                               const D2D1_COLOR_F& color,
+                               float scrollDip,
+                               DWRITE_READING_DIRECTION readingDirection) noexcept
 {
     auto* dc    = host.GetDeviceContext();
     auto* brush = host.GetSolidBrush(color);
@@ -670,8 +656,7 @@ void DrawSingleLineTextClipped(
     const float heightDip         = std::max(1.0f, snappedRect.bottom - snappedRect.top);
     const float layoutWidthDip =
         ResolveSingleLineLayoutWidthDip(&host, text, role, heightDip, std::max(1.0f, snappedRect.right - snappedRect.left + scrollDip), readingDirection);
-    if (wil::com_ptr<IDWriteTextLayout> layout = CreateSingleLineTextLayout(
-            &host, text, role, layoutWidthDip, heightDip, readingDirection))
+    if (wil::com_ptr<IDWriteTextLayout> layout = CreateSingleLineTextLayout(&host, text, role, layoutWidthDip, heightDip, readingDirection))
     {
         dc->PushAxisAlignedClip(snappedRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         dc->DrawTextLayout(D2D1::Point2F(snappedRect.left - scrollDip, snappedRect.top), layout.get(), brush, kTextDrawOptions);
@@ -917,8 +902,7 @@ void DrawSingleLineSelection(WindowHost& host,
     dc->PushAxisAlignedClip(selectionRect.value(), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     const float layoutWidthDip =
         ResolveSingleLineLayoutWidthDip(&host, text, role, heightDip, std::max(1.0f, snappedRect.right - snappedRect.left + scrollDip), readingDirection);
-    if (wil::com_ptr<IDWriteTextLayout> layout =
-            CreateSingleLineTextLayout(&host, text, role, layoutWidthDip, heightDip, readingDirection))
+    if (wil::com_ptr<IDWriteTextLayout> layout = CreateSingleLineTextLayout(&host, text, role, layoutWidthDip, heightDip, readingDirection))
     {
         dc->DrawTextLayout(D2D1::Point2F(snappedRect.left - scrollDip, snappedRect.top), layout.get(), textBrush, kTextDrawOptions);
     }

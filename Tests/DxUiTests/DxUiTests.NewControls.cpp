@@ -188,6 +188,30 @@ void TestDropDownButtonMnemonicInvokesDropDownCallback()
     Require(host.GetFocusControl() == button, "drop-down button mnemonic keeps focus on the button");
 }
 
+void TestDropDownButtonCallbackCanReplaceRootSafely()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root    = std::make_unique<Panel>();
+    auto* button = root->AddChild<Button>(L"Options");
+    button->SetBounds(D2D1::RectF(0.0f, 0.0f, 120.0f, 28.0f));
+    button->SetVariant(ButtonVariant::DropDown);
+
+    bool dropDownOpened = false;
+    button->SetOnDropDownClick([&]
+    {
+        dropDownOpened = true;
+        host.SetRoot(std::make_unique<Panel>());
+    });
+
+    host.SetRoot(std::move(root));
+
+    Require(button->OnKeyDown(host, VK_RETURN, 0), "drop-down button handles keyboard activation before replacing the root");
+    Require(dropDownOpened, "drop-down callback runs before replacing the root");
+    Require(host.GetRoot() != nullptr, "drop-down callback can replace the host root safely");
+}
+
 void TestButtonMouseClickReleasesHostCaptureBeforeCallback()
 {
     using namespace RedSalamander::DxUi;
@@ -1096,10 +1120,10 @@ void TestContextMenuPopupScrollsOversizedContent()
 
         ContextMenuPopupDebugState popupState{};
         if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) {
-            return state.hasScrollbar && state.contentHeightDip > state.visibleHeightDip;
+            return state.hasScrollbar && state.contentHeightDip > state.visibleHeightDip && state.renderCount > 0u;
         }, popupState))
         {
-            driverFailure = "oversized context menu exposes scrollbar state";
+            driverFailure = "oversized context menu exposes scrollbar state after its initial frame renders";
             return;
         }
 
@@ -1148,6 +1172,72 @@ void TestContextMenuPopupScrollsOversizedContent()
     Require(! result.has_value(), "dismissing the oversized context menu returns no invoked command");
 }
 
+void TestContextMenuPopupHonorsSessionMaxRootHeight()
+{
+    using namespace RedSalamander::DxUi;
+    constexpr size_t kOversizedMenuItemCount = 48u;
+    constexpr float kMaxRootHeightDip        = 180.0f;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 160, 160, 320, 220, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    std::vector<MenuFlyoutItem> items;
+    for (size_t index = 0u; index < kOversizedMenuItemCount; ++index)
+    {
+        items.push_back(MenuFlyoutItem{
+            .kind      = MenuItemKind::Standard,
+            .text      = std::format(L"Capped item {:02}", index),
+            .commandId = static_cast<int>(2000u + index),
+        });
+    }
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        HWND popupHwnd = WaitForOwnedContextMenuPopupWindow(ownerWindow.Hwnd());
+        if (! popupHwnd)
+        {
+            driverFailure = "capped context menu popup window appears";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept
+        {
+            if (IsWindow(popupHwnd) != FALSE)
+            {
+                PostMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+            }
+        });
+
+        ContextMenuPopupDebugState popupState{};
+        if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) {
+            return state.hasScrollbar && state.contentHeightDip > state.visibleHeightDip && state.renderCount > 0u;
+        }, popupState))
+        {
+            driverFailure = "capped context menu exposes scrollbar state after its initial frame renders";
+            return;
+        }
+
+        if (popupState.visibleHeightDip > kMaxRootHeightDip + 1.0f)
+        {
+            driverFailure = "capped context menu keeps visible height within the session maximum";
+            return;
+        }
+    });
+
+    const ThemePalette theme = MakeDefaultThemePalette(true);
+    ContextMenuSessionCallbacks callbacks{};
+    callbacks.maxRootHeightDip      = kMaxRootHeightDip;
+    callbacks.rootVerticalPlacement = ContextMenuRootVerticalPlacement::Above;
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), POINT{220, 220}, items, theme, callbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(! result.has_value(), "dismissing the capped oversized context menu returns no invoked command");
+}
+
 // ---------------------------------------------------------------------------
 // StatusStrip
 // ---------------------------------------------------------------------------
@@ -1178,6 +1268,42 @@ void TestStatusStripMultiSectionSetup()
 
     strip.SetSectionText(1u, L"Ln 42, Col 10");
     Require(strip.GetSectionCount() == 3u, "status strip section count unchanged after set-section-text");
+}
+
+void TestStatusStripRightAlignedLeadingEllipsisSections()
+{
+    using namespace RedSalamander::DxUi;
+
+    StatusStrip strip;
+    strip.SetSections({
+        StatusStrip::Section{.text = L"Completed with scan: 1872 matches, 2416 files scanned",
+                             .widthDip = 120.0f,
+                             .alignment = DWRITE_TEXT_ALIGNMENT_TRAILING,
+                             .leadingEllipsis = true},
+    });
+
+    Require(strip.GetSectionCount() == 1u, "status strip leading-ellipsis section is retained");
+    Require(strip.GetSectionAlignment(0u) == DWRITE_TEXT_ALIGNMENT_TRAILING, "status strip stores trailing section alignment");
+    Require(strip.GetSectionLeadingEllipsis(0u), "status strip stores leading-ellipsis section trim mode");
+
+    const std::wstring displayText =
+        StatusStrip::DebugElideLeadingForWidth(nullptr, strip.GetSectionText(0u), FontRole::Small, 96.0f, 22.0f);
+    Require(displayText.starts_with(L"..."), "status strip leading ellipsis starts with dots when clipped");
+    Require(displayText.ends_with(L"scanned"), "status strip leading ellipsis preserves the message tail");
+}
+
+void TestStatusStripBlendWithWindowBackgroundRoundtrips()
+{
+    using namespace RedSalamander::DxUi;
+
+    StatusStrip strip;
+    Require(! strip.GetBlendWithWindowBackground(), "status strip defaults to drawing its own background");
+
+    strip.SetBlendWithWindowBackground(true);
+    Require(strip.GetBlendWithWindowBackground(), "status strip stores blend-with-window-background mode");
+
+    strip.SetBlendWithWindowBackground(false);
+    Require(! strip.GetBlendWithWindowBackground(), "status strip clears blend-with-window-background mode");
 }
 
 void TestStatusStripPaintHandlesMissingDeviceContext()
@@ -1246,6 +1372,7 @@ void RunNewControlTests()
     TestHyperlinkButtonClickInvokesCallback();
     TestDropDownButtonKeyboardActivationInvokesDropDownCallback();
     TestDropDownButtonMnemonicInvokesDropDownCallback();
+    TestDropDownButtonCallbackCanReplaceRootSafely();
     TestButtonMouseClickReleasesHostCaptureBeforeCallback();
     TestSplitButtonDropDownMouseClickReleasesHostCaptureBeforeCallback();
     TestButtonMouseLeaveClearsPressedState();
@@ -1302,10 +1429,13 @@ void RunNewControlTests()
 
     // Oversized context menus
     TestContextMenuPopupScrollsOversizedContent();
+    TestContextMenuPopupHonorsSessionMaxRootHeight();
 
     // StatusStrip
     TestStatusStripTextRoundtrips();
     TestStatusStripMultiSectionSetup();
+    TestStatusStripRightAlignedLeadingEllipsisSections();
+    TestStatusStripBlendWithWindowBackgroundRoundtrips();
     TestStatusStripPaintHandlesMissingDeviceContext();
 
     // Smoke overlay

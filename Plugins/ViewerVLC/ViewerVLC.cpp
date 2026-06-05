@@ -45,23 +45,23 @@ using libvlc_time_t = int64_t;
 
 namespace
 {
-constexpr UINT_PTR kUiTimerId          = 1;
-constexpr UINT kUiTimerIntervalMs      = 200;
-constexpr UINT_PTR kHudAnimTimerId     = 2;
-constexpr UINT kHudAnimIntervalMs      = 16;
-constexpr UINT_PTR kLoadingTimerId     = 3;
-constexpr UINT kLoadingTimerIntervalMs = 100;
-constexpr ULONGLONG kLoadingOverlayDelayMs = 800;
-constexpr int kLoadingSpinnerDotCount = 12;
-constexpr int kLoadingSpinnerOrbitDip = 19;
-constexpr int kLoadingSpinnerDotRadiusDip = 3;
-constexpr int kLoadingSpinnerActiveDotRadiusDip = 5;
-constexpr int kLoadingSpinnerHaloRadiusDip = 25;
-constexpr int kLoadingSpinnerRightInsetDip = 48;
-constexpr int kLoadingSpinnerTopInsetDip = 28;
-constexpr int kLoadingSpinnerTextReserveDip = 112;
-constexpr float kHudDimOpacity         = 0.18f;
-constexpr ULONGLONG kHudIdleDimDelayMs = 20'000;
+constexpr UINT_PTR kUiTimerId                        = 1;
+constexpr UINT kUiTimerIntervalMs                    = 200;
+constexpr UINT_PTR kHudAnimTimerId                   = 2;
+constexpr UINT kHudAnimIntervalMs                    = 16;
+constexpr UINT_PTR kLoadingTimerId                   = 3;
+constexpr UINT kLoadingTimerIntervalMs               = 100;
+constexpr ULONGLONG kLoadingOverlayDelayMs           = 800;
+constexpr int kLoadingSpinnerDotCount                = 12;
+constexpr int kLoadingSpinnerOrbitDip                = 19;
+constexpr int kLoadingSpinnerDotRadiusDip            = 3;
+constexpr int kLoadingSpinnerActiveDotRadiusDip      = 5;
+constexpr int kLoadingSpinnerHaloRadiusDip           = 25;
+constexpr int kLoadingSpinnerRightInsetDip           = 48;
+constexpr int kLoadingSpinnerTopInsetDip             = 28;
+constexpr int kLoadingSpinnerTextReserveDip          = 112;
+constexpr float kHudDimOpacity                       = 0.18f;
+constexpr ULONGLONG kHudIdleDimDelayMs               = 20'000;
 constexpr wchar_t kWheelForwardOriginalWndProcProp[] = L"RS.ViewerVLC.WheelForwardOriginalWndProc";
 constexpr wchar_t kWheelForwardOwnerProp[]           = L"RS.ViewerVLC.WheelForwardOwner";
 constexpr wchar_t kHudGlyphPlay                      = static_cast<wchar_t>(0xE768);
@@ -358,45 +358,39 @@ template <typename T> [[nodiscard]] bool TryLoadProc(HMODULE module, const char*
 
 struct LoadingSpinnerVisualSpec
 {
-    int dotCount = kLoadingSpinnerDotCount;
-    float orbitPx = 0.0f;
-    float dotRadiusPx = 0.0f;
+    int dotCount            = kLoadingSpinnerDotCount;
+    float orbitPx           = 0.0f;
+    float dotRadiusPx       = 0.0f;
     float activeDotRadiusPx = 0.0f;
-    float haloRadiusPx = 0.0f;
-    float rightInsetPx = 0.0f;
-    float topInsetPx = 0.0f;
-    COLORREF accent = RGB(0, 120, 212);
-    bool rainbowMode = false;
-    float rainbowHue = 0.0f;
+    float haloRadiusPx      = 0.0f;
+    float rightInsetPx      = 0.0f;
+    float topInsetPx        = 0.0f;
+    COLORREF accent         = RGB(0, 120, 212);
+    bool rainbowMode        = false;
+    float rainbowHue        = 0.0f;
     float rainbowSaturation = 0.70f;
-    float rainbowValue = 0.95f;
+    float rainbowValue      = 0.95f;
 };
 
-[[nodiscard]] LoadingSpinnerVisualSpec MakeLoadingSpinnerVisualSpec(const ViewerTheme* theme,
-                                                                    bool themed,
-                                                                    UINT dpi,
-                                                                    COLORREF accent,
-                                                                    std::wstring_view seed) noexcept
+[[nodiscard]] LoadingSpinnerVisualSpec MakeLoadingSpinnerVisualSpec(
+    const ViewerTheme* theme, bool themed, UINT dpi, COLORREF accent, std::wstring_view seed) noexcept
 {
-    const auto px = [&](int dip) noexcept
-    {
-        return std::max(1.0f, static_cast<float>(MulDiv(dip, static_cast<int>(dpi), 96)));
-    };
+    const auto px = [&](int dip) noexcept { return std::max(1.0f, static_cast<float>(MulDiv(dip, static_cast<int>(dpi), 96))); };
 
     LoadingSpinnerVisualSpec spec{};
-    spec.orbitPx = px(kLoadingSpinnerOrbitDip);
-    spec.dotRadiusPx = px(kLoadingSpinnerDotRadiusDip);
+    spec.orbitPx           = px(kLoadingSpinnerOrbitDip);
+    spec.dotRadiusPx       = px(kLoadingSpinnerDotRadiusDip);
     spec.activeDotRadiusPx = px(kLoadingSpinnerActiveDotRadiusDip);
-    spec.haloRadiusPx = px(kLoadingSpinnerHaloRadiusDip);
-    spec.rightInsetPx = px(kLoadingSpinnerRightInsetDip);
-    spec.topInsetPx = px(kLoadingSpinnerTopInsetDip);
-    spec.accent = accent;
-    spec.rainbowMode = themed && theme && theme->rainbowMode != FALSE && theme->highContrast == FALSE;
+    spec.haloRadiusPx      = px(kLoadingSpinnerHaloRadiusDip);
+    spec.rightInsetPx      = px(kLoadingSpinnerRightInsetDip);
+    spec.topInsetPx        = px(kLoadingSpinnerTopInsetDip);
+    spec.accent            = accent;
+    spec.rainbowMode       = themed && theme && theme->rainbowMode != FALSE && theme->highContrast == FALSE;
     if (spec.rainbowMode)
     {
-        spec.rainbowHue = static_cast<float>(StableHash32(seed) % 360u);
+        spec.rainbowHue        = static_cast<float>(StableHash32(seed) % 360u);
         spec.rainbowSaturation = (theme && theme->darkBase != FALSE) ? 0.78f : 0.66f;
-        spec.rainbowValue = (theme && theme->darkBase != FALSE) ? 1.0f : 0.90f;
+        spec.rainbowValue      = (theme && theme->darkBase != FALSE) ? 1.0f : 0.90f;
     }
     return spec;
 }
@@ -409,7 +403,7 @@ struct LoadingSpinnerVisualSpec
     }
 
     const float step = 360.0f / static_cast<float>(spec.dotCount);
-    float hue = spec.rainbowHue + (static_cast<float>(dotIndex) * step);
+    float hue        = spec.rainbowHue + (static_cast<float>(dotIndex) * step);
     while (hue >= 360.0f)
     {
         hue -= 360.0f;
@@ -437,12 +431,12 @@ struct HudLayout
 
     const auto px = [&](int dip) noexcept { return MulDiv(dip, static_cast<int>(dpi), 96); };
 
-    const int inset    = px(12);
-    const int gap      = px(10);
-    const int btn      = px(36);
-    const int timeW    = px(140);
-    const int volumeW  = px(96);
-    const int trackH   = std::max(1, px(6));
+    const int inset   = px(12);
+    const int gap     = px(10);
+    const int btn     = px(36);
+    const int timeW   = px(140);
+    const int volumeW = px(96);
+    const int trackH  = std::max(1, px(6));
 
     const int y = std::max(0, (height - btn) / 2);
 
@@ -1006,11 +1000,11 @@ struct ViewerVLC::VlcLoadSpec
 
 struct ViewerVLC::VlcAsyncLoadResult
 {
-    VlcAsyncLoadResult()                                      = default;
-    VlcAsyncLoadResult(const VlcAsyncLoadResult&)             = delete;
-    VlcAsyncLoadResult(VlcAsyncLoadResult&&)                  = delete;
-    VlcAsyncLoadResult& operator=(const VlcAsyncLoadResult&)  = delete;
-    VlcAsyncLoadResult& operator=(VlcAsyncLoadResult&&)       = delete;
+    VlcAsyncLoadResult()                                     = default;
+    VlcAsyncLoadResult(const VlcAsyncLoadResult&)            = delete;
+    VlcAsyncLoadResult(VlcAsyncLoadResult&&)                 = delete;
+    VlcAsyncLoadResult& operator=(const VlcAsyncLoadResult&) = delete;
+    VlcAsyncLoadResult& operator=(VlcAsyncLoadResult&&)      = delete;
 
     uint64_t generation = 0;
     std::filesystem::path path;
@@ -1021,15 +1015,15 @@ struct ViewerVLC::VlcAsyncLoadResult
 
 struct ViewerVLC::VlcAsyncLoadWork
 {
-    VlcAsyncLoadWork()                                      = default;
-    VlcAsyncLoadWork(const VlcAsyncLoadWork&)               = delete;
-    VlcAsyncLoadWork(VlcAsyncLoadWork&&)                    = delete;
-    VlcAsyncLoadWork& operator=(const VlcAsyncLoadWork&)    = delete;
-    VlcAsyncLoadWork& operator=(VlcAsyncLoadWork&&)         = delete;
+    VlcAsyncLoadWork()                                   = default;
+    VlcAsyncLoadWork(const VlcAsyncLoadWork&)            = delete;
+    VlcAsyncLoadWork(VlcAsyncLoadWork&&)                 = delete;
+    VlcAsyncLoadWork& operator=(const VlcAsyncLoadWork&) = delete;
+    VlcAsyncLoadWork& operator=(VlcAsyncLoadWork&&)      = delete;
 
     wil::unique_hmodule moduleKeepAlive;
     wil::com_ptr<IViewer> self;
-    HWND hwnd = nullptr;
+    HWND hwnd           = nullptr;
     uint64_t generation = 0;
     std::filesystem::path path;
     VlcLoadSpec spec;
@@ -1039,11 +1033,11 @@ namespace
 {
 struct VlcPlayerCleanupWork final
 {
-    VlcPlayerCleanupWork()                                          = default;
-    VlcPlayerCleanupWork(const VlcPlayerCleanupWork&)               = delete;
-    VlcPlayerCleanupWork(VlcPlayerCleanupWork&&)                    = delete;
-    VlcPlayerCleanupWork& operator=(const VlcPlayerCleanupWork&)    = delete;
-    VlcPlayerCleanupWork& operator=(VlcPlayerCleanupWork&&)         = delete;
+    VlcPlayerCleanupWork()                                       = default;
+    VlcPlayerCleanupWork(const VlcPlayerCleanupWork&)            = delete;
+    VlcPlayerCleanupWork(VlcPlayerCleanupWork&&)                 = delete;
+    VlcPlayerCleanupWork& operator=(const VlcPlayerCleanupWork&) = delete;
+    VlcPlayerCleanupWork& operator=(VlcPlayerCleanupWork&&)      = delete;
 
     wil::unique_hmodule moduleKeepAlive;
     wil::unique_hmodule vlcModuleKeepAlive;
@@ -1058,11 +1052,11 @@ struct VlcPlayerCleanupWork final
 
 struct VlcStateCleanupWork final
 {
-    VlcStateCleanupWork()                                         = default;
-    VlcStateCleanupWork(const VlcStateCleanupWork&)               = delete;
-    VlcStateCleanupWork(VlcStateCleanupWork&&)                    = delete;
-    VlcStateCleanupWork& operator=(const VlcStateCleanupWork&)    = delete;
-    VlcStateCleanupWork& operator=(VlcStateCleanupWork&&)         = delete;
+    VlcStateCleanupWork()                                      = default;
+    VlcStateCleanupWork(const VlcStateCleanupWork&)            = delete;
+    VlcStateCleanupWork(VlcStateCleanupWork&&)                 = delete;
+    VlcStateCleanupWork& operator=(const VlcStateCleanupWork&) = delete;
+    VlcStateCleanupWork& operator=(VlcStateCleanupWork&&)      = delete;
 
     wil::unique_hmodule moduleKeepAlive;
     std::unique_ptr<VlcState> state;
@@ -1172,13 +1166,9 @@ void QueueVlcPlayerCleanup(std::unique_ptr<VlcPlayerCleanupWork> work) noexcept
         return;
     }
 
-    const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
-    {
+    const BOOL queued = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept {
         CleanupVlcPlayer(std::unique_ptr<VlcPlayerCleanupWork>(static_cast<VlcPlayerCleanupWork*>(context)));
-    },
-        work.get(),
-        nullptr);
+    }, work.get(), nullptr);
 
     if (queued == 0)
     {
@@ -1197,13 +1187,9 @@ void QueueVlcStateCleanup(std::unique_ptr<VlcStateCleanupWork> work) noexcept
         return;
     }
 
-    const BOOL queued = TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
-    {
+    const BOOL queued = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept {
         CleanupVlcState(std::unique_ptr<VlcStateCleanupWork>(static_cast<VlcStateCleanupWork*>(context)));
-    },
-        work.get(),
-        nullptr);
+    }, work.get(), nullptr);
 
     if (queued == 0)
     {
@@ -1500,7 +1486,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::SetConfiguration(const char* configurationJ
     _config.lastVolumePercent          = lastVolumePercent;
     _config.muted                      = muted;
 
-    _hudRate = std::clamp(static_cast<float>(_config.defaultPlaybackRatePercent) / 100.0f, 0.25f, 4.0f);
+    _hudRate                = std::clamp(static_cast<float>(_config.defaultPlaybackRatePercent) / 100.0f, 0.25f, 4.0f);
     _hudVolumeValue         = std::clamp<int>(static_cast<int>(_config.lastVolumePercent), 0, 100);
     _hudPreviousVolumeValue = (_hudVolumeValue > 0) ? _hudVolumeValue : 100;
     _hudMuted               = _config.muted;
@@ -1569,19 +1555,12 @@ HRESULT ViewerVLC::RebuildConfigurationJson() noexcept
     };
 
     const std::string installPathUtf8 = Utf8FromUtf16(_config.vlcInstallPath.wstring());
-    const bool ok = addString("vlcInstallPath", installPathUtf8) &&
-                    addBool("autoDetectVlc", _config.autoDetectVlc) &&
-                    addBool("quiet", _config.quiet) &&
-                    addUint("defaultPlaybackRatePercent", _config.defaultPlaybackRatePercent) &&
-                    addUint("fileCachingMs", _config.fileCachingMs) &&
-                    addUint("networkCachingMs", _config.networkCachingMs) &&
-                    addString("avcodecHw", _config.avcodecHw) &&
-                    addString("videoOutput", _config.videoOutput) &&
-                    addString("audioOutput", _config.audioOutput) &&
-                    addString("audioVisualization", _config.audioVisualization) &&
-                    addString("extraArgs", _config.extraArgs) &&
-                    addUint("lastVolumePercent", _config.lastVolumePercent) &&
-                    addBool("muted", _config.muted);
+    const bool ok = addString("vlcInstallPath", installPathUtf8) && addBool("autoDetectVlc", _config.autoDetectVlc) && addBool("quiet", _config.quiet) &&
+                    addUint("defaultPlaybackRatePercent", _config.defaultPlaybackRatePercent) && addUint("fileCachingMs", _config.fileCachingMs) &&
+                    addUint("networkCachingMs", _config.networkCachingMs) && addString("avcodecHw", _config.avcodecHw) &&
+                    addString("videoOutput", _config.videoOutput) && addString("audioOutput", _config.audioOutput) &&
+                    addString("audioVisualization", _config.audioVisualization) && addString("extraArgs", _config.extraArgs) &&
+                    addUint("lastVolumePercent", _config.lastVolumePercent) && addBool("muted", _config.muted);
     if (! ok)
     {
         return E_OUTOFMEMORY;
@@ -1603,19 +1582,9 @@ HRESULT ViewerVLC::RebuildConfigurationJson() noexcept
 
 bool ViewerVLC::ConfigurationDiffersFromDefaults() const noexcept
 {
-    return ! _config.vlcInstallPath.empty() ||
-           ! _config.autoDetectVlc ||
-           ! _config.quiet ||
-           _config.fileCachingMs != 300 ||
-           _config.networkCachingMs != 1000 ||
-           _config.defaultPlaybackRatePercent != 100 ||
-           _config.avcodecHw != "any" ||
-           ! _config.videoOutput.empty() ||
-           ! _config.audioOutput.empty() ||
-           _config.audioVisualization != "visual" ||
-           ! _config.extraArgs.empty() ||
-           _config.lastVolumePercent != 100 ||
-           _config.muted;
+    return ! _config.vlcInstallPath.empty() || ! _config.autoDetectVlc || ! _config.quiet || _config.fileCachingMs != 300 || _config.networkCachingMs != 1000 ||
+           _config.defaultPlaybackRatePercent != 100 || _config.avcodecHw != "any" || ! _config.videoOutput.empty() || ! _config.audioOutput.empty() ||
+           _config.audioVisualization != "visual" || ! _config.extraArgs.empty() || _config.lastVolumePercent != 100 || _config.muted;
 }
 
 ATOM ViewerVLC::RegisterWndClass(HINSTANCE instance) noexcept
@@ -1905,15 +1874,13 @@ LRESULT CALLBACK ViewerVLC::WheelForwardProc(HWND hwnd, UINT msg, WPARAM wp, LPA
             const auto currentWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
             if (currentWndProc == &ViewerVLC::WheelForwardProc)
             {
-                static_cast<void>(
-                    RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(originalWndProc)));
+                static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(originalWndProc)));
             }
         }
         RemovePropW(hwnd, kWheelForwardOriginalWndProcProp);
         RemovePropW(hwnd, kWheelForwardOwnerProp);
 
-        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp)
-                               : DefWindowProcW(hwnd, msg, wp, lp);
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
     }
 
     return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kWheelForwardOriginalWndProcProp, msg, wp, lp);
@@ -1940,21 +1907,21 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            *snapshot = {};
+            *snapshot                = {};
             snapshot->loadingActive  = _loadingUiActive;
             snapshot->loadingVisible = _loadingUiVisible;
             snapshot->missingVisible = _missingUiVisible;
-            snapshot->hasVideoChild = _hVideo && IsWindow(_hVideo.get()) != FALSE;
+            snapshot->hasVideoChild  = _hVideo && IsWindow(_hVideo.get()) != FALSE;
             if (snapshot->hasVideoChild)
             {
-                const LONG_PTR style = GetWindowLongPtrW(_hVideo.get(), GWL_STYLE);
-                snapshot->videoChildIsChildWindow = (style & WS_CHILD) != 0;
+                const LONG_PTR style               = GetWindowLongPtrW(_hVideo.get(), GWL_STYLE);
+                snapshot->videoChildIsChildWindow  = (style & WS_CHILD) != 0;
                 snapshot->videoChildParentIsViewer = GetParent(_hVideo.get()) == _hWnd.get();
             }
-            snapshot->muted          = _hudMuted;
-            snapshot->volume         = _hudVolumeValue;
-            snapshot->timeMs         = _hudTimeMs;
-            snapshot->lengthMs       = _hudLengthMs;
+            snapshot->muted    = _hudMuted;
+            snapshot->volume   = _hudVolumeValue;
+            snapshot->timeMs   = _hudTimeMs;
+            snapshot->lengthMs = _hudLengthMs;
             if (_hHud)
             {
                 static_cast<void>(EnsureHudDirect2D(_hHud.get()));
@@ -1969,30 +1936,30 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 
             if (_loadingUiActive || _loadingUiVisible)
             {
-                const UINT dpi = _hMissingOverlay ? GetDpiForWindow(_hMissingOverlay.get()) : (_hWnd ? GetDpiForWindow(_hWnd.get()) : 96u);
-                const bool themed = _hasTheme && ! _theme.highContrast;
+                const UINT dpi               = _hMissingOverlay ? GetDpiForWindow(_hMissingOverlay.get()) : (_hWnd ? GetDpiForWindow(_hWnd.get()) : 96u);
+                const bool themed            = _hasTheme && ! _theme.highContrast;
                 const std::wstring_view seed = _currentPath.empty() ? std::wstring_view(L"ViewerVLC") : std::wstring_view(_currentPath.native());
-                const COLORREF accent = themed ? ResolveAccentColor(_theme, seed) : GetSysColor(COLOR_HIGHLIGHT);
-                const LoadingSpinnerVisualSpec spinner = MakeLoadingSpinnerVisualSpec(_hasTheme ? &_theme : nullptr, themed, dpi, accent, seed);
-                snapshot->loadingSpinnerUsesRainbow = spinner.rainbowMode;
-                snapshot->loadingSpinnerDotCount = spinner.dotCount;
-                snapshot->loadingSpinnerOrbitPx = static_cast<LONG>(std::lround(spinner.orbitPx));
-                snapshot->loadingSpinnerDotRadiusPx = static_cast<LONG>(std::lround(spinner.dotRadiusPx));
+                const COLORREF accent        = themed ? ResolveAccentColor(_theme, seed) : GetSysColor(COLOR_HIGHLIGHT);
+                const LoadingSpinnerVisualSpec spinner    = MakeLoadingSpinnerVisualSpec(_hasTheme ? &_theme : nullptr, themed, dpi, accent, seed);
+                snapshot->loadingSpinnerUsesRainbow       = spinner.rainbowMode;
+                snapshot->loadingSpinnerDotCount          = spinner.dotCount;
+                snapshot->loadingSpinnerOrbitPx           = static_cast<LONG>(std::lround(spinner.orbitPx));
+                snapshot->loadingSpinnerDotRadiusPx       = static_cast<LONG>(std::lround(spinner.dotRadiusPx));
                 snapshot->loadingSpinnerActiveDotRadiusPx = static_cast<LONG>(std::lround(spinner.activeDotRadiusPx));
-                snapshot->loadingSpinnerFirstDotArgb = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 0));
-                snapshot->loadingSpinnerSecondDotArgb = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 1));
+                snapshot->loadingSpinnerFirstDotArgb      = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 0));
+                snapshot->loadingSpinnerSecondDotArgb     = OpaqueArgbFromColorRef(ResolveLoadingSpinnerDotColor(spinner, 1));
             }
 
-            const SIZE snapshotSize = ComputeSnapshotSize();
+            const SIZE snapshotSize  = ComputeSnapshotSize();
             snapshot->snapshotWidth  = snapshotSize.cx;
             snapshot->snapshotHeight = snapshotSize.cy;
 
             RECT hudClient{};
             if (_hWnd && GetClientRect(_hWnd.get(), &hudClient) != 0)
             {
-                const int hudW = std::max<LONG>(0, hudClient.right - hudClient.left);
-                const int hudH = MulDiv(64, static_cast<int>(GetDpiForWindow(_hWnd.get())), 96);
-                const HudLayout layout = ComputeHudLayout(hudW, hudH, GetDpiForWindow(_hWnd.get()));
+                const int hudW                = std::max<LONG>(0, hudClient.right - hudClient.left);
+                const int hudH                = MulDiv(64, static_cast<int>(GetDpiForWindow(_hWnd.get())), 96);
+                const HudLayout layout        = ComputeHudLayout(hudW, hudH, GetDpiForWindow(_hWnd.get()));
                 snapshot->hasVolumeMuteButton = ! IsRectEmpty(&layout.volumeMute);
                 snapshot->hasVolumeSlider     = ! IsRectEmpty(&layout.volumeHit) && ! IsRectEmpty(&layout.volumeTrack);
             }
@@ -2011,12 +1978,12 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             {
                 return FALSE;
             }
-            _hudLengthMs = std::max<int64_t>(0, state->lengthMs);
-            _hudTimeMs = (_hudLengthMs > 0) ? std::clamp<int64_t>(state->timeMs, 0, _hudLengthMs) : std::max<int64_t>(0, state->timeMs);
-            _hudDragTimeMs = _hudTimeMs;
-            _hudVolumeValue = std::clamp(state->volume, 0, 100);
+            _hudLengthMs            = std::max<int64_t>(0, state->lengthMs);
+            _hudTimeMs              = (_hudLengthMs > 0) ? std::clamp<int64_t>(state->timeMs, 0, _hudLengthMs) : std::max<int64_t>(0, state->timeMs);
+            _hudDragTimeMs          = _hudTimeMs;
+            _hudVolumeValue         = std::clamp(state->volume, 0, 100);
             _hudPreviousVolumeValue = (_hudVolumeValue > 0) ? _hudVolumeValue : 100;
-            _hudMuted = state->muted;
+            _hudMuted               = state->muted;
             PersistVolumeState();
             if (_hHud)
             {
@@ -2034,9 +2001,7 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             SeekByWheel(wheel->wheelDelta, wheel->shift, wheel->ctrl);
             return TRUE;
         }
-        case WndMsg::kViewerVlcDebugToggleMute:
-            ToggleMute();
-            return TRUE;
+        case WndMsg::kViewerVlcDebugToggleMute: ToggleMute(); return TRUE;
         case WndMsg::kViewerVlcDebugWheelVideoChild:
         {
             const auto* wheel = reinterpret_cast<const WndMsg::ViewerVlcDebugWheel*>(lp);
@@ -2045,8 +2010,8 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return FALSE;
             }
 
-            const WPARAM wheelParam = MAKEWPARAM((wheel->shift ? MK_SHIFT : 0) | (wheel->ctrl ? MK_CONTROL : 0),
-                                                 static_cast<WORD>(static_cast<short>(wheel->wheelDelta)));
+            const WPARAM wheelParam =
+                MAKEWPARAM((wheel->shift ? MK_SHIFT : 0) | (wheel->ctrl ? MK_CONTROL : 0), static_cast<WORD>(static_cast<short>(wheel->wheelDelta)));
             SendMessageW(_debugWheelVideoChild.get(), WM_MOUSEWHEEL, wheelParam, 0);
             return TRUE;
         }
@@ -2093,9 +2058,7 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 return 0;
             }
             break;
-        case WM_MOUSEWHEEL:
-            OnSurfaceMouseWheel(wp);
-            return 0;
+        case WM_MOUSEWHEEL: OnSurfaceMouseWheel(wp); return 0;
         case WM_NCACTIVATE: ApplyTitleBarTheme(wp != FALSE); return DefWindowProcW(hwnd, msg, wp, lp);
         case WM_LBUTTONDBLCLK: ToggleFullscreen(); return 0;
         case WM_PAINT:
@@ -2140,9 +2103,7 @@ LRESULT ViewerVLC::VideoProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             }
             return 0;
         case WM_LBUTTONDBLCLK: ToggleFullscreen(); return 0;
-        case WM_MOUSEWHEEL:
-            OnSurfaceMouseWheel(wp);
-            return 0;
+        case WM_MOUSEWHEEL: OnSurfaceMouseWheel(wp); return 0;
         case WM_PARENTNOTIFY:
         {
             const UINT childMsg = LOWORD(wp);
@@ -2369,9 +2330,7 @@ bool ViewerVLC::TryRestoreFocusFromEmbeddedSetFocus(WPARAM previousFocusParam) n
     }
 
     const auto isExternalFocusTarget = [this](HWND hwnd) noexcept
-    {
-        return hwnd != nullptr && IsWindow(hwnd) != FALSE && (_hWnd == nullptr || (hwnd != _hWnd.get() && IsChild(_hWnd.get(), hwnd) == FALSE));
-    };
+    { return hwnd != nullptr && IsWindow(hwnd) != FALSE && (_hWnd == nullptr || (hwnd != _hWnd.get() && IsChild(_hWnd.get(), hwnd) == FALSE)); };
 
     HWND focusTarget = isExternalFocusTarget(_embeddedFocusReturnWindow) ? _embeddedFocusReturnWindow : reinterpret_cast<HWND>(previousFocusParam);
     if (isExternalFocusTarget(focusTarget))
@@ -2500,22 +2459,22 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _backgroundBrush.reset();
     _backgroundColor = CLR_INVALID;
 
-    _hudHot            = HudPart::None;
-    _hudPressed        = HudPart::None;
-    _hudFocus          = HudPart::PlayPause;
-    _hudTrackingMouse  = false;
-    _hudSeekDragging   = false;
-    _hudVolumeDragging = false;
-    _hudOpacity        = 1.0f;
-    _hudTargetOpacity  = 1.0f;
-    _hudAnimTimerId    = 0;
-    _hudVolumeValue    = 100;
+    _hudHot                 = HudPart::None;
+    _hudPressed             = HudPart::None;
+    _hudFocus               = HudPart::PlayPause;
+    _hudTrackingMouse       = false;
+    _hudSeekDragging        = false;
+    _hudVolumeDragging      = false;
+    _hudOpacity             = 1.0f;
+    _hudTargetOpacity       = 1.0f;
+    _hudAnimTimerId         = 0;
+    _hudVolumeValue         = 100;
     _hudPreviousVolumeValue = 100;
-    _hudMuted          = false;
-    _hudTimeMs         = 0;
-    _hudLengthMs       = 0;
-    _hudPlaying        = false;
-    _hudDragTimeMs     = 0;
+    _hudMuted               = false;
+    _hudTimeMs              = 0;
+    _hudLengthMs            = 0;
+    _hudPlaying             = false;
+    _hudDragTimeMs          = 0;
 
     _hudRenderTarget.reset();
     _hudTextFormat.reset();
@@ -2531,9 +2490,9 @@ LRESULT ViewerVLC::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     _hudDWriteFactory.reset();
     _hudD2DFactory.reset();
 
-    _loadingTimerId = 0;
-    _loadingUiActive = false;
-    _loadingUiVisible = false;
+    _loadingTimerId     = 0;
+    _loadingUiActive    = false;
+    _loadingUiVisible   = false;
     _loadingStartedTick = 0;
 
     Release();
@@ -2561,7 +2520,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
     const std::filesystem::path path(context->focusedPath);
     _currentPath = path;
 
-    const bool embeddedMode = IsEmbeddedOpen(*context);
+    const bool embeddedMode   = IsEmbeddedOpen(*context);
     const HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
     if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
     {
@@ -2610,18 +2569,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
 
         const std::wstring caption = embeddedMode ? std::wstring{} : LoadStringResource(g_hInstance, IDS_VIEWERVLC_WINDOW_CAPTION);
         const DWORD style          = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN);
-        HWND window                = CreateWindowExW(0,
-                                      kClassName,
-                                      caption.c_str(),
-                                      style,
-                                      x,
-                                      y,
-                                      w,
-                                      h,
-                                      embeddedMode ? embeddedParent : nullptr,
-                                      nullptr,
-                                      g_hInstance,
-                                      this);
+        HWND window = CreateWindowExW(0, kClassName, caption.c_str(), style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, nullptr, g_hInstance, this);
         if (! window)
         {
             const DWORD lastError = Debug::ErrorWithLastError(L"ViewerVLC: CreateWindowExW failed.");
@@ -2683,7 +2631,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Close() noexcept
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
-    _embeddedMode = false;
+    _embeddedMode              = false;
     _embeddedFocusReturnWindow = nullptr;
     return S_OK;
 }
@@ -2814,8 +2762,8 @@ void ViewerVLC::SeekAbsoluteMs(int64_t timeMs) noexcept
         if (_hudLengthMs > 0)
         {
             const int64_t clamped = std::clamp<int64_t>(timeMs, 0, _hudLengthMs);
-            _hudTimeMs           = clamped;
-            _hudDragTimeMs       = clamped;
+            _hudTimeMs            = clamped;
+            _hudDragTimeMs        = clamped;
             if (_hHud)
             {
                 InvalidateRect(_hHud.get(), nullptr, FALSE);
@@ -3060,8 +3008,8 @@ bool ViewerVLC::DebugEnsureWheelVideoChild() noexcept
         return false;
     }
 
-    _debugWheelVideoChild.reset(CreateWindowExW(
-        0, L"Static", nullptr, WS_CHILD | WS_VISIBLE | SS_BLACKRECT, 0, 0, 24, 24, _hVideo.get(), nullptr, g_hInstance, nullptr));
+    _debugWheelVideoChild.reset(
+        CreateWindowExW(0, L"Static", nullptr, WS_CHILD | WS_VISIBLE | SS_BLACKRECT, 0, 0, 24, 24, _hVideo.get(), nullptr, g_hInstance, nullptr));
     if (! _debugWheelVideoChild)
     {
         return false;
@@ -3366,7 +3314,7 @@ void ViewerVLC::UpdatePlaybackUi() noexcept
     {
         _hudPreviousVolumeValue = _hudVolumeValue;
     }
-    _hudRate        = std::clamp(rate, 0.25f, 4.0f);
+    _hudRate = std::clamp(rate, 0.25f, 4.0f);
 
     if (_hHud)
     {
@@ -4423,10 +4371,10 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
     const COLORREF border    = themed ? BlendColor(bg, fg, 64u) : GetSysColor(COLOR_WINDOWFRAME);
     const COLORREF borderDim = BlendColor(bg, border, dimA);
 
-    const COLORREF hoverFill    = BlendColor(bg, accent, 34u);
-    const COLORREF hoverFillDim = BlendColor(bg, hoverFill, dimA);
-    const COLORREF pressFill    = BlendColor(bg, accent, 56u);
-    const COLORREF pressFillDim = BlendColor(bg, pressFill, dimA);
+    const COLORREF hoverFill     = BlendColor(bg, accent, 34u);
+    const COLORREF hoverFillDim  = BlendColor(bg, hoverFill, dimA);
+    const COLORREF pressFill     = BlendColor(bg, accent, 56u);
+    const COLORREF pressFillDim  = BlendColor(bg, pressFill, dimA);
     const COLORREF buttonFill    = themed ? BlendColor(bg, fg, 18u) : GetSysColor(COLOR_BTNFACE);
     const COLORREF buttonFillDim = BlendColor(bg, buttonFill, dimA);
     const COLORREF mutedFill     = BlendColor(bg, accent, 44u);
@@ -4461,9 +4409,9 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
 
     const auto drawButtonBackground = [&](const RECT& rcBtn, HudPart part, bool enabled)
     {
-        const bool hot     = (_hudHot == part);
-        const bool pressed = (_hudPressed == part);
-        const bool focused = (_hudFocus == part) && (GetFocus() == hwnd);
+        const bool hot         = (_hudHot == part);
+        const bool pressed     = (_hudPressed == part);
+        const bool focused     = (_hudFocus == part) && (GetFocus() == hwnd);
         const bool mutedButton = part == HudPart::VolumeMute && (_hudMuted || _hudVolumeValue == 0);
 
         ID2D1Brush* fillBrush = mutedButton ? brushMutedButton.get() : brushButton.get();
@@ -4481,9 +4429,8 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
             _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(RectFFromRect(rcBtn), radius, radius), fillBrush);
         }
 
-        _hudRenderTarget->DrawRoundedRectangle(D2D1::RoundedRect(RectFFromRect(rcBtn), radius, radius),
-                                               mutedButton ? brushAccent.get() : brushBorder.get(),
-                                               stroke);
+        _hudRenderTarget->DrawRoundedRectangle(
+            D2D1::RoundedRect(RectFFromRect(rcBtn), radius, radius), mutedButton ? brushAccent.get() : brushBorder.get(), stroke);
 
         if (focused)
         {
@@ -4585,14 +4532,14 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
 
     if (! IsRectEmpty(&layout.volumeHit))
     {
-        const RECT volumeTrack = layout.volumeTrack;
+        const RECT volumeTrack   = layout.volumeTrack;
         const float volumeRadius = std::max(1.0f, static_cast<float>(px(3)));
         _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(RectFFromRect(volumeTrack), volumeRadius, volumeRadius), brushBorder.get());
 
         const int volumeTrackW = std::max(1, static_cast<int>(volumeTrack.right - volumeTrack.left));
-        const double vRatio = std::clamp(static_cast<double>(_hudVolumeValue) / 100.0, 0.0, 1.0);
-        RECT volumeFill = volumeTrack;
-        volumeFill.right = std::min(volumeTrack.right, volumeTrack.left + static_cast<int>(std::lround(static_cast<double>(volumeTrackW) * vRatio)));
+        const double vRatio    = std::clamp(static_cast<double>(_hudVolumeValue) / 100.0, 0.0, 1.0);
+        RECT volumeFill        = volumeTrack;
+        volumeFill.right       = std::min(volumeTrack.right, volumeTrack.left + static_cast<int>(std::lround(static_cast<double>(volumeTrackW) * vRatio)));
         if (volumeFill.right > volumeFill.left)
         {
             _hudRenderTarget->FillRoundedRectangle(D2D1::RoundedRect(RectFFromRect(volumeFill), volumeRadius, volumeRadius),
@@ -4684,7 +4631,7 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
     if (_loadingUiVisible)
     {
         const int spinnerReserve = px(kLoadingSpinnerTextReserveDip);
-        const int minTextWidth = px(220);
+        const int minTextWidth   = px(220);
         if ((textContentRc.right - spinnerReserve) >= (textContentRc.left + minTextWidth))
         {
             textContentRc.right -= spinnerReserve;
@@ -4778,11 +4725,11 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
 
     if (_loadingUiVisible)
     {
-        const ULONGLONG elapsed = (_loadingStartedTick != 0) ? (GetTickCount64() - _loadingStartedTick) : 0;
+        const ULONGLONG elapsed                = (_loadingStartedTick != 0) ? (GetTickCount64() - _loadingStartedTick) : 0;
         const LoadingSpinnerVisualSpec spinner = MakeLoadingSpinnerVisualSpec(_hasTheme ? &_theme : nullptr, themed, dpi, accent, seed);
-        const int activeIndex = static_cast<int>((elapsed / 90) % static_cast<ULONGLONG>(spinner.dotCount));
-        const float centerX = static_cast<float>(contentRc.right) - spinner.rightInsetPx;
-        const float centerY = static_cast<float>(contentRc.top) + spinner.topInsetPx;
+        const int activeIndex                  = static_cast<int>((elapsed / 90) % static_cast<ULONGLONG>(spinner.dotCount));
+        const float centerX                    = static_cast<float>(contentRc.right) - spinner.rightInsetPx;
+        const float centerY                    = static_cast<float>(contentRc.top) + spinner.topInsetPx;
 
         wil::com_ptr<ID2D1SolidColorBrush> brushHalo;
         _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, accent, 44u)), brushHalo.put());
@@ -4794,11 +4741,11 @@ void ViewerVLC::OnOverlayPaint(HWND hwnd) noexcept
 
         for (int i = 0; i < spinner.dotCount; ++i)
         {
-            const double angle = (-1.57079632679489661923) + ((static_cast<double>(i) / static_cast<double>(spinner.dotCount)) * 6.28318530717958647692);
-            const int distance = (spinner.dotCount + i - activeIndex) % spinner.dotCount;
-            const float freshness = 1.0f - (static_cast<float>(distance) / static_cast<float>(spinner.dotCount));
-            const uint8_t alpha = static_cast<uint8_t>(std::clamp(82.0f + (freshness * 173.0f), 82.0f, 255.0f));
-            const float dotR = spinner.dotRadiusPx + ((spinner.activeDotRadiusPx - spinner.dotRadiusPx) * freshness);
+            const double angle     = (-1.57079632679489661923) + ((static_cast<double>(i) / static_cast<double>(spinner.dotCount)) * 6.28318530717958647692);
+            const int distance     = (spinner.dotCount + i - activeIndex) % spinner.dotCount;
+            const float freshness  = 1.0f - (static_cast<float>(distance) / static_cast<float>(spinner.dotCount));
+            const uint8_t alpha    = static_cast<uint8_t>(std::clamp(82.0f + (freshness * 173.0f), 82.0f, 255.0f));
+            const float dotR       = spinner.dotRadiusPx + ((spinner.activeDotRadiusPx - spinner.dotRadiusPx) * freshness);
             const COLORREF dotBase = ResolveLoadingSpinnerDotColor(spinner, i);
             wil::com_ptr<ID2D1SolidColorBrush> brushDot;
             _overlayRenderTarget->CreateSolidColorBrush(ColorFFromColorRef(BlendColor(cardBg, dotBase, alpha)), brushDot.put());
@@ -5139,13 +5086,13 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec
     SetMissingUiVisible(false, {});
     SetLoadingUiVisible(true);
 
-    auto work = std::make_unique<VlcAsyncLoadWork>();
+    auto work             = std::make_unique<VlcAsyncLoadWork>();
     work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
-    work->self       = static_cast<IViewer*>(this);
-    work->hwnd       = _hWnd.get();
-    work->generation = ++_asyncOpenGeneration;
-    work->path       = path;
-    work->spec       = std::move(spec);
+    work->self            = static_cast<IViewer*>(this);
+    work->hwnd            = _hWnd.get();
+    work->generation      = ++_asyncOpenGeneration;
+    work->path            = path;
+    work->spec            = std::move(spec);
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
@@ -5159,8 +5106,7 @@ void ViewerVLC::BeginAsyncVlcLoad(const std::filesystem::path& path, VlcLoadSpec
         result->self       = work->self;
         result->state      = LoadVlcState(work->spec, result->error);
 
-        if (! work->hwnd || IsWindow(work->hwnd) == FALSE ||
-            ! PostMessagePayload(work->hwnd, WndMsg::kViewerVlcAsyncOpenComplete, 0, std::move(result)))
+        if (! work->hwnd || IsWindow(work->hwnd) == FALSE || ! PostMessagePayload(work->hwnd, WndMsg::kViewerVlcAsyncOpenComplete, 0, std::move(result)))
         {
             Debug::Warning(L"ViewerVLC: Failed to post async VLC initialization result.");
         }
@@ -5328,7 +5274,7 @@ bool ViewerVLC::StartPlaybackWithLoadedVlc(const std::filesystem::path& path) no
         _vlc->libvlc_media_player_set_rate(_vlc->player.get(), std::clamp(_hudRate, 0.25f, 4.0f));
     }
 
-    _vlc->media  = std::move(media);
+    _vlc->media = std::move(media);
     ApplyVolumeToPlayer();
 
     SetMissingUiVisible(false, {});
@@ -5383,16 +5329,16 @@ void ViewerVLC::RetireCurrentPlayerAsync(bool updateUi) noexcept
         std::unique_ptr<VlcPlayerCleanupWork> work(new (std::nothrow) VlcPlayerCleanupWork{});
         if (work)
         {
-            work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
+            work->moduleKeepAlive    = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
             work->vlcModuleKeepAlive = KeepLibVlcModuleLoaded(_vlc->installDir);
-            work->stop = _vlc->libvlc_media_player_stop;
+            work->stop               = _vlc->libvlc_media_player_stop;
             if (_vlc->libvlc_retain && _vlc->libvlc_release && _vlc->instance)
             {
                 _vlc->libvlc_retain(_vlc->instance.get());
                 work->instanceRef.get_deleter().release = _vlc->libvlc_release;
                 work->instanceRef.reset(_vlc->instance.get());
             }
-            work->media = std::move(_vlc->media);
+            work->media  = std::move(_vlc->media);
             work->player = std::move(_vlc->player);
 #ifdef ENABLE_TESTS
             work->delayMs = _debugStopDelayMs;
@@ -5446,7 +5392,7 @@ void ViewerVLC::RetireVlcStateAsync(std::unique_ptr<VlcState> state, bool update
         if (work)
         {
             work->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerVlcModuleAnchor);
-            work->state = std::move(state);
+            work->state           = std::move(state);
 #ifdef ENABLE_TESTS
             work->delayMs = _debugStopDelayMs;
 #endif
@@ -5518,10 +5464,10 @@ void ViewerVLC::TakeSnapshot() noexcept
         return;
     }
 
-    const SIZE snapshotSize = ComputeSnapshotSize();
-    const unsigned snapshotWidth = static_cast<unsigned>(std::max<LONG>(0, snapshotSize.cx));
+    const SIZE snapshotSize       = ComputeSnapshotSize();
+    const unsigned snapshotWidth  = static_cast<unsigned>(std::max<LONG>(0, snapshotSize.cx));
     const unsigned snapshotHeight = static_cast<unsigned>(std::max<LONG>(0, snapshotSize.cy));
-    const int rc = _vlc->libvlc_video_take_snapshot(_vlc->player.get(), 0, outUtf8.c_str(), snapshotWidth, snapshotHeight);
+    const int rc                  = _vlc->libvlc_video_take_snapshot(_vlc->player.get(), 0, outUtf8.c_str(), snapshotWidth, snapshotHeight);
     if (rc == 0)
     {
         return;

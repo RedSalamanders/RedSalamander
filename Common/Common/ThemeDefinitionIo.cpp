@@ -166,8 +166,7 @@ bool IsValidThemeColorKey(std::wstring_view key) noexcept
 
     for (const wchar_t ch : key)
     {
-        const bool ok = (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9') || ch == L'_' ||
-                        ch == L'.' || ch == L'-';
+        const bool ok = (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9') || ch == L'_' || ch == L'.' || ch == L'-';
         if (! ok)
         {
             return false;
@@ -200,8 +199,7 @@ bool IsValidUserThemeId(std::wstring_view id) noexcept
 
     for (const wchar_t ch : suffix)
     {
-        const bool ok = (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9') || ch == L'_' ||
-                        ch == L'.' || ch == L'-';
+        const bool ok = (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z') || (ch >= L'0' && ch <= L'9') || ch == L'_' || ch == L'.' || ch == L'-';
         if (! ok)
         {
             return false;
@@ -324,7 +322,7 @@ HRESULT ParseThemeDefinitionJson5(std::string_view jsonText, ThemeDefinition& ou
         }
 
         const std::wstring value = Utf16FromUtf8(std::string_view(valueText, yyjson_get_len(colorValue)));
-        uint32_t argb           = 0;
+        uint32_t argb            = 0;
         if (value.empty() || ! TryParseColor(value, argb))
         {
             return InvalidData(ThemeDefinitionIoError::InvalidColorValue, outError, outMessage);

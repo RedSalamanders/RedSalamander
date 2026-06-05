@@ -25,7 +25,6 @@ public:
 #ifdef ENABLE_TESTS
     [[nodiscard]] PreferencesAdvancedDebugFocusTarget DebugGetFocusTarget() const noexcept;
     [[nodiscard]] bool DebugFocusBypassHelloToggle() noexcept;
-    [[nodiscard]] bool DebugSelectFilterPresetByText(std::wstring_view displayText) noexcept;
 #endif
 
 private:
@@ -44,8 +43,6 @@ private:
     RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
     bool _syncingDxHelloTimeoutEdit                         = false;
-    bool _syncingDxMonitorFilterPresetCombo                 = false;
-    bool _syncingDxMonitorFilterMaskEdit                    = false;
     bool _syncingDxCacheDirectoryInfoMaxBytesEdit           = false;
     bool _syncingDxCacheDirectoryInfoMaxWatchersEdit        = false;
     bool _syncingDxCacheDirectoryInfoMruWatchedEdit         = false;

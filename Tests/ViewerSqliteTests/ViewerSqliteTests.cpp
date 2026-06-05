@@ -2332,26 +2332,23 @@ bool Check(bool condition, std::wstring_view message, bool& success)
     }
 
     SendViewerSqliteTab(viewerWindow, false);
-    const bool fileComboFocused = WaitForViewerSnapshot(
-        viewerWindow,
-        [&](const WndMsg::ViewerSqliteDebugSnapshot& value) noexcept { return focusAndStateStable(value, WndMsg::ViewerSqliteDebugFocusTarget::FileCombo); },
-        5000ms,
-        &snapshot);
+    const bool fileComboFocused = WaitForViewerSnapshot(viewerWindow, [&](const WndMsg::ViewerSqliteDebugSnapshot& value) noexcept {
+        return focusAndStateStable(value, WndMsg::ViewerSqliteDebugFocusTarget::FileCombo);
+    }, 5000ms, &snapshot);
     Check(fileComboFocused, L"focus is on a viewer control before Escape focus-return validation", success);
 
     static_cast<void>(SendMessageW(viewerWindow, WM_KEYDOWN, VK_ESCAPE, 0));
     static_cast<void>(SendMessageW(viewerWindow, WM_KEYUP, VK_ESCAPE, 0));
-    const bool escapeReturnedFocus = WaitForViewerSnapshot(
-        viewerWindow,
-        [&](const WndMsg::ViewerSqliteDebugSnapshot& value) noexcept { return focusAndStateStable(value, WndMsg::ViewerSqliteDebugFocusTarget::ResultGrid); },
-        5000ms,
-        &snapshot);
+    const bool escapeReturnedFocus = WaitForViewerSnapshot(viewerWindow, [&](const WndMsg::ViewerSqliteDebugSnapshot& value) noexcept {
+        return focusAndStateStable(value, WndMsg::ViewerSqliteDebugFocusTarget::ResultGrid);
+    }, 5000ms, &snapshot);
     Check(escapeReturnedFocus && IsWindow(viewerWindow) != FALSE, L"Escape from viewer controls returns focus to the results grid without closing", success);
 
     static_cast<void>(SendMessageW(viewerWindow, WM_KEYDOWN, VK_ESCAPE, 0));
     static_cast<void>(SendMessageW(viewerWindow, WM_KEYUP, VK_ESCAPE, 0));
-    Check(
-        PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms), L"viewer window closes cleanly after Escape from the results grid", success);
+    Check(PumpUntil([&]() noexcept { return IsWindow(viewerWindow) == FALSE; }, 5000ms),
+          L"viewer window closes cleanly after Escape from the results grid",
+          success);
 
     static_cast<void>(viewer->SetCallback(nullptr, nullptr));
     viewer.reset();

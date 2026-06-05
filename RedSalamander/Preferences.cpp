@@ -366,6 +366,31 @@ bool DebugSelectPreferencesAdvancedFilterPreset(std::wstring_view displayText) n
     return PreferencesDialog::DebugSelectAdvancedFilterPreset(displayText);
 }
 
+bool DebugFocusPreferencesMonitorToolbarToggle() noexcept
+{
+    return PreferencesDialog::DebugFocusMonitorToolbarToggle();
+}
+
+bool DebugSelectPreferencesMonitorFilterPreset(std::wstring_view displayText) noexcept
+{
+    return PreferencesDialog::DebugSelectMonitorFilterPreset(displayText);
+}
+
+void DebugSetPreferencesSettingsFileOpenCapture(const bool capture) noexcept
+{
+    PreferencesDialog::DebugSetSettingsFileOpenCapture(capture);
+}
+
+void DebugClearPreferencesLastSettingsFileOpen() noexcept
+{
+    PreferencesDialog::DebugClearLastSettingsFileOpen();
+}
+
+bool DebugGetPreferencesLastSettingsFileOpen(std::filesystem::path& outPath, HRESULT& outHr) noexcept
+{
+    return PreferencesDialog::DebugGetLastSettingsFileOpen(outPath, outHr);
+}
+
 bool DebugFocusPreferencesFileOperationsPreCalcEnabledToggle() noexcept
 {
     return PreferencesDialog::DebugFocusFileOperationsPreCalcEnabledToggle();

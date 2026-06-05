@@ -11,11 +11,7 @@ namespace
     return CompareStringOrdinal(pluginId.data(), static_cast<int>(pluginId.size()), L"builtin/file-system", -1, TRUE) == CSTR_EQUAL;
 }
 
-void ShowClipboardOverlay(FolderView& view,
-                          UINT titleStringId,
-                          UINT messageStringId,
-                          FolderView::OverlaySeverity severity,
-                          HRESULT hr = S_OK) noexcept
+void ShowClipboardOverlay(FolderView& view, UINT titleStringId, UINT messageStringId, FolderView::OverlaySeverity severity, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Scope perf(L"clipboard.feedback_us");
     perf.SetHr(hr);
@@ -35,11 +31,7 @@ void ShowClipboardOverlay(FolderView& view,
     view.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, severity, std::move(title), std::move(message), hr, true, false);
 }
 
-void ShowClipboardFormattedOverlay(FolderView& view,
-                                   UINT titleStringId,
-                                   UINT messageStringId,
-                                   const std::filesystem::path& path,
-                                   HRESULT hr) noexcept
+void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT messageStringId, const std::filesystem::path& path, HRESULT hr) noexcept
 {
     Debug::Perf::Scope perf(L"clipboard.feedback_us");
     perf.SetHr(hr);
@@ -50,8 +42,7 @@ void ShowClipboardFormattedOverlay(FolderView& view,
         title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
     }
 
-    std::wstring message =
-        FormatStringResource(nullptr, messageStringId, path.filename().wstring(), static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+    std::wstring message = FormatStringResource(nullptr, messageStringId, path.filename().wstring(), static_cast<unsigned long>(static_cast<uint32_t>(hr)));
     if (message.empty())
     {
         message = title;
@@ -156,10 +147,9 @@ void ShowClipboardFormattedOverlay(FolderView& view,
     const UINT preferredDropEffectFormat = PreferredDropEffectFormat();
     if (preferredDropEffectFormat == 0u || SetClipboardData(preferredDropEffectFormat, effect.get()) == nullptr)
     {
-        Debug::Warning(
-            L"FolderView::SetFileDropClipboard: SetClipboardData(Preferred DropEffect) failed (format={}, error={}).",
-            preferredDropEffectFormat,
-            GetLastError());
+        Debug::Warning(L"FolderView::SetFileDropClipboard: SetClipboardData(Preferred DropEffect) failed (format={}, error={}).",
+                       preferredDropEffectFormat,
+                       GetLastError());
         return false;
     }
     effect.release();
@@ -200,6 +190,37 @@ void ShowClipboardFormattedOverlay(FolderView& view,
         }
     }
 
+    return result;
+}
+
+[[nodiscard]] std::optional<DWORD> ReadPreferredDropEffectClipboard(HWND ownerWindow) noexcept
+{
+    if (OpenClipboard(ownerWindow) == 0)
+    {
+        return std::nullopt;
+    }
+    const auto closeClipboard = wil::scope_exit([] { CloseClipboard(); });
+
+    const UINT format = PreferredDropEffectFormat();
+    if (format == 0u)
+    {
+        return std::nullopt;
+    }
+
+    HANDLE handle = GetClipboardData(format);
+    if (! handle)
+    {
+        return std::nullopt;
+    }
+
+    auto* effect = static_cast<DWORD*>(GlobalLock(handle));
+    if (! effect)
+    {
+        return std::nullopt;
+    }
+
+    const DWORD result = *effect;
+    GlobalUnlock(handle);
     return result;
 }
 
@@ -392,18 +413,14 @@ HRESULT FolderView::CopySelectedItemsToFolder(const std::filesystem::path& desti
         return S_FALSE;
     }
 
-    if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_COPY, paths, destinationFolder))
-    {
-        return S_FALSE;
-    }
-
+    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
     if (_fileOperationRequestCallback)
     {
         FileOperationRequest request{};
         request.operation         = FILESYSTEM_COPY;
         request.sourcePaths       = std::move(paths);
         request.destinationFolder = destinationFolder;
-        request.flags             = FILESYSTEM_FLAG_RECURSIVE;
+        request.flags             = flags;
 
         const HRESULT hrStart = _fileOperationRequestCallback(std::move(request));
         if (FAILED(hrStart))
@@ -413,6 +430,11 @@ HRESULT FolderView::CopySelectedItemsToFolder(const std::filesystem::path& desti
         }
 
         return hrStart;
+    }
+
+    if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_COPY, paths, destinationFolder))
+    {
+        return S_FALSE;
     }
 
     FileSystemArenaOwner arenaOwner;
@@ -425,7 +447,6 @@ HRESULT FolderView::CopySelectedItemsToFolder(const std::filesystem::path& desti
         return hr;
     }
 
-    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
     hr                          = _fileSystem->CopyItems(sourcePaths, count, destinationFolder.c_str(), flags, nullptr, nullptr, nullptr);
     if (FAILED(hr))
     {
@@ -467,18 +488,14 @@ HRESULT FolderView::MoveSelectedItemsToFolder(const std::filesystem::path& desti
         return S_FALSE;
     }
 
-    if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_MOVE, paths, destinationFolder))
-    {
-        return S_FALSE;
-    }
-
+    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
     if (_fileOperationRequestCallback)
     {
         FileOperationRequest request{};
         request.operation         = FILESYSTEM_MOVE;
         request.sourcePaths       = std::move(paths);
         request.destinationFolder = destinationFolder;
-        request.flags             = FILESYSTEM_FLAG_RECURSIVE;
+        request.flags             = flags;
 
         const HRESULT hrStart = _fileOperationRequestCallback(std::move(request));
         if (FAILED(hrStart))
@@ -488,6 +505,11 @@ HRESULT FolderView::MoveSelectedItemsToFolder(const std::filesystem::path& desti
         }
 
         return hrStart;
+    }
+
+    if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_MOVE, paths, destinationFolder))
+    {
+        return S_FALSE;
     }
 
     FileSystemArenaOwner arenaOwner;
@@ -500,7 +522,6 @@ HRESULT FolderView::MoveSelectedItemsToFolder(const std::filesystem::path& desti
         return hr;
     }
 
-    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
     hr                          = _fileSystem->MoveItems(sourcePaths, count, destinationFolder.c_str(), flags, nullptr, nullptr, nullptr);
     if (FAILED(hr))
     {
@@ -619,39 +640,47 @@ bool FolderView::CutSelectionToClipboard()
 
 void FolderView::PasteItemsFromClipboard()
 {
-    if (! OpenClipboard(_hWnd.get()))
-        return;
-
-    HANDLE handle = GetClipboardData(CF_HDROP);
-    if (! handle)
+    std::vector<std::filesystem::path> sources = ReadFileDropClipboard(_hWnd.get());
+    if (sources.empty())
     {
-        CloseClipboard();
         return;
     }
-
-    auto* drop = static_cast<DROPFILES*>(GlobalLock(handle));
-    if (! drop)
-    {
-        CloseClipboard();
-        return;
-    }
-
-    const wchar_t* current = reinterpret_cast<const wchar_t*>(reinterpret_cast<const BYTE*>(drop) + drop->pFiles);
-    std::vector<std::filesystem::path> sources;
-    while (*current)
-    {
-        sources.emplace_back(current);
-        current += wcslen(current) + 1;
-    }
-    GlobalUnlock(handle);
-    CloseClipboard();
 
     if (! _currentFolder || ! _fileSystem)
     {
         return;
     }
 
-    if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_COPY, sources, _currentFolder.value()))
+    const DWORD preferredDropEffect = ReadPreferredDropEffectClipboard(_hWnd.get()).value_or(DROPEFFECT_COPY);
+    const bool moveRequested        = preferredDropEffect == DROPEFFECT_MOVE;
+    const FileSystemOperation operation = moveRequested ? FILESYSTEM_MOVE : FILESYSTEM_COPY;
+
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::PasteItemsFromClipboard sources={} preferredDropEffect=0x{:X} operation={} callback={}",
+                                              sources.size(),
+                                              static_cast<unsigned>(preferredDropEffect),
+                                              operation == FILESYSTEM_MOVE ? L"move" : L"copy",
+                                              _fileOperationRequestCallback ? L"yes" : L"no"));
+#endif
+
+    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+    if (_fileOperationRequestCallback)
+    {
+        FileOperationRequest request{};
+        request.operation         = operation;
+        request.sourcePaths       = std::move(sources);
+        request.destinationFolder = _currentFolder.value();
+        request.flags             = flags;
+
+        const HRESULT hrStart = _fileOperationRequestCallback(std::move(request));
+        if (FAILED(hrStart))
+        {
+            ReportError(moveRequested ? L"Move" : L"Copy", hrStart);
+        }
+        return;
+    }
+
+    if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), operation, sources, _currentFolder.value()))
     {
         return;
     }
@@ -662,20 +691,30 @@ void FolderView::PasteItemsFromClipboard()
     HRESULT hr            = BuildPathArrayArena(sources, arenaOwner, &paths, &count);
     if (FAILED(hr))
     {
-        ReportError(L"Copy", hr);
+        ReportError(moveRequested ? L"Move" : L"Copy", hr);
         return;
     }
 
-    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE |
-                                                               FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-    hr                          = _fileSystem->CopyItems(paths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
+    hr = moveRequested ? _fileSystem->MoveItems(paths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr)
+                       : _fileSystem->CopyItems(paths, count, _currentFolder->c_str(), flags, nullptr, nullptr, nullptr);
     if (FAILED(hr))
     {
-        ReportError(L"Copy", hr);
+        ReportError(moveRequested ? L"Move" : L"Copy", hr);
         return;
     }
 
     DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
+    if (moveRequested)
+    {
+        for (const auto& source : sources)
+        {
+            const std::filesystem::path parent = source.parent_path();
+            if (! parent.empty())
+            {
+                cache.NotifyFolderContentsChanged(_fileSystem.get(), parent);
+            }
+        }
+    }
     cache.NotifyFolderContentsChanged(_fileSystem.get(), _currentFolder.value());
     if (! _currentFolder || ! cache.IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
     {
@@ -707,9 +746,8 @@ bool FolderView::PasteShortcutFromClipboard()
     std::vector<std::filesystem::path> sources = ReadFileDropClipboard(_hWnd.get());
     perf.SetValue0(static_cast<uint64_t>(sources.size()));
 #ifdef ENABLE_TESTS
-    SelfTest::AppendSelfTestTrace(std::format(L"PasteShortcutFromClipboard sources={} first='{}'",
-                                              sources.size(),
-                                              ! sources.empty() ? sources.front().wstring() : std::wstring()));
+    SelfTest::AppendSelfTestTrace(
+        std::format(L"PasteShortcutFromClipboard sources={} first='{}'", sources.size(), ! sources.empty() ? sources.front().wstring() : std::wstring()));
 #endif
     if (sources.empty())
     {

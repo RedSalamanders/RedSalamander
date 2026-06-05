@@ -111,7 +111,7 @@ template <typename WorkerFunc> void RunEditNewPromptModalCycle(HWND mainWindow, 
 {
     std::jthread worker([&](std::stop_token) noexcept
     {
-        const HWND prompt = WaitForWindow([] noexcept { return GetFolderViewEditNewPromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
+        const HWND prompt  = WaitForWindow([] noexcept { return GetFolderViewEditNewPromptHandle(); }, SelfTest::Scale(std::chrono::milliseconds{5000}));
         const auto cleanup = wil::scope_exit([&]() noexcept
         {
             if (prompt && IsWindow(prompt) != FALSE)
@@ -865,8 +865,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
 
             promptResult.sawOverlay.store(true, std::memory_order_release);
 
-            state.Require(GetAncestor(overlay, GA_ROOT) == mainWindow,
-                          std::format(L"Alert overlay prompt should attach under the main window root for {}.", operationName));
+            state.Require(IsOwnedBy(overlay, mainWindow),
+                          std::format(L"Alert overlay prompt should be owned by the main window root for {}.", operationName));
             state.Require(CountVisibleChildWindows(overlay) == 0u,
                           std::format(L"Alert overlay prompt should not expose visible child fallback for {}.", operationName));
             state.Require(WindowExposesUiaProvider(overlay), std::format(L"Alert overlay prompt should answer WM_GETOBJECT for {}.", operationName));
@@ -1021,8 +1021,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 return;
             }
 
-            state.Require(GetAncestor(overlay, GA_ROOT) == mainWindow,
-                          std::format(L"Alert overlay prompt should attach under the main window root for {}.", operationName));
+            state.Require(IsOwnedBy(overlay, mainWindow),
+                          std::format(L"Alert overlay prompt should be owned by the main window root for {}.", operationName));
             state.Require(CountVisibleChildWindows(overlay) == 0u,
                           std::format(L"Alert overlay prompt should not expose visible child fallback for {}.", operationName));
             state.Require(WindowExposesUiaProvider(overlay), std::format(L"Alert overlay prompt should answer WM_GETOBJECT for {}.", operationName));
@@ -1146,8 +1146,8 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 return;
             }
 
-            state.Require(GetAncestor(overlay, GA_ROOT) == mainWindow,
-                          std::format(L"Alert overlay prompt should stay under the main window root on churn iteration {}.", iteration + 1u));
+            state.Require(IsOwnedBy(overlay, mainWindow),
+                          std::format(L"Alert overlay prompt should stay owned by the main window root on churn iteration {}.", iteration + 1u));
             state.Require(CountVisibleChildWindows(overlay) == 0u,
                           std::format(L"Alert overlay prompt should keep visible child fallback at zero on churn iteration {}.", iteration + 1u));
             state.Require(WindowExposesUiaProvider(overlay),
@@ -2186,7 +2186,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
-            const bool targetClosed = ! splash || IsWindow(splash) == FALSE;
+            const bool targetClosed                         = ! splash || IsWindow(splash) == FALSE;
             const SplashScreen::DebugSnapshot debugSnapshot = SplashScreen::DebugGetSnapshot();
             if (targetClosed && ! debugSnapshot.threadStarted && ! debugSnapshot.hasHwnd)
             {
@@ -2243,8 +2243,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         state.Require(WindowExposesUiaProvider(splash), L"Splash window should answer WM_GETOBJECT with a UI Automation provider.");
 
         Trace(std::format(L"splash_surface: collecting UIA pattern stats during '{}'", label));
-        const auto uiaPatternStats =
-            RunDialogUiaTaskWithMessagePump(label, [splash]() noexcept { return CollectVisibleUiaDescendantPatternStats(splash); });
+        const auto uiaPatternStats = RunDialogUiaTaskWithMessagePump(label, [splash]() noexcept { return CollectVisibleUiaDescendantPatternStats(splash); });
         Trace(std::format(L"splash_surface: collected UIA pattern stats during '{}' hasValue={}", label, uiaPatternStats.has_value() ? 1 : 0));
         state.Require(uiaPatternStats.has_value(),
                       std::format(L"Failed to collect live UI Automation pattern statistics for the splash window during {}.", label));
@@ -2252,7 +2251,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         {
             state.Require(uiaPatternStats->visibleElementCount > 0u, L"Splash window should expose visible UI Automation descendants.");
             state.Require(uiaPatternStats->textControlCount > 0u,
-                           std::format(L"Splash window should expose a visible UI Automation text descendant during {}.", label));
+                          std::format(L"Splash window should expose a visible UI Automation text descendant during {}.", label));
         }
 
         Trace(std::format(L"splash_surface: collecting UIA text state during '{}'", label));
@@ -3909,8 +3908,7 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
                       std::format(L"Pane Filter prompt should not expose more than one visible child window during {}; saw {}.",
                                   failureContext,
                                   cycle.snapshot.visibleChildWindowCount));
-        state.Require(cycle.snapshot.historyComboVisible,
-                      std::format(L"Pane Filter prompt should use an editable history combo during {}.", failureContext));
+        state.Require(cycle.snapshot.historyComboVisible, std::format(L"Pane Filter prompt should use an editable history combo during {}.", failureContext));
         state.Require(! cycle.snapshot.historyButtonVisible,
                       std::format(L"Pane Filter prompt should not expose a separate History button during {}.", failureContext));
         state.Require(cycle.snapshot.historyItemCount > 0u,
@@ -3967,8 +3965,9 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         {
             state.Require(cycle.expandedHelpSnapshot.helpExpanded,
                           std::format(L"Pane Filter prompt mask syntax help should report expanded during {}.", failureContext));
-            state.Require(cycle.expandedHelpSnapshot.commandButtonsFitInClient,
-                          std::format(L"Pane Filter prompt expanded mask syntax should keep command buttons inside the client area during {}.", failureContext));
+            state.Require(
+                cycle.expandedHelpSnapshot.commandButtonsFitInClient,
+                std::format(L"Pane Filter prompt expanded mask syntax should keep command buttons inside the client area during {}.", failureContext));
         }
 
         state.Require(cycle.setEnabled, std::format(L"Failed to set the pane-filter toggle during {}.", failureContext));
@@ -4517,13 +4516,13 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
     g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
     state.Require(WaitForAtomicAtLeast(enumEmpty, enumBeforeReset + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Enumeration did not refresh for empty folder after clearing inherited pane visibility state.");
-    state.Require(waitForLeftPaneState([]() noexcept
+    state.Require(waitForLeftPaneState(
+                      []() noexcept
     {
-        return ! g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left) &&
-               g_folderWindow.DebugIsEmptyFolderStateActive(FolderWindow::Pane::Left) &&
+        return ! g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left) && g_folderWindow.DebugIsEmptyFolderStateActive(FolderWindow::Pane::Left) &&
                g_folderWindow.DebugGetFilterWatermarkVisualMode(FolderWindow::Pane::Left) == FolderView::FilterWatermarkVisualMode::None;
     },
-                                       SelfTest::Scale(3000ms)),
+                      SelfTest::Scale(3000ms)),
                   std::format(L"Expected unfiltered empty-folder state before applying pane filter; {}.", describeLeftPaneState()));
     if (! state.failure.empty())
     {
@@ -6578,10 +6577,10 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::wstring leftPluginBefore                         = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore       = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_settings.fileActions.editors = editorsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -6594,44 +6593,44 @@ void AutomateChangeCasePrompt(
     g_settings.fileActions.editors = Common::Settings::EditorFileActionsSettings{};
 
     Common::Settings::FileActionDefinition editNewEditor{};
-    editNewEditor.id               = L"edit-new-editor";
-    editNewEditor.displayName      = L"Edit New Marker Editor";
-    editNewEditor.enabled          = true;
-    editNewEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    editNewEditor.executablePath   = ResolveCommandProcessorPath();
-    editNewEditor.arguments        = L"/C echo {Filename}>\"{Path}\\edit-new-marker.txt\"";
-    editNewEditor.workingDirectory = L"{Path}";
+    editNewEditor.id                = L"edit-new-editor";
+    editNewEditor.displayName       = L"Edit New Marker Editor";
+    editNewEditor.enabled           = true;
+    editNewEditor.kind              = Common::Settings::FileActionKind::ExternalProgram;
+    editNewEditor.executablePath    = ResolveCommandProcessorPath();
+    editNewEditor.arguments         = L"/C echo {Filename}>\"{Path}\\edit-new-marker.txt\"";
+    editNewEditor.workingDirectory  = L"{Path}";
     editNewEditor.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Extension, L".editnew"}};
     g_settings.fileActions.editors.actions.push_back(std::move(editNewEditor));
 
     Common::Settings::FileActionDefinition filteredEditor{};
-    filteredEditor.id               = L"filtered-editor";
-    filteredEditor.displayName      = L"Filtered Marker Editor";
-    filteredEditor.enabled          = true;
-    filteredEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    filteredEditor.executablePath   = ResolveCommandProcessorPath();
-    filteredEditor.arguments        = L"/C echo filtered>\"{Path}\\filtered-edit-new-marker.txt\"";
-    filteredEditor.workingDirectory = L"{Path}";
+    filteredEditor.id                = L"filtered-editor";
+    filteredEditor.displayName       = L"Filtered Marker Editor";
+    filteredEditor.enabled           = true;
+    filteredEditor.kind              = Common::Settings::FileActionKind::ExternalProgram;
+    filteredEditor.executablePath    = ResolveCommandProcessorPath();
+    filteredEditor.arguments         = L"/C echo filtered>\"{Path}\\filtered-edit-new-marker.txt\"";
+    filteredEditor.workingDirectory  = L"{Path}";
     filteredEditor.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Extension, L".othereditnew"}};
     g_settings.fileActions.editors.actions.push_back(std::move(filteredEditor));
 
     Common::Settings::FileActionDefinition unavailableEditor{};
-    unavailableEditor.id             = L"missing-executable-editor";
-    unavailableEditor.displayName    = L"Missing Executable Editor";
-    unavailableEditor.enabled        = true;
-    unavailableEditor.kind           = Common::Settings::FileActionKind::ExternalProgram;
-    unavailableEditor.executablePath = L"";
+    unavailableEditor.id                = L"missing-executable-editor";
+    unavailableEditor.displayName       = L"Missing Executable Editor";
+    unavailableEditor.enabled           = true;
+    unavailableEditor.kind              = Common::Settings::FileActionKind::ExternalProgram;
+    unavailableEditor.executablePath    = L"";
     unavailableEditor.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Extension, L".editnew"}};
     g_settings.fileActions.editors.actions.push_back(std::move(unavailableEditor));
 
     Common::Settings::FileActionDefinition computerFilteredEditor{};
-    computerFilteredEditor.id               = L"other-computer-editor";
-    computerFilteredEditor.displayName      = L"Other Computer Editor";
-    computerFilteredEditor.enabled          = true;
-    computerFilteredEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    computerFilteredEditor.executablePath   = ResolveCommandProcessorPath();
-    computerFilteredEditor.arguments        = L"/C echo other>\"{Path}\\other-computer-edit-new-marker.txt\"";
-    computerFilteredEditor.workingDirectory = L"{Path}";
+    computerFilteredEditor.id                      = L"other-computer-editor";
+    computerFilteredEditor.displayName             = L"Other Computer Editor";
+    computerFilteredEditor.enabled                 = true;
+    computerFilteredEditor.kind                    = Common::Settings::FileActionKind::ExternalProgram;
+    computerFilteredEditor.executablePath          = ResolveCommandProcessorPath();
+    computerFilteredEditor.arguments               = L"/C echo other>\"{Path}\\other-computer-edit-new-marker.txt\"";
+    computerFilteredEditor.workingDirectory        = L"{Path}";
     computerFilteredEditor.appliesTo.matches       = {{Common::Settings::FileActionMatchKind::Extension, L".editnew"}};
     computerFilteredEditor.appliesTo.computerNames = {L"red-salamander-selftest-other-computer"};
     g_settings.fileActions.editors.actions.push_back(std::move(computerFilteredEditor));
@@ -6675,10 +6674,10 @@ void AutomateChangeCasePrompt(
             return;
         }
 
-        probe.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
-        probe.capturedInitial   = DebugGetFolderViewEditNewPromptSnapshot(probe.initialSnapshot);
-        probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(prompt);
-        probe.setName           = DebugSetFolderViewEditNewPromptText(L"alpha.editnew");
+        probe.ownedByMainWindow      = IsOwnedBy(prompt, mainWindow);
+        probe.capturedInitial        = DebugGetFolderViewEditNewPromptSnapshot(probe.initialSnapshot);
+        probe.uiaPatternStats        = CollectVisibleUiaDescendantPatternStats(prompt);
+        probe.setName                = DebugSetFolderViewEditNewPromptText(L"alpha.editnew");
         probe.capturedAfterExtension = DebugGetFolderViewEditNewPromptSnapshot(probe.extensionSnapshot);
         probe.selectedEditor         = DebugSelectFolderViewEditNewPromptEditor(L"edit-new-editor");
         probe.actionTriggered        = DebugConfirmFolderViewEditNewPrompt();
@@ -6784,10 +6783,10 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::wstring leftPluginBefore                         = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore       = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_settings.fileActions.editors = editorsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -6801,8 +6800,7 @@ void AutomateChangeCasePrompt(
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for Edit New validation test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Edit New validation test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Edit New validation test.");
     if (! state.failure.empty())
     {
         return false;
@@ -6904,10 +6902,10 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::wstring leftPluginBefore                         = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
-    const std::optional<std::filesystem::path> leftBefore       = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                             = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore           = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreState = wil::scope_exit([&]
+    const auto restoreState                                         = wil::scope_exit([&]
     {
         g_settings.fileActions.editors = editorsBefore;
         static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
@@ -6919,21 +6917,20 @@ void AutomateChangeCasePrompt(
 
     g_settings.fileActions.editors = Common::Settings::EditorFileActionsSettings{};
     Common::Settings::FileActionDefinition unrelatedEditor{};
-    unrelatedEditor.id               = L"unrelated-editor";
-    unrelatedEditor.displayName      = L"Unrelated Editor";
-    unrelatedEditor.enabled          = true;
-    unrelatedEditor.kind             = Common::Settings::FileActionKind::ExternalProgram;
-    unrelatedEditor.executablePath   = ResolveCommandProcessorPath();
-    unrelatedEditor.arguments        = L"/C exit /B 0";
-    unrelatedEditor.workingDirectory = L"{Path}";
+    unrelatedEditor.id                = L"unrelated-editor";
+    unrelatedEditor.displayName       = L"Unrelated Editor";
+    unrelatedEditor.enabled           = true;
+    unrelatedEditor.kind              = Common::Settings::FileActionKind::ExternalProgram;
+    unrelatedEditor.executablePath    = ResolveCommandProcessorPath();
+    unrelatedEditor.arguments         = L"/C exit /B 0";
+    unrelatedEditor.workingDirectory  = L"{Path}";
     unrelatedEditor.appliesTo.matches = {{Common::Settings::FileActionMatchKind::Extension, L".different"}};
     g_settings.fileActions.editors.actions.push_back(std::move(unrelatedEditor));
 
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for Edit New no-editor test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Edit New no-editor test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Edit New no-editor test.");
     if (! state.failure.empty())
     {
         return false;
@@ -6991,8 +6988,7 @@ void AutomateChangeCasePrompt(
 
     ec.clear();
     state.Require(std::filesystem::exists(newFile, ec), L"Edit New should create the requested file even when no editor applies.");
-    state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"plain.noeditor"),
-                  L"Edit New no-editor creation should refresh the pane.");
+    state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"plain.noeditor"), L"Edit New no-editor creation should refresh the pane.");
     state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == L"plain.noeditor",
                   L"Edit New no-editor creation should focus the new file.");
 
@@ -7022,10 +7018,7 @@ void AutomateChangeCasePrompt(
     std::filesystem::remove_all(root, ec);
     ec.clear();
 
-    const auto clearReadOnlyBits = wil::scope_exit([&]
-    {
-        static_cast<void>(::SetFileAttributesW(alphaPath.c_str(), FILE_ATTRIBUTE_ARCHIVE));
-    });
+    const auto clearReadOnlyBits = wil::scope_exit([&] { static_cast<void>(::SetFileAttributesW(alphaPath.c_str(), FILE_ATTRIBUTE_ARCHIVE)); });
 
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create Change Attributes prompt test root.");
     state.Require(SelfTest::WriteTextFile(alphaPath, "alpha"), L"Failed to create alpha.txt for Change Attributes prompt test.");
@@ -7052,14 +7045,11 @@ void AutomateChangeCasePrompt(
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for Change Attributes prompt test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Change Attributes prompt test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Change Attributes prompt test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for Change Attributes prompt test.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
-        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"alpha.txt"; }, true);
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
-                  L"Expected alpha.txt selected before Change Attributes prompt test.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"alpha.txt"; }, true);
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u, L"Expected alpha.txt selected before Change Attributes prompt test.");
     if (! state.failure.empty())
     {
         return false;
@@ -7067,15 +7057,15 @@ void AutomateChangeCasePrompt(
 
     struct ProbeResult final
     {
-        bool sawPrompt          = false;
-        bool ownedByMainWindow  = false;
-        bool capturedInitial    = false;
-        bool setState           = false;
-        bool cycledArchive      = false;
-        bool capturedEdited     = false;
-        bool capturedCycled     = false;
-        bool actionTriggered    = false;
-        bool closed             = false;
+        bool sawPrompt         = false;
+        bool ownedByMainWindow = false;
+        bool capturedInitial   = false;
+        bool setState          = false;
+        bool cycledArchive     = false;
+        bool capturedEdited    = false;
+        bool capturedCycled    = false;
+        bool actionTriggered   = false;
+        bool closed            = false;
         ChangeAttributesOptionsPromptDebugSnapshot initialSnapshot{};
         ChangeAttributesOptionsPromptDebugSnapshot editedSnapshot{};
         ChangeAttributesOptionsPromptDebugSnapshot cycledSnapshot{};
@@ -7094,20 +7084,18 @@ void AutomateChangeCasePrompt(
         probe.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
         probe.capturedInitial   = DebugGetChangeAttributesOptionsPromptSnapshot(probe.initialSnapshot);
         probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(prompt);
-        probe.setState          = DebugSetChangeAttributesOptionsPromptState(
-            static_cast<uint8_t>(FolderWindow::AttributeChangeState::Set),
-            static_cast<uint8_t>(FolderWindow::AttributeChangeState::Clear),
-            static_cast<uint8_t>(FolderWindow::AttributeChangeState::LeaveUnchanged),
-            static_cast<uint8_t>(FolderWindow::AttributeChangeState::Clear),
-            true);
-        probe.cycledArchive  = DebugCycleChangeAttributesOptionsPromptArchive();
-        probe.capturedCycled = DebugGetChangeAttributesOptionsPromptSnapshot(probe.cycledSnapshot);
-        probe.setState       = probe.setState && DebugSetChangeAttributesOptionsPromptState(
-                                                  static_cast<uint8_t>(FolderWindow::AttributeChangeState::Set),
-                                                  static_cast<uint8_t>(FolderWindow::AttributeChangeState::Clear),
-                                                  static_cast<uint8_t>(FolderWindow::AttributeChangeState::LeaveUnchanged),
-                                                  static_cast<uint8_t>(FolderWindow::AttributeChangeState::Set),
-                                                  true);
+        probe.setState          = DebugSetChangeAttributesOptionsPromptState(static_cast<uint8_t>(FolderWindow::AttributeChangeState::Set),
+                                                                             static_cast<uint8_t>(FolderWindow::AttributeChangeState::Clear),
+                                                                             static_cast<uint8_t>(FolderWindow::AttributeChangeState::LeaveUnchanged),
+                                                                             static_cast<uint8_t>(FolderWindow::AttributeChangeState::Clear),
+                                                                             true);
+        probe.cycledArchive     = DebugCycleChangeAttributesOptionsPromptArchive();
+        probe.capturedCycled    = DebugGetChangeAttributesOptionsPromptSnapshot(probe.cycledSnapshot);
+        probe.setState = probe.setState && DebugSetChangeAttributesOptionsPromptState(static_cast<uint8_t>(FolderWindow::AttributeChangeState::Set),
+                                                                                      static_cast<uint8_t>(FolderWindow::AttributeChangeState::Clear),
+                                                                                      static_cast<uint8_t>(FolderWindow::AttributeChangeState::LeaveUnchanged),
+                                                                                      static_cast<uint8_t>(FolderWindow::AttributeChangeState::Set),
+                                                                                      true);
         probe.capturedEdited  = DebugGetChangeAttributesOptionsPromptSnapshot(probe.editedSnapshot);
         probe.actionTriggered = DebugConfirmChangeAttributesOptionsPrompt();
         probe.closed          = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
@@ -7117,14 +7105,12 @@ void AutomateChangeCasePrompt(
     state.Require(probe.ownedByMainWindow, L"Change Attributes options prompt should be owned by the main window.");
     state.Require(probe.capturedInitial, L"Failed to capture initial Change Attributes options prompt snapshot.");
     state.Require(probe.initialSnapshot.usesDxUiHost, L"Change Attributes options prompt should use a DxUi host.");
-    state.Require(probe.initialSnapshot.visibleChildWindowCount <= 1u,
-                  L"Change Attributes options prompt should not expose native child-control fallback.");
+    state.Require(probe.initialSnapshot.visibleChildWindowCount <= 1u, L"Change Attributes options prompt should not expose native child-control fallback.");
     state.Require(probe.initialSnapshot.visibleNativeChildControlCount <= 1u,
                   L"Change Attributes options prompt should not expose a Win32 dialog-template form.");
     state.Require(probe.initialSnapshot.dialogClassName == L"RedSalamander.ChangeAttributesOptionsPrompt",
                   L"Change Attributes options prompt should use the DxUi host window class.");
-    state.Require(probe.initialSnapshot.dialogClassName != L"#32770",
-                  L"Change Attributes options prompt should not be an app-owned Win32 dialog template.");
+    state.Require(probe.initialSnapshot.dialogClassName != L"#32770", L"Change Attributes options prompt should not be an app-owned Win32 dialog template.");
     state.Require(probe.initialSnapshot.dateTimeSectionVisible, L"Change Attributes options prompt should expose Change Date and Time.");
     state.Require(probe.initialSnapshot.modifiedTimeVisible, L"Change Attributes options prompt should expose the Modified time row.");
     state.Require(probe.initialSnapshot.createdTimeVisible, L"Change Attributes options prompt should expose the Created time row.");
@@ -7141,8 +7127,7 @@ void AutomateChangeCasePrompt(
                       L"Change Attributes options prompt should expose attributes, date/time toggles, recurse, and stream-removal checkboxes.");
         state.Require(probe.uiaPatternStats->togglePatternCount >= 11u,
                       L"Change Attributes options prompt should expose toggle automation for attributes, date/time, recurse, and stream removal.");
-        state.Require(probe.uiaPatternStats->buttonControlCount > 0u,
-                      L"Change Attributes options prompt should expose command buttons.");
+        state.Require(probe.uiaPatternStats->buttonControlCount > 0u, L"Change Attributes options prompt should expose command buttons.");
     }
     state.Require(probe.setState, L"Failed to set Change Attributes options prompt state.");
     state.Require(probe.cycledArchive, L"Failed to cycle the Change Attributes archive checkbox.");
@@ -7156,8 +7141,7 @@ void AutomateChangeCasePrompt(
                   L"Change Attributes prompt should store the edited hidden state.");
     state.Require(probe.editedSnapshot.archive == static_cast<uint8_t>(FolderWindow::AttributeChangeState::Set),
                   L"Change Attributes prompt should store the edited archive state.");
-    state.Require(probe.editedSnapshot.removeAlternateDataStreams,
-                  L"Change Attributes prompt should expose the remove alternate data streams option.");
+    state.Require(probe.editedSnapshot.removeAlternateDataStreams, L"Change Attributes prompt should expose the remove alternate data streams option.");
     state.Require(probe.actionTriggered, L"Failed to confirm the Change Attributes options prompt.");
     state.Require(probe.closed, L"Change Attributes options prompt did not close after confirmation.");
     if (! state.failure.empty())
@@ -7235,8 +7219,7 @@ void AutomateChangeCasePrompt(
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for Make File List prompt test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Make File List prompt test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Make File List prompt test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for Make File List prompt test.");
     if (! state.failure.empty())
@@ -7246,13 +7229,13 @@ void AutomateChangeCasePrompt(
 
     struct ProbeResult final
     {
-        bool sawPrompt          = false;
-        bool ownedByMainWindow  = false;
-        bool capturedInitial    = false;
-        bool setState           = false;
-        bool capturedEdited     = false;
-        bool actionTriggered    = false;
-        bool closed             = false;
+        bool sawPrompt         = false;
+        bool ownedByMainWindow = false;
+        bool capturedInitial   = false;
+        bool setState          = false;
+        bool capturedEdited    = false;
+        bool actionTriggered   = false;
+        bool closed            = false;
         MakeFileListOptionsPromptDebugSnapshot initialSnapshot{};
         MakeFileListOptionsPromptDebugSnapshot editedSnapshot{};
         std::optional<UiaDescendantPatternStats> uiaPatternStats;
@@ -7270,45 +7253,38 @@ void AutomateChangeCasePrompt(
         probe.ownedByMainWindow = IsOwnedBy(prompt, mainWindow);
         probe.capturedInitial   = DebugGetMakeFileListOptionsPromptSnapshot(probe.initialSnapshot);
         probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(prompt);
-        probe.setState          = DebugSetMakeFileListOptionsPromptState(
-            static_cast<uint8_t>(Common::Settings::MakeFileListSourceMode::CurrentFolder),
-            false,
-            static_cast<uint8_t>(Common::Settings::MakeFileListFormat::Json),
-            static_cast<uint8_t>(Common::Settings::MakeFileListOutputTarget::File),
-            L"{filename}",
-            outputPath.wstring(),
-            true,
-            false,
-            false,
-            false,
-            true,
-            false);
-        probe.capturedEdited  = DebugGetMakeFileListOptionsPromptSnapshot(probe.editedSnapshot);
-        probe.actionTriggered = DebugConfirmMakeFileListOptionsPrompt();
-        probe.closed          = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
+        probe.setState          = DebugSetMakeFileListOptionsPromptState(static_cast<uint8_t>(Common::Settings::MakeFileListSourceMode::CurrentFolder),
+                                                                         false,
+                                                                         static_cast<uint8_t>(Common::Settings::MakeFileListFormat::Json),
+                                                                         static_cast<uint8_t>(Common::Settings::MakeFileListOutputTarget::File),
+                                                                         L"{filename}",
+                                                                         outputPath.wstring(),
+                                                                         true,
+                                                                         false,
+                                                                         false,
+                                                                         false,
+                                                                         true,
+                                                                         false);
+        probe.capturedEdited    = DebugGetMakeFileListOptionsPromptSnapshot(probe.editedSnapshot);
+        probe.actionTriggered   = DebugConfirmMakeFileListOptionsPrompt();
+        probe.closed            = WaitForWindowClosed(prompt, SelfTest::Scale(3000ms));
     });
 
     state.Require(probe.sawPrompt, L"Make File List options prompt did not open.");
     state.Require(probe.ownedByMainWindow, L"Make File List options prompt should be owned by the main window.");
     state.Require(probe.capturedInitial, L"Failed to capture initial Make File List options prompt snapshot.");
     state.Require(probe.initialSnapshot.usesDxUiHost, L"Make File List options prompt should use a DxUi host.");
-    state.Require(probe.initialSnapshot.visibleChildWindowCount <= 1u,
-                  L"Make File List options prompt should not expose native child-control fallback.");
-    state.Require(probe.initialSnapshot.visibleNativeChildControlCount <= 1u,
-                  L"Make File List options prompt should not expose a Win32 dialog-template form.");
+    state.Require(probe.initialSnapshot.visibleChildWindowCount <= 1u, L"Make File List options prompt should not expose native child-control fallback.");
+    state.Require(probe.initialSnapshot.visibleNativeChildControlCount <= 1u, L"Make File List options prompt should not expose a Win32 dialog-template form.");
     state.Require(probe.initialSnapshot.dialogClassName == L"RedSalamander.MakeFileListOptionsPrompt",
                   L"Make File List options prompt should use the DxUi host window class.");
-    state.Require(probe.initialSnapshot.dialogClassName != L"#32770",
-                  L"Make File List options prompt should not be an app-owned Win32 dialog template.");
+    state.Require(probe.initialSnapshot.dialogClassName != L"#32770", L"Make File List options prompt should not be an app-owned Win32 dialog template.");
     state.Require(probe.uiaPatternStats.has_value(), L"Failed to collect UI Automation stats for Make File List options prompt.");
     if (probe.uiaPatternStats.has_value())
     {
-        state.Require(probe.uiaPatternStats->comboBoxControlCount >= 3u,
-                      L"Make File List options prompt should expose source, format, and output combos.");
-        state.Require(probe.uiaPatternStats->editControlCount >= 2u,
-                      L"Make File List options prompt should expose text macro and output file fields.");
-        state.Require(probe.uiaPatternStats->buttonControlCount > 0u,
-                      L"Make File List options prompt should expose command buttons.");
+        state.Require(probe.uiaPatternStats->comboBoxControlCount >= 3u, L"Make File List options prompt should expose source, format, and output combos.");
+        state.Require(probe.uiaPatternStats->editControlCount >= 2u, L"Make File List options prompt should expose text macro and output file fields.");
+        state.Require(probe.uiaPatternStats->buttonControlCount > 0u, L"Make File List options prompt should expose command buttons.");
     }
     state.Require(probe.setState, L"Failed to set Make File List options prompt state.");
     state.Require(probe.capturedEdited, L"Failed to capture edited Make File List options prompt snapshot.");
@@ -7406,13 +7382,10 @@ void AutomateChangeCasePrompt(
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for Pack prompt test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Pack prompt test.");
-    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"payload"}, SelfTest::Scale(3000ms)),
-                  L"Pane contents not ready for Pack prompt test.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view displayName) noexcept {
-        return displayName == L"payload";
-    });
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Pack prompt test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"payload"}, SelfTest::Scale(3000ms)), L"Pane contents not ready for Pack prompt test.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
+                                                          [](std::wstring_view displayName) noexcept { return displayName == L"payload"; });
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u, L"Pack prompt test should select the payload folder.");
     if (! state.failure.empty())
     {
@@ -7465,8 +7438,7 @@ void AutomateChangeCasePrompt(
     state.Require(probe.initialSnapshot.usesDxUiHost, L"Pack prompt should use a DxUi host.");
     state.Require(probe.initialSnapshot.visibleChildWindowCount <= 1u, L"Pack prompt should not expose native child-control fallback.");
     state.Require(probe.initialSnapshot.visibleNativeChildControlCount <= 1u, L"Pack prompt should not expose a Win32 dialog-template form.");
-    state.Require(probe.initialSnapshot.dialogClassName == L"RedSalamander.ArchivePackPrompt",
-                  L"Pack prompt should use the DxUi Pack window class.");
+    state.Require(probe.initialSnapshot.dialogClassName == L"RedSalamander.ArchivePackPrompt", L"Pack prompt should use the DxUi Pack window class.");
     state.Require(probe.initialSnapshot.dialogClassName != L"#32770", L"Pack prompt should not be the stock save-file dialog.");
     state.Require(probe.initialSnapshot.archivePathText.find(L"payload (2).zip") != std::wstring::npos,
                   std::format(L"Pack prompt should suggest a conflict-free ZIP path; saw '{}'.", probe.initialSnapshot.archivePathText));
@@ -7491,8 +7463,7 @@ void AutomateChangeCasePrompt(
         const std::wstring expectedExtension = L"." + probe.secondPackerSnapshot.packerExtension;
         state.Require(probe.secondPackerSnapshot.selectedPackerIndex == 1u, L"Pack prompt should store the edited packer index.");
         state.Require(std::filesystem::path(probe.secondPackerSnapshot.archivePathText).extension().wstring() == expectedExtension,
-                      std::format(L"Pack prompt archive extension should follow the selected packer; saw '{}'.",
-                                  probe.secondPackerSnapshot.archivePathText));
+                      std::format(L"Pack prompt archive extension should follow the selected packer; saw '{}'.", probe.secondPackerSnapshot.archivePathText));
     }
     state.Require(probe.setDeleteAfter, L"Failed to toggle delete-after-packing in Pack prompt.");
     state.Require(probe.capturedDeleteAfter, L"Failed to capture Pack prompt after toggling delete-after-packing.");
@@ -7588,19 +7559,13 @@ void AutomateChangeCasePrompt(
 [[nodiscard]] bool WriteDeflatedZipFixtureForUnpackSelfTest(const std::filesystem::path& archivePath) noexcept
 {
     static constexpr std::array<unsigned char, 153u> kArchiveBytes{{
-        0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x08, 0x00, 0x6D, 0xBB,
-        0xA3, 0x5C, 0x01, 0xD0, 0x9C, 0x03, 0x25, 0x00, 0x00, 0x00, 0x23, 0x00,
-        0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x61, 0x6C, 0x70, 0x68, 0x61, 0x2E,
-        0x74, 0x78, 0x74, 0x4B, 0xCC, 0x29, 0xC8, 0x48, 0x54, 0x48, 0x2B, 0xCA,
-        0xCF, 0x55, 0x48, 0x54, 0x48, 0xCE, 0xCF, 0x2D, 0x28, 0x4A, 0x2D, 0x2E,
-        0x4E, 0x4D, 0x51, 0xA8, 0xCA, 0x2C, 0x50, 0x48, 0xCB, 0xAC, 0x28, 0x29,
-        0x2D, 0x4A, 0x05, 0x00, 0x50, 0x4B, 0x01, 0x02, 0x14, 0x00, 0x14, 0x00,
-        0x00, 0x00, 0x08, 0x00, 0x6D, 0xBB, 0xA3, 0x5C, 0x01, 0xD0, 0x9C, 0x03,
-        0x25, 0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x61, 0x6C, 0x70, 0x68, 0x61, 0x2E, 0x74, 0x78, 0x74, 0x50,
-        0x4B, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x37,
-        0x00, 0x00, 0x00, 0x4C, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00, 0x08, 0x00, 0x6D, 0xBB, 0xA3, 0x5C, 0x01, 0xD0, 0x9C, 0x03, 0x25, 0x00, 0x00, 0x00,
+        0x23, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x61, 0x6C, 0x70, 0x68, 0x61, 0x2E, 0x74, 0x78, 0x74, 0x4B, 0xCC, 0x29, 0xC8, 0x48,
+        0x54, 0x48, 0x2B, 0xCA, 0xCF, 0x55, 0x48, 0x54, 0x48, 0xCE, 0xCF, 0x2D, 0x28, 0x4A, 0x2D, 0x2E, 0x4E, 0x4D, 0x51, 0xA8, 0xCA, 0x2C,
+        0x50, 0x48, 0xCB, 0xAC, 0x28, 0x29, 0x2D, 0x4A, 0x05, 0x00, 0x50, 0x4B, 0x01, 0x02, 0x14, 0x00, 0x14, 0x00, 0x00, 0x00, 0x08, 0x00,
+        0x6D, 0xBB, 0xA3, 0x5C, 0x01, 0xD0, 0x9C, 0x03, 0x25, 0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x61, 0x6C, 0x70, 0x68, 0x61, 0x2E, 0x74, 0x78, 0x74, 0x50,
+        0x4B, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x37, 0x00, 0x00, 0x00, 0x4C, 0x00, 0x00, 0x00, 0x00, 0x00,
     }};
 
     std::ofstream output(archivePath, std::ios::binary | std::ios::trunc);
@@ -7630,10 +7595,10 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    const std::filesystem::path root       = suiteRoot / L"work" / (L"archive_unpack_prompt_" + NewGuidText());
-    const std::filesystem::path sourceRoot = root / L"source";
-    const std::filesystem::path outputRoot = root / L"archives";
-    const std::filesystem::path extractRoot = root / L"extract";
+    const std::filesystem::path root                  = suiteRoot / L"work" / (L"archive_unpack_prompt_" + NewGuidText());
+    const std::filesystem::path sourceRoot            = root / L"source";
+    const std::filesystem::path outputRoot            = root / L"archives";
+    const std::filesystem::path extractRoot           = root / L"extract";
     const std::filesystem::path compressedExtractRoot = root / L"compressed-extract";
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
@@ -7664,8 +7629,7 @@ void AutomateChangeCasePrompt(
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to activate builtin file-system for Unpack prompt test.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to set left pane path for Unpack prompt setup.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceRoot, SelfTest::Scale(3000ms)), L"Failed to set left pane path for Unpack prompt setup.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"gamma.log", L"nested"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for Unpack prompt setup.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view displayName) noexcept {
@@ -7693,8 +7657,7 @@ void AutomateChangeCasePrompt(
     }
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, outputRoot, SelfTest::Scale(3000ms)),
-                  L"Failed to navigate to Unpack prompt archive folder.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, outputRoot, SelfTest::Scale(3000ms)), L"Failed to navigate to Unpack prompt archive folder.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"selected.zip"}, SelfTest::Scale(3000ms)),
                   L"Unpack prompt archive folder did not show selected.zip.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"selected.zip"),
@@ -7706,15 +7669,15 @@ void AutomateChangeCasePrompt(
 
     struct ProbeResult final
     {
-        bool sawPrompt           = false;
-        bool ownedByMainWindow   = false;
-        bool capturedInitial     = false;
-        bool setDestination      = false;
-        bool setMask             = false;
-        bool setDeleteAfter      = false;
-        bool capturedEdited      = false;
-        bool actionTriggered     = false;
-        bool closed              = false;
+        bool sawPrompt         = false;
+        bool ownedByMainWindow = false;
+        bool capturedInitial   = false;
+        bool setDestination    = false;
+        bool setMask           = false;
+        bool setDeleteAfter    = false;
+        bool capturedEdited    = false;
+        bool actionTriggered   = false;
+        bool closed            = false;
         ArchiveUnpackPromptDebugSnapshot initialSnapshot{};
         ArchiveUnpackPromptDebugSnapshot editedSnapshot{};
         std::optional<UiaDescendantPatternStats> uiaPatternStats;
@@ -7746,12 +7709,11 @@ void AutomateChangeCasePrompt(
     state.Require(probe.initialSnapshot.usesDxUiHost, L"Unpack prompt should use a DxUi host.");
     state.Require(probe.initialSnapshot.visibleChildWindowCount <= 1u, L"Unpack prompt should not expose native child-control fallback.");
     state.Require(probe.initialSnapshot.visibleNativeChildControlCount <= 1u, L"Unpack prompt should not expose a Win32 dialog-template form.");
-    state.Require(probe.initialSnapshot.dialogClassName == L"RedSalamander.ArchiveUnpackPrompt",
-                  L"Unpack prompt should use the DxUi Unpack window class.");
+    state.Require(probe.initialSnapshot.dialogClassName == L"RedSalamander.ArchiveUnpackPrompt", L"Unpack prompt should use the DxUi Unpack window class.");
     state.Require(probe.initialSnapshot.dialogClassName != L"#32770", L"Unpack prompt should not be the stock pick-folder dialog.");
-    state.Require(probe.initialSnapshot.destinationPathText.find(L"selected") != std::wstring::npos,
-                  std::format(L"Unpack prompt should suggest a destination derived from the archive name; saw '{}'.",
-                              probe.initialSnapshot.destinationPathText));
+    state.Require(
+        probe.initialSnapshot.destinationPathText.find(L"selected") != std::wstring::npos,
+        std::format(L"Unpack prompt should suggest a destination derived from the archive name; saw '{}'.", probe.initialSnapshot.destinationPathText));
     state.Require(probe.initialSnapshot.unpackerDisplayName.find(L"ZIP") != std::wstring::npos,
                   std::format(L"Unpack prompt should select ZIP first; saw '{}'.", probe.initialSnapshot.unpackerDisplayName));
     state.Require(probe.initialSnapshot.unpackerExtension == L"zip",
@@ -7775,8 +7737,7 @@ void AutomateChangeCasePrompt(
     state.Require(probe.capturedEdited, L"Failed to capture edited Unpack prompt snapshot.");
     if (probe.capturedEdited)
     {
-        state.Require(probe.editedSnapshot.destinationPathText == extractRoot.wstring(),
-                      L"Unpack prompt should store the edited destination path.");
+        state.Require(probe.editedSnapshot.destinationPathText == extractRoot.wstring(), L"Unpack prompt should store the edited destination path.");
         state.Require(probe.editedSnapshot.maskText == L"alpha.txt", L"Unpack prompt should store the edited file mask.");
         state.Require(probe.editedSnapshot.deleteAfterUnpacking, L"Unpack prompt should store the delete-after-unpacking checkbox state.");
     }
@@ -7807,8 +7768,7 @@ void AutomateChangeCasePrompt(
         state.Require(unpackResult->destinationPath == extractRoot, L"Unpack prompt extraction should use the confirmed destination.");
         state.Require(unpackResult->entryCount == 1u, L"Unpack prompt mask should extract only the matching file.");
     }
-    state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"alpha",
-                  L"Unpack prompt should extract the masked file.");
+    state.Require(ReadUtf8TextFileForCommandSelfTest(extractRoot / L"alpha.txt") == L"alpha", L"Unpack prompt should extract the masked file.");
     state.Require(! SelfTest::PathExists(extractRoot / L"gamma.log"), L"Unpack prompt mask should skip unmatched root files.");
     state.Require(! SelfTest::PathExists(extractRoot / L"nested" / L"beta.txt"), L"Unpack prompt mask should skip unmatched nested files.");
     state.Require(! SelfTest::PathExists(archivePath), L"Delete-after-unpacking should remove the archive after successful extraction.");
@@ -7824,11 +7784,9 @@ void AutomateChangeCasePrompt(
                   L"Failed to refresh Unpack prompt archive folder for compressed ZIP fixture.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"compressed.zip"}, SelfTest::Scale(3000ms)),
                   L"Unpack prompt archive folder did not show compressed.zip.");
-    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view displayName) noexcept {
-        return displayName == L"compressed.zip";
-    });
-    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
-                  L"Compressed ZIP unpack should select the compressed fixture.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
+                                                          [](std::wstring_view displayName) noexcept { return displayName == L"compressed.zip"; });
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u, L"Compressed ZIP unpack should select the compressed fixture.");
     if (! state.failure.empty())
     {
         return false;
@@ -7858,10 +7816,8 @@ void AutomateChangeCasePrompt(
     if (compressedUnpackResult.has_value())
     {
         state.Require(SUCCEEDED(compressedUnpackResult->hr),
-                      std::format(L"Compressed ZIP extraction should succeed; hr=0x{:08X}.",
-                                  static_cast<unsigned long>(compressedUnpackResult->hr)));
-        state.Require(compressedUnpackResult->destinationPath == compressedExtractRoot,
-                      L"Compressed ZIP extraction should use the requested destination.");
+                      std::format(L"Compressed ZIP extraction should succeed; hr=0x{:08X}.", static_cast<unsigned long>(compressedUnpackResult->hr)));
+        state.Require(compressedUnpackResult->destinationPath == compressedExtractRoot, L"Compressed ZIP extraction should use the requested destination.");
         state.Require(compressedUnpackResult->entryCount == 1u, L"Compressed ZIP extraction should extract the fixture file.");
     }
     state.Require(ReadUtf8TextFileForCommandSelfTest(compressedExtractRoot / L"alpha.txt") == L"alpha from a compressed zip fixture",
@@ -8959,7 +8915,7 @@ void AutomateChangeCasePrompt(
         state.Require(snapshot.fieldCount > 0u, std::format(L"Item Properties window should expose at least one parsed field during {}.", context));
         state.Require(snapshot.contentText.find(L"alpha.txt") != std::wstring::npos,
                       std::format(L"Item Properties window text should include the selected file name during {}.", context));
-        const std::wstring exactSizeText = std::format(L"{} bytes", kFileSizeBytes);
+        const std::wstring exactSizeText    = std::format(L"{} bytes", kFileSizeBytes);
         const std::wstring expectedSizeText = std::format(L"{} ({})", FormatBytesCompact(kFileSizeBytes), exactSizeText);
         state.Require(snapshot.contentText.find(expectedSizeText) != std::wstring::npos,
                       std::format(L"Item Properties window should include compact and exact file size '{}' during {}.", expectedSizeText, context));
@@ -9045,13 +9001,8 @@ void AutomateChangeCasePrompt(
     streamPath.push_back(L':');
     streamPath.append(streamName);
 
-    wil::unique_handle stream(CreateFileW(streamPath.c_str(),
-                                          GENERIC_WRITE,
-                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                          nullptr,
-                                          CREATE_ALWAYS,
-                                          FILE_ATTRIBUTE_NORMAL,
-                                          nullptr));
+    wil::unique_handle stream(CreateFileW(
+        streamPath.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! stream)
     {
         const DWORD lastError = GetLastError();
@@ -9067,7 +9018,7 @@ void AutomateChangeCasePrompt(
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    DWORD written = 0u;
+    DWORD written            = 0u;
     const DWORD bytesToWrite = static_cast<DWORD>(payload.size());
     if (WriteFile(stream.get(), payload.data(), bytesToWrite, &written, nullptr) == 0 || written != bytesToWrite)
     {
@@ -9080,8 +9031,7 @@ void AutomateChangeCasePrompt(
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626) // WIL unique_hfind has deleted copy operations by design.
-[[nodiscard]] std::optional<uint64_t> FindAlternateStreamSizeForItemPropertiesTest(const std::filesystem::path& path,
-                                                                                  std::wstring_view streamName) noexcept
+[[nodiscard]] std::optional<uint64_t> FindAlternateStreamSizeForItemPropertiesTest(const std::filesystem::path& path, std::wstring_view streamName) noexcept
 {
     if (path.empty() || streamName.empty())
     {
@@ -9250,8 +9200,7 @@ void AutomateChangeCasePrompt(
     PumpPendingMessages();
 
     ItemPropertiesWindowDebugSnapshot loadedSnapshot{};
-    state.Require(WaitForItemPropertiesLoadedSnapshot(loadedSnapshot, SelfTest::Scale(5000ms)),
-                  L"Item Properties window did not complete the delayed load.");
+    state.Require(WaitForItemPropertiesLoadedSnapshot(loadedSnapshot, SelfTest::Scale(5000ms)), L"Item Properties window did not complete the delayed load.");
     SendMessageW(properties, WM_MOUSEMOVE, 0, loadingHoverSpot);
     PumpPendingMessages();
     state.Require(! loadedSnapshot.loadFailed, L"Item Properties delayed load should complete successfully.");
@@ -9412,20 +9361,19 @@ void AutomateChangeCasePrompt(
     }
 
     g_folderWindow.CloseAllViewers();
-    const auto closeViewers = wil::scope_exit([&]() noexcept { g_folderWindow.CloseAllViewers(); });
+    const auto closeViewers          = wil::scope_exit([&]() noexcept { g_folderWindow.CloseAllViewers(); });
     const size_t baselineViewerCount = g_folderWindow.DebugGetViewerInstanceCount();
     state.Require(SUCCEEDED(DebugOpenItemPropertiesStream(L"notes")), L"Failed to open alternate stream from Item Properties in ViewerText.");
     const auto viewerDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     while (std::chrono::steady_clock::now() < viewerDeadline &&
-           !(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u && g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text")))
+           ! (g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u && g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text")))
     {
         PumpPendingMessages();
         std::this_thread::sleep_for(20ms);
     }
     state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u,
                   L"Opening an alternate stream from Item Properties should create a ViewerText instance.");
-    state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text"),
-                  L"Opening an alternate stream from Item Properties should use ViewerText.");
+    state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text"), L"Opening an alternate stream from Item Properties should use ViewerText.");
     if (! state.failure.empty())
     {
         return false;
@@ -9458,8 +9406,7 @@ void AutomateChangeCasePrompt(
                   std::format(L"Folder properties should expose one removable stream; saw {}.", snapshot.removableStreamCount));
     state.Require(snapshot.viewableStreamCount == 1u,
                   std::format(L"Folder properties should expose one viewable stream; saw {}.", snapshot.viewableStreamCount));
-    state.Require(snapshot.contentText.find(L"folder-note: 13 bytes") != std::wstring::npos,
-                  L"Folder properties should include folder stream name and size.");
+    state.Require(snapshot.contentText.find(L"folder-note: 13 bytes") != std::wstring::npos, L"Folder properties should include folder stream name and size.");
     state.Require(InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_PROPERTIES_STREAM_REMOVE)),
                   L"Failed to invoke the visible stream Remove button from properties.");
     state.Require(waitForStreamCount(0u, snapshot), L"Folder properties did not refresh to zero streams after invoking the Remove button.");
@@ -9729,10 +9676,10 @@ void AutomateChangeCasePrompt(
     state.Require(WaitForWindowExposesUiaProvider(properties, SelfTest::Scale(3000ms)),
                   L"Item Properties window should answer WM_GETOBJECT during copy validation.");
     wil::com_ptr<IUIAutomationElement> copyHintElement;
-    state.Require(FindMatchingVisibleDescendantElement(
-                      properties, UIA_TextControlTypeId, LoadStringResource(nullptr, IDS_PROPERTIES_COPY_HINT), copyHintElement.put()) &&
-                      copyHintElement,
-                  L"Item Properties window should show the discrete Ctrl+C copy hint at the bottom.");
+    state.Require(
+        FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, LoadStringResource(nullptr, IDS_PROPERTIES_COPY_HINT), copyHintElement.put()) &&
+            copyHintElement,
+        L"Item Properties window should show the discrete Ctrl+C copy hint at the bottom.");
 
     ItemPropertiesWindowDebugSnapshot snapshot{};
     state.Require(WaitForItemPropertiesLoadedSnapshot(snapshot, SelfTest::Scale(5000ms)),
@@ -10002,23 +9949,23 @@ void AutomateChangeCasePrompt(
     PumpPendingMessages();
     std::this_thread::sleep_for(50ms);
     state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), L"Failed to capture Item Properties snapshot after narrow-width scrolling validation.");
-    state.Require(
-        snapshot.bodyVisibleLineCount > 0u && snapshot.bodyTotalLineCount > 0u,
-        std::format(L"Item Properties window did not expose a readable DX read-only surface after narrow-width validation; current={}x{}, requested={}x{}, applied={}x{}, "
-                    L"visibleLines={}, totalLines={}, firstVisibleLine={}, canScroll={}, resizeCount={}, renderCount={}, textLength={}.",
-                    currentWidthPx,
-                    currentHeightPx,
-                    narrowWidthPx,
-                    narrowHeightPx,
-                    appliedNarrowSize.width,
-                    appliedNarrowSize.height,
-                    snapshot.bodyVisibleLineCount,
-                    snapshot.bodyTotalLineCount,
-                    snapshot.bodyFirstVisibleLine,
-                    snapshot.bodyCanScrollVertically ? 1 : 0,
-                    snapshot.resizeCount,
-                    snapshot.renderCount,
-                    snapshot.contentText.size()));
+    state.Require(snapshot.bodyVisibleLineCount > 0u && snapshot.bodyTotalLineCount > 0u,
+                  std::format(L"Item Properties window did not expose a readable DX read-only surface after narrow-width validation; current={}x{}, "
+                              L"requested={}x{}, applied={}x{}, "
+                              L"visibleLines={}, totalLines={}, firstVisibleLine={}, canScroll={}, resizeCount={}, renderCount={}, textLength={}.",
+                              currentWidthPx,
+                              currentHeightPx,
+                              narrowWidthPx,
+                              narrowHeightPx,
+                              appliedNarrowSize.width,
+                              appliedNarrowSize.height,
+                              snapshot.bodyVisibleLineCount,
+                              snapshot.bodyTotalLineCount,
+                              snapshot.bodyFirstVisibleLine,
+                              snapshot.bodyCanScrollVertically ? 1 : 0,
+                              snapshot.resizeCount,
+                              snapshot.renderCount,
+                              snapshot.contentText.size()));
     if (! state.failure.empty())
     {
         return false;
@@ -10348,8 +10295,7 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    state.Require(! IsOwnedBy(properties, mainWindow),
-                  L"Item Properties window should not stay owned above the main window during access-key validation.");
+    state.Require(! IsOwnedBy(properties, mainWindow), L"Item Properties window should not stay owned above the main window during access-key validation.");
     const size_t accessKeyVisibleChildren = CountVisibleChildWindows(properties);
     state.Require(accessKeyVisibleChildren <= 1u,
                   std::format(L"Item Properties window should expose at most the shared DX text-bridge child during access-key validation; saw {}.",

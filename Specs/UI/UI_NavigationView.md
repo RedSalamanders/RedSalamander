@@ -9,9 +9,15 @@
 - Startup performance: Direct2D/D3D swap-chain initialization is **deferred until after the first paint** (via `WndMsg::kNavigationViewDeferredInit`) so `WM_CREATE` stays fast; the first paint uses only GDI background/border.
 - Graphics resources: NavigationView instances **share** the process-wide D2D/DWrite/D3D device objects; swap chains and device contexts remain per-window.
 - Uses Win32 for the window procedure and a visible `NavigationDxTextHost` child window in edit mode; text input behavior is delegated to DxUi's native text-input backend rather than a visible native `EDIT` surface or a NavigationView-owned hidden bridge subclass.
-- Uses DxUi-owned popup windows for the Drive/Menu, History, and Disk Info dropdown surfaces; the older NavigationView `WM_MEASUREITEM` / `WM_DRAWITEM` popup forwarding has been retired, and simple GDI painting remains only for fallback background/border work during pre-D2D startup.
+- Uses DxUi-owned popup windows for the Drive/Menu, History, breadcrumb sibling, and Disk Info dropdown surfaces; the older NavigationView `WM_MEASUREITEM` / `WM_DRAWITEM` popup forwarding has been retired, and simple GDI painting remains only for fallback background/border work during pre-D2D startup. Opening feedback must be driven by NavigationView and popup messages, not by a later title-bar activation or unrelated owner-window movement.
 - Pane-level commands that focus or open NavigationView-owned UI (`cmd/pane/focusAddressBar`, change-directory, drive menu, and folder-history commands) MUST reveal the target pane's navigation bar before invoking the NavigationView action. Hidden navigation bars must not leave an active edit/dropdown state attached to an invisible child host.
 - Clicking the current/last breadcrumb segment MUST focus the owning pane without dispatching a redundant same-path navigation. Double-clicking that segment, or whitespace in the path section, MUST enter address-bar edit mode with the current path selected; the leading click of that double-click must not queue a refresh that can close the edit host.
+- The `RedSalamander.NavigationView` child HWND owns client hit-testing and mouse activation for both pane-hosted and embedded modes: its WndProc returns `HTCLIENT` for the rendered client surface and `MA_ACTIVATE` for `WM_MOUSEACTIVATE`. Breadcrumb, menu, history, disk, and separator clicks must therefore reach the NavigationView input branch directly instead of being routed through a parent DirectX host, transparent popup margin, or another owner window first.
+- `NavigationDxTextHost` child windows are edit-mode implementation details, not permanent hit-test surfaces. When address-bar or full-path edit mode is inactive, the corresponding DxUi edit child must be hidden; if a stale visible edit child receives `WM_NCHITTEST`, mouse activation, cursor, hover, or button messages after edit focus has escaped, it must retire itself and return `HTTRANSPARENT` or forward the pointer message to the owning `RedSalamander.NavigationView`. A stale edit child must never make menu/history/separator clicks wait for title-bar movement, pointer exit, or another unrelated owner-window message.
+- Hosts that embed NavigationView must not starve its child-window messages while coalescing their own posted work. Parent UI handlers may batch only messages that are actually consecutive at the thread-queue head; they must not use parent-HWND-filtered queue peeks that skip older NavigationView `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, `WM_MOUSELEAVE`, activation, or popup messages.
+- Paint, layout, path, and history refreshes MUST NOT resample global cursor state or preserve obsolete hover state through explicit teardown. Hover is cleared by delivered `WM_MOUSELEAVE`, edit/popup teardown, and other explicit state transitions; repaint only renders the current state. Reapplying an identical path or identical history list is a no-op and must not force a repaint or re-open a delayed input path.
+- Delivered `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, `WM_LBUTTONDBLCLK`, and related pointer messages use the message `lParam` client point as authoritative. Production NavigationView input routing MUST NOT call `GetCursorPos()` or replace delivered message coordinates with the later live cursor. `GetCursorPos()` is permitted only in diagnostic logging and selftest/repro harness code that records evidence; it must not affect hover, click activation, stale classification, edit-mode entry, popup opening, popup dismissal, or repaint state. Stale activation/queue residue must be rejected by delivered-message metadata such as target HWND, message time/order, capture/menu ownership, layout/input generation, and explicit teardown tokens. Stale double-clicks must not enter address-bar edit mode, and pointer feedback/activation must not open a menu later because the user moved the pointer over a title bar, screen edge, or unrelated owner-window region.
+- NavigationView maintains a shared `DxUi::InputGeneration` token for owner pointer routing. Delivered owner `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, and `WM_LBUTTONDBLCLK` events must be stamped with the current generation and rejected if their target/client-point/generation metadata no longer matches. The generation advances when layout, DPI, path/history, file-system menu surface, theme/focus/embedded mode, edit mode, full-path popup state, dropdown/menu loop state, or teardown can invalidate previously delivered pointer assumptions.
 
 ## Typography Contract
 
@@ -178,26 +184,27 @@ else
 
 ### 6. Interactive States and Animation System (December 2025)
 ✅ **Comprehensive hover effects across all sections**:
-- **Section 1 (Menu Button)**: Timer-based hover polling with `_menuButtonHovered` state
-  - **Implementation**: 30 FPS polling timer (`HOVER_TIMER_ID = 2`) checks cursor position via `GetCursorPos` + `ScreenToClient` + `PtInRect`
-  - **Rationale**: Keeps hover states consistent while dropdown popup sessions are active and prevents stale highlights
-  - **Benefits**: No reliance on `WM_MOUSELEAVE`; explicit clearing when cursor leaves regions
-- **Section 2 (Breadcrumb Segments)**: Direct2D hover backgrounds via timer polling
+- **Section 1 (Menu Button)**: Message-driven hover with `_menuButtonHovered` state; menu-loop housekeeping may flush delivered separator-switch events while a popup owns pointer routing.
+  - **Implementation**: Delivered `WM_MOUSEMOVE` / `WM_MOUSELEAVE` update hover. Stale owner messages are rejected by delivered-message metadata and NavigationView input-generation tokens, not by live cursor polling.
+  - **Rationale**: Keeps immediate feedback tied to the routed child-window message and prevents delayed dropdown activation from stale queued coordinates.
+  - **Benefits**: Normal hover follows pointer messages; popup switching still works without an always-on timer.
+- **Section 2 (Breadcrumb Segments)**: Direct2D hover backgrounds from delivered pointer messages
   - **Coordinate Transform**: Window coordinates converted to Section 2 local space before hit testing
   - **Hover Cleanup**: Explicitly clears hover when cursor leaves Section 2 bounds to prevent stale highlights
-- **Section 2 (Separators)**: Timer-based hover detection with pressed states persisting during menu
+- **Section 2 (Separators)**: Delivered-message hover detection, with timer-based hover switching only while a sibling menu is already open
   - **Increased Size**: Font 50% larger (36pt at 96 DPI), width 24→32px, rect 20x24→32x36
   - **Text Alignment**: Uses full section height with `PARAGRAPH_ALIGNMENT_CENTER`, Y position at 0.0f
-- **Section 3 (History Button)**: Direct2D-rendered region with `_historyButtonHovered` updated by timer
-- **Section 4 (Disk Info)**: Direct2D-rendered region with `_diskInfoHovered` updated by timer (disk text + progress bar)
+- **Section 3 (History Button)**: Direct2D-rendered region with `_historyButtonHovered` updated from delivered pointer messages and active in edit mode.
+- **Section 4 (Disk Info)**: Direct2D-rendered region with `_diskInfoHovered` updated from delivered pointer messages and active in edit mode (disk text + progress bar).
 - **Popup menus** (Drive/Menu + Disk Info): DxUi context-menu popup windows with stock shell bitmap icons, right-aligned disk info values, and the shared popup material treatment
 - **Consistent Colors**: Hover/pressed colors come from `NavigationViewTheme` (e.g., `backgroundHover`, `backgroundPressed`)
+- **Refresh safety**: Non-pointer invalidations (path/history/status/layout repaint, owner redraw, theme repaint) must draw the current delivered-message hover state and must not poll `GetCursorPos()` during paint to replace it.
 
 ✅ **Hover tracking system** (All sections):
 ```cpp
-// Timer is toggled on-demand (menus/edit mode only)
+// Timer is toggled on-demand for menu-loop hover switching only.
 void UpdateHoverTimerState() noexcept {
-    const bool shouldRun = _editMode || _inMenuLoop;
+    const bool shouldRun = _inMenuLoop;
     if (shouldRun && _hoverTimer == 0) {
         _hoverTimer = SetTimer(_hWnd, HOVER_TIMER_ID, 1000 / HOVER_CHECK_FPS, nullptr);
     } else if (!shouldRun && _hoverTimer != 0) {
@@ -209,51 +216,21 @@ void UpdateHoverTimerState() noexcept {
 // Start/stop points
 case WM_ENTERMENULOOP: _inMenuLoop = true; UpdateHoverTimerState(); break;
 case WM_EXITMENULOOP:  _inMenuLoop = false; UpdateHoverTimerState(); break;
-EnterEditMode():       _editMode = true; UpdateHoverTimerState();
-ExitEditMode():        _editMode = false; UpdateHoverTimerState();
 
-// OnTimer handler (30 FPS polling)
+// OnTimer handler (menu-loop housekeeping only)
 void OnTimer(UINT_PTR timerId) {
     if (timerId == HOVER_TIMER_ID) {
-        POINT pt;
-        GetCursorPos(&pt);
-        ScreenToClient(_hWnd, &pt);
-        
-        RECT clientRect;
-        GetClientRect(_hWnd, &clientRect);
-        bool inClient = PtInRect(&clientRect, pt);
-        
-        // Section 1 hover detection
-        bool menuButtonHovered = inClient && PtInRect(&_sectionDriveRect, pt);
-        if (menuButtonHovered != _menuButtonHovered) {
-            _menuButtonHovered = menuButtonHovered;
-            RenderDriveSection();
-        }
-        
-        // History hover detection
-        bool historyButtonHovered = inClient && PtInRect(&_sectionHistoryRect, pt);
-        if (historyButtonHovered != _historyButtonHovered) {
-            _historyButtonHovered = historyButtonHovered;
-            RenderHistorySection();
-        }
-
-        // Disk info hover detection
-        bool diskInfoHovered = inClient && PtInRect(&_sectionDiskInfoRect, pt);
-        if (diskInfoHovered != _diskInfoHovered) {
-            _diskInfoHovered = diskInfoHovered;
-            RenderDiskInfoSection();
-        }
-        
-        // Section 2 segments/separators hover (with coordinate transform)
-        // ... check each segment/separator with local coordinates ...
-        // Explicitly clear hover when cursor leaves Section 2
+        // No GetCursorPos() here. Popup/menu-loop hover-switch work is driven
+        // by delivered owner/popup pointer events routed through DxUi's shared
+        // input router, tagged with NavigationView generation/capture state.
+        FlushDeferredMenuSwitchesFromDeliveredEvents();
     }
 }
 ```
-**Why Timer Polling (Only During Menus/Edit Mode)?**
-- Hover state remains correct while dropdown popup sessions are active (they temporarily redirect pointer handling away from the owning control)
-- Edit mode uses a child text host window, so hover for the chrome (close button) is easier to keep consistent via polling
-- Outside of those cases, hover is driven by `WM_MOUSEMOVE` / `WM_MOUSELEAVE` to avoid an always-on timer
+**Why Timer Polling (Only During Menus)?**
+- The timer may flush deferred menu-loop bookkeeping after delivered pointer events, but it must not sample global cursor position.
+- Edit mode does not start the hover timer. The path section suppresses breadcrumb hover while the edit host is active, but the drive/menu, history, and disk-info button regions still react to real delivered mouse messages.
+- Outside menu sessions, hover is driven by `WM_MOUSEMOVE` / `WM_MOUSELEAVE` to avoid an always-on timer and avoid stale queued pointer activation.
 
 **Timer Configuration**:
 ```cpp
@@ -264,6 +241,7 @@ UINT_PTR _hoverTimer = 0;
 
 ✅ **DxUi popup dropdowns**:
 - NavigationView dropdowns are composed as DxUi popup windows with shared menu materials, shell bitmap support, and app-rendered rows instead of Win32 owner-draw `HMENU` menus.
+- Sibling/history/drive/disk popups must open from the resolved NavigationView input branch without waiting for unrelated owner-window traffic.
 
 ✅ **Coordinate space transformation for Section 2**:
 - **Problem**: Direct2D uses local coordinate space after `SetTransform`, Win32 mouse events use window coordinates
@@ -315,7 +293,7 @@ uint64_t _separatorAnimationLastTickMs;       // Last dispatcher tick (ms)
 
 **New Methods**:
 ```cpp
-void OnTimer(UINT_PTR timerId);            // Hover polling (menus/edit mode)
+void OnTimer(UINT_PTR timerId);            // Menu-loop separator hover polling
 void OnEnterMenuLoop(bool isTrackPopupMenu);
 void OnExitMenuLoop(bool isShortcut);      // Menu cleanup + reverse animation
 void StartSeparatorAnimation(size_t, float);  // Begin rotation
@@ -361,6 +339,7 @@ void StopSeparatorAnimation() noexcept;
 
 **Popup Menus**: DxUi-owned popup windows
 - Drive, history, sibling, and disk-info dropdowns are transient owned DxUi popup windows with app-rendered materials, not Win32 `TrackPopupMenu` loops.
+- Opening a popup must create and show the popup from the resolved input branch; a later mouse move must not be required to process the open request.
 
 ### Why DirectX for Section 2?
 
@@ -526,7 +505,7 @@ _menuIconBitmapD2D = (iconIndex >= 0) ? IconCache::GetInstance().GetIconBitmap(i
 ### Menu Display (December 2025)
 ✅ **Drive menu popup alignment**:
 - **Alignment**: The visible popup body aligns its left edge to the Section 1 button left edge.
-- **Implementation**: `NavigationView::ShowDriveMenuDropdown()` anchors the popup from `_sectionDriveRect.left/bottom` and shows it through `DxUi::ContextMenu::Show(...)`.
+- **Implementation**: `NavigationView::ShowDriveMenuDropdown()` anchors pane popups from `_sectionDriveRect.left/bottom`; embedded destination hosts anchor from `_sectionDriveRect.left/top` so the visible popup surface opens above the footer. Both paths show through `DxUi::ContextMenu::Show(...)`.
 - **Previous**: The old native popup path right-aligned from `rc.right`, which made the drive surface feel detached from the button boundary.
 - **Rationale**: Keeping the popup anchored to the button edge preserves one stable chrome rhythm across the migrated DxUi dropdowns.
 
@@ -985,7 +964,7 @@ For path `C:\Users\aUser\Downloads`:
   ```
 - **Hit Testing**: Uses local coordinates against segment bounds stored in local space
 - **Hover Cleanup**: Explicitly clears all segment hover states when cursor leaves Section 2
-- **Trigger**: `HOVER_TIMER_ID` timer polls cursor position and transforms coordinates
+- **Trigger**: Delivered pointer messages update hover; `HOVER_TIMER_ID` may only flush deferred menu-loop bookkeeping from already delivered events.
 
 **Section 2 (Breadcrumb Separators)**:
 - **Normal**: No background
@@ -1126,10 +1105,10 @@ void RenderBreadcrumbs() {
 3. If B is different and eligible:
    - Highlight B (hover state) immediately
    - Send `WM_CANCELMODE` to force the current menu to close
-   - Post a deferred “open separator menu B” message (e.g. `WM_USER+100`)
+   - Pointer-click dispatch opens B directly after the current popup is canceled; hover-switch dispatch may still post a deferred open message so the current menu loop can unwind before the hover replacement opens
 4. The popup session for separator A exits and `WM_EXITMENULOOP` fires
 5. `OnExitMenuLoop` clears state and starts reverse rotation animation
-6. Deferred message opens B’s menu; pressed state/animation updates apply to B
+6. B’s menu opens with `_menuOpenForSeparator` set for the active popup duration; pressed state/animation updates apply to B
 
 **Code**:
 ```cpp
@@ -1141,20 +1120,15 @@ void OnLButtonDown(POINT pt) {
             // Check if different separator menu is open
             if (_menuOpenForSeparator != -1 && 
                 _menuOpenForSeparator != static_cast<int>(i)) {
-                // Close current menu and defer new menu
                 SendMessageW(_hWnd, WM_CANCELMODE, 0, 0);
-                PostMessageW(_hWnd, WM_USER + 100, 
-                           static_cast<WPARAM>(i), 0);
-            } else {
-                // No menu open or same separator clicked
-                ShowSiblingsDropdown(i);
             }
+            ShowSiblingsDropdown(i);
             return;
         }
     }
 }
 
-// WndProc handler for deferred menu opening
+// WndProc handler remains for keyboard/full-path/hover deferred entry points.
 case WM_USER + 100:
     ShowSiblingsDropdown(static_cast<size_t>(wp));
     return 0;
@@ -1162,19 +1136,18 @@ case WM_USER + 100:
 
 **Hover Switching (During a Dropdown Session)**:
 - The active sibling dropdown temporarily owns pointer interaction, so `OnMouseMove`/`OnLButtonDown` on the owning control won’t run normally.
-- To support “hover-to-switch” behavior, a 30 FPS timer polls `GetCursorPos()` + hit testing against separator bounds.
-- If the cursor is over a different eligible separator, the same `WM_CANCELMODE` + deferred-open flow is used.
-- While the cursor is over popup content, polling ignores hover/switching to avoid accidental menu changes.
+- To support “hover-to-switch” behavior, popup/owner `WM_MOUSEMOVE` messages are routed through the shared DxUi input router with delivered message coordinates and NavigationView generation state.
+- If the delivered pointer event is over a different eligible separator, the same `WM_CANCELMODE` + deferred-open flow is used.
+- While delivered pointer events target popup content, hover switching ignores them unless the shared router identifies an owner/breadcrumb switch event.
 
 **Full-Path Popup Consistency**:
 - The full-path popup breadcrumb window uses the same hover-to-switch logic for its separator sibling menus.
 - While the full-path popup is open, `NavigationView` hover tracking is suspended to prevent background hover/switch activity beneath the popup.
 
-**Why PostMessage Instead of Direct Call?**:
-- `SendMessageW(WM_CANCELMODE)` triggers menu exit but message processing continues
-- Modal loop completes, `WM_EXITMENULOOP` is dispatched
-- Only after modal loop ends can we safely open new menu
-- `PostMessage` defers new menu opening until after cleanup is complete
+**Why Pointer Clicks Open Directly But Hover Switching May Post**:
+- Pointer clicks originate on the owner `NavigationView` before a new popup has entered its modal loop, so `ShowSiblingsDropdown(...)` must be called in that dispatch path to avoid waiting for unrelated messages.
+- Hover switching can be detected while another popup owns the menu loop; that path may still defer the replacement until the active popup has unwound.
+- Posted dropdown-open messages are therefore allowed for callback/key/hover reentrancy control, but they are not the default pointer-click path.
 
 **Alternative Rejected Approaches**:
 - **Approach A**: `SetWindowsHookEx` with global hook - Complex, requires unhook, global state
@@ -1482,57 +1455,28 @@ void ExitEditMode();   // Hide edit host, show breadcrumbs
 
 ### Disk Information Update
 ```cpp
-void UpdateDiskInfo() {
-    _diskSpaceText.clear();
-    _freeBytes = 0;
-    _totalBytes = 0;
-    _usedBytes = 0;
-    _hasTotalBytes = false;
-    _hasFreeBytes = false;
-    _hasUsedBytes = false;
-    _volumeLabel.clear();
-    _fileSystem.clear();
-    _driveDisplayName.clear();
-
-    if (!_currentPluginPath || !_driveInfo) return;
-
-    const std::wstring pathText = _currentPluginPath.value().wstring();
-    DriveInfo info{};
-    const HRESULT hr = _driveInfo->GetDriveInfo(pathText.c_str(), &info);
-    if (FAILED(hr) || hr == S_FALSE) return;
-
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_DISPLAY_NAME) != 0 && info.displayName)
-        _driveDisplayName = info.displayName;
-    else
-        _driveDisplayName = _currentPluginPath.value().root_path().wstring();
-
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_VOLUME_LABEL) != 0 && info.volumeLabel)
-        _volumeLabel = info.volumeLabel;
-
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_FILE_SYSTEM) != 0 && info.fileSystem)
-        _fileSystem = info.fileSystem;
-
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_TOTAL_BYTES) != 0)
-    {
-        _totalBytes = info.totalBytes;
-        _hasTotalBytes = true;
+void UpdateDiskInfo(bool resetState = true) {
+    if (resetState) {
+        ResetDiskInfoState();
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_FREE_BYTES) != 0)
-    {
-        _freeBytes = info.freeBytes;
-        _hasFreeBytes = true;
+    // Queue the potentially slow IDriveInfo::GetDriveInfo call to the
+    // NavigationView drive-info worker. UI navigation must not wait here.
+    QueueDriveInfoQuery(_currentPluginPath, _driveInfo);
+}
+
+LRESULT OnDriveInfoLoaded(DriveInfoResultPayload payload) {
+    if (payload.requestId != _driveInfoRequestId || payload.pathText != CurrentPathText()) {
+        return 0; // stale async result
     }
 
-    if ((info.flags & DRIVE_INFO_FLAG_HAS_USED_BYTES) != 0) {
-        _usedBytes = info.usedBytes;
-        _hasUsedBytes = true;
-    }
-
-    if (_hasTotalBytes)
-        _diskSpaceText = FormatBytesCompact(_hasFreeBytes ? _freeBytes : _totalBytes) + L" ";
+    ApplyDriveInfoSnapshot(payload);
+    InvalidateRect(_hWnd.get(), &_sectionDiskInfoRect, FALSE);
+    return 0;
 }
 ```
+
+`IDriveInfo::GetDriveInfo` MUST NOT be called synchronously from path navigation, pane activation, or Find `Go to folder` handling. NavigationView queues it on a background MTA worker, copies the returned strings into an owned payload, discards stale request IDs on the UI thread, and emits `navigation.drive_info.query_us` for the worker-side query duration. Opening the disk-info dropdown uses the last applied snapshot and may queue a non-clearing refresh, but MUST NOT clear cached values before building the menu.
 
 **Conditional Display Logic** (December 2025):
 - **No `IDriveInfo`**: disk info section hidden.
@@ -1547,7 +1491,7 @@ void UpdateDiskInfo() {
 void ShowDiskInfoDropdown() {
     if (!_currentPluginPath || !_driveInfo) return;
 
-    UpdateDiskInfo();
+    UpdateDiskInfo(false); // refresh without clearing the current snapshot
 
     uint64_t usedBytes = 0;
     bool hasUsedBytes = false;
@@ -1594,8 +1538,15 @@ void ShowDiskInfoDropdown() {
 ```
 
 Additional dropdown rules:
+- NavigationView drive/menu, history, sibling, full-path, and disk-info dropdowns share the `DxUi::ContextMenu::Show(...)` input contract: pointer hover highlights, item invocation, outside-click dismissal, Escape dismissal, arrow-key navigation, mnemonics, and menu-bar/root switching are owned by the shared DxUI menu router while the popup chain is active.
+- Those dropdowns inherit the shared DxUI delivered-pointer rule while the popup chain is active: once Windows has delivered a popup/menu message, the menu router uses that message point for hover, root switching, invocation, and dismissal instead of substituting the later live cursor position. Production routing must not sample `GetCursorPos()` for timer-driven menu-loop hover switching, direct menu-bar hover notifications, stale detection, or light-dismiss decisions.
+- NavigationView chrome hover state is owned by delivered `WM_MOUSEMOVE` / `WM_MOUSELEAVE` messages plus explicit teardown. Before applying a no-capture owner `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, or `WM_LBUTTONDBLCLK`, NavigationView must sanity-check delivered-message metadata: target HWND, capture/menu ownership, message time/order, layout/input generation, and edit-host lifecycle. Production routing MUST NOT call `GetCursorPos()` or `WindowFromPoint()` to replace delivered coordinates or classify staleness. Stale messages must clear/ignore instead of opening a delayed dropdown or entering edit mode. `WM_PAINT` and `WM_SETCURSOR` MUST NOT mutate hover state; painting can only render the current state, and cursor handling can only set the cursor shape.
+- Hidden or inactive DxUi edit hosts used for NavigationView path editing MUST NOT remain as pointer sinks above the breadcrumb/history/destination chrome. If such a child host receives pointer activation after edit mode has ended, it must retire itself and forward the triggering pointer message to the owning NavigationView using the triggering message coordinates, not wait for unrelated mouse movement, repaint, or title-bar activation.
+- While address-bar edit mode is active, the path/breadcrumb section remains owned by the edit host, but the drive/menu, history, and disk-info chrome remain live. A real pointer over one of those buttons updates hover, exits edit mode on click, and continues to the selected dropdown branch in the same dispatch. Edit mode must not require timer polling or title-bar movement before those buttons react.
+- Pointer-click entry points on NavigationView chrome MUST dispatch the selected dropdown directly once the hit-test branch is known. Entry points that originate from keyboard activation, command callbacks, full-path popup handoff, or hover-switch replacement MAY use the existing posted message handlers when needed to avoid reentrant teardown.
+- NavigationView embedded destination mode (`SetEmbeddedDestinationMode(true)`) keeps the same dropdown commands, but root dropdown visible surfaces opened from the footer MUST anchor to the footer control's top edge, open upward, and use a compact maximum visible height with scrollbar support. Long history or sibling-folder lists must not clamp to a monitor-height root popup that captures most of the Find dialog, and transparent popup shadow margins must not own hit testing over the footer.
 - Informational disk rows (volume label, file system, total/used/free space) SHOULD render as non-interactive label/value rows, with the value right-aligned when present.
-- The disk info popup MUST anchor to the bottom-right corner of `_sectionDiskInfoRect` and use trailing-edge root alignment so a left-pane disk popup grows back into its own pane instead of spilling into the neighboring pane.
+- In pane mode, the disk info popup MUST anchor to the bottom-right corner of `_sectionDiskInfoRect` and use trailing-edge root alignment so a left-pane disk popup grows back into its own pane instead of spilling into the neighboring pane.
 - Appended drive-menu commands MUST preserve the stock shell icon when the plugin supplies `iconPath`/`path`; the DxUi popup path carries a pre-resolved bitmap icon payload from `IconCache` instead of substituting a generic glyph.
 - Well-known drive commands such as `Properties` / `Cleanup` MAY still use command glyphs when no stock shell icon is available.
 
@@ -1735,15 +1686,15 @@ private:
     std::wstring _driveDisplayName;
     
     // Interactive state (December 2025)
-    bool _menuButtonHovered = false;     // Section 1 hover state (timer-based)
+    bool _menuButtonHovered = false;     // Section 1 hover state (message-driven)
     bool _menuButtonPressed = false;     // Section 1 pressed state
-    bool _diskInfoHovered = false;       // Section 3 hover state (timer-based)
-    bool _historyButtonHovered = false;  // History button hover (timer-based)
+    bool _diskInfoHovered = false;       // Section 3 hover state (message-driven)
+    bool _historyButtonHovered = false;  // History button hover (message-driven)
     bool _isMenuOpen = false;            // Section 1 menu open state
     int _menuOpenForSeparator = -1;      // Which separator's menu is open
     int _activeSeparatorIndex = -1;      // Which separator is pressed
     
-    // Hover polling (enabled only for menus/edit mode)
+    // Hover polling (enabled only while a menu loop needs separator switching)
     static constexpr UINT_PTR HOVER_TIMER_ID = 2;
     static constexpr UINT HOVER_CHECK_FPS = 30;
     UINT_PTR _hoverTimer = 0;
@@ -1932,6 +1883,9 @@ NavigationView must support the shared theme system with **Light**, **Dark**, **
   - Inactive pane: noticeably dimmed palette while keeping text readable.
   - Pane focus is driven by `FolderWindow::UpdatePaneFocusStates()` calling `NavigationView::SetPaneFocused(...)`.
   - In Rainbow mode, any per-segment rainbow accents (e.g., breadcrumb underline / current segment text) must also be dimmed for the inactive pane.
+- Hosts that embed NavigationView outside a pane, such as the Find window's destination footer, must opt into embedded destination presentation with `SetEmbeddedDestinationMode(true)`. Embedded mode keeps the normal breadcrumb, edit, autosuggest, validation, and history/menu behavior, but paints into the host footer/window background, suppresses pane-only focused chrome such as the active-pane bottom border and current-segment accent/rainbow underline, and uses upward scroll-capped root dropdowns whose visible surfaces anchor to the footer top edge.
+- NavigationView history/menu diagnostic tracing participates in the shared DxUI menu trace switch. When enabled, pointer input must log raw mouse-down/double-click context, stale-pointer rejection with delivered-message metadata, resolved branch (`menu`, `history`, `disk`, `segment`, `siblings`, or ignored), dropdown entry/show/result, elapsed popup duration, and skip reasons so delayed message routing can be diagnosed from live application logs without changing normal release behavior. Diagnostic logs may include `GetCursorPos()` / `WindowFromPoint()` evidence, but that evidence is observational only and must not feed production routing decisions.
+- NavigationView destination/debug repro tracing must also expose whether input is reaching the application queue, the NavigationView HWND, its edit child host, the embedding owner/DxUi host, or an active popup/menu loop: `app.message-loop.find` queue/dequeue records for Find-hosted instances, `navigation.wndproc.raw` child-window activation/pointer boundary records, `navigation.input-state` snapshots, edit-host mouse/focus messages, `find.wndproc.raw` owner dispatch records, `dxui.windowhost.raw` / `dxui.windowhost.pointer-*` host dispatch records, hover candidates/changes/renders, hover-timer state/cursor ticks, cancel/capture/menu-loop transitions, and paint/present decisions are part of the diagnostic contract under the same trace switch.
 
 **Rainbow Mode (Implementation Guidance):**
 - Keep a neutral light/dark base for readability.

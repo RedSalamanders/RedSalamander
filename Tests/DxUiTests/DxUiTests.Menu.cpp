@@ -1,18 +1,24 @@
+#include "DxUi/DxUi.PointerInput.h"
 #include "DxUi/DxUiNativeMenuInterop.h"
 #include "DxUiTestHelpers.h"
 #include "FolderViewEmptyStateLayout.h"
 #include "FolderViewIncrementalSearch.h"
 #include "FolderViewVisualState.h"
+#include "Ui/AnimationDispatcher.h"
 
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <commctrl.h>
 #include <cmath>
+#include <fstream>
 #include <format>
 #include <iterator>
 #include <string>
 #include <thread>
 #include <vector>
+
+#pragma comment(lib, "comctl32.lib")
 
 namespace
 {
@@ -143,6 +149,143 @@ void TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout()
     const PlaceholderItemMetrics extraDetailedMetrics = ResolvePlaceholderItemMetrics(extraDetailed);
     Require(extraDetailedMetrics.tileHeightDip == expectedTileHeight(extraDetailed),
             "empty-folder placeholder height follows extra-detailed display-mode row height");
+}
+
+void TestPointerInputEventMouseMoveUsesDeliveredPoint()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    SetWindowPos(window.Hwnd(), nullptr, 240, 180, 320, 200, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    constexpr POINT deliveredClientPoint{37, 49};
+    POINT expectedScreenPoint = deliveredClientPoint;
+    Require(ClientToScreen(window.Hwnd(), &expectedScreenPoint) != FALSE, "pointer move test converts delivered client point to screen");
+
+    const std::optional<PointerInputEvent> event =
+        TryBuildPointerInputEvent(window.Hwnd(), WM_MOUSEMOVE, MK_CONTROL, MAKELPARAM(deliveredClientPoint.x, deliveredClientPoint.y),
+                                  PointerInputSource::WindowProc, InputGeneration{42});
+
+    Require(event.has_value(), "pointer move event is built from a mouse message");
+    Require(event.value().source == PointerInputSource::WindowProc, "pointer move event preserves source");
+    Require(event.value().kind == PointerInputKind::Move, "pointer move event records move kind");
+    Require(event.value().targetHwnd == window.Hwnd(), "pointer move event records target HWND");
+    Require(event.value().rootHwnd == GetAncestor(window.Hwnd(), GA_ROOT), "pointer move event records root HWND");
+    Require(event.value().captureHwnd == GetCapture(), "pointer move event records current capture HWND");
+    Require(event.value().message == WM_MOUSEMOVE, "pointer move event records message");
+    Require(event.value().wParam == MK_CONTROL, "pointer move event records flags");
+    Require(event.value().lParam == MAKELPARAM(deliveredClientPoint.x, deliveredClientPoint.y), "pointer move event records raw lParam");
+    Require(event.value().messageTime == static_cast<DWORD>(GetMessageTime()), "pointer move event stores message time metadata");
+    Require(event.value().generation.value == 42u, "pointer move event preserves generation");
+    Require(event.value().hasClientPoint, "pointer move event has a client point");
+    Require(event.value().hasScreenPoint, "pointer move event has a screen point");
+    Require(event.value().clientPointPx.x == deliveredClientPoint.x && event.value().clientPointPx.y == deliveredClientPoint.y,
+            "pointer move event uses delivered client point");
+    Require(event.value().screenPointPx.x == expectedScreenPoint.x && event.value().screenPointPx.y == expectedScreenPoint.y,
+            "pointer move event derives screen point from delivered client point");
+}
+
+void TestPointerInputEventButtonUsesDeliveredPointAndFlags()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    SetWindowPos(window.Hwnd(), nullptr, 260, 210, 320, 200, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(window.Hwnd(), SW_SHOWNOACTIVATE);
+    SetCapture(window.Hwnd());
+    const auto releaseCapture = wil::scope_exit([]() noexcept { static_cast<void>(ReleaseCapture()); });
+
+    constexpr POINT deliveredClientPoint{11, 23};
+    POINT expectedScreenPoint = deliveredClientPoint;
+    Require(ClientToScreen(window.Hwnd(), &expectedScreenPoint) != FALSE, "button test converts delivered client point to screen");
+
+    const std::optional<PointerInputEvent> event =
+        TryBuildPointerInputEvent(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON | MK_SHIFT,
+                                  MAKELPARAM(deliveredClientPoint.x, deliveredClientPoint.y), PointerInputSource::ModalLoopMessage,
+                                  InputGeneration{7});
+
+    Require(event.has_value(), "button event is built from a mouse button message");
+    Require(event.value().kind == PointerInputKind::LeftDown, "button event records left-down kind");
+    Require(event.value().source == PointerInputSource::ModalLoopMessage, "button event preserves modal-loop source");
+    Require(event.value().targetHwnd == window.Hwnd(), "button event records target HWND");
+    Require(event.value().captureHwnd == window.Hwnd(), "button event records current capture HWND");
+    Require((event.value().wParam & MK_LBUTTON) != 0, "button event records MK_LBUTTON flag");
+    Require(event.value().generation.value == 7u, "button event preserves generation");
+    Require(event.value().clientPointPx.x == deliveredClientPoint.x && event.value().clientPointPx.y == deliveredClientPoint.y,
+            "button event uses delivered client point");
+    Require(event.value().screenPointPx.x == expectedScreenPoint.x && event.value().screenPointPx.y == expectedScreenPoint.y,
+            "button event derives screen point from delivered client point");
+}
+
+void TestPointerInputEventWheelUsesDeliveredScreenPoint()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow window;
+    SetWindowPos(window.Hwnd(), nullptr, 300, 250, 320, 200, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    POINT deliveredScreenPoint{351, 289};
+    POINT expectedClientPoint = deliveredScreenPoint;
+    Require(ScreenToClient(window.Hwnd(), &expectedClientPoint) != FALSE, "wheel test converts delivered screen point to client");
+
+    const WPARAM wheelFlags = MAKEWPARAM(MK_RBUTTON, WHEEL_DELTA);
+    const LPARAM wheelPoint = MAKELPARAM(deliveredScreenPoint.x, deliveredScreenPoint.y);
+    const std::optional<PointerInputEvent> event =
+        TryBuildPointerInputEvent(window.Hwnd(), WM_MOUSEWHEEL, wheelFlags, wheelPoint, PointerInputSource::PopupWindowProc,
+                                  InputGeneration{9});
+
+    Require(event.has_value(), "wheel event is built from a wheel message");
+    Require(event.value().kind == PointerInputKind::Wheel, "wheel event records wheel kind");
+    Require(event.value().source == PointerInputSource::PopupWindowProc, "wheel event preserves popup source");
+    Require(event.value().wheelDelta == WHEEL_DELTA, "wheel event records delivered wheel delta");
+    Require(event.value().hasScreenPoint, "wheel event has a screen point");
+    Require(event.value().hasClientPoint, "wheel event has a client point");
+    Require(event.value().screenPointPx.x == deliveredScreenPoint.x && event.value().screenPointPx.y == deliveredScreenPoint.y,
+            "wheel event uses delivered screen point");
+    Require(event.value().clientPointPx.x == expectedClientPoint.x && event.value().clientPointPx.y == expectedClientPoint.y,
+            "wheel event derives client point from delivered screen point");
+}
+
+void TestPointerInputEventHasNoLiveCursorState()
+{
+    using namespace RedSalamander::DxUi;
+
+    MSG message{};
+    message.hwnd    = nullptr;
+    message.message = WM_TIMER;
+    message.wParam  = 0;
+    message.lParam  = 0;
+    Require(! TryBuildPointerInputEventFromMsg(message, PointerInputSource::WindowProc).has_value(),
+            "non-pointer messages do not build pointer input events");
+    Require(! PointerInputKindFromMessage(WM_TIMER).has_value(), "non-pointer messages do not map to pointer input kinds");
+
+    const std::filesystem::path sourcePath = FindRepoRootForDxUiTests() / L"Common" / L"DxUi" / L"DxUi.PointerInput.cpp";
+    std::ifstream input(sourcePath);
+    Require(input.good(), "pointer input implementation source is readable for live-cursor guard");
+    const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    Require(source.find("GetCursorPos") == std::string::npos, "pointer input core does not sample the live cursor");
+}
+
+void TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate()
+{
+    const std::filesystem::path repoRoot = FindRepoRootForDxUiTests();
+    const std::array<std::filesystem::path, 5> sourcePaths = {
+        repoRoot / L"RedSalamander" / L"NavigationView.h",
+        repoRoot / L"RedSalamander" / L"NavigationView.cpp",
+        repoRoot / L"RedSalamander" / L"NavigationView.Interaction.cpp",
+        repoRoot / L"RedSalamander" / L"NavigationView.Edit.cpp",
+        repoRoot / L"RedSalamander" / L"NavigationView.Menus.cpp",
+    };
+
+    for (const std::filesystem::path& sourcePath : sourcePaths)
+    {
+        std::ifstream input(sourcePath);
+        Require(input.good(), "NavigationView source is readable for pointer-generation guard");
+        const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        Require(source.find("BumpInputGeneration") == std::string::npos, "NavigationView does not maintain synthetic input generations");
+        Require(source.find("CurrentInputGeneration") == std::string::npos, "NavigationView does not stamp delivered pointer input with synthetic generations");
+        Require(source.find("_inputGeneration") == std::string::npos, "NavigationView does not store synthetic pointer input generation state");
+    }
 }
 
 class StripedBackdropControl final : public RedSalamander::DxUi::Control
@@ -339,6 +482,206 @@ bool WaitForContextMenuPopupBitmapCapture(HWND popupHwnd,
     POINT point{x, y};
     Require(ClientToScreen(hwnd, &point) != FALSE, context);
     return point;
+}
+
+[[nodiscard]] LPARAM MousePointLParamForMenuSuite(LONG x, LONG y) noexcept
+{
+    return MAKELPARAM(static_cast<WORD>(static_cast<SHORT>(x)), static_cast<WORD>(static_cast<SHORT>(y)));
+}
+
+[[nodiscard]] LRESULT SendCapturedMouseMessageForMenuSuite(HWND hwnd, UINT message, WPARAM wParam, POINT screenPoint) noexcept
+{
+    RECT windowRect{};
+    if (! hwnd || GetWindowRect(hwnd, &windowRect) == FALSE)
+    {
+        return 0;
+    }
+
+    const LPARAM lParam = MousePointLParamForMenuSuite(screenPoint.x - windowRect.left, screenPoint.y - windowRect.top);
+    return SendMessageW(hwnd, message, wParam, lParam);
+}
+
+[[nodiscard]] bool PostCapturedMouseMessageForMenuSuite(HWND hwnd, UINT message, WPARAM wParam, POINT screenPoint) noexcept
+{
+    RECT windowRect{};
+    if (! hwnd || GetWindowRect(hwnd, &windowRect) == FALSE)
+    {
+        return false;
+    }
+
+    const LPARAM lParam = MousePointLParamForMenuSuite(screenPoint.x - windowRect.left, screenPoint.y - windowRect.top);
+    return PostMessageW(hwnd, message, wParam, lParam) != FALSE;
+}
+
+[[nodiscard]] bool MoveLiveCursorForMenuSuite(POINT screenPoint) noexcept
+{
+    const auto cursorReached = [&]() noexcept
+    {
+        POINT current{};
+        return GetCursorPos(&current) != FALSE && std::abs(current.x - screenPoint.x) <= 2 && std::abs(current.y - screenPoint.y) <= 2;
+    };
+
+    if (SetCursorPos(screenPoint.x, screenPoint.y) != FALSE)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        if (cursorReached())
+        {
+            return true;
+        }
+    }
+
+    const int virtualLeft   = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    const int virtualTop    = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    const int virtualWidth  = (std::max)(1, GetSystemMetrics(SM_CXVIRTUALSCREEN));
+    const int virtualHeight = (std::max)(1, GetSystemMetrics(SM_CYVIRTUALSCREEN));
+    INPUT input{};
+    input.type       = INPUT_MOUSE;
+    input.mi.dx      = static_cast<LONG>((static_cast<int64_t>(screenPoint.x - virtualLeft) * 65535) / (std::max)(1, virtualWidth - 1));
+    input.mi.dy      = static_cast<LONG>((static_cast<int64_t>(screenPoint.y - virtualTop) * 65535) / (std::max)(1, virtualHeight - 1));
+    input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK;
+    if (SendInput(1u, &input, sizeof(INPUT)) != 1u)
+    {
+        return false;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    return cursorReached();
+}
+
+[[nodiscard]] bool SendLiveLeftClickForMenuSuite(POINT screenPoint) noexcept
+{
+    if (! MoveLiveCursorForMenuSuite(screenPoint))
+    {
+        return false;
+    }
+
+    std::array<INPUT, 2> inputs{};
+    inputs[0].type       = INPUT_MOUSE;
+    inputs[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+    inputs[1].type       = INPUT_MOUSE;
+    inputs[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+    return SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT)) == inputs.size();
+}
+
+[[nodiscard]] bool SendClientMouseMoveForMenuSuite(HWND hwnd, LONG x, LONG y) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    static_cast<void>(SendMessageW(hwnd, WM_MOUSEMOVE, 0, MousePointLParamForMenuSuite(x, y)));
+    return true;
+}
+
+[[nodiscard]] bool SendSettledClientMouseMoveForMenuSuite(HWND hwnd, LONG x, LONG y) noexcept
+{
+    POINT screenPoint{x, y};
+    if (! hwnd || IsWindow(hwnd) == FALSE || ClientToScreen(hwnd, &screenPoint) == FALSE)
+    {
+        return false;
+    }
+
+    static_cast<void>(MoveLiveCursorForMenuSuite(screenPoint));
+
+    return SendClientMouseMoveForMenuSuite(hwnd, x, y);
+}
+
+void DrainPendingMouseMessagesForMenuSuite() noexcept
+{
+    MSG msg{};
+    while (PeekMessageW(&msg, nullptr, WM_MOUSEFIRST, WM_MOUSELAST, PM_REMOVE) != FALSE)
+    {
+    }
+}
+
+[[nodiscard]] bool WaitForPendingSubmenuCloseTimerForMenuSuite(HWND popupHwnd,
+                                                               RedSalamander::DxUi::ContextMenuPopupDebugState& outState)
+{
+    return WaitForContextMenuPopupState(popupHwnd, [](const RedSalamander::DxUi::ContextMenuPopupDebugState& state) noexcept {
+        return state.hoverTimerActive && state.hoverTimerPendingClose;
+    }, outState);
+}
+
+[[nodiscard]] bool WaitForNoSubmenuHoverTimerForMenuSuite(HWND popupHwnd,
+                                                          RedSalamander::DxUi::ContextMenuPopupDebugState& outState)
+{
+    return WaitForContextMenuPopupState(popupHwnd, [](const RedSalamander::DxUi::ContextMenuPopupDebugState& state) noexcept {
+        return ! state.hoverTimerActive;
+    }, outState);
+}
+
+[[nodiscard]] bool FirePendingSubmenuHoverTimerForMenuSuite(HWND popupHwnd) noexcept
+{
+    return RedSalamander::DxUi::DebugFireContextMenuPopupHoverTimer(popupHwnd);
+}
+
+HWND FindOwnedContextMenuPopupWindowByFirstItemText(HWND ownerHwnd, std::wstring_view firstItemText);
+
+[[nodiscard]] bool WaitForSubmenuOpenAfterHoverForMenuSuite(HWND ownerHwnd,
+                                                            HWND popupHwnd,
+                                                            size_t itemIndex,
+                                                            std::wstring_view submenuFirstItemText,
+                                                            HWND& submenuHwnd,
+                                                            RedSalamander::DxUi::ContextMenuPopupDebugState& outState,
+                                                            std::chrono::milliseconds timeout = std::chrono::milliseconds(1200))
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    bool timerPosted   = false;
+    do
+    {
+        submenuHwnd = FindOwnedContextMenuPopupWindowByFirstItemText(ownerHwnd, submenuFirstItemText);
+        if (submenuHwnd)
+        {
+            return true;
+        }
+
+        if (! timerPosted && RedSalamander::DxUi::DebugGetContextMenuPopupState(popupHwnd, outState) &&
+            outState.hoverTimerActive && outState.hoverTimerPendingOpen && outState.hoverTimerItemIndex.has_value() &&
+            outState.hoverTimerItemIndex.value() == itemIndex)
+        {
+            if (! FirePendingSubmenuHoverTimerForMenuSuite(popupHwnd))
+            {
+                return false;
+            }
+            timerPosted = true;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    submenuHwnd = FindOwnedContextMenuPopupWindowByFirstItemText(ownerHwnd, submenuFirstItemText);
+    return submenuHwnd != nullptr;
+}
+
+[[nodiscard]] bool WaitForSubmenuClosedAfterHoverForMenuSuite(HWND popupHwnd,
+                                                              HWND submenuHwnd,
+                                                              RedSalamander::DxUi::ContextMenuPopupDebugState& outState,
+                                                              std::chrono::milliseconds timeout = std::chrono::milliseconds(1200))
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    bool timerPosted   = false;
+    do
+    {
+        if (IsWindow(submenuHwnd) == FALSE)
+        {
+            return true;
+        }
+
+        if (! timerPosted && RedSalamander::DxUi::DebugGetContextMenuPopupState(popupHwnd, outState) &&
+            outState.hoverTimerActive && outState.hoverTimerPendingClose)
+        {
+            if (! FirePendingSubmenuHoverTimerForMenuSuite(popupHwnd))
+            {
+                return false;
+            }
+            timerPosted = true;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    } while (std::chrono::steady_clock::now() < deadline);
+
+    return IsWindow(submenuHwnd) == FALSE;
 }
 
 RedSalamander::DxUi::WindowHostBitmapCapture CropWindowHostBitmapCaptureForTest(const RedSalamander::DxUi::WindowHostBitmapCapture& source,
@@ -560,18 +903,21 @@ HWND WaitForOwnedContextMenuPopupWindow(HWND ownerHwnd, std::chrono::millisecond
     return nullptr;
 }
 
+bool WaitForWindowDestroyed(HWND hwnd, std::chrono::milliseconds timeout);
+
 void DismissOwnedContextMenuPopupChain(HWND ownerHwnd) noexcept
 {
-    for (int attempt = 0; attempt < 4; ++attempt)
+    for (int attempt = 0; attempt < 16; ++attempt)
     {
         if (HWND popupHwnd = FindOwnedContextMenuPopupWindow(ownerHwnd))
         {
-            PostMessageW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0);
-            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+            DWORD_PTR unused = 0;
+            static_cast<void>(SendMessageTimeoutW(popupHwnd, WM_KEYDOWN, VK_ESCAPE, 0, SMTO_ABORTIFHUNG, 1000u, &unused));
+            static_cast<void>(WaitForWindowDestroyed(popupHwnd, std::chrono::milliseconds(120)));
             continue;
         }
 
-        break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
 }
 
@@ -763,6 +1109,394 @@ void RunMenuDismissalKeyScenario(UINT message, WPARAM virtualKey, const char* ap
     Require(WaitForFocusedWindow(focusedChild.get()), focusExpectation);
 }
 
+void TestSplitButtonContextMenuLivePointerHoverAndOutsideDismiss()
+{
+    using namespace RedSalamander::DxUi;
+
+    POINT originalCursor{};
+    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
+    const auto restore       = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            static_cast<void>(MoveLiveCursorForMenuSuite(originalCursor));
+        }
+    });
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 420, 260, SWP_NOZORDER);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOW);
+    static_cast<void>(SetForegroundWindow(ownerWindow.Hwnd()));
+    static_cast<void>(SetActiveWindow(ownerWindow.Hwnd()));
+
+    const std::vector<MenuFlyoutItem> items{
+        {.text = L"Find Now", .enabled = true, .commandId = 4101},
+        {.text = L"Refine - Intersect with Found Items", .enabled = true, .commandId = 4102},
+        {.text = L"Refine - Subtract from Found Items", .enabled = true, .commandId = 4103},
+        {.text = L"Append to Found Items", .enabled = true, .commandId = 4104},
+    };
+    ownerWindow.PumpMessages();
+    const POINT menuAnchor = ClientScreenPointForTest(ownerWindow.Hwnd(), 24, 60, "split-button-style menu anchor converts to screen coordinates");
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Find Now");
+        if (! popupHwnd)
+        {
+            driverFailure = "split-button opens the owned DxUi context menu";
+            return;
+        }
+
+        ContextMenuPopupDebugState popupState{};
+        if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+            return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f;
+        }, popupState))
+        {
+            driverFailure = "split-button popup exposes geometry before live pointer routing validation";
+            return;
+        }
+
+        D2D1_RECT_F refineRectDip{};
+        if (! WaitForContextMenuPopupItemRect(popupHwnd, 1u, refineRectDip))
+        {
+            driverFailure = "split-button popup exposes the Refine row bounds";
+            return;
+        }
+
+        POINT refineCenter{
+            static_cast<LONG>(std::lround((refineRectDip.left + refineRectDip.right) * 0.5f *
+                                          static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+            static_cast<LONG>(std::lround((refineRectDip.top + refineRectDip.bottom) * 0.5f *
+                                          static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+        };
+        if (ClientToScreen(popupHwnd, &refineCenter) == FALSE)
+        {
+            driverFailure = "split-button popup Refine row converts to screen coordinates";
+            return;
+        }
+
+        POINT preHoverPoint = ownerWindow.Host().DipPointToScreenPoint(D2D1::Point2F(32.0f, 196.0f));
+        RECT popupRectBeforeHover{};
+        if (GetWindowRect(popupHwnd, &popupRectBeforeHover) != FALSE && PtInRect(&popupRectBeforeHover, preHoverPoint) != FALSE)
+        {
+            preHoverPoint = ownerWindow.Host().DipPointToScreenPoint(D2D1::Point2F(388.0f, 196.0f));
+        }
+        if (! MoveLiveCursorForMenuSuite(preHoverPoint))
+        {
+            return;
+        }
+
+        const bool movedLiveCursor = MoveLiveCursorForMenuSuite(refineCenter);
+        if (! movedLiveCursor)
+        {
+            return;
+        }
+
+        ContextMenuPopupItemPaintDebugState paintState{};
+        const auto hoverDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(800);
+        bool hoverObserved       = false;
+        const auto observeHover = [&]() noexcept
+        {
+            ContextMenuPopupDebugState hoverState{};
+            return DebugGetContextMenuPopupState(popupHwnd, hoverState) && hoverState.hoveredIndex == std::optional<size_t>{1u} &&
+                   DebugGetContextMenuPopupItemPaint(popupHwnd, 1u, paintState) && paintState.usesHighlightFill;
+        };
+        hoverObserved = observeHover();
+        do
+        {
+            if (hoverObserved)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            hoverObserved = observeHover();
+        } while (std::chrono::steady_clock::now() < hoverDeadline);
+        if (! hoverObserved)
+        {
+            return;
+        }
+
+        POINT outsidePoint = ownerWindow.Host().DipPointToScreenPoint(D2D1::Point2F(32.0f, 196.0f));
+        RECT popupRect{};
+        if (GetWindowRect(popupHwnd, &popupRect) != FALSE && PtInRect(&popupRect, outsidePoint) != FALSE)
+        {
+            outsidePoint = ownerWindow.Host().DipPointToScreenPoint(D2D1::Point2F(388.0f, 196.0f));
+        }
+        if (! SendLiveLeftClickForMenuSuite(outsidePoint))
+        {
+            return;
+        }
+        if (! WaitForWindowDestroyed(popupHwnd))
+        {
+            driverFailure = "outside click dismisses the split-button popup";
+        }
+    });
+
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), menuAnchor, items, ownerWindow.Host().GetTheme());
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(! result.has_value(), "outside-dismissed split-button-style popup returns no command");
+}
+
+void TestSplitButtonContextMenuSentMouseMessagesHoverAndInvokeImmediately()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 140, 140, 460, 280, SWP_NOZORDER);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOW);
+    static_cast<void>(SetForegroundWindow(ownerWindow.Hwnd()));
+    static_cast<void>(SetActiveWindow(ownerWindow.Hwnd()));
+
+    const std::vector<MenuFlyoutItem> items{
+        {.text = L"Find Now", .enabled = true, .commandId = 4201},
+        {.text = L"Refine - Intersect with Found Items", .enabled = true, .commandId = 4202},
+        {.text = L"Refine - Subtract from Found Items", .enabled = true, .commandId = 4203},
+        {.text = L"Append to Found Items", .enabled = true, .commandId = 4204},
+    };
+    ownerWindow.PumpMessages();
+    const POINT menuAnchor = ClientScreenPointForTest(ownerWindow.Hwnd(), 24, 60, "sent-message menu anchor converts to screen coordinates");
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Find Now");
+        if (! popupHwnd)
+        {
+            driverFailure = "sent-message split-button popup opens";
+            return;
+        }
+
+        ContextMenuPopupDebugState popupState{};
+        D2D1_RECT_F refineRectDip{};
+        if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+            return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f;
+        }, popupState) ||
+            ! WaitForContextMenuPopupItemRect(popupHwnd, 1u, refineRectDip))
+        {
+            driverFailure = "sent-message split-button popup exposes the Refine row";
+            return;
+        }
+
+        POINT refineCenter{
+            static_cast<LONG>(std::lround((refineRectDip.left + refineRectDip.right) * 0.5f *
+                                          static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+            static_cast<LONG>(std::lround((refineRectDip.top + refineRectDip.bottom) * 0.5f *
+                                          static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+        };
+        if (ClientToScreen(popupHwnd, &refineCenter) == FALSE)
+        {
+            driverFailure = "sent-message split-button Refine row converts to screen coordinates";
+            return;
+        }
+
+        static_cast<void>(MoveLiveCursorForMenuSuite(refineCenter));
+        static_cast<void>(SendCapturedMouseMessageForMenuSuite(popupHwnd, WM_MOUSEMOVE, 0, refineCenter));
+
+        ContextMenuPopupItemPaintDebugState paintState{};
+        const auto hoverDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(800);
+        bool hoverObserved       = false;
+        const auto observeHover = [&]() noexcept
+        {
+            ContextMenuPopupDebugState hoverState{};
+            return DebugGetContextMenuPopupState(popupHwnd, hoverState) && hoverState.hoveredIndex == std::optional<size_t>{1u} &&
+                   DebugGetContextMenuPopupItemPaint(popupHwnd, 1u, paintState) && paintState.usesHighlightFill;
+        };
+        hoverObserved = observeHover();
+        do
+        {
+            if (hoverObserved)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            hoverObserved = observeHover();
+        } while (std::chrono::steady_clock::now() < hoverDeadline);
+        if (! hoverObserved)
+        {
+            ContextMenuPopupDebugState finalState{};
+            static_cast<void>(DebugGetContextMenuPopupState(popupHwnd, finalState));
+            RECT popupRect{};
+            static_cast<void>(GetWindowRect(popupHwnd, &popupRect));
+            driverFailure = std::format("sent WM_MOUSEMOVE over the split-button popup Refine row produces visible hover highlight "
+                                        "(hovered={}, keyboard={}, center=({},{}), popup=({},{} {}x{}), row=({:.1f},{:.1f},{:.1f},{:.1f}), renders={})",
+                                        finalState.hoveredIndex.has_value() ? static_cast<long long>(finalState.hoveredIndex.value()) : -1ll,
+                                        finalState.keyboardIndex.has_value() ? static_cast<long long>(finalState.keyboardIndex.value()) : -1ll,
+                                        refineCenter.x,
+                                        refineCenter.y,
+                                        popupRect.left,
+                                        popupRect.top,
+                                        popupRect.right - popupRect.left,
+                                        popupRect.bottom - popupRect.top,
+                                        refineRectDip.left,
+                                        refineRectDip.top,
+                                        refineRectDip.right,
+                                        refineRectDip.bottom,
+                                        finalState.renderCount);
+            return;
+        }
+
+        static_cast<void>(SendCapturedMouseMessageForMenuSuite(popupHwnd, WM_LBUTTONDOWN, MK_LBUTTON, refineCenter));
+        static_cast<void>(SendCapturedMouseMessageForMenuSuite(popupHwnd, WM_LBUTTONUP, 0, refineCenter));
+
+        if (! WaitForWindowDestroyed(popupHwnd, std::chrono::milliseconds(800)))
+        {
+            driverFailure = "sent split-button menu item click closes the popup immediately";
+        }
+    });
+
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), menuAnchor, items, ownerWindow.Host().GetTheme());
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(result == std::optional<int>{4202}, "sent split-button-style menu item click invokes immediately without a later activation poke");
+}
+
+constexpr UINT kMenuOwnerMessageFloodTestMessage = WM_APP + 0x53Du;
+constexpr UINT_PTR kMenuOwnerMessageFloodSubclassId = 0x53Du;
+
+LRESULT CALLBACK MenuOwnerMessageFloodTestSubclassProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) noexcept
+{
+    if (message == kMenuOwnerMessageFloodTestMessage)
+    {
+        Sleep(1);
+        return 0;
+    }
+
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
+void TestSplitButtonContextMenuOwnerMessageFloodDoesNotStarvePointerInput()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 140, 140, 460, 280, SWP_NOZORDER);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOW);
+    static_cast<void>(SetForegroundWindow(ownerWindow.Hwnd()));
+    static_cast<void>(SetActiveWindow(ownerWindow.Hwnd()));
+
+    Require(SetWindowSubclass(ownerWindow.Hwnd(), MenuOwnerMessageFloodTestSubclassProc, kMenuOwnerMessageFloodSubclassId, 0) != FALSE,
+            "owner-message-flood validation subclasses the owner window");
+    const auto restoreOwnerWndProc = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(RemoveWindowSubclass(ownerWindow.Hwnd(), MenuOwnerMessageFloodTestSubclassProc, kMenuOwnerMessageFloodSubclassId));
+        MSG drainMessage{};
+        while (PeekMessageW(&drainMessage, ownerWindow.Hwnd(), kMenuOwnerMessageFloodTestMessage, kMenuOwnerMessageFloodTestMessage, PM_REMOVE) != FALSE)
+        {
+        }
+    });
+
+    const std::vector<MenuFlyoutItem> items{
+        {.text = L"Find Now", .enabled = true, .commandId = 4201},
+        {.text = L"Refine - Intersect with Found Items", .enabled = true, .commandId = 4202},
+        {.text = L"Refine - Subtract from Found Items", .enabled = true, .commandId = 4203},
+        {.text = L"Append to Found Items", .enabled = true, .commandId = 4204},
+    };
+    ownerWindow.PumpMessages();
+    const POINT menuAnchor = ClientScreenPointForTest(ownerWindow.Hwnd(), 24, 60, "owner-message-flood menu anchor converts to screen coordinates");
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Find Now");
+        if (! popupHwnd)
+        {
+            driverFailure = "owner-message-flood split-button popup opens";
+            return;
+        }
+
+        ContextMenuPopupDebugState popupState{};
+        D2D1_RECT_F refineRectDip{};
+        if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+            return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f;
+        }, popupState) ||
+            ! WaitForContextMenuPopupItemRect(popupHwnd, 1u, refineRectDip))
+        {
+            driverFailure = "owner-message-flood split-button popup exposes the Refine row";
+            return;
+        }
+
+        POINT refineCenter{
+            static_cast<LONG>(std::lround((refineRectDip.left + refineRectDip.right) * 0.5f *
+                                          static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+            static_cast<LONG>(std::lround((refineRectDip.top + refineRectDip.bottom) * 0.5f *
+                                          static_cast<float>(popupState.dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+        };
+        if (ClientToScreen(popupHwnd, &refineCenter) == FALSE)
+        {
+            driverFailure = "owner-message-flood split-button Refine row converts to screen coordinates";
+            return;
+        }
+        static constexpr int kFloodMessageCount = 2000;
+        for (int i = 0; i < kFloodMessageCount; ++i)
+        {
+            if (PostMessageW(ownerWindow.Hwnd(), kMenuOwnerMessageFloodTestMessage, 0, 0) == FALSE)
+            {
+                driverFailure = "owner-message-flood posts owner-window traffic";
+                return;
+            }
+        }
+
+        static_cast<void>(MoveLiveCursorForMenuSuite(refineCenter));
+        if (! PostCapturedMouseMessageForMenuSuite(popupHwnd, WM_MOUSEMOVE, 0, refineCenter))
+        {
+            driverFailure = "owner-message-flood posts popup mouse move";
+            return;
+        }
+
+        ContextMenuPopupItemPaintDebugState paintState{};
+        const auto hoverDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(800);
+        bool hoverObserved       = false;
+        const auto observeHover = [&]() noexcept
+        {
+            ContextMenuPopupDebugState hoverState{};
+            return DebugGetContextMenuPopupState(popupHwnd, hoverState) && hoverState.hoveredIndex == std::optional<size_t>{1u} &&
+                   DebugGetContextMenuPopupItemPaint(popupHwnd, 1u, paintState) && paintState.usesHighlightFill;
+        };
+        do
+        {
+            hoverObserved = observeHover();
+            if (hoverObserved)
+            {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(25));
+        } while (std::chrono::steady_clock::now() < hoverDeadline);
+        if (! hoverObserved)
+        {
+            driverFailure = "owner-window message flood does not starve popup hover highlight";
+            return;
+        }
+
+        if (! PostCapturedMouseMessageForMenuSuite(popupHwnd, WM_LBUTTONDOWN, MK_LBUTTON, refineCenter) ||
+            ! PostCapturedMouseMessageForMenuSuite(popupHwnd, WM_LBUTTONUP, 0, refineCenter))
+        {
+            driverFailure = "owner-message-flood posts popup item click";
+            return;
+        }
+
+        if (! WaitForWindowDestroyed(popupHwnd, std::chrono::milliseconds(800)))
+        {
+            driverFailure = "owner-window message flood does not delay popup invocation";
+        }
+    });
+
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), menuAnchor, items, ownerWindow.Host().GetTheme());
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(result == std::optional<int>{4202}, "owner-window message flood cannot delay popup pointer hover or invocation");
+}
+
 std::shared_ptr<RedSalamander::DxUi::MenuFlyoutItem::BitmapIcon> CreateSyntheticMenuBitmapIcon(UINT sizePx)
 {
     if (sizePx == 0u)
@@ -858,6 +1592,28 @@ RedSalamander::DxUi::WindowHostBitmapCapture CaptureMenuPopupBitmapForTheme(cons
     return RECT{0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
 }
 
+[[nodiscard]] RECT GetVirtualScreenBounds() noexcept
+{
+    const int left   = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    const int top    = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    const int width  = (std::max)(1, GetSystemMetrics(SM_CXVIRTUALSCREEN));
+    const int height = (std::max)(1, GetSystemMetrics(SM_CYVIRTUALSCREEN));
+    return RECT{left, top, left + width, top + height};
+}
+
+[[nodiscard]] RECT GetNearestMonitorWorkArea(POINT screenPoint) noexcept
+{
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize     = sizeof(monitorInfo);
+    const HMONITOR monitor = MonitorFromPoint(screenPoint, MONITOR_DEFAULTTONEAREST);
+    if (monitor && GetMonitorInfoW(monitor, &monitorInfo) != FALSE)
+    {
+        return monitorInfo.rcWork;
+    }
+
+    return GetPrimaryMonitorWorkArea();
+}
+
 void TestMenuKeyboardNavigationSkipsInfoRows()
 {
     using namespace RedSalamander::DxUi;
@@ -928,6 +1684,10 @@ void TestMenuKeyboardRightArrowMatchesWindowsMenuLoop()
     SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
     ownerWindow.PumpMessages();
+    const POINT idleCursorPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "left-arrow keyboard validation idle cursor maps to screen coordinates");
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleCursorPoint));
+    ownerWindow.PumpMessages();
+    DrainPendingMouseMessagesForMenuSuite();
 
     const std::vector<std::vector<MenuFlyoutItem>> rootMenus = {
         {
@@ -1125,6 +1885,10 @@ void TestStationaryMouseDoesNotOverrideKeyboardRootSwitch()
         return buildRequest(activeRootIndex);
     };
 
+    POINT idleScreenPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "synthetic hover idle point converts to screen coordinates");
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleScreenPoint));
+    DrainPendingMouseMessagesForMenuSuite();
+
     std::string driverFailure;
     std::thread driver([&]
     {
@@ -1277,7 +2041,7 @@ void TestMenuPointerOverSiblingRootSwitchesOpenMenu()
     POINT viewMenuClientPoint{280, 20};
     POINT viewMenuScreenPoint = viewMenuClientPoint;
     Require(ClientToScreen(ownerWindow.Hwnd(), &viewMenuScreenPoint) != FALSE, "View root test point converts to screen coordinates for idle cursor polling validation");
-    SetCursorPos(viewMenuScreenPoint.x, viewMenuScreenPoint.y);
+    static_cast<void>(MoveLiveCursorForMenuSuite(viewMenuScreenPoint));
 
     std::string driverFailure;
     std::thread driver([&]
@@ -1306,7 +2070,10 @@ void TestMenuPointerOverSiblingRootSwitchesOpenMenu()
             return;
         }
 
-        SetCursorPos(pluginsMenuScreenPoint.x, pluginsMenuScreenPoint.y);
+        if (! MoveLiveCursorForMenuSuite(pluginsMenuScreenPoint))
+        {
+            return;
+        }
         const LPARAM capturedMouseMovePoint = MAKELPARAM(pluginsMenuScreenPoint.x - viewPopupRect.left, pluginsMenuScreenPoint.y - viewPopupRect.top);
         PostMessageW(viewPopupHwnd, WM_MOUSEMOVE, 0, capturedMouseMovePoint);
 
@@ -1331,12 +2098,218 @@ void TestMenuPointerOverSiblingRootSwitchesOpenMenu()
         }
     });
 
+    const ThemePalette theme = MakeDefaultThemePalette(true);
+    const std::optional<int> result =
+        ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(! result.has_value(), "closing the pointer root-switch validation popup with Escape returns no invoked command");
+}
+
+void TestMenuPopupMouseMoveUsesDeliveredPointForRootSwitch()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    const std::array<std::vector<MenuFlyoutItem>, 2> rootMenus = {
+        std::vector<MenuFlyoutItem>{{.text = L"View one", .commandId = 36761}, {.text = L"View two", .commandId = 36762}},
+        std::vector<MenuFlyoutItem>{{.text = L"Plugins one", .commandId = 36771}, {.text = L"Plugins two", .commandId = 36772}},
+    };
+    const std::array<POINT, 2> rootPopupPoints = {POINT{270, 180}, POINT{190, 180}};
+
+    size_t activeRootIndex  = 0u;
+    const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
+    {
+        ContextMenuRootSwitchRequest request{};
+        request.screenPoint = rootPopupPoints[rootIndex];
+        request.items       = rootMenus[rootIndex];
+        return request;
+    };
+
+    ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.switchRootFromPointer = [&](POINT screenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        POINT clientPoint = screenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &clientPoint) == FALSE || clientPoint.y < 0 || clientPoint.y >= 40)
+        {
+            return std::nullopt;
+        }
+
+        size_t hitIndex = rootMenus.size();
+        if (clientPoint.x >= 140 && clientPoint.x < 220)
+        {
+            hitIndex = 1u;
+        }
+        else if (clientPoint.x >= 240 && clientPoint.x < 320)
+        {
+            hitIndex = 0u;
+        }
+
+        if (hitIndex >= rootMenus.size() || hitIndex == activeRootIndex)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = hitIndex;
+        return buildRequest(activeRootIndex);
+    };
+
+    POINT idleScreenPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "delivered root-switch idle cursor point converts to screen coordinates");
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleScreenPoint));
+    DrainPendingMouseMessagesForMenuSuite();
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
+        if (! viewPopupHwnd)
+        {
+            driverFailure = "View root popup opens before delivered root-switch validation";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        const POINT pluginsMenuScreenPoint =
+            ClientScreenPointForTest(ownerWindow.Hwnd(), 180, 20, "Plugins delivered root-switch point converts to screen coordinates");
+        if (! PostCapturedMouseMessageForMenuSuite(viewPopupHwnd, WM_MOUSEMOVE, 0, pluginsMenuScreenPoint))
+        {
+            driverFailure = "View popup receives delivered root-switch mouse move";
+            return;
+        }
+
+        const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one");
+        if (! pluginsPopupHwnd)
+        {
+            driverFailure = "popup mouse-move root switching must use the delivered lParam point even when the live cursor is elsewhere";
+            return;
+        }
+
+        if (IsWindow(viewPopupHwnd) != FALSE)
+        {
+            driverFailure = "delivered root-switch closes the previous View popup";
+        }
+    });
+
     const ThemePalette theme        = MakeDefaultThemePalette(true);
     const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
     driver.join();
 
     Require(driverFailure.empty(), driverFailure.c_str());
-    Require(! result.has_value(), "closing the pointer root-switch validation popup with Escape returns no invoked command");
+    Require(activeRootIndex == 1u, "delivered root-switch validation records the accepted root index");
+    Require(! result.has_value(), "closing the delivered root-switch validation popup with Escape returns no invoked command");
+}
+
+void TestMenuOwnerMouseMoveRoutesRootSwitchImmediately()
+{
+    using namespace RedSalamander::DxUi;
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 420, 260, SWP_NOZORDER | SWP_NOACTIVATE);
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    ownerWindow.PumpMessages();
+
+    const std::array<std::vector<MenuFlyoutItem>, 2> rootMenus = {
+        std::vector<MenuFlyoutItem>{{.text = L"View one", .commandId = 36781}, {.text = L"View two", .commandId = 36782}},
+        std::vector<MenuFlyoutItem>{{.text = L"Plugins one", .commandId = 36791}, {.text = L"Plugins two", .commandId = 36792}},
+    };
+    const std::array<POINT, 2> rootPopupPoints = {
+        ClientScreenPointForTest(ownerWindow.Hwnd(), 270, 60, "owner-move View root popup point converts to screen coordinates"),
+        ClientScreenPointForTest(ownerWindow.Hwnd(), 190, 60, "owner-move Plugins root popup point converts to screen coordinates"),
+    };
+
+    size_t activeRootIndex = 0u;
+    const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
+    {
+        ContextMenuRootSwitchRequest request{};
+        request.screenPoint = rootPopupPoints[rootIndex];
+        request.items       = rootMenus[rootIndex];
+        return request;
+    };
+
+    ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.switchRootFromPointer = [&](POINT screenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    {
+        POINT clientPoint = screenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &clientPoint) == FALSE || clientPoint.y < 0 || clientPoint.y >= 40)
+        {
+            return std::nullopt;
+        }
+
+        size_t hitIndex = rootMenus.size();
+        if (clientPoint.x >= 140 && clientPoint.x < 220)
+        {
+            hitIndex = 1u;
+        }
+        else if (clientPoint.x >= 240 && clientPoint.x < 320)
+        {
+            hitIndex = 0u;
+        }
+
+        if (hitIndex >= rootMenus.size() || hitIndex == activeRootIndex)
+        {
+            return std::nullopt;
+        }
+
+        activeRootIndex = hitIndex;
+        return buildRequest(activeRootIndex);
+    };
+
+    POINT idleScreenPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "owner-move idle cursor point converts to screen coordinates");
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleScreenPoint));
+    DrainPendingMouseMessagesForMenuSuite();
+
+    std::string driverFailure;
+    std::thread driver([&]
+    {
+        const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
+        if (! viewPopupHwnd)
+        {
+            driverFailure = "View root popup opens before owner mouse-move root switching validation";
+            return;
+        }
+
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
+
+        if (PostMessageW(ownerWindow.Hwnd(), WM_MOUSEMOVE, 0, MousePointLParamForMenuSuite(180, 20)) == 0)
+        {
+            driverFailure = "owner window receives a mouse-move over the Plugins root while the menu loop is active";
+            return;
+        }
+
+        const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one");
+        if (! pluginsPopupHwnd)
+        {
+            driverFailure = "owner-window WM_MOUSEMOVE over a sibling root switches the open menu immediately";
+            return;
+        }
+
+        ContextMenuPopupDebugState pluginsPopupState{};
+        if (! DebugGetContextMenuPopupState(pluginsPopupHwnd, pluginsPopupState) || pluginsPopupState.rootSwitchImmediateRenderCount == 0u ||
+            pluginsPopupState.renderCount == 0u)
+        {
+            driverFailure = "owner-window mouse-move root switch paints the replacement popup immediately";
+            return;
+        }
+
+        if (IsWindow(viewPopupHwnd) != FALSE)
+        {
+            driverFailure = "owner-window mouse-move root switch closes the previous View popup";
+        }
+    });
+
+    const ThemePalette theme        = MakeDefaultThemePalette(true);
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    driver.join();
+
+    Require(driverFailure.empty(), driverFailure.c_str());
+    Require(activeRootIndex == 1u, "owner-window mouse-move root switch records the accepted root index");
+    Require(! result.has_value(), "closing the owner-window mouse-move root switch popup with Escape returns no invoked command");
 }
 
 void TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup()
@@ -1381,7 +2354,7 @@ void TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup()
     };
 
     POINT idleScreenPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "synthetic hover idle point converts to screen coordinates");
-    SetCursorPos(idleScreenPoint.x, idleScreenPoint.y);
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleScreenPoint));
 
     std::string driverFailure;
     std::thread driver([&]
@@ -1423,8 +2396,9 @@ void TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup()
         }
     });
 
-    const ThemePalette theme        = MakeDefaultThemePalette(true);
-    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    const ThemePalette theme = MakeDefaultThemePalette(true);
+    const std::optional<int> result =
+        ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
     driver.join();
 
     Require(driverFailure.empty(), driverFailure.c_str());
@@ -1432,7 +2406,7 @@ void TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup()
     Require(! result.has_value(), "closing the direct synthetic menu-bar hover popup with Escape returns no invoked command");
 }
 
-void TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot()
+void TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar()
 {
     using namespace RedSalamander::DxUi;
 
@@ -1492,7 +2466,7 @@ void TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot()
     POINT idleClientPoint{20, 140};
     POINT idleScreenPoint = idleClientPoint;
     Require(ClientToScreen(ownerWindow.Hwnd(), &idleScreenPoint) != FALSE, "idle cursor point converts to screen coordinates");
-    SetCursorPos(idleScreenPoint.x, idleScreenPoint.y);
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleScreenPoint));
 
     std::string driverFailure;
     std::thread driver([&]
@@ -1546,24 +2520,15 @@ void TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot()
             return;
         }
 
-        PostMessageW(viewPopupHwnd,
-                     WM_MOUSEMOVE,
-                     0,
-                     MAKELPARAM(popupItemScreenPoint.x - popupWindowRect.left, popupItemScreenPoint.y - popupWindowRect.top));
+        PostMessageW(viewPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(popupItemScreenPoint.x - popupWindowRect.left, popupItemScreenPoint.y - popupWindowRect.top));
 
-        const HWND pluginsPopupHwnd =
-            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
+        const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
         if (pluginsPopupHwnd)
         {
             driverFailure = "moving inside a frontmost popup must not switch the root menu underneath it";
             return;
         }
 
-        if (SetCursorPos(popupItemScreenPoint.x, popupItemScreenPoint.y) == FALSE)
-        {
-            driverFailure = "overlapping popup sample point remains available as the live cursor position before synthetic hover validation";
-            return;
-        }
         pendingMenuBarHoverRootSwitch.store(1);
         if (PostMessageW(viewPopupHwnd, WndMsg::kDxUiContextMenuRootHoverChanged, 1u, 0) == 0)
         {
@@ -1571,28 +2536,29 @@ void TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot()
             return;
         }
         const HWND pluginsPopupFromHoverHwnd =
-            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
-        if (pluginsPopupFromHoverHwnd)
+            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(900));
+        if (! pluginsPopupFromHoverHwnd)
         {
-            driverFailure = "a menu-bar hover message must not switch root while the live cursor is inside a frontmost popup";
+            driverFailure = "an explicit menu-bar hover message must switch root while a frontmost popup overlaps the menu strip";
             return;
         }
 
-        if (IsWindow(viewPopupHwnd) == FALSE)
+        if (IsWindow(viewPopupHwnd) != FALSE && IsWindowVisible(viewPopupHwnd) != FALSE)
         {
-            driverFailure = "View popup remains alive after moving inside its overlapping surface";
+            driverFailure = "View popup should close after explicit menu-bar hover switches to the Plugins root";
         }
     });
 
-    const ThemePalette theme        = MakeDefaultThemePalette(true);
-    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    const ThemePalette theme = MakeDefaultThemePalette(true);
+    const std::optional<int> result =
+        ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
     driver.join();
 
     Require(driverFailure.empty(), driverFailure.c_str());
     Require(! result.has_value(), "closing the overlapping popup validation with Escape returns no invoked command");
 }
 
-void TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch()
+void TestMenuRootSwitchUsesDeliveredOwnerMouseMoveAfterPopupSwitch()
 {
     using namespace RedSalamander::DxUi;
 
@@ -1607,7 +2573,7 @@ void TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch()
     };
     const std::array<POINT, 2> rootPopupPoints = {POINT{270, 180}, POINT{190, 180}};
 
-    size_t activeRootIndex  = 0u;
+    std::atomic<size_t> activeRootIndex{0u};
     const auto buildRequest = [&](size_t rootIndex) -> ContextMenuRootSwitchRequest
     {
         ContextMenuRootSwitchRequest request{};
@@ -1635,14 +2601,18 @@ void TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch()
             hitIndex = 0u;
         }
 
-        if (hitIndex >= rootMenus.size() || hitIndex == activeRootIndex)
+        if (hitIndex >= rootMenus.size() || hitIndex == activeRootIndex.load(std::memory_order_acquire))
         {
             return std::nullopt;
         }
 
-        activeRootIndex = hitIndex;
-        return buildRequest(activeRootIndex);
+        activeRootIndex.store(hitIndex, std::memory_order_release);
+        return buildRequest(hitIndex);
     };
+
+    POINT idleScreenPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "delivered owner-move idle cursor point converts to screen coordinates");
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleScreenPoint));
+    DrainPendingMouseMessagesForMenuSuite();
 
     std::string driverFailure;
     std::thread driver([&]
@@ -1650,7 +2620,7 @@ void TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch()
         const HWND viewPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one");
         if (! viewPopupHwnd)
         {
-            driverFailure = "View root popup opens before stale mouse-move validation";
+            driverFailure = "View root popup opens before delivered owner mouse-move validation";
             return;
         }
 
@@ -1660,7 +2630,7 @@ void TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch()
         POINT pluginsMenuScreenPoint = pluginsMenuClientPoint;
         if (ClientToScreen(ownerWindow.Hwnd(), &pluginsMenuScreenPoint) == FALSE)
         {
-            driverFailure = "Plugins root test point converts to screen coordinates for stale mouse-move validation";
+            driverFailure = "Plugins root test point converts to screen coordinates for delivered owner mouse-move validation";
             return;
         }
 
@@ -1668,56 +2638,67 @@ void TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch()
         POINT viewMenuScreenPoint = viewMenuClientPoint;
         if (ClientToScreen(ownerWindow.Hwnd(), &viewMenuScreenPoint) == FALSE)
         {
-            driverFailure = "View root stale point converts to screen coordinates";
+            driverFailure = "View root delivered owner point converts to screen coordinates";
             return;
         }
 
-        RECT viewPopupRect{};
-        if (GetWindowRect(viewPopupHwnd, &viewPopupRect) == FALSE)
+        if (! PostCapturedMouseMessageForMenuSuite(viewPopupHwnd, WM_MOUSEMOVE, 0, pluginsMenuScreenPoint))
         {
-            driverFailure = "View root popup exposes a screen rect before stale mouse-move validation";
+            driverFailure = "View popup receives the delivered Plugins root-switch move";
             return;
         }
-
-        SetCursorPos(pluginsMenuScreenPoint.x, pluginsMenuScreenPoint.y);
-        const LPARAM pluginsMovePoint = MAKELPARAM(pluginsMenuScreenPoint.x - viewPopupRect.left, pluginsMenuScreenPoint.y - viewPopupRect.top);
-        PostMessageW(viewPopupHwnd, WM_MOUSEMOVE, 0, pluginsMovePoint);
 
         const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one");
         if (! pluginsPopupHwnd)
         {
-            driverFailure = "moving the live cursor to Plugins opens the Plugins popup before stale mouse-move validation";
+            driverFailure = "delivered popup move opens the Plugins popup before delivered owner mouse-move validation";
+            return;
+        }
+        if (activeRootIndex.load(std::memory_order_acquire) != 1u)
+        {
+            driverFailure = "delivered popup move records the Plugins root as active before owner mouse-move validation";
             return;
         }
 
-        POINT staleViewClientPoint = viewMenuScreenPoint;
-        if (ScreenToClient(ownerWindow.Hwnd(), &staleViewClientPoint) == FALSE)
+        POINT deliveredViewClientPoint = viewMenuScreenPoint;
+        if (ScreenToClient(ownerWindow.Hwnd(), &deliveredViewClientPoint) == FALSE)
         {
-            driverFailure = "stale View screen point converts to owner client coordinates";
+            driverFailure = "View delivered owner point converts to owner client coordinates";
             return;
         }
-        PostMessageW(ownerWindow.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(staleViewClientPoint.x, staleViewClientPoint.y));
-
-        const HWND staleViewPopupHwnd =
-            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one", std::chrono::milliseconds(180));
-        if (staleViewPopupHwnd && staleViewPopupHwnd != viewPopupHwnd)
+        if (PostMessageW(ownerWindow.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(deliveredViewClientPoint.x, deliveredViewClientPoint.y)) == FALSE)
         {
-            driverFailure = "a stale View mouse-move message switched away from the live Plugins cursor";
+            driverFailure = "owner receives the delivered View root-switch move";
             return;
         }
 
-        if (IsWindow(pluginsPopupHwnd) == FALSE)
+        const HWND deliveredViewPopupHwnd =
+            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"View one", std::chrono::milliseconds(900));
+        if (! deliveredViewPopupHwnd)
         {
-            driverFailure = "Plugins popup remains alive after the stale View mouse-move message";
+            driverFailure = "a fresh delivered owner View mouse-move should switch root after the Plugins popup opened";
+            return;
+        }
+
+        if (activeRootIndex.load(std::memory_order_acquire) != 0u)
+        {
+            driverFailure = "fresh delivered owner View mouse-move should record the View root as active";
+            return;
+        }
+
+        if (IsWindow(pluginsPopupHwnd) != FALSE && IsWindowVisible(pluginsPopupHwnd) != FALSE)
+        {
+            driverFailure = "Plugins popup should close after the fresh delivered owner View mouse-move message";
         }
     });
 
     const ThemePalette theme        = MakeDefaultThemePalette(true);
-    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    const size_t initialRootIndex   = activeRootIndex.load(std::memory_order_acquire);
+    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[initialRootIndex], rootMenus[initialRootIndex], theme, sessionCallbacks);
     driver.join();
 
     Require(driverFailure.empty(), driverFailure.c_str());
-    Require(! result.has_value(), "closing the stale mouse-move validation popup with Escape returns no invoked command");
+    Require(! result.has_value(), "closing the delivered owner mouse-move validation popup with Escape returns no invoked command");
 }
 
 void TestMenuRootSwitchDoesNotPollCursorWhileIdle()
@@ -1772,6 +2753,10 @@ void TestMenuRootSwitchDoesNotPollCursorWhileIdle()
         return buildRequest(activeRootIndex);
     };
 
+    POINT idleScreenPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 20, 220, "synthetic hover idle point converts to screen coordinates");
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleScreenPoint));
+    DrainPendingMouseMessagesForMenuSuite();
+
     std::string driverFailure;
     std::thread driver([&]
     {
@@ -1784,8 +2769,7 @@ void TestMenuRootSwitchDoesNotPollCursorWhileIdle()
 
         const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
 
-        const HWND pluginsPopupHwnd =
-            WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
+        const HWND pluginsPopupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Plugins one", std::chrono::milliseconds(180));
         if (pluginsPopupHwnd)
         {
             driverFailure = "waiting without a mouse-move message must not switch root menus by idle polling";
@@ -1798,8 +2782,9 @@ void TestMenuRootSwitchDoesNotPollCursorWhileIdle()
         }
     });
 
-    const ThemePalette theme        = MakeDefaultThemePalette(true);
-    const std::optional<int> result = ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
+    const ThemePalette theme = MakeDefaultThemePalette(true);
+    const std::optional<int> result =
+        ContextMenu::Show(ownerWindow.Hwnd(), rootPopupPoints[activeRootIndex], rootMenus[activeRootIndex], theme, sessionCallbacks);
     driver.join();
 
     Require(driverFailure.empty(), driverFailure.c_str());
@@ -1814,7 +2799,7 @@ void TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay()
     SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
     ownerWindow.PumpMessages();
-
+    DrainPendingMouseMessagesForMenuSuite();
     const std::vector<MenuFlyoutItem> items = {
         {.text      = L"B1",
          .commandId = 3681,
@@ -1857,16 +2842,24 @@ void TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay()
         const LONG b2X    = static_cast<LONG>(std::lround(((secondItemRectDip.left + secondItemRectDip.right) * 0.5f) * scale));
         const LONG b2Y    = static_cast<LONG>(std::lround(((secondItemRectDip.top + secondItemRectDip.bottom) * 0.5f) * scale));
 
-        PostMessageW(rootPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(b1X, b1Y));
-        const HWND submenuHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"B11", std::chrono::milliseconds(1200));
-        if (! submenuHwnd)
+        if (! SendSettledClientMouseMoveForMenuSuite(rootPopupHwnd, b1X, b1Y) ||
+            ! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+            return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 0u;
+        }, popupState))
+        {
+            driverFailure = "hovering B1 updates the root-popup hover target before delayed submenu close";
+            return;
+        }
+
+        HWND submenuHwnd = nullptr;
+        if (! WaitForSubmenuOpenAfterHoverForMenuSuite(ownerWindow.Hwnd(), rootPopupHwnd, 0u, L"B11", submenuHwnd, popupState))
         {
             driverFailure = "hovering B1 long enough opens its submenu before delayed close validation";
             return;
         }
 
-        PostMessageW(rootPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(b2X, b2Y));
-        if (! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+        if (! SendSettledClientMouseMoveForMenuSuite(rootPopupHwnd, b2X, b2Y) ||
+            ! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
             return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 1u;
         }, popupState))
         {
@@ -1874,7 +2867,7 @@ void TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay()
             return;
         }
 
-        if (! WaitForWindowDestroyed(submenuHwnd, std::chrono::milliseconds(1200)))
+        if (! WaitForSubmenuClosedAfterHoverForMenuSuite(rootPopupHwnd, submenuHwnd, popupState))
         {
             driverFailure = "hovering B2 long enough closes the already-open submenu from B1";
         }
@@ -1896,7 +2889,7 @@ void TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay()
     SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
     ownerWindow.PumpMessages();
-
+    DrainPendingMouseMessagesForMenuSuite();
     const std::vector<MenuFlyoutItem> items = {
         {.text      = L"B1",
          .commandId = 3691,
@@ -1945,16 +2938,24 @@ void TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay()
         const LONG b2X    = static_cast<LONG>(std::lround(((secondItemRectDip.left + secondItemRectDip.right) * 0.5f) * scale));
         const LONG b2Y    = static_cast<LONG>(std::lround(((secondItemRectDip.top + secondItemRectDip.bottom) * 0.5f) * scale));
 
-        PostMessageW(rootPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(b1X, b1Y));
-        const HWND firstSubmenuHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"B11", std::chrono::milliseconds(1200));
-        if (! firstSubmenuHwnd)
+        if (! SendSettledClientMouseMoveForMenuSuite(rootPopupHwnd, b1X, b1Y) ||
+            ! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+                return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 0u;
+            }, popupState))
+        {
+            driverFailure = "hovering B1 updates the root-popup hover target before delayed submenu replacement";
+            return;
+        }
+
+        HWND firstSubmenuHwnd = nullptr;
+        if (! WaitForSubmenuOpenAfterHoverForMenuSuite(ownerWindow.Hwnd(), rootPopupHwnd, 0u, L"B11", firstSubmenuHwnd, popupState))
         {
             driverFailure = "hovering B1 long enough opens its submenu before delayed replacement validation";
             return;
         }
 
-        PostMessageW(rootPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(b2X, b2Y));
-        if (! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+        if (! SendSettledClientMouseMoveForMenuSuite(rootPopupHwnd, b2X, b2Y) ||
+            ! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
             return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 1u;
         }, popupState))
         {
@@ -1962,8 +2963,8 @@ void TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay()
             return;
         }
 
-        const HWND replacementSubmenuHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"B21", std::chrono::milliseconds(1200));
-        if (! replacementSubmenuHwnd)
+        HWND replacementSubmenuHwnd = nullptr;
+        if (! WaitForSubmenuOpenAfterHoverForMenuSuite(ownerWindow.Hwnd(), rootPopupHwnd, 1u, L"B21", replacementSubmenuHwnd, popupState))
         {
             driverFailure = "hovering B2 long enough opens B2's replacement submenu";
             return;
@@ -1991,7 +2992,7 @@ void TestMenuPointerInsideSubmenuAndParentItemCancelPendingCloseDelay()
     SetWindowPos(ownerWindow.Hwnd(), nullptr, 120, 120, 360, 240, SWP_NOZORDER | SWP_NOACTIVATE);
     ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
     ownerWindow.PumpMessages();
-
+    DrainPendingMouseMessagesForMenuSuite();
     const std::vector<MenuFlyoutItem> items = {
         {.text      = L"B1",
          .commandId = 3701,
@@ -2034,20 +3035,33 @@ void TestMenuPointerInsideSubmenuAndParentItemCancelPendingCloseDelay()
         const LONG b2X        = static_cast<LONG>(std::lround(((secondItemRectDip.left + secondItemRectDip.right) * 0.5f) * rootScale));
         const LONG b2Y        = static_cast<LONG>(std::lround(((secondItemRectDip.top + secondItemRectDip.bottom) * 0.5f) * rootScale));
 
-        PostMessageW(rootPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(b1X, b1Y));
-        const HWND submenuHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"B11", std::chrono::milliseconds(1200));
-        if (! submenuHwnd)
+        if (! SendSettledClientMouseMoveForMenuSuite(rootPopupHwnd, b1X, b1Y) ||
+            ! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+                return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 0u;
+            }, rootState))
+        {
+            driverFailure = "hovering B1 updates the root-popup hover target before hover-retention validation";
+            return;
+        }
+
+        HWND submenuHwnd = nullptr;
+        if (! WaitForSubmenuOpenAfterHoverForMenuSuite(ownerWindow.Hwnd(), rootPopupHwnd, 0u, L"B11", submenuHwnd, rootState))
         {
             driverFailure = "hovering B1 long enough opens its submenu before hover-retention validation";
             return;
         }
 
-        PostMessageW(rootPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(b2X, b2Y));
-        if (! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+        if (! SendSettledClientMouseMoveForMenuSuite(rootPopupHwnd, b2X, b2Y) ||
+            ! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
             return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 1u;
         }, rootState))
         {
             driverFailure = "hovering B2 starts the delayed close path before entering the submenu";
+            return;
+        }
+        if (! WaitForPendingSubmenuCloseTimerForMenuSuite(rootPopupHwnd, rootState))
+        {
+            driverFailure = "hovering B2 schedules the parent delayed-close timer before entering the submenu";
             return;
         }
 
@@ -2066,16 +3080,30 @@ void TestMenuPointerInsideSubmenuAndParentItemCancelPendingCloseDelay()
         const float submenuScale = static_cast<float>(submenuState.dpi) / 96.0f;
         const LONG submenuX      = static_cast<LONG>(std::lround(((submenuItemRectDip.left + submenuItemRectDip.right) * 0.5f) * submenuScale));
         const LONG submenuY      = static_cast<LONG>(std::lround(((submenuItemRectDip.top + submenuItemRectDip.bottom) * 0.5f) * submenuScale));
-        PostMessageW(submenuHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(submenuX, submenuY));
+        if (! SendSettledClientMouseMoveForMenuSuite(submenuHwnd, submenuX, submenuY) ||
+            ! WaitForContextMenuPopupState(submenuHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+            return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 0u;
+        }, submenuState))
+        {
+            driverFailure = "moving into an open submenu updates the submenu hover target";
+            return;
+        }
 
-        if (WaitForWindowDestroyed(submenuHwnd, std::chrono::milliseconds(700)))
+        if (! WaitForNoSubmenuHoverTimerForMenuSuite(rootPopupHwnd, rootState) || IsWindow(submenuHwnd) == FALSE)
         {
             driverFailure = "moving into an open submenu cancels the parent delayed-close timer";
             return;
         }
 
-        PostMessageW(rootPopupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(b1X, b1Y));
-        if (WaitForWindowDestroyed(submenuHwnd, std::chrono::milliseconds(700)))
+        if (! SendSettledClientMouseMoveForMenuSuite(rootPopupHwnd, b1X, b1Y) ||
+            ! WaitForContextMenuPopupState(rootPopupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+            return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 0u;
+        }, rootState))
+        {
+            driverFailure = "moving from an open submenu back to its parent menu item updates root hover";
+            return;
+        }
+        if (! WaitForNoSubmenuHoverTimerForMenuSuite(rootPopupHwnd, rootState) || IsWindow(submenuHwnd) == FALSE)
         {
             driverFailure = "moving from an open submenu back to its parent menu item keeps the submenu open";
             return;
@@ -2341,7 +3369,11 @@ void TestMenuInfoRowsDoNotDismissOnClick()
         const LONG clientY      = static_cast<LONG>(std::lround(((infoRectDip.top + infoRectDip.bottom) * 0.5f) * scale));
         const LPARAM clickPoint = MAKELPARAM(clientX, clientY);
 
-        PostMessageW(popupHwnd, WM_MOUSEMOVE, 0, clickPoint);
+        if (! SendSettledClientMouseMoveForMenuSuite(popupHwnd, clientX, clientY))
+        {
+            driverFailure = "moving the pointer to the info row before clicking succeeds";
+            return;
+        }
         PostMessageW(popupHwnd, WM_LBUTTONDOWN, MK_LBUTTON, clickPoint);
         PostMessageW(popupHwnd, WM_LBUTTONUP, 0, clickPoint);
 
@@ -2365,13 +3397,15 @@ void TestMenuPopupPositionClampsAcrossDpiMatrix()
 {
     using namespace RedSalamander::DxUi;
 
-    const RECT workArea         = GetPrimaryMonitorWorkArea();
+    const RECT virtualScreen    = GetVirtualScreenBounds();
     constexpr UINT kDpiMatrix[] = {96u, 120u, 144u, 168u, 192u};
 
     for (const UINT dpi : kDpiMatrix)
     {
         RECT popupRect{};
-        Require(DebugComputeContextMenuPopupPosition(POINT{workArea.left - 80, workArea.top - 60},
+        const POINT topLeftAnchor{virtualScreen.left - 80, virtualScreen.top - 60};
+        const RECT topLeftWorkArea = GetNearestMonitorWorkArea(topLeftAnchor);
+        Require(DebugComputeContextMenuPopupPosition(topLeftAnchor,
                                                      240.0f,
                                                      180.0f,
                                                      dpi,
@@ -2381,13 +3415,15 @@ void TestMenuPopupPositionClampsAcrossDpiMatrix()
                                                      ContextMenuRootHorizontalAlignment::Start,
                                                      popupRect),
                 std::format("root popup position resolves for {} DPI near the top-left edge", dpi).c_str());
-        Require(popupRect.left == workArea.left, std::format("root popup clamps left to the work area at {} DPI", dpi).c_str());
-        Require(popupRect.top == workArea.top, std::format("root popup clamps top to the work area at {} DPI", dpi).c_str());
-        Require(popupRect.right <= workArea.right && popupRect.bottom <= workArea.bottom,
+        Require(popupRect.left == topLeftWorkArea.left, std::format("root popup clamps left to the work area at {} DPI", dpi).c_str());
+        Require(popupRect.top == topLeftWorkArea.top, std::format("root popup clamps top to the work area at {} DPI", dpi).c_str());
+        Require(popupRect.right <= topLeftWorkArea.right && popupRect.bottom <= topLeftWorkArea.bottom,
                 std::format("root popup stays inside the work area after top-left clamping at {} DPI", dpi).c_str());
 
         popupRect = RECT{};
-        Require(DebugComputeContextMenuPopupPosition(POINT{workArea.right - 4, workArea.bottom - 4},
+        const POINT bottomRightAnchor{virtualScreen.right + 80, virtualScreen.bottom + 60};
+        const RECT bottomRightWorkArea = GetNearestMonitorWorkArea(bottomRightAnchor);
+        Require(DebugComputeContextMenuPopupPosition(bottomRightAnchor,
                                                      240.0f,
                                                      180.0f,
                                                      dpi,
@@ -2397,9 +3433,9 @@ void TestMenuPopupPositionClampsAcrossDpiMatrix()
                                                      ContextMenuRootHorizontalAlignment::Start,
                                                      popupRect),
                 std::format("root popup position resolves for {} DPI near the bottom-right edge", dpi).c_str());
-        Require(popupRect.right == workArea.right, std::format("root popup clamps right to the work area at {} DPI", dpi).c_str());
-        Require(popupRect.bottom == workArea.bottom, std::format("root popup clamps bottom to the work area at {} DPI", dpi).c_str());
-        Require(popupRect.left >= workArea.left && popupRect.top >= workArea.top,
+        Require(popupRect.right == bottomRightWorkArea.right, std::format("root popup clamps right to the work area at {} DPI", dpi).c_str());
+        Require(popupRect.bottom == bottomRightWorkArea.bottom, std::format("root popup clamps bottom to the work area at {} DPI", dpi).c_str());
+        Require(popupRect.left >= bottomRightWorkArea.left && popupRect.top >= bottomRightWorkArea.top,
                 std::format("root popup stays inside the work area after bottom-right clamping at {} DPI", dpi).c_str());
     }
 }
@@ -2756,7 +3792,11 @@ void TestMenuRainbowHoverUsesSeededHighlightContrast()
 
         const LONG hoverX = static_cast<LONG>(std::lround((firstRowRectDip.left + firstRowRectDip.right) * 0.5f));
         const LONG hoverY = static_cast<LONG>(std::lround((firstRowRectDip.top + firstRowRectDip.bottom) * 0.5f));
-        PostMessageW(popupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(hoverX, hoverY));
+        if (! SendSettledClientMouseMoveForMenuSuite(popupHwnd, hoverX, hoverY))
+        {
+            driverFailure = "moving the pointer onto the rainbow row succeeds";
+            return;
+        }
 
         if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
             return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 0u;
@@ -2841,7 +3881,11 @@ void TestMenuHoverContrastAppliesToGlyphsAcrossThemes()
 
         const LONG hoverX = static_cast<LONG>(std::lround((firstRowRectDip.left + firstRowRectDip.right) * 0.5f));
         const LONG hoverY = static_cast<LONG>(std::lround((firstRowRectDip.top + firstRowRectDip.bottom) * 0.5f));
-        PostMessageW(popupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(hoverX, hoverY));
+        if (! SendSettledClientMouseMoveForMenuSuite(popupHwnd, hoverX, hoverY))
+        {
+            driverFailure = "moving the pointer onto the contrast row succeeds";
+            return;
+        }
 
         if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
             return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 0u;
@@ -3005,7 +4049,11 @@ void TestMenuCheckedRowsDoNotPaintSecondFullRowSelection()
 
             const LONG hoverX = static_cast<LONG>(std::lround((hoverRowRectDip.left + hoverRowRectDip.right) * 0.5f));
             const LONG hoverY = static_cast<LONG>(std::lround((hoverRowRectDip.top + hoverRowRectDip.bottom) * 0.5f));
-            PostMessageW(popupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(hoverX, hoverY));
+            if (! SendSettledClientMouseMoveForMenuSuite(popupHwnd, hoverX, hoverY))
+            {
+                failure = "moving the pointer to a plain row before checked-row selection capture succeeds";
+                return;
+            }
 
             if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
                 return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 1u;
@@ -3104,7 +4152,11 @@ void TestMenuCheckedRowsDoNotPaintLeadingCheckedBox()
 
             const LONG hoverX = static_cast<LONG>(std::lround((hoverRowRectDip.left + hoverRowRectDip.right) * 0.5f));
             const LONG hoverY = static_cast<LONG>(std::lround((hoverRowRectDip.top + hoverRowRectDip.bottom) * 0.5f));
-            PostMessageW(popupHwnd, WM_MOUSEMOVE, 0, MAKELPARAM(hoverX, hoverY));
+            if (! SendSettledClientMouseMoveForMenuSuite(popupHwnd, hoverX, hoverY))
+            {
+                failure = "moving the pointer away from the checked row before checked-indicator capture succeeds";
+                return;
+            }
 
             if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
                 return state.hoveredIndex.has_value() && state.hoveredIndex.value() == 1u;
@@ -3358,6 +4410,9 @@ void TestMenuPopupAcrylicLightVisualBaseline()
     ownerWindow.Host().SetRoot(std::make_unique<StripedBackdropControl>(10));
     ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
     ownerWindow.PumpMessages();
+    const POINT idleCursorPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 260, 190, "acrylic baseline idle cursor point maps to screen coordinates");
+    static_cast<void>(MoveLiveCursorForMenuSuite(idleCursorPoint));
+    DrainPendingMouseMessagesForMenuSuite();
     WindowHostBitmapCapture ownerBackdropCapture{};
     Require(ownerWindow.Host().DebugCaptureBitmap(ownerBackdropCapture), "acrylic visual-baseline owner backdrop renders before popup capture");
     const POINT menuPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 72, 48, "acrylic baseline popup anchor maps to screen coordinates");
@@ -3383,10 +4438,10 @@ void TestMenuPopupAcrylicLightVisualBaseline()
 
         ContextMenuPopupDebugState popupState{};
         if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
-            return state.usesAppBackdropBlur && state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f;
+            return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f && ! state.hoveredIndex.has_value();
         }, popupState))
         {
-            driverFailure = "menu popup exposes acrylic geometry for visual-baseline capture";
+            driverFailure = "menu popup exposes unhovered acrylic geometry for visual-baseline capture";
             return;
         }
 
@@ -3753,9 +4808,12 @@ void TestMenuAcrylicBackdropScenarioEmitsMetrics()
             driverFailure = "menu popup window appears for acrylic backdrop metric capture";
             return;
         }
+        const auto dismissPopup = wil::scope_exit([&]() noexcept { DismissOwnedContextMenuPopupChain(ownerWindow.Hwnd()); });
 
         ContextMenuPopupDebugState popupState{};
-        if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) { return state.usesAppBackdropBlur; }, popupState))
+        if (! WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) {
+            return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f;
+        }, popupState))
         {
             driverFailure = "menu popup enables app-rendered backdrop blur for acrylic backdrop metric capture";
             return;
@@ -3863,23 +4921,33 @@ void RunMenuTests()
     {
         std::cerr << "  [START] " << name << '\n' << std::flush;
         fn();
+        RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
         std::cerr << "  [DONE] " << name << '\n' << std::flush;
     };
 
     runTest("TestFolderViewIncrementalSearchKeepsContainsHighlightButUsesPrefixFocus", TestFolderViewIncrementalSearchKeepsContainsHighlightButUsesPrefixFocus);
     runTest("TestFolderViewInactiveVisualStateDimsNormalTextAndIcons", TestFolderViewInactiveVisualStateDimsNormalTextAndIcons);
     runTest("TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout", TestFolderViewEmptyPlaceholderMetricsUseCurrentEmptyLayout);
+    runTest("TestPointerInputEventMouseMoveUsesDeliveredPoint", TestPointerInputEventMouseMoveUsesDeliveredPoint);
+    runTest("TestPointerInputEventButtonUsesDeliveredPointAndFlags", TestPointerInputEventButtonUsesDeliveredPointAndFlags);
+    runTest("TestPointerInputEventWheelUsesDeliveredScreenPoint", TestPointerInputEventWheelUsesDeliveredScreenPoint);
+    runTest("TestPointerInputEventHasNoLiveCursorState", TestPointerInputEventHasNoLiveCursorState);
+    runTest("TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate", TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate);
     runTest("TestMenuMnemonicHonorsExplicitAmpersandLabels", TestMenuMnemonicHonorsExplicitAmpersandLabels);
     runTest("TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface", TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface);
     runTest("TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands", TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands);
     runTest("TestMenuShadowMarginMouseUpLightDismissesAfterInitialRelease", TestMenuShadowMarginMouseUpLightDismissesAfterInitialRelease);
+    runTest("TestSplitButtonContextMenuSentMouseMessagesHoverAndInvokeImmediately", TestSplitButtonContextMenuSentMouseMessagesHoverAndInvokeImmediately);
+    runTest("TestSplitButtonContextMenuOwnerMessageFloodDoesNotStarvePointerInput", TestSplitButtonContextMenuOwnerMessageFloodDoesNotStarvePointerInput);
     runTest("TestMenuKeyboardNavigationSkipsInfoRows", TestMenuKeyboardNavigationSkipsInfoRows);
     runTest("TestMenuKeyboardRightArrowMatchesWindowsMenuLoop", TestMenuKeyboardRightArrowMatchesWindowsMenuLoop);
     runTest("TestStationaryMouseDoesNotOverrideKeyboardRootSwitch", TestStationaryMouseDoesNotOverrideKeyboardRootSwitch);
     runTest("TestMenuPointerOverSiblingRootSwitchesOpenMenu", TestMenuPointerOverSiblingRootSwitchesOpenMenu);
+    runTest("TestMenuPopupMouseMoveUsesDeliveredPointForRootSwitch", TestMenuPopupMouseMoveUsesDeliveredPointForRootSwitch);
+    runTest("TestMenuOwnerMouseMoveRoutesRootSwitchImmediately", TestMenuOwnerMouseMoveRoutesRootSwitchImmediately);
     runTest("TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup", TestMenuBarHoverMessageSwitchesRootWhenCursorOutsidePopup);
-    runTest("TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot", TestMenuPointerInsideOverlappingPopupDoesNotSwitchRoot);
-    runTest("TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch", TestMenuRootSwitchIgnoresStaleMouseMoveAfterCursorSwitch);
+    runTest("TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar", TestMenuBarHoverMessageSwitchesRootWhilePopupOverlapsMenuBar);
+    runTest("TestMenuRootSwitchUsesDeliveredOwnerMouseMoveAfterPopupSwitch", TestMenuRootSwitchUsesDeliveredOwnerMouseMoveAfterPopupSwitch);
     runTest("TestMenuRootSwitchDoesNotPollCursorWhileIdle", TestMenuRootSwitchDoesNotPollCursorWhileIdle);
     runTest("TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay", TestMenuHoveringSiblingClosesOpenSubmenuAfterDelay);
     runTest("TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay", TestMenuHoveringSiblingWithChildrenReplacesOpenSubmenuAfterDelay);
@@ -3908,4 +4976,5 @@ void RunMenuTests()
     runTest("TestMenuPopupAcrylicLightVisualBaseline", TestMenuPopupAcrylicLightVisualBaseline);
     runTest("TestMenuPopupKeepsSystemBackdropDisabledForAppRenderedMaterials", TestMenuPopupKeepsSystemBackdropDisabledForAppRenderedMaterials);
     runTest("TestMenuAcrylicBackdropScenarioEmitsMetrics", TestMenuAcrylicBackdropScenarioEmitsMetrics);
+    runTest("TestSplitButtonContextMenuLivePointerHoverAndOutsideDismiss", TestSplitButtonContextMenuLivePointerHoverAndOutsideDismiss);
 }

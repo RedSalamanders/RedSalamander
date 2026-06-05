@@ -445,7 +445,7 @@ struct FileActionDefinition
 {
     std::wstring id;
     std::wstring displayName;
-    bool enabled = true;
+    bool enabled        = true;
     FileActionKind kind = FileActionKind::ExternalProgram;
     std::wstring pluginId;
     std::wstring executablePath;
@@ -540,9 +540,7 @@ inline FileActionDefinition MakeViewerPluginAction(std::wstring id,
     return action;
 }
 
-inline void AddViewerAssociationExtensions(ViewerFileActionsSettings& settings,
-                                           std::wstring_view actionId,
-                                           std::initializer_list<const wchar_t*> extensions)
+inline void AddViewerAssociationExtensions(ViewerFileActionsSettings& settings, std::wstring_view actionId, std::initializer_list<const wchar_t*> extensions)
 {
     for (const wchar_t* extension : extensions)
     {
@@ -563,22 +561,19 @@ inline ViewerFileActionsSettings DefaultViewerFileActionsSettings()
 {
     ViewerFileActionsSettings settings{};
 
-    const std::initializer_list<const wchar_t*> kTextExtensions{
-        L".txt", L".log", L".xml", L".ini", L".cfg", L".csv", L".diff", L".patch", L".rej"};
+    const std::initializer_list<const wchar_t*> kTextExtensions{L".txt", L".log", L".xml", L".ini", L".cfg", L".csv", L".diff", L".patch", L".rej"};
     const std::initializer_list<const wchar_t*> kMarkdownExtensions{L".md"};
     const std::initializer_list<const wchar_t*> kJsonExtensions{L".json", L".json5", L".jsonl", L".ndjson"};
     const std::initializer_list<const wchar_t*> kWebExtensions{L".html", L".htm", L".pdf"};
     const std::initializer_list<const wchar_t*> kSqliteExtensions{L".db", L".db3", L".s3db", L".sqlite", L".sqlite3"};
     const std::initializer_list<const wchar_t*> kImageExtensions{
-        L".bmp", L".dib", L".gif", L".ico", L".jpe", L".jpeg", L".jpg", L".png", L".tif", L".tiff", L".hdp", L".jxr", L".wdp",
-        L".3fr", L".ari", L".arw", L".bay", L".braw", L".cap", L".cr2", L".cr3", L".crw", L".data", L".dcr", L".dcs", L".dng",
-        L".drf", L".eip", L".erf", L".fff", L".gpr", L".iiq", L".k25", L".kdc", L".mdc", L".mef", L".mos", L".mrw", L".nef",
-        L".nrw", L".obm", L".orf", L".pef", L".ptx", L".pxn", L".r3d", L".raf", L".raw", L".rwl", L".rw2", L".rwz", L".sr2",
-        L".srf", L".srw", L".x3f"};
-    const std::initializer_list<const wchar_t*> kVideoExtensions{
-        L".avi", L".mp4", L".mkv", L".mka", L".mov", L".wmv", L".flv", L".mpg", L".mpeg", L".m4v", L".webm", L".3gp", L".ts",
-        L".m2ts", L".mts", L".vob", L".ogv", L".m4a", L".mp3", L".aac", L".flac", L".wav", L".ogg", L".opus", L".wma", L".aif",
-        L".aiff"};
+        L".bmp", L".dib", L".gif", L".ico",  L".jpe", L".jpeg", L".jpg", L".png", L".tif",  L".tiff", L".hdp", L".jxr", L".wdp", L".3fr",
+        L".ari", L".arw", L".bay", L".braw", L".cap", L".cr2",  L".cr3", L".crw", L".data", L".dcr",  L".dcs", L".dng", L".drf", L".eip",
+        L".erf", L".fff", L".gpr", L".iiq",  L".k25", L".kdc",  L".mdc", L".mef", L".mos",  L".mrw",  L".nef", L".nrw", L".obm", L".orf",
+        L".pef", L".ptx", L".pxn", L".r3d",  L".raf", L".raw",  L".rwl", L".rw2", L".rwz",  L".sr2",  L".srf", L".srw", L".x3f"};
+    const std::initializer_list<const wchar_t*> kVideoExtensions{L".avi", L".mp4",  L".mkv",  L".mka", L".mov",  L".wmv",  L".flv", L".mpg", L".mpeg",
+                                                                 L".m4v", L".webm", L".3gp",  L".ts",  L".m2ts", L".mts",  L".vob", L".ogv", L".m4a",
+                                                                 L".mp3", L".aac",  L".flac", L".wav", L".ogg",  L".opus", L".wma", L".aif", L".aiff"};
     const std::initializer_list<const wchar_t*> kPeExtensions{L".cpl", L".dll", L".drv", L".exe", L".ocx", L".scr", L".spl", L".sys"};
 
     settings.actions.reserve(8u);
@@ -644,11 +639,11 @@ enum class MakeFileListOutputTarget : uint8_t
 
 struct MakeFileListSettings
 {
-    MakeFileListSourceMode sourceMode   = MakeFileListSourceMode::Selection;
-    bool recursive                      = false;
-    MakeFileListFormat format           = MakeFileListFormat::Text;
+    MakeFileListSourceMode sourceMode     = MakeFileListSourceMode::Selection;
+    bool recursive                        = false;
+    MakeFileListFormat format             = MakeFileListFormat::Text;
     MakeFileListOutputTarget outputTarget = MakeFileListOutputTarget::Clipboard;
-    std::wstring textMacro              = L"{fullPath}\t{size}\t{modified}";
+    std::wstring textMacro                = L"{fullPath}\t{size}\t{modified}";
     std::filesystem::path outputFile;
     bool includeName        = true;
     bool includeFullPath    = true;
@@ -709,7 +704,6 @@ struct ExtensionsSettings
         {L".xar", L"builtin/file-system-7z"},
         {L".z", L"builtin/file-system-7z"},
     };
-
 };
 
 struct ShortcutBinding

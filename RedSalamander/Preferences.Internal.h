@@ -42,9 +42,11 @@ enum class PrefCategory : int
     HotPaths,
     FileOperations,
     UserMenu,
+    Monitor,
 };
 
-inline constexpr size_t kPrefCategoryCount = static_cast<size_t>(PrefCategory::UserMenu) + 1u;
+inline constexpr size_t kPrefCategoryCount = static_cast<size_t>(PrefCategory::Monitor) + 1u;
+inline constexpr std::wstring_view kPreferencesMonitorAppId = L"RedSalamanderMonitor";
 
 [[nodiscard]] constexpr size_t PrefCategoryIndex(const PrefCategory category) noexcept
 {
@@ -137,7 +139,7 @@ inline constexpr int kMediumComboWidthDip = 140;
 inline constexpr int kLargeComboWidthDip  = 180;
 } // namespace PrefsLayoutConstants
 
-// Monitor filter mask bits for Advanced pane
+// Monitor filter mask bits for the Monitor Preferences page.
 enum class MonitorFilterBit : uint32_t
 {
     Text    = 0x01u,
@@ -324,6 +326,8 @@ struct PreferencesDialogState
     // Settings Management
     Common::Settings::Settings baselineSettings;
     Common::Settings::Settings workingSettings;
+    Common::Settings::Settings monitorBaselineSettings;
+    Common::Settings::Settings workingMonitorSettings;
 
     bool dirty                   = false;
     bool appliedOnce             = false;
@@ -349,21 +353,21 @@ struct PreferencesDialogState
     int categoryListWidthPx = 0;
     SIZE minTrackSizePx{};
 
-    int pageScrollY                            = 0;
-    int pageScrollMaxY                         = 0;
-    int pageWheelDeltaRemainder                = 0;
+    int pageScrollY             = 0;
+    int pageScrollMaxY          = 0;
+    int pageWheelDeltaRemainder = 0;
 #ifdef ENABLE_TESTS
-    uint64_t pageHostScrollRequestCount         = 0u;
-    uint64_t pageHostScrollCoalescedRequestCount = 0u;
-    uint64_t pageHostScrollApplyCount           = 0u;
-    uint64_t pageHostScrollMovedChildCountTotal = 0u;
+    uint64_t pageHostScrollRequestCount             = 0u;
+    uint64_t pageHostScrollCoalescedRequestCount    = 0u;
+    uint64_t pageHostScrollApplyCount               = 0u;
+    uint64_t pageHostScrollMovedChildCountTotal     = 0u;
     uint64_t pageHostDxScrollMovedControlCountTotal = 0u;
     uint64_t pageHostDxScrollLastMovedControlCount  = 0u;
     uint64_t pageHostScrollLastApplyUs              = 0u;
 #endif
-    int pageHostPendingScrollY                  = 0;
-    bool pageHostScrollApplyPending             = false;
-    bool pageHostSyncingScrollPanel             = false;
+    int pageHostPendingScrollY      = 0;
+    bool pageHostScrollApplyPending = false;
+    bool pageHostSyncingScrollPanel = false;
     std::array<int, kPrefCategoryCount> retainedPageScrollYByCategory{};
     int pageHostDirectContentBottomPx = 0;
     std::vector<RECT> pageSettingCards;
@@ -405,15 +409,15 @@ struct PreferencesDialogState
     wil::unique_hbrush inputDisabledBrush;
     COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
     // Dialog Structure Controls
-    HWND categoryTreeWindow                                  = nullptr;
-    bool categoryTreeUsesDxUi                                = false;
-    bool pageHostUsesDxUi                                    = false;
-    RedSalamander::DxUi::WindowHost* pageHostDxHost          = nullptr;
-    RedSalamander::DxUi::Panel* pageHostDxRootControl        = nullptr;
+    HWND categoryTreeWindow                                        = nullptr;
+    bool categoryTreeUsesDxUi                                      = false;
+    bool pageHostUsesDxUi                                          = false;
+    RedSalamander::DxUi::WindowHost* pageHostDxHost                = nullptr;
+    RedSalamander::DxUi::Panel* pageHostDxRootControl              = nullptr;
     RedSalamander::DxUi::ScrollPanel* pageHostDxScrollPanelControl = nullptr;
-    RedSalamander::DxUi::Panel* pageHostDxContentRootControl = nullptr;
-    RedSalamander::DxUi::Control* pageHostDxNoteControl      = nullptr;
-    HWND pageHostWindow                                      = nullptr;
+    RedSalamander::DxUi::Panel* pageHostDxContentRootControl       = nullptr;
+    RedSalamander::DxUi::Control* pageHostDxNoteControl            = nullptr;
+    HWND pageHostWindow                                            = nullptr;
 
     std::vector<std::wstring> viewersExtensionKeys;
     std::vector<ViewerPluginOption> viewersPluginOptions;

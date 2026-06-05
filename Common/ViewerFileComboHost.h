@@ -21,13 +21,8 @@ inline constexpr int kStandaloneComboAccentHeightDip  = 1;
 inline constexpr int kStandaloneComboAccentGapDip     = 1;
 
 template <typename ViewerT>
-[[nodiscard]] LRESULT DispatchFileComboHostWndProc(HWND hwnd,
-                                                    UINT msg,
-                                                    WPARAM wp,
-                                                    LPARAM lp,
-                                                    const wchar_t* stateProp,
-                                                    const wchar_t* originalWndProcProp,
-                                                    WNDPROC hookWndProc) noexcept
+[[nodiscard]] LRESULT DispatchFileComboHostWndProc(
+    HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, const wchar_t* stateProp, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
 {
     auto* self = reinterpret_cast<ViewerT*>(::GetPropW(hwnd, stateProp));
     if (! self)
@@ -103,8 +98,7 @@ inline void UnhookFileComboHostWindow(HWND hwnd, const wchar_t* stateProp, const
     Win32Callback::RestoreWndProcHook(hwnd, originalWndProcProp, hookWndProc);
 }
 
-template <typename WindowHostT, typename FocusMainSurfaceFn>
-void ConfigureFileComboKeyboard(WindowHostT& host, FocusMainSurfaceFn&& focusMainSurface)
+template <typename WindowHostT, typename FocusMainSurfaceFn> void ConfigureFileComboKeyboard(WindowHostT& host, FocusMainSurfaceFn&& focusMainSurface)
 {
     using FocusCallback = std::decay_t<FocusMainSurfaceFn>;
     FocusCallback focusForTab(std::forward<FocusMainSurfaceFn>(focusMainSurface));

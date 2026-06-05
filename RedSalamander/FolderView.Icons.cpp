@@ -7,11 +7,11 @@
 
 namespace
 {
-constexpr unsigned int kMaxIconLoadRetries = 2u;
+constexpr unsigned int kMaxIconLoadRetries      = 2u;
 constexpr unsigned int kMaxThumbnailLoadRetries = 1u;
-constexpr size_t kMaxThumbnailQueueItems = 256u;
-constexpr uint32_t kMaxThumbnailPixelSize = 512u;
-constexpr uint64_t kMaxThumbnailCacheBytes = 64ull * 1024ull * 1024ull;
+constexpr size_t kMaxThumbnailQueueItems        = 256u;
+constexpr uint32_t kMaxThumbnailPixelSize       = 512u;
+constexpr uint64_t kMaxThumbnailCacheBytes      = 64ull * 1024ull * 1024ull;
 
 [[nodiscard]] uint64_t PerfElapsedUs(const std::chrono::steady_clock::time_point& start) noexcept
 {
@@ -57,18 +57,18 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
         return nullptr;
     }
 
-    auto* pixels = static_cast<uint32_t*>(bits);
-    const uint8_t red = static_cast<uint8_t>(64u + ((itemIndex * 41u) % 160u));
-    const uint8_t green = static_cast<uint8_t>(72u + ((itemIndex * 29u) % 150u));
-    const uint8_t blue = static_cast<uint8_t>(96u + ((itemIndex * 17u) % 130u));
-    const uint32_t fill = 0xFF000000u | (static_cast<uint32_t>(red) << 16u) | (static_cast<uint32_t>(green) << 8u) | blue;
+    auto* pixels          = static_cast<uint32_t*>(bits);
+    const uint8_t red     = static_cast<uint8_t>(64u + ((itemIndex * 41u) % 160u));
+    const uint8_t green   = static_cast<uint8_t>(72u + ((itemIndex * 29u) % 150u));
+    const uint8_t blue    = static_cast<uint8_t>(96u + ((itemIndex * 17u) % 130u));
+    const uint32_t fill   = 0xFF000000u | (static_cast<uint32_t>(red) << 16u) | (static_cast<uint32_t>(green) << 8u) | blue;
     const uint32_t accent = 0xFFFFFFFFu;
 
     for (uint32_t y = 0; y < height; ++y)
     {
         for (uint32_t x = 0; x < width; ++x)
         {
-            const bool border = x == 0u || y == 0u || x + 1u == width || y + 1u == height;
+            const bool border                            = x == 0u || y == 0u || x + 1u == width || y + 1u == height;
             pixels[(static_cast<size_t>(y) * width) + x] = border ? accent : fill;
         }
     }
@@ -94,9 +94,9 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
 
     const uint32_t safeSize = std::clamp(targetPx, 1u, kMaxThumbnailPixelSize);
     const SIZE size{static_cast<LONG>(safeSize), static_cast<LONG>(safeSize)};
-    HBITMAP rawBitmap = nullptr;
+    HBITMAP rawBitmap      = nullptr;
     constexpr SIIGBF flags = static_cast<SIIGBF>(SIIGBF_THUMBNAILONLY | SIIGBF_BIGGERSIZEOK | SIIGBF_SCALEUP);
-    hr = imageFactory->GetImage(size, flags, &rawBitmap);
+    hr                     = imageFactory->GetImage(size, flags, &rawBitmap);
     outBitmap.reset(rawBitmap);
     return hr;
 }
@@ -119,8 +119,8 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
 
 struct DecodedThumbnailPixels
 {
-    uint32_t widthPx = 0;
-    uint32_t heightPx = 0;
+    uint32_t widthPx     = 0;
+    uint32_t heightPx    = 0;
     uint32_t strideBytes = 0;
     std::vector<uint8_t> bgra;
 
@@ -155,18 +155,18 @@ struct DecodedThumbnailPixels
         return hr;
     }
 
-    UINT sourceWidth = 0u;
+    UINT sourceWidth  = 0u;
     UINT sourceHeight = 0u;
-    hr = frame->GetSize(&sourceWidth, &sourceHeight);
+    hr                = frame->GetSize(&sourceWidth, &sourceHeight);
     if (FAILED(hr) || sourceWidth == 0u || sourceHeight == 0u)
     {
         return FAILED(hr) ? hr : WINCODEC_ERR_BADIMAGE;
     }
 
     const uint32_t safeTarget = std::clamp(targetPx, 1u, kMaxThumbnailPixelSize);
-    const double scale = std::min(1.0, std::min(static_cast<double>(safeTarget) / static_cast<double>(sourceWidth),
-                                                static_cast<double>(safeTarget) / static_cast<double>(sourceHeight)));
-    const UINT targetWidth = std::max<UINT>(1u, static_cast<UINT>(std::round(static_cast<double>(sourceWidth) * scale)));
+    const double scale        = std::min(
+        1.0, std::min(static_cast<double>(safeTarget) / static_cast<double>(sourceWidth), static_cast<double>(safeTarget) / static_cast<double>(sourceHeight)));
+    const UINT targetWidth  = std::max<UINT>(1u, static_cast<UINT>(std::round(static_cast<double>(sourceWidth) * scale)));
     const UINT targetHeight = std::max<UINT>(1u, static_cast<UINT>(std::round(static_cast<double>(sourceHeight) * scale)));
 
     wil::com_ptr<IWICBitmapSource> source;
@@ -198,18 +198,13 @@ struct DecodedThumbnailPixels
         return hr;
     }
 
-    hr = converter->Initialize(source.get(),
-                               GUID_WICPixelFormat32bppPBGRA,
-                               WICBitmapDitherTypeNone,
-                               nullptr,
-                               0.0,
-                               WICBitmapPaletteTypeCustom);
+    hr = converter->Initialize(source.get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
     if (FAILED(hr))
     {
         return hr;
     }
 
-    const uint32_t stride = targetWidth * 4u;
+    const uint32_t stride      = targetWidth * 4u;
     const uint64_t byteCount64 = static_cast<uint64_t>(stride) * static_cast<uint64_t>(targetHeight);
     if (byteCount64 > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()))
     {
@@ -224,10 +219,10 @@ struct DecodedThumbnailPixels
         return hr;
     }
 
-    outPixels.widthPx = targetWidth;
-    outPixels.heightPx = targetHeight;
+    outPixels.widthPx     = targetWidth;
+    outPixels.heightPx    = targetHeight;
     outPixels.strideBytes = stride;
-    outPixels.bgra = std::move(pixels);
+    outPixels.bgra        = std::move(pixels);
     return S_OK;
 }
 } // namespace
@@ -617,7 +612,8 @@ void FolderView::ProcessIconLoadQueue()
             std::lock_guard lock(_d2dDeviceMutex);
             d2dDeviceSnapshot = _d2dDevice;
         }
-        const bool cachedForDevice = d2dDeviceSnapshot && IconCache::GetInstance().HasCachedIcon(request.iconIndex, d2dDeviceSnapshot.get(), request.targetDipSize);
+        const bool cachedForDevice =
+            d2dDeviceSnapshot && IconCache::GetInstance().HasCachedIcon(request.iconIndex, d2dDeviceSnapshot.get(), request.targetDipSize);
 
         auto bitmapRequest                   = std::make_unique<IconBitmapRequest>();
         bitmapRequest->iconLoadBatchId       = batchId;
@@ -712,10 +708,10 @@ void FolderView::QueueThumbnailLoading()
     Debug::Perf::Scope queuePerf(L"thumbnails.queue_build_us");
     queuePerf.SetDetail(_itemsFolder.native());
 
-    const uint64_t batchId = _thumbnailLoadStats.batchId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    const uint64_t batchId               = _thumbnailLoadStats.batchId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
     const uint64_t enumerationGeneration = _enumerationGeneration.load(std::memory_order_acquire);
-    const float targetDip = _iconSizeDip;
-    const uint32_t targetPx = static_cast<uint32_t>(std::max(1, PxFromDip(targetDip)));
+    const float targetDip                = _iconSizeDip;
+    const uint32_t targetPx              = static_cast<uint32_t>(std::max(1, PxFromDip(targetDip)));
 
     _thumbnailLoadStats.queued.store(0u, std::memory_order_release);
     _thumbnailLoadStats.completed.store(0u, std::memory_order_release);
@@ -732,8 +728,8 @@ void FolderView::QueueThumbnailLoading()
     _thumbnailLoadStats.targetDipX100.store(static_cast<uint64_t>(std::round(targetDip * 100.0f)), std::memory_order_release);
 
     const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
-    const size_t visibleStart = std::min(visibleStartRaw, _items.size());
-    const size_t visibleEnd = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
+    const size_t visibleStart                   = std::min(visibleStartRaw, _items.size());
+    const size_t visibleEnd                     = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
 
     uint64_t cacheBytes = 0u;
     for (const FolderItem& item : _items)
@@ -764,7 +760,7 @@ void FolderView::QueueThumbnailLoading()
             }
 
             const D2D1_SIZE_U pixelSize = item.thumbnail->GetPixelSize();
-            const uint64_t itemBytes = static_cast<uint64_t>(pixelSize.width) * static_cast<uint64_t>(pixelSize.height) * 4u;
+            const uint64_t itemBytes    = static_cast<uint64_t>(pixelSize.width) * static_cast<uint64_t>(pixelSize.height) * 4u;
             item.thumbnail.reset();
             cacheBytes = itemBytes >= cacheBytes ? 0u : cacheBytes - itemBytes;
             ++evictedCount;
@@ -831,8 +827,8 @@ bool FolderView::HasMissingVisibleThumbnails() const
     }
 
     const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
-    const size_t visibleStart = std::min(visibleStartRaw, _items.size());
-    const size_t visibleEnd   = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
+    const size_t visibleStart                   = std::min(visibleStartRaw, _items.size());
+    const size_t visibleEnd                     = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
     for (size_t index = visibleStart; index < visibleEnd; ++index)
     {
         if (! _items[index].thumbnail)
@@ -952,42 +948,42 @@ void FolderView::ProcessThumbnailLoadQueue()
                              S_OK);
         }
 
-        auto bitmapRequest = std::make_unique<ThumbnailBitmapRequest>();
-        bitmapRequest->thumbnailLoadBatchId = batchId;
+        auto bitmapRequest                   = std::make_unique<ThumbnailBitmapRequest>();
+        bitmapRequest->thumbnailLoadBatchId  = batchId;
         bitmapRequest->enumerationGeneration = request.enumerationGeneration;
-        bitmapRequest->itemIndex = request.itemIndex;
-        bitmapRequest->postedAt = std::chrono::steady_clock::now();
+        bitmapRequest->itemIndex             = request.itemIndex;
+        bitmapRequest->postedAt              = std::chrono::steady_clock::now();
 
         const auto extractStart = std::chrono::steady_clock::now();
-        HRESULT hr = S_FALSE;
-        bool usedFallback = false;
-        bool allowWicFallback = false;
-        bool triedWicFallback = false;
+        HRESULT hr              = S_FALSE;
+        bool usedFallback       = false;
+        bool allowWicFallback   = false;
+        bool triedWicFallback   = false;
 
 #ifdef ENABLE_TESTS
         const DebugThumbnailProviderMode providerMode = _debugThumbnailProviderMode.load(std::memory_order_acquire);
         if (providerMode == DebugThumbnailProviderMode::ForceFallback)
         {
             usedFallback = true;
-            hr = S_FALSE;
+            hr           = S_FALSE;
         }
         else if (providerMode == DebugThumbnailProviderMode::ForceSyntheticSuccess)
         {
-            bitmapRequest->hBitmap = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex, false);
-            hr = bitmapRequest->hBitmap ? S_OK : S_FALSE;
-            usedFallback = ! bitmapRequest->hBitmap;
+            bitmapRequest->hBitmap    = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex, false);
+            hr                        = bitmapRequest->hBitmap ? S_OK : S_FALSE;
+            usedFallback              = ! bitmapRequest->hBitmap;
             bitmapRequest->sourceKind = bitmapRequest->hBitmap ? ThumbnailBitmapRequest::SourceKind::Synthetic : ThumbnailBitmapRequest::SourceKind::Fallback;
         }
         else if (providerMode == DebugThumbnailProviderMode::ForceSyntheticWideSuccess)
         {
-            bitmapRequest->hBitmap = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex, true);
-            hr = bitmapRequest->hBitmap ? S_OK : S_FALSE;
-            usedFallback = ! bitmapRequest->hBitmap;
+            bitmapRequest->hBitmap    = CreateSyntheticThumbnailBitmap(request.targetPx, request.itemIndex, true);
+            hr                        = bitmapRequest->hBitmap ? S_OK : S_FALSE;
+            usedFallback              = ! bitmapRequest->hBitmap;
             bitmapRequest->sourceKind = bitmapRequest->hBitmap ? ThumbnailBitmapRequest::SourceKind::Synthetic : ThumbnailBitmapRequest::SourceKind::Fallback;
         }
         else if (providerMode == DebugThumbnailProviderMode::ForceShellFailureAllowWic)
         {
-            hr = HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+            hr               = HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
             allowWicFallback = true;
         }
         else
@@ -997,7 +993,7 @@ void FolderView::ProcessThumbnailLoadQueue()
             hr = ExtractShellThumbnailBitmap(request.fullPath, request.targetPx, shellBitmap);
             if (SUCCEEDED(hr) && shellBitmap)
             {
-                bitmapRequest->hBitmap = std::move(shellBitmap);
+                bitmapRequest->hBitmap    = std::move(shellBitmap);
                 bitmapRequest->sourceKind = ThumbnailBitmapRequest::SourceKind::Shell;
                 _thumbnailLoadStats.shellSuccess.fetch_add(1u, std::memory_order_relaxed);
             }
@@ -1009,34 +1005,31 @@ void FolderView::ProcessThumbnailLoadQueue()
 
         if (allowWicFallback && HasLikelyWicImageExtension(request.fullPath))
         {
-            triedWicFallback = true;
+            triedWicFallback    = true;
             const auto wicStart = std::chrono::steady_clock::now();
             DecodedThumbnailPixels pixels;
             IWICImagingFactory* wicFactory = nullptr;
-            HRESULT wicHr = EnsureThumbnailWicFactory(thumbnailWicFactory, &wicFactory);
+            HRESULT wicHr                  = EnsureThumbnailWicFactory(thumbnailWicFactory, &wicFactory);
             if (SUCCEEDED(wicHr))
             {
                 wicHr = DecodeWicThumbnailPixels(wicFactory, request.fullPath, request.targetPx, pixels);
             }
-            PerfEmitDuration(L"thumbnails.wic_decode_us",
-                             PerfElapsedUs(wicStart),
-                             static_cast<uint64_t>(request.itemIndex),
-                             static_cast<uint64_t>(request.targetPx),
-                             wicHr);
+            PerfEmitDuration(
+                L"thumbnails.wic_decode_us", PerfElapsedUs(wicStart), static_cast<uint64_t>(request.itemIndex), static_cast<uint64_t>(request.targetPx), wicHr);
             if (SUCCEEDED(wicHr) && pixels.IsValid())
             {
-                bitmapRequest->pixels.widthPx = pixels.widthPx;
-                bitmapRequest->pixels.heightPx = pixels.heightPx;
+                bitmapRequest->pixels.widthPx     = pixels.widthPx;
+                bitmapRequest->pixels.heightPx    = pixels.heightPx;
                 bitmapRequest->pixels.strideBytes = pixels.strideBytes;
-                bitmapRequest->pixels.bgra = std::move(pixels.bgra);
-                bitmapRequest->sourceKind = ThumbnailBitmapRequest::SourceKind::Wic;
+                bitmapRequest->pixels.bgra        = std::move(pixels.bgra);
+                bitmapRequest->sourceKind         = ThumbnailBitmapRequest::SourceKind::Wic;
                 _thumbnailLoadStats.wicSuccess.fetch_add(1u, std::memory_order_relaxed);
-                hr = S_OK;
+                hr           = S_OK;
                 usedFallback = false;
             }
             else
             {
-                hr = FAILED(wicHr) ? wicHr : S_FALSE;
+                hr           = FAILED(wicHr) ? wicHr : S_FALSE;
                 usedFallback = true;
             }
         }
@@ -1054,13 +1047,10 @@ void FolderView::ProcessThumbnailLoadQueue()
             }
         }
 
-        bitmapRequest->hr = hr;
+        bitmapRequest->hr           = hr;
         bitmapRequest->usedFallback = usedFallback;
-        PerfEmitDuration(L"thumbnails.extract_us",
-                         PerfElapsedUs(extractStart),
-                         static_cast<uint64_t>(request.itemIndex),
-                         static_cast<uint64_t>(request.targetPx),
-                         hr);
+        PerfEmitDuration(
+            L"thumbnails.extract_us", PerfElapsedUs(extractStart), static_cast<uint64_t>(request.itemIndex), static_cast<uint64_t>(request.targetPx), hr);
 
         if (! bitmapRequest->hBitmap && ! bitmapRequest->pixels.IsValid() && ! usedFallback && request.retryCount < kMaxThumbnailLoadRetries)
         {
@@ -1165,7 +1155,8 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
         const auto convertStart = std::chrono::steady_clock::now();
         try
         {
-            bitmap = IconCache::GetInstance().ConvertIconToBitmapOnUIThread(requestPtr->hIcon.get(), requestPtr->iconIndex, _d2dContext.get(), requestPtr->targetDipSize);
+            bitmap = IconCache::GetInstance().ConvertIconToBitmapOnUIThread(
+                requestPtr->hIcon.get(), requestPtr->iconIndex, _d2dContext.get(), requestPtr->targetDipSize);
         }
         catch (const std::bad_alloc&)
         {
@@ -1305,11 +1296,8 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
 
     if (requestPtr->postedAt.time_since_epoch().count() > 0)
     {
-        PerfEmitDuration(L"thumbnails.post_message_latency_us",
-                         PerfElapsedUs(requestPtr->postedAt),
-                         static_cast<uint64_t>(requestPtr->itemIndex),
-                         1u,
-                         requestPtr->hr);
+        PerfEmitDuration(
+            L"thumbnails.post_message_latency_us", PerfElapsedUs(requestPtr->postedAt), static_cast<uint64_t>(requestPtr->itemIndex), 1u, requestPtr->hr);
     }
 
     const auto completeAsFallback = [&]() noexcept
@@ -1334,11 +1322,8 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
     const auto convertStart = std::chrono::steady_clock::now();
     wil::com_ptr<ID2D1Bitmap1> bitmap;
     HRESULT hr = S_OK;
-    const D2D1_BITMAP_PROPERTIES1 bitmapProps = D2D1::BitmapProperties1(
-        D2D1_BITMAP_OPTIONS_NONE,
-        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),
-        _dpi,
-        _dpi);
+    const D2D1_BITMAP_PROPERTIES1 bitmapProps =
+        D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_NONE, D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), _dpi, _dpi);
 
     if (requestPtr->pixels.IsValid())
     {
@@ -1369,11 +1354,7 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
         }
     }
 
-    PerfEmitDuration(L"thumbnails.ui_convert_us",
-                     PerfElapsedUs(convertStart),
-                     static_cast<uint64_t>(requestPtr->itemIndex),
-                     1u,
-                     hr);
+    PerfEmitDuration(L"thumbnails.ui_convert_us", PerfElapsedUs(convertStart), static_cast<uint64_t>(requestPtr->itemIndex), 1u, hr);
     if (FAILED(hr) || ! bitmap)
     {
         completeAsFallback();
@@ -1410,23 +1391,23 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
 FolderView::ThumbnailDebugSnapshot FolderView::DebugGetThumbnailSnapshot() const noexcept
 {
     ThumbnailDebugSnapshot snapshot{};
-    snapshot.visible = _thumbnailsVisible;
-    snapshot.targetDip = static_cast<float>(_thumbnailLoadStats.targetDipX100.load(std::memory_order_acquire)) / 100.0f;
-    snapshot.queuedCount = _thumbnailLoadStats.queued.load(std::memory_order_acquire);
-    snapshot.completedCount = _thumbnailLoadStats.completed.load(std::memory_order_acquire);
-    snapshot.fallbackCount = _thumbnailLoadStats.fallback.load(std::memory_order_acquire);
-    snapshot.staleDropCount = _thumbnailLoadStats.staleDrops.load(std::memory_order_acquire);
-    snapshot.pendingCount = _thumbnailLoadStats.pendingBitmapCreates.load(std::memory_order_acquire);
-    snapshot.cacheHitCount = _thumbnailLoadStats.cacheHits.load(std::memory_order_acquire);
-    snapshot.shellSuccessCount = _thumbnailLoadStats.shellSuccess.load(std::memory_order_acquire);
-    snapshot.wicSuccessCount = _thumbnailLoadStats.wicSuccess.load(std::memory_order_acquire);
-    snapshot.wicFactoryCreateCount = _thumbnailLoadStats.wicFactoryCreate.load(std::memory_order_acquire);
-    snapshot.decodeFailureCount = _thumbnailLoadStats.decodeFailures.load(std::memory_order_acquire);
-    snapshot.visibleApplyCount = _thumbnailLoadStats.visibleApply.load(std::memory_order_acquire);
+    snapshot.visible                            = _thumbnailsVisible;
+    snapshot.targetDip                          = static_cast<float>(_thumbnailLoadStats.targetDipX100.load(std::memory_order_acquire)) / 100.0f;
+    snapshot.queuedCount                        = _thumbnailLoadStats.queued.load(std::memory_order_acquire);
+    snapshot.completedCount                     = _thumbnailLoadStats.completed.load(std::memory_order_acquire);
+    snapshot.fallbackCount                      = _thumbnailLoadStats.fallback.load(std::memory_order_acquire);
+    snapshot.staleDropCount                     = _thumbnailLoadStats.staleDrops.load(std::memory_order_acquire);
+    snapshot.pendingCount                       = _thumbnailLoadStats.pendingBitmapCreates.load(std::memory_order_acquire);
+    snapshot.cacheHitCount                      = _thumbnailLoadStats.cacheHits.load(std::memory_order_acquire);
+    snapshot.shellSuccessCount                  = _thumbnailLoadStats.shellSuccess.load(std::memory_order_acquire);
+    snapshot.wicSuccessCount                    = _thumbnailLoadStats.wicSuccess.load(std::memory_order_acquire);
+    snapshot.wicFactoryCreateCount              = _thumbnailLoadStats.wicFactoryCreate.load(std::memory_order_acquire);
+    snapshot.decodeFailureCount                 = _thumbnailLoadStats.decodeFailures.load(std::memory_order_acquire);
+    snapshot.visibleApplyCount                  = _thumbnailLoadStats.visibleApply.load(std::memory_order_acquire);
     const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
-    const size_t visibleStart = std::min(visibleStartRaw, _items.size());
-    const size_t visibleEnd = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
-    snapshot.visibleItemCount = static_cast<uint64_t>(visibleEnd - visibleStart);
+    const size_t visibleStart                   = std::min(visibleStartRaw, _items.size());
+    const size_t visibleEnd                     = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
+    snapshot.visibleItemCount                   = static_cast<uint64_t>(visibleEnd - visibleStart);
     for (size_t index = 0; index < _items.size(); ++index)
     {
         if (! _items[index].thumbnail)
@@ -1453,19 +1434,19 @@ FolderView::ThumbnailDebugSnapshot FolderView::DebugGetThumbnailSnapshot() const
             cacheBytes += static_cast<uint64_t>(pixelSize.width) * static_cast<uint64_t>(pixelSize.height) * 4u;
         }
     }
-    snapshot.cacheBytes = cacheBytes;
-    snapshot.cacheEvictedCount = _thumbnailLoadStats.cacheEvicted.load(std::memory_order_acquire);
-    snapshot.cancelCount = _thumbnailLoadStats.cancelCount.load(std::memory_order_acquire);
-    snapshot.lastDrawSawThumbnail = _debugLastThumbnailDrawSawThumbnail;
-    snapshot.lastDrawSourceWidthPx = _debugLastThumbnailSourceWidthPx;
-    snapshot.lastDrawSourceHeightPx = _debugLastThumbnailSourceHeightPx;
-    snapshot.lastDrawSlotRectDip = _debugLastThumbnailSlotRectDip;
-    snapshot.lastDrawRectDip = _debugLastThumbnailDrawRectDip;
-    snapshot.lastIconDrawSawIcon = _debugLastIconDrawSawIcon;
-    snapshot.lastIconDrawSourceWidthPx = _debugLastIconDrawSourceWidthPx;
+    snapshot.cacheBytes                 = cacheBytes;
+    snapshot.cacheEvictedCount          = _thumbnailLoadStats.cacheEvicted.load(std::memory_order_acquire);
+    snapshot.cancelCount                = _thumbnailLoadStats.cancelCount.load(std::memory_order_acquire);
+    snapshot.lastDrawSawThumbnail       = _debugLastThumbnailDrawSawThumbnail;
+    snapshot.lastDrawSourceWidthPx      = _debugLastThumbnailSourceWidthPx;
+    snapshot.lastDrawSourceHeightPx     = _debugLastThumbnailSourceHeightPx;
+    snapshot.lastDrawSlotRectDip        = _debugLastThumbnailSlotRectDip;
+    snapshot.lastDrawRectDip            = _debugLastThumbnailDrawRectDip;
+    snapshot.lastIconDrawSawIcon        = _debugLastIconDrawSawIcon;
+    snapshot.lastIconDrawSourceWidthPx  = _debugLastIconDrawSourceWidthPx;
     snapshot.lastIconDrawSourceHeightPx = _debugLastIconDrawSourceHeightPx;
-    snapshot.lastIconDrawSlotRectDip = _debugLastIconDrawSlotRectDip;
-    snapshot.lastIconDrawRectDip = _debugLastIconDrawRectDip;
+    snapshot.lastIconDrawSlotRectDip    = _debugLastIconDrawSlotRectDip;
+    snapshot.lastIconDrawRectDip        = _debugLastIconDrawRectDip;
     return snapshot;
 }
 

@@ -25,6 +25,7 @@
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
+void ResetSharedEnvironment() noexcept;
 
 namespace
 {
@@ -215,4 +216,14 @@ extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, co
 
     *schemaJsonUtf8 = schema;
     return S_OK;
+}
+
+extern "C" PLUGFACTORY_API void __stdcall RedSalamanderPluginShutdown() noexcept
+{
+    ResetSharedEnvironment();
+}
+
+extern "C" PLUGFACTORY_API BOOL __stdcall RedSalamanderPluginRetainModuleUntilProcessExit() noexcept
+{
+    return FALSE;
 }

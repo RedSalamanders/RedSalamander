@@ -55,10 +55,7 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
 
 [[nodiscard]] std::wstring TrimCopy(std::wstring_view text)
 {
-    const auto isSpace = [](wchar_t ch) noexcept
-    {
-        return ch == L' ' || ch == L'\t' || ch == L'\r' || ch == L'\n';
-    };
+    const auto isSpace = [](wchar_t ch) noexcept { return ch == L' ' || ch == L'\t' || ch == L'\r' || ch == L'\n'; };
 
     while (! text.empty() && isSpace(text.front()))
     {
@@ -75,10 +72,7 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
 [[nodiscard]] std::wstring ToLowerCopy(std::wstring_view text)
 {
     std::wstring result(text);
-    std::transform(result.begin(), result.end(), result.begin(), [](wchar_t ch) noexcept
-    {
-        return static_cast<wchar_t>(::towlower(ch));
-    });
+    std::transform(result.begin(), result.end(), result.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(::towlower(ch)); });
     return result;
 }
 
@@ -120,7 +114,7 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
         }
     }
 
-    wchar_t* end = nullptr;
+    wchar_t* end        = nullptr;
     const double parsed = std::wcstod(trimmed.c_str(), &end);
     if (! end || *end != L'\0')
     {
@@ -134,14 +128,14 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
 [[nodiscard]] bool ParseExpressionText(std::wstring_view text, RedConfigure::Themes::ThemeColorExpression& outExpression)
 {
     const std::wstring trimmed = TrimCopy(text);
-    const size_t open         = trimmed.find(L'(');
-    const size_t close        = trimmed.rfind(L')');
+    const size_t open          = trimmed.find(L'(');
+    const size_t close         = trimmed.rfind(L')');
     if (open == std::wstring::npos || close == std::wstring::npos || close <= open || close != trimmed.size() - 1u)
     {
         return false;
     }
 
-    const std::wstring function = ToLowerCopy(TrimCopy(std::wstring_view(trimmed).substr(0u, open)));
+    const std::wstring function          = ToLowerCopy(TrimCopy(std::wstring_view(trimmed).substr(0u, open)));
     const std::vector<std::wstring> args = SplitArguments(std::wstring_view(trimmed).substr(open + 1u, close - open - 1u));
 
     using RedConfigure::Themes::ThemeColorExpressionKind;
@@ -161,7 +155,7 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
         {
             return false;
         }
-        expression.kind     = (function == L"lighten") ? ThemeColorExpressionKind::Lighten
+        expression.kind     = (function == L"lighten")  ? ThemeColorExpressionKind::Lighten
                               : (function == L"darken") ? ThemeColorExpressionKind::Darken
                                                         : ThemeColorExpressionKind::Alpha;
         expression.firstKey = args[0];
@@ -207,7 +201,7 @@ constexpr std::array<DefaultColor, 26> kDefaultColors = {{
 
 [[nodiscard]] uint32_t MixChannel(uint32_t from, uint32_t to, double amount) noexcept
 {
-    const double mixed = static_cast<double>(from) + ((static_cast<double>(to) - static_cast<double>(from)) * amount);
+    const double mixed   = static_cast<double>(from) + ((static_cast<double>(to) - static_cast<double>(from)) * amount);
     const double clamped = std::clamp(mixed, 0.0, 255.0);
     return static_cast<uint32_t>(clamped + 0.5);
 }
@@ -354,8 +348,8 @@ std::optional<uint32_t> ThemePreviewModel::ResolveExpression(const ThemeColorExp
             }
             return MixColors(first.value(), second.value(), expression.amount);
         }
-        case ThemeColorExpressionKind::Contrast: return RelativeBrightness(first.value()) >= 128u ? std::optional<uint32_t>(0xFF000000u)
-                                                                                                  : std::optional<uint32_t>(0xFFFFFFFFu);
+        case ThemeColorExpressionKind::Contrast:
+            return RelativeBrightness(first.value()) >= 128u ? std::optional<uint32_t>(0xFF000000u) : std::optional<uint32_t>(0xFFFFFFFFu);
         default: return std::nullopt;
     }
 }
@@ -368,7 +362,7 @@ bool ThemePreviewModel::TryEditOverride(std::wstring_view key, std::wstring_view
     }
 
     const std::wstring authoredText = TrimCopy(colorText);
-    uint32_t argb = 0u;
+    uint32_t argb                   = 0u;
     if (! Common::Settings::TryParseColor(authoredText, argb))
     {
         ThemeColorExpression expression;
@@ -384,7 +378,7 @@ bool ThemePreviewModel::TryEditOverride(std::wstring_view key, std::wstring_view
         _expressions[keyText] = std::move(expression);
         if (! GetEffectiveColor(key))
         {
-            _expressions = std::move(previousExpressions);
+            _expressions  = std::move(previousExpressions);
             _theme.colors = std::move(previousColors);
             return false;
         }

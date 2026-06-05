@@ -41,9 +41,9 @@
 #include <commdlg.h>
 #include <lm.h>
 #include <oleauto.h>
-#include <shobjidl.h>
-#include <shlwapi.h>
 #include <shellapi.h>
+#include <shlwapi.h>
+#include <shobjidl.h>
 #include <winnetwk.h>
 
 #ifndef INITGUID
@@ -749,9 +749,8 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
 
 [[nodiscard]] bool IsNativeDialogTemplateControlClass(std::wstring_view className) noexcept
 {
-    return _wcsicmp(className.data(), L"#32770") == 0 || _wcsicmp(className.data(), L"Button") == 0 ||
-           _wcsicmp(className.data(), L"Edit") == 0 || _wcsicmp(className.data(), L"Static") == 0 ||
-           _wcsicmp(className.data(), L"ComboBox") == 0;
+    return _wcsicmp(className.data(), L"#32770") == 0 || _wcsicmp(className.data(), L"Button") == 0 || _wcsicmp(className.data(), L"Edit") == 0 ||
+           _wcsicmp(className.data(), L"Static") == 0 || _wcsicmp(className.data(), L"ComboBox") == 0;
 }
 
 [[nodiscard]] size_t CountVisibleNativeChildControlWindowsLocal(HWND hwnd) noexcept
@@ -1337,10 +1336,8 @@ private:
 
         if (_useLabel)
         {
-            _useLabel->SetBounds(D2D1::RectF(left,
-                                             y + 6.0f,
-                                             std::max(left, right - kPaneFilterPromptToggleWidthDip - kPaneFilterPromptGapDip),
-                                             y + 6.0f + kPaneFilterPromptLabelHeightDip));
+            _useLabel->SetBounds(D2D1::RectF(
+                left, y + 6.0f, std::max(left, right - kPaneFilterPromptToggleWidthDip - kPaneFilterPromptGapDip), y + 6.0f + kPaneFilterPromptLabelHeightDip));
         }
         if (_toggle)
         {
@@ -1375,17 +1372,12 @@ private:
 
         if (_okButton)
         {
-            _okButton->SetBounds(D2D1::RectF(okLeft,
-                                             buttonsTop,
-                                             okLeft + kPaneFilterPromptButtonWidthDip,
-                                             buttonsTop + kPaneFilterPromptButtonHeightDip));
+            _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kPaneFilterPromptButtonWidthDip, buttonsTop + kPaneFilterPromptButtonHeightDip));
         }
         if (_cancelButton)
         {
-            _cancelButton->SetBounds(D2D1::RectF(cancelLeft,
-                                                 buttonsTop,
-                                                 cancelLeft + kPaneFilterPromptButtonWidthDip,
-                                                 buttonsTop + kPaneFilterPromptButtonHeightDip));
+            _cancelButton->SetBounds(
+                D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kPaneFilterPromptButtonWidthDip, buttonsTop + kPaneFilterPromptButtonHeightDip));
         }
     }
 
@@ -1470,7 +1462,8 @@ private:
                 {
                     snapshot.cancelButtonBottomDip = _cancelButton->GetBounds().bottom;
                 }
-                snapshot.commandButtonsFitInClient = snapshot.okButtonBottomDip <= snapshot.clientBottomDip && snapshot.cancelButtonBottomDip <= snapshot.clientBottomDip;
+                snapshot.commandButtonsFitInClient =
+                    snapshot.okButtonBottomDip <= snapshot.clientBottomDip && snapshot.cancelButtonBottomDip <= snapshot.clientBottomDip;
                 {
                     const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
                     g_folderViewPaneFilterPromptDebugSnapshot = std::move(snapshot);
@@ -3190,7 +3183,7 @@ private:
         }
 
         _editorCombo->SetItems(std::move(items));
-        _editorCombo->SetEnabled(!_editorActionIds.empty());
+        _editorCombo->SetEnabled(! _editorActionIds.empty());
         _editorCombo->SetSelectedIndex(selectedIndex);
         _selectedEditorActionId = selectedIndex.has_value() ? _editorActionIds[selectedIndex.value()] : std::wstring{};
 
@@ -3351,10 +3344,10 @@ private:
                         snapshot->selectionEnd   = selectionRange->second;
                     }
                 }
-                snapshot->editorComboEnabled       = _editorCombo && _editorCombo->IsEnabled();
-                snapshot->selectedEditorActionId   = _selectedEditorActionId;
-                snapshot->editorActionIds          = _editorActionIds;
-                snapshot->editorDisplayNames       = _editorDisplayNames;
+                snapshot->editorComboEnabled     = _editorCombo && _editorCombo->IsEnabled();
+                snapshot->selectedEditorActionId = _selectedEditorActionId;
+                snapshot->editorActionIds        = _editorActionIds;
+                snapshot->editorDisplayNames     = _editorDisplayNames;
                 return TRUE;
             }
             case FolderViewEditNewPromptDebugCommand::SetText:
@@ -3442,16 +3435,15 @@ std::optional<EditNewPromptResult> PromptForEditNewFile(HWND ownerWindow,
                                                         std::wstring_view captionText     = {},
                                                         bool showEditorControls           = true)
 {
-    auto prompt = std::make_unique<FolderViewEditNewPromptWindow>(
-        ownerWindow,
-        targetFolder,
-        std::wstring(displayPath),
-        editorSettings,
-        std::wstring(computerName),
-        theme,
-        std::wstring(initialFileName),
-        std::wstring(captionText),
-        showEditorControls);
+    auto prompt = std::make_unique<FolderViewEditNewPromptWindow>(ownerWindow,
+                                                                  targetFolder,
+                                                                  std::wstring(displayPath),
+                                                                  editorSettings,
+                                                                  std::wstring(computerName),
+                                                                  theme,
+                                                                  std::wstring(initialFileName),
+                                                                  std::wstring(captionText),
+                                                                  showEditorControls);
     return prompt ? prompt->ShowModal() : std::nullopt;
 }
 
@@ -3807,14 +3799,14 @@ private:
         const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
         _root->SetBounds(client);
 
-        constexpr float kMarginDip       = 16.0f;
-        constexpr float kGapDip          = 8.0f;
-        constexpr float kLabelHeightDip  = 22.0f;
-        constexpr float kRowHeightDip    = 34.0f;
+        constexpr float kMarginDip        = 16.0f;
+        constexpr float kGapDip           = 8.0f;
+        constexpr float kLabelHeightDip   = 22.0f;
+        constexpr float kRowHeightDip     = 34.0f;
         constexpr float kExampleHeightDip = 24.0f;
-        constexpr float kToggleHeightDip = 36.0f;
-        constexpr float kButtonWidthDip  = 96.0f;
-        constexpr float kButtonHeightDip = 34.0f;
+        constexpr float kToggleHeightDip  = 36.0f;
+        constexpr float kButtonWidthDip   = 96.0f;
+        constexpr float kButtonHeightDip  = 34.0f;
 
         const float left  = client.left + kMarginDip;
         const float right = std::max(left, client.right - kMarginDip);
@@ -4290,6 +4282,44 @@ HRESULT FolderWindow::ReloadFileSystemPlugins() noexcept
     return S_OK;
 }
 
+void FolderWindow::ReleaseFileSystemPluginsForRefresh() noexcept
+{
+    std::array<IFileSystem*, 2> providers{_leftPane.fileSystem.get(), _rightPane.fileSystem.get()};
+    for (size_t i = 0; i < providers.size(); ++i)
+    {
+        IFileSystem* provider = providers[i];
+        if (! provider)
+        {
+            continue;
+        }
+
+        bool alreadySeen = false;
+        for (size_t j = 0; j < i; ++j)
+        {
+            if (providers[j] == provider)
+            {
+                alreadySeen = true;
+                break;
+            }
+        }
+        if (! alreadySeen)
+        {
+            DirectoryInfoCache::GetInstance().UnregisterProvider(provider);
+        }
+    }
+
+    auto releasePane = [](PaneState& state) noexcept
+    {
+        wil::com_ptr<IFileSystem> emptyFileSystem;
+        state.folderView.SetFileSystem(emptyFileSystem);
+        state.navigationView.SetFileSystem(emptyFileSystem);
+        state.fileSystem.reset();
+    };
+
+    releasePane(_leftPane);
+    releasePane(_rightPane);
+}
+
 HRESULT FolderWindow::SetFileSystemPluginForPane(Pane pane, std::wstring_view pluginId) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -4390,18 +4420,39 @@ HRESULT FolderWindow::SetFileSystemInstanceForPane(
 HRESULT FolderWindow::ExecuteInActivePane(const std::filesystem::path& folderPath,
                                           std::wstring_view focusItemDisplayName,
                                           unsigned int folderViewCommandId,
-                                          bool activateWindow) noexcept
+                                          bool activateWindow,
+                                          std::wstring_view navigateToPaintMetricName,
+                                          std::chrono::steady_clock::time_point inputStartedAt) noexcept
+{
+    return ExecuteInPane(_activePane, folderPath, focusItemDisplayName, folderViewCommandId, activateWindow, navigateToPaintMetricName, inputStartedAt);
+}
+
+HRESULT FolderWindow::ExecuteInPane(Pane pane,
+                                    const std::filesystem::path& folderPath,
+                                    std::wstring_view focusItemDisplayName,
+                                    unsigned int folderViewCommandId,
+                                    bool activateWindow,
+                                    std::wstring_view navigateToPaintMetricName,
+                                    std::chrono::steady_clock::time_point inputStartedAt) noexcept
 {
     if (folderPath.empty())
     {
         return E_INVALIDARG;
     }
 
-    const Pane pane  = _activePane;
+    Debug::Perf::Scope perf(pane == Pane::Left ? L"FolderWindow.ExecuteInPane.Left" : L"FolderWindow.ExecuteInPane.Right");
+    perf.SetDetail(folderPath.native());
+
+    SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
-    if (activateWindow)
+    const auto activateRootWindow = [&]() noexcept
     {
+        if (! activateWindow)
+        {
+            return;
+        }
+
         const HWND root = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
         const HWND wnd  = root ? root : _hWnd.get();
         if (wnd)
@@ -4417,12 +4468,27 @@ HRESULT FolderWindow::ExecuteInActivePane(const std::filesystem::path& folderPat
 
             SetForegroundWindow(wnd);
         }
-    }
+    };
 
-    if (state.hFolderView && IsWindow(state.hFolderView.get()))
+    const auto focusFolderView = [&]() noexcept
     {
-        SetFocus(state.hFolderView.get());
-    }
+        if (state.hFolderView && IsWindow(state.hFolderView.get()))
+        {
+            SetFocus(state.hFolderView.get());
+        }
+    };
+
+    const auto flushPaneVisuals = [&]() noexcept
+    {
+        if (state.hNavigationView && IsWindow(state.hNavigationView.get()))
+        {
+            UpdateWindow(state.hNavigationView.get());
+        }
+        if (state.hFolderView && IsWindow(state.hFolderView.get()))
+        {
+            UpdateWindow(state.hFolderView.get());
+        }
+    };
 
     const std::optional<std::filesystem::path> currentFolder = state.folderView.GetFolderPath();
 
@@ -4444,6 +4510,7 @@ HRESULT FolderWindow::ExecuteInActivePane(const std::filesystem::path& folderPat
 
     if (sameFolder)
     {
+        state.pendingNavigationToPaintMetric.reset();
         bool ready = true;
         if (! focusItemDisplayName.empty())
         {
@@ -4452,7 +4519,17 @@ HRESULT FolderWindow::ExecuteInActivePane(const std::filesystem::path& folderPat
 
         if (ready && folderViewCommandId != 0u && state.hFolderView)
         {
+            activateRootWindow();
+            focusFolderView();
             PostMessageW(state.hFolderView.get(), WM_COMMAND, MAKEWPARAM(folderViewCommandId, 0), 0);
+            return S_OK;
+        }
+
+        if (ready && folderViewCommandId == 0u)
+        {
+            activateRootWindow();
+            focusFolderView();
+            flushPaneVisuals();
             return S_OK;
         }
 
@@ -4466,6 +4543,9 @@ HRESULT FolderWindow::ExecuteInActivePane(const std::filesystem::path& folderPat
         }
 
         state.folderView.ForceRefresh();
+        activateRootWindow();
+        focusFolderView();
+        flushPaneVisuals();
         return S_OK;
     }
 
@@ -4478,7 +4558,26 @@ HRESULT FolderWindow::ExecuteInActivePane(const std::filesystem::path& folderPat
         state.folderView.QueueCommandAfterNextEnumeration(folderViewCommandId, folderPath, focusItemDisplayName);
     }
 
+    if (! navigateToPaintMetricName.empty() && inputStartedAt != std::chrono::steady_clock::time_point{})
+    {
+        state.pendingNavigationToPaintMetric = PaneState::PendingNavigationToPaintMetric{
+            .targetFolder = folderPath,
+            .startedAt    = inputStartedAt,
+            .metricName   = std::wstring(navigateToPaintMetricName),
+            .detail       = folderPath.native(),
+            .value0       = focusItemDisplayName.empty() ? 0u : 1u,
+            .value1       = folderViewCommandId,
+        };
+    }
+    else
+    {
+        state.pendingNavigationToPaintMetric.reset();
+    }
+
     SetFolderPath(pane, folderPath);
+    activateRootWindow();
+    focusFolderView();
+    flushPaneVisuals();
     return S_OK;
 }
 

@@ -175,12 +175,8 @@ void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t valu
     Debug::Perf::Emit(name, L"", durationUs, value0, value1, hr);
 }
 
-void PerfEmitDurationWithDetail(std::wstring_view name,
-                                std::wstring_view detail,
-                                uint64_t durationUs,
-                                uint64_t value0 = 0,
-                                uint64_t value1 = 0,
-                                HRESULT hr      = S_OK) noexcept
+void PerfEmitDurationWithDetail(
+    std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
 {
     Debug::Perf::Emit(name, detail, durationUs, value0, value1, hr);
 }
@@ -308,7 +304,7 @@ void EmitAssociationLruEvictScanMetric(const AssociationLruEvictScanMetric& metr
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(g_associationCacheMutex);
-        lookupWaitUs = PerfElapsedUs(lockWaitStart);
+        lookupWaitUs             = PerfElapsedUs(lockWaitStart);
         const auto lockHoldStart = std::chrono::steady_clock::now();
         AssociationQueryKey cacheKey{extensionKey, fileAttributes};
         const auto cached = g_associationToIconIndex.find(cacheKey);
@@ -349,7 +345,7 @@ void EmitAssociationLruEvictScanMetric(const AssociationLruEvictScanMetric& metr
     {
         const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(g_associationCacheMutex);
-        storeWaitUs = PerfElapsedUs(lockWaitStart);
+        storeWaitUs              = PerfElapsedUs(lockWaitStart);
         const auto lockHoldStart = std::chrono::steady_clock::now();
         AssociationQueryKey cacheKey{extensionKey, fileAttributes};
         evictionMetric = EvictAssociationQueryBatch();
@@ -777,10 +773,10 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
         }
         EvictLRUIfNeeded(cache);
         CacheEntry entry;
-        entry.bitmap             = bitmap;
-        entry.lastAccessTime     = ++cache.accessCounter;
-        entry.bytes              = bytes;
-        cache.bitmaps[cacheKey]  = std::move(entry);
+        entry.bitmap            = bitmap;
+        entry.lastAccessTime    = ++cache.accessCounter;
+        entry.bytes             = bytes;
+        cache.bitmaps[cacheKey] = std::move(entry);
         PerfEmitDuration(L"iconcache.miss_store_us", PerfElapsedUs(storeStart), static_cast<uint64_t>(iconIndex), bytes, S_OK);
     }
 
@@ -1334,10 +1330,10 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
         }
         EvictLRUIfNeeded(cache);
         CacheEntry entry;
-        entry.bitmap             = bitmap;
-        entry.lastAccessTime     = ++cache.accessCounter;
-        entry.bytes              = bytes;
-        cache.bitmaps[cacheKey]  = std::move(entry);
+        entry.bitmap            = bitmap;
+        entry.lastAccessTime    = ++cache.accessCounter;
+        entry.bytes             = bytes;
+        cache.bitmaps[cacheKey] = std::move(entry);
     }
 
     return bitmap;
@@ -1364,7 +1360,7 @@ void IconCache::Clear()
 
 void IconCache::ClearAssociationCache() noexcept
 {
-    const auto clearStart = std::chrono::steady_clock::now();
+    const auto clearStart   = std::chrono::steady_clock::now();
     size_t associationCount = 0u;
     {
         std::lock_guard lock(g_associationCacheMutex);
@@ -1653,8 +1649,8 @@ void IconCache::EvictLRUIfNeeded(IconCache::DeviceCache& cache)
     const auto scanStart = std::chrono::steady_clock::now();
     // Find oldest entry by access time
     IconBitmapCacheKey oldestKey{};
-    bool haveOldest    = false;
-    size_t oldestTime  = SIZE_MAX;
+    bool haveOldest   = false;
+    size_t oldestTime = SIZE_MAX;
 
     for (const auto& [key, entry] : cache.bitmaps)
     {
@@ -1670,10 +1666,8 @@ void IconCache::EvictLRUIfNeeded(IconCache::DeviceCache& cache)
     {
         cache.bitmaps.erase(oldestKey);
         _lruEvictions++;
-        DBGOUT_INFO(L"IconCache: Evicted icon index {} sizeClass {} (LRU), cache size now {}",
-                    oldestKey.iconIndex,
-                    oldestKey.imageListSize,
-                    cache.bitmaps.size());
+        DBGOUT_INFO(
+            L"IconCache: Evicted icon index {} sizeClass {} (LRU), cache size now {}", oldestKey.iconIndex, oldestKey.imageListSize, cache.bitmaps.size());
     }
 
     PerfEmitDuration(L"iconcache.device_lru_evict_scan_us",

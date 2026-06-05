@@ -2294,8 +2294,7 @@ void TestWrappedMultilineTextFieldShiftArrowExtendsSelectionAndReplacesRange()
     resetState.caretIndex       = originalCaretIndex;
     resetState.multiline        = true;
     resetState.firstVisibleLine = state.firstVisibleLine;
-    Require(field.ImportTextInputState(host, resetState, false),
-            "wrapped multiline text field reimports the original wrapped caret before direct shift+right");
+    Require(field.ImportTextInputState(host, resetState, false), "wrapped multiline text field reimports the original wrapped caret before direct shift+right");
     Require(field.ExportTextInputState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+right");
 
     Require(field.OnKeyDown(host, VK_RIGHT, MK_SHIFT), "wrapped multiline text field handles shift+right on a wrapped visual line");
@@ -2345,8 +2344,7 @@ void TestWrappedMultilineTextFieldShiftHomeEndExtendSelectionAndReplaceRange()
     resetState.caretIndex       = originalCaretIndex;
     resetState.multiline        = true;
     resetState.firstVisibleLine = state.firstVisibleLine;
-    Require(field.ImportTextInputState(host, resetState, false),
-            "wrapped multiline text field reimports the original wrapped caret before direct shift+end");
+    Require(field.ImportTextInputState(host, resetState, false), "wrapped multiline text field reimports the original wrapped caret before direct shift+end");
     Require(field.ExportTextInputState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+end");
 
     Require(field.OnKeyDown(host, VK_END, MK_SHIFT), "wrapped multiline text field handles direct shift+end on a wrapped visual line");
@@ -2451,8 +2449,7 @@ void TestWrappedMultilineTextFieldShiftUpDownExtendSelectionAndReplaceRange()
     resetState.caretIndex       = originalCaretIndex;
     resetState.multiline        = true;
     resetState.firstVisibleLine = state.firstVisibleLine;
-    Require(field.ImportTextInputState(host, resetState, false),
-            "wrapped multiline text field reimports the original wrapped caret before direct shift+down");
+    Require(field.ImportTextInputState(host, resetState, false), "wrapped multiline text field reimports the original wrapped caret before direct shift+down");
     Require(field.ExportTextInputState(state), "wrapped multiline text field exports restarted state before direct wrapped shift+down");
 
     Require(field.OnKeyDown(host, VK_DOWN, MK_SHIFT), "wrapped multiline text field handles direct shift+down");

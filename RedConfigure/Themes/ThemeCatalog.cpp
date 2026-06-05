@@ -46,7 +46,10 @@ HRESULT LoadThemeCatalog(std::span<const Workspace::ThemeFile> files, ThemeCatal
         outCatalog.themes.push_back(ThemeCatalogEntry{.path = file.path, .definition = std::move(definition)});
     }
 
-    std::sort(outCatalog.themes.begin(), outCatalog.themes.end(), [](const auto& lhs, const auto& rhs) noexcept {
+    std::sort(outCatalog.themes.begin(),
+              outCatalog.themes.end(),
+              [](const auto& lhs, const auto& rhs) noexcept
+    {
         if (lhs.definition.name == rhs.definition.name)
         {
             return lhs.definition.id < rhs.definition.id;

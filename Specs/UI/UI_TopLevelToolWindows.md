@@ -15,6 +15,8 @@ This spec defines the normative windowing behavior for long-lived RedSalamander 
 
 Native OS dialogs remain out of scope here. Transient app-owned prompts, confirmations, credential editors, and popup-owned helper surfaces may remain explicitly owned or modal when their own specs require it, but any such window that opts into the shared tool-window chrome contract MUST follow the backdrop policy below.
 
+Transient alert/help overlays are not long-lived tool windows. They MAY be implemented as owned top-level popup windows to preserve reliable Win32 input routing and z-order over their anchor/parent, but they MUST remain short-lived, hidden/destroyed by their owner, and follow the transient overlay routing rules in `Specs/UI/UI_CommandMenuKeyboard.md`. Owner-level keyboard dismissal such as `Escape` MUST enumerate these owned top-level popups as well as child windows, because they are intentionally not children of the owner root.
+
 ## Normative Rules
 
 - Long-lived tool windows MUST be modeless.

@@ -3461,8 +3461,7 @@ struct RecursiveCopyWorkItem
     const auto rememberCreatedDirectory = [&](const PathInfo& directorySource, const PathInfo& directoryDestination) noexcept
     {
         std::scoped_lock lock(createdDirectoriesMutex);
-        createdDirectories.push_back(
-            CreatedDirectoryMetadataTarget{.sourcePath = directorySource.extended, .destinationPath = directoryDestination.extended});
+        createdDirectories.push_back(CreatedDirectoryMetadataTarget{.sourcePath = directorySource.extended, .destinationPath = directoryDestination.extended});
     };
 
     const auto initializeChildContext = [&](OperationContext& context, uint64_t progressStreamId) noexcept
@@ -3879,9 +3878,7 @@ struct RecursiveCopyWorkItem
     std::sort(directoriesToRestore.begin(),
               directoriesToRestore.end(),
               [](const CreatedDirectoryMetadataTarget& left, const CreatedDirectoryMetadataTarget& right) noexcept
-    {
-        return left.destinationPath.size() > right.destinationPath.size();
-    });
+    { return left.destinationPath.size() > right.destinationPath.size(); });
     for (const CreatedDirectoryMetadataTarget& directory : directoriesToRestore)
     {
         CopyPathBasicInformationBestEffort(directory.sourcePath, directory.destinationPath);

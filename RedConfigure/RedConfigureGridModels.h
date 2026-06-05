@@ -32,26 +32,34 @@ class InventoryGridModel final : public IDxGridModel
 public:
     InventoryGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)
     {
-        _columns.push_back(GridColumnDesc{
-            .id = L"kind", .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_KIND), .widthDip = 130.0f, .minWidthDip = 90.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"owner",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_OWNER),
-            .widthDip = 150.0f,
-            .minWidthDip = 90.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = false,
-            .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"id", .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_ID), .widthDip = 160.0f, .minWidthDip = 90.0f, .kind = GridColumnKind::Text, .sortable = false, .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"source",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_SOURCE),
-            .widthDip = 360.0f,
-            .minWidthDip = 160.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = false,
-            .multiline = false});
+        _columns.push_back(GridColumnDesc{.id          = L"kind",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_KIND),
+                                          .widthDip    = 130.0f,
+                                          .minWidthDip = 90.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"owner",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_OWNER),
+                                          .widthDip    = 150.0f,
+                                          .minWidthDip = 90.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"id",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_ID),
+                                          .widthDip    = 160.0f,
+                                          .minWidthDip = 90.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"source",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_SOURCE),
+                                          .widthDip    = 360.0f,
+                                          .minWidthDip = 160.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
     }
 
     InventoryGridModel(const InventoryGridModel&)            = delete;
@@ -76,7 +84,7 @@ public:
 
     void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
     {
-        outCell = {};
+        outCell         = {};
         const auto rows = _session.GetInventoryEntries();
         if (rowIndex >= rows.size())
         {
@@ -123,32 +131,34 @@ class TranslationGridModel final : public IDxGridModel
 public:
     TranslationGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)
     {
-        _columns.push_back(GridColumnDesc{
-            .id = L"id", .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_ID), .widthDip = 160.0f, .minWidthDip = 90.0f, .kind = GridColumnKind::Text, .sortable = true, .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"source",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_SOURCE),
-            .widthDip = 360.0f,
-            .minWidthDip = 160.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = true,
-            .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"target",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_TARGET),
-            .widthDip = 360.0f,
-            .minWidthDip = 160.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = true,
-            .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"status",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_STATUS),
-            .widthDip = 150.0f,
-            .minWidthDip = 110.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = true,
-            .multiline = false});
+        _columns.push_back(GridColumnDesc{.id          = L"id",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_ID),
+                                          .widthDip    = 160.0f,
+                                          .minWidthDip = 90.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = true,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"source",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_SOURCE),
+                                          .widthDip    = 360.0f,
+                                          .minWidthDip = 160.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = true,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"target",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_TARGET),
+                                          .widthDip    = 360.0f,
+                                          .minWidthDip = 160.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = true,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"status",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_STATUS),
+                                          .widthDip    = 150.0f,
+                                          .minWidthDip = 110.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = true,
+                                          .multiline   = false});
     }
 
     TranslationGridModel(const TranslationGridModel&)            = delete;
@@ -173,8 +183,8 @@ public:
 
     void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
     {
-        outCell = {};
-        const auto rows = _session.GetTranslations();
+        outCell                                = {};
+        const auto rows                        = _session.GetTranslations();
         const std::optional<size_t> sessionRow = ResolveSessionRow(rowIndex);
         if (! sessionRow || sessionRow.value() >= rows.size())
         {
@@ -196,9 +206,10 @@ public:
 
     [[nodiscard]] GridRowStyle GetRowStyle(size_t rowIndex) const override
     {
-        const auto rows = _session.GetTranslations();
+        const auto rows                        = _session.GetTranslations();
         const std::optional<size_t> sessionRow = ResolveSessionRow(rowIndex);
-        if (! sessionRow || sessionRow.value() >= rows.size() || rows[sessionRow.value()].validation.status == RedConfigure::Localization::PlaceholderStatus::Ok)
+        if (! sessionRow || sessionRow.value() >= rows.size() ||
+            rows[sessionRow.value()].validation.status == RedConfigure::Localization::PlaceholderStatus::Ok)
         {
             return {};
         }
@@ -220,7 +231,7 @@ public:
         }
 
         const size_t sessionRow = static_cast<size_t>(rowId - 1u);
-        const auto it = std::find(_viewRows.begin(), _viewRows.end(), sessionRow);
+        const auto it           = std::find(_viewRows.begin(), _viewRows.end(), sessionRow);
         return it != _viewRows.end() ? std::optional<size_t>(static_cast<size_t>(std::distance(_viewRows.begin(), it))) : std::nullopt;
     }
 
@@ -246,30 +257,27 @@ class ThemeColorGridModel final : public IDxGridModel
 public:
     ThemeColorGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)
     {
-        _columns.push_back(GridColumnDesc{
-            .id = L"key",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_COLOR_KEY),
-            .widthDip = 210.0f,
-            .minWidthDip = 140.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = false,
-            .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"effective",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_EFFECTIVE_VALUE),
-            .widthDip = 120.0f,
-            .minWidthDip = 90.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = false,
-            .multiline = false});
-        _columns.push_back(GridColumnDesc{
-            .id = L"authored",
-            .title = LoadAppString(_instance, IDS_REDCONFIGURE_COL_AUTHORED_VALUE),
-            .widthDip = 190.0f,
-            .minWidthDip = 120.0f,
-            .kind = GridColumnKind::Text,
-            .sortable = false,
-            .multiline = false});
+        _columns.push_back(GridColumnDesc{.id          = L"key",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_LABEL_COLOR_KEY),
+                                          .widthDip    = 210.0f,
+                                          .minWidthDip = 140.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"effective",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_EFFECTIVE_VALUE),
+                                          .widthDip    = 120.0f,
+                                          .minWidthDip = 90.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
+        _columns.push_back(GridColumnDesc{.id          = L"authored",
+                                          .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_AUTHORED_VALUE),
+                                          .widthDip    = 190.0f,
+                                          .minWidthDip = 120.0f,
+                                          .kind        = GridColumnKind::Text,
+                                          .sortable    = false,
+                                          .multiline   = false});
     }
 
     ThemeColorGridModel(const ThemeColorGridModel&)            = delete;
@@ -364,4 +372,4 @@ private:
     std::vector<GridColumnDesc> _columns;
     std::vector<std::wstring> _keys;
 };
-}
+} // namespace RedConfigure::Ui

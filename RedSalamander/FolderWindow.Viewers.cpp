@@ -35,15 +35,29 @@ bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
 [[nodiscard]] bool SupportsEmbeddedPreviewViewer(std::wstring_view pluginId) noexcept
 {
     return EqualsNoCase(pluginId, kFallbackPreviewViewerId) || EqualsNoCase(pluginId, L"builtin/viewer-space") ||
-           EqualsNoCase(pluginId, L"builtin/viewer-imgraw") || EqualsNoCase(pluginId, L"builtin/viewer-vlc") ||
-           EqualsNoCase(pluginId, L"builtin/viewer-web") || EqualsNoCase(pluginId, L"builtin/viewer-json") ||
-           EqualsNoCase(pluginId, L"builtin/viewer-markdown") || EqualsNoCase(pluginId, L"builtin/viewer-pe") ||
-           EqualsNoCase(pluginId, L"builtin/viewer-sqlite");
+           EqualsNoCase(pluginId, L"builtin/viewer-imgraw") || EqualsNoCase(pluginId, L"builtin/viewer-vlc") || EqualsNoCase(pluginId, L"builtin/viewer-web") ||
+           EqualsNoCase(pluginId, L"builtin/viewer-json") || EqualsNoCase(pluginId, L"builtin/viewer-markdown") ||
+           EqualsNoCase(pluginId, L"builtin/viewer-pe") || EqualsNoCase(pluginId, L"builtin/viewer-sqlite");
 }
 
 [[nodiscard]] bool IsDefaultFileActionResolution(FileActionResolver::Reason reason) noexcept
 {
     return reason == FileActionResolver::Reason::ComputerDefaultRule || reason == FileActionResolver::Reason::GlobalDefaultRule;
+}
+
+[[nodiscard]] HWND ResolveFileActionOwnerWindow(HWND preferredOwner, HWND fallbackWindow) noexcept
+{
+    if (preferredOwner && IsWindow(preferredOwner) != FALSE)
+    {
+        return preferredOwner;
+    }
+
+    HWND owner = fallbackWindow ? GetAncestor(fallbackWindow, GA_ROOT) : nullptr;
+    if (! owner)
+    {
+        owner = fallbackWindow;
+    }
+    return owner;
 }
 
 [[nodiscard]] bool HasExplicitPathSyntax(std::wstring_view path) noexcept
@@ -134,11 +148,8 @@ bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
     return LoadStringResource(nullptr, IDS_CMD_USER_MENU);
 }
 
-void ShowUserMenuUnavailableOverlay(FolderWindow& window,
-                                    FolderWindow::Pane pane,
-                                    std::wstring_view actionId,
-                                    const std::wstring& targetLabel,
-                                    HRESULT hr) noexcept
+void ShowUserMenuUnavailableOverlay(
+    FolderWindow& window, FolderWindow::Pane pane, std::wstring_view actionId, const std::wstring& targetLabel, HRESULT hr) noexcept
 {
     Debug::Perf::Scope perf(L"usermenu.feedback_us");
     perf.SetDetail(L"unavailable");
@@ -161,11 +172,8 @@ void ShowUserMenuUnavailableOverlay(FolderWindow& window,
         pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr, true, false);
 }
 
-void ShowUserMenuLaunchFailedOverlay(FolderWindow& window,
-                                     FolderWindow::Pane pane,
-                                     std::wstring_view actionId,
-                                     const std::wstring& targetLabel,
-                                     HRESULT hr) noexcept
+void ShowUserMenuLaunchFailedOverlay(
+    FolderWindow& window, FolderWindow::Pane pane, std::wstring_view actionId, const std::wstring& targetLabel, HRESULT hr) noexcept
 {
     Debug::Perf::Scope perf(L"usermenu.feedback_us");
     perf.SetDetail(L"launch-failed");
@@ -418,23 +426,17 @@ void FolderWindow::CloseAllViewers() noexcept
     ShutdownViewers();
 }
 
-HRESULT FolderWindow::OpenViewerWithPlugin(std::wstring_view pluginId,
-                                           const ViewerOpenContext& context,
-                                           std::wstring_view openedBy,
-                                           Pane pane) noexcept
+HRESULT FolderWindow::OpenViewerWithPlugin(std::wstring_view pluginId, const ViewerOpenContext& context, std::wstring_view openedBy, Pane pane) noexcept
 {
     return OpenViewerWithPluginInternal(pluginId, context, openedBy, pane, OpenedFileSourceKind::Viewer, nullptr);
 }
 
-void FolderWindow::UpdateViewerInstanceContext(ViewerInstance& instance,
-                                               const ViewerOpenContext& context,
-                                               std::wstring_view openedBy,
-                                               Pane pane,
-                                               OpenedFileSourceKind source) noexcept
+void FolderWindow::UpdateViewerInstanceContext(
+    ViewerInstance& instance, const ViewerOpenContext& context, std::wstring_view openedBy, Pane pane, OpenedFileSourceKind source) noexcept
 {
     instance.openedBy.assign(openedBy);
-    instance.source = source;
-    instance.pane   = pane;
+    instance.source     = source;
+    instance.pane       = pane;
     instance.fileSystem = context.fileSystem;
     instance.fileSystemName.assign(context.fileSystemName ? context.fileSystemName : L"");
     instance.focusedPath.assign(context.focusedPath ? context.focusedPath : L"");
@@ -539,11 +541,8 @@ void FolderWindow::UpdateViewerInstanceContext(ViewerInstance& instance,
     instance.openContext.flags                 = context.flags;
 }
 
-HRESULT FolderWindow::ReopenViewerInstance(ViewerInstance& instance,
-                                           const ViewerOpenContext& context,
-                                           std::wstring_view openedBy,
-                                           Pane pane,
-                                           OpenedFileSourceKind source) noexcept
+HRESULT FolderWindow::ReopenViewerInstance(
+    ViewerInstance& instance, const ViewerOpenContext& context, std::wstring_view openedBy, Pane pane, OpenedFileSourceKind source) noexcept
 {
     if (! instance.viewer || ! context.fileSystem || ! context.focusedPath || context.focusedPath[0] == L'\0')
     {
@@ -642,7 +641,7 @@ HRESULT FolderWindow::OpenViewerWithPluginInternal(std::wstring_view pluginId,
 
 void FolderWindow::ClosePreviewViewer(Pane hostPane) noexcept
 {
-    PaneState& host = hostPane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& host                 = hostPane == Pane::Left ? _leftPane : _rightPane;
     ViewerInstance* previewInstance = host.previewViewerInstance;
     host.previewViewerInstance      = nullptr;
     host.previewViewerPluginId.clear();
@@ -685,27 +684,27 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
 
     std::wstring pluginIdStorage;
     std::wstring openedBy;
-    std::wstring resolutionSource = L"fallback";
-    const std::wstring computerName = GetComputerNameText();
+    std::wstring resolutionSource               = L"fallback";
+    const std::wstring computerName             = GetComputerNameText();
     FileActionResolver::Reason configuredReason = FileActionResolver::Reason::None;
     if (! _settings->fileActions.viewers.associations.empty())
     {
         FileActionResolver::Request resolveRequest{};
-        resolveRequest.command      = FileActionResolver::Command::View;
-        resolveRequest.filePath     = hostState.previewedPath;
-        resolveRequest.computerName = computerName;
+        resolveRequest.command                          = FileActionResolver::Command::View;
+        resolveRequest.filePath                         = hostState.previewedPath;
+        resolveRequest.computerName                     = computerName;
         const FileActionResolver::Resolution resolution = FileActionResolver::ResolveViewerAction(_settings->fileActions.viewers, resolveRequest);
-        configuredReason                              = resolution.reason;
+        configuredReason                                = resolution.reason;
         if (resolution.action && resolution.action->kind == Common::Settings::FileActionKind::ViewerPlugin && ! resolution.action->pluginId.empty())
         {
-            pluginIdStorage = resolution.action->pluginId;
-            openedBy        = resolution.action->displayName;
+            pluginIdStorage  = resolution.action->pluginId;
+            openedBy         = resolution.action->displayName;
             resolutionSource = resolution.reasonText.empty() ? L"saved viewer association" : resolution.reasonText;
         }
     }
 
     Common::Settings::ViewerFileActionsSettings builtInViewers;
-    bool builtInViewersInitialized = false;
+    bool builtInViewersInitialized   = false;
     auto resolveBuiltInPreviewViewer = [&]() -> FileActionResolver::Resolution
     {
         if (! builtInViewersInitialized)
@@ -721,22 +720,20 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
         return FileActionResolver::ResolveViewerAction(builtInViewers, resolveRequest);
     };
 
-    const bool configuredOnlyTextDefault =
-        EqualsNoCase(pluginIdStorage, kFallbackPreviewViewerId) && IsDefaultFileActionResolution(configuredReason);
+    const bool configuredOnlyTextDefault  = EqualsNoCase(pluginIdStorage, kFallbackPreviewViewerId) && IsDefaultFileActionResolution(configuredReason);
     bool builtInPreviewResolutionSelected = false;
     if (pluginIdStorage.empty() || configuredOnlyTextDefault)
     {
         const FileActionResolver::Resolution builtInResolution = resolveBuiltInPreviewViewer();
-        const bool builtInOnlyTextDefault =
-            builtInResolution.action && EqualsNoCase(builtInResolution.action->pluginId, kFallbackPreviewViewerId) &&
-            IsDefaultFileActionResolution(builtInResolution.reason);
+        const bool builtInOnlyTextDefault = builtInResolution.action && EqualsNoCase(builtInResolution.action->pluginId, kFallbackPreviewViewerId) &&
+                                            IsDefaultFileActionResolution(builtInResolution.reason);
         if (builtInResolution.action && builtInResolution.action->kind == Common::Settings::FileActionKind::ViewerPlugin &&
-            ! builtInResolution.action->pluginId.empty() && SupportsEmbeddedPreviewViewer(builtInResolution.action->pluginId) &&
-            ! builtInOnlyTextDefault)
+            ! builtInResolution.action->pluginId.empty() && SupportsEmbeddedPreviewViewer(builtInResolution.action->pluginId) && ! builtInOnlyTextDefault)
         {
-            pluginIdStorage  = builtInResolution.action->pluginId;
-            openedBy         = builtInResolution.action->displayName;
-            resolutionSource = builtInResolution.reasonText.empty() ? L"built-in viewer defaults" : L"built-in viewer defaults: " + builtInResolution.reasonText;
+            pluginIdStorage = builtInResolution.action->pluginId;
+            openedBy        = builtInResolution.action->displayName;
+            resolutionSource =
+                builtInResolution.reasonText.empty() ? L"built-in viewer defaults" : L"built-in viewer defaults: " + builtInResolution.reasonText;
             builtInPreviewResolutionSelected = true;
         }
     }
@@ -837,12 +834,12 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     context.flags                 = static_cast<ViewerOpenFlags>(VIEWER_OPEN_FLAG_EMBEDDED);
 
     ViewerInstance* instance = nullptr;
-    HRESULT openHr = S_OK;
+    HRESULT openHr           = S_OK;
     if (hostState.previewViewerInstance && OrdinalString::EqualsNoCase(hostState.previewViewerPluginId, pluginIdStorage))
     {
         previewPerf.SetValue0(1u);
         instance = hostState.previewViewerInstance;
-        openHr  = ReopenViewerInstance(*instance, context, openedBy, sourcePane, OpenedFileSourceKind::Preview);
+        openHr   = ReopenViewerInstance(*instance, context, openedBy, sourcePane, OpenedFileSourceKind::Preview);
         if (SUCCEEDED(openHr))
         {
             SetPreviewPlaceholder(hostPane, {});
@@ -867,10 +864,11 @@ bool FolderWindow::OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPa
     openHr = OpenViewerWithPluginInternal(pluginIdStorage, context, openedBy, sourcePane, OpenedFileSourceKind::Preview, &instance);
     if (FAILED(openHr) || ! instance)
     {
-        Debug::Warning(L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to open preview viewer '{}' for '{}' (hr=0x{:08X}); using item properties fallback.",
-                       pluginIdStorage,
-                       hostState.previewedPath.wstring(),
-                       static_cast<unsigned long>(openHr));
+        Debug::Warning(
+            L"FolderWindow::OpenPreviewFocusedPathWithViewer: failed to open preview viewer '{}' for '{}' (hr=0x{:08X}); using item properties fallback.",
+            pluginIdStorage,
+            hostState.previewedPath.wstring(),
+            static_cast<unsigned long>(openHr));
         previewPerf.SetHr(openHr);
         return false;
     }
@@ -908,7 +906,7 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
 
     std::wstring pluginIdStorage;
     const std::wstring computerName = GetComputerNameText();
-    auto launchExternalAction = [&](const Common::Settings::FileActionDefinition& action) noexcept -> bool
+    auto launchExternalAction       = [&](const Common::Settings::FileActionDefinition& action) noexcept -> bool
     {
         PaneState& oppositeState = pane == Pane::Left ? _rightPane : _leftPane;
 
@@ -935,11 +933,7 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
         }
 
         FileActionLauncher::LaunchOptions options{};
-        options.ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
-        if (! options.ownerWindow)
-        {
-            options.ownerWindow = _hWnd.get();
-        }
+        options.ownerWindow          = ResolveFileActionOwnerWindow(request.ownerWindow, _hWnd.get());
         options.captureProcessHandle = true;
 
         FileActionLauncher::LaunchResult launchResult{};
@@ -963,8 +957,8 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
     const Common::Settings::FileActionDefinition* configuredAction = nullptr;
     if (! request.actionId.empty())
     {
-        configuredAction = FileActionResolver::FindApplicableActionById(
-            _settings->fileActions.viewers.actions, request.actionId, request.focusedPath, computerName);
+        configuredAction =
+            FileActionResolver::FindApplicableActionById(_settings->fileActions.viewers.actions, request.actionId, request.focusedPath, computerName);
         if (! configuredAction)
         {
             return false;
@@ -984,12 +978,12 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
     else if (! _settings->fileActions.viewers.associations.empty())
     {
         FileActionResolver::Request resolveRequest{};
-        resolveRequest.command      = request.role == FolderView::ViewFileRole::Alternate ? FileActionResolver::Command::AlternateView
-                                                                                          : FileActionResolver::Command::View;
-        resolveRequest.filePath     = request.focusedPath;
-        resolveRequest.computerName = computerName;
+        resolveRequest.command =
+            request.role == FolderView::ViewFileRole::Alternate ? FileActionResolver::Command::AlternateView : FileActionResolver::Command::View;
+        resolveRequest.filePath                         = request.focusedPath;
+        resolveRequest.computerName                     = computerName;
         const FileActionResolver::Resolution resolution = FileActionResolver::ResolveViewerAction(_settings->fileActions.viewers, resolveRequest);
-        configuredAction                                  = resolution.action;
+        configuredAction                                = resolution.action;
         if (configuredAction)
         {
             if (configuredAction->kind == Common::Settings::FileActionKind::ExternalProgram)
@@ -1030,12 +1024,11 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
         if (configuredAction)
         {
             FileActionResolver::Request resolveRequest{};
-            resolveRequest.command      = request.role == FolderView::ViewFileRole::Alternate ? FileActionResolver::Command::AlternateView
-                                                                                              : FileActionResolver::Command::View;
-            resolveRequest.filePath     = candidate;
-            resolveRequest.computerName = computerName;
-            const FileActionResolver::Resolution candidateResolution =
-                FileActionResolver::ResolveViewerAction(_settings->fileActions.viewers, resolveRequest);
+            resolveRequest.command =
+                request.role == FolderView::ViewFileRole::Alternate ? FileActionResolver::Command::AlternateView : FileActionResolver::Command::View;
+            resolveRequest.filePath                                  = candidate;
+            resolveRequest.computerName                              = computerName;
+            const FileActionResolver::Resolution candidateResolution = FileActionResolver::ResolveViewerAction(_settings->fileActions.viewers, resolveRequest);
             if (candidateResolution.action && EqualsNoCase(candidateResolution.action->id, configuredAction->id))
             {
                 otherFiles.push_back(candidate);
@@ -1120,11 +1113,7 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
         otherFilePointers.push_back(s.c_str());
     }
 
-    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
-    if (! ownerWindow)
-    {
-        ownerWindow = _hWnd.get();
-    }
+    const HWND ownerWindow = ResolveFileActionOwnerWindow(request.ownerWindow, _hWnd.get());
 
     ViewerOpenContext context{};
     context.ownerWindow            = ownerWindow;
@@ -1163,7 +1152,8 @@ bool FolderWindow::TryEditFileWithEditor(Pane pane,
                                           const std::filesystem::path& filePath,
                                           const std::vector<std::filesystem::path>& selectedPaths,
                                           std::wstring_view actionId,
-                                          bool alternate) noexcept
+                                          bool alternate,
+                                          HWND ownerWindow) noexcept
 {
     ClearFileActionFailure();
 
@@ -1183,7 +1173,7 @@ bool FolderWindow::TryEditFileWithEditor(Pane pane,
         effectiveSelectedPaths.push_back(filePath);
     }
 
-    const std::wstring computerName = GetComputerNameText();
+    const std::wstring computerName                      = GetComputerNameText();
     const Common::Settings::FileActionDefinition* action = nullptr;
     if (! actionId.empty())
     {
@@ -1196,11 +1186,11 @@ bool FolderWindow::TryEditFileWithEditor(Pane pane,
     else
     {
         FileActionResolver::Request resolveRequest{};
-        resolveRequest.command      = alternate ? FileActionResolver::Command::AlternateEdit : FileActionResolver::Command::Edit;
-        resolveRequest.filePath     = filePath;
-        resolveRequest.computerName = computerName;
+        resolveRequest.command                          = alternate ? FileActionResolver::Command::AlternateEdit : FileActionResolver::Command::Edit;
+        resolveRequest.filePath                         = filePath;
+        resolveRequest.computerName                     = computerName;
         const FileActionResolver::Resolution resolution = FileActionResolver::ResolveEditorAction(_settings->fileActions.editors, resolveRequest);
-        action                                           = resolution.action;
+        action                                          = resolution.action;
     }
 
     if (! action || action->kind != Common::Settings::FileActionKind::ExternalProgram)
@@ -1233,11 +1223,7 @@ bool FolderWindow::TryEditFileWithEditor(Pane pane,
     }
 
     FileActionLauncher::LaunchOptions options{};
-    options.ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
-    if (! options.ownerWindow)
-    {
-        options.ownerWindow = _hWnd.get();
-    }
+    options.ownerWindow          = ResolveFileActionOwnerWindow(ownerWindow, _hWnd.get());
     options.captureProcessHandle = true;
 
     FileActionLauncher::LaunchResult launchResult{};
@@ -1275,6 +1261,75 @@ bool FolderWindow::TryEditFocusedFileWithEditor(Pane pane, std::wstring_view act
     }
 
     return TryEditFileWithEditor(pane, focusedPath.value(), selectedPaths, actionId, alternate);
+}
+
+bool FolderWindow::TryLaunchResolvedFileAction(std::wstring_view sourcePluginId,
+                                               std::wstring_view sourceInstanceContext,
+                                               const std::filesystem::path& focusedPath,
+                                               std::vector<std::filesystem::path> selectedPaths,
+                                               std::vector<std::filesystem::path> displayedFilePaths,
+                                               unsigned int commandId,
+                                               HWND ownerWindow) noexcept
+{
+    if (focusedPath.empty())
+    {
+        return false;
+    }
+
+    std::vector<std::filesystem::path> sourceProbe;
+    sourceProbe.push_back(focusedPath);
+    const std::optional<Pane> resolvedSourcePane = ResolveSourcePaneForResolvedPaths(sourcePluginId, sourceInstanceContext, sourceProbe);
+    if (! resolvedSourcePane.has_value())
+    {
+        return false;
+    }
+
+    if (selectedPaths.empty())
+    {
+        selectedPaths.push_back(focusedPath);
+    }
+    if (displayedFilePaths.empty())
+    {
+        displayedFilePaths.push_back(focusedPath);
+    }
+
+    const Pane pane = resolvedSourcePane.value();
+    ClearFileActionFailure();
+
+    switch (commandId)
+    {
+        case IDM_PANE_VIEW:
+        case IDM_PANE_ALTERNATE_VIEW:
+        {
+            FolderView::ViewFileRequest request{};
+            request.role               = commandId == IDM_PANE_ALTERNATE_VIEW ? FolderView::ViewFileRole::Alternate : FolderView::ViewFileRole::Primary;
+            request.ownerWindow        = ownerWindow;
+            request.focusedPath        = focusedPath;
+            request.selectionPaths     = std::move(selectedPaths);
+            request.displayedFilePaths = std::move(displayedFilePaths);
+
+            const bool handled = TryViewFileWithViewer(pane, request);
+            if (! handled)
+            {
+                static_cast<void>(ShowRecordedFileActionFailureOverlay(pane));
+            }
+            return handled;
+        }
+
+        case IDM_PANE_EDIT:
+        case IDM_PANE_ALTERNATE_EDIT:
+        {
+            const bool alternate = commandId == IDM_PANE_ALTERNATE_EDIT;
+            const bool handled   = TryEditFileWithEditor(pane, focusedPath, selectedPaths, {}, alternate, ownerWindow);
+            if (! handled)
+            {
+                static_cast<void>(ShowRecordedFileActionFailureOverlay(pane));
+            }
+            return handled;
+        }
+
+        default: return false;
+    }
 }
 
 std::vector<FolderWindow::UserMenuItem> FolderWindow::CollectUserMenuItems(Pane pane) const
@@ -1382,12 +1437,9 @@ void FolderWindow::CommandUserMenu(Pane pane, std::wstring_view actionId)
     }
 
     const std::wstring computerName = GetComputerNameText();
-    const auto actionIt            = std::find_if(_settings->userMenu.actions.begin(),
+    const auto actionIt = std::find_if(_settings->userMenu.actions.begin(),
                                        _settings->userMenu.actions.end(),
-                                       [&](const Common::Settings::FileActionDefinition& action) noexcept
-    {
-        return EqualsNoCase(action.id, actionId);
-    });
+                                       [&](const Common::Settings::FileActionDefinition& action) noexcept { return EqualsNoCase(action.id, actionId); });
 
     if (actionIt == _settings->userMenu.actions.end() || ! UserMenuActionMatchesContext(*actionIt, itemPath, computerName))
     {

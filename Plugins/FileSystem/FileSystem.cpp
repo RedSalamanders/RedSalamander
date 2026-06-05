@@ -125,8 +125,8 @@ struct NamedStreamInfo
 
 [[nodiscard]] std::optional<std::wstring> TryExtractNamedStreamName(std::wstring_view win32StreamName)
 {
-    constexpr std::wstring_view kPrefix = L":";
-    constexpr std::wstring_view kSuffix = L":$DATA";
+    constexpr std::wstring_view kPrefix            = L":";
+    constexpr std::wstring_view kSuffix            = L":$DATA";
     constexpr std::wstring_view kDefaultDataStream = L"::$DATA";
 
     if (win32StreamName == kDefaultDataStream || ! win32StreamName.starts_with(kPrefix) || ! win32StreamName.ends_with(kSuffix) ||
@@ -151,11 +151,7 @@ struct NamedStreamInfo
         return false;
     }
 
-    return std::ranges::none_of(streamName,
-                                [](wchar_t ch) noexcept
-    {
-        return ch == L':' || ch == L'\\' || ch == L'/' || ch == L'\0';
-    });
+    return std::ranges::none_of(streamName, [](wchar_t ch) noexcept { return ch == L':' || ch == L'\\' || ch == L'/' || ch == L'\0'; });
 }
 
 HRESULT EnumerateNamedStreams(const wchar_t* path, std::vector<NamedStreamInfo>& streams) noexcept
@@ -212,26 +208,26 @@ struct ItemPropertiesLinkTargetInfo final
 
 struct MountPointReparseDataBufferForProperties final
 {
-    ULONG ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
-    USHORT ReparseDataLength = 0;
-    USHORT Reserved = 0;
+    ULONG ReparseTag            = IO_REPARSE_TAG_MOUNT_POINT;
+    USHORT ReparseDataLength    = 0;
+    USHORT Reserved             = 0;
     USHORT SubstituteNameOffset = 0;
     USHORT SubstituteNameLength = 0;
-    USHORT PrintNameOffset = 0;
-    USHORT PrintNameLength = 0;
+    USHORT PrintNameOffset      = 0;
+    USHORT PrintNameLength      = 0;
     wchar_t PathBuffer[1]{};
 };
 
 struct SymbolicLinkReparseDataBufferForProperties final
 {
-    ULONG ReparseTag = IO_REPARSE_TAG_SYMLINK;
-    USHORT ReparseDataLength = 0;
-    USHORT Reserved = 0;
+    ULONG ReparseTag            = IO_REPARSE_TAG_SYMLINK;
+    USHORT ReparseDataLength    = 0;
+    USHORT Reserved             = 0;
     USHORT SubstituteNameOffset = 0;
     USHORT SubstituteNameLength = 0;
-    USHORT PrintNameOffset = 0;
-    USHORT PrintNameLength = 0;
-    ULONG Flags = 0;
+    USHORT PrintNameOffset      = 0;
+    USHORT PrintNameLength      = 0;
+    ULONG Flags                 = 0;
     wchar_t PathBuffer[1]{};
 };
 
@@ -305,7 +301,7 @@ struct SymbolicLinkReparseDataBufferForProperties final
 
 [[nodiscard]] std::optional<std::wstring> ResolveShellLinkTargetForProperties(const wchar_t* shortcutPath) noexcept
 {
-    const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    const HRESULT coHr      = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     const bool uninitialize = SUCCEEDED(coHr);
     const auto coCleanup    = wil::scope_exit([&]
     {
@@ -455,10 +451,9 @@ struct SymbolicLinkReparseDataBufferForProperties final
 
     if (header->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT)
     {
-        const auto* mountPoint = reinterpret_cast<const MountPointReparseDataBufferForProperties*>(reparseBuffer.data());
-        const size_t pathBufferBytes =
-            mountPoint->ReparseDataLength >= (4u * sizeof(USHORT)) ? mountPoint->ReparseDataLength - (4u * sizeof(USHORT)) : 0u;
-        substituteName = ExtractReparsePathBufferStringForProperties(
+        const auto* mountPoint       = reinterpret_cast<const MountPointReparseDataBufferForProperties*>(reparseBuffer.data());
+        const size_t pathBufferBytes = mountPoint->ReparseDataLength >= (4u * sizeof(USHORT)) ? mountPoint->ReparseDataLength - (4u * sizeof(USHORT)) : 0u;
+        substituteName               = ExtractReparsePathBufferStringForProperties(
             mountPoint->PathBuffer, mountPoint->SubstituteNameOffset, mountPoint->SubstituteNameLength, pathBufferBytes);
         info.kind = "Mount point";
     }
@@ -471,9 +466,7 @@ struct SymbolicLinkReparseDataBufferForProperties final
 
         const auto* symlink = reinterpret_cast<const SymbolicLinkReparseDataBufferForProperties*>(reparseBuffer.data());
         const size_t pathBufferBytes =
-            symlink->ReparseDataLength >= ((4u * sizeof(USHORT)) + sizeof(ULONG))
-                ? symlink->ReparseDataLength - ((4u * sizeof(USHORT)) + sizeof(ULONG))
-                : 0u;
+            symlink->ReparseDataLength >= ((4u * sizeof(USHORT)) + sizeof(ULONG)) ? symlink->ReparseDataLength - ((4u * sizeof(USHORT)) + sizeof(ULONG)) : 0u;
         substituteName =
             ExtractReparsePathBufferStringForProperties(symlink->PathBuffer, symlink->SubstituteNameOffset, symlink->SubstituteNameLength, pathBufferBytes);
         info.kind = "Symbolic link";
@@ -1437,7 +1430,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetItemProperties(const wchar_t* path, con
 
     const std::wstring fullPath(path);
     const std::filesystem::path fullPathFs(fullPath);
-    const std::wstring name       = fullPathFs.filename().wstring();
+    const std::wstring name = fullPathFs.filename().wstring();
 
     auto addField = [&](yyjson_mut_val* sectionFields, const char* key, const std::string& value) noexcept
     {

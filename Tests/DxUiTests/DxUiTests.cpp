@@ -36,10 +36,10 @@ int wmain(int argc, wchar_t** argv)
     bool writeBaselines = false;
     for (int argIndex = 1; argIndex < argc; ++argIndex)
     {
-        const std::wstring_view arg                  = argv[argIndex] ? std::wstring_view(argv[argIndex]) : std::wstring_view{};
-        constexpr std::wstring_view kSuitePrefix     = L"--suite=";
-        constexpr std::wstring_view kPerfJsonlPrefix = L"--perf-jsonl=";
-        constexpr std::wstring_view kGalleryPrefix   = L"--gallery-output=";
+        const std::wstring_view arg                         = argv[argIndex] ? std::wstring_view(argv[argIndex]) : std::wstring_view{};
+        constexpr std::wstring_view kSuitePrefix            = L"--suite=";
+        constexpr std::wstring_view kPerfJsonlPrefix        = L"--perf-jsonl=";
+        constexpr std::wstring_view kGalleryPrefix          = L"--gallery-output=";
         constexpr std::wstring_view kGalleryDirectoryPrefix = L"--gallery-output-directory=";
         constexpr std::wstring_view kButtonAuditPrefix      = L"--button-audit-output=";
         if (arg.rfind(kSuitePrefix, 0) == 0)

@@ -556,9 +556,15 @@ void StartSplashDrag(HWND hwnd) noexcept
     }
     if (! monitor)
     {
-        POINT pt{};
-        GetCursorPos(&pt);
-        monitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+        const HWND foreground = GetForegroundWindow();
+        if (foreground && IsWindow(foreground))
+        {
+            monitor = MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST);
+        }
+    }
+    if (! monitor)
+    {
+        monitor = MonitorFromPoint(POINT{}, MONITOR_DEFAULTTOPRIMARY);
     }
 
     MONITORINFO mi{};

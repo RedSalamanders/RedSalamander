@@ -446,8 +446,14 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_advanced_theme_cycle_keeps_surface_legible", [=](CaseState& state) noexcept {
         return TestPreferencesDialogAdvancedThemeCycleKeepsSurfaceLegible(mainWindow, state);
     });
-    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_advanced_filter_preset_custom_mask_live_dx_interaction", [=](CaseState& state) noexcept {
-        return TestPreferencesDialogAdvancedFilterPresetCustomMaskLiveDxInteraction(mainWindow, state);
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_monitor_filter_preset_custom_mask_live_dx_interaction", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogMonitorFilterPresetCustomMaskLiveDxInteraction(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_advanced_settings_file_link_opens_current_settings_file", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogAdvancedSettingsFileLinkOpensCurrentSettingsFile(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_monitor_settings_file_link_opens_monitor_settings_file", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogMonitorSettingsFileLinkOpensMonitorSettingsFile(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_advanced_tab_traversal_live_dx_interaction", [=](CaseState& state) noexcept {
         return TestPreferencesDialogAdvancedTabTraversalLiveDxInteraction(mainWindow, state);
