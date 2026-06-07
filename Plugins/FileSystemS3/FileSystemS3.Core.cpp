@@ -13,7 +13,7 @@ namespace
     {
         case FileSystemS3Mode::S3:
         {
-            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME);
+            static const std::wstring text = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME);
             return text.c_str();
         }
         case FileSystemS3Mode::S3Table:
@@ -23,7 +23,7 @@ namespace
         }
     }
 
-    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME);
+    static const std::wstring fallback = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME);
     return fallback.c_str();
 }
 

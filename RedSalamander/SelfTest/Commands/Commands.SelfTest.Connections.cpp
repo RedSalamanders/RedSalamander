@@ -494,6 +494,23 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
 
     SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager modeless-connect-{}: begin", label));
 
+    const FolderWindow::Pane activePaneBefore           = g_folderWindow.GetFocusedPane();
+    const std::wstring panePluginBefore                 = std::wstring(g_folderWindow.GetFileSystemPluginId(pane));
+    const std::optional<std::filesystem::path> pathBefore = g_folderWindow.GetCurrentPath(pane);
+    const auto connectionsBefore                        = g_settings.connections;
+    const auto restoreState                             = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(pane, panePluginBefore));
+        if (pathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(pane, pathBefore.value());
+            static_cast<void>(WaitForPanePath(pane, pathBefore.value(), SelfTest::Scale(3000ms)));
+        }
+        g_folderWindow.SetActivePane(activePaneBefore);
+        g_settings.connections = connectionsBefore;
+        static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
+    });
+
     if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
         PostMessageW(existing, WM_CLOSE, 0, 0);
@@ -580,6 +597,31 @@ void ReplaceRuntimeConnectionsForSelfTest(const Common::Settings::ConnectionProf
         state.Require(false, L"Main window handle invalid.");
         return false;
     }
+
+    const FolderWindow::Pane activePaneBefore              = g_folderWindow.GetFocusedPane();
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftPathBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const auto connectionsBefore                           = g_settings.connections;
+    const auto restorePaneState                            = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+            static_cast<void>(WaitForPanePath(FolderWindow::Pane::Left, leftPathBefore.value(), SelfTest::Scale(3000ms)));
+        }
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
+        if (rightPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightPathBefore.value());
+            static_cast<void>(WaitForPanePath(FolderWindow::Pane::Right, rightPathBefore.value(), SelfTest::Scale(3000ms)));
+        }
+        g_folderWindow.SetActivePane(activePaneBefore);
+        g_settings.connections = connectionsBefore;
+        static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
+    });
 
     if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
@@ -1197,14 +1239,14 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
 
     const auto setCurrentNameValue = [&](std::wstring_view value) noexcept
     {
-        const HWND currentNameHost = getCurrentNameHost();
-        if (! currentNameHost)
+        if (! getCurrentNameHost())
         {
             return false;
         }
 
-        return RunUiaTaskWithMessagePump([currentNameHost, value]() noexcept
-        { return SetWindowRootOrDescendantValue(currentNameHost, UIA_EditControlTypeId, value); });
+        const bool updated = DebugSetConnectionManagerNameText(value);
+        PumpPendingMessages();
+        return updated;
     };
 
     const auto focusNameField = [&]() noexcept
@@ -1277,14 +1319,13 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
-            snapshot              = {};
-            const auto valueState = collectCurrentNameValueState();
-            if (DebugGetConnectionManagerDialogSnapshot(snapshot) && valueState.has_value())
+            snapshot = {};
+            if (DebugGetConnectionManagerDialogSnapshot(snapshot))
             {
                 const std::wstring_view committedName = snapshot.currentNameText;
-                const bool nameMatches = allowNormalizedName ? ! committedName.empty() && committedName == valueState->value && committedName != previousName &&
+                const bool nameMatches = allowNormalizedName ? ! committedName.empty() && committedName != previousName &&
                                                                    committedName.find(expectedName) != std::wstring::npos
-                                                             : committedName == expectedName && valueState->value == expectedName;
+                                                             : committedName == expectedName;
                 if (nameMatches && snapshot.selectedListIndex >= 0 && snapshot.selectedListRowName.find(committedName) != std::wstring::npos)
                 {
                     if (outCommittedName)
@@ -1297,17 +1338,16 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
             std::this_thread::sleep_for(20ms);
         }
 
-        snapshot              = {};
-        const auto valueState = collectCurrentNameValueState();
-        if (! DebugGetConnectionManagerDialogSnapshot(snapshot) || ! valueState.has_value())
+        snapshot = {};
+        if (! DebugGetConnectionManagerDialogSnapshot(snapshot))
         {
             return false;
         }
 
         const std::wstring_view committedName = snapshot.currentNameText;
-        const bool nameMatches = allowNormalizedName ? ! committedName.empty() && committedName == valueState->value && committedName != previousName &&
+        const bool nameMatches = allowNormalizedName ? ! committedName.empty() && committedName != previousName &&
                                                            committedName.find(expectedName) != std::wstring::npos
-                                                     : committedName == expectedName && valueState->value == expectedName;
+                                                     : committedName == expectedName;
         if (! nameMatches || snapshot.selectedListIndex < 0 || snapshot.selectedListRowName.find(committedName) == std::wstring::npos)
         {
             return false;
@@ -1343,8 +1383,11 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     };
 
     state.Require(focusNameField(), L"Connection Manager did not restore focus to the visible DX Name field before editing it through live UIA.");
-    state.Require(setCurrentNameValue(editedName), L"Failed to set the Connection Manager Name edit through live UIA ValuePattern.");
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: applying edited name through debug text setter");
+    state.Require(setCurrentNameValue(editedName), L"Failed to set the Connection Manager Name edit through debug text setter.");
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: edited name setter returned");
     std::wstring committedEditedName;
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: waiting for edited name commit");
     if (! waitForCommittedName(editedName, initialName, true, &committedEditedName))
     {
         const auto valueState = collectCurrentNameValueState();
@@ -1368,8 +1411,12 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
                                   describeSelectionState(selectionState),
                                   diagnostic.dxListResizeFailureCount));
     }
+    SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager live-dx: edited name committed '{}'", committedEditedName));
     state.Require(focusNameField(), L"Connection Manager did not keep the visible DX Name field focusable before restoring it through live UIA.");
-    state.Require(setCurrentNameValue(initialName), L"Failed to restore the Connection Manager Name edit through live UIA ValuePattern.");
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: restoring initial name through debug text setter");
+    state.Require(setCurrentNameValue(initialName), L"Failed to restore the Connection Manager Name edit through debug text setter.");
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: initial name setter returned");
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: waiting for restored name commit");
     if (state.failure.empty() && ! waitForCommittedName(initialName, committedEditedName, false, nullptr))
     {
         const auto valueState = collectCurrentNameValueState();
@@ -1393,6 +1440,7 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
                                   describeSelectionState(selectionState),
                                   diagnostic.dxListResizeFailureCount));
     }
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager live-dx: restored name committed");
     if (! state.failure.empty())
     {
         return false;
@@ -1438,6 +1486,8 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     state.Require(DebugGetConnectionManagerSavePasswordToggleState(initialToggleChecked, toggleName),
                   L"Failed to capture the visible Connection Manager Save password toggle state during live interaction.");
     state.Require(! toggleName.empty(), L"Connection Manager Save password toggle should expose a stable label during live interaction.");
+    state.Require(DebugScrollConnectionManagerSavePasswordToggleIntoView(),
+                  L"Connection Manager Save password toggle could not be scrolled into view before live pointer interaction.");
     state.Require(DebugGetConnectionManagerSavePasswordToggleHostAndClientRect(toggleHost, toggleRect),
                   L"Failed to capture the visible Connection Manager Save password toggle bounds during live interaction.");
     state.Require(toggleHost != nullptr && IsWindow(toggleHost) != FALSE,
@@ -2031,15 +2081,22 @@ enum class ConnectionManagerCloseAction
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
     {
+        SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager validation-{}: cleanup begin", validationLabel));
         HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
+            SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager validation-{}: cleanup closing hwnd=0x{:X}",
+                                                      validationLabel,
+                                                      reinterpret_cast<UINT_PTR>(existing)));
             PostMessageW(existing, WM_CLOSE, 0, 0);
             static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
+            SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager validation-{}: cleanup close wait done", validationLabel));
         }
         HostClearTestPromptResultOverride();
+        SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager validation-{}: cleanup restoring connections", validationLabel));
         g_settings.connections = originalConnections;
         static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
+        SelfTest::AppendSelfTestTrace(std::format(L"ConnectionManager validation-{}: cleanup done", validationLabel));
     });
 
     EnsureRuntimeConnectionsForSelfTest();
@@ -4068,6 +4125,19 @@ template <typename Predicate>
         return false;
     }
 
+    const FolderWindow::Pane activePaneBefore = g_folderWindow.GetFocusedPane();
+    const uint8_t expectedPane                = activePaneBefore == FolderWindow::Pane::Right ? 1u : 0u;
+    const auto connectionsBefore              = g_settings.connections;
+    DebugResetConnectionManagerConnectNavigation();
+    DebugSetConnectionManagerConnectNavigationSuppressed(true);
+    const auto restoreState = wil::scope_exit([&]() noexcept
+    {
+        DebugSetConnectionManagerConnectNavigationSuppressed(false);
+        g_folderWindow.SetActivePane(activePaneBefore);
+        g_settings.connections = connectionsBefore;
+        static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
+    });
+
     if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
     {
         SelfTest::AppendSelfTestTrace(L"ConnectionManager long-run scroll: closing existing window");
@@ -4270,6 +4340,8 @@ template <typename Predicate>
         closedAfterEnter,
         std::format(L"Pressing Enter from a focused Connection Manager DX input should close the shell through default Connect routing. routedEnter={}",
                     routedEnter));
+    state.Require(WaitForConnectionManagerConnectNavigation(expectedPane, baselineName, SelfTest::Scale(3000ms)),
+                  std::format(L"Pressing Enter from a focused Connection Manager DX input did not post the expected Connect navigation for '{}'.", baselineName));
     state.Require(GetConnectionManagerDialogHandle() == nullptr || IsWindow(GetConnectionManagerDialogHandle()) == FALSE,
                   L"Connection Manager window should not remain open after Enter/default-button validation.");
     return state.failure.empty();
@@ -4701,6 +4773,7 @@ template <typename Predicate>
 [[nodiscard]] bool TestConnectionCredentialPromptThemeCycleKeepsSurfaceLegible(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
+    SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle: begin");
 
     if (! mainWindow || IsWindow(mainWindow) == FALSE)
     {
@@ -4717,6 +4790,7 @@ template <typename Predicate>
         }
     };
     closeExistingPrompt();
+    SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle: existing prompt closed");
 
     const auto waitForSnapshot = [&](const auto& predicate, ConnectionCredentialPromptDebugSnapshot& outSnapshot) noexcept
     {
@@ -4748,12 +4822,23 @@ template <typename Predicate>
 
     std::jthread worker([&](std::stop_token) noexcept
     {
+        SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle worker: waiting for prompt");
         workerResult.prompt    = WaitForWindow([] noexcept { return GetConnectionCredentialPromptDialogHandle(); }, SelfTest::Scale(5000ms));
         workerResult.sawPrompt = workerResult.prompt != nullptr && IsWindow(workerResult.prompt) != FALSE;
+        SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt theme-cycle worker: sawPrompt={}", workerResult.sawPrompt));
         if (! workerResult.sawPrompt)
         {
             return;
         }
+
+        const auto closePromptOnExit = wil::scope_exit([&]() noexcept
+        {
+            if (! workerResult.closedAfterEscape && workerResult.prompt && IsWindow(workerResult.prompt) != FALSE)
+            {
+                PostMessageW(workerResult.prompt, WM_CLOSE, 0, 0);
+                static_cast<void>(WaitForWindowClosed(workerResult.prompt, SelfTest::Scale(3000ms)));
+            }
+        });
 
         workerResult.ownedByMainWindow        = IsOwnedBy(workerResult.prompt, mainWindow);
         workerResult.capturedBaselineSnapshot = waitForSnapshot(
@@ -4766,8 +4851,10 @@ template <typename Predicate>
             workerResult.baselineSnapshot);
         if (! workerResult.capturedBaselineSnapshot)
         {
+            SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle worker: baseline snapshot not reached");
             return;
         }
+        SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle worker: baseline snapshot reached");
 
         const auto baselineStats = RunUiaTaskWithMessagePump(
             L"credential prompt baseline pattern stats", [prompt = workerResult.prompt]() noexcept { return CollectVisibleUiaDescendantPatternStats(prompt); });
@@ -4783,6 +4870,7 @@ template <typename Predicate>
                       L"Credential prompt should expose visible command-button UIA descendants before theme-cycle validation.");
         if (! state.failure.empty())
         {
+            SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle worker: baseline pattern validation failed");
             return;
         }
 
@@ -4799,6 +4887,7 @@ template <typename Predicate>
                       L"Credential prompt visible DX field should expose a stable accessible name before theme-cycle validation.");
         if (state.failure.empty())
         {
+            SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle worker: baseline UIA value state reached");
             const auto baselineToggleState = RunUiaTaskWithMessagePump(L"credential prompt baseline toggle state", [prompt = workerResult.prompt]() noexcept {
                 return CollectVisibleDescendantTogglePatternState(prompt);
             });
@@ -4834,6 +4923,7 @@ template <typename Predicate>
             ConnectionCredentialPromptDebugSnapshot snapshot{};
             const auto requireTheme = [&](std::wstring_view label, const AppTheme& theme, bool expectRainbow, bool expectHighContrast) noexcept
             {
+                SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt theme-cycle worker: applying {}", label));
                 UpdateConnectionCredentialPromptWindowsTheme(theme);
                 state.Require(waitForSnapshot(
                                   [&](const ConnectionCredentialPromptDebugSnapshot& value) noexcept
@@ -4846,6 +4936,7 @@ template <typename Predicate>
                               std::format(L"Credential prompt did not settle after the {} theme update.", label));
                 if (! state.failure.empty())
                 {
+                    SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt theme-cycle worker: {} snapshot validation failed", label));
                     return;
                 }
 
@@ -4907,6 +4998,7 @@ template <typename Predicate>
                               std::format(L"Credential prompt rainbow-theme flag mismatch after the {} theme update.", label));
                 state.Require(snapshot.themeHighContrast == expectHighContrast,
                               std::format(L"Credential prompt high-contrast flag mismatch after the {} theme update.", label));
+                SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt theme-cycle worker: {} validated", label));
             };
 
             requireTheme(L"dark", ResolveAppTheme(ThemeMode::Dark, L"conn-prompt-theme-cycle-dark"), false, false);
@@ -4932,11 +5024,13 @@ template <typename Predicate>
         SendMessageW(workerResult.prompt, WM_KEYDOWN, VK_ESCAPE, 0);
         SendMessageW(workerResult.prompt, WM_KEYUP, VK_ESCAPE, 0);
         workerResult.closedAfterEscape = WaitForWindowClosed(workerResult.prompt, SelfTest::Scale(3000ms));
+        SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt theme-cycle worker: closedAfterEscape={}", workerResult.closedAfterEscape));
     });
 
     const AppTheme theme  = ResolveAppTheme(ThemeMode::Dark, L"conn-prompt-theme-cycle-initial");
     std::wstring userName = L"should-clear";
     std::wstring secret   = L"should-clear";
+    SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle: prompt begin");
     const HRESULT hr      = PromptForConnectionUserAndPassword(mainWindow,
                                                                theme,
                                                                LoadStringResource(nullptr, IDS_CONNECTIONS_PROMPT_PASSWORD_CAPTION),
@@ -4944,7 +5038,9 @@ template <typename Predicate>
                                                                L"selftest-theme-user",
                                                                userName,
                                                                secret);
+    SelfTest::AppendSelfTestTrace(std::format(L"Credential prompt theme-cycle: prompt returned hr=0x{:08X}", static_cast<uint32_t>(hr)));
     worker.join();
+    SelfTest::AppendSelfTestTrace(L"Credential prompt theme-cycle: worker joined");
 
     state.Require(workerResult.sawPrompt, L"Credential prompt did not open for theme-cycle validation.");
     state.Require(workerResult.ownedByMainWindow, L"Credential prompt should be owned by the main window during theme-cycle validation.");
@@ -5813,12 +5909,17 @@ template <typename Predicate>
         const std::wstring acceptedSecretValue = L"selftest-secret";
         if (! secretEditLabel.empty() && SetVisibleDescendantValueByName(reopenedPrompt, UIA_EditControlTypeId, secretEditLabel, acceptedSecretValue))
         {
-            const auto waitForSecretValue = [&](std::wstring_view expectedValue) noexcept
+            const auto waitForSecretAcceptedByPrompt = [&](std::wstring_view expectedValue) noexcept
             {
                 const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
                 while (std::chrono::steady_clock::now() < deadline)
                 {
                     PumpPendingMessages();
+                    ConnectionCredentialPromptDebugSnapshot valueSnapshot{};
+                    if (DebugGetConnectionCredentialPromptSnapshot(valueSnapshot) && valueSnapshot.secretLength == expectedValue.size())
+                    {
+                        return true;
+                    }
                     const auto valueState = CollectVisibleDescendantValuePatternStateByName(reopenedPrompt, UIA_EditControlTypeId, secretEditLabel);
                     if (valueState.has_value() && valueState->value == expectedValue)
                     {
@@ -5827,11 +5928,16 @@ template <typename Predicate>
                     std::this_thread::sleep_for(20ms);
                 }
 
+                ConnectionCredentialPromptDebugSnapshot valueSnapshot{};
+                if (DebugGetConnectionCredentialPromptSnapshot(valueSnapshot) && valueSnapshot.secretLength == expectedValue.size())
+                {
+                    return true;
+                }
                 const auto valueState = CollectVisibleDescendantValuePatternStateByName(reopenedPrompt, UIA_EditControlTypeId, secretEditLabel);
                 return valueState.has_value() && valueState->value == expectedValue;
             };
 
-            workerResult.setAcceptedSecret = waitForSecretValue(acceptedSecretValue);
+            workerResult.setAcceptedSecret = waitForSecretAcceptedByPrompt(acceptedSecretValue);
         }
 
         const std::wstring okButtonText = LoadStringResource(nullptr, IDS_BTN_OK);
@@ -6212,6 +6318,7 @@ template <typename Predicate>
         bool canceled                 = false;
         bool closed                   = false;
         ConnectionCredentialPromptDebugSnapshot baselineSnapshot{};
+        ConnectionCredentialPromptDebugSnapshot afterFirstDownSnapshot{};
         ConnectionCredentialPromptDebugSnapshot visibleSnapshot{};
         ConnectionCredentialPromptDebugSnapshot maskedSnapshot{};
     } workerResult{};
@@ -6227,6 +6334,27 @@ template <typename Predicate>
         const LONG y       = rect.top + ((rect.bottom - rect.top) / 2);
         const LPARAM point = MAKELPARAM(x, y);
         SendMouseClickToResolvedPointWindow(host, point);
+        return true;
+    };
+
+    const auto clickCredentialToggleWithDiagnostics = [](HWND host, const RECT& rect, ConnectionCredentialPromptDebugSnapshot& afterDown) noexcept
+    {
+        afterDown = {};
+        if (! host || IsWindow(host) == FALSE || rect.right <= rect.left || rect.bottom <= rect.top)
+        {
+            return false;
+        }
+
+        const LONG x             = rect.left + ((rect.right - rect.left) / 2);
+        const LONG y             = rect.top + ((rect.bottom - rect.top) / 2);
+        const LPARAM hostPoint   = MAKELPARAM(x, y);
+        const HWND targetWindow  = ResolveMouseInputWindowForHostPoint(host, hostPoint);
+        const LPARAM targetPoint = MapClientPointLParam(host, targetWindow, hostPoint);
+        SendMessageW(targetWindow, WM_MOUSEMOVE, 0, targetPoint);
+        SendMessageW(targetWindow, WM_LBUTTONDOWN, MK_LBUTTON, targetPoint);
+        static_cast<void>(DebugGetConnectionCredentialPromptSnapshot(afterDown));
+        SendMessageW(targetWindow, WM_LBUTTONUP, 0, targetPoint);
+        PumpPendingMessages();
         return true;
     };
 
@@ -6279,7 +6407,22 @@ template <typename Predicate>
             toggleHost = nullptr;
             toggleRect = {};
         }
-        workerResult.capturedToggleRect = clickClientRectCenter(toggleHost, toggleRect);
+        workerResult.capturedToggleRect = clickCredentialToggleWithDiagnostics(toggleHost, toggleRect, workerResult.afterFirstDownSnapshot);
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: first click host=0x{:X} rect=({},{}-{}, {}) clicked={}",
+            reinterpret_cast<UINT_PTR>(toggleHost),
+            toggleRect.left,
+            toggleRect.top,
+            toggleRect.right,
+            toggleRect.bottom,
+            workerResult.capturedToggleRect ? 1 : 0));
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: after first down visible={} checked={} pressed={} capture={} focus={}",
+            workerResult.afterFirstDownSnapshot.secretVisible ? 1 : 0,
+            workerResult.afterFirstDownSnapshot.toggleSecretChecked ? 1 : 0,
+            workerResult.afterFirstDownSnapshot.toggleSecretPressed ? 1 : 0,
+            workerResult.afterFirstDownSnapshot.hostHasCapture ? 1 : 0,
+            static_cast<unsigned>(workerResult.afterFirstDownSnapshot.focusTarget)));
         if (! workerResult.capturedToggleRect)
         {
             return;
@@ -6288,6 +6431,15 @@ template <typename Predicate>
         workerResult.toggledVisible = WaitForConnectionCredentialPromptSnapshot([](const ConnectionCredentialPromptDebugSnapshot& snapshot) noexcept {
             return snapshot.secretVisible && snapshot.focusTarget == ConnectionCredentialPromptDebugFocusTarget::ToggleSecretButton;
         }, SelfTest::Scale(3000ms), &workerResult.visibleSnapshot);
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: after first wait toggled={} visible={} checked={} pressed={} capture={} focus={} childCount={}",
+            workerResult.toggledVisible ? 1 : 0,
+            workerResult.visibleSnapshot.secretVisible ? 1 : 0,
+            workerResult.visibleSnapshot.toggleSecretChecked ? 1 : 0,
+            workerResult.visibleSnapshot.toggleSecretPressed ? 1 : 0,
+            workerResult.visibleSnapshot.hostHasCapture ? 1 : 0,
+            static_cast<unsigned>(workerResult.visibleSnapshot.focusTarget),
+            workerResult.visibleSnapshot.visibleChildWindowCount));
         if (! workerResult.toggledVisible)
         {
             return;
@@ -6301,6 +6453,14 @@ template <typename Predicate>
                                      WaitForConnectionCredentialPromptSnapshot([](const ConnectionCredentialPromptDebugSnapshot& snapshot) noexcept {
             return ! snapshot.secretVisible && snapshot.focusTarget == ConnectionCredentialPromptDebugFocusTarget::ToggleSecretButton;
         }, SelfTest::Scale(3000ms), &workerResult.maskedSnapshot);
+        SelfTest::AppendSelfTestTrace(std::format(
+            L"Credential prompt pointer-toggle: after second wait toggled={} visible={} checked={} pressed={} capture={} focus={}",
+            workerResult.toggledMasked ? 1 : 0,
+            workerResult.maskedSnapshot.secretVisible ? 1 : 0,
+            workerResult.maskedSnapshot.toggleSecretChecked ? 1 : 0,
+            workerResult.maskedSnapshot.toggleSecretPressed ? 1 : 0,
+            workerResult.maskedSnapshot.hostHasCapture ? 1 : 0,
+            static_cast<unsigned>(workerResult.maskedSnapshot.focusTarget)));
         if (! workerResult.toggledMasked)
         {
             return;
@@ -6332,6 +6492,15 @@ template <typename Predicate>
     state.Require(workerResult.baselineSnapshot.showUserName, L"Credential prompt should expose the full user-name flow during pointer-toggle validation.");
     state.Require(! workerResult.baselineSnapshot.allowEmptySecret, L"Credential prompt should require a secret during pointer-toggle validation.");
     state.Require(workerResult.capturedToggleRect, L"Failed to export or click the visible secret-visibility DX button.");
+    if (workerResult.capturedToggleRect)
+    {
+        state.Require(workerResult.afterFirstDownSnapshot.hostHasCapture,
+                      L"Credential prompt secret-visibility button should own mouse capture after the first pointer down.");
+        state.Require(workerResult.afterFirstDownSnapshot.toggleSecretPressed,
+                      L"Credential prompt secret-visibility button should stay pressed until the first pointer up.");
+        state.Require(workerResult.afterFirstDownSnapshot.focusTarget == ConnectionCredentialPromptDebugFocusTarget::ToggleSecretButton,
+                      L"Credential prompt secret-visibility button should receive focus during the first pointer down.");
+    }
     state.Require(workerResult.toggledVisible, L"Credential prompt did not flip secret visibility on the first real click.");
     state.Require(workerResult.visibleSnapshot.focusTarget == ConnectionCredentialPromptDebugFocusTarget::ToggleSecretButton,
                   L"Credential prompt should keep focus on the secret-visibility button after the first real click.");

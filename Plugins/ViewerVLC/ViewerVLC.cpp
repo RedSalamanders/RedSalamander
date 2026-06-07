@@ -1227,7 +1227,7 @@ ViewerVLC::ViewerVLC()
 {
     _metaId          = L"builtin/viewer-vlc";
     _metaShortId     = L"viewvlc";
-    _metaName        = LoadStringResource(g_hInstance, IDS_VIEWERVLC_NAME);
+    _metaName        = LoadEmbeddedStringResource(g_hInstance, IDS_VIEWERVLC_NAME);
     _metaDescription = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DESCRIPTION);
 
     _metaData.id          = _metaId.c_str();
@@ -4501,7 +4501,7 @@ void ViewerVLC::OnHudPaint(HWND hwnd) noexcept
     {
         const std::wstring label =
             (lenMs > 0) ? std::format(L"{} / {}", FormatDurationMs(static_cast<libvlc_time_t>(posMs)), FormatDurationMs(static_cast<libvlc_time_t>(lenMs)))
-                        : LoadStringResource(g_hInstance, IDS_VIEWERVLC_LABEL_TIME_UNKNOWN);
+                        : LoadEmbeddedStringResource(g_hInstance, IDS_VIEWERVLC_LABEL_TIME_UNKNOWN);
 
         const D2D1_RECT_F textRc = RectFFromRect(layout.time);
         _hudRenderTarget->DrawTextW(

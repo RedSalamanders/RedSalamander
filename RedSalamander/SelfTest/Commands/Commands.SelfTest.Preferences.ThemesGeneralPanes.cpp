@@ -2044,8 +2044,15 @@ namespace
     const bool expectedCompactMode          = ! baseline.themeCompactMode;
     const bool compactHeightShouldShrink    = expectedCompactMode;
     const bool selectEnglishLanguage        = baseline.generalUiLanguage != L"en";
-    const std::wstring targetLanguageText =
-        LoadStringResource(nullptr, selectEnglishLanguage ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_ENGLISH : IDS_PREFS_GENERAL_OPTION_LANGUAGE_SYSTEM);
+    std::wstring targetLanguageText;
+    if (selectEnglishLanguage)
+    {
+        targetLanguageText = LoadEmbeddedStringResource(nullptr, IDS_PREFS_GENERAL_OPTION_LANGUAGE_ENGLISH);
+    }
+    else
+    {
+        targetLanguageText = LoadStringResource(nullptr, IDS_PREFS_GENERAL_OPTION_LANGUAGE_SYSTEM);
+    }
     const std::wstring expectedLanguage        = selectEnglishLanguage ? L"en" : L"system";
     const std::wstring targetReducedMotionText = baseline.themeReducedMotion ? LoadStringResource(nullptr, IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_ON)
                                                                              : LoadStringResource(nullptr, IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_OFF);

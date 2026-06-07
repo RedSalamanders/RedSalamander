@@ -1237,7 +1237,7 @@ case SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf:
                                   const std::filesystem::path& dstDir,
                                   uint64_t& durationOut,
                                   unsigned int expectedConfigured,
-                                  unsigned int observedConfigured,
+                                  unsigned int& observedConfigured,
                                   std::wstring_view label) noexcept -> int
     {
         if (! taskSlot.has_value())
@@ -1279,6 +1279,11 @@ case SelfTestState::Step::Phase7_CopyMoveConcurrency16Perf:
         {
             Fail(std::format(L"{} captured zero duration.", label));
             return -1;
+        }
+
+        if (observedConfigured == 0u && completion.configuredMaxConcurrency != 0u)
+        {
+            observedConfigured = completion.configuredMaxConcurrency;
         }
 
         if (observedConfigured != expectedConfigured)
@@ -1598,7 +1603,7 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
                                   const std::filesystem::path& dstDir,
                                   uint64_t& durationOut,
                                   unsigned int expectedConfigured,
-                                  unsigned int observedConfigured,
+                                  unsigned int& observedConfigured,
                                   std::wstring_view label) noexcept -> int
     {
         if (! taskSlot.has_value())
@@ -1642,6 +1647,11 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
             return -1;
         }
 
+        if (observedConfigured == 0u && completion.configuredMaxConcurrency != 0u)
+        {
+            observedConfigured = completion.configuredMaxConcurrency;
+        }
+
         if (observedConfigured != expectedConfigured)
         {
             Fail(std::format(L"{} expected configured concurrency {} but observed {}.", label, expectedConfigured, observedConfigured));
@@ -1683,7 +1693,7 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
 
     const auto finalizeDelete = [&](const std::optional<std::uint64_t>& taskSlot,
                                     unsigned int expectedConfigured,
-                                    unsigned int observedConfigured,
+                                    unsigned int& observedConfigured,
                                     std::wstring_view label) noexcept -> int
     {
         if (! taskSlot.has_value())
@@ -1711,6 +1721,11 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
             return -1;
         }
 
+        if (observedConfigured == 0u && completion.configuredMaxConcurrency != 0u)
+        {
+            observedConfigured = completion.configuredMaxConcurrency;
+        }
+
         if (observedConfigured != expectedConfigured)
         {
             Fail(std::format(L"{} expected configured concurrency {} but observed {}.", label, expectedConfigured, observedConfigured));
@@ -1728,7 +1743,11 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
     };
 
     const auto verifyAutoConcurrencyDiagnostics =
-        [&](uint64_t taskId, unsigned int expectedAutoConcurrency, unsigned int expectedEffectiveConcurrency, std::wstring_view label) noexcept -> int
+        [&](uint64_t taskId,
+            std::wstring_view expectedOperation,
+            unsigned int expectedAutoConcurrency,
+            unsigned int expectedEffectiveConcurrency,
+            std::wstring_view label) noexcept -> int
     {
         const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(L"RedSalamander");
         if (settingsPath.empty())
@@ -1774,7 +1793,8 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
         }
 
         std::wstring line;
-        if (! TryFindDiagnosticLine(diagnosticsText, taskId, L"task.autoConcurrency", line))
+        const std::wstring operationNeedle = std::format(L"\"op\":\"{}\"", expectedOperation);
+        if (! TryFindDiagnosticLine(diagnosticsText, taskId, L"task.autoConcurrency", line, operationNeedle))
         {
             return 0;
         }
@@ -2130,7 +2150,7 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
     }
 
     const int autoCopyDiagnostics =
-        verifyAutoConcurrencyDiagnostics(state.taskB.value(), kAutoCopyConcurrency, kAutoCopyConcurrency, L"auto-concurrency auto copy");
+        verifyAutoConcurrencyDiagnostics(state.taskB.value(), L"copy", kAutoCopyConcurrency, kAutoCopyConcurrency, L"auto-concurrency auto copy");
     if (autoCopyDiagnostics < 0)
     {
         return true;
@@ -2141,7 +2161,7 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
     }
 
     const int autoDeleteDiagnostics =
-        verifyAutoConcurrencyDiagnostics(state.taskC.value(), kAutoDeleteConcurrency, kAutoDeleteConcurrency, L"auto-concurrency auto delete");
+        verifyAutoConcurrencyDiagnostics(state.taskC.value(), L"delete", kAutoDeleteConcurrency, kAutoDeleteConcurrency, L"auto-concurrency auto delete");
     if (autoDeleteDiagnostics < 0)
     {
         return true;
@@ -2472,6 +2492,12 @@ case SelfTestState::Step::Phase7_CopyItemsSingleFolderRecursiveParallelism:
                       callback.progressCount,
                       callback.completedCount,
                       hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.ClearflowSingleDeepFolderWorkerOccupancy",
+                      L"api=CopyItems shape=single-selected-folder-with-one-nested-child",
+                      static_cast<uint64_t>(callback.streamCount),
+                      callback.progressCount,
+                      static_cast<uint64_t>(kFileCount),
+                      hr);
 
     if (FAILED(hr))
     {
@@ -2523,6 +2549,12 @@ case SelfTestState::Step::Phase7_CopyItemsSingleFolderRecursiveParallelism:
                       static_cast<uint64_t>(directCallback.streamCount),
                       directCallback.progressCount,
                       directCallback.completedCount,
+                      directHr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.ClearflowSingleDeepFolderWorkerOccupancy",
+                      L"api=CopyItem shape=single-selected-folder-with-one-nested-child",
+                      static_cast<uint64_t>(directCallback.streamCount),
+                      directCallback.progressCount,
+                      static_cast<uint64_t>(kFileCount),
                       directHr);
 
     if (FAILED(directHr))

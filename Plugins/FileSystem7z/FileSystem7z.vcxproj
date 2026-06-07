@@ -153,6 +153,18 @@
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
+    <ProjectReference Include="Lang\cs-CZ\FileSystem7z-cs-CZ.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{b5be7d68-7177-56e5-bf05-8bd5318aeda6}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+    <ProjectReference Include="Lang\sk-SK\FileSystem7z-sk-SK.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{43a59b0f-b1e1-58c0-87c8-0262ddc70848}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

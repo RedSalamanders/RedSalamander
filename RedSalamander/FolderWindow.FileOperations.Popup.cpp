@@ -259,6 +259,151 @@ void NormalizeCompletedTaskSnapshotForDisplay(FileOperationsPopupInternal::TaskS
     }
 }
 
+using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
+using ConflictBucket = FolderWindow::FileOperationState::Task::ConflictBucket;
+
+struct ConflictActionLayout
+{
+    std::array<ConflictAction, FileOperationsPopupInternal::TaskSnapshot::kMaxConflictActions> primary{};
+    std::array<ConflictAction, FileOperationsPopupInternal::TaskSnapshot::kMaxConflictActions> overflow{};
+    size_t primaryCount  = 0u;
+    size_t overflowCount = 0u;
+};
+
+[[nodiscard]] ConflictAction ConflictActionFromRaw(uint8_t rawAction) noexcept
+{
+    return static_cast<ConflictAction>(rawAction);
+}
+
+[[nodiscard]] uint8_t RawConflictAction(ConflictAction action) noexcept
+{
+    return static_cast<uint8_t>(action);
+}
+
+[[nodiscard]] bool ConflictPromptHasAction(const FileOperationsPopupInternal::TaskSnapshot::ConflictPromptSnapshot& conflict,
+                                           ConflictAction action) noexcept
+{
+    for (size_t i = 0; i < conflict.actionCount && i < conflict.actions.size(); ++i)
+    {
+        if (ConflictActionFromRaw(conflict.actions[i]) == action)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+[[nodiscard]] bool ConflictLayoutContains(const std::array<ConflictAction, FileOperationsPopupInternal::TaskSnapshot::kMaxConflictActions>& actions,
+                                          size_t actionCount,
+                                          ConflictAction action) noexcept
+{
+    for (size_t i = 0; i < actionCount && i < actions.size(); ++i)
+    {
+        if (actions[i] == action)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void AppendConflictLayoutAction(std::array<ConflictAction, FileOperationsPopupInternal::TaskSnapshot::kMaxConflictActions>& actions,
+                                size_t& actionCount,
+                                ConflictAction action) noexcept
+{
+    if (action == ConflictAction::None || ConflictLayoutContains(actions, actionCount, action))
+    {
+        return;
+    }
+
+    if (actionCount < actions.size())
+    {
+        actions[actionCount] = action;
+    }
+    ++actionCount;
+}
+
+void AppendPrimaryConflictActionIfAvailable(ConflictActionLayout& layout,
+                                            const FileOperationsPopupInternal::TaskSnapshot::ConflictPromptSnapshot& conflict,
+                                            ConflictAction action) noexcept
+{
+    if (layout.primaryCount >= 3u || ! ConflictPromptHasAction(conflict, action))
+    {
+        return;
+    }
+
+    AppendConflictLayoutAction(layout.primary, layout.primaryCount, action);
+}
+
+[[nodiscard]] ConflictActionLayout BuildConflictActionLayout(const FileOperationsPopupInternal::TaskSnapshot::ConflictPromptSnapshot& conflict) noexcept
+{
+    ConflictActionLayout layout{};
+    if (! conflict.active)
+    {
+        return layout;
+    }
+
+    switch (static_cast<ConflictBucket>(conflict.bucket))
+    {
+        case ConflictBucket::Exists:
+            AppendPrimaryConflictActionIfAvailable(layout, conflict, ConflictAction::Overwrite);
+            break;
+        case ConflictBucket::RecycleBinFailed:
+            AppendPrimaryConflictActionIfAvailable(layout, conflict, ConflictAction::PermanentDelete);
+            break;
+        case ConflictBucket::AccessDenied:
+        case ConflictBucket::SharingViolation:
+        case ConflictBucket::DiskFull:
+        case ConflictBucket::PathTooLong:
+        case ConflictBucket::NetworkOffline:
+        case ConflictBucket::UnsupportedReparse:
+        case ConflictBucket::Unknown:
+        case ConflictBucket::Count:
+            AppendPrimaryConflictActionIfAvailable(layout, conflict, ConflictAction::Retry);
+            break;
+        case ConflictBucket::ReadOnly:
+        default:
+            AppendPrimaryConflictActionIfAvailable(layout, conflict, ConflictAction::Retry);
+            break;
+    }
+
+    AppendPrimaryConflictActionIfAvailable(layout, conflict, ConflictAction::Skip);
+    AppendPrimaryConflictActionIfAvailable(layout, conflict, ConflictAction::Cancel);
+
+    for (size_t i = 0; i < conflict.actionCount && i < conflict.actions.size(); ++i)
+    {
+        const ConflictAction action = ConflictActionFromRaw(conflict.actions[i]);
+        if (action == ConflictAction::None || ConflictLayoutContains(layout.primary, layout.primaryCount, action))
+        {
+            continue;
+        }
+
+        AppendConflictLayoutAction(layout.overflow, layout.overflowCount, action);
+    }
+
+    return layout;
+}
+
+[[nodiscard]] std::wstring ConflictActionText(ConflictAction action) noexcept
+{
+    switch (action)
+    {
+        case ConflictAction::Overwrite: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_OVERWRITE);
+        case ConflictAction::ReplaceReadOnly: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_REPLACE_READONLY);
+        case ConflictAction::PermanentDelete: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_PERMANENT_DELETE);
+        case ConflictAction::Retry: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_RETRY);
+        case ConflictAction::Skip: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP);
+        case ConflictAction::SkipAll: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP_ALL);
+        case ConflictAction::Cancel: return LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL);
+        case ConflictAction::None:
+        default: break;
+    }
+
+    return LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL);
+}
+
 D2D1_RECT_F ComputeIndeterminateBarFill(const D2D1_RECT_F& bar, ULONGLONG tick) noexcept
 {
     const float width = bar.right - bar.left;
@@ -305,6 +450,222 @@ std::wstring FormatDurationHms(uint64_t seconds)
     }
 
     return std::format(L"{:02d}:{:02d}", minutes, secs);
+}
+
+using TaskStatusKind = FileOperationsPopupInternal::TaskSnapshot::StatusKind;
+
+struct GlobalFileOperationsStatusSummary
+{
+    uint32_t running       = 0;
+    uint32_t waiting       = 0;
+    uint32_t needAttention = 0;
+};
+
+[[nodiscard]] bool TaskHasPublishedProgressNumbers(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+{
+    return task.completedItems > 0 || task.completedBytes > 0 || task.totalItems > 0 || task.totalBytes > 0;
+}
+
+[[nodiscard]] bool TaskShowsPreparingStatus(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+{
+    return ! task.started || ! task.hasProgressCallbacks || (task.operation == FILESYSTEM_DELETE && ! TaskHasPublishedProgressNumbers(task));
+}
+
+[[nodiscard]] TaskStatusKind ResolveTaskStatusKind(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+{
+    const HRESULT partialHr   = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+
+    if (task.finished)
+    {
+        if (task.resultHr == cancelledHr || task.resultHr == E_ABORT)
+        {
+            return TaskStatusKind::Canceled;
+        }
+        if (task.resultHr == partialHr || (SUCCEEDED(task.resultHr) && (task.warningCount > 0 || task.errorCount > 0)))
+        {
+            return TaskStatusKind::Partial;
+        }
+        if (FAILED(task.resultHr))
+        {
+            return TaskStatusKind::Failed;
+        }
+        return TaskStatusKind::Done;
+    }
+
+    if (task.conflict.active)
+    {
+        return TaskStatusKind::Conflict;
+    }
+    if (task.queuePaused || task.waitingInQueue || task.waitingForOthers)
+    {
+        return TaskStatusKind::Waiting;
+    }
+    if (task.paused)
+    {
+        return TaskStatusKind::Paused;
+    }
+    if (task.preCalcInProgress)
+    {
+        return TaskStatusKind::Calculating;
+    }
+    if (TaskShowsPreparingStatus(task))
+    {
+        return TaskStatusKind::Preparing;
+    }
+    return TaskStatusKind::Running;
+}
+
+[[nodiscard]] bool StatusNeedsAttention(TaskStatusKind status) noexcept
+{
+    return status == TaskStatusKind::Conflict || status == TaskStatusKind::Partial || status == TaskStatusKind::Failed;
+}
+
+[[nodiscard]] bool StatusCountsAsRunning(TaskStatusKind status) noexcept
+{
+    return status == TaskStatusKind::Calculating || status == TaskStatusKind::Preparing || status == TaskStatusKind::Running ||
+           status == TaskStatusKind::Paused;
+}
+
+[[nodiscard]] bool StatusCountsAsWaiting(TaskStatusKind status) noexcept
+{
+    return status == TaskStatusKind::Waiting;
+}
+
+[[nodiscard]] bool StatusIsWarning(TaskStatusKind status) noexcept
+{
+    return status == TaskStatusKind::Conflict || status == TaskStatusKind::Partial;
+}
+
+[[nodiscard]] bool StatusIsError(TaskStatusKind status) noexcept
+{
+    return status == TaskStatusKind::Failed;
+}
+
+[[nodiscard]] bool StatusIsOk(TaskStatusKind status) noexcept
+{
+    return status == TaskStatusKind::Done;
+}
+
+[[nodiscard]] std::wstring StatusTextForTask(const FileOperationsPopupInternal::TaskSnapshot& task, TaskStatusKind status, ULONGLONG nowTick)
+{
+    switch (status)
+    {
+        case TaskStatusKind::Waiting: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_WAITING);
+        case TaskStatusKind::Paused: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
+        case TaskStatusKind::Conflict: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_NEEDS_ATTENTION);
+        case TaskStatusKind::Calculating:
+        {
+            const uint64_t elapsedSec = task.preCalcElapsedMs / 1000;
+            return elapsedSec > 0 ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_CALCULATING_TIME, FormatDurationHms(elapsedSec))
+                                  : LoadStringResource(nullptr, IDS_FILEOPS_CALCULATING);
+        }
+        case TaskStatusKind::Preparing:
+        {
+            const ULONGLONG opStartTick = task.operationStartTick;
+            const uint64_t elapsedSec =
+                (opStartTick > 0 && nowTick >= opStartTick) ? static_cast<uint64_t>((nowTick - opStartTick) / 1000ull) : 0ull;
+            return elapsedSec > 0 ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_PREPARING_TIME, FormatDurationHms(elapsedSec))
+                                  : LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
+        }
+        case TaskStatusKind::Done: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_COMPLETED);
+        case TaskStatusKind::Partial: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_PARTIAL);
+        case TaskStatusKind::Failed: return FormatStringResource(nullptr, IDS_FMT_FILEOPS_STATUS_FAILED, static_cast<unsigned long>(task.resultHr));
+        case TaskStatusKind::Canceled: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_CANCELED);
+        case TaskStatusKind::Running:
+        case TaskStatusKind::None:
+        default: break;
+    }
+
+    return {};
+}
+
+[[nodiscard]] std::wstring BuildTaskHeaderText(const FileOperationsPopupInternal::TaskSnapshot& task,
+                                               std::wstring_view operationText,
+                                               ULONGLONG nowTick)
+{
+    const TaskStatusKind status = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
+    if (status == TaskStatusKind::Running || status == TaskStatusKind::None)
+    {
+        if (task.totalItems > 0)
+        {
+            return FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS, std::wstring(operationText), task.completedItems, task.totalItems);
+        }
+        return FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, std::wstring(operationText), task.completedItems);
+    }
+
+    return FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, std::wstring(operationText), StatusTextForTask(task, status, nowTick));
+}
+
+[[nodiscard]] std::wstring GraphOverlayTextForStatus(const FileOperationsPopupInternal::TaskSnapshot& task,
+                                                     TaskStatusKind status,
+                                                     bool& showAnimation)
+{
+    showAnimation = false;
+    switch (status)
+    {
+        case TaskStatusKind::Waiting: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_WAITING);
+        case TaskStatusKind::Paused: return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
+        case TaskStatusKind::Calculating:
+            showAnimation = true;
+            return LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_CALCULATING);
+        case TaskStatusKind::Preparing:
+            showAnimation = true;
+            return LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
+        case TaskStatusKind::Conflict: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_NEEDS_ATTENTION);
+        case TaskStatusKind::Running:
+        case TaskStatusKind::Done:
+        case TaskStatusKind::Partial:
+        case TaskStatusKind::Failed:
+        case TaskStatusKind::Canceled:
+        case TaskStatusKind::None:
+        default: break;
+    }
+
+    static_cast<void>(task);
+    return {};
+}
+
+[[nodiscard]] GlobalFileOperationsStatusSummary BuildGlobalStatusSummary(const std::vector<FileOperationsPopupInternal::TaskSnapshot>& snapshot) noexcept
+{
+    GlobalFileOperationsStatusSummary summary{};
+    for (const auto& task : snapshot)
+    {
+        if (task.kind != FileOperationsPopupInternal::TaskSnapshot::Kind::FileOperation)
+        {
+            continue;
+        }
+
+        const TaskStatusKind status = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
+        if (StatusNeedsAttention(status))
+        {
+            ++summary.needAttention;
+        }
+        else if (StatusCountsAsWaiting(status))
+        {
+            ++summary.waiting;
+        }
+        else if (StatusCountsAsRunning(status))
+        {
+            ++summary.running;
+        }
+    }
+
+    return summary;
+}
+
+[[nodiscard]] std::wstring FormatGlobalStatusSummaryText(const GlobalFileOperationsStatusSummary& summary)
+{
+    return FormatStringResource(nullptr,
+                                IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY,
+                                static_cast<unsigned long>(summary.running),
+                                static_cast<unsigned long>(summary.waiting),
+                                static_cast<unsigned long>(summary.needAttention));
+}
+
+[[nodiscard]] size_t SurfacedTaskStatusCount(TaskStatusKind status) noexcept
+{
+    return status == TaskStatusKind::None ? 0u : 1u;
 }
 
 bool IsAsciiSpace(wchar_t ch) noexcept
@@ -1124,6 +1485,139 @@ bool IsRateSamplingBlocked(const FileOperationsPopupInternal::RateSnapshot& task
     return task.paused || task.queuePaused || task.waitingInQueue;
 }
 
+void AddHueWeight(std::array<FileOperationsPopupInternal::RateHistory::HueWeight, FileOperationsPopupInternal::RateHistory::kMaxHueWeightsPerSample>& weights,
+                  size_t& weightCount,
+                  float hue,
+                  double weight) noexcept
+{
+    if (hue < 0.0f || ! std::isfinite(weight) || weight <= 0.0)
+    {
+        return;
+    }
+
+    for (size_t i = 0; i < weightCount && i < weights.size(); ++i)
+    {
+        if (weights[i].hue == hue)
+        {
+            weights[i].weight += weight;
+            return;
+        }
+    }
+
+    if (weightCount < weights.size())
+    {
+        weights[weightCount] = {.hue = hue, .weight = weight};
+    }
+    ++weightCount;
+}
+
+void AddPendingHueWeight(FileOperationsPopupInternal::RateHistory& history, float hue, double weight) noexcept
+{
+    AddHueWeight(history.pendingHueWeights, history.pendingHueWeightCount, hue, weight);
+}
+
+[[nodiscard]] float DominantHue(
+    const std::array<FileOperationsPopupInternal::RateHistory::HueWeight, FileOperationsPopupInternal::RateHistory::kMaxHueWeightsPerSample>& weights,
+    size_t weightCount,
+    float fallbackHue) noexcept
+{
+    float dominantHue     = fallbackHue;
+    double dominantWeight = 0.0;
+    for (size_t i = 0; i < weightCount && i < weights.size(); ++i)
+    {
+        if (weights[i].weight > dominantWeight)
+        {
+            dominantWeight = weights[i].weight;
+            dominantHue    = weights[i].hue;
+        }
+    }
+    return dominantHue;
+}
+
+void ResetRateStreamProgress(FileOperationsPopupInternal::RateHistory& history) noexcept
+{
+    history.streamProgressCount = 0u;
+}
+
+void SyncRateStreamBaselines(FileOperationsPopupInternal::RateHistory& history, const FileOperationsPopupInternal::RateSnapshot& task) noexcept
+{
+    history.streamProgressCount = 0u;
+    for (size_t i = 0; i < task.inFlightFileCount && i < task.inFlightFiles.size() && history.streamProgressCount < history.streamProgress.size(); ++i)
+    {
+        const auto& stream = task.inFlightFiles[i];
+        auto& entry        = history.streamProgress[history.streamProgressCount++];
+        entry.cookieKey        = stream.cookieKey;
+        entry.progressStreamId = stream.progressStreamId;
+        entry.sourcePath       = stream.sourcePath;
+        entry.completedBytes   = stream.completedBytes;
+        entry.lastUpdateTick   = stream.lastUpdateTick;
+    }
+}
+
+void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& history,
+                                const FileOperationsPopupInternal::RateSnapshot& task,
+                                uint64_t aggregateDeltaBytes,
+                                float fallbackHue) noexcept
+{
+    using StreamProgress = FileOperationsPopupInternal::RateHistory::StreamProgress;
+
+    std::array<StreamProgress, FileOperationsPopupInternal::TaskSnapshot::kMaxInFlightFiles> previous{};
+    const size_t previousCount = std::min(history.streamProgressCount, history.streamProgress.size());
+    for (size_t i = 0; i < previousCount; ++i)
+    {
+        previous[i] = history.streamProgress[i];
+    }
+
+    history.streamProgressCount = 0u;
+
+    double streamWeightTotal = 0.0;
+    for (size_t i = 0; i < task.inFlightFileCount && i < task.inFlightFiles.size(); ++i)
+    {
+        const auto& stream = task.inFlightFiles[i];
+        const StreamProgress* baseline = nullptr;
+        for (size_t j = 0; j < previousCount; ++j)
+        {
+            if (previous[j].cookieKey == stream.cookieKey && previous[j].progressStreamId == stream.progressStreamId)
+            {
+                baseline = &previous[j];
+                break;
+            }
+        }
+
+        uint64_t deltaBytes = 0;
+        if (! baseline || baseline->sourcePath != stream.sourcePath || stream.completedBytes < baseline->completedBytes)
+        {
+            deltaBytes = stream.completedBytes;
+        }
+        else
+        {
+            deltaBytes = stream.completedBytes - baseline->completedBytes;
+        }
+
+        if (deltaBytes > 0)
+        {
+            const float hue = RateSampleHue(stream.sourcePath);
+            AddPendingHueWeight(history, hue, static_cast<double>(deltaBytes));
+            streamWeightTotal += static_cast<double>(deltaBytes);
+        }
+
+        if (history.streamProgressCount < history.streamProgress.size())
+        {
+            auto& entry            = history.streamProgress[history.streamProgressCount++];
+            entry.cookieKey        = stream.cookieKey;
+            entry.progressStreamId = stream.progressStreamId;
+            entry.sourcePath       = stream.sourcePath;
+            entry.completedBytes   = stream.completedBytes;
+            entry.lastUpdateTick   = stream.lastUpdateTick;
+        }
+    }
+
+    if (streamWeightTotal <= 0.0 && aggregateDeltaBytes > 0)
+    {
+        AddPendingHueWeight(history, fallbackHue, static_cast<double>(aggregateDeltaBytes));
+    }
+}
+
 [[nodiscard]] double ClampFiniteNonNegative(double value) noexcept
 {
     return std::isfinite(value) && value > 0.0 ? value : 0.0;
@@ -1174,11 +1668,34 @@ bool IsRateSamplingBlocked(const FileOperationsPopupInternal::RateSnapshot& task
 
 void AppendRateSample(FileOperationsPopupInternal::RateHistory& history, double sample, float hue) noexcept
 {
-    const double clampedSample          = ClampFiniteNonNegative(sample);
-    history.samples[history.writeIndex] = static_cast<float>(std::min<double>(clampedSample, std::numeric_limits<float>::max()));
-    history.hues[history.writeIndex]    = hue;
-    history.writeIndex                  = (history.writeIndex + 1u) % FileOperationsPopupInternal::RateHistory::kMaxSamples;
-    history.count                       = std::min(FileOperationsPopupInternal::RateHistory::kMaxSamples, history.count + 1u);
+    const double clampedSample = ClampFiniteNonNegative(sample);
+    const size_t slot          = history.writeIndex;
+
+    history.samples[slot] = static_cast<float>(std::min<double>(clampedSample, std::numeric_limits<float>::max()));
+
+    const size_t pendingCount = std::min(history.pendingHueWeightCount, history.pendingHueWeights.size());
+    if (pendingCount > 0u)
+    {
+        const size_t storedCount      = std::min(pendingCount, history.hueWeights[slot].size());
+        history.hueWeightCounts[slot] = static_cast<uint8_t>(storedCount);
+        for (size_t i = 0; i < storedCount; ++i)
+        {
+            history.hueWeights[slot][i] = history.pendingHueWeights[i];
+        }
+        history.hues[slot] = DominantHue(history.hueWeights[slot], storedCount, hue);
+    }
+    else
+    {
+        history.hueWeightCounts[slot] = hue >= 0.0f ? 1u : 0u;
+        if (hue >= 0.0f)
+        {
+            history.hueWeights[slot][0] = {.hue = hue, .weight = 1.0};
+        }
+        history.hues[slot] = hue;
+    }
+
+    history.writeIndex = (history.writeIndex + 1u) % FileOperationsPopupInternal::RateHistory::kMaxSamples;
+    history.count      = std::min(FileOperationsPopupInternal::RateHistory::kMaxSamples, history.count + 1u);
 }
 
 void ResetPendingRateSample(FileOperationsPopupInternal::RateHistory& history) noexcept
@@ -1186,6 +1703,7 @@ void ResetPendingRateSample(FileOperationsPopupInternal::RateHistory& history) n
     history.pendingBucketMs         = 0;
     history.pendingWeightedSampleMs = 0.0;
     history.pendingHue              = -1.0f;
+    history.pendingHueWeightCount   = 0u;
 }
 
 void AppendResampledRateSamples(FileOperationsPopupInternal::RateHistory& history, ULONGLONG elapsedMs, double sample, float hue) noexcept
@@ -1885,6 +2403,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.started               = true;
         snap.finished              = info.finished;
         snap.resultHr              = info.resultHr;
+        snap.statusKind            = ResolveTaskStatusKind(snap);
 
         result.push_back(std::move(snap));
     }
@@ -2017,6 +2536,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             snap.itemCompletedBytes = std::min(snap.itemCompletedBytes, snap.itemTotalBytes);
         }
         NormalizeCompletedTaskSnapshotForDisplay(snap);
+        snap.statusKind = ResolveTaskStatusKind(snap);
 
         result.push_back(std::move(snap));
     }
@@ -2065,6 +2585,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             snap.completedBytes = std::min(snap.completedBytes, snap.totalBytes);
         }
         NormalizeCompletedTaskSnapshotForDisplay(snap);
+        snap.statusKind = ResolveTaskStatusKind(snap);
 
         result.push_back(std::move(snap));
     }
@@ -2108,6 +2629,20 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             std::scoped_lock lock(task->_progressPathMutex);
             snap.currentSourcePath        = ! task->_lastProgressCallbackSourcePath.empty() ? task->_lastProgressCallbackSourcePath : task->_progressSourcePath;
             snap.lastProgressCallbackTick = task->_lastProgressCallbackTick;
+        }
+
+        {
+            std::scoped_lock lock(task->_inFlightFilesMutex);
+            snap.inFlightFileCount = std::min(task->_inFlightFileCount, snap.inFlightFiles.size());
+            for (size_t i = 0; i < snap.inFlightFileCount; ++i)
+            {
+                snap.inFlightFiles[i].cookieKey         = task->_inFlightFiles[i].cookieKey;
+                snap.inFlightFiles[i].progressStreamId  = task->_inFlightFiles[i].progressStreamId;
+                snap.inFlightFiles[i].sourcePath        = task->_inFlightFiles[i].sourcePath;
+                snap.inFlightFiles[i].totalBytes        = task->_inFlightFiles[i].totalBytes;
+                snap.inFlightFiles[i].completedBytes    = task->_inFlightFiles[i].completedBytes;
+                snap.inFlightFiles[i].lastUpdateTick    = task->_inFlightFiles[i].lastUpdateTick;
+            }
         }
 
         snap.progressStateChangeTick = task->_rateSamplingStateChangeTick.load(std::memory_order_acquire);
@@ -2175,6 +2710,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
             history.lastProgressCallbackTick = task.lastProgressCallbackTick;
             history.lastDisplaySampleTick    = nowTick;
             history.lastStateChangeTick      = task.progressStateChangeTick;
+            SyncRateStreamBaselines(history, task);
             continue;
         }
 
@@ -2187,6 +2723,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
             history.resumeTick            = blocked ? 0 : task.progressStateChangeTick;
             history.lastDisplaySampleTick = nowTick;
             ResetPendingRateSample(history);
+            ResetRateStreamProgress(history);
+            SyncRateStreamBaselines(history, task);
 
             if (blocked)
             {
@@ -2206,6 +2744,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
             history.lastProgressCallbackTick = task.lastProgressCallbackTick;
             history.lastDisplaySampleTick    = nowTick;
             history.hasSmoothedEta           = false;
+            ResetPendingRateSample(history);
+            ResetRateStreamProgress(history);
+            SyncRateStreamBaselines(history, task);
             continue;
         }
 
@@ -2247,6 +2788,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
                 const uint64_t deltaBytes = task.completedBytes - history.lastBytes;
                 if (deltaBytes > 0 && dtSec > 0.0)
                 {
+                    AccumulateStreamHueWeights(history, task, deltaBytes, hue);
                     const double instBytesPerSec = static_cast<double>(deltaBytes) / dtSec;
                     history.smoothedBytesPerSec  = SmoothRateForDisplay(history.smoothedBytesPerSec, instBytesPerSec, elapsedMs);
                     history.displayedBytesPerSec = history.smoothedBytesPerSec;
@@ -2350,6 +2892,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::LayoutChrome(float w
 
     _footerQueueModeRect =
         D2D1::RectF(_footerCancelAllRect.right + footerGap, footerBtnY, _footerCancelAllRect.right + footerGap + footerBtnW, footerBtnY + footerBtnH);
+    _footerSummaryRect = D2D1::RectF(_footerQueueModeRect.right + footerGap,
+                                     footerBtnY,
+                                     std::max(_footerQueueModeRect.right + footerGap, width - DipsToPixels(10.0f, _dpi)),
+                                     footerBtnY + footerBtnH);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateScrollBar(HWND hwnd, float viewH, float contentH) noexcept
@@ -2823,6 +3369,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
 
     std::array<D2D1_POINT_2F, RateHistory::kMaxSamples> points{};
     std::array<float, RateHistory::kMaxSamples> sampleHues{};
+    std::array<std::array<RateHistory::HueWeight, RateHistory::kMaxHueWeightsPerSample>, RateHistory::kMaxSamples> sampleHueWeights{};
+    std::array<uint8_t, RateHistory::kMaxSamples> sampleHueWeightCounts{};
     size_t count  = 0;
     size_t oldest = 0;
     if (canDrawSamples)
@@ -2835,6 +3383,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
             const size_t index = (oldest + i) % RateHistory::kMaxSamples;
             const float speed  = history.samples[index];
             sampleHues[i]      = history.hues[index];
+            sampleHueWeightCounts[i] = history.hueWeightCounts[index];
+            sampleHueWeights[i]      = history.hueWeights[index];
 
             const float xFrac = static_cast<float>(i) / static_cast<float>(count - 1u);
             const float yFrac = Clamp01(speed / axisMax);
@@ -2848,33 +3398,81 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
         {
             if (rainbowMode && _graphDynamicBrush && count >= 2)
             {
-                // Rainbow: draw per-segment trapezoids with individual hue colors
+                // Rainbow: draw per-segment trapezoids split into proportional per-stream hue bands.
                 const float fillAlpha = _graphFillBaseColor.a;
                 for (size_t i = 1; i < count; ++i)
                 {
-                    // Use the hue from the right-side sample (newer) for each segment
-                    const float hue                = sampleHues[i];
-                    const D2D1_COLOR_F segmentFill = sampleColorFromHue(hue, fillAlpha);
-                    _graphDynamicBrush->SetColor(segmentFill);
-
-                    // Build a trapezoid: from points[i-1] to points[i] to bottom-right to bottom-left
-                    wil::com_ptr<ID2D1PathGeometry> trapezoid;
-                    const HRESULT hrGeo = _d2dFactory->CreatePathGeometry(trapezoid.put());
-                    if (SUCCEEDED(hrGeo) && trapezoid)
+                    const auto& weights = sampleHueWeights[i];
+                    const size_t weightCount = std::min<size_t>(sampleHueWeightCounts[i], weights.size());
+                    double totalWeight = 0.0;
+                    for (size_t band = 0; band < weightCount; ++band)
                     {
-                        wil::com_ptr<ID2D1GeometrySink> sink;
-                        const HRESULT hrSink = trapezoid->Open(sink.put());
-                        if (SUCCEEDED(hrSink) && sink)
+                        if (weights[band].weight > 0.0)
                         {
-                            sink->SetFillMode(D2D1_FILL_MODE_WINDING);
-                            sink->BeginFigure(points[i - 1u], D2D1_FIGURE_BEGIN_FILLED);
-                            sink->AddLine(points[i]);
-                            sink->AddLine(D2D1::Point2F(points[i].x, rect.bottom));
-                            sink->AddLine(D2D1::Point2F(points[i - 1u].x, rect.bottom));
-                            sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-                            sink->Close();
-                            _target->FillGeometry(trapezoid.get(), _graphDynamicBrush.get());
+                            totalWeight += weights[band].weight;
                         }
+                    }
+
+                    const float leftFilledH  = std::max(0.0f, rect.bottom - points[i - 1u].y);
+                    const float rightFilledH = std::max(0.0f, rect.bottom - points[i].y);
+                    double lowerShare = 0.0;
+
+                    const auto drawBand = [&](float hue, double upperShare) noexcept
+                    {
+                        const float lower = Clamp01(static_cast<float>(lowerShare));
+                        const float upper = Clamp01(static_cast<float>(upperShare));
+                        if (upper <= lower)
+                        {
+                            lowerShare = upperShare;
+                            return;
+                        }
+
+                        const D2D1_COLOR_F segmentFill = sampleColorFromHue(hue, fillAlpha);
+                        _graphDynamicBrush->SetColor(segmentFill);
+
+                        wil::com_ptr<ID2D1PathGeometry> trapezoid;
+                        const HRESULT hrGeo = _d2dFactory->CreatePathGeometry(trapezoid.put());
+                        if (SUCCEEDED(hrGeo) && trapezoid)
+                        {
+                            wil::com_ptr<ID2D1GeometrySink> sink;
+                            const HRESULT hrSink = trapezoid->Open(sink.put());
+                            if (SUCCEEDED(hrSink) && sink)
+                            {
+                                const D2D1_POINT_2F leftLower  = D2D1::Point2F(points[i - 1u].x, rect.bottom - leftFilledH * lower);
+                                const D2D1_POINT_2F rightLower = D2D1::Point2F(points[i].x, rect.bottom - rightFilledH * lower);
+                                const D2D1_POINT_2F rightUpper = D2D1::Point2F(points[i].x, rect.bottom - rightFilledH * upper);
+                                const D2D1_POINT_2F leftUpper  = D2D1::Point2F(points[i - 1u].x, rect.bottom - leftFilledH * upper);
+
+                                sink->SetFillMode(D2D1_FILL_MODE_WINDING);
+                                sink->BeginFigure(leftLower, D2D1_FIGURE_BEGIN_FILLED);
+                                sink->AddLine(rightLower);
+                                sink->AddLine(rightUpper);
+                                sink->AddLine(leftUpper);
+                                sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                                sink->Close();
+                                _target->FillGeometry(trapezoid.get(), _graphDynamicBrush.get());
+                            }
+                        }
+
+                        lowerShare = upperShare;
+                    };
+
+                    if (weightCount > 0u && totalWeight > 0.0)
+                    {
+                        for (size_t band = 0; band < weightCount; ++band)
+                        {
+                            if (weights[band].weight <= 0.0)
+                            {
+                                continue;
+                            }
+
+                            const double upperShare = lowerShare + (weights[band].weight / totalWeight);
+                            drawBand(weights[band].hue, upperShare);
+                        }
+                    }
+                    else
+                    {
+                        drawBand(sampleHues[i], 1.0);
                     }
                 }
             }
@@ -3204,16 +3802,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
         queueBtn.hit.kind = PopupHitTest::Kind::FooterQueueMode;
         _buttons.push_back(queueBtn);
 
-        const float footerBtnW = DipsToPixels(120.0f, _dpi);
-        const float footerGap  = DipsToPixels(10.0f, _dpi);
-        PopupButton autoDismissBtn{};
-        autoDismissBtn.bounds   = D2D1::RectF(_footerQueueModeRect.right + footerGap,
-                                              _footerQueueModeRect.top,
-                                              _footerQueueModeRect.right + footerGap + (footerBtnW * 1.7f),
-                                              _footerQueueModeRect.bottom);
-        autoDismissBtn.hit.kind = PopupHitTest::Kind::FooterAutoDismissSuccess;
-        _buttons.push_back(autoDismissBtn);
-
         const bool hasActiveOperations = fileOps ? fileOps->HasActiveOperations() : false;
         const UINT footerActionId = hasActiveOperations ? static_cast<UINT>(IDS_FILEOPS_BTN_CANCEL_ALL) : static_cast<UINT>(IDS_FILEOPS_BTN_CLEAR_COMPLETED);
         const std::wstring cancelAllText = LoadStringResource(nullptr, footerActionId);
@@ -3224,26 +3812,16 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
         const std::wstring modeText = LoadStringResource(nullptr, modeId);
         DrawButton(queueBtn, _buttonFormat.get(), modeText);
 
-        const bool autoDismissSuccess = fileOps ? fileOps->GetAutoDismissSuccess() : false;
-        if (_smallFormat && _textBrush)
+        const GlobalFileOperationsStatusSummary globalSummary = BuildGlobalStatusSummary(snapshot);
+        const std::wstring globalSummaryText                  = FormatGlobalStatusSummaryText(globalSummary);
+        if (_smallFormat && _subTextBrush && _footerSummaryRect.right > _footerSummaryRect.left && _footerSummaryRect.bottom > _footerSummaryRect.top)
         {
-            const float insetX    = DipsToPixels(10.0f, _dpi);
-            const float checkSize = DipsToPixels(12.0f, _dpi);
-            const float checkTop  = autoDismissBtn.bounds.top + (autoDismissBtn.bounds.bottom - autoDismissBtn.bounds.top - checkSize) * 0.5f;
-            const D2D1_RECT_F checkRc =
-                D2D1::RectF(autoDismissBtn.bounds.left + insetX, checkTop, autoDismissBtn.bounds.left + insetX + checkSize, checkTop + checkSize);
-            DrawCheckboxBox(checkRc, autoDismissSuccess);
-
-            const float gapX          = DipsToPixels(8.0f, _dpi);
-            const float labelLeft     = checkRc.right + gapX;
-            const float rightInset    = insetX;
-            const float labelRight    = std::max(labelLeft, autoDismissBtn.bounds.right - rightInset);
-            const D2D1_RECT_F labelRc = D2D1::RectF(labelLeft, autoDismissBtn.bounds.top, labelRight, autoDismissBtn.bounds.bottom);
-
-            const UINT labelId =
-                autoDismissSuccess ? static_cast<UINT>(IDS_FILEOPS_CHECK_AUTODISMISS_ON) : static_cast<UINT>(IDS_FILEOPS_CHECK_AUTODISMISS_OFF);
-            const std::wstring label = LoadStringResource(nullptr, labelId);
-            _target->DrawTextW(label.data(), static_cast<UINT32>(label.size()), _smallFormat.get(), labelRc, _textBrush.get());
+            _target->DrawTextW(globalSummaryText.data(),
+                               static_cast<UINT32>(globalSummaryText.size()),
+                               _smallFormat.get(),
+                               _footerSummaryRect,
+                               _subTextBrush.get(),
+                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
         }
 
         float y = _listViewportRect.top + padding - _scrollY;
@@ -3297,7 +3875,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         {
                             statusText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_STATUS_FAILED, static_cast<unsigned long>(info.resultHr));
                         }
-                        headerText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, info.title, statusText);
+                        headerText = FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, info.title, statusText);
                     }
 
                     const float collapseBtnSize = DipsToPixels(18.0f, _dpi);
@@ -3516,9 +4094,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             {
                                 const std::wstring countsText =
                                     info.changeCasePlannedRenames > 0
-                                        ? FormatStringResource(
+                                        ? FormatEmbeddedStringResource(
                                               nullptr, IDS_FMT_FILEOPS_OP_COUNTS, info.title, info.changeCaseCompletedRenames, info.changeCasePlannedRenames)
-                                        : FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, info.title, info.changeCaseCompletedRenames);
+                                        : FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, info.title, info.changeCaseCompletedRenames);
                                 const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
                                 _target->DrawTextW(countsText.data(),
                                                    static_cast<UINT32>(countsText.size()),
@@ -3561,12 +4139,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             {
                                 const std::wstring countsText =
                                     info.changeAttributesPlannedItems > 0
-                                        ? FormatStringResource(nullptr,
-                                                               IDS_FMT_FILEOPS_OP_COUNTS,
-                                                               info.title,
-                                                               info.changeAttributesCompletedItems,
-                                                               info.changeAttributesPlannedItems)
-                                        : FormatStringResource(
+                                        ? FormatEmbeddedStringResource(nullptr,
+                                                                       IDS_FMT_FILEOPS_OP_COUNTS,
+                                                                       info.title,
+                                                                       info.changeAttributesCompletedItems,
+                                                                       info.changeAttributesPlannedItems)
+                                        : FormatEmbeddedStringResource(
                                               nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, info.title, info.changeAttributesCompletedItems);
                                 const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
                                 _target->DrawTextW(countsText.data(),
@@ -3884,76 +4462,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const std::wstring opText = LoadStringResource(nullptr, opTextId);
                 const ULONGLONG nowTick   = renderTick;
 
-                // Build header text - show calculating status or operation progress
-                std::wstring headerText;
-                if (task.finished)
-                {
-                    const HRESULT partialHr   = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-                    const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-                    std::wstring statusText;
-                    if (SUCCEEDED(task.resultHr))
-                    {
-                        statusText = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_COMPLETED);
-                    }
-                    else if (task.resultHr == cancelledHr || task.resultHr == E_ABORT)
-                    {
-                        statusText = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_CANCELED);
-                    }
-                    else if (task.resultHr == partialHr)
-                    {
-                        statusText = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_PARTIAL);
-                    }
-                    else
-                    {
-                        statusText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_STATUS_FAILED, static_cast<unsigned long>(task.resultHr));
-                    }
-                    headerText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, opText, statusText);
-                }
-                else
-                {
-                    const bool isWaiting = task.queuePaused || task.waitingInQueue;
-                    if (isWaiting)
-                    {
-                        headerText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, opText, LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_WAITING));
-                    }
-                    else if (task.paused)
-                    {
-                        headerText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, opText, LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED));
-                    }
-                    else if (task.preCalcInProgress)
-                    {
-                        // Show "Calculating... (Xs elapsed)"
-                        const uint64_t elapsedSec   = task.preCalcElapsedMs / 1000;
-                        const std::wstring calcText = elapsedSec > 0
-                                                          ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_CALCULATING_TIME, FormatDurationHms(elapsedSec))
-                                                          : LoadStringResource(nullptr, IDS_FILEOPS_CALCULATING);
-                        headerText                  = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, opText, calcText);
-                    }
-                    else
-                    {
-                        const bool hasProgressNumbers = task.completedItems > 0 || task.completedBytes > 0 || task.totalItems > 0 || task.totalBytes > 0;
-                        const bool showPreparing =
-                            ! task.started || ! task.hasProgressCallbacks || (task.operation == FILESYSTEM_DELETE && ! hasProgressNumbers);
-                        if (showPreparing)
-                        {
-                            const ULONGLONG opStartTick = task.operationStartTick;
-                            const uint64_t elapsedSec =
-                                (opStartTick > 0 && nowTick >= opStartTick) ? static_cast<uint64_t>((nowTick - opStartTick) / 1000ull) : 0ull;
-                            const std::wstring prepText = elapsedSec > 0
-                                                              ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_PREPARING_TIME, FormatDurationHms(elapsedSec))
-                                                              : LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
-                            headerText                  = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, opText, prepText);
-                        }
-                        else if (task.totalItems > 0)
-                        {
-                            headerText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS, opText, task.completedItems, task.totalItems);
-                        }
-                        else
-                        {
-                            headerText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, opText, task.completedItems);
-                        }
-                    }
-                }
+                const TaskStatusKind taskStatus = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
+                const std::wstring headerText   = BuildTaskHeaderText(task, opText, nowTick);
 
                 const float collapseBtnSize = DipsToPixels(18.0f, _dpi);
                 const float collapseBtnGap  = DipsToPixels(6.0f, _dpi);
@@ -3976,18 +4486,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
 
                 CaptionStatus statusIcon = CaptionStatus::None;
                 {
-                    const HRESULT partialHr   = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-                    const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-                    if (task.errorCount > 0 ||
-                        (task.finished && FAILED(task.resultHr) && task.resultHr != partialHr && task.resultHr != cancelledHr && task.resultHr != E_ABORT))
+                    if (StatusIsError(taskStatus))
                     {
                         statusIcon = CaptionStatus::Error;
                     }
-                    else if (task.warningCount > 0 || (task.finished && task.resultHr == partialHr))
+                    else if (StatusIsWarning(taskStatus))
                     {
                         statusIcon = CaptionStatus::Warning;
                     }
-                    else if (task.finished && SUCCEEDED(task.resultHr))
+                    else if (StatusIsOk(taskStatus))
                     {
                         statusIcon = CaptionStatus::Ok;
                     }
@@ -4159,29 +4666,25 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     {
                         const float btnGap = DipsToPixels(6.0f, _dpi);
                         const float totalW = std::max(0.0f, contentRight - textX);
-                        const float btnW   = std::max(0.0f, (totalW - btnGap * 2.0f) / 3.0f);
-
-                        PopupButton showLogBtn{};
-                        showLogBtn.bounds     = D2D1::RectF(textX, dismissButtonTop, textX + btnW, dismissButtonTop + dismissButtonH);
-                        showLogBtn.hit.kind   = PopupHitTest::Kind::TaskShowLog;
-                        showLogBtn.hit.taskId = task.taskId;
-                        _buttons.push_back(showLogBtn);
-                        DrawButton(showLogBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOP_BTN_SHOW_LOG));
-
-                        PopupButton exportIssuesBtn{};
-                        exportIssuesBtn.bounds =
-                            D2D1::RectF(textX + btnW + btnGap, dismissButtonTop, textX + btnW * 2.0f + btnGap, dismissButtonTop + dismissButtonH);
-                        exportIssuesBtn.hit.kind   = PopupHitTest::Kind::TaskExportIssues;
-                        exportIssuesBtn.hit.taskId = task.taskId;
-                        _buttons.push_back(exportIssuesBtn);
-                        DrawButton(exportIssuesBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOP_BTN_EXPORT_ISSUES));
+                        const float preferredMoreW = DipsToPixels(96.0f, _dpi);
+                        const float moreW          = totalW > DipsToPixels(180.0f, _dpi) ? std::min(preferredMoreW, std::max(0.0f, totalW * 0.35f))
+                                                                                          : std::max(0.0f, (totalW - btnGap) * 0.5f);
+                        const float dismissW       = std::max(0.0f, totalW - btnGap - moreW);
 
                         PopupButton dismissBtn{};
-                        dismissBtn.bounds = D2D1::RectF(textX + btnW * 2.0f + btnGap * 2.0f, dismissButtonTop, contentRight, dismissButtonTop + dismissButtonH);
+                        dismissBtn.bounds     = D2D1::RectF(textX, dismissButtonTop, textX + dismissW, dismissButtonTop + dismissButtonH);
                         dismissBtn.hit.kind   = PopupHitTest::Kind::TaskDismiss;
                         dismissBtn.hit.taskId = task.taskId;
                         _buttons.push_back(dismissBtn);
                         DrawButton(dismissBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS));
+
+                        PopupButton moreBtn{};
+                        moreBtn.bounds     = D2D1::RectF(textX + dismissW + btnGap, dismissButtonTop, contentRight, dismissButtonTop + dismissButtonH);
+                        moreBtn.hit.kind   = PopupHitTest::Kind::TaskCompletedMore;
+                        moreBtn.hit.taskId = task.taskId;
+                        moreBtn.hit.data   = 2u;
+                        _buttons.push_back(moreBtn);
+                        DrawMenuButton(moreBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE));
                     }
                     else
                     {
@@ -4250,8 +4753,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         const bool showSizeProgress = task.preCalcCompleted && task.preCalcTotalBytes > 0 && task.completedBytes > 0;
                         if (showSizeProgress)
                         {
-                            const std::wstring sizeProgressText = FormatStringResource(
-                                nullptr, IDS_FMT_FILEOPS_SIZE_PROGRESS, FormatBytesCompact(task.completedBytes), FormatBytesCompact(task.preCalcTotalBytes));
+                            const std::wstring sizeProgressText = FormatEmbeddedStringResource(
+                                nullptr,
+                                IDS_FMT_FILEOPS_SIZE_PROGRESS,
+                                FormatBytesCompact(task.completedBytes),
+                                FormatBytesCompact(task.preCalcTotalBytes));
                             const D2D1_RECT_F sizeRc = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                             _target->DrawTextW(
                                 sizeProgressText.data(), static_cast<UINT32>(sizeProgressText.size()), _bodyFormat.get(), sizeRc, _subTextBrush.get());
@@ -4302,7 +4808,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     // Show size progress (transferred / total) if we have data
                     if (task.totalBytes > 0)
                     {
-                        const std::wstring sizeProgressText = FormatStringResource(
+                        const std::wstring sizeProgressText = FormatEmbeddedStringResource(
                             nullptr, IDS_FMT_FILEOPS_SIZE_PROGRESS, FormatBytesCompact(task.completedBytes), FormatBytesCompact(task.totalBytes));
                         const D2D1_RECT_F sizeRc = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                         _target->DrawTextW(
@@ -4526,6 +5032,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const float barGapY   = DipsToPixels(4.0f, _dpi);
 
                 const bool hasConflictPrompt = task.conflict.active;
+                const ConflictActionLayout conflictActionLayout = hasConflictPrompt ? BuildConflictActionLayout(task.conflict) : ConflictActionLayout{};
 
                 const float barsHeight    = task.operation == FILESYSTEM_DELETE ? barHItem : (barHItem + barGapY + barHTotal);
                 const float bottomPadding = DipsToPixels(10.0f, _dpi);
@@ -4533,7 +5040,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const float buttonH       = DipsToPixels(24.0f, _dpi);
 
                 const float conflictRowGapY = DipsToPixels(6.0f, _dpi);
-                const int conflictRows      = hasConflictPrompt ? ((task.conflict.actionCount > 3u) ? 2 : 1) : 1;
+                const int conflictRows      = 1;
                 const float conflictButtonsHeight =
                     buttonH * static_cast<float>(conflictRows) + conflictRowGapY * static_cast<float>(std::max(0, conflictRows - 1));
                 const float conflictApplyLineHeight = hasConflictPrompt ? (lineH + conflictRowGapY) : 0.0f;
@@ -4656,26 +5163,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             }
                             const RateHistory empty{};
                             const RateHistory& graphHistory = history ? *history : empty;
-                            std::wstring overlayText;
                             bool showAnimation = false;
-                            if (task.paused)
-                            {
-                                overlayText = LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
-                            }
-                            else if (task.queuePaused || task.waitingInQueue)
-                            {
-                                overlayText = LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_WAITING);
-                            }
-                            else if (task.preCalcInProgress)
-                            {
-                                overlayText   = LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_CALCULATING);
-                                showAnimation = true;
-                            }
-                            else if (! task.started || ! task.hasProgressCallbacks)
-                            {
-                                overlayText   = LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
-                                showAnimation = true;
-                            }
+                            const std::wstring overlayText = GraphOverlayTextForStatus(task, taskStatus, showAnimation);
                             const bool rainbowMode = folderWindow && folderWindow->GetTheme().menu.rainbowMode;
                             DrawBandwidthGraph(graphRc, graphHistory, limit, overlayText, showAnimation, rainbowMode, nowTick);
                         }
@@ -4698,33 +5187,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         {
                             const RateHistory empty{};
                             const RateHistory& graphHistory = history ? *history : empty;
-                            std::wstring overlayText;
                             bool showAnimation = false;
-                            if (task.paused)
-                            {
-                                overlayText = LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_PAUSED);
-                            }
-                            else if (task.queuePaused || task.waitingInQueue)
-                            {
-                                overlayText = LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_WAITING);
-                            }
-                            else if (task.preCalcInProgress)
-                            {
-                                overlayText   = LoadStringResource(nullptr, IDS_FILEOPS_GRAPH_CALCULATING);
-                                showAnimation = true;
-                            }
-                            else
-                            {
-                                const bool hasProgressNumbers =
-                                    task.completedItems > 0 || task.completedBytes > 0 || task.totalItems > 0 || task.totalBytes > 0;
-                                const bool showPreparing =
-                                    ! task.started || ! task.hasProgressCallbacks || (task.operation == FILESYSTEM_DELETE && ! hasProgressNumbers);
-                                if (showPreparing)
-                                {
-                                    overlayText   = LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
-                                    showAnimation = true;
-                                }
-                            }
+                            const std::wstring overlayText = GraphOverlayTextForStatus(task, taskStatus, showAnimation);
                             const bool rainbowMode = folderWindow && folderWindow->GetTheme().menu.rainbowMode;
                             DrawBandwidthGraph(graphRc, graphHistory, 0, overlayText, showAnimation, rainbowMode, nowTick);
                         }
@@ -4871,7 +5335,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             const D2D1_RECT_F checkRc = D2D1::RectF(textX, checkTop, textX + checkSize, checkTop + checkSize);
                             DrawCheckboxBox(checkRc, task.conflict.applyToAllChecked);
 
-                            const std::wstring applyText = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL);
+                            const std::wstring applyText = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SHORT);
                             const float labelLeft        = textX + checkSize + DipsToPixels(8.0f, _dpi);
                             const D2D1_RECT_F labelRc    = D2D1::RectF(labelLeft, applyTop, contentRight, applyBottom);
 
@@ -4889,71 +5353,42 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             applyBtn.hit.taskId = task.taskId;
                             _buttons.push_back(applyBtn);
 
-                            const auto conflictActionText = [&](FolderWindow::FileOperationState::Task::ConflictAction action) noexcept -> std::wstring
+                            const float rowY       = buttonsTop;
+                            const float rowYBottom = rowY + buttonH;
+                            const size_t visibleActionButtons =
+                                conflictActionLayout.primaryCount + (conflictActionLayout.overflowCount > 0u ? 1u : 0u);
+                            if (visibleActionButtons > 0u)
                             {
-                                switch (action)
-                                {
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::Overwrite:
-                                        return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_OVERWRITE);
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::ReplaceReadOnly:
-                                        return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_REPLACE_READONLY);
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::PermanentDelete:
-                                        return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_PERMANENT_DELETE);
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::Retry:
-                                        return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_RETRY);
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::Skip:
-                                        return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP);
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::SkipAll:
-                                        return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_SKIP_ALL);
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::Cancel:
-                                        return LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL);
-                                    case FolderWindow::FileOperationState::Task::ConflictAction::None:
-                                    default: break;
-                                }
-                                return LoadStringResource(nullptr, IDS_FILEOP_BTN_CANCEL);
-                            };
-
-                            constexpr size_t kMaxPerRow = 3u;
-                            size_t actionIndex          = 0;
-                            const size_t totalActions   = task.conflict.actionCount;
-
-                            for (int row = 0; row < conflictRows; ++row)
-                            {
-                                if (actionIndex >= totalActions)
-                                {
-                                    break;
-                                }
-
-                                const float rowY       = buttonsTop + static_cast<float>(row) * (buttonH + conflictRowGapY);
-                                const float rowYBottom = rowY + buttonH;
-
-                                const size_t remaining   = totalActions - actionIndex;
-                                const size_t buttonCount = std::min(kMaxPerRow, remaining);
-                                if (buttonCount == 0)
-                                {
-                                    break;
-                                }
-
-                                const float totalGapX = btnGapX * static_cast<float>(buttonCount - 1u);
-                                const float btnW      = std::max(0.0f, (rowW - totalGapX) / static_cast<float>(buttonCount));
+                                const float totalGapX = btnGapX * static_cast<float>(visibleActionButtons - 1u);
+                                const float btnW      = std::max(0.0f, (rowW - totalGapX) / static_cast<float>(visibleActionButtons));
 
                                 float xBtn = textX;
-                                for (size_t i = 0; i < buttonCount; ++i)
+                                for (size_t i = 0; i < conflictActionLayout.primaryCount && i < conflictActionLayout.primary.size(); ++i)
                                 {
-                                    const uint8_t rawAction  = task.conflict.actions[actionIndex];
-                                    const auto action        = static_cast<FolderWindow::FileOperationState::Task::ConflictAction>(rawAction);
-                                    const std::wstring label = conflictActionText(action);
+                                    const ConflictAction action = conflictActionLayout.primary[i];
+                                    const std::wstring label   = ConflictActionText(action);
 
                                     PopupButton btn{};
                                     btn.bounds     = D2D1::RectF(xBtn, rowY, xBtn + btnW, rowYBottom);
                                     btn.hit.kind   = PopupHitTest::Kind::TaskConflictAction;
                                     btn.hit.taskId = task.taskId;
-                                    btn.hit.data   = static_cast<uint32_t>(rawAction);
+                                    btn.hit.data   = static_cast<uint32_t>(RawConflictAction(action));
                                     _buttons.push_back(btn);
                                     DrawButton(btn, _buttonSmallFormat.get(), label);
 
                                     xBtn += btnW + btnGapX;
-                                    ++actionIndex;
+                                }
+
+                                if (conflictActionLayout.overflowCount > 0u)
+                                {
+                                    PopupButton moreBtn{};
+                                    moreBtn.bounds     = D2D1::RectF(xBtn, rowY, xBtn + btnW, rowYBottom);
+                                    moreBtn.hit.kind   = PopupHitTest::Kind::TaskConflictMore;
+                                    moreBtn.hit.taskId = task.taskId;
+                                    moreBtn.hit.data   = static_cast<uint32_t>(
+                                        std::min<size_t>(conflictActionLayout.overflowCount, std::numeric_limits<uint32_t>::max()));
+                                    _buttons.push_back(moreBtn);
+                                    DrawMenuButton(moreBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_MORE));
                                 }
                             }
                         }
@@ -5119,27 +5554,19 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateLastPopupRect(
 
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateCaptionStatus(HWND hwnd, const std::vector<TaskSnapshot>& snapshot) noexcept
 {
-    const HRESULT partialHr   = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-    const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-
     CaptionStatus computed = snapshot.empty() ? CaptionStatus::None : CaptionStatus::Ok;
 
     bool sawWarning = false;
     for (const TaskSnapshot& task : snapshot)
     {
-        if (task.errorCount > 0)
+        const TaskStatusKind status = task.statusKind != TaskStatusKind::None ? task.statusKind : ResolveTaskStatusKind(task);
+        if (StatusIsError(status))
         {
             computed = CaptionStatus::Error;
             break;
         }
 
-        if (task.finished && FAILED(task.resultHr) && task.resultHr != partialHr && task.resultHr != cancelledHr && task.resultHr != E_ABORT)
-        {
-            computed = CaptionStatus::Error;
-            break;
-        }
-
-        if (task.warningCount > 0 || (task.finished && task.resultHr == partialHr))
+        if (StatusIsWarning(status))
         {
             sawWarning = true;
         }
@@ -5339,6 +5766,61 @@ PopupHitTest FileOperationsPopupInternal::FileOperationsPopupState::HitTest(floa
     return {};
 }
 
+std::optional<FileOperationsPopupInternal::PopupMenuAnchor> FileOperationsPopupInternal::FileOperationsPopupState::ResolveButtonMenuAnchor(
+    HWND hwnd, const PopupHitTest& hit, RedSalamander::DxUi::ContextMenuRootVerticalPlacement placement) const noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return std::nullopt;
+    }
+
+    const PopupButton* match = nullptr;
+    for (auto it = _buttons.rbegin(); it != _buttons.rend(); ++it)
+    {
+        const PopupButton& button = *it;
+        if (button.hit.kind != hit.kind || button.hit.taskId != hit.taskId || button.hit.data != hit.data)
+        {
+            continue;
+        }
+
+        if (button.bounds.right <= button.bounds.left || button.bounds.bottom <= button.bounds.top)
+        {
+            continue;
+        }
+
+        match = &button;
+        break;
+    }
+
+    if (! match)
+    {
+        return std::nullopt;
+    }
+
+    RECT client{};
+    static_cast<void>(GetClientRect(hwnd, &client));
+    const float clientMidX = static_cast<float>(client.right - client.left) * 0.5f;
+    const float buttonMidX = (match->bounds.left + match->bounds.right) * 0.5f;
+    const bool alignEnd    = buttonMidX >= clientMidX;
+
+    POINT anchor{
+        static_cast<LONG>(std::lround(alignEnd ? match->bounds.right : match->bounds.left)),
+        static_cast<LONG>(std::lround(placement == RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above ? match->bounds.top
+                                                                                                                 : match->bounds.bottom)),
+    };
+    if (ClientToScreen(hwnd, &anchor) == FALSE)
+    {
+        return std::nullopt;
+    }
+
+    PopupMenuAnchor result{};
+    result.screenPoint = anchor;
+    result.sessionCallbacks.rootHorizontalAlignment =
+        alignEnd ? RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End : RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::Start;
+    result.sessionCallbacks.rootVerticalPlacement = placement;
+    return result;
+}
+
 void FileOperationsPopupInternal::FileOperationsPopupState::Invalidate(HWND hwnd) const noexcept
 {
     if (hwnd)
@@ -5466,8 +5948,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     customItem.commandId = static_cast<int>(kCmdCustom);
     items.push_back(std::move(customItem));
 
-    const POINT pt = ResolveOwnerCenterScreenPoint(hwnd);
-    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()));
+    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor = ResolveButtonMenuAnchor(
+        hwnd, PopupHitTest{PopupHitTest::Kind::TaskSpeedLimit, taskId, 0u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Below);
+    const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
+    if (anchor.has_value())
+    {
+        sessionCallbacks = anchor->sessionCallbacks;
+    }
+    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
     if (! chosenOpt.has_value())
     {
         return;
@@ -5665,8 +6154,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
         items.push_back(std::move(item));
     }
 
-    const POINT pt = ResolveOwnerCenterScreenPoint(hwnd);
-    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()));
+    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor = ResolveButtonMenuAnchor(
+        hwnd, PopupHitTest{PopupHitTest::Kind::TaskDestination, taskId, 0u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Below);
+    const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
+    if (anchor.has_value())
+    {
+        sessionCallbacks = anchor->sessionCallbacks;
+    }
+    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
     if (! chosenOpt.has_value())
     {
         return;
@@ -5686,6 +6182,227 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
     {
         const size_t index = static_cast<size_t>(chosen - kCmdHistoryBase);
         task->SetDestinationFolder(entries[index].folder);
+    }
+}
+
+bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitCompletedOverflowAction(
+    HWND hwnd, uint64_t taskId, uint32_t action, bool openExportAfterWrite) noexcept
+{
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    constexpr uint32_t kActionShowLog      = 1u;
+    constexpr uint32_t kActionExportIssues = 2u;
+
+    bool handled = false;
+    if (action == kActionShowLog)
+    {
+        handled = fileOps->OpenDiagnosticsLogForTask(taskId);
+    }
+    else if (action == kActionExportIssues)
+    {
+        handled = fileOps->ExportTaskIssuesReport(taskId, nullptr, openExportAfterWrite);
+    }
+
+    if (handled)
+    {
+        Invalidate(hwnd);
+    }
+    return handled;
+}
+
+void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflowMenu(HWND hwnd, uint64_t taskId) noexcept
+{
+    if (! hwnd || ! fileOps || ! folderWindow)
+    {
+        return;
+    }
+
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
+    const std::vector<TaskSnapshot> snapshot = BuildSnapshot();
+    const auto taskIt = std::find_if(snapshot.begin(), snapshot.end(), [taskId](const TaskSnapshot& task) noexcept {
+        return task.kind == TaskSnapshot::Kind::FileOperation && task.taskId == taskId && task.finished;
+    });
+    if (taskIt == snapshot.end() || (taskIt->warningCount == 0 && taskIt->errorCount == 0))
+    {
+        return;
+    }
+
+    constexpr UINT kCmdShowLog      = 1u;
+    constexpr UINT kCmdExportIssues = 2u;
+
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    items.reserve(2u);
+
+    RedSalamander::DxUi::MenuFlyoutItem showLogItem{};
+    showLogItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_SHOW_LOG);
+    showLogItem.commandId = static_cast<int>(kCmdShowLog);
+    items.push_back(std::move(showLogItem));
+
+    RedSalamander::DxUi::MenuFlyoutItem exportIssuesItem{};
+    exportIssuesItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_EXPORT_ISSUES);
+    exportIssuesItem.commandId = static_cast<int>(kCmdExportIssues);
+    items.push_back(std::move(exportIssuesItem));
+
+    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor = ResolveButtonMenuAnchor(
+        hwnd, PopupHitTest{PopupHitTest::Kind::TaskCompletedMore, taskId, 2u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above);
+    const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
+    if (anchor.has_value())
+    {
+        sessionCallbacks = anchor->sessionCallbacks;
+    }
+    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
+    if (! chosenOpt.has_value())
+    {
+        return;
+    }
+
+    const UINT chosen = static_cast<UINT>(chosenOpt.value());
+    if (chosen == kCmdShowLog || chosen == kCmdExportIssues)
+    {
+        static_cast<void>(SubmitCompletedOverflowAction(hwnd, taskId, chosen, true));
+    }
+}
+
+bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitConflictOverflowAction(HWND hwnd, uint64_t taskId, uint32_t rawAction) noexcept
+{
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    FolderWindow::FileOperationState::Task* task = fileOps->FindTask(taskId);
+    if (! task)
+    {
+        return false;
+    }
+
+    TaskSnapshot::ConflictPromptSnapshot conflict{};
+    bool applyToAll = false;
+    {
+        std::scoped_lock lock(task->_conflictMutex);
+        if (! task->_conflictPrompt.active)
+        {
+            return false;
+        }
+
+        conflict.active            = true;
+        conflict.bucket            = static_cast<uint8_t>(task->_conflictPrompt.bucket);
+        conflict.status            = task->_conflictPrompt.status;
+        conflict.sourcePath        = task->_conflictPrompt.sourcePath;
+        conflict.destinationPath   = task->_conflictPrompt.destinationPath;
+        conflict.actionCount       = std::min(task->_conflictPrompt.actionCount, conflict.actions.size());
+        conflict.applyToAllChecked = task->_conflictPrompt.applyToAllChecked;
+        conflict.retryFailed       = task->_conflictPrompt.retryFailed;
+        for (size_t i = 0; i < conflict.actionCount; ++i)
+        {
+            conflict.actions[i] = RawConflictAction(task->_conflictPrompt.actions[i]);
+        }
+        applyToAll = task->_conflictPrompt.applyToAllChecked;
+    }
+
+    const ConflictAction requestedAction = static_cast<ConflictAction>(rawAction);
+    const ConflictActionLayout layout    = BuildConflictActionLayout(conflict);
+    if (! ConflictLayoutContains(layout.overflow, layout.overflowCount, requestedAction))
+    {
+        return false;
+    }
+
+    task->SubmitConflictDecision(requestedAction, applyToAll);
+    Invalidate(hwnd);
+    return true;
+}
+
+void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflowMenu(HWND hwnd, uint64_t taskId) noexcept
+{
+    if (! hwnd || ! fileOps || ! folderWindow)
+    {
+        return;
+    }
+
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
+    FolderWindow::FileOperationState::Task* task = fileOps->FindTask(taskId);
+    if (! task)
+    {
+        return;
+    }
+
+    TaskSnapshot::ConflictPromptSnapshot conflict{};
+    {
+        std::scoped_lock lock(task->_conflictMutex);
+        if (! task->_conflictPrompt.active)
+        {
+            return;
+        }
+
+        conflict.active            = true;
+        conflict.bucket            = static_cast<uint8_t>(task->_conflictPrompt.bucket);
+        conflict.status            = task->_conflictPrompt.status;
+        conflict.sourcePath        = task->_conflictPrompt.sourcePath;
+        conflict.destinationPath   = task->_conflictPrompt.destinationPath;
+        conflict.actionCount       = std::min(task->_conflictPrompt.actionCount, conflict.actions.size());
+        conflict.applyToAllChecked = task->_conflictPrompt.applyToAllChecked;
+        conflict.retryFailed       = task->_conflictPrompt.retryFailed;
+        for (size_t i = 0; i < conflict.actionCount; ++i)
+        {
+            conflict.actions[i] = RawConflictAction(task->_conflictPrompt.actions[i]);
+        }
+    }
+
+    const ConflictActionLayout layout = BuildConflictActionLayout(conflict);
+    if (layout.overflowCount == 0u)
+    {
+        return;
+    }
+
+    constexpr UINT kCmdOverflowBase = 1u;
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    items.reserve(std::min(layout.overflowCount, layout.overflow.size()));
+    for (size_t i = 0; i < layout.overflowCount && i < layout.overflow.size(); ++i)
+    {
+        RedSalamander::DxUi::MenuFlyoutItem item{};
+        item.text      = ConflictActionText(layout.overflow[i]);
+        item.commandId = static_cast<int>(kCmdOverflowBase + static_cast<UINT>(i));
+        items.push_back(std::move(item));
+    }
+
+    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const uint32_t overflowData =
+        static_cast<uint32_t>(std::min<size_t>(layout.overflowCount, std::numeric_limits<uint32_t>::max()));
+    const auto anchor = ResolveButtonMenuAnchor(
+        hwnd, PopupHitTest{PopupHitTest::Kind::TaskConflictMore, taskId, overflowData}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Below);
+    const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
+    if (anchor.has_value())
+    {
+        sessionCallbacks = anchor->sessionCallbacks;
+    }
+    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
+    if (! chosenOpt.has_value())
+    {
+        return;
+    }
+
+    const UINT chosen = static_cast<UINT>(chosenOpt.value());
+    if (chosen < kCmdOverflowBase || chosen >= kCmdOverflowBase + static_cast<UINT>(items.size()))
+    {
+        return;
+    }
+
+    const size_t index = static_cast<size_t>(chosen - kCmdOverflowBase);
+    if (index < layout.overflowCount && index < layout.overflow.size())
+    {
+        static_cast<void>(SubmitConflictOverflowAction(hwnd, taskId, static_cast<uint32_t>(RawConflictAction(layout.overflow[index]))));
     }
 }
 
@@ -6097,6 +6814,13 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
         return 0;
     }
 
+    if (hit.kind == PopupHitTest::Kind::TaskCompletedMore)
+    {
+        ShowCompletedOverflowMenu(hwnd, hit.taskId);
+        Invalidate(hwnd);
+        return 0;
+    }
+
     if (hit.kind == PopupHitTest::Kind::TaskShowLog)
     {
         if (fileOps)
@@ -6159,6 +6883,13 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
         return 0;
     }
 
+    if (hit.kind == PopupHitTest::Kind::TaskConflictMore)
+    {
+        ShowConflictOverflowMenu(hwnd, hit.taskId);
+        Invalidate(hwnd);
+        return 0;
+    }
+
     if (hit.kind == PopupHitTest::Kind::TaskConflictAction)
     {
         if (fileOps)
@@ -6201,6 +6932,16 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
     {
         // Let self-test callers advance their state before the modal prompt loop starts.
         return PostMessageW(hwnd, kFileOperationsPopupDeferredSpeedLimitPromptMessage, 0, static_cast<LPARAM>(payload->taskId)) != FALSE ? 1 : 0;
+    }
+
+    if (payload->kind == PopupHitTest::Kind::TaskConflictMore && payload->data != 0u)
+    {
+        return SubmitConflictOverflowAction(hwnd, payload->taskId, payload->data) ? 1 : 0;
+    }
+
+    if (payload->kind == PopupHitTest::Kind::TaskCompletedMore && payload->data != 0u)
+    {
+        return SubmitCompletedOverflowAction(hwnd, payload->taskId, payload->data, false) ? 1 : 0;
     }
 
     return OnActivatedHit(hwnd, PopupHitTest{payload->kind, payload->taskId, payload->data});
@@ -6251,6 +6992,161 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnCaptionGlyphSna
     snapshot->usesDirectWriteGlyphRendering = true;
     snapshot->usesGdiTextFallback           = false;
     return 1;
+}
+
+LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotRequest(PopupLayoutDebugSnapshot* snapshot) const noexcept
+{
+    if (! snapshot)
+    {
+        return 0;
+    }
+
+    PopupLayoutDebugSnapshot result{};
+    result.taskId = snapshot->taskId;
+
+    const std::vector<TaskSnapshot> taskSnapshot = BuildSnapshot();
+    const GlobalFileOperationsStatusSummary globalSummary = BuildGlobalStatusSummary(taskSnapshot);
+    result.globalRunningCount                            = globalSummary.running;
+    result.globalWaitingCount                            = globalSummary.waiting;
+    result.globalNeedAttentionCount                      = globalSummary.needAttention;
+    result.globalSummaryText                             = FormatGlobalStatusSummaryText(globalSummary);
+    result.globalSummaryVisible                          = ! taskSnapshot.empty();
+
+    auto taskIt = result.taskId == 0
+                      ? std::find_if(taskSnapshot.begin(),
+                                     taskSnapshot.end(),
+                                     [](const TaskSnapshot& task) noexcept { return task.kind == TaskSnapshot::Kind::FileOperation && ! task.finished; })
+                      : std::find_if(taskSnapshot.begin(), taskSnapshot.end(), [&result](const TaskSnapshot& task) noexcept {
+        return task.kind == TaskSnapshot::Kind::FileOperation && task.taskId == result.taskId;
+    });
+    if (result.taskId == 0 && taskIt == taskSnapshot.end())
+    {
+        taskIt = std::find_if(taskSnapshot.begin(), taskSnapshot.end(), [](const TaskSnapshot& task) noexcept {
+            return task.kind == TaskSnapshot::Kind::FileOperation;
+        });
+    }
+    if (taskIt != taskSnapshot.end())
+    {
+        result.taskId = taskIt->taskId;
+        result.found  = true;
+        const TaskStatusKind status = taskIt->statusKind != TaskStatusKind::None ? taskIt->statusKind : ResolveTaskStatusKind(*taskIt);
+        result.taskStatusKind             = status;
+        result.taskStatusActiveStateCount = SurfacedTaskStatusCount(status);
+
+        const ConflictActionLayout conflictLayout = BuildConflictActionLayout(taskIt->conflict);
+        result.conflictOverflowActionCount        = conflictLayout.overflowCount;
+        for (size_t i = 0; i < conflictLayout.overflowCount && i < conflictLayout.overflow.size() && i < result.conflictOverflowActions.size(); ++i)
+        {
+            result.conflictOverflowActions[i] = RawConflictAction(conflictLayout.overflow[i]);
+        }
+    }
+
+    const auto appendPrimaryAction = [&](uint8_t rawAction) noexcept
+    {
+        if (result.conflictPrimaryActionCount < result.conflictPrimaryActions.size())
+        {
+            result.conflictPrimaryActions[result.conflictPrimaryActionCount] = rawAction;
+        }
+        ++result.conflictPrimaryActionCount;
+    };
+
+    const auto rectHasArea = [](const D2D1_RECT_F& rc) noexcept
+    { return rc.right > rc.left && rc.bottom > rc.top; };
+
+    const auto rectsOverlap = [&](const D2D1_RECT_F& lhs, const D2D1_RECT_F& rhs) noexcept
+    {
+        if (! rectHasArea(lhs) || ! rectHasArea(rhs))
+        {
+            return false;
+        }
+
+        return lhs.left < rhs.right && rhs.left < lhs.right && lhs.top < rhs.bottom && rhs.top < lhs.bottom;
+    };
+
+    result.visibleButtonCount = _buttons.size();
+    for (size_t i = 0; i < _buttons.size(); ++i)
+    {
+        const PopupButton& button = _buttons[i];
+        switch (button.hit.kind)
+        {
+            case PopupHitTest::Kind::FooterCancelAll:
+            case PopupHitTest::Kind::FooterQueueMode:
+                ++result.footerVisibleButtonCount;
+                break;
+            case PopupHitTest::Kind::FooterAutoDismissSuccess:
+                result.footerAutoDismissVisible = true;
+                ++result.footerVisibleButtonCount;
+                break;
+            case PopupHitTest::Kind::TaskConflictToggleApplyToAll:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.conflictApplyToAllVisible = true;
+                }
+                break;
+            case PopupHitTest::Kind::TaskConflictAction:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    appendPrimaryAction(static_cast<uint8_t>(button.hit.data));
+                }
+                break;
+            case PopupHitTest::Kind::TaskConflictMore:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.conflictMoreVisible = true;
+                }
+                break;
+            case PopupHitTest::Kind::TaskShowLog:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.completedShowLogVisible = true;
+                    ++result.completedVisibleActionCount;
+                }
+                break;
+            case PopupHitTest::Kind::TaskExportIssues:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.completedExportIssuesVisible = true;
+                    ++result.completedVisibleActionCount;
+                }
+                break;
+            case PopupHitTest::Kind::TaskCompletedMore:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.completedDiagnosticsMoreVisible = true;
+                    result.completedDiagnosticsMoreButtonRectVisible = true;
+                    result.completedDiagnosticsMoreButtonRect        = button.bounds;
+                    ++result.completedVisibleActionCount;
+                }
+                break;
+            case PopupHitTest::Kind::TaskDismiss:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.completedDismissVisible = true;
+                    ++result.completedVisibleActionCount;
+                }
+                break;
+            case PopupHitTest::Kind::None:
+            case PopupHitTest::Kind::TaskToggleCollapse:
+            case PopupHitTest::Kind::TaskPause:
+            case PopupHitTest::Kind::TaskCancel:
+            case PopupHitTest::Kind::TaskSkip:
+            case PopupHitTest::Kind::TaskDestination:
+            case PopupHitTest::Kind::TaskSpeedLimit:
+            default:
+                break;
+        }
+
+        for (size_t j = i + 1u; j < _buttons.size(); ++j)
+        {
+            if (rectsOverlap(button.bounds, _buttons[j].bounds))
+            {
+                result.hasVisibleButtonOverlap = true;
+            }
+        }
+    }
+
+    *snapshot = result;
+    return result.found ? 1 : 0;
 }
 #endif
 
@@ -6380,6 +7276,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
         case WndMsg::kFileOpsPopupSelfTestInvoke: return OnSelfTestInvoke(hwnd, reinterpret_cast<const PopupSelfTestInvoke*>(lp));
         case WndMsg::kFileOpsPopupSelfTestSnapshot: return OnTaskSnapshotRequest(reinterpret_cast<const PopupTaskSnapshotRequest*>(lp));
         case WndMsg::kFileOpsPopupCaptionGlyphSnapshot: return OnCaptionGlyphSnapshotRequest(reinterpret_cast<CaptionGlyphDebugSnapshot*>(lp));
+        case WndMsg::kFileOpsPopupLayoutSnapshot: return OnLayoutSnapshotRequest(reinterpret_cast<PopupLayoutDebugSnapshot*>(lp));
 #endif
     }
 
@@ -6652,6 +7549,52 @@ bool DebugGetFileOperationsPopupCaptionGlyphSnapshot(HWND popup, FileOperationsP
         out = snapshot;
     }
     return ok;
+}
+
+bool DebugGetFileOperationsPopupLayoutSnapshot(HWND popup, FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept
+{
+    if (! popup || IsWindow(popup) == FALSE)
+    {
+        return false;
+    }
+
+    RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_NOCHILDREN);
+
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot snapshot{};
+    snapshot.taskId = out.taskId;
+    const bool ok   = SendMessageW(popup, WndMsg::kFileOpsPopupLayoutSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE;
+    if (ok && snapshot.found)
+    {
+        out = snapshot;
+    }
+    return ok && snapshot.found;
+}
+
+bool DebugBuildFileOperationsGraphFairColorWeightSnapshot(FileOperationsPopupInternal::GraphHueWeightDebugSnapshot& out) noexcept
+{
+    out = {};
+
+    RateHistory history{};
+    AddPendingHueWeight(history, 10.0f, 100.0);
+    AddPendingHueWeight(history, 100.0f, 100.0);
+    AddPendingHueWeight(history, 190.0f, 100.0);
+    AddPendingHueWeight(history, 280.0f, 100.0);
+    AppendResampledRateSamples(history, kRateSampleBucketMs, 400.0, -1.0f);
+
+    if (history.count == 0u)
+    {
+        return false;
+    }
+
+    const size_t sampleIndex = (history.writeIndex + RateHistory::kMaxSamples - 1u) % RateHistory::kMaxSamples;
+    out.hueCount             = std::min<size_t>(history.hueWeightCounts[sampleIndex], out.hues.size());
+    for (size_t i = 0; i < out.hueCount; ++i)
+    {
+        out.hues[i]     = history.hueWeights[sampleIndex][i].hue;
+        out.weights[i]  = history.hueWeights[sampleIndex][i].weight;
+        out.totalWeight += out.weights[i];
+    }
+    return true;
 }
 
 float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept

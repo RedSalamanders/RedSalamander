@@ -4,7 +4,7 @@
 
 **Goal:** Replace duplicated live-cursor-based pointer decisions with one delivered-message input router and remove every production `GetCursorPos()` dependency from the source tree.
 
-**Architecture:** A shared DxUi pointer input layer builds immutable routed events from delivered Win32 messages: target HWND, delivered client/screen points, message id, message time/order, capture/menu owner, and component generation tokens. Production routing, menu anchoring, hover, hit testing, popup open/close, root switching, viewer context menus, and placement logic consume only delivered events or explicit owner/control anchors. `GetCursorPos()` is diagnostic/selftest evidence only and must not affect production behavior anywhere under `Common`, `RedSalamander`, or `Plugins`.
+**Architecture:** A shared DxUi pointer input layer builds immutable routed events from delivered Win32 messages: target HWND, delivered client/screen points, message id, message time/order, and capture/menu owner. Production routing, menu anchoring, hover, hit testing, popup open/close, root switching, viewer context menus, and placement logic consume only delivered events or explicit owner/control anchors. `GetCursorPos()` is diagnostic/selftest evidence only and must not affect production behavior anywhere under `Common`, `RedSalamander`, or `Plugins`.
 
 **Tech Stack:** C++23, Win32 messages, Direct2D/DxUi controls, `DxUiTests`, RedSalamander command selftests, PowerShell source guard.
 
@@ -15,6 +15,10 @@
 **Status:** Complete
 **Date:** 2026-06-04
 **Scope:** Whole production tree for this rule: `Common`, `RedSalamander`, and `Plugins`. Tests/selftests may use `GetCursorPos()` for deterministic setup/evidence. Production code may contain `GetCursorPos()` only on a same-line diagnostic-only annotation and only when the value is logged, never routed from.
+
+## Post-Closeout Correction - 2026-06-06
+
+The NavigationView-specific `DxUi::InputGeneration` token described in the original implementation notes below is no longer the shipped contract. The final router contract is the authoritative one in `Specs/UI/UI_NavigationView.md`: delivered target HWND, client/screen point metadata, message time/order, capture/menu ownership, edit-host lifecycle, and explicit teardown/layout tokens decide stale/fresh routing. Historical notes that mention the removed generation test or token document an intermediate implementation and are superseded by this correction.
 
 ## Continuation Closeout - 2026-06-04
 
@@ -48,7 +52,7 @@ Final validation:
   assertions because the OS clipboard was externally unavailable
   (`OpenClipboard error=5, openWindow=0x0, owner=0x0`); focused clipboard
   coverage had already passed earlier at `2026-06-04_180358/`.
-- `Scripts/VerifyNoProductionGetCursorPos.ps1`: passed with
+- `Tools/Tests/VerifyNoProductionGetCursorPos.Tests.ps1`: passed with
   `No production GetCursorPos violations found.`
 - `git diff --check -- Common RedSalamander Plugins Specs\UI Specs\Testing Scripts Tests`:
   exited 0 with only line-ending normalization warnings.
@@ -229,7 +233,7 @@ foreach ($case in $cases) {
   "$case EXIT=$($p.ExitCode)"
 }
 
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 git diff --check -- Common RedSalamander Plugins Specs\UI Specs\Testing Scripts
 ```
 
@@ -302,7 +306,7 @@ These specs now make the following behavior mandatory:
 - Production routing must not call `GetCursorPos()` or replace delivered points with the later live cursor.
 - `GetCursorPos()` is allowed only in tests/selftests or diagnostic-only production code with the exact same-line annotation `// getcursorpos-allow: diagnostic-only`.
 - Diagnostic-only production calls may only write evidence to logs/traces. They must not branch, route, open, close, repaint, hit-test, select anchors, choose monitor placement, update hover, or decide stale/fresh input.
-- Stale input must be rejected by delivered-message metadata: target HWND, source HWND, message time/order, capture/menu ownership, input generation, root-switch generation, edit-host lifecycle, and explicit teardown tokens.
+- Stale input must be rejected by delivered-message metadata: target HWND, source HWND, message time/order, capture/menu ownership, root-switch state, edit-host lifecycle, and explicit teardown tokens.
 - Paint, cursor handling, path refresh, status refresh, and identical history refresh must not mutate hover state.
 
 ## Current Evidence
@@ -312,17 +316,17 @@ The live log showed two different cases that the current code cannot cleanly dis
 - A valid queued destination NavigationView message delivered to client `(178, 22)` while the later live cursor had drifted to `(178, 44)` on the same Find owner window. Current live-cursor classification can drop this valid click.
 - A stale destination NavigationView message delivered to an old client point while the later live cursor was far away or on another top-level window. Current code must still reject this residue.
 
-The central router solves this by removing live cursor state from routing. The valid queued click is accepted because the delivered event is still current for its target/input generation. The stale residue is rejected because the target/layout/edit/menu generation no longer matches, or because the event is older than the teardown/root-switch state that invalidated it.
+The central router solves this by removing live cursor state from routing. The valid queued click is accepted because the delivered event is still current for its target/client point. The stale residue is rejected because the target/layout/edit/menu state no longer matches, or because the event is older than the teardown/root-switch state that invalidated it.
 
 ## Implementation Tracking Checklist
 
 | State | Slice | Implementation unit | Required proof before complete | Evidence / notes |
 |-------|-------|---------------------|--------------------------------|------------------|
 | [x] | 0 | Whole-tree baseline and source audit | Every current `GetCursorPos` hit under `Common`, `RedSalamander`, and `Plugins` listed and classified | `rg` found 30 production `GetCursorPos()` lines. Classified as production-routing (`DxUi.Menu` resync, `DxUi.WindowHost` leave/down/up live routing, `NavigationView` stale/live resolver), production-anchor (`DxUiNativeMenuInterop`, Compare, Folder, FileOps popup, main menu/context, ViewerText/ViewerSpace context), production-hit-test (`FolderWindow.Interaction`, status bar, AlertOverlay, ViewerText/ViewerSpace hover), production-placement (`SplashScreen`), and diagnostic-only trace candidates (`FindFilesWindow`, `RedSalamander`, parts of DxUi/Menu/WindowHost/NavigationView`). Baseline focused Find command selftests all exited `0`. |
-| [x] | 1 | Whole-tree static source guard | Guard scans `Common`, `RedSalamander`, and `Plugins`; fails on current production calls; passes only when production is clean | Guard added at `Scripts/VerifyNoProductionGetCursorPos.ps1`; fixed PowerShell array construction; initial red run exits `1` with 30 production violations. Final green run exits `0` with `No production GetCursorPos violations found.` |
+| [x] | 1 | Whole-tree static source guard | Guard scans `Common`, `RedSalamander`, and `Plugins`; fails on current production calls; passes only when production is clean | Guard added at `Tools/Tests/VerifyNoProductionGetCursorPos.Tests.ps1`; fixed PowerShell array construction; initial red run exits `1` with 30 production violations. Final green run exits `0` with `No production GetCursorPos violations found.` |
 | [x] | 2 | Routed event core | DxUi unit tests prove delivered point/time/source/capture fields are stable | Added `Common/DxUi/DxUi.PointerInput.{h,cpp}` and Menu-suite tests `TestPointerInputEventMouseMoveUsesDeliveredPoint`, `TestPointerInputEventButtonUsesDeliveredPointAndFlags`, `TestPointerInputEventWheelUsesDeliveredScreenPoint`, and `TestPointerInputEventHasNoLiveCursorState`. Red build failed on missing header (`msbuild-20260603_164435_268.log`); green `DxUiTests` build passed with `0 warning(s), 0 error(s)` (`msbuild-20260603_164640_282.log`) and `.build\x64\Debug\DxUiTests.exe --suite=Menu` exited `0`. |
 | [x] | 3 | DxUi menu migration | Menu tests pass without modal resync/live cursor routing | Removed menu modal live-cursor resync and idle polling. Updated root-switch tests to the delivered-message contract. `.\build.ps1 -ProjectName DxUiTests` passed with `0 warning(s), 0 error(s)` (`.build\logs\msbuild-20260603_173337_275.log`), and `.\.build\x64\Debug\DxUiTests.exe --suite=Menu` exited `0` with `All DxUi tests passed.` |
-| [x] | 4 | NavigationView migration | Find destination stale/queued tests pass without live cursor classification | Implemented explicit `NavigationView::_inputGeneration{1}` using the shared `DxUi::InputGeneration` token. NavigationView WndProc now stamps delivered `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, and `WM_LBUTTONDBLCLK` events with the current generation, event handlers validate target/client-point/generation metadata before routing, and generation bumps on layout/DPI/path/history/file-system/theme/focus/embedded-mode/edit-mode/full-path-popup/dropdown/menu-loop/destroy transitions. The debug snapshots expose the generation through Find's destination NavigationView bridge, and `cmd_pane_find_dialog_destination_navigation_uses_delivered_input_generation` asserts generation advances on delivered double-click edit entry and Escape edit exit. Focused green evidence: standalone generation run `Specs\TestRuns\4cb089111a23\Commands\2026-06-03_192232\`, and final focused batch `2026-06-03_192316\` through `2026-06-03_192330\` all exited `0`; the generation case is `2026-06-03_192318\`. |
+| [x] | 4 | NavigationView migration | Find destination stale/queued tests pass without live cursor classification | The original closeout used a NavigationView generation token; the 2026-06-06 correction removed that vestigial token and retained the delivered target/client-point contract. NavigationView WndProc builds delivered `WM_MOUSEMOVE`, `WM_LBUTTONDOWN`, and `WM_LBUTTONDBLCLK` events, and event handlers validate target/client-point metadata plus edit-host/layout/menu teardown state before routing. Focused green evidence for the original migration remains archived under `Specs\TestRuns\4cb089111a23\Commands\`; current code is guarded by `TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate`. |
 | [x] | 5 | WindowHost/Find diagnostics cleanup | Production `GetCursorPos` calls converted to diagnostic wrapper or removed | `DxUi.WindowHost`, `FindFilesWindow`, `NavigationView`, `RedSalamander`, and `DxUi.Menu` retain only same-line annotated diagnostic-only `GetCursorPos()` calls. `WM_MOUSELEAVE` no longer re-arms hover from the live cursor. |
 | [x] | 6 | Native menu/context anchors | Menus opened from commands use explicit delivered/owner anchors instead of cursor fallback | Removed native context-menu cursor fallback. Keyboard/no-point routes now use explicit owner/control/focused anchors or `{}` rather than current cursor state. Guard exits `0`. |
 | [x] | 7 | RedSalamander whole-tree production removal | Folder, compare, status, overlay, splash, and file-operation popup paths no longer use live cursor | Removed live cursor dependencies from FolderWindow, CompareDirectories, status bar, AlertOverlay, file-operation popup, SplashScreen placement, main user-menu anchors, and NavigationView full-path popup polling. `rg` shows production calls only on diagnostic-annotated lines; guard exits `0`. |
@@ -337,10 +341,10 @@ The central router solves this by removing live cursor state from routing. The v
 ### Create
 
 - `Common/DxUi/DxUi.PointerInput.h`
-  - Defines `PointerInputSource`, `PointerInputKind`, `PointerInputEvent`, `InputGeneration`, and helper builders.
+  - Defines `PointerInputSource`, `PointerInputKind`, `PointerInputEvent`, and helper builders.
 - `Common/DxUi/DxUi.PointerInput.cpp`
   - Converts delivered Win32 messages to routed pointer events without live cursor polling.
-- `Scripts/VerifyNoProductionGetCursorPos.ps1`
+- `Tools/Tests/VerifyNoProductionGetCursorPos.Tests.ps1`
   - Scans `Common`, `RedSalamander`, and `Plugins`; fails if raw `GetCursorPos()` appears outside tests/selftests or outside explicitly annotated diagnostic-only production lines.
 
 ### Modify
@@ -495,12 +499,12 @@ Expected now: all cases pass before migration starts. Any failure must be invest
 ## Task 1: Add A Whole-Tree No-Live-Cursor Source Guard
 
 **Files:**
-- Create: `Scripts/VerifyNoProductionGetCursorPos.ps1`
+- Create: `Tools/Tests/VerifyNoProductionGetCursorPos.Tests.ps1`
 - Modify: `Specs/Testing/Testing_TestCoverage.md`
 
 - [x] **Step 1.1: Write the failing guard script**
 
-Create `Scripts/VerifyNoProductionGetCursorPos.ps1` with this behavior:
+Create `Tools/Tests/VerifyNoProductionGetCursorPos.Tests.ps1` with this behavior:
 
 ```powershell
 param(
@@ -510,7 +514,7 @@ param(
 $allowedPathPatterns = @(
     '\\SelfTest\\',
     '\\Tests\\',
-    '\\Scripts\\VerifyNoProductionGetCursorPos\.ps1$'
+    '\\Tools\\Tests\\VerifyNoProductionGetCursorPos.Tests.ps1$'
 )
 
 $requiredDiagnosticAnnotation = '// getcursorpos-allow: diagnostic-only'
@@ -571,7 +575,7 @@ Rules enforced by the guard:
 Run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 ```
 
 Expected before production migration: exit `1`, with violations in `Common`, `RedSalamander`, and `Plugins` production files listed in Task 0.
@@ -976,7 +980,7 @@ Do not let diagnostic cursor fields choose routing, hover, open, close, or repai
 Run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 ```
 
 Expected after Task 5: violations remain only for production-anchor, production-hit-test, or production-placement sites that Tasks 6-8 will remove, or no violations if those tasks have already landed.
@@ -1026,7 +1030,7 @@ Add tests proving:
 Run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 ```
 
 Expected after Task 6: no `production-anchor` violations remain. The guard may still exit `1` only for RedSalamander production hit-test/placement sites handled by Task 7 or plugin viewer sites handled by Task 8.
@@ -1052,7 +1056,7 @@ Expected after Task 6: no `production-anchor` violations remain. The guard may s
 Run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 ```
 
 Expected before this task: remaining violations point at RedSalamander production files outside the DxUi/Menu/Find diagnostic cleanup.
@@ -1126,7 +1130,7 @@ Run:
 
 ```powershell
 .\build.ps1 -ProjectName RedSalamander
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 ```
 
 Expected after this task: no RedSalamander production violations remain unless Task 8 plugin viewer violations are still pending.
@@ -1210,7 +1214,7 @@ foreach ($case in $cases) {
   $p = Start-Process -FilePath $exe -ArgumentList @('--commands-selftest', "--selftest-case=$case", '--selftest-timeout-multiplier=4') -WorkingDirectory (Get-Location) -Wait -PassThru -WindowStyle Hidden
   "$case EXIT=$($p.ExitCode)"
 }
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 ```
 
 Expected: all viewer cases exit `0`; the source guard exits `0`.
@@ -1274,7 +1278,7 @@ Expected: all exit `0`.
 Run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 ```
 
 Expected: exit `0`.
@@ -1317,7 +1321,7 @@ Run:
 
 ```powershell
 rg -n "GetCursorPos" Common RedSalamander Plugins -g "*.cpp" -g "*.h"
-powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1
 git diff --check -- Common RedSalamander Plugins Specs\UI Specs\Testing Scripts
 ```
 

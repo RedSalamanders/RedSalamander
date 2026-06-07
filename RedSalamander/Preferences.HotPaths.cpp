@@ -441,7 +441,7 @@ void HotPathsPane::SyncDxControlsFromState(const PreferencesDialogState& state) 
         const D2D1_COLOR_F labelColor = hasPathOrLabel ? palette.text : palette.disabledText;
 
         const wchar_t digitChar = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
-        dxSlot.header->SetText(FormatStringResource(nullptr, IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT, digitChar));
+        dxSlot.header->SetText(FormatEmbeddedStringResource(nullptr, IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT, digitChar));
         dxSlot.pathLabel->SetText(pathLabelText);
         dxSlot.pathLabel->SetMnemonicTarget(dxSlot.pathEdit);
 
@@ -684,7 +684,7 @@ void HotPathsPane::LayoutDxPage(HWND host,
         for (int i = 0; i < kSlotCount; ++i)
         {
             const wchar_t digitChar = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
-            layoutSlotDx(dxPage.slots[static_cast<size_t>(i)], FormatStringResource(nullptr, IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT, digitChar));
+            layoutSlotDx(dxPage.slots[static_cast<size_t>(i)], FormatEmbeddedStringResource(nullptr, IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT, digitChar));
         }
 
         const int openTextWidth     = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);

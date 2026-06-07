@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -22,7 +23,9 @@
 #include <vector>
 
 #include <d2d1_1.h>
+#include <d3d11.h>
 #include <dwrite.h>
+#include <dxgi1_2.h>
 #include <dxgiformat.h>
 
 #pragma comment(lib, "d2d1")
@@ -125,15 +128,90 @@ private:
         uint32_t aggregateFiles   = 0;
     };
 
+    static constexpr uint32_t kFileRecordIdBase      = 0x40000000u;
+    static constexpr uint32_t kSyntheticNodeIdBase   = 0x80000000u;
+    static constexpr uint32_t kTreemapItemIdMask     = 0x3FFFFFFFu;
+
+    struct FileRecord final
+    {
+        uint32_t id       = 0;
+        uint32_t parentId = 0;
+        std::wstring_view name;
+        uint64_t bytes = 0;
+    };
+
+    struct ResolvedItem final
+    {
+        uint32_t id         = 0;
+        uint32_t parentId   = 0;
+        bool isDirectory    = false;
+        bool isSynthetic    = false;
+        bool isFileRecord   = false;
+        ScanState scanState = ScanState::Done;
+        std::wstring_view name;
+        uint64_t totalBytes       = 0;
+        uint32_t aggregateFolders = 0;
+        uint32_t aggregateFiles   = 0;
+    };
+
     struct DrawItem final
     {
+        enum class Lod : uint8_t
+        {
+            Culled,
+            Tiny,
+            Small,
+            Medium,
+            Large,
+            Hero,
+        };
+
         uint32_t nodeId      = 0;
         uint8_t depth        = 0;
+        Lod lod              = Lod::Culled;
+        float areaDip2       = 0.0f;
         float labelHeightDip = 0.0f;
         D2D1_RECT_F targetRect{};
         D2D1_RECT_F currentRect{};
         D2D1_RECT_F startRect{};
         double animationStartSeconds = 0.0;
+    };
+
+    struct LayoutItem final
+    {
+        uint32_t nodeId = 0;
+        double weight   = 0.0;
+        uint64_t bytes  = 0;
+    };
+
+    struct LayoutExpandTask final
+    {
+        uint32_t nodeId = 0;
+        D2D1_RECT_F bounds{};
+        float area    = 0.0f;
+        uint8_t depth = 0;
+    };
+
+    struct LayoutWorkspace final
+    {
+        std::vector<LayoutItem> items;
+        std::vector<LayoutItem> topItems;
+        std::vector<LayoutItem> forcedItems;
+        std::vector<LayoutItem> row;
+        std::vector<uint32_t> forcedChildIds;
+        std::vector<LayoutExpandTask> expandTasks;
+    };
+
+    struct LayoutCandidateCacheEntry final
+    {
+        uint64_t signature = 0u;
+        uint32_t maxItems  = 0u;
+        std::vector<LayoutItem> items;
+        uint64_t otherBytes   = 0u;
+        double otherWeight    = 0.0;
+        size_t otherCount     = 0u;
+        uint64_t otherFolders = 0u;
+        uint64_t otherFiles   = 0u;
     };
 
     struct PendingUpdate final
@@ -184,12 +262,20 @@ private:
     void OnLButtonDown(int x, int y) noexcept;
     void OnLButtonDblClk(int x, int y) noexcept;
     void OnContextMenu(HWND hwnd, POINT screenPt) noexcept;
+    void OnDpiChanged(HWND hwnd, UINT dpi, const RECT* suggestedRect) noexcept;
     void OnNcActivate(HWND hwnd, bool windowActive) noexcept;
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
     void OnTimer(UINT_PTR timerId) noexcept;
 
     bool EnsureDirect2D(HWND hwnd) noexcept;
     void DiscardDirect2D() noexcept;
+    void InvalidateStaticTreemapCache() noexcept;
+    bool CanReplayStaticTreemapCache(bool scanActive, bool completionOverlayActive) const noexcept;
+    bool CanRecordStaticTreemapCache(bool scanActive, bool completionOverlayActive, double nowSeconds) const noexcept;
+    bool HasActiveLayoutAnimation(double nowSeconds) const noexcept;
+    HRESULT EnsureStaticTreemapCacheBitmap() noexcept;
+    HRESULT RecordStaticTreemapCacheFromCurrentTarget() noexcept;
+    void PaintHoverOverlay(const D2D1::ColorF& accentColor) noexcept;
     void ApplyThemeToWindow(HWND hwnd) noexcept;
     void ApplyTitleBarTheme(HWND hwnd, bool windowActive) noexcept;
     void UpdateWindowTitle(HWND hwnd) noexcept;
@@ -218,19 +304,31 @@ private:
 
     void PostUpdate(PendingUpdate&& update) noexcept;
     void DrainUpdates() noexcept;
+    static size_t EstimatePendingUpdateBytes(const PendingUpdate& update) noexcept;
     void ContinueScanCacheBuild() noexcept;
     void CancelScanCacheBuild() noexcept;
     const Node* TryGetRealNode(uint32_t nodeId) const noexcept;
     Node* TryGetRealNode(uint32_t nodeId) noexcept;
+    const FileRecord* TryGetFileRecord(uint32_t itemId) const noexcept;
+    std::optional<ResolvedItem> ResolveTreemapItem(uint32_t itemId) const noexcept;
+    static bool IsFileRecordId(uint32_t itemId) noexcept;
+    static bool IsSyntheticNodeId(uint32_t itemId) noexcept;
+    static uint32_t FileRecordIdFromIndex(size_t index) noexcept;
+    static uint32_t SyntheticOtherBucketIdForParent(uint32_t parentId) noexcept;
+    static uint64_t SubtractAtomicFloor(std::atomic_uint64_t& value, uint64_t delta) noexcept;
     std::span<const uint32_t> GetRealNodeChildren(const Node& node) const noexcept;
-    void AddRealNodeChild(Node& parent, uint32_t childNodeId) noexcept;
+    void AddRealNodeChild(Node& parent, uint32_t childItemId) noexcept;
     std::wstring BuildNodePathText(uint32_t nodeId) const;
+    std::wstring BuildItemPathText(uint32_t itemId) const;
     void UpdateViewPathText() noexcept;
 
     void EnsureLayoutForView() noexcept;
     void MaybeRebuildLayout() noexcept;
     void RebuildLayout() noexcept;
+    static DrawItem::Lod ClassifyDrawItemLod(const D2D1_RECT_F& itemRc, uint8_t depth) noexcept;
+    void BuildHitGrid(const D2D1_RECT_F& bounds) noexcept;
     std::optional<uint32_t> HitTestTreemap(float xDip, float yDip) const noexcept;
+    std::optional<uint32_t> HitTestTreemapLinear(float xDip, float yDip, uint32_t& candidatesChecked) const noexcept;
 
     void NavigateTo(uint32_t nodeId) noexcept;
     void NavigateUp() noexcept;
@@ -240,6 +338,7 @@ private:
     float GetMenuBarHeightDip() const noexcept;
     float GetHeaderTopDip() const noexcept;
     float GetHeaderBottomDip() const noexcept;
+    uint32_t ComputeAdaptiveFileCandidateBudget() const noexcept;
 
     float DipFromPx(int px) const noexcept;
     int PxFromDip(float dip) const noexcept;
@@ -271,8 +370,23 @@ private:
     float _dpi = static_cast<float>(USER_DEFAULT_SCREEN_DPI);
     SIZE _clientSize{};
 
-    wil::com_ptr<ID2D1Factory> _d2dFactory;
-    wil::com_ptr<ID2D1HwndRenderTarget> _renderTarget;
+    struct RendererResources final
+    {
+        wil::com_ptr<ID3D11Device> d3dDevice;
+        wil::com_ptr<ID3D11DeviceContext> d3dContext;
+        wil::com_ptr<IDXGIFactory2> dxgiFactory;
+        wil::com_ptr<ID2D1Device> d2dDevice;
+        wil::com_ptr<ID2D1DeviceContext> d2dContext;
+        wil::com_ptr<IDXGISwapChain1> swapChain;
+        wil::com_ptr<ID2D1Bitmap1> targetBitmap;
+        UINT swapChainWidthPx              = 0;
+        UINT swapChainHeightPx             = 0;
+        D3D_FEATURE_LEVEL featureLevel      = D3D_FEATURE_LEVEL_11_0;
+    };
+
+    wil::com_ptr<ID2D1Factory1> _d2dFactory;
+    RendererResources _renderer;
+    wil::com_ptr<ID2D1RenderTarget> _renderTarget;
     wil::com_ptr<ID2D1SolidColorBrush> _brushBackground;
     wil::com_ptr<ID2D1SolidColorBrush> _brushText;
     wil::com_ptr<ID2D1SolidColorBrush> _brushOutline;
@@ -282,6 +396,20 @@ private:
     wil::com_ptr<ID2D1GradientStopCollection> _shadingStops;
     wil::com_ptr<ID2D1StrokeStyle> _otherStrokeStyle;
     wil::com_ptr<ID2D1PathGeometry> _dogEarFlapGeometry;
+
+    struct StaticTreemapCache final
+    {
+        wil::com_ptr<ID2D1Bitmap1> bitmap;
+        UINT widthPx = 0;
+        UINT heightPx = 0;
+        uint64_t generation = 0u;
+        uint64_t hits = 0u;
+        uint64_t misses = 0u;
+        uint64_t recordCount = 0u;
+        uint64_t lastRecordUs = 0u;
+        uint64_t bytes = 0u;
+    };
+    StaticTreemapCache _staticTreemapCache;
 
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
     wil::com_ptr<IDWriteTextFormat> _textFormat;
@@ -311,6 +439,7 @@ private:
     std::pmr::monotonic_buffer_resource _nameArena;
     std::pmr::monotonic_buffer_resource _layoutNameArena;
     std::pmr::vector<Node> _nodes             = std::pmr::vector<Node>(&_nodePool);
+    std::pmr::vector<FileRecord> _fileRecords = std::pmr::vector<FileRecord>(&_nodePool);
     std::pmr::vector<uint32_t> _childrenArena = std::pmr::vector<uint32_t>(&_nodePool);
 
     ScanWorker _scanWorker;
@@ -323,17 +452,21 @@ private:
 
     std::shared_ptr<void> _scanCacheBuildSnapshot;
     std::wstring _scanCacheBuildRootKey;
+    uint32_t _scanTopFilesPerDirectory           = 0;
     uint32_t _scanCacheBuildTopFilesPerDirectory = 0;
     uint32_t _scanCacheBuildGeneration           = 0;
     uint32_t _scanCacheLastStoredGeneration      = 0;
     size_t _scanCacheBuildChildrenNext           = 0;
     size_t _scanCacheBuildNodesNext              = 0;
+    size_t _scanCacheBuildFileRecordsNext        = 0;
+    uint64_t _lastScanCacheSnapshotBytes         = 0u;
 
     std::unordered_map<uint32_t, Node> _syntheticNodes;
-    std::unordered_map<uint32_t, uint32_t> _otherBucketIdsByParent;
     std::unordered_map<uint32_t, uint32_t> _layoutMaxItemsByNode;
     std::unordered_set<uint32_t> _autoExpandedOtherByNode;
-    uint32_t _nextSyntheticNodeId = 0x80000000u;
+    std::unordered_map<uint32_t, LayoutCandidateCacheEntry> _layoutCandidateCache;
+    uint64_t _layoutCandidateCacheHits   = 0u;
+    uint64_t _layoutCandidateCacheMisses = 0u;
     uint32_t _rootNodeId          = 0;
     uint32_t _viewNodeId          = 0;
     std::wstring _scanRootPath;
@@ -361,6 +494,27 @@ private:
     float _headerPathDisplayMaxWidthDip = 0.0f;
 
     std::vector<DrawItem> _drawItems;
+    std::vector<LayoutWorkspace> _layoutWorkspaceByDepth;
+
+    struct HitGrid final
+    {
+        D2D1_RECT_F bounds{};
+        uint32_t columns = 0u;
+        uint32_t rows = 0u;
+        uint32_t maxCandidatesPerCell = 0u;
+        std::vector<std::vector<uint32_t>> cells;
+
+        void Clear() noexcept
+        {
+            bounds = {};
+            columns = 0u;
+            rows = 0u;
+            maxCandidatesPerCell = 0u;
+            cells.clear();
+        }
+    };
+    HitGrid _hitGrid;
+    std::unordered_map<uint32_t, D2D1_RECT_F> _lastRectsByNode;
     uint32_t _hoverNodeId = 0;
 
     std::wstring _tooltipText;
@@ -375,7 +529,29 @@ private:
     bool _debugHasLastContextMenuScreenPoint = false;
     POINT _debugLastContextMenuScreenPoint{};
     uint32_t _debugLastContextMenuHitNodeId = 0;
+    uint64_t _lastPaintUs = 0u;
+    uint64_t _lastLayoutUs = 0u;
+    uint64_t _lastDrainUs = 0u;
+    uint64_t _lastWorkingSetBytes = 0u;
+    uint64_t _lastTileDrawCount = 0u;
+    uint64_t _lastTextDrawCount = 0u;
+    uint64_t _layoutGeneration = 0u;
+    uint32_t _rendererDeviceCreateCount = 0u;
+    uint32_t _swapChainResizeCount = 0u;
+    uint32_t _rendererBrushCreateCount = 0u;
+    uint32_t _rendererTextFormatCreateCount = 0u;
+    uint32_t _rendererFailureStage = 0u;
+    uint32_t _rendererFailureHr = 0u;
+    uint32_t _debugForcedRendererFault = 0u;
+    mutable uint64_t _lastHitTestUs = 0u;
+    mutable uint32_t _lastHitTestCandidatesChecked = 0u;
 #endif
+
+    std::atomic_uint64_t _pendingUpdatePostedCount{0};
+    std::atomic_uint64_t _pendingUpdateCoalescedCount{0};
+    std::atomic_uint64_t _pendingUpdateBytes{0};
+    std::chrono::steady_clock::time_point _openStartedAt{};
+    bool _openToFirstPaintEmitted = false;
 
     bool _trackingMouse       = false;
     bool _layoutDirty         = true;

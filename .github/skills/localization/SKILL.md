@@ -28,9 +28,29 @@ std::wstring title = LoadStringResource(IDS_APP_TITLE);
 // Format with arguments
 std::wstring msg = FormatStringResource(IDS_FILE_COUNT, fileCount);
 
+// Load a documented language-neutral string from the owner module only
+std::wstring token = LoadEmbeddedStringResource(g_hInstance, IDS_PLUGIN_PROTOCOL_NAME);
+
+// Format a documented language-neutral skeleton from the owner module only
+std::wstring codepage = FormatEmbeddedStringResource(g_hInstance, IDS_CODEPAGE_FORMAT, codepageId);
+
 // Message box from resources
 MessageBoxResource(_hWnd, IDS_ERROR_MSG, IDS_ERROR_TITLE, MB_OK | MB_ICONERROR);
 ```
+
+## Language-Neutral Resource Rule
+
+Stable non-translatable tokens still live in resources, but only in the
+embedded `.rc` for the executable or plugin that owns them. Do not duplicate
+those IDs in satellite `.rc` files. Load them with `LoadEmbeddedStringResource`
+or `FormatEmbeddedStringResource`, passing the owner `HINSTANCE`; plugin code
+must pass the plugin DLL handle such as `g_hInstance`, not `nullptr`.
+
+Examples: language autonyms in a language picker, product/protocol/brand names,
+file format identifiers, keyboard glyphs, sample technical paths, placeholder-
+only layout skeletons, and technical formats such as hex/HRESULT strings.
+Ordinary UI labels, tooltips, sentences, command names, and grammar-bearing
+formats remain localizable even when translations currently match English.
 
 ## STRINGTABLE in .rc
 

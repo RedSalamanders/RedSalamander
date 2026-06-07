@@ -248,6 +248,18 @@
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
+    <ProjectReference Include="Lang\cs-CZ\RedSalamanderMonitor-cs-CZ.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{0d62f314-388b-5af9-8a3c-6dcfb8e8e84d}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+    <ProjectReference Include="Lang\sk-SK\RedSalamanderMonitor-sk-SK.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{b3bed282-ee0e-5919-9ce5-b2d77e38dc32}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="CopyPredefinedThemes" AfterTargets="Build">

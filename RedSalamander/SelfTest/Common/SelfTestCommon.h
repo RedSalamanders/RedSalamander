@@ -211,6 +211,16 @@ template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSu
                                  ok ? L"yes" : L"no",
                                  state.failure.empty() ? L"no" : L"yes",
                                  state.skipped.empty() ? L"no" : L"yes"));
+    if (! state.failure.empty())
+    {
+        AppendSuiteTrace(suite.suite, std::format(L"Case failure: {} reason='{}'", name, state.failure));
+        AppendSelfTestTrace(std::format(L"Case failure: {} reason='{}'", name, state.failure));
+    }
+    else if (! state.skipped.empty())
+    {
+        AppendSuiteTrace(suite.suite, std::format(L"Case skipped: {} reason='{}'", name, state.skipped));
+        AppendSelfTestTrace(std::format(L"Case skipped: {} reason='{}'", name, state.skipped));
+    }
 
     result.durationMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(endedAt - startedAt).count());
 

@@ -1,0 +1,89 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+IDR_VIEWERWEB_MENU MENU
+BEGIN
+    POPUP "&Súbor"
+    BEGIN
+        MENUITEM "&Uložiť ako...\tCtrl+S", IDM_VIEWERWEB_FILE_SAVE_AS
+        MENUITEM "&Obnoviť\tF5", IDM_VIEWERWEB_FILE_REFRESH
+        POPUP "&Iné súbory"
+        BEGIN
+            MENUITEM "&Ďalej\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
+            MENUITEM "&Predchádzajúce\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "&Po prvé\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
+            MENUITEM "&Posledný\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Koniec\tEsc", IDM_VIEWERWEB_FILE_EXIT
+    END
+    POPUP "&Hľadať"
+    BEGIN
+        MENUITEM "&Nájsť...\tCtrl+F", IDM_VIEWERWEB_SEARCH_FIND
+        MENUITEM "&Nájsť ďalší\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
+        MENUITEM "&Nájsť predchádzajúci\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
+    END
+    POPUP "&Zobrazenie"
+    BEGIN
+        MENUITEM "&Priblížiť\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
+        MENUITEM "&Oddialiť\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
+        MENUITEM "&Resetovať priblíženie\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
+        MENUITEM SEPARATOR
+        MENUITEM "&Prepnúť DevTools\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
+    END
+    POPUP "&Nástroje"
+    BEGIN
+        MENUITEM "&Kopírovať URL\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
+        MENUITEM "&Otvoriť v prehliadači\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM SEPARATOR
+        MENUITEM "&Rozbaliť všetko (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
+        MENUITEM "&Zbaliť všetko (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL
+        MENUITEM SEPARATOR
+        MENUITEM "&Prepnúť zdroj Markdown\tCtrl+`", IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERWEB_NAME "Webový prehliadač"
+    IDS_VIEWERWEB_DESCRIPTION "Prehliadač súborov HTML a PDF založený na WebView2."
+
+    IDS_VIEWERJSON_NAME "Prehliadač JSON"
+    IDS_VIEWERJSON_DESCRIPTION "Prehliadač JSON/JSON5/JSONL založený na WebView2 so skladaním a zvýraznením syntaxe."
+
+    IDS_VIEWERMARKDOWN_NAME "Prehliadač Markdown"
+    IDS_VIEWERMARKDOWN_DESCRIPTION "Prehliadač Markdown založený na WebView2 so zvýraznením syntaxe."
+
+    IDS_VIEWERWEB_ERROR_TITLE "ViewerWeb"
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING "Microsoft Edge WebView2 Runtime nie je nainštalovaný."
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED "Inicializácia WebView2 zlyhala."
+    IDS_VIEWERWEB_ERROR_BUILD_FILE_URL "Nepodarilo sa vytvoriť adresu URL súboru."
+    IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT "Nepodarilo sa vytvoriť dokument HTML."
+    IDS_VIEWERWEB_ERROR_NAVIGATE_TO_STRING_FAILED_FMT "NavigateToString zlyhal (h=0x{0:08X})."
+    IDS_VIEWERWEB_ERROR_NAVIGATE_FAILED_FMT "Navigácia zlyhala (h=0x{0:08X})."
+    IDS_VIEWERWEB_ERROR_FILE_SYSTEM_UNAVAILABLE "Systém súborov je nedostupný."
+    IDS_VIEWERWEB_ERROR_NO_FILE_IO "Aktívny súborový systém nepodporuje I/O súborov."
+    IDS_VIEWERWEB_ERROR_OPEN_FOR_VIEWING_FAILED "Nepodarilo sa otvoriť súbor na zobrazenie."
+    IDS_VIEWERWEB_STATUS_LOADING "Načítava sa..."
+    IDS_VIEWERWEB_ERROR_GET_TEMP_FOLDER_FAILED "Nepodarilo sa získať dočasný priečinok."
+    IDS_VIEWERWEB_ERROR_CREATE_TEMP_FILE_FAILED "Nepodarilo sa vytvoriť dočasný súbor."
+    IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED "Nepodarilo sa zapísať dočasný súbor."
+    IDS_VIEWERWEB_ERROR_READ_FILE_FAILED "Súbor sa nepodarilo prečítať."
+    IDS_VIEWERWEB_ERROR_READ_FILE_SIZE_FAILED "Nepodarilo sa prečítať veľkosť súboru."
+    IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT "Súbor je príliš veľký ({0}), limit je {1}."
+    IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED "Nepodarilo sa analyzovať dokument JSON/JSON5/JSONL."
+    IDS_VIEWERWEB_ERROR_FORMAT_JSON_FAILED "Formátovanie dokumentu JSON/JSONL zlyhalo."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED "Uložiť ako zlyhalo."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO "Uložiť ako zlyhalo (I/O súborového systému nie je podporované)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_OPEN_FAILED "Uložiť ako zlyhalo (nie je možné otvoriť súbor)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_SEEK_FAILED "Uložiť ako zlyhalo (hľadanie zlyhalo)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED "Uložiť ako zlyhalo (čítanie zlyhalo)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED "Uložiť ako zlyhalo (zápis zlyhal)."
+    IDS_VIEWERWEB_ERROR_OPEN_BROWSER_FAILED "Nepodarilo sa otvoriť v prehliadači."
+    IDS_VIEWERWEB_WARNING_DEVTOOLS_DISABLED "DevTools je vypnutý v nastaveniach pluginu."
+    IDS_VIEWERWEB_PROMPT_OPEN_TEXT_VIEWER_FMT "{0} Chcete ho radšej otvoriť v textovom prehliadači?"
+    IDS_VIEWERWEB_ERROR_OPEN_TEXT_VIEWER_FAILED "Nepodarilo sa otvoriť v programe Text Viewer."
+END

@@ -2,8 +2,9 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <exception>
-#include <new>
+#include <memory>
+#include <mutex>
+#include <string>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514) // WIL headers: deleted copy/move and unused inline Helpers
@@ -46,17 +47,15 @@ struct PluginMetaDataStorage final
     PluginMetaData metaData;
 };
 
-PluginMetaDataStorage* g_pluginMetaDataStorage = nullptr;
+std::mutex g_pluginMetaDataStorageMutex;
+std::unique_ptr<PluginMetaDataStorage> g_pluginMetaDataStorage;
 
 [[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
 {
-    if (g_pluginMetaDataStorage == nullptr)
+    std::scoped_lock lock(g_pluginMetaDataStorageMutex);
+    if (! g_pluginMetaDataStorage)
     {
-        g_pluginMetaDataStorage = new (std::nothrow) PluginMetaDataStorage();
-        if (g_pluginMetaDataStorage == nullptr)
-        {
-            std::terminate();
-        }
+        g_pluginMetaDataStorage = std::make_unique<PluginMetaDataStorage>();
     }
 
     return g_pluginMetaDataStorage->metaData;
@@ -64,11 +63,8 @@ PluginMetaDataStorage* g_pluginMetaDataStorage = nullptr;
 
 void ShutdownPluginMetaData() noexcept
 {
-    if (g_pluginMetaDataStorage != nullptr)
-    {
-        delete g_pluginMetaDataStorage;
-        g_pluginMetaDataStorage = nullptr;
-    }
+    std::scoped_lock lock(g_pluginMetaDataStorageMutex);
+    g_pluginMetaDataStorage.reset();
 }
 
 [[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept

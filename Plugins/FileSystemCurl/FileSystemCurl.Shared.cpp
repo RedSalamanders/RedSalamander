@@ -15,27 +15,27 @@ std::atomic<unsigned long> g_fileSystemCurlInstanceCount{0};
     {
         case FileSystemCurlProtocol::Ftp:
         {
-            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_NAME);
+            static const std::wstring text = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_NAME);
             return text.c_str();
         }
         case FileSystemCurlProtocol::Sftp:
         {
-            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME);
+            static const std::wstring text = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME);
             return text.c_str();
         }
         case FileSystemCurlProtocol::Scp:
         {
-            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_NAME);
+            static const std::wstring text = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_NAME);
             return text.c_str();
         }
         case FileSystemCurlProtocol::Imap:
         {
-            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_NAME);
+            static const std::wstring text = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_NAME);
             return text.c_str();
         }
     }
 
-    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME);
+    static const std::wstring fallback = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME);
     return fallback.c_str();
 }
 

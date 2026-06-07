@@ -108,6 +108,63 @@ LRESULT CALLBACK PrefsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) n
 
 } // namespace
 
+void PrefsReorderPanelChildren(RedSalamander::DxUi::Panel* root, std::span<RedSalamander::DxUi::Control* const> orderedControls)
+{
+    if (! root)
+    {
+        return;
+    }
+
+    auto children = root->GetChildren();
+    if (children.empty())
+    {
+        return;
+    }
+
+    std::vector<std::unique_ptr<RedSalamander::DxUi::Control>> reordered;
+    reordered.reserve(children.size());
+
+    auto moveChild = [&](RedSalamander::DxUi::Control* wanted) noexcept
+    {
+        if (! wanted)
+        {
+            return;
+        }
+
+        for (auto& child : children)
+        {
+            if (child && child.get() == wanted)
+            {
+                reordered.push_back(std::move(child));
+                return;
+            }
+        }
+    };
+
+    for (auto* control : orderedControls)
+    {
+        moveChild(control);
+    }
+
+    for (auto& child : children)
+    {
+        if (child)
+        {
+            reordered.push_back(std::move(child));
+        }
+    }
+
+    if (reordered.size() != children.size())
+    {
+        return;
+    }
+
+    for (size_t index = 0; index < children.size(); ++index)
+    {
+        children[index] = std::move(reordered[index]);
+    }
+}
+
 namespace PrefsPageHost
 {
 namespace

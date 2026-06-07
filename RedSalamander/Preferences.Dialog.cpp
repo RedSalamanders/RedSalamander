@@ -5843,8 +5843,37 @@ bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexce
 
             if (out.shellHostClientWidthPx > 0 && out.shellOkButtonBoundsPx.bottom > out.shellOkButtonBoundsPx.top)
             {
-                const int sampleX                = out.shellHostClientWidthPx / 2;
-                const int sampleY                = out.shellOkButtonBoundsPx.top + ((out.shellOkButtonBoundsPx.bottom - out.shellOkButtonBoundsPx.top) / 2);
+                const std::array buttonRects{out.shellOkButtonBoundsPx,
+                                             out.shellCancelButtonBoundsPx,
+                                             out.shellApplyButtonBoundsPx};
+                const auto insideAnyButton = [&](const int x, const int y) noexcept
+                {
+                    for (const RECT& rect : buttonRects)
+                    {
+                        if (x >= rect.left && x < rect.right && y >= rect.top && y < rect.bottom)
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                const int sampleY = out.shellOkButtonBoundsPx.top + ((out.shellOkButtonBoundsPx.bottom - out.shellOkButtonBoundsPx.top) / 2);
+                int sampleX       = out.shellHostClientWidthPx / 2;
+                if (insideAnyButton(sampleX, sampleY))
+                {
+                    sampleX = -1;
+                    constexpr int kFooterBackgroundSamplePadding = 8;
+                    for (int candidateX = kFooterBackgroundSamplePadding; candidateX < out.shellHostClientWidthPx - kFooterBackgroundSamplePadding; ++candidateX)
+                    {
+                        if (! insideAnyButton(candidateX, sampleY))
+                        {
+                            sampleX = candidateX;
+                            break;
+                        }
+                    }
+                }
+
                 out.shellFooterBackgroundSampled = samplePixel(sampleX, sampleY, out.shellFooterBackgroundBgra);
                 if (out.shellFooterBackgroundSampled)
                 {
@@ -7460,12 +7489,6 @@ bool PreferencesDialog::DebugFocusAdvancedBypassHelloToggle() noexcept
 
     auto& hostState = static_cast<PreferencesDialogHost&>(*state);
     return hostState._advancedPane.DebugFocusBypassHelloToggle();
-}
-
-bool PreferencesDialog::DebugSelectAdvancedFilterPreset(std::wstring_view displayText) noexcept
-{
-    static_cast<void>(displayText);
-    return false;
 }
 
 bool PreferencesDialog::DebugFocusMonitorToolbarToggle() noexcept

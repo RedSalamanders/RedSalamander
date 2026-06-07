@@ -28,8 +28,10 @@ struct PopupHitTest
         TaskSpeedLimit,
         TaskShowLog,
         TaskExportIssues,
+        TaskCompletedMore,
         TaskConflictToggleApplyToAll,
         TaskConflictAction,
+        TaskConflictMore,
         TaskDismiss,
     };
 
@@ -56,10 +58,31 @@ struct PopupButton
     PopupHitTest hit{};
 };
 
+struct PopupMenuAnchor
+{
+    POINT screenPoint{};
+    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+};
+
 struct TaskSnapshot
 {
     static constexpr size_t kMaxInFlightFiles   = 16u;
     static constexpr size_t kMaxConflictActions = 8u;
+
+    enum class StatusKind : uint8_t
+    {
+        None,
+        Waiting,
+        Calculating,
+        Preparing,
+        Running,
+        Paused,
+        Conflict,
+        Done,
+        Partial,
+        Failed,
+        Canceled,
+    };
 
     enum class Kind : uint8_t
     {
@@ -126,6 +149,7 @@ struct TaskSnapshot
     unsigned long warningCount = 0;
     unsigned long errorCount   = 0;
     std::wstring lastDiagnosticMessage;
+    StatusKind statusKind = StatusKind::None;
 
     bool started                       = false;
     bool paused                        = false;
@@ -166,10 +190,61 @@ struct CaptionGlyphDebugSnapshot
     bool usesGdiTextFallback           = true;
     bool highContrastSuppressed        = false;
 };
+
+struct PopupLayoutDebugSnapshot
+{
+    uint64_t taskId = 0;
+    bool found      = false;
+
+    size_t visibleButtonCount          = 0u;
+    size_t footerVisibleButtonCount    = 0u;
+    bool footerAutoDismissVisible      = false;
+    bool hasVisibleButtonOverlap       = false;
+    bool conflictApplyToAllVisible     = false;
+    bool conflictMoreVisible           = false;
+    bool completedDiagnosticsMoreVisible = false;
+    bool completedDiagnosticsMoreButtonRectVisible = false;
+    bool completedShowLogVisible       = false;
+    bool completedExportIssuesVisible  = false;
+    bool completedDismissVisible       = false;
+    D2D1_RECT_F completedDiagnosticsMoreButtonRect{};
+    size_t conflictPrimaryActionCount  = 0u;
+    size_t conflictOverflowActionCount = 0u;
+    size_t completedVisibleActionCount = 0u;
+    std::array<uint8_t, TaskSnapshot::kMaxConflictActions> conflictPrimaryActions{};
+    std::array<uint8_t, TaskSnapshot::kMaxConflictActions> conflictOverflowActions{};
+    TaskSnapshot::StatusKind taskStatusKind = TaskSnapshot::StatusKind::None;
+    size_t taskStatusActiveStateCount       = 0u;
+    uint32_t globalRunningCount             = 0u;
+    uint32_t globalWaitingCount             = 0u;
+    uint32_t globalNeedAttentionCount       = 0u;
+    bool globalSummaryVisible               = false;
+    std::wstring globalSummaryText;
+};
+
+struct GraphHueWeightDebugSnapshot
+{
+    static constexpr size_t kMaxHues = 16u;
+
+    size_t hueCount    = 0u;
+    double totalWeight = 0.0;
+    std::array<float, kMaxHues> hues{};
+    std::array<double, kMaxHues> weights{};
+};
 #endif
 
 struct RateSnapshot
 {
+    struct InFlightStreamSnapshot
+    {
+        const void* cookieKey     = nullptr;
+        uint64_t progressStreamId = 0;
+        std::wstring sourcePath;
+        uint64_t totalBytes      = 0;
+        uint64_t completedBytes  = 0;
+        ULONGLONG lastUpdateTick = 0;
+    };
+
     uint64_t taskId               = 0;
     FileSystemOperation operation = FILESYSTEM_COPY;
 
@@ -179,6 +254,8 @@ struct RateSnapshot
     std::wstring currentSourcePath;
     ULONGLONG lastProgressCallbackTick = 0;
     ULONGLONG progressStateChangeTick  = 0;
+    std::array<InFlightStreamSnapshot, TaskSnapshot::kMaxInFlightFiles> inFlightFiles{};
+    size_t inFlightFileCount = 0;
     bool started                       = false;
     bool paused                        = false;
     bool waitingForOthers              = false;
@@ -190,9 +267,27 @@ struct RateSnapshot
 struct RateHistory
 {
     static constexpr size_t kMaxSamples = 180u; // ~18s @ 100ms
+    static constexpr size_t kMaxHueWeightsPerSample = TaskSnapshot::kMaxInFlightFiles;
+
+    struct HueWeight
+    {
+        float hue     = -1.0f;
+        double weight = 0.0;
+    };
+
+    struct StreamProgress
+    {
+        const void* cookieKey     = nullptr;
+        uint64_t progressStreamId = 0;
+        std::wstring sourcePath;
+        uint64_t completedBytes  = 0;
+        ULONGLONG lastUpdateTick = 0;
+    };
 
     std::array<float, kMaxSamples> samples{};
     std::array<float, kMaxSamples> hues{}; // Per-sample hue (0-360) for rainbow mode
+    std::array<std::array<HueWeight, kMaxHueWeightsPerSample>, kMaxSamples> hueWeights{};
+    std::array<uint8_t, kMaxSamples> hueWeightCounts{};
     size_t count      = 0;
     size_t writeIndex = 0;
     bool initialized  = false;
@@ -207,6 +302,10 @@ struct RateHistory
     ULONGLONG pendingBucketMs      = 0;
     double pendingWeightedSampleMs = 0.0;
     float pendingHue               = -1.0f;
+    std::array<HueWeight, kMaxHueWeightsPerSample> pendingHueWeights{};
+    size_t pendingHueWeightCount = 0;
+    std::array<StreamProgress, TaskSnapshot::kMaxInFlightFiles> streamProgress{};
+    size_t streamProgressCount = 0;
 
     double smoothedBytesPerSec  = 0.0;
     double smoothedItemsPerSec  = 0.0;
@@ -274,6 +373,9 @@ private:
     void PaintCaptionStatusGlyph(HWND hwnd) noexcept;
 
     PopupHitTest HitTest(float x, float y) const noexcept;
+    std::optional<PopupMenuAnchor> ResolveButtonMenuAnchor(HWND hwnd,
+                                                           const PopupHitTest& hit,
+                                                           RedSalamander::DxUi::ContextMenuRootVerticalPlacement placement) const noexcept;
     void Invalidate(HWND hwnd) const noexcept;
 
     LRESULT OnActivatedHit(HWND hwnd, const PopupHitTest& hit) noexcept;
@@ -282,6 +384,10 @@ private:
     void ShowSpeedLimitMenu(HWND hwnd, uint64_t taskId) noexcept;
     bool ShowCustomSpeedLimitPromptForTask(HWND hwnd, uint64_t requestedTaskId) noexcept;
     void ShowDestinationMenu(HWND hwnd, uint64_t taskId) noexcept;
+    bool SubmitCompletedOverflowAction(HWND hwnd, uint64_t taskId, uint32_t action, bool openExportAfterWrite) noexcept;
+    void ShowCompletedOverflowMenu(HWND hwnd, uint64_t taskId) noexcept;
+    bool SubmitConflictOverflowAction(HWND hwnd, uint64_t taskId, uint32_t rawAction) noexcept;
+    void ShowConflictOverflowMenu(HWND hwnd, uint64_t taskId) noexcept;
 
     LRESULT OnCreate(HWND hwnd) noexcept;
     LRESULT OnThemeChanged(HWND hwnd) noexcept;
@@ -306,6 +412,7 @@ private:
     LRESULT OnSelfTestInvoke(HWND hwnd, const PopupSelfTestInvoke* payload) noexcept;
     LRESULT OnTaskSnapshotRequest(const PopupTaskSnapshotRequest* request) const noexcept;
     LRESULT OnCaptionGlyphSnapshotRequest(CaptionGlyphDebugSnapshot* snapshot) const noexcept;
+    LRESULT OnLayoutSnapshotRequest(PopupLayoutDebugSnapshot* snapshot) const noexcept;
 #endif
 
     UINT _dpi = USER_DEFAULT_SCREEN_DPI;
@@ -332,6 +439,7 @@ private:
 
     D2D1_RECT_F _footerCancelAllRect{};
     D2D1_RECT_F _footerQueueModeRect{};
+    D2D1_RECT_F _footerSummaryRect{};
     D2D1_RECT_F _listViewportRect{};
 
     std::vector<PopupButton> _buttons;
@@ -411,6 +519,8 @@ struct FileOperationsSpeedLimitPromptDebugSnapshot
 [[nodiscard]] bool DebugInvokeFileOperationsPopup(HWND popup, const FileOperationsPopupInternal::PopupSelfTestInvoke& invoke) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsPopupTaskSnapshot(HWND popup, uint64_t taskId, FileOperationsPopupInternal::TaskSnapshot& out) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsPopupCaptionGlyphSnapshot(HWND popup, FileOperationsPopupInternal::CaptionGlyphDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugGetFileOperationsPopupLayoutSnapshot(HWND popup, FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugBuildFileOperationsGraphFairColorWeightSnapshot(FileOperationsPopupInternal::GraphHueWeightDebugSnapshot& out) noexcept;
 [[nodiscard]] float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 [[nodiscard]] double DebugSmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept;
 [[nodiscard]] double DebugDecayRateForCallbackSilence(double smoothedRate, ULONGLONG silenceMs) noexcept;

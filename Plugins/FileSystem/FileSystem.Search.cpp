@@ -919,11 +919,11 @@ HRESULT SearchDirectoryTreeParallelNameOnly(SearchRuntime& runtime) noexcept
     switch (preference)
     {
         case FileSystemSearchBackendPreference::Auto:
-            if (preferIndexHint && preferServiceBackend)
+            if (preferServiceBackend)
             {
                 selection.backend = FILESYSTEM_SEARCH_BACKEND_SERVICE;
             }
-            else if (preferIndexHint && support.indexable)
+            else if (support.indexable)
             {
                 selection.backend = FILESYSTEM_SEARCH_BACKEND_INDEX;
             }
@@ -2549,16 +2549,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::Search(const FileSystemSearchQuery* query,
             }
         }
 
-        const bool preferIndexRequested               = (query->flags & FILESYSTEM_SEARCH_PREFER_INDEX) != 0;
-        const bool autoIndexedBackendAllowed          = backendPreference == FileSystemSearchBackendPreference::Auto && preferIndexRequested;
+        const bool autoBackendPreference              = backendPreference == FileSystemSearchBackendPreference::Auto;
         const bool preferServiceBackend               = indexSupport.indexable &&
-                                                        (autoIndexedBackendAllowed || backendPreference == FileSystemSearchBackendPreference::Service) &&
+                                                        (autoBackendPreference || backendPreference == FileSystemSearchBackendPreference::Service) &&
                                                         ! serviceTemporarilyUnavailable;
         const SearchBackendSelection backendSelection = SelectSearchBackend(backendPreference, query->flags, indexSupport, preferServiceBackend);
         runtime.backend                               = backendSelection.backend;
         runtime.warningFlags |= backendSelection.warningFlags;
         if (serviceTemporarilyUnavailable && indexSupport.indexable &&
-            (autoIndexedBackendAllowed || backendPreference == FileSystemSearchBackendPreference::Service))
+            (autoBackendPreference || backendPreference == FileSystemSearchBackendPreference::Service))
         {
             runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE;
         }

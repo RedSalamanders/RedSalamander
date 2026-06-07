@@ -1,0 +1,2008 @@
+#pragma code_page(65001)
+#include "../../Resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+IDR_FOLDERVIEW_CONTEXT MENU
+BEGIN
+	    POPUP ""
+		    BEGIN
+		        MENUITEM "&Otevřít",                       IDM_FOLDERVIEW_CONTEXT_OPEN
+		        MENUITEM "&Otevřít pomocí...",               IDM_FOLDERVIEW_CONTEXT_OPEN_WITH
+		        MENUITEM "&Zobrazit prostor",                 IDM_FOLDERVIEW_CONTEXT_VIEW_SPACE
+		        MENUITEM SEPARATOR
+		        MENUITEM "&Odstranit",                     IDM_FOLDERVIEW_CONTEXT_DELETE
+		        MENUITEM "&Přesunout...",                    IDM_FOLDERVIEW_CONTEXT_MOVE
+		        MENUITEM "&Přejmenovat",                     IDM_FOLDERVIEW_CONTEXT_RENAME
+	        MENUITEM SEPARATOR
+	        MENUITEM "&Kopírovat",                       IDM_FOLDERVIEW_CONTEXT_COPY
+		        MENUITEM "&Vložit",                      IDM_FOLDERVIEW_CONTEXT_PASTE
+		        MENUITEM SEPARATOR
+		        MENUITEM "&Vlastnosti",                 IDM_FOLDERVIEW_CONTEXT_PROPERTIES
+#if defined(_DEBUG) || defined(DEBUG)
+		        MENUITEM SEPARATOR
+		        POPUP "&Překryvná ukázka [dbg]"
+		        BEGIN
+		            POPUP "&Modální (blokuje vstup) [dbg]"
+		            BEGIN
+		                MENUITEM "&Chyba [dbg]",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR
+		                MENUITEM "&Upozornění [dbg]",                    IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING
+		                MENUITEM "&Informace [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION
+		                MENUITEM "&Čekejte prosím [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY
+		                MENUITEM "&Čekejte prosím (se zrušením) [dbg]",  IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL
+		            END
+		            POPUP "&Nemodální (neblokuje) [dbg]"
+		            BEGIN
+		                MENUITEM "&Chyba [dbg]",                      IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR_NONMODAL
+		                MENUITEM "&Upozornění [dbg]",                    IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING_NONMODAL
+		                MENUITEM "&Informace [dbg]",                IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION_NONMODAL
+		                MENUITEM "&Načítání zrušeno (bez uzavření) [dbg]", IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_CANCELED
+		            END
+		            MENUITEM SEPARATOR
+		            MENUITEM "&Skrýt překryvnou vrstvu [dbg]",               IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_HIDE
+		        END
+#endif
+		    END
+		END
+
+	IDC_REDSALAMANDER MENUEX
+BEGIN
+    POPUP "&Vlevo",                          65535,MFT_STRING,MFS_ENABLED
+    BEGIN
+        MENUITEM "&Změnit Disk",        IDM_LEFT_CHANGE_DRIVE,MFT_STRING,MFS_ENABLED
+        POPUP "&Přejít na",                         65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Zpět",                   IDM_LEFT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Vpřed",                IDM_LEFT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Nadřazený adresář", IDM_LEFT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Kořenový adresář",                    IDM_LEFT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Cesta z jiného panelu",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Horké stezky...",      IDM_LEFT_HOT_PATHS,MFT_STRING,MFS_ENABLED
+            MENUITEM "(Prázdné)",                      0,MFT_STRING,MFS_GRAYED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "(Prázdné)",                      0,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Stručně",               IDM_LEFT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Podrobné",            IDM_LEFT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Extra podrobné",      IDM_LEFT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Miniatury",          IDM_LEFT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Podokno náhledu",      IDM_LEFT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        POPUP "&Seřadit podle",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Žádný",              IDM_LEFT_SORT_NONE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Jméno",              IDM_LEFT_SORT_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Rozšíření",         IDM_LEFT_SORT_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Čas",              IDM_LEFT_SORT_TIME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Velikost",              IDM_LEFT_SORT_SIZE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Atributy",                 IDM_LEFT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+        END
+        POPUP "&Zobrazit",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Skryté soubory",        IDM_LEFT_SHOW_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Systémové soubory",        IDM_LEFT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Přípony souborů",   IDM_LEFT_SHOW_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Filtrační lišta",         IDM_LEFT_FILTER_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Navigační lišta",     IDM_LEFT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Stavový řádek",            IDM_LEFT_STATUSBAR,MFT_STRING,MFS_ENABLED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Maximalizovat/Obnovit podokno", IDM_LEFT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Vyměňte tabule",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Cesta z jiného panelu",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Obnovit",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrovat...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
+#if defined(_DEBUG) || defined(DEBUG)
+	        MENUITEM MFT_SEPARATOR
+	        POPUP "&Překryvná ukázka [dbg]",          65535,MFT_STRING,MFS_ENABLED
+		        BEGIN
+		            POPUP "&Modální (blokuje vstup) [dbg]",          65535,MFT_STRING,MFS_ENABLED
+		            BEGIN
+		                MENUITEM "&Chyba [dbg]",                      IDM_LEFT_OVERLAY_SAMPLE_ERROR,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Upozornění [dbg]",                    IDM_LEFT_OVERLAY_SAMPLE_WARNING,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Informace [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_INFORMATION,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Čekejte prosím [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_BUSY,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Čekejte prosím (se zrušením) [dbg]",  IDM_LEFT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
+	            END
+	            POPUP "&Nemodální (neblokuje) [dbg]",      65535,MFT_STRING,MFS_ENABLED
+	            BEGIN
+	                MENUITEM "&Chyba [dbg]",                      IDM_LEFT_OVERLAY_SAMPLE_ERROR_NONMODAL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Upozornění [dbg]",                    IDM_LEFT_OVERLAY_SAMPLE_WARNING_NONMODAL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Informace [dbg]",                IDM_LEFT_OVERLAY_SAMPLE_INFORMATION_NONMODAL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Načítání zrušeno (bez uzavření) [dbg]", IDM_LEFT_OVERLAY_SAMPLE_CANCELED,MFT_STRING,MFS_ENABLED
+	            END
+		            MENUITEM MFT_SEPARATOR
+		            MENUITEM "&Skrýt překryvnou vrstvu [dbg]",               IDM_LEFT_OVERLAY_SAMPLE_HIDE,MFT_STRING,MFS_ENABLED
+		        END
+#endif
+	    END
+    POPUP "&Soubory",                         65535,MFT_STRING,MFS_ENABLED
+    BEGIN
+        MENUITEM "&Přejmenovat...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Otevřít / Provést",       IDM_PANE_EXECUTE_OPEN,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Zobrazení",                    IDM_PANE_VIEW,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Zobrazit šířku...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Alternativní pohled",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
+        POPUP "&Zobrazit s",                      65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "(Prázdné)",                      0,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM "&Úpravy",                    IDM_PANE_EDIT,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Alternativní úprava", IDM_PANE_ALTERNATE_EDIT,MFT_STRING,MFS_ENABLED
+        POPUP "&Upravit pomocí",                      65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "(Prázdné)",                      0,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM "&Upravit nový soubor...",   IDM_PANE_EDIT_NEW,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Kopírovat...",                  IDM_PANE_COPY_TO_OTHER,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Přesunout/Přejmenovat...",           IDM_PANE_MOVE_TO_OTHER,MFT_STRING,MFS_ENABLED
+        POPUP "&Odstranit",                         65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Odstranit",                   IDM_PANE_DELETE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Přesunout do koše",     IDM_PANE_MOVE_TO_RECYCLE_BIN,MFT_STRING,MFS_ENABLED
+        END
+        MENUITEM "&Trvalé smazání",   IDM_PANE_PERMANENT_DELETE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Vlastnosti",        IDM_PANE_OPEN_PROPERTIES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Kontextové menu",      IDM_PANE_CONTEXT_MENU,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Kontextová nabídka (aktuální adresář)", IDM_PANE_CONTEXT_MENU_CURRENT_DIRECTORY,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Zabezpečení...",                       IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Změnit atributy...", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Změnit případ...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Zabalit...",                     IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Rozbalit...",                   IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
+        POPUP "&Nové",                            65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Složka...",                IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "(Prázdné)",                      0,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Konec",                IDM_EXIT,MFT_STRING,MFS_ENABLED
+    END
+    POPUP "&Úpravy",                          65535,MFT_STRING,MFS_ENABLED
+    BEGIN
+        MENUITEM "&Řez",                                IDM_PANE_CLIPBOARD_CUT,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Kopírovat",           IDM_PANE_CLIPBOARD_COPY,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Vložit",         IDM_PANE_CLIPBOARD_PASTE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Vložit zástupce",                      IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "Kopírovat cestu + název jako text", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Zkopírovat název jako text",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Kopírovat cestu jako text",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Zkopírujte cestu UNC + název jako text", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Vyberte...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Zrušit výběr...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Invertovat výběr",                    IDM_PANE_SELECTION_INVERT,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Vyberte Vše",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Zrušte výběr všech",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Obnovit výběr",                   IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Vyberte Další",          IDM_PANE_SELECT_NEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Vyberte + Vypočítat velikost adresáře + Další", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
+        POPUP "&Pokročilé",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Uložit výběr", IDM_PANE_SAVE_SELECTION,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Načíst výběr...", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Vyberte možnost Stejná rozšíření",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "Zrušte výběr stejných rozšíření",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Vyberte možnost Stejná jména",                   IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "Zrušte výběr Stejná jména",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Skrýt vybraná jména",          IDM_PANE_SELECTION_HIDE_SELECTED_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Skrýt nevybraná jména",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Zobrazit skrytá jména",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Přejděte na předchozí vybraný název",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "Přejděte na další vybraný název",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+        END
+    END
+    POPUP "&Příkazy",                      65535,MFT_STRING,MFS_ENABLED
+    BEGIN
+        MENUITEM "&Vytvořit adresář...", IDM_PANE_CREATE_DIR,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Změnit adresář...", IDM_PANE_CHANGE_DIRECTORY,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Porovnat adresáře...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Vypočítejte obsazený prostor", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Najít soubory a adresáře...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Vytvořit seznam souborů...", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Přejděte na zástupce nebo cíl odkazu", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Seznam otevřených souborů", IDM_PANE_LIST_OPENED_FILES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Zobrazit historii složek", IDM_PANE_SHOW_FOLDERS_HISTORY,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Připojit síťový disk...", IDM_PANE_CONNECT,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Odpojit...", IDM_PANE_DISCONNECT,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Sdílené adresáře...", IDM_PANE_SHARES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Správce připojení...", IDM_PANE_CONNECTION_MANAGER,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Command Shell", IDM_PANE_OPEN_COMMAND_SHELL,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Rychlé vyhledávání", IDM_PANE_QUICK_SEARCH,MFT_STRING,MFS_ENABLED
+        MENUITEM "Přeneste aktuální adresář do příkazového řádku", IDM_PANE_BRING_CURRENT_DIR_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Přeneste název souboru na příkazový řádek", IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Nabídka podokna", IDM_PANE_MENU,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Znovu si přečtěte asociace", IDM_APP_REREAD_ASSOCIATIONS,MFT_STRING,MFS_ENABLED
+        POPUP "&Uživatelské menu",                          65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "(Prázdné)",                     0,MFT_STRING,MFS_GRAYED
+        END
+        POPUP "&Otevřete Průzkumník souborů",               65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Aktuální složka", IDM_PANE_OPEN_CURRENT_FOLDER,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Plocha",                  IDM_APP_OPEN_FILE_EXPLORER_DESKTOP,MFT_STRING,MFS_ENABLED
+            MENUITEM "Dokumenty",                IDM_APP_OPEN_FILE_EXPLORER_DOCUMENTS,MFT_STRING,MFS_ENABLED
+            MENUITEM "Stahování",                IDM_APP_OPEN_FILE_EXPLORER_DOWNLOADS,MFT_STRING,MFS_ENABLED
+            MENUITEM "obrázky",                 IDM_APP_OPEN_FILE_EXPLORER_PICTURES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Hudba",                    IDM_APP_OPEN_FILE_EXPLORER_MUSIC,MFT_STRING,MFS_ENABLED
+            MENUITEM "videa",                   IDM_APP_OPEN_FILE_EXPLORER_VIDEOS,MFT_STRING,MFS_ENABLED
+            MENUITEM "OneDrive",                 IDM_APP_OPEN_FILE_EXPLORER_ONEDRIVE,MFT_STRING,MFS_ENABLED
+        END
+    END
+    POPUP "&Pluginy",                       65535,MFT_STRING,MFS_ENABLED
+    BEGIN
+        MENUITEM "&Správce pluginů...",           IDM_VIEW_PLUGINS_MANAGE,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "(Prázdné)",                     0,MFT_STRING,MFS_GRAYED
+    END
+    POPUP "&Zobrazení",                          65535,MFT_STRING,MFS_ENABLED
+    BEGIN
+        POPUP "&téma",                         65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Vysoký kontrast (systém)",     IDM_VIEW_THEME_HIGH_CONTRAST,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Systém",                     IDM_VIEW_THEME_SYSTEM,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Světlý",                      IDM_VIEW_THEME_LIGHT,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Tmavý",                       IDM_VIEW_THEME_DARK,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Duha",                    IDM_VIEW_THEME_RAINBOW,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Vysoký kontrast (aplikace)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "Předchozí téma",              IDM_VIEW_THEME_PREV,MFT_STRING,MFS_ENABLED
+            MENUITEM "Další téma",                  IDM_VIEW_THEME_NEXT,MFT_STRING,MFS_ENABLED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Přepnout na celou obrazovku", IDM_APP_FULL_SCREEN,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Nabídka okna",            IDM_VIEW_WINDOW_MENU,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Přepnout zaměření podokna",            IDM_VIEW_SWITCH_PANE_FOCUS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Položky operace se soubory se nezdařily", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Funkční lišta",                IDM_VIEW_FUNCTIONBAR,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Panel nabídek",                    IDM_VIEW_MENUBAR,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Předvolby...",              IDM_FILE_PREFERENCES,MFT_STRING,MFS_ENABLED
+    END
+    POPUP "&Správně",                         65535,MFT_STRING,MFS_ENABLED
+    BEGIN
+        MENUITEM "&Změnit Disk",        IDM_RIGHT_CHANGE_DRIVE,MFT_STRING,MFS_ENABLED
+        POPUP "&Přejít na",                         65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Zpět",                   IDM_RIGHT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Vpřed",                IDM_RIGHT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Nadřazený adresář", IDM_RIGHT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Kořenový adresář",                    IDM_RIGHT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Cesta z jiného panelu",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Horké stezky...",      IDM_RIGHT_HOT_PATHS,MFT_STRING,MFS_ENABLED
+            MENUITEM "(Prázdné)",                      0,MFT_STRING,MFS_GRAYED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "(Prázdné)",                      0,MFT_STRING,MFS_GRAYED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Stručně",               IDM_RIGHT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Podrobné",            IDM_RIGHT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Extra podrobné",      IDM_RIGHT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Miniatury",          IDM_RIGHT_DISPLAY_THUMBNAILS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Podokno náhledu",      IDM_RIGHT_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        POPUP "&Seřadit podle",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Žádný",              IDM_RIGHT_SORT_NONE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Jméno",              IDM_RIGHT_SORT_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Rozšíření",         IDM_RIGHT_SORT_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Čas",              IDM_RIGHT_SORT_TIME,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Velikost",              IDM_RIGHT_SORT_SIZE,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Atributy",                 IDM_RIGHT_SORT_ATTRIBUTES,MFT_STRING,MFS_ENABLED
+        END
+        POPUP "&Zobrazit",                       65535,MFT_STRING,MFS_ENABLED
+        BEGIN
+            MENUITEM "&Skryté soubory",        IDM_RIGHT_SHOW_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Systémové soubory",        IDM_RIGHT_SHOW_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Přípony souborů",   IDM_RIGHT_SHOW_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
+            MENUITEM MFT_SEPARATOR
+            MENUITEM "&Filtrační lišta",         IDM_RIGHT_FILTER_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Navigační lišta",     IDM_RIGHT_NAVIGATION_BAR,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Stavový řádek",            IDM_RIGHT_STATUSBAR,MFT_STRING,MFS_ENABLED
+        END
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&Maximalizovat/Obnovit podokno", IDM_RIGHT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Vyměňte tabule",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Cesta z jiného panelu",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Obnovit",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Filtrovat...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
+#if defined(_DEBUG) || defined(DEBUG)
+	        MENUITEM MFT_SEPARATOR
+	        POPUP "&Překryvná ukázka [dbg]",          65535,MFT_STRING,MFS_ENABLED
+	        BEGIN
+	            POPUP "&Modální (blokuje vstup) [dbg]",          65535,MFT_STRING,MFS_ENABLED
+	            BEGIN
+	                MENUITEM "&Chyba [dbg]",                      IDM_RIGHT_OVERLAY_SAMPLE_ERROR,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Upozornění [dbg]",                    IDM_RIGHT_OVERLAY_SAMPLE_WARNING,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Informace [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_INFORMATION,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Čekejte prosím [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_BUSY,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Čekejte prosím (se zrušením) [dbg]",  IDM_RIGHT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,MFT_STRING,MFS_ENABLED
+	            END
+	            POPUP "&Nemodální (neblokuje) [dbg]",      65535,MFT_STRING,MFS_ENABLED
+	            BEGIN
+	                MENUITEM "&Chyba [dbg]",                      IDM_RIGHT_OVERLAY_SAMPLE_ERROR_NONMODAL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Upozornění [dbg]",                    IDM_RIGHT_OVERLAY_SAMPLE_WARNING_NONMODAL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Informace [dbg]",                IDM_RIGHT_OVERLAY_SAMPLE_INFORMATION_NONMODAL,MFT_STRING,MFS_ENABLED
+	                MENUITEM "&Načítání zrušeno (bez uzavření) [dbg]", IDM_RIGHT_OVERLAY_SAMPLE_CANCELED,MFT_STRING,MFS_ENABLED
+	            END
+	            MENUITEM MFT_SEPARATOR
+	            MENUITEM "&Skrýt překryvnou vrstvu [dbg]",               IDM_RIGHT_OVERLAY_SAMPLE_HIDE,MFT_STRING,MFS_ENABLED
+	        END
+#endif
+	    END
+	    POPUP "&Nápověda",                          65535,MFT_STRING | MFT_RIGHTJUSTIFY,MFS_ENABLED
+    BEGIN
+        MENUITEM "&Zobrazit zástupce...", IDM_APP_SHOW_SHORTCUTS,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Externí nápověda",        IDM_APP_EXTERNAL_HELP,MFT_STRING,MFS_ENABLED
+        MENUITEM MFT_SEPARATOR
+        MENUITEM "&O...",                  IDM_ABOUT,MFT_STRING,MFS_ENABLED
+    END
+END
+
+IDR_COMPARE_DIRECTORIES_MENU MENU
+BEGIN
+    POPUP "&Porovnejte"
+    BEGIN
+        MENUITEM "&Možnosti...",              IDM_COMPARE_OPTIONS
+        MENUITEM "&Znovu naskenovat",                 IDM_COMPARE_RESCAN
+        MENUITEM SEPARATOR
+        MENUITEM "&Zobrazit identické položky",   IDM_COMPARE_TOGGLE_IDENTICAL
+        MENUITEM SEPARATOR
+        MENUITEM "&Obnovit výběr rozdílů", IDM_COMPARE_RESTORE_DIFFERENCES_SELECTION
+        MENUITEM "&Invertovat výběr rozdílů",  IDM_COMPARE_INVERT_DIFFERENCES_SELECTION
+        MENUITEM SEPARATOR
+        MENUITEM "&Zavřít",                  IDM_COMPARE_CLOSE
+    END
+    POPUP "&Zobrazení"
+    BEGIN
+        MENUITEM "&Stručně\tAlt+2",           IDM_PANE_DISPLAY_BRIEF
+        MENUITEM "&Podrobné\tAlt+3",        IDM_PANE_DISPLAY_DETAILED
+        MENUITEM "&Extra podrobné\tAlt+4",  IDM_PANE_DISPLAY_EXTRA_DETAILED
+    END
+END
+
+IDD_PREFERENCES DIALOGEX 0, 0, 500, 340
+STYLE DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_CLIPCHILDREN | DS_SHELLFONT
+CAPTION "Předvolby"
+FONT 9, "Segoe UI"
+BEGIN
+    CONTROL         "",IDC_PREFS_CATEGORY_LIST,"Static",WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY,8,8,120,308
+    CONTROL         "",IDC_PREFS_PAGE_HOST,"RedSalamanderPrefsPageHost",WS_CHILD | WS_VISIBLE | WS_TABSTOP,136,8,356,308
+    DEFPUSHBUTTON   "OK",IDOK,318,324,54,14
+    PUSHBUTTON      "Storno",IDCANCEL,376,324,54,14
+    PUSHBUTTON      "Použít",IDC_PREFS_APPLY,434,324,54,14
+END
+
+IDD_CONNECTION_CRED_PROMPT DIALOGEX 0, 0, 300, 150
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_SHELLFONT
+CAPTION "Jsou vyžadovány přihlašovací údaje"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "",IDC_CONNECTION_CRED_PROMPT_MESSAGE,10,10,280,24,SS_NOPREFIX
+    LTEXT           "",IDC_CONNECTION_CRED_PROMPT_USER_LABEL,10,40,280,10
+    EDITTEXT        IDC_CONNECTION_CRED_PROMPT_USER_EDIT,10,52,280,16,ES_AUTOHSCROLL
+    LTEXT           "",IDC_CONNECTION_CRED_PROMPT_SECRET_LABEL,10,74,280,10
+    EDITTEXT        IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT,10,86,236,16,ES_AUTOHSCROLL | ES_PASSWORD
+    PUSHBUTTON      "",IDC_CONNECTION_CRED_PROMPT_SHOW_SECRET,250,86,40,16
+    LTEXT           "",IDC_CONNECTION_CRED_PROMPT_VALIDATION,10,106,280,22,SS_NOPREFIX
+    DEFPUSHBUTTON   "",IDOK,190,132,48,14
+    PUSHBUTTON      "",IDCANCEL,242,132,48,14
+END
+
+IDD_COMPARE_DIRECTORIES_OPTIONS DIALOGEX 0, 0, 360, 276
+STYLE DS_SETFONT | DS_CONTROL | WS_CHILD | WS_CLIPSIBLINGS
+EXSTYLE WS_EX_CONTROLPARENT
+FONT 9, "Segoe UI"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,198,255,48,14
+    PUSHBUTTON      "Storno",IDCANCEL,250,255,50,14
+END
+
+STRINGTABLE
+BEGIN
+    IDC_REDSALAMANDER       "REDSALAMANDER"
+    IDS_CAPTION_ERROR       "Chyba"
+    IDS_CAPTION_WARNING     "Upozornění"
+    IDS_CAPTION_INVALID_PATH "Neplatná cesta"
+    IDS_BTN_OK              "OK"
+    IDS_BTN_CANCEL          "Storno"
+    IDS_BTN_YES             "Ano"
+    IDS_BTN_NO              "Ne"
+    IDS_BTN_APPLY           "Použít"
+    IDS_PREFS_CAPTION       "Předvolby"
+    IDS_PREFS_CONFIRM_SAVE_CHANGES "Uložit změny před zavřením Předvoleb?"
+    IDS_PREFS_CAT_GENERAL   "Generál"
+    IDS_PREFS_CAT_GENERAL_DESC "Obecné předvolby aplikace."
+    IDS_PREFS_CAT_PANES     "Skla"
+    IDS_PREFS_CAT_PANES_DESC "Předvolby levého a pravého panelu."
+    IDS_PREFS_CAT_VIEWERS   "Diváci"
+    IDS_PREFS_CAT_VIEWERS_DESC "Nakonfigurujte akce prohlížeče a přidružení příkazů."
+    IDS_PREFS_CAT_EDITORS   "redaktoři"
+    IDS_PREFS_CAT_EDITORS_DESC "Nakonfigurujte akce editoru a přidružení příkazů."
+    IDS_PREFS_CAT_USER_MENU "Uživatelské menu"
+    IDS_PREFS_CAT_USER_MENU_DESC "Konfigurace vlastních externích příkazů."
+    IDS_PREFS_EDITORS_PLACEHOLDER "Nakonfigurujte akce a přidružení editoru."
+    IDS_PREFS_EDITORS_EMPTY_TITLE "Zatím žádné akce editoru"
+    IDS_PREFS_EDITORS_EMPTY_BODY "Přidejte akce editoru v nastavení a poté zde vyberte primární a alternativní výchozí hodnoty."
+    IDS_PREFS_EDITORS_EMPTY_CAPTION "Akce editoru používají stejný makromodel externího programu jako Zobrazit, Alternativní pohled a Upravit pomocí."
+    IDS_PREFS_CAT_KEYBOARD  "klávesnice"
+    IDS_PREFS_CAT_KEYBOARD_DESC "Klávesové zkratky."
+    IDS_PREFS_CAT_MOUSE     "myš"
+    IDS_PREFS_CAT_MOUSE_DESC "Myšové zkratky."
+    IDS_PREFS_MOUSE_PLACEHOLDER "Konfigurace gest myši je plánována pro budoucí verzi."
+    IDS_PREFS_MOUSE_EMPTY_TITLE "Zatím žádné nastavení myši"
+    IDS_PREFS_MOUSE_EMPTY_BODY "Konfigurace gest myši je plánována pro budoucí verzi."
+    IDS_PREFS_MOUSE_EMPTY_CAPTION "Aktuální chování myši stále používá standardní vestavěné výchozí hodnoty."
+    IDS_PREFS_CAT_THEMES    "Motivy"
+    IDS_PREFS_CAT_THEMES_DESC "Vyberte a upravte motivy."
+    IDS_PREFS_CAT_PLUGINS   "Pluginy"
+    IDS_PREFS_CAT_PLUGINS_DESC "Spravovat pluginy."
+    IDS_PREFS_CAT_FILE_OPERATIONS "Operace se soubory"
+    IDS_PREFS_CAT_FILE_OPERATIONS_DESC "Výchozí nastavení operace se soubory na celém hostiteli."
+    IDS_PREFS_CAT_COMPARE_DIRECTORIES "Porovnejte adresáře"
+    IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC "Výchozí možnosti pro porovnání adresářů."
+    IDS_PREFS_CAT_HOT_PATHS "Horké cesty"
+    IDS_PREFS_CAT_HOT_PATHS_DESC "Uložte si cesty ke složce pro rychlý přístup."
+    IDS_PREFS_CAT_ADVANCED  "Pokročilé"
+    IDS_PREFS_CAT_ADVANCED_DESC "Pokročilé možnosti pro zkušené uživatele."
+    IDS_PREFS_OOM_PREPARE_SAVE "Nedostatek paměti při přípravě předvoleb pro uložení."
+    IDS_PREFS_OOM_APPLY     "Nedostatek paměti při použití předvoleb."
+    IDS_PREFS_COMMON_SEARCH "Hledat"
+    IDS_PREFS_COMMON_ON     "Zapnuto"
+    IDS_PREFS_COMMON_OFF    "Vypnuto"
+    IDS_BTN_HISTORY         "Historie"
+    IDS_CAPTION_CONNECTIONS "Spojení"
+    IDS_COMPARE_DIRECTORIES_TITLE "Porovnejte adresáře"
+    IDS_COMPARE_OPTIONS_SECTION_COMPARE "Porovnejte soubory se stejným názvem podle"
+    IDS_COMPARE_OPTIONS_SECTION_SUBDIRS "Možnosti podadresářů"
+    IDS_COMPARE_OPTIONS_SECTION_ADVANCED "Další možnosti"
+    IDS_COMPARE_OPTIONS_SECTION_IGNORE "Více možností"
+
+    IDS_COMPARE_OPTIONS_SIZE_TITLE "Velikost"
+    IDS_COMPARE_OPTIONS_SIZE_DESC "Budou vybrány větší soubory."
+    IDS_COMPARE_OPTIONS_DATETIME_TITLE "Datum a čas"
+    IDS_COMPARE_OPTIONS_DATETIME_DESC "Budou vybrány novější soubory."
+    IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE "Atributy"
+    IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC "Budou vybrány soubory s různými atributy."
+    IDS_COMPARE_OPTIONS_CONTENT_TITLE "Obsah"
+    IDS_COMPARE_OPTIONS_CONTENT_DESC "Budou vybrány soubory s různým obsahem."
+    IDS_COMPARE_OPTIONS_CONTENT_DESC_UNSUPPORTED "Porovnání obsahu vyžaduje podporu I/O streamování na obou souborových systémech."
+    IDS_COMPARE_OPTIONS_CONTENT_WORKERS_TITLE "Obsah porovnávat pracovníky"
+    IDS_COMPARE_OPTIONS_CONTENT_WORKERS_DESC "Počet pracovníků na pozadí použitých, když je povoleno Porovnat obsah. Auto si vybere až 4."
+    IDS_COMPARE_OPTIONS_CONTENT_WORKERS_AUTO "Auto (≤4)"
+
+    IDS_COMPARE_OPTIONS_SUBDIRS_TITLE "Porovnejte podadresáře"
+    IDS_COMPARE_OPTIONS_SUBDIRS_DESC "Budou vybrány adresáře s různým obsahem. Budou vybrány adresáře existující pouze v jednom panelu."
+    IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE "Porovnejte atributy podadresářů"
+    IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC "Budou vybrány adresáře s různými atributy."
+    IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE "Vyberte podadresáře obsažené pouze v jednom panelu"
+    IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC "Budou vybrány adresáře existující pouze v jednom panelu."
+
+    IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE "Ignorovat soubory"
+    IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC "Zástupné znaky oddělené ';'."
+    IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE "Ignorovat adresáře"
+    IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC "Zástupné znaky oddělené ';'."
+    IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_TITLE "Uchovávejte stejné položky"
+    IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_DESC "Zachovejte identické položky, abyste mohli přepínat „Zobrazit identické položky“ bez opětovného skenování. Používá více paměti na velmi velkých stromech."
+    IDS_FOLDERVIEW_RENAME_CAPTION "Přejmenovat"
+    IDS_FOLDERVIEW_RENAME_LABEL "Nové jméno:"
+    IDS_ABOUT_WINDOW_CAPTION "O RedSalamanderovi"
+    IDS_ABOUT_COPYRIGHT "Copyright (c) 2026 RedSalamander Authors"
+    IDS_FMT_COMPARE_SCAN_STATUS "Skenování: {0} (složky {1}, položky {2})"
+    IDS_FMT_COMPARE_CONTENT_STATUS "Porovnání: {0} ({1} / {2})"
+    IDS_FMT_COMPARE_CONTENT_STATUS_UNKNOWN "Porovnání: {0} (přečteno {1})"
+    IDS_COMPARE_DETAILS_IDENTICAL "Identické"
+    IDS_COMPARE_DETAILS_ONLY_IN_LEFT "Pouze v levé složce"
+    IDS_COMPARE_DETAILS_ONLY_IN_RIGHT "Pouze ve správné složce"
+    IDS_COMPARE_DETAILS_TYPE_MISMATCH "Neshoda souboru/složky"
+    IDS_COMPARE_DETAILS_BIGGER "Větší"
+    IDS_COMPARE_DETAILS_SMALLER "Menší"
+    IDS_COMPARE_DETAILS_NEWER "Novější"
+    IDS_COMPARE_DETAILS_OLDER "Starší"
+    IDS_COMPARE_DETAILS_ATTRIBUTES_DIFFER "Atributy se liší"
+    IDS_COMPARE_DETAILS_CONTENT_DIFFER "Obsah se liší"
+    IDS_COMPARE_DETAILS_CONTENT_COMPARING "Porovnávám..."
+    IDS_COMPARE_DETAILS_SUBDIR_ATTRIBUTES_DIFFER "Atributy složky se liší"
+    IDS_COMPARE_DETAILS_SUBDIR_CONTENT_DIFFER "Podadresáře se liší"
+    IDS_COMPARE_DETAILS_SUBDIR_COMPUTING "Počítání..."
+    IDS_COMPARE_BANNER_TITLE "Porovnat složku"
+    IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS "Možnosti..."
+    IDS_COMPARE_BANNER_RESCAN "Znovu naskenovat"
+    IDS_COMPARE_BANNER_CANCEL "Storno"
+    IDS_COMPARE_WATERMARK_IN_PROGRESS "Porovnávám..."
+    IDS_COMPARE_WATERMARK_CANCELLED "Srovnání zrušeno"
+    IDS_COMPARE_NO_DIFFERENCES "Žádné rozdíly"
+    IDS_COMPARE_NO_DIFFERENCES_FUN_1 "✅\r\nVšechno odpovídá."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_2 "🎯\r\nPerfektní synchronizace."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_3 "🟢\r\nVše jasné – nebyly nalezeny žádné rozdíly."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_4 "🧘\r\nMírumilovný: obě strany souhlasí."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_5 "🧩\r\nDvě složky, jeden příběh."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_6 "🤝\r\nVlevo a vpravo: stejný obsah."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_7 "🌟\r\nNejsou potřeba žádné změny."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_8 "🔍\r\nŽádné rozdíly se zde neskrývají."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_9 "📎\r\nJednovaječná dvojčata."
+    IDS_COMPARE_NO_DIFFERENCES_FUN_10 "✨\r\nNulové rozdíly. Nekonečné možnosti."
+    IDS_COMPARE_FOLDER_NOT_FOUND "Tato složka v této hierarchii neexistuje."
+    IDS_COMPARE_DETAILS_ACCESS_DENIED "Přístup odepřen"
+    IDS_COMPARE_LEAVE_SCOPE_TITLE "Porovnat složku"
+    IDS_COMPARE_LEAVE_SCOPE_MESSAGE "Opuštěním rozsahu porovnání zrušíte aktuální skenování a nevyřízené porovnání obsahu."
+    IDS_FMT_COMPARE_DONE_SUMMARY "Naskenované složky {0}, položky {1} • Porovnání souborů {2}/{3}"
+    IDS_FMT_COMPARE_DONE_SUMMARY_SCAN_ONLY "Naskenované složky {0}, záznamy {1}"
+    IDS_FMT_COMPARE_SCAN_CANDIDATES_STATUS "Kandidáti obsahu: soubory {0}, {1}"
+    IDS_FMT_COMPARE_CONTENT_COUNTS_STATUS "Porovnání obsahu: {0} čeká na vyřízení, {1} dokončeno"
+    IDS_FMT_COMPARE_CONTENT_TOTAL_BYTES_STATUS "Celkem: {0} / {1}"
+    IDS_FMT_COMPARE_ETA "ETA: {0}"
+    IDS_FMT_COMPARE_ELAPSED "Uplynulo: {0}"
+    IDS_CONNECTIONS_LIST_HEADER "Spojení"
+    IDS_CONNECTIONS_SECTION_CONNECTION "Připojení"
+    IDS_CONNECTIONS_SECTION_AUTH "Autentizace"
+    IDS_CONNECTIONS_LABEL_NAME "Jméno"
+    IDS_CONNECTIONS_LABEL_PROTOCOL "Protokol"
+    IDS_CONNECTIONS_LABEL_HOST "Hostitel"
+    IDS_CONNECTIONS_LABEL_REGION "Region"
+    IDS_CONNECTIONS_LABEL_PORT "Port"
+    IDS_CONNECTIONS_LABEL_INITIAL_PATH "Počáteční cesta"
+    IDS_CONNECTIONS_LABEL_COPYMOVE_CONCURRENCY "Maximální souběžnost kopírování/přesunutí (0 = výchozí)"
+    IDS_CONNECTIONS_LABEL_DELETE_CONCURRENCY "Smazat maximální souběžnost (0 = výchozí)"
+    IDS_CONNECTIONS_CUE_COPYMOVE_CONCURRENCY "0 = zdědit (max. 8)"
+    IDS_CONNECTIONS_CUE_DELETE_CONCURRENCY "0 = zdědit (max. 64)"
+    IDS_CONNECTIONS_LABEL_ANONYMOUS "Anonymní přihlášení"
+    IDS_CONNECTIONS_LABEL_USER "Uživatel"
+    IDS_CONNECTIONS_LABEL_ACCESS_KEY_ID "ID přístupového klíče"
+    IDS_CONNECTIONS_LABEL_PASSWORD "Heslo"
+    IDS_CONNECTIONS_LABEL_PASSPHRASE "Přístupová fráze"
+    IDS_CONNECTIONS_LABEL_SECRET_ACCESS_KEY "Tajný přístupový klíč"
+    IDS_CONNECTIONS_LABEL_SAVE_PASSWORD "Uložit heslo"
+    IDS_CONNECTIONS_LABEL_REMEMBER_SIGN_IN "Pamatujte na přihlášení"
+    IDS_CONNECTIONS_LABEL_REQUIRE_HELLO "Vyžadovat Windows Hello"
+    IDS_CONNECTIONS_LABEL_IGNORE_SSL_TRUST "Ignorovat důvěryhodnost pro SSL"
+    IDS_CONNECTIONS_LABEL_ENDPOINT_OVERRIDE "Přepsání koncového bodu"
+    IDS_CONNECTIONS_LABEL_USE_HTTPS "Použijte HTTPS"
+    IDS_CONNECTIONS_LABEL_VERIFY_TLS "Ověřte certifikát TLS"
+    IDS_CONNECTIONS_LABEL_USE_VIRTUAL_ADDRESSING "Použijte styl adresování hostovaného virtuálním serverem"
+    IDS_CONNECTIONS_LABEL_SSH_PRIVATEKEY "Soukromý klíč"
+    IDS_CONNECTIONS_LABEL_SSH_KNOWNHOSTS "známí_hostitelé"
+    IDS_CONNECTIONS_BTN_NEW_ELLIPSIS "Nové..."
+    IDS_CONNECTIONS_BTN_RENAME_ELLIPSIS "Přejmenovat..."
+    IDS_CONNECTIONS_BTN_REMOVE "Odebrat"
+    IDS_CONNECTIONS_BTN_CONNECT "Připojte se"
+    IDS_CONNECTIONS_BTN_CLOSE "Zavřít"
+    IDS_CONNECTIONS_QUICK_CONNECT "<Rychlé připojení>"
+    IDS_CONNECTIONS_PROMPT_PASSWORD_CAPTION "Je vyžadováno heslo"
+    IDS_CONNECTIONS_PROMPT_PASSWORD_MESSAGE_FMT "Zadejte heslo pro připojení „{0}“."
+    IDS_CONNECTIONS_PROMPT_PASSPHRASE_CAPTION "Je vyžadována přístupová fráze"
+    IDS_CONNECTIONS_PROMPT_PASSPHRASE_MESSAGE_FMT "Zadejte heslo pro připojení „{0}“."
+    IDS_CONNECTIONS_PROMPT_FTP_CREDENTIALS_CAPTION "Jsou vyžadovány přihlašovací údaje"
+    IDS_CONNECTIONS_PROMPT_FTP_ANON_REJECTED_MESSAGE_FMT "FTP server odmítl anonymní přihlášení. Zadejte přihlašovací údaje pro připojení „{0}“."
+    IDS_CONNECTIONS_ERR_PROMPT_USER_REQUIRED "Je vyžadováno uživatelské jméno."
+    IDS_CONNECTIONS_ERR_PROMPT_PASSWORD_REQUIRED "Je vyžadováno heslo."
+    IDS_CONNECTIONS_CONFIRM_DISCARD_MESSAGE "Máte neuložené změny připojení. Zvolte OK, chcete-li je zahodit, nebo Storno, chcete-li pokračovat v úpravách."
+    IDS_CONNECTIONS_BTN_SHOW_SECRET "Zobrazit"
+    IDS_CONNECTIONS_BTN_HIDE_SECRET "Skrýt"
+    IDS_CONNECTIONS_BROWSE_PRIVATE_KEY "Vyberte soukromý klíč"
+    IDS_CONNECTIONS_BROWSE_KNOWN_HOSTS "Vyberte známé_hostitele"
+    IDS_CONNECTIONS_ERR_SELECT_CONNECTION "Vyberte připojení."
+    IDS_CONNECTIONS_ERR_CREATE_ID "Nepodařilo se vytvořit ID připojení."
+    IDS_CONNECTIONS_DEFAULT_NEW_NAME "Nové připojení"
+    IDS_CONNECTIONS_FILE_FILTER_ALL_FILES "Všechny soubory (*.*)\0*.*\0"
+    IDS_CONNECTIONS_ERR_NAME_REQUIRED "Název připojení je povinný."
+    IDS_CONNECTIONS_ERR_HOST_REQUIRED "Je vyžadován hostitel."
+    IDS_CONNECTIONS_ERR_PROTOCOL_REQUIRED "Je vyžadován protokol."
+    IDS_CONNECTIONS_ERR_USER_REQUIRED "Je vyžadován uživatel (nebo povolte ""Anonymní přihlášení"")."
+    IDS_CONNECTIONS_ERR_NAME_UNIQUE "Názvy připojení musí být jedinečné."
+    IDS_CONNECTIONS_ERR_NAME_RESERVED "Název ""{0}"" je vyhrazen. Vyberte jiné jméno."
+    IDS_CONNECTIONS_ERR_CONNECT_NOTIFY_FAILED "Vybrané připojení nebylo možné otevřít, protože hlavní okno nebylo k dispozici."
+    IDS_CONNECTIONS_ERR_PASSPHRASE_REQUIRED_TO_SAVE "K uložení je vyžadována přístupová fráze (nebo zrušte zaškrtnutí políčka „Uložit heslo“)."
+    IDS_CONNECTIONS_ERR_PASSWORD_REQUIRED_TO_SAVE "Pro uložení je vyžadováno heslo."
+    IDS_CONNECTIONS_ERR_PASSWORD_SAVE_REQUIRED "Připojení založená na hesle vyžadují heslo (uložené nebo zadané při připojení)."
+    IDS_CONNECTIONS_ERR_SAVE_CREDENTIAL_FAILED_FMT "Nepodařilo se uložit pověření pro připojení '{0}'.\r\n\r\n{1}"
+    IDS_CONNECTIONS_HELLO_PROMPT_CREDENTIAL "Pro přístup k uloženým přihlašovacím údajům ověřte pomocí Windows Hello."
+    IDS_PREFS_GENERAL_LABEL_MENU_BAR "Panel nabídek"
+    IDS_PREFS_GENERAL_DESC_MENU_BAR "Zobrazit nebo skrýt lištu hlavní nabídky."
+    IDS_PREFS_GENERAL_LABEL_FUNCTION_BAR "Funkční lišta"
+    IDS_PREFS_GENERAL_DESC_FUNCTION_BAR "Zobrazit nebo skrýt panel funkcí."
+    IDS_PREFS_GENERAL_LABEL_SPLASH_SCREEN "Úvodní obrazovka"
+    IDS_PREFS_GENERAL_DESC_SPLASH_SCREEN "Zobrazit úvodní obrazovku, když spuštění trvá déle než 300 ms."
+    IDS_PREFS_GENERAL_CHECK_SHOW_MENU_BAR "Zobrazit panel nabídek"
+    IDS_PREFS_GENERAL_CHECK_SHOW_FUNCTION_BAR "Zobrazit panel funkcí"
+    IDS_PREFS_GENERAL_CHECK_SHOW_SPLASH_SCREEN "Zobrazit úvodní obrazovku"
+    IDS_PREFS_GENERAL_SECTION_DISPLAY "Displej"
+    IDS_PREFS_GENERAL_SECTION_STARTUP "Spuštění"
+    IDS_PREFS_GENERAL_LABEL_LANGUAGE "Jazyk"
+    IDS_PREFS_GENERAL_DESC_LANGUAGE "Vyberte jazyk aplikace. Jazyk systému se řídí předvolbami jazyka zobrazení systému Windows."
+    IDS_PREFS_GENERAL_OPTION_LANGUAGE_SYSTEM "Systémový jazyk"
+    IDS_PREFS_GENERAL_LABEL_COMPACT_MODE "Kompaktní režim"
+    IDS_PREFS_GENERAL_DESC_COMPACT_MODE "Použijte hustší mezery DxUI pro nabídky, vyskakovací seznamy a karty předvoleb."
+    IDS_PREFS_GENERAL_LABEL_REDUCED_MOTION "Animace"
+    IDS_PREFS_GENERAL_DESC_REDUCED_MOTION "Zvolte, zda se animace DxUI řídí systémovými preferencemi, nebo zda zůstanou nuceně zapnuté či vypnuté."
+    IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_SYSTEM "Systém"
+    IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_ON "Zapnuto"
+    IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_OFF "Vypnuto"
+    IDS_PREFS_GENERAL_LABEL_WINDOW_BACKDROP "Pozadí okna"
+    IDS_PREFS_GENERAL_DESC_WINDOW_BACKDROP "Vyberte zásadu pozadí systému DWM pro podporovaná okna aplikací."
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_DEFAULT "Výchozí"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_NONE "Žádný"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_MICA "Mica"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_MICA_ALT "Mica Alt"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_ACRYLIC "Acrylic"
+    IDS_CRASH_DETECTED_TITLE "Bylo zjištěno předchozí selhání"
+    IDS_CRASH_DETECTED_MESSAGE "Byl nalezen výpis při selhání z předchozího spuštění.\r\n\r\nOtevřít složku selhání?"
+    IDS_CRASH_DETECTED_MESSAGE_FMT "Výpis zhroucení z předchozího spuštění byl zapsán do:\r\n{0}\r\n\r\nOtevřít složku selhání?"
+    IDS_CRASH_QUARANTINE_TITLE "Obnova po havárii"
+    IDS_CRASH_QUARANTINE_MESSAGE_FMT "Předchozí běh selhal, když byl aktivní plugin systému souborů '{0}'.\r\n\r\nZakázat tento plugin, aby se zabránilo opakovaným selháním?"
+    IDS_CRASH_QUARANTINE_MESSAGE_PLURAL_FMT "Předchozí běh selhal, když byly aktivní následující pluginy souborového systému:\r\n{0}\r\n\r\nZakázat tyto pluginy, aby se zabránilo opakovaným selháním?"
+    IDS_INSECURE_TLS_TITLE "Nezabezpečené TLS"
+    IDS_INSECURE_TLS_MESSAGE_FMT "Povolujete nezabezpečená nastavení TLS pro připojení „{0}“.\r\n\r\nTo může vystavit přihlašovací údaje a data při přenosu.\r\n\r\nPokračovat?"
+    IDS_STATUS_INSECURE_TLS "Nezabezpečené TLS"
+    IDS_TIP_STATUS_INSECURE_TLS "Toto připojení používá nezabezpečená nastavení TLS."
+    IDS_PREFS_PANES_HEADER_LEFT "Levý panel"
+    IDS_PREFS_PANES_HEADER_RIGHT "Pravé podokno"
+    IDS_PREFS_PANES_LABEL_DISPLAY "Displej"
+    IDS_PREFS_PANES_DESC_DISPLAY "Vyberte, zda se v každém podokně zobrazí kompaktní nebo podrobný seznam souborů."
+    IDS_PREFS_PANES_LABEL_SORT_BY "Seřadit podle"
+    IDS_PREFS_PANES_DESC_SORT "Společně vyberte třídicí pole a jeho směr."
+    IDS_PREFS_PANES_LABEL_DIRECTION "Směr"
+    IDS_PREFS_PANES_LABEL_STATUS_BAR "Stavový řádek"
+    IDS_PREFS_PANES_DESC_STATUS_BAR "Zobrazit nebo skrýt stavový řádek."
+    IDS_PREFS_PANES_CHECK_SHOW_STATUS_BAR "Zobrazit stavový řádek"
+    IDS_PREFS_PANES_LABEL_HISTORY_SIZE "Velikost historie"
+    IDS_PREFS_PANES_DESC_HISTORY_SIZE "Maximální počet složek uchovávaných v historii."
+    IDS_PREFS_PANES_OPTION_BRIEF "Stručně"
+    IDS_PREFS_PANES_OPTION_DETAILED "Podrobné"
+    IDS_PREFS_PANES_OPTION_EXTRA_DETAILED "Extra podrobné"
+    IDS_PREFS_PANES_OPTION_THUMBNAILS "Miniatury"
+    IDS_PREFS_PANES_THUMBNAIL_SIZE "Velikost náhledu"
+    IDS_PREFS_PANES_THUMBNAIL_SIZE_SMALL "Malý"
+    IDS_PREFS_PANES_THUMBNAIL_SIZE_MEDIUM "Střední"
+    IDS_PREFS_PANES_THUMBNAIL_SIZE_LARGE "Velký"
+    IDS_PREFS_PANES_THUMBNAIL_SIZE_EXTRA_LARGE "Extra velké"
+    IDS_PREFS_PANES_OPTION_ASCENDING "Vzestupně"
+    IDS_PREFS_PANES_OPTION_DESCENDING "Sestupně"
+    IDS_PREFS_PANES_OPTION_HIDE "Skrýt"
+    IDS_PREFS_PANES_OPTION_SHOW "Zobrazit"
+    IDS_PREFS_PANES_SORT_NAME "Jméno"
+    IDS_PREFS_PANES_SORT_EXTENSION "Rozšíření"
+    IDS_PREFS_PANES_SORT_TIME "Čas"
+    IDS_PREFS_PANES_SORT_SIZE "Velikost"
+    IDS_PREFS_PANES_SORT_ATTRIBUTES "Atributy"
+    IDS_PREFS_PANES_SORT_NONE "Žádný"
+    IDS_PREFS_PANES_HEADER_GENERAL "Generál"
+    IDS_PREFS_PANES_LABEL_SHOW_HIDDEN_FILES "Zobrazení skrytých souborů a složek"
+    IDS_PREFS_PANES_LABEL_SHOW_SYSTEM_FILES "Zobrazení systémových souborů a složek"
+    IDS_PREFS_PANES_CHECK_SHOW_HIDDEN_FILES "Zobrazení skrytých souborů a složek"
+    IDS_PREFS_PANES_CHECK_SHOW_SYSTEM_FILES "Zobrazení systémových souborů a složek"
+    IDS_PREFS_VIEWERS_COL_EXTENSION "Rozšíření"
+    IDS_PREFS_VIEWERS_COL_VIEWER "Prohlížeč"
+    IDS_PREFS_VIEWERS_HINT "Nakonfigurujte F3 a Alt+F3 odpovídajícím rozšířením, vzorem, počítačem a akcí."
+    IDS_PREFS_VIEWERS_WARNING_ENTER_EXTENSION "Zadejte příponu jako .txt"
+    IDS_PREFS_VIEWERS_WARNING_SELECT_VIEWER "Vyberte plugin prohlížeče."
+    IDS_PREFS_VIEWERS_OOM_UPDATE "Nedostatek paměti při aktualizaci mapování."
+    IDS_PREFS_VIEWERS_OOM_RESET "Nedostatek paměti při resetování mapování."
+    IDS_PREFS_VIEWERS_BUTTON_ADD_UPDATE "Přidat / Aktualizovat"
+    IDS_PREFS_VIEWERS_BUTTON_REMOVE "Odebrat"
+    IDS_PREFS_VIEWERS_BUTTON_RESET_DEFAULTS "Obnovit výchozí"
+    IDS_PREFS_KEYBOARD_LABEL_SCOPE "Rozsah"
+    IDS_PREFS_KEYBOARD_COL_COMMAND "Příkaz"
+    IDS_PREFS_KEYBOARD_COL_SHORTCUT "Zkratka"
+    IDS_PREFS_KEYBOARD_COL_SCOPE "Rozsah"
+    IDS_PREFS_KEYBOARD_BUTTON_ASSIGN_ELLIPSIS "Přiřadit..."
+    IDS_PREFS_KEYBOARD_BUTTON_REMOVE "Odebrat"
+    IDS_PREFS_KEYBOARD_BUTTON_RESET_DEFAULTS "Obnovit výchozí"
+    IDS_PREFS_KEYBOARD_BUTTON_IMPORT "Importovat..."
+    IDS_PREFS_KEYBOARD_BUTTON_EXPORT "Exportovat..."
+    IDS_PREFS_KEYBOARD_SCOPE_ALL "Vše"
+    IDS_PREFS_KEYBOARD_HINT_PRESS_SHORTCUT "Stiskněte zkratku. Pro zrušení stiskněte Esc."
+    IDS_PREFS_KEYBOARD_HINT_SELECT_COMMAND "Vyberte příkaz a kliknutím na tlačítko Přiřadit... nastavte zkratku."
+    IDS_PREFS_KEYBOARD_HINT_ASSIGN_PRESSED_FMT "Přiřadit „{0}“\r\nLisováno: {1}"
+    IDS_PREFS_KEYBOARD_HINT_ASSIGN_PRESS_FMT "Přiřadit „{0}“\r\nStiskněte zkratku. Pro zrušení stiskněte Esc."
+    IDS_PREFS_KEYBOARD_HINT_CONFLICT_FMT "\r\nKonflikt s '{0}'. Potvrďte kliknutím na {1}."
+    IDS_PREFS_KEYBOARD_BUTTON_SWAP "Vyměňte"
+    IDS_PREFS_KEYBOARD_HINT_CONFLICT_SWAP_FMT "\r\nKonflikt s '{0}'. Klepněte na {1} pro nahrazení nebo {2} pro výměnu."
+    IDS_PREFS_KEYBOARD_HINT_CONFIRM_FMT "\r\nPotvrďte kliknutím na {0}. Pro zrušení stiskněte Esc."
+    IDS_PREFS_KEYBOARD_BUTTON_ASSIGN "Přiřadit"
+    IDS_PREFS_KEYBOARD_BUTTON_REPLACE "Vyměňte"
+    IDS_PREFS_KEYBOARD_BUTTON_CANCEL "Storno"
+    IDS_PREFS_KEYBOARD_CONFLICT_MARK "!"
+    IDS_PREFS_KEYBOARD_UNASSIGNED "Nepřiřazeno"
+    IDS_PREFS_KEYBOARD_OOM_LOAD "Nedostatek paměti při načítání zástupců."
+    IDS_PREFS_KEYBOARD_OOM_BUILD_LIST "Nedostatek paměti při vytváření seznamu zkratek."
+    IDS_PREFS_KEYBOARD_OOM_UPDATE "Nedostatek paměti při aktualizaci zástupců."
+    IDS_PREFS_KEYBOARD_OOM_RESET "Nedostatek paměti při resetování zástupců."
+    IDS_PREFS_KEYBOARD_OOM_PARSE_FILE "Nedostatek paměti při analýze souboru zástupce."
+    IDS_PREFS_KEYBOARD_OOM_EXPORT "Nedostatek paměti při exportu zástupců."
+    IDS_PREFS_KEYBOARD_EXPORT_BUILD_FAILED "Nepodařilo se vytvořit soubor exportu zástupců."
+    IDS_PREFS_KEYBOARD_WRITE_FILE_FMT "Nepodařilo se zapsat soubor:\r\n\r\n{0}"
+    IDS_PREFS_KEYBOARD_WRITE_FILE_FALLBACK "Zápis souboru zástupce se nezdařil."
+    IDS_PREFS_KEYBOARD_READ_FILE_FMT "Nepodařilo se přečíst soubor:\r\n\r\n{0}"
+    IDS_PREFS_KEYBOARD_READ_FILE_FALLBACK "Nepodařilo se přečíst soubor zástupce."
+    IDS_PREFS_KEYBOARD_IMPORT_FAILED "Import zástupců se nezdařil."
+    IDS_PREFS_KEYBOARD_OOM_IMPORT_APPLY "Nedostatek paměti při použití importovaných zkratek."
+    IDS_PREFS_KEYBOARD_FILE_FILTER "JSON files (*.json)\0*.json\0All files (*.*)\0*.*\0\0"
+    IDS_PREFS_KEYBOARD_IMPORT_FILE_EMPTY "Soubor zástupce je prázdný."
+    IDS_PREFS_KEYBOARD_IMPORT_PARSE_FAILED "Soubor zástupce se nepodařilo analyzovat."
+    IDS_PREFS_KEYBOARD_IMPORT_ROOT_NOT_OBJECT "Soubor zástupce musí obsahovat objekt JSON."
+    IDS_PREFS_KEYBOARD_IMPORT_EXPECTED_ARRAY "Očekávané pole pro zkratky."
+    IDS_PREFS_VIEWERS_BUILTIN_TEXT_VIEWER "Prohlížeč textu"
+    IDS_PREFS_THEMES_BASE_NONE "Žádný"
+    IDS_PREFS_THEMES_BASE_SYSTEM "Systém"
+    IDS_PREFS_THEMES_BASE_LIGHT "Světlý"
+    IDS_PREFS_THEMES_BASE_DARK "Tmavý"
+    IDS_PREFS_THEMES_BASE_RAINBOW "Duha"
+    IDS_PREFS_THEMES_BASE_HIGH_CONTRAST "Vysoký kontrast (aplikace)"
+    IDS_PREFS_THEMES_NEW_THEME_ENTRY "<Nové téma>"
+    IDS_PREFS_THEMES_DEFAULT_NEW_NAME "Nové téma"
+    IDS_PREFS_THEMES_FILE_FILTER "Theme files (*.theme.json5)\0*.theme.json5\0JSON5 files (*.json5)\0*.json5\0All files (*.*)\0*.*\0\0"
+    IDS_PREFS_THEMES_LABEL_THEME "téma"
+    IDS_PREFS_THEMES_LABEL_NAME "Jméno"
+    IDS_PREFS_THEMES_LABEL_BASE "Základna"
+    IDS_PREFS_THEMES_LABEL_KEY "klíč"
+    IDS_PREFS_THEMES_LABEL_COLOR "Barva"
+    IDS_PREFS_THEMES_COL_KEY "klíč"
+    IDS_PREFS_THEMES_COL_VALUE "Hodnota"
+    IDS_PREFS_THEMES_BUTTON_PICK "Vybrat..."
+    IDS_PREFS_THEMES_BUTTON_SET "Set"
+    IDS_PREFS_THEMES_BUTTON_CLEAR "Jasný"
+    IDS_PREFS_THEMES_BUTTON_LOAD_FROM_FILE "Načíst ze souboru..."
+    IDS_PREFS_THEMES_BUTTON_SAVE_THEME "Uložit motiv..."
+    IDS_PREFS_THEMES_BUTTON_APPLY_TEMPORARILY "Použít Dočasně"
+    IDS_PREFS_THEMES_BUTTON_DUPLICATE "Duplicitní"
+    IDS_PREFS_THEMES_DUPLICATE_NAME_FMT "{0} (kopie)"
+    IDS_PREFS_THEMES_NOTE_DISK_THEME "Toto téma je načteno z disku. Pro import a úpravu použijte 'Načíst ze souboru...'."
+    IDS_PREFS_THEMES_NOTE_BUILTIN_THEME "Vestavěné motivy nelze upravovat. Vytvořte nebo načtěte uživatelský motiv pro přizpůsobení barev."
+    IDS_PREFS_THEMES_OOM_CREATE "Nedostatek paměti při vytváření nového motivu."
+    IDS_PREFS_THEMES_OOM_APPLY_PREVIEW "Nedostatek paměti při použití náhledu motivu."
+    IDS_PREFS_THEMES_WARNING_SELECT_USER_EDIT "Vyberte uživatelské téma, které chcete upravit."
+    IDS_PREFS_THEMES_WARNING_ENTER_COLOR_KEY "Zadejte platný klíč barvy motivu."
+    IDS_PREFS_THEMES_WARNING_ENTER_COLOR_VALUE "Zadejte barvu jako #RRGGBB nebo #AARRGGBB."
+    IDS_PREFS_THEMES_OOM_UPDATE_OVERRIDE "Nedostatek paměti při aktualizaci přepsání motivu."
+    IDS_PREFS_THEMES_ERROR_READ_FILE "Soubor motivu se nepodařilo přečíst."
+    IDS_PREFS_THEMES_ERROR_LOAD_FILE "Soubor motivu se nepodařilo načíst."
+    IDS_PREFS_THEMES_OOM_IMPORT "Nedostatek paměti při importu motivu."
+    IDS_PREFS_THEMES_WARNING_SELECT_USER_SAVE "Vyberte uživatelské téma, které chcete uložit."
+    IDS_PREFS_THEMES_ERROR_BUILD_FILE "Sestavení souboru motivu se nezdařilo."
+    IDS_PREFS_THEMES_ERROR_WRITE_FILE "Zápis souboru motivu se nezdařil."
+    IDS_PREFS_THEMES_IMPORT_FILE_EMPTY "Soubor motivu je prázdný."
+    IDS_PREFS_THEMES_IMPORT_PARSE_FAILED "Soubor motivu se nepodařilo analyzovat."
+    IDS_PREFS_THEMES_IMPORT_ROOT_NOT_OBJECT "Soubor motivu musí obsahovat objekt JSON."
+    IDS_PREFS_THEMES_IMPORT_FIELD_MISSING_OR_NOT_STRING_FMT "{0} chybí nebo není řetězec."
+    IDS_PREFS_THEMES_IMPORT_FIELD_EMPTY_FMT "{0} je prázdný."
+    IDS_PREFS_THEMES_IMPORT_INVALID_ID "ID motivu se musí shodovat: uživatel/<jméno>."
+    IDS_PREFS_THEMES_IMPORT_BASE_NOT_BUILTIN "baseThemeId musí být vestavěné ID motivu."
+    IDS_PREFS_THEMES_IMPORT_COLORS_MISSING_OR_NOT_OBJECT "barvy chybí nebo nejsou předmětem."
+    IDS_PREFS_THEMES_IMPORT_COLOR_VALUES_MUST_BE_STRINGS "Hodnoty barev musí být řetězce."
+    IDS_PREFS_THEMES_IMPORT_INVALID_COLOR_VALUE "Neplatná hodnota barvy."
+    IDS_PREFS_THEMES_IMPORT_OOM_PARSE "Nedostatek paměti při analýze souboru motivu."
+    IDS_PREFS_ADV_HEADER_CONNECTIONS_HELLO "Windows Hello pro připojení"
+    IDS_PREFS_ADV_LABEL_CONNECTIONS_BYPASS_HELLO "Přeskočit ověření Windows Hello"
+    IDS_PREFS_ADV_DESC_CONNECTIONS_BYPASS_HELLO "Když je povoleno, ověření Windows Hello je přeskočeno, i když to připojení vyžaduje. Určeno pro automatizaci."
+    IDS_PREFS_ADV_CHECK_CONNECTIONS_BYPASS_HELLO "Přeskočit ověření Windows Hello"
+    IDS_PREFS_ADV_LABEL_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION "Povolit nezabezpečené TLS v automatizaci"
+    IDS_PREFS_ADV_DESC_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION "Pokud je tato možnost povolena, jsou během autotestů/automatizace povolena nezabezpečená nastavení TLS (deaktivováno ověřování certifikátu nebo zakázáno HTTPS). Výchozí: vypnuto."
+    IDS_PREFS_ADV_CHECK_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION "Povolit nezabezpečené TLS v automatizaci"
+    IDS_PREFS_ADV_LABEL_CONNECTIONS_HELLO_TIMEOUT "Časový limit Windows Hello (minuty)"
+    IDS_PREFS_ADV_DESC_CONNECTIONS_HELLO_TIMEOUT "Jak dlouho se pro připojení znovu používá úspěšné ověření Windows Hello. 0 = pokaždé se znovu zeptat."
+    IDS_PREFS_ADV_HEADER_FILEOPS "Operace se soubory"
+    IDS_PREFS_ADV_LABEL_FILEOPS_MAX_DIAG_LOG_FILES "Maximální počet souborů protokolu diagnostiky"
+    IDS_PREFS_ADV_DESC_FILEOPS_MAX_DIAG_LOG_FILES "Maximální počet souborů protokolu diagnostiky operací se soubory uložených na disku."
+    IDS_PREFS_ADV_LABEL_FILEOPS_DIAG_INFO "Diagnostika: Info"
+    IDS_PREFS_ADV_DESC_FILEOPS_DIAG_INFO "Zahrnout diagnostiku provozu souborů na informační úrovni do protokolu denní diagnostiky. Výchozí: zapnuto v sestaveních ladění, vypnuto ve sestaveních vydání."
+    IDS_PREFS_ADV_CHECK_FILEOPS_DIAG_INFO "Informace"
+    IDS_PREFS_ADV_LABEL_FILEOPS_DIAG_DEBUG "Diagnostika: Debug"
+    IDS_PREFS_ADV_DESC_FILEOPS_DIAG_DEBUG "Zahrnout diagnostiku provozu souborů na úrovni ladění do protokolu denní diagnostiky. Výchozí: zapnuto v sestaveních ladění, vypnuto ve sestaveních vydání."
+    IDS_PREFS_ADV_CHECK_FILEOPS_DIAG_DEBUG "Ladění"
+    IDS_PREFS_ADV_HEADER_COMPARE_DIRECTORIES "Porovnejte adresáře"
+    IDS_PREFS_COMPARE_KEEP_IDENTICAL_TITLE "Uchovávejte stejné položky"
+    IDS_PREFS_COMPARE_KEEP_IDENTICAL_DESC "Zachovejte identické položky, aby byl k dispozici přepínač zobrazení 'Zobrazit identické položky'. Používá více paměti na velmi velkých stromech."
+    IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE "Zobrazit identické položky"
+    IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC "Ve výchozím nastavení zahrnout do výsledků porovnání identické položky (nejen rozdíly). Vyžaduje 'Ponechat stejné položky'."
+    IDS_PREFS_COMPARE_IGNORE_FILES_PATTERNS_TITLE "Vzory souborů"
+    IDS_PREFS_COMPARE_IGNORE_DIRECTORIES_PATTERNS_TITLE "Vzory adresářů"
+    IDS_PREFS_ADV_HEADER_MONITOR "Monitor"
+    IDS_PREFS_ADV_LABEL_TOOLBAR "Panel nástrojů"
+    IDS_PREFS_ADV_DESC_TOOLBAR "Zobrazit nebo skrýt panel nástrojů Monitor."
+    IDS_PREFS_ADV_LABEL_LINE_NUMBERS "Čísla řádků"
+    IDS_PREFS_ADV_DESC_LINE_NUMBERS "Zobrazit nebo skrýt čísla řádků na monitoru."
+    IDS_PREFS_ADV_LABEL_ALWAYS_ON_TOP "Vždy na vrcholu"
+    IDS_PREFS_ADV_DESC_ALWAYS_ON_TOP "Udržujte okno Monitor nad ostatními okny."
+    IDS_PREFS_ADV_LABEL_SHOW_IDS "Zobrazit ID"
+    IDS_PREFS_ADV_DESC_SHOW_IDS "Zobrazit číselná ID zpráv (užitečné pro ladění)."
+    IDS_PREFS_ADV_LABEL_AUTO_SCROLL "Automatické rolování"
+    IDS_PREFS_ADV_DESC_AUTO_SCROLL "Posouvat automaticky při příchodu nových zpráv."
+    IDS_PREFS_ADV_LABEL_FILTER_PRESET "Přednastavený filtr"
+    IDS_PREFS_ADV_DESC_FILTER_PRESET "Vyberte předvolbu, pro kterou se zprávy zobrazují na monitoru."
+    IDS_PREFS_ADV_FILTER_CUSTOM "Vlastní"
+    IDS_PREFS_ADV_FILTER_ERRORS_ONLY "Pouze chyby"
+    IDS_PREFS_ADV_FILTER_ERRORS_WARNINGS "Chyby a varování"
+    IDS_PREFS_ADV_FILTER_ALL_TYPES "Všechny typy"
+    IDS_PREFS_ADV_CHECK_SHOW_TOOLBAR "Zobrazit panel nástrojů"
+    IDS_PREFS_ADV_CHECK_SHOW_LINE_NUMBERS "Zobrazit čísla řádků"
+    IDS_PREFS_ADV_CHECK_ALWAYS_ON_TOP "Vždy na vrcholu"
+    IDS_PREFS_ADV_CHECK_SHOW_IDS "Zobrazit ID"
+    IDS_PREFS_ADV_CHECK_AUTO_SCROLL "Automatické rolování"
+    IDS_PREFS_ADV_LABEL_FILTER_MASK "Filtrační maska"
+    IDS_PREFS_ADV_DESC_FILTER_MASK "Bitová maska povolených typů zpráv (0..63)."
+    IDS_PREFS_ADV_LABEL_FILTER_TEXT "Text"
+    IDS_PREFS_ADV_DESC_FILTER_TEXT "Zobrazit textové zprávy."
+    IDS_PREFS_ADV_LABEL_FILTER_ERROR "Chyba"
+    IDS_PREFS_ADV_DESC_FILTER_ERROR "Zobrazit chybové zprávy."
+    IDS_PREFS_ADV_LABEL_FILTER_WARNING "Upozornění"
+    IDS_PREFS_ADV_DESC_FILTER_WARNING "Zobrazit varovné zprávy."
+    IDS_PREFS_ADV_LABEL_FILTER_INFO "Informace"
+    IDS_PREFS_ADV_DESC_FILTER_INFO "Zobrazit informační zprávy."
+    IDS_PREFS_ADV_LABEL_FILTER_PERF "Výkon"
+    IDS_PREFS_ADV_DESC_FILTER_PERF "Zobrazit zprávy o výkonu."
+    IDS_PREFS_ADV_LABEL_FILTER_DEBUG "Ladění"
+    IDS_PREFS_ADV_DESC_FILTER_DEBUG "Zobrazit ladicí zprávy."
+    IDS_PREFS_ADV_CHECK_FILTER_TEXT "Text"
+    IDS_PREFS_ADV_CHECK_FILTER_ERROR "Chyba"
+    IDS_PREFS_ADV_CHECK_FILTER_WARNING "Upozornění"
+    IDS_PREFS_ADV_CHECK_FILTER_INFO "Informace"
+    IDS_PREFS_ADV_CHECK_FILTER_PERF "Výkon"
+    IDS_PREFS_ADV_CHECK_FILTER_DEBUG "Ladění"
+    IDS_PREFS_ADV_LABEL_SETTINGS_FILE "Soubor nastavení"
+    IDS_PREFS_ADV_DESC_SETTINGS_FILE "Otevřete aktuální soubor nastavení JSON pro tohoto uživatele."
+    IDS_PREFS_ADV_OPEN_SETTINGS_FILE_LINK "Otevřete soubor nastavení"
+    IDS_FMT_PREFS_OPEN_SETTINGS_FILE_FAILED "Nelze otevřít soubor nastavení:\r\n\r\n{0}\r\n\r\nChyba: 0x{1:08X}"
+    IDS_PREFS_CAT_MONITOR "Monitor"
+    IDS_PREFS_CAT_MONITOR_DESC "Nakonfigurujte zobrazení RedSalamanderMonitor a filtrování událostí."
+    IDS_PREFS_MONITOR_LABEL_SETTINGS_FILE "Soubor nastavení monitoru"
+    IDS_PREFS_MONITOR_DESC_SETTINGS_FILE "Otevřete soubor nastavení RedSalamanderMonitor JSON pro tohoto uživatele."
+    IDS_PREFS_MONITOR_OPEN_SETTINGS_FILE_LINK "Otevřete soubor nastavení monitoru"
+    IDS_PREFS_ADV_HEADER_CACHE "Cache"
+    IDS_PREFS_ADV_LABEL_CACHE_DIR_MAX_BYTES "Max bajtů"
+    IDS_PREFS_ADV_DESC_CACHE_DIR_MAX_BYTES "Maximální velikost mezipaměti informací o adresáři (akceptuje celé číslo KiB nebo řetězec jako '256 MB')."
+    IDS_PREFS_ADV_LABEL_CACHE_DIR_MAX_WATCHERS "Max hlídači"
+    IDS_PREFS_ADV_DESC_CACHE_DIR_MAX_WATCHERS "Maximální počet hlídačů složek používaných mezipamětí."
+    IDS_PREFS_ADV_LABEL_CACHE_DIR_MRU_WATCHED "MRU sledoval"
+    IDS_PREFS_ADV_DESC_CACHE_DIR_MRU_WATCHED "Maximální počet naposledy sledovaných složek uložených v mezipaměti."
+    IDS_PREFS_PLUGINS_NOTE "Povolit/zakázat a nakonfigurovat nainstalované pluginy."
+    IDS_PREFS_PLUGINS_MANAGE_BUTTON "Spravovat pluginy..."
+    IDS_PREFS_PLUGINS_COL_NAME "Plugin"
+    IDS_PREFS_PLUGINS_COL_TYPE "Typ"
+    IDS_PREFS_PLUGINS_COL_ORIGIN "Původ"
+    IDS_PREFS_PLUGINS_COL_ID "Id"
+    IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM "Systém souborů"
+    IDS_PREFS_PLUGINS_TYPE_VIEWER "Prohlížeč"
+    IDS_PREFS_PLUGINS_ORIGIN_EMBEDDED "Vložené"
+    IDS_PREFS_PLUGINS_ORIGIN_OPTIONAL "Volitelné"
+    IDS_PREFS_PLUGINS_ORIGIN_CUSTOM "Vlastní"
+    IDS_PREFS_PLUGINS_CANNOT_DISABLE_ACTIVE_FILE_SYSTEM "Aktivní zásuvný modul souborového systému nelze deaktivovat."
+    IDS_PREFS_PLUGINS_OOM_UPDATE "Nedostatek paměti při aktualizaci pluginů."
+    IDS_PREFS_PLUGINS_CUSTOM_PATHS_HEADER "Vlastní cesty pluginů"
+    IDS_PREFS_PLUGINS_CUSTOM_PATHS_NOTE "Vlastní pluginy se načtou po kliknutí na Použít."
+    IDS_PREFS_PLUGINS_CUSTOM_PATHS_ADD_ELLIPSIS "Přidat..."
+    IDS_PREFS_PLUGINS_CUSTOM_PATHS_REMOVE "Odebrat"
+    IDS_PREFS_PLUGINS_CUSTOM_PATHS_INVALID "Vyberte soubor DLL."
+    IDS_PREFS_PLUGINS_CUSTOM_PATHS_EMPTY "Zatím nebyly přidány žádné vlastní knihovny DLL. Použijte Přidat... pro přidání cest DLL pluginu."
+    IDS_PREFS_PLUGINS_CONFIGURE_ELLIPSIS "Konfigurovat..."
+    IDS_PREFS_PLUGINS_CONFIGURE_OPEN_FAILED_FMT "Nepodařilo se otevřít konfiguraci pro:\r\n\r\n{0}\r\n\r\nChyba: 0x{1:08X}"
+    IDS_PREFS_PLUGINS_DETAILS_HINT "Chcete-li se vrátit do seznamu pluginů, vyberte v navigačním stromě 'Pluginy'."
+    IDS_PREFS_PLUGINS_DETAILS_ID_FMT "ID: {0}"
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_LABEL "Konfigurace"
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE "Konfigurace není pro tento plugin k dispozici."
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT "Pro tento plugin není uložena žádná konfigurace (s použitím výchozích hodnot)."
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS "Procházet..."
+    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "🧩\r\nTento plugin neposkytuje konfigurační editor."
+    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "🚧\r\nTento plugin momentálně nelze načíst, takže jeho konfigurační editor je nedostupný."
+    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS "Tento plugin neodhaluje žádná konfigurovatelná nastavení."
+    IDS_PREFS_PLUGINS_EMPTY_TITLE "Není co konfigurovat"
+    IDS_PREFS_PLUGINS_EMPTY_BODY "{0} neodhaluje žádná konfigurovatelná nastavení."
+    IDS_PREFS_PLUGINS_EMPTY_CAPTION "Je připraven k použití tak, jak je."
+    IDS_FILEACTION_VIEWER_UNAVAILABLE_TITLE "Akce prohlížeče není k dispozici"
+    IDS_FILEACTION_EDITOR_UNAVAILABLE_TITLE "Akce editoru není k dispozici"
+    IDS_FMT_FILEACTION_VIEWER_NOT_AVAILABLE "Akce prohlížeče ""{0}"" není pro {1} dostupná."
+    IDS_FMT_FILEACTION_EDITOR_NOT_AVAILABLE "Akce editoru ""{0}"" není k dispozici pro {1}."
+    IDS_FMT_FILEACTION_VIEWER_LAUNCH_FAILED "Nelze spustit akci prohlížeče „{0}“ pro {1}. Chyba: 0x{2:08X}."
+    IDS_FMT_FILEACTION_EDITOR_LAUNCH_FAILED "Nelze spustit akci editoru ""{0}"" pro {1}. Chyba: 0x{2:08X}."
+    IDS_FMT_FILEACTION_ALTERNATE_VIEWER_NOT_CONFIGURED "Pro {0} není nakonfigurován žádný alternativní prohlížeč."
+    IDS_FMT_FILEACTION_ALTERNATE_EDITOR_NOT_CONFIGURED "Pro {0} není nakonfigurován žádný alternativní editor."
+    IDS_BTN_TEST "Test"
+    IDS_BTN_TEST_ALL "Testovat vše"
+    IDS_PREFS_BUTTON_RESET_ALL "Obnovit vše na výchozí"
+    IDS_PREFS_RESET_ALL_CONFIRM "Obnovit všechny předvolby na výchozí hodnoty?\r\n\r\nToto nelze vrátit zpět."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_MSG_FAILED_CREATE_FOLDERWINDOW "Vytvoření okna FolderWindow se nezdařilo."
+    IDS_MSG_FAILED_CREATE_LEFT_PANE "Vytvoření levého panelu se nezdařilo."
+    IDS_MSG_FAILED_CREATE_RIGHT_PANE "Nepodařilo se vytvořit pravý panel."
+    IDS_FMT_INVALID_PATH    "Cesta '{0}' není platná nebo neexistuje."
+    IDS_MENU_EMPTY          "(Prázdné)"
+    IDS_MENU_CHANGE_DRIVE   "&Změnit Disk"
+    IDS_MENU_CONNECTIONS "Spojení"
+    IDS_MENU_CONNECTIONS_ELLIPSIS "Správce připojení..."
+    IDS_MENU_COMMON_FOLDERS "Společné složky"
+    IDS_MENU_GO_TO         "Přejít na"
+    IDS_MENU_GO_TO_BACK    "Zpět"
+    IDS_MENU_GO_TO_FORWARD "Vpřed"
+    IDS_MENU_GO_TO_PARENT_DIRECTORY "Nadřazený adresář"
+    IDS_MENU_GO_TO_ROOT_DIRECTORY "Kořenový adresář"
+    IDS_MENU_GO_TO_PATH_FROM_OTHER_PANEL "Cesta z jiného panelu"
+    IDS_MENU_GO_TO_HOT_PATHS "Horké stezky..."
+    IDS_FATAL_ERROR_CAPTION "RedSalamander - Fatal Error"
+    IDS_FATAL_EXCEPTION_FMT "Fatální výjimka v RedSalamander\r\n\r\nVýjimka: {0} (0x{1:08X})\r\n\r\nAplikace bude nyní ukončena."
+    IDS_MENU_NAV_DESKTOP    "Plocha"
+    IDS_MENU_NAV_DOCUMENTS  "Dokumenty"
+    IDS_MENU_NAV_DOWNLOADS  "Stahování"
+    IDS_MENU_NAV_PICTURES   "obrázky"
+    IDS_MENU_NAV_MUSIC      "Hudba"
+    IDS_MENU_NAV_VIDEOS     "videa"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_FMT_DISK_INFO_HEADER "Informace o disku: {0}"
+    IDS_FMT_DISK_VOLUME_LABEL "Označení svazku: {0}"
+    IDS_FMT_DISK_FILE_SYSTEM "Systém souborů: {0}"
+    IDS_FMT_DISK_TOTAL_SPACE "Celkový prostor: {0} ({1:L} bajtů)"
+    IDS_FMT_DISK_USED_SPACE "Využité místo: {0} ({1:L} bajtů)"
+    IDS_FMT_DISK_FREE_SPACE "Volné místo: {0} ({1:L} bajtů)"
+    IDS_FMT_DISK_USED_PERCENT "Použito {0:.1Lf} %."
+    IDS_MENU_DISK_PROPERTIES "Vlastnosti disku..."
+    IDS_MENU_DISK_CLEANUP   "Vyčištění disku..."
+    IDS_OVERLAY_TITLE_OPERATION_FAILED "Operace se nezdařila"
+    IDS_OVERLAY_TITLE_RENDERING_ERROR "Chyba vykreslování"
+    IDS_OVERLAY_TITLE_ENUMERATION_FAILED "Nelze vytvořit výčet složky"
+    IDS_OVERLAY_TITLE_ACCESS_DENIED "Přístup odepřen"
+    IDS_OVERLAY_TITLE_LOGIN_FAILED  "Přihlášení se nezdařilo"
+    IDS_OVERLAY_TITLE_TLS_CERTIFICATE_FAILED "Ověření certifikátu TLS se nezdařilo"
+    IDS_OVERLAY_TITLE_PLEASE_WAIT "Čekejte prosím"
+    IDS_OVERLAY_TITLE_CANCELED    "Načítání zrušeno"
+    IDS_OVERLAY_TITLE_DISCONNECTED "Odpojeno"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_OVERLAY_MSG_ACCESS_DENIED_FMT
+                            "Nemáte oprávnění zobrazit '{0}'.\r\n\r\n{1}"
+    IDS_OVERLAY_MSG_LOGIN_FAILED_FMT
+                            "Při přístupu k '{0}' se nepodařilo ověřit.\r\n\r\n{1}"
+    IDS_OVERLAY_MSG_INVALID_PASSWORD_FMT
+                            "Ověření se nezdařilo, protože pro '{0}' není k dispozici žádné uložené heslo.\r\n\r\n{1}\r\n\r\nOtevřete správce připojení a zadejte heslo znovu (ujistěte se, že je povoleno „Uložit heslo“)."
+    IDS_OVERLAY_MSG_TLS_CERTIFICATE_FAILED_FMT
+                            "Při přístupu k '{0}' se nepodařilo navázat zabezpečené připojení.\r\n\r\nCertifikát serveru se nepodařilo ověřit. Ujistěte se, že řetězec certifikátů je v tomto počítači důvěryhodný, nebo opravte certifikát serveru.\r\n\r\n{1}"
+    IDS_OVERLAY_MSG_ACCESSING_FOLDER_FMT
+                            "Přistupuje se k '{0}'.\r\n\r\nMůže to chvíli trvat."
+    IDS_OVERLAY_MSG_ENUMERATION_CANCELED
+                            "Načítání složky bylo zrušeno.\r\n\r\nNebyly načteny žádné položky."
+    IDS_OVERLAY_TITLE_FS_PLUGIN_NOT_AVAILABLE
+                            "Plugin systému souborů není k dispozici"
+    IDS_OVERLAY_MSG_FS_PLUGIN_NOT_AVAILABLE_FMT
+                            "Plugin FileSystem se nepodařilo načíst.\r\n\r\nUjistěte se, že FileSystem.dll se nachází ve složce Plugins vedle RedSalamander.exe.\r\n\r\n{0}"
+    IDS_OVERLAY_MSG_DISCONNECTED_FMT
+                            "Umístění '{0}' již není k dispozici.\r\n\r\nZnovu připojte jednotku nebo vyberte jiné umístění."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_OVERLAY_TITLE_WARNING "Upozornění"
+    IDS_OVERLAY_TITLE_INFORMATION "Informace"
+    IDS_OVERLAY_DEBUG_SAMPLE_MSG_ERROR_FMT
+                            "Operaci nelze dokončit.\r\n\r\n{0}"
+    IDS_OVERLAY_DEBUG_SAMPLE_MSG_WARNING
+                            "Toto je ukázka upozornění používaná pro testování uživatelského rozhraní.\r\n\r\nNěkteré operace mohou trvat déle, než se očekávalo."
+    IDS_OVERLAY_DEBUG_SAMPLE_MSG_INFORMATION
+                            "Toto je informační ukázka používaná pro testování uživatelského rozhraní.\r\n\r\nVše funguje podle očekávání."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_CAPTION_PLUGINS_MANAGER      "Pluginy"
+    IDS_FMT_PLUGIN_TEST_ALL_RESULT   "Výsledky testu pluginu:\r\n\r\nOK: {0:L}\r\nSelhalo: {1:L}"
+    IDS_MSG_PLUGIN_TEST_OK           "Test pluginu byl úspěšný."
+    IDS_MSG_PLUGIN_TEST_FAILED       "Test pluginu se nezdařil."
+    IDS_FMT_PLUGIN_TEST_FAILED_NAMED "Test pluginu selhal: {0}"
+    IDS_FMT_PLUGIN_TEST_ALL_RESULT_WITH_FAILURES "Výsledky testu pluginu:\r\n\r\nOK: {0:L}\r\nSelhalo: {1:L}\r\n\r\nNeúspěšné pluginy:\r\n{2}"
+    IDS_PLUGIN_COLUMN_NAME           "Plugin"
+    IDS_PLUGIN_COLUMN_SHORT_ID       "Krátké Id"
+    IDS_PLUGIN_COLUMN_TYPE           "Typ"
+    IDS_PLUGIN_TYPE_FILESYSTEM       "Systém souborů"
+    IDS_PLUGIN_TYPE_VIEWER           "Prohlížeč"
+    IDS_PLUGIN_GROUP_EMBEDDED        "Vložené"
+    IDS_PLUGIN_GROUP_OPTIONAL        "Volitelné"
+    IDS_PLUGIN_GROUP_CUSTOM          "Vlastní"
+    IDS_PLUGIN_ORIGIN_EMBEDDED       "Vložené"
+    IDS_PLUGIN_ORIGIN_OPTIONAL       "Volitelné"
+    IDS_PLUGIN_ORIGIN_CUSTOM         "Vlastní"
+    IDS_PLUGIN_ORIGIN_UNKNOWN        "Neznámý"
+    IDS_PLUGIN_SUFFIX_DISABLED       "(Zakázáno)"
+    IDS_PLUGIN_SUFFIX_UNAVAILABLE    "(Nedostupné)"
+    IDS_FILEDLG_FILTER_DLL           "Soubory DLL (*.dll)\0*.dll\0Všechny soubory (*.*)\0*.*\0"
+    IDS_FMT_PLUGIN_ABOUT             "{0}\r\n\r\nID: {1}\r\nVerze: {2}\r\nCesta: {3}"
+    IDS_MSG_PLUGIN_CONFIG_APPLY_FAILED "Nepodařilo se použít konfiguraci pluginu."
+    IDS_FMT_SETTINGS_SAVE_FAILED     "Nastavení se nepodařilo uložit do:\r\n\r\n{0}\r\n\r\nChyba: 0x{1:08X}\r\n\r\nPokud je soubor otevřen v jiném programu, zavřete jej a zkuste to znovu."
+    IDS_CAPTION_SETTINGS_RELOADED_FROM_DISK "Nastavení znovu načteno"
+    IDS_FMT_SETTINGS_RELOAD_CONFLICT_KEEP_EDITING "Nastavení byla změněna na disku, zatímco '{0}' obsahuje neuložené změny.\r\n\r\nAno znovu načte z disku a zahodí aktuální neuložené změny.\r\nNe stále upravuje aktuální neuložené změny."
+    IDS_FMT_SETTINGS_RELOAD_CONFLICT_STALE_SAVE "Po zahájení úprav „{0}“ došlo na disku ke změně nastavení.\r\n\r\nAno přepíše soubor aktuálními neuloženými změnami.\r\nŽádné opětovné načítání z disku a zahození aktuálních neuložených změn.\r\nZrušit pokračuje v úpravách bez uložení."
+    IDS_CAPTION_SETTINGS_RELOAD_FAILED "Opětovné načtení nastavení se nezdařilo"
+    IDS_FMT_SETTINGS_RELOAD_FAILED_KEEP_CURRENT "Nepodařilo se znovu načíst nastavení z:\r\n\r\n{0}\r\n\r\nAplikace zachovala aktuální nastavení v paměti."
+    IDS_MSG_PLUGIN_ADD_INVALID       "Vybraná knihovna DLL neobsahuje kompatibilní plugin."
+    IDS_MSG_PLUGIN_ADD_DUPLICATE_ID  "Plugin se stejným ID je již k dispozici."
+    IDS_MSG_PLUGIN_ADD_FAILED        "Plugin nelze přidat."
+    IDS_PLUGIN_BUTTON_REMOVE         "Odebrat"
+    IDS_PLUGIN_BUTTON_DISABLE        "Zakázat"
+    IDS_PLUGIN_BUTTON_ENABLE         "Povolit"
+    IDS_FMT_STATUS_SELECTED_FILES          "Soubor {0:L}{1:s}: Vybrán {2}"
+    IDS_FMT_STATUS_SELECTED_FOLDERS_FILES  "Složka {0:L}{1:s} / soubor {2:L}{3:s}: Vybrán {4}"
+    IDS_FMT_STATUS_SELECTED_FOLDERS        "Složka {0:L}{1:s}: Vybráno {2}"
+    IDS_STATUS_NO_SELECTION                "Žádný výběr"
+    IDS_FMT_STATUS_INCREMENTAL_SEARCH      "vyhledávání: {0}"
+    IDS_TIP_STATUS_SORT                                 "Kliknutím změníte řazení"
+    IDS_FOLDERVIEW_TYPE_FOLDER                          "Složka"
+    IDS_FOLDERVIEW_TYPE_FILE                            "Soubor"
+    IDS_MSG_PANE_OP_REQUIRES_SAME_FS                     "Tato operace vyžaduje, aby obě podokna používali stejný systém souborů."
+    IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER            "Tato operace vyžaduje, aby zdroj a cíl byly různé složky."
+    IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS               "Tato operace vyžaduje kompatibilní zdrojové a cílové systémy souborů."
+    IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED                  "Vytvořit adresář není pro aktuální systém souborů podporován."
+    IDS_FMT_PANE_CHANGE_CASE_FAILED                      "Nepodařilo se změnit velikost písmen.\r\n\r\nChyba: 0x{0:08X}"
+    IDS_CAPTION_PROPERTIES                               "Vlastnosti"
+    IDS_PROPERTIES_COL_KEY                               "Majetek"
+    IDS_PROPERTIES_COL_VALUE                             "Hodnota"
+    IDS_PROPERTIES_BTN_CLOSE                             "Zavřít"
+    IDS_PROPERTIES_STREAMS_TITLE                         "Proudy"
+    IDS_PROPERTIES_STREAMS_EMPTY                         "Žádné alternativní datové toky"
+    IDS_PROPERTIES_STREAM_REMOVE                         "Odebrat"
+    IDS_PROPERTIES_LOADING                               "Načítání vlastností..."
+    IDS_FMT_PROPERTIES_STREAM_REMOVE_FAILED              "Nelze odebrat stream „{0}“.\r\n\r\nChyba: 0x{1:08X}"
+    IDS_PROPERTIES_STREAM_VIEW                           "Zobrazení"
+    IDS_FMT_PROPERTIES_STREAM_VIEW_FAILED                "Nelze otevřít stream ""{0}"" v ViewerText.\r\n\r\nChyba: 0x{1:08X}"
+    IDS_FMT_PROPERTIES_LOAD_FAILED                       "Vlastnosti se nepodařilo načíst.\r\n\r\nChyba: 0x{0:08X}"
+    IDS_PROPERTIES_COPY_HINT                             "Stisknutím Ctrl+C zkopírujte všechny informace."
+    IDS_CAPTION_CREATE_DIR                               "Vytvořit složku"
+    IDS_LABEL_CREATE_DIR_IN                              "Vytvořit v:"
+    IDS_LABEL_CREATE_DIR_NAME                            "Název složky:"
+    IDS_BUTTON_CREATE                                    "Vytvořit"
+    IDS_CAPTION_EDIT_NEW                                 "Upravit nový soubor"
+    IDS_LABEL_EDIT_NEW_IN                                "Vytvořit v:"
+    IDS_LABEL_EDIT_NEW_NAME                              "Název souboru:"
+    IDS_LABEL_EDIT_NEW_EDITOR                            "redaktor:"
+    IDS_BUTTON_CREATE_AND_EDIT                           "Vytvořit a upravit"
+    IDS_CAPTION_SELECTION_MASK                           "Vybrat nebo Zrušit výběr"
+    IDS_LABEL_SELECTION_MASK                             "Vybrat nebo Zrušit výběr"
+    IDS_CAPTION_SELECTION_MASK_SELECT                    "Vyberte"
+    IDS_CAPTION_SELECTION_MASK_UNSELECT                  "Zrušte výběr"
+    IDS_LABEL_SELECTION_MASK_SELECT                      "Vyberte"
+    IDS_LABEL_SELECTION_MASK_UNSELECT                    "Zrušte výběr"
+    IDS_SELECTION_MASK_HINT_COLLAPSED                    "Syntaxe masky ▸"
+    IDS_SELECTION_MASK_HINT_EXPANDED                     "Syntaxe masky ▾"
+    IDS_SELECTION_MASK_HELP_TEXT                         "'*' znamená libovolný počet znaků. '?' znamená jakoukoli postavu.\r\nPříklad: *.a? (.al, cokoliv.ai atd.)\r\nMasky jsou odděleny středníkem. Příklad: *.txt;*.doc (a.txt, b.doc atd.)\r\nVyloučené masky jsou umístěny za '|'. Příklad: |*.txt;*.doc (cokoli kromě *.txt;*.doc)\r\nPokud potřebujete středník uvnitř masky, zadejte jej dvakrát. Příklad: jeden;;maska"
+    IDS_CAPTION_PANE_FILTER                              "Filtr"
+    IDS_LABEL_PANE_FILTER                                "Filtr"
+    IDS_LABEL_PANE_FILTER_USE_FILTER                     "Použijte Filtr"
+    IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED              "Výběr se nepodařilo zkopírovat do schránky."
+    IDS_MSG_SELECTION_RESTORE_NO_SAVED                   "Žádný uložený výběr."
+    IDS_FMT_SELECTION_RESTORE_INCOMPLETE                 "Nelze obnovit výběr pro některé položky:\r\n{0}{1}"
+    IDS_MSG_SELECTION_RESTORE_FILTER_NOTE                "Některé položky mohou být aktuálním filtrem skryté."
+    IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED               "Položka {0:L}{1} byla zkopírována do schránky."
+    IDS_EMPTY_FOLDER_TITLE                               "Prázdná složka"
+    IDS_EMPTY_FOLDER_PARENT_ROW                          "Přejít k rodiči"
+    IDS_EMPTY_FOLDER_FUN_1                               "😌\r\nNení zde nic k vidění. Ještě."
+    IDS_EMPTY_FOLDER_FUN_2                               "🧹\r\nVše čisté. Tato složka je bez poskvrny."
+    IDS_EMPTY_FOLDER_FUN_3                               "🦄\r\nMagický prostor k dispozici. Přidejte něco zábavného."
+    IDS_EMPTY_FOLDER_FUN_4                               "😴\r\nTato složka si zdřímne."
+    IDS_EMPTY_FOLDER_FUN_5                               "🎉\r\nDotáhl jsi to do konce. Pět!"
+    IDS_EMPTY_FOLDER_FUN_6                               "🤖\r\nPípnutí, pípnutí… nebyly zjištěny žádné soubory."
+    IDS_EMPTY_FOLDER_FUN_7                               "🧭\r\nZtraceno? Ne. Prostě prázdno."
+    IDS_EMPTY_FOLDER_FUN_8                               "🪐\r\nTolik prostoru. Tak málo souborů."
+    IDS_EMPTY_FOLDER_FUN_9                               "🐾\r\nŽádné stopy. Nikdo tu nebyl."
+    IDS_EMPTY_FOLDER_FUN_10                              "🗃️\r\nPrázdná police, čekající na poklady."
+    IDS_NEW_FOLDER_DEFAULT_NAME                          "Nová složka"
+    IDS_CAPTION_FILEOP_SPEED_LIMIT_CUSTOM                "Vlastní rychlostní limit"
+    IDS_FILEOP_SPEED_LIMIT_PROMPT_LABEL                  "Rychlostní limit (0 = neomezený):"
+    IDS_FILEOP_SPEED_LIMIT_PROMPT_HINT                   "Příklady: 3KB, 4MB, 1GB (/s volitelné)"
+    IDS_MSG_PANE_CREATE_DIR_INVALID_CHARS                "Název složky nesmí obsahovat žádný z následujících znaků:\r\n\\ / : * ? "" < > |"
+    IDS_MSG_PANE_CREATE_DIR_EMPTY_NAME                   "Název složky nesmí být prázdný."
+    IDS_MSG_PANE_CREATE_DIR_DOT_NAME                     "Název složky nemůže být '.' nebo '...'."
+    IDS_MSG_PANE_CREATE_DIR_INVALID_WHITESPACE           "Název složky nesmí obsahovat konce řádků ani tabulátory."
+    IDS_FMT_PANE_CREATE_DIR_FAILED                       "Nepodařilo se vytvořit složku:\r\n\r\n{0}\r\n\r\nChyba: 0x{1:08X}"
+    IDS_FMT_PANE_CREATE_DIR_UNSUPPORTED_PLUGIN           "Plugin systému souborů '{0}' nepodporuje vytváření složek."
+    IDS_MSG_PANE_EDIT_NEW_UNSUPPORTED                    "Vytvoření nového souboru není pro aktuální systém souborů podporováno."
+    IDS_FMT_PANE_EDIT_NEW_UNSUPPORTED_PLUGIN             "Plugin systému souborů '{0}' nepodporuje vytváření souborů."
+    IDS_FMT_PANE_EDIT_NEW_FAILED                         "Nepodařilo se vytvořit soubor:\r\n\r\n{0}\r\n\r\nChyba: 0x{1:08X}"
+    IDS_MSG_PANE_EDIT_NEW_INVALID_CHARS                  "Název souboru nesmí obsahovat žádný z následujících znaků:\r\n\\ / : * ? "" < > |"
+    IDS_MSG_PANE_EDIT_NEW_EMPTY_NAME                     "Název souboru nesmí být prázdný."
+    IDS_MSG_PANE_EDIT_NEW_DOT_NAME                       "Název souboru nemůže být '.' nebo '...'."
+    IDS_MSG_PANE_EDIT_NEW_INVALID_WHITESPACE             "Název souboru nesmí obsahovat konce řádků ani tabulátory."
+    IDS_MSG_PANE_EDIT_NEW_EXISTS                         "Soubor s tímto názvem již existuje."
+    IDS_MSG_PANE_EDIT_NEW_RESERVED_NAME                  "Tento název souboru je rezervován systémem Windows."
+    IDS_PREFS_FILE_ACTION_PRIMARY_DEFAULT                "Primární:"
+    IDS_PREFS_FILE_ACTION_ALTERNATE_DEFAULT              "Alternativní:"
+    IDS_PREFS_FILE_ACTION_NONE                           "(žádný)"
+    IDS_PREFS_EDITORS_ACTION_HINT                        "Nakonfigurujte F4, Ctrl+Shift+F4 a Shift+F4 odpovídajícím rozšířením, vzorem, počítačem a akcí editoru."
+    IDS_PREFS_USER_MENU_ACTIONS_TITLE                    "Nakonfigurované příkazy"
+    IDS_PREFS_USER_MENU_EMPTY_TITLE                      "Zatím žádné příkazy uživatelské nabídky"
+    IDS_PREFS_USER_MENU_EMPTY_BODY                       "Chcete-li zde zobrazit příkazy, přidejte akce uživatelské nabídky do nastavení."
+    IDS_PREFS_USER_MENU_HINT                             "Příkazy uživatelské nabídky jsou externí programy uložené v nastavení. Podporují stejná makra jako prohlížeče a editory: {Path}, {FullPath}, {PathAndFilename}, {Filename}, {SelectedPathsFile}, {OppositePanePath} a {ComputerName}."
+    IDS_SHELL_ACTION_UNAVAILABLE_TITLE                   "Akce Shell není k dispozici"
+    IDS_MSG_SHELL_ACTION_LOCAL_FOLDER_REQUIRED           "Tento příkaz vyžaduje místní složku Windows v aktivním podokně."
+    IDS_MSG_SHELL_ACTION_LOCAL_SELECTION_REQUIRED        "Nejprve vyberte místní soubor nebo složku systému Windows."
+    IDS_FMT_SHELL_ACTION_FAILED                          "Windows nemohl otevřít požadovanou akci prostředí pro {0}. Chyba 0x{1:08X}."
+    IDS_MSG_CHANGE_ATTRIBUTES_SELECTION_REQUIRED          "Nejprve vyberte soubor nebo složku."
+    IDS_MSG_CHANGE_ATTRIBUTES_UNSUPPORTED                 "Tento panel nepodporuje změnu atributů."
+    IDS_MSG_CHANGE_ATTRIBUTES_NO_CHANGES                  "Nebyly požadovány žádné změny atributu, data/času nebo streamu."
+    IDS_FMT_CHANGE_ATTRIBUTES_REPORT                      "Zpracovány položky {0}. Změněné atributy na {1}; změněno datum/čas na {2}; odstraněny alternativní toky {3}."
+    IDS_FMT_CHANGE_ATTRIBUTES_REPORT_FAILURE              "Zpracovány položky {0}. Změněné atributy na {1}; změněno datum/čas na {2}; odstraněný alternativní proud(y) {3}; Selhání {4}, první chyba 0x{5:08X}."
+    IDS_MSG_SHORTCUT_TARGET_SELECTION_REQUIRED            "Nejprve vyberte zástupce, odkaz, křižovatku nebo přípojný bod."
+    IDS_MSG_SHORTCUT_TARGET_UNSUPPORTED                   "Vybraná položka neukazuje na místní cíl Windows, který může RedSalamander otevřít."
+    IDS_MSG_SHELL_NEW_NO_TEMPLATES                       "Nejsou k dispozici žádné šablony shellu."
+    IDS_FMT_SHELL_NEW_TEMPLATE_UNAVAILABLE               "Šablona prostředí '{0}' není k dispozici."
+    IDS_FMT_SHELL_NEW_CREATE_FAILED                      "Vytvoření „{0}“ ze šablony shellu se nezdařilo. HRESULT: 0x{1:08X}."
+    IDS_MSG_SHELL_NEW_LOCAL_FOLDER_REQUIRED              "Šablony prostředí jsou dostupné pouze v místních složkách systému souborů."
+    IDS_MSG_CLIPBOARD_LOCAL_SELECTION_REQUIRED           "Příkazy souboru schránky vyžadují výběr místního systému souborů Windows."
+    IDS_MSG_CLIPBOARD_SELECTION_REQUIRED                 "Nejprve vyberte místní soubor nebo složku."
+    IDS_MSG_CLIPBOARD_WRITE_FAILED                       "Nepodařilo se zapsat výběr souboru do schránky."
+    IDS_MSG_CLIPBOARD_LOCAL_FOLDER_REQUIRED              "Vložit zástupce je k dispozici pouze v místních složkách systému souborů."
+    IDS_MSG_CLIPBOARD_NO_SHORTCUT_SOURCE                 "Schránka neobsahuje cesty k souboru pro zástupce pro vložení."
+    IDS_FMT_CLIPBOARD_PASTE_SHORTCUT_FAILED              "Vytvoření zástupce pro {0} se nezdařilo. HRESULT: 0x{1:08X}."
+    IDS_COMMAND_LINE_LABEL                               "příkaz:"
+    IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED           "Vstup z příkazového řádku vyžaduje místní složku Windows v aktivním podokně."
+    IDS_MSG_COMMAND_LINE_ITEM_REQUIRED                   "Nejprve vyberte nebo zaměřte soubor nebo složku."
+    IDS_FMT_COMMAND_LINE_LAUNCH_FAILED                   "Windows nemohl spustit příkazový řádek. HRESULT: 0x{0:08X}."
+    IDS_USER_MENU_UNAVAILABLE_TITLE                      "Položka uživatelské nabídky není k dispozici"
+    IDS_FMT_USER_MENU_ITEM_UNAVAILABLE                   "Položka uživatelské nabídky ""{0}"" není pro {1} dostupná."
+    IDS_FMT_USER_MENU_LAUNCH_FAILED                      "Nelze spustit položku uživatelské nabídky ""{0}"" pro {1}. Chyba: 0x{2:08X}."
+    IDS_MSG_USER_MENU_EMPTY                              "Nejsou nakonfigurovány žádné příkazy uživatelské nabídky."
+    IDS_FMT_PANE_FILTER_BAR_ACTIVE                       "Filtr: {0}"
+    IDS_MSG_MAKE_FILE_LIST_LOCAL_FOLDER_REQUIRED          "Vytvořit seznam souborů je k dispozici pouze v místních složkách systému souborů."
+    IDS_MSG_MAKE_FILE_LIST_SELECTION_REQUIRED             "Nejprve vyberte soubor nebo složku nebo zvolte Aktuální složka."
+    IDS_MSG_MAKE_FILE_LIST_OUTPUT_FILE_REQUIRED           "Vyberte výstupní soubor nebo přepněte výstup do schránky."
+    IDS_FMT_MAKE_FILE_LIST_FAILED                        "Nepodařilo se vytvořit seznam souborů pro {0}. HRESULT: 0x{1:08X}."
+    IDS_FMT_MAKE_FILE_LIST_COMPLETED                     "Vytvořil seznam souborů {0} s položkami {1} v {2}."
+    IDS_MSG_MAKE_FILE_LIST_TARGET_CLIPBOARD               "schránka"
+    IDS_CHANGE_ATTR_OPTIONS_HINT                         "Vyberte, jak se mají jednotlivé atributy u vybraných položek změnit."
+    IDS_CHANGE_ATTR_SECTION_ATTRIBUTES                   "Nastavit atributy"
+    IDS_CHANGE_ATTR_LABEL_READONLY                       "Pouze pro čtení"
+    IDS_CHANGE_ATTR_LABEL_HIDDEN                         "Skrytá"
+    IDS_CHANGE_ATTR_LABEL_SYSTEM                         "Systém"
+    IDS_CHANGE_ATTR_LABEL_ARCHIVE                        "Archiv"
+    IDS_CHANGE_ATTR_LABEL_COMPRESSED                     "Stlačený"
+    IDS_CHANGE_ATTR_LABEL_ENCRYPTED                      "Zašifrováno"
+    IDS_CHANGE_ATTR_REMOVE_STREAMS                       "Odebrat alternativní datové toky z výběru"
+    IDS_CHANGE_ATTR_SECTION_OPTIONS                      "Možnosti"
+    IDS_CHANGE_ATTR_OPTION_LEAVE                         "Ponechat beze změny"
+    IDS_CHANGE_ATTR_OPTION_SET                           "Set"
+    IDS_CHANGE_ATTR_OPTION_CLEAR                         "Jasný"
+    IDS_CHANGE_CASE_EXAMPLE_FMT                          "Příklad: {0} -> {1}"
+    IDS_MAKE_FILE_LIST_SOURCE                            "Zdroj"
+    IDS_MAKE_FILE_LIST_SOURCE_SELECTION                  "Výběr nebo zaměřená položka"
+    IDS_MAKE_FILE_LIST_SOURCE_CURRENT_FOLDER             "Aktuální složka"
+    IDS_MAKE_FILE_LIST_RECURSIVE                         "Rekurzivní"
+    IDS_MAKE_FILE_LIST_FORMAT                            "Formát"
+    IDS_MAKE_FILE_LIST_FORMAT_TEXT                       "Text"
+    IDS_MAKE_FILE_LIST_TEXT_MACRO                        "Textové makro"
+    IDS_MAKE_FILE_LIST_FIELDS                            "Pole"
+    IDS_MAKE_FILE_LIST_INCLUDE_NAME                      "Jméno"
+    IDS_MAKE_FILE_LIST_INCLUDE_FULLPATH                  "Celá cesta"
+    IDS_MAKE_FILE_LIST_INCLUDE_SIZE                      "Velikost"
+    IDS_MAKE_FILE_LIST_INCLUDE_MODIFIED                  "Upraveno"
+    IDS_MAKE_FILE_LIST_INCLUDE_ATTRIBUTES                "Atributy"
+    IDS_MAKE_FILE_LIST_INCLUDE_DIRECTORIES               "Adresáře"
+    IDS_MAKE_FILE_LIST_OUTPUT                            "Výstup"
+    IDS_MAKE_FILE_LIST_OUTPUT_CLIPBOARD                  "Schránka"
+    IDS_MAKE_FILE_LIST_OUTPUT_FILE                       "Soubor"
+    IDS_MAKE_FILE_LIST_OUTPUT_FILE_PATH                  "Výstupní soubor"
+    IDS_OPENED_FILES_COLUMN_FILE                         "Soubor"
+    IDS_OPENED_FILES_COLUMN_SOURCE                       "Zdroj"
+    IDS_OPENED_FILES_COLUMN_OPENED_BY                    "Otevřeno uživatelem"
+    IDS_OPENED_FILES_EMPTY                               "RedSalamander aktuálně neotevírá žádné soubory."
+    IDS_OPENED_FILES_SOURCE_VIEWER                       "Prohlížeč"
+    IDS_OPENED_FILES_SOURCE_EDITOR                       "redaktor"
+    IDS_OPENED_FILES_SOURCE_PREVIEW                      "Podokno náhledu"
+    IDS_OPENED_FILES_OPENED_BY_PREVIEW                   "Podokno náhledu"
+    IDS_OPENED_FILES_UNKNOWN_VIEWER                      "Prohlížeč"
+    IDS_OPENED_FILES_FOCUS_ITEM                          "Zaměření položky"
+    IDS_OPENED_FILES_CLOSE                               "Zavřít"
+    IDS_SHARED_DIRECTORIES_CAPTION                       "Sdílené adresáře"
+    IDS_SHARED_DIRECTORIES_OPEN_PATH                     "Otevřít cestu"
+    IDS_SHARED_DIRECTORIES_MANAGE                        "Spravovat..."
+    IDS_SHARED_DIRECTORIES_CLOSE                         "Zavřít"
+    IDS_SHARED_DIRECTORIES_COLUMN_NAME                   "Sdílejte"
+    IDS_SHARED_DIRECTORIES_COLUMN_LOCAL_PATH             "Místní cesta"
+    IDS_SHARED_DIRECTORIES_COLUMN_TYPE                   "Typ"
+    IDS_SHARED_DIRECTORIES_COLUMN_REMARK                 "Poznámka"
+    IDS_SHARED_DIRECTORIES_EMPTY                         "Nejsou k dispozici žádné sdílené adresáře."
+    IDS_SHARED_DIRECTORIES_ACCESS_DENIED                 "Sdílené adresáře nelze uvést, protože byl odepřen přístup."
+    IDS_SHARED_DIRECTORIES_TYPE_DISK                     "Disk"
+    IDS_SHARED_DIRECTORIES_OPEN_FAILED                   "Cestu ke sdílenému adresáři nelze otevřít."
+    IDS_SHARED_DIRECTORIES_MANAGE_FAILED                 "Správu sdílených složek systému Windows nelze otevřít."
+    IDS_MSG_ARCHIVE_LOCAL_FOLDER_REQUIRED                "Pack a Unpack jsou k dispozici pouze pro místní složky systému souborů."
+    IDS_MSG_ARCHIVE_SELECTION_REQUIRED                   "Nejprve vyberte nebo zaměřte alespoň jeden soubor nebo složku."
+    IDS_MSG_ARCHIVE_ARCHIVE_PATH_REQUIRED                "Vyberte cestu k archivu."
+    IDS_MSG_ARCHIVE_DESTINATION_REQUIRED                 "Vyberte cílovou složku."
+    IDS_FMT_ARCHIVE_PACK_FAILED                          "Archiv nelze vytvořit:\r\n{0}\r\n\r\nChyba: 0x{1:08X}"
+    IDS_FMT_ARCHIVE_UNPACK_FAILED                        "Archiv ZIP nelze extrahovat:\r\n{0}\r\n\r\nChyba: 0x{1:08X}"
+    IDS_FMT_ARCHIVE_PACK_COMPLETED                       "Vytvořen archiv {0} s položkami {1}."
+    IDS_FMT_ARCHIVE_UNPACK_COMPLETED                     "Extrahované položky {0} z {1}."
+    IDS_MSG_ARCHIVE_UNSUPPORTED_FORMAT                   "Podporovány jsou pouze standardní archivy ZIP."
+    IDS_MSG_ARCHIVE_INVALID_ENTRY_PATH                   "Archiv ZIP obsahuje cestu k nebezpečnému záznamu."
+    IDS_BTN_HELP                                         "Nápověda"
+    IDS_ARCHIVE_PACK_DIRECTORY_FMT                       "Zabalte adresář ""{0}"" k archivaci"
+    IDS_ARCHIVE_PACK_FILE_FMT                            "Zabalte soubor ""{0}"" k archivaci"
+    IDS_ARCHIVE_PACK_SELECTION_FMT                       "Zabalit výběr k archivaci"
+    IDS_ARCHIVE_PACKER_LABEL                             "Balič:"
+    IDS_ARCHIVE_PACK_DELETE_AFTER                        "Po zabalení do archivu smažte soubory z disku"
+    IDS_FMT_ARCHIVE_DELETE_SOURCES_FAILED                "Archiv {0} byl vytvořen, ale odstranění původních souborů se nezdařilo.\r\n\r\nChyba: 0x{1:08X}"
+    IDS_ARCHIVE_UNPACK_ARCHIVE_FMT                       "Rozbalte archiv ""{0}"" do"
+    IDS_ARCHIVE_UNPACKER_LABEL                           "Rozbalovač:"
+    IDS_ARCHIVE_UNPACK_DELETE_AFTER                      "Po rozbalení smažte archiv"
+    IDS_ARCHIVE_UNPACK_FILES_LABEL                       "Rozbalte soubory:"
+    IDS_ARCHIVE_UNPACK_MASK_HINTS                        "masky rady"
+    IDS_FMT_ARCHIVE_DELETE_ARCHIVE_FAILED                "Archiv {0} byl extrahován, ale smazání archivu se nezdařilo.\r\n\r\nChyba: 0x{1:08X}"
+    IDS_FMT_FILEOPS_CONFIRM_COPY                         "Kopírovat {0}:\r\nod: {1}\r\n\r\nkomu: {2}"
+    IDS_FMT_FILEOPS_CONFIRM_MOVE                         "Přesunout {0}:\r\nod: {1}\r\n\r\nkomu: {2}"
+    IDS_FMT_FILEOPS_CONFIRM_PERMANENT_DELETE             "Trvale odstranit {0}:\r\nod: {1}\r\n\r\nToto nelze vrátit zpět."
+    IDS_FMT_FILEOPS_INVALID_DESTINATION_OVERLAP          "Tato operace nemůže cílit na stejnou položku nebo její podsložku.\r\n\r\nzdroj:\r\n{0}\r\n\r\nCílová složka:\r\n{1}"
+    IDS_FILEOPS_LOCATION_MULTIPLE                        "Více míst"
+    IDS_FMT_FILEOPS_COUNT_ITEM                           "{0:L} položka{1:s}"
+    IDS_FMT_FILEOPS_COUNT_FILE                           "Soubor {0:L}{1:s}"
+    IDS_FMT_FILEOPS_COUNT_FOLDER                         "Složka {0:L}{1:s}"
+    IDS_FMT_FILEOPS_COUNT_FILES_FOLDERS                  "Soubor {0:L}{1:s} a složka {2:L}{3:s}"
+    IDS_STATUS_CALCULATING_SIZE                          "Počítání..."
+    IDS_FMT_STATUS_CALCULATING_SIZE_WITH_BYTES           "Počítám... {0}"
+    IDS_FILEOP_OPERATION_COPY                            "Kopírovat"
+    IDS_FILEOP_OPERATION_MOVE                            "Pohybujte se"
+    IDS_FILEOP_OPERATION_DELETE                          "Odstranit"
+    IDS_FILEOP_OPERATION_RENAME                          "Přejmenovat"
+    IDS_FMT_FILEOP_ITEMS                                 "Položky: {0:L}/{1:L}"
+    IDS_FMT_FILEOP_ITEMS_UNKNOWN_TOTAL                   "Položky: {0:L}/?"
+    IDS_FMT_FILEOP_SPEED_BYTES                           "Rychlost: {0}/s"
+    IDS_FMT_FILEOP_SPEED_ITEMS                           "Rychlost: {0:.1Lf} položek/s"
+    IDS_FMT_FILEOP_SPEED_LIMIT_BUTTON_BYTES              "Limit: {0}/s"
+    IDS_FILEOP_SPEED_LIMIT_BUTTON_UNLIMITED              "Limit: Neomezený"
+    IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED                "Neomezené"
+    IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM                   "Vlastní..."
+    IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES                "{0}/s"
+    IDS_MSG_FILEOP_SPEED_LIMIT_INVALID                   "Neplatný rychlostní limit. Příklady: 3 KB, 4 MB, 1 GB, 0."
+    IDS_FILEOP_BTN_PAUSE                                 "Pauza"
+    IDS_FILEOP_BTN_RESUME                                "Pokračovat"
+    IDS_FILEOP_BTN_CANCEL                                "Storno"
+    IDS_FILEOP_BTN_SPEED_LIMIT                           "Rychlostní limit"
+    IDS_FILEOP_BTN_DESTINATION                           "Cíl"
+    IDS_FILEOP_BTN_WAIT                                  "Počkejte"
+    IDS_FILEOP_DEST_OTHER_PANEL                          "Jiný panel"
+    IDS_CAPTION_CONFIRM                                  "Potvrďte"
+    IDS_FILEOPS_POPUP_TITLE                               "Operace se soubory"
+    IDS_FILEOPS_LABEL_FROM                                "Od:"
+    IDS_FILEOPS_LABEL_TO                                  "Komu:"
+    IDS_FILEOPS_LABEL_DELETING                            "Mazání:"
+    IDS_FMT_FILEOPS_OP_COUNTS                             "{0}: {1:L}/{2:L}"
+    IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL               "{0}: {1:L}/?"
+    IDS_FMT_FILEOPS_ETA                                   "Zbývající: {0}"
+    IDS_FILEOPS_BTN_CANCEL_ALL                            "Zrušit vše"
+    IDS_FILEOPS_BTN_MODE_QUEUE                            "Počkejte"
+    IDS_FILEOPS_BTN_MODE_PARALLEL                         "Paralelní"
+    IDS_MSG_FILEOPS_CANCEL_ALL_CONFIRM                    "Zrušit všechny operace se soubory?"
+    IDS_FILEOPS_CALCULATING                               "Počítání..."
+    IDS_FMT_FILEOPS_CALCULATING_TIME                      "Počítám... (uplynulo {0})"
+    IDS_FILEOPS_PREPARING                                 "Příprava..."
+    IDS_FMT_FILEOPS_PREPARING_TIME                        "Příprava... (uplynulo {0})"
+    IDS_FILEOPS_BTN_SKIP                                  "Přeskočit předletovou kontrolu"
+    IDS_FMT_FILEOPS_FILES_FOLDERS                         "Položky {0:L} (soubory {1:L}, složky {2:L})"
+    IDS_FMT_FILEOPS_SIZE_PROGRESS                         "{0} / {1}"
+    IDS_FILEOPS_GRAPH_PAUSED                              "Pozastaveno"
+    IDS_FILEOPS_GRAPH_WAITING                             "Čekání na dokončení předchozího"
+    IDS_FILEOPS_GRAPH_CALCULATING                         "Počítání..."
+    IDS_CAPTION_FILEOPS_CANCEL_ALL                        "Zrušit všechny operace"
+    IDS_MSG_FILEOPS_CANCEL_ALL_POPUP                      "Opravdu chcete zrušit všechny nevyřízené operace se soubory?"
+    IDS_CAPTION_FILEOPS_EXIT                              "Ukončete aplikaci"
+    IDS_MSG_FILEOPS_CANCEL_ALL_EXIT                       "Operace se soubory stále probíhají.\n\nZrušit všechny operace a ukončit?"
+    IDS_FILEOPS_BTN_SKIP_ALL                              "Přeskočit vše"
+    IDS_FILEOPS_CONFLICT_EXISTS                           "Cíl již existuje."
+    IDS_FILEOPS_CONFLICT_READONLY                         "Položka je pouze pro čtení."
+    IDS_FILEOPS_CONFLICT_ACCESS_DENIED                    "Přístup odepřen."
+    IDS_FILEOPS_CONFLICT_SHARING                          "Soubor se používá."
+    IDS_FILEOPS_CONFLICT_DISK_FULL                        "Disk je plný."
+    IDS_FILEOPS_CONFLICT_PATH_TOO_LONG                    "Cesta je příliš dlouhá."
+    IDS_FILEOPS_CONFLICT_RECYCLE_BIN                      "Odstranění koše se nezdařilo."
+    IDS_FILEOPS_CONFLICT_NETWORK                          "Síť je nedostupná."
+    IDS_FILEOPS_CONFLICT_UNKNOWN                          "Operace se nezdařila (neznámá chyba)."
+    IDS_FILEOPS_CONFLICT_RETRY_FAILED                     "Opakování se nezdařilo."
+    IDS_FILEOPS_CONFLICT_APPLY_TO_ALL                     "Použít vybranou akci na všechny podobné konflikty"
+    IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SHORT               "Všechny podobné"
+    IDS_FILEOPS_CONFLICT_BTN_OVERWRITE                    "Přepsat"
+    IDS_FILEOPS_CONFLICT_BTN_REPLACE_READONLY             "Nahradit pouze pro čtení"
+    IDS_FILEOPS_CONFLICT_BTN_PERMANENT_DELETE             "Trvale smazat"
+    IDS_FILEOPS_CONFLICT_BTN_RETRY                        "Zkuste to znovu"
+    IDS_FILEOPS_CONFLICT_BTN_SKIP                         "Přeskočit položku"
+    IDS_FILEOPS_CONFLICT_BTN_SKIP_ALL                     "Přeskočte všechny podobné konflikty"
+    IDS_FILEOPS_CONFLICT_BTN_MORE                         "Více..."
+    IDS_MSG_FILEOPS_REPARSE_FOLLOW_WARNING                "Následující cíle změny zpracování se mohou vrátit do propojených složek, uniknout vybranému stromu nebo běžet mnohem déle, než se očekávalo.\r\n\r\nPokračovat?"
+    IDS_FILEOPS_CONFLICT_UNSUPPORTED_REPARSE              "Bod změny zpracování adresáře nelze pro tuto operaci zachovat."
+    IDS_FILEOPS_STATUS_COMPLETED                          "Dokončeno"
+    IDS_FILEOPS_STATUS_PARTIAL                            "Dokončeno s přeskočenými položkami"
+    IDS_FMT_FILEOPS_STATUS_FAILED                         "Selhalo (0x{0:08X})"
+    IDS_FMT_FILEOPS_OP_STATUS                             "{0}: {1}"
+    IDS_FMT_FILEOPS_WARNINGS_ERRORS                       "Varování: {0:L}, Chyby: {1:L}"
+    IDS_FMT_FILEOPS_LAST_NOTE                             "Poslední poznámka: {0}"
+    IDS_FMT_FILEOPS_RESULT_HRESULT                        "Výsledek: 0x{0:08X}"
+    IDS_FILEOP_BTN_DISMISS                                "Odmítnout"
+    IDS_FILEOPS_BTN_CLEAR_COMPLETED                       "Vymazání dokončeno"
+    IDS_FILEOP_BTN_SHOW_LOG                               "Zobrazit protokol"
+    IDS_FILEOPS_STATUS_CANCELED                           "Zrušeno"
+    IDS_FILEOPS_STATUS_NEEDS_ATTENTION                    "Vyžaduje pozornost"
+    IDS_FMT_FILEOPS_GLOBAL_STATUS_SUMMARY                 "{0:L} běží, {1:L} čeká, {2:L} vyžaduje pozornost"
+    IDS_FILEOPS_CHECK_AUTODISMISS_OFF                     "Automatické zrušení bylo úspěšné/zrušeno"
+    IDS_FILEOPS_CHECK_AUTODISMISS_ON                      "Automatické zrušení bylo úspěšné/zrušeno"
+    IDS_FILEOP_BTN_EXPORT_ISSUES                          "Problémy s exportem"
+    IDS_FMT_FILEOPS_AUTO_CONCURRENCY                      "Automatická souběžnost: vyřešeno {0}, použito {1}"
+    IDS_FILEOPS_ISSUES_PANE_TITLE                         "Položky operace se soubory se nezdařily"
+    IDS_FILEOPS_ISSUES_COL_TIME                           "Čas"
+    IDS_FILEOPS_ISSUES_COL_TASK                           "Úkol"
+    IDS_FILEOPS_ISSUES_COL_OPERATION                      "Provoz"
+    IDS_FILEOPS_ISSUES_COL_SEVERITY                       "Závažnost"
+    IDS_FILEOPS_ISSUES_COL_HRESULT                        "HRESULT"
+    IDS_FILEOPS_ISSUES_COL_STATUS_TEXT                    "Stavový text"
+    IDS_FILEOPS_ISSUES_COL_CATEGORY                       "Kategorie"
+    IDS_FILEOPS_ISSUES_COL_MESSAGE                        "Zpráva"
+    IDS_FILEOPS_ISSUES_COL_SOURCE                         "Zdroj"
+    IDS_FILEOPS_ISSUES_COL_DESTINATION                    "Cíl"
+    IDS_FILEOPS_ISSUES_OPERATION_UNKNOWN                  "Neznámý"
+
+    IDS_CAPTION_NOT_IMPLEMENTED                           "Neimplementováno"
+    IDS_FMT_CMD_NOT_IMPLEMENTED                           "'{0}' ještě není implementováno."
+
+	    IDS_CMD_EXIT                                          "Konec"
+	    IDS_CMD_OPEN_LEFT_DRIVE_MENU                          "Otevřete nabídku levého disku"
+    IDS_CMD_RENAME                                        "Přejmenovat"
+    IDS_CMD_CHANGE_ATTRIBUTES                             "Změnit atributy"
+    IDS_CMD_OPEN_RIGHT_DRIVE_MENU                         "Otevřete nabídku pravého disku"
+    IDS_CMD_SAVE_SELECTION                                "Uložit výběr"
+    IDS_CMD_VIEW                                          "Zobrazení"
+    IDS_CMD_SORT_BY_NAME                                  "Seřadit podle jména"
+    IDS_CMD_SORT_NONE                                     "Seřadit podle Žádné"
+    IDS_CMD_ALTERNATE_VIEW                                "Alternativní pohled"
+    IDS_CMD_OPEN_CURRENT_FOLDER                           "Otevřete aktuální složku"
+    IDS_CMD_VIEW_WIDTH                                    "Zobrazit šířku"
+    IDS_CMD_EDIT                                          "Úpravy"
+    IDS_CMD_SORT_BY_EXTENSION                             "Seřadit podle rozšíření"
+    IDS_CMD_EDIT_NEW                                      "Upravit Nový"
+    IDS_CMD_ALTERNATE_EDIT                                "Alternativní úprava"
+    IDS_CMD_COPY                                          "Kopírovat"
+    IDS_CMD_SORT_BY_TIME                                  "Seřadit podle času"
+    IDS_CMD_PACK                                          "Pack"
+    IDS_CMD_MOVE                                          "Pohybujte se"
+    IDS_CMD_SORT_BY_SIZE                                  "Seřadit podle velikosti"
+    IDS_CMD_UNPACK                                        "Rozbalit"
+    IDS_CMD_LOAD_SELECTION                                "Výběr zatížení"
+    IDS_CMD_MAKE_DIRECTORY                                "Vytvořit adresář"
+    IDS_CMD_CHANGE_CASE                                   "Změnit případ"
+    IDS_CMD_FIND                                          "Najít"
+    IDS_CMD_CHANGE_DIRECTORY                              "Změnit adresář"
+    IDS_CMD_DELETE                                        "Odstranit"
+    IDS_CMD_USER_MENU                                     "Uživatelské menu"
+    IDS_CMD_REFRESH                                       "Obnovit"
+    IDS_CMD_HOT_PATHS                                     "Horké cesty"
+    IDS_CMD_SHARES                                        "akcie"
+    IDS_CMD_MENU                                          "Menu"
+    IDS_CMD_COMPARE                                       "Porovnejte"
+    IDS_CMD_SPACE_VIEW                                    "Vesmírný pohled"
+    IDS_CMD_CONTEXT_MENU                                  "Kontextové menu"
+    IDS_CMD_CONTEXT_MENU_CURRENT_DIRECTORY                "Kontextová nabídka (aktuální adresář)"
+    IDS_CMD_CONNECT                                       "Připojte se"
+    IDS_CMD_CONNECTIONS                                   "Spojení"
+    IDS_CMD_ZOOM_PANEL                                    "Panel přiblížení"
+    IDS_CMD_LIST_OPENED_FILES                             "Seznam otevřených souborů"
+    IDS_CMD_FULL_SCREEN                                   "Celá obrazovka"
+    IDS_CMD_DISCONNECT                                    "Odpojit"
+    IDS_CMD_FILTER                                        "Filtr"
+	    IDS_CMD_SHOW_FOLDERS_HISTORY                           "Zobrazit historii složek"
+	    IDS_CMD_DISPLAY_BRIEF                                 "Stručně"
+	    IDS_CMD_DISPLAY_DETAILED                              "Podrobné"
+	    IDS_CMD_DISPLAY_EXTRA_DETAILED                        "Extra podrobné"
+	    IDS_CMD_UP_ONE_DIRECTORY                              "O jeden adresář nahoru"
+	    IDS_CMD_SWITCH_PANE_FOCUS                             "Přepnout zaměření podokna"
+	    IDS_CMD_EXECUTE_OPEN                                  "Spustit / otevřít"
+	    IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE                "Přeneste název souboru na příkazový řádek"
+	    IDS_CMD_OPEN_PROPERTIES                               "Otevřete Vlastnosti"
+	    IDS_CMD_SELECT_CALC_DIR_SIZE_NEXT                     "Vyberte + Vypočítat velikost adresáře + Další"
+	    IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE             "Přeneste aktuální adresář do příkazového řádku"
+	    IDS_CMD_WINDOW_MENU                                   "Nabídka okna"
+	    IDS_CMD_QUICK_SEARCH                                  "Rychlé vyhledávání"
+	    IDS_CMD_SELECT_NEXT                                   "Vyberte Další"
+	    IDS_CMD_CLIPBOARD_COPY                                "Kopie schránky"
+	    IDS_CMD_COPY_PATH_AND_NAME_AS_TEXT                    "Kopírovat cestu + název jako text"
+	    IDS_CMD_CLIPBOARD_PASTE                               "Vložit do schránky"
+	    IDS_CMD_COPY_PATH_AND_FILE_NAME                       "Zkopírujte cestu UNC + název jako text"
+	    IDS_CMD_COPY_PATH_AS_TEXT                             "Kopírovat cestu jako text"
+	    IDS_CMD_COPY_NAME_AS_TEXT                             "Zkopírovat název jako text"
+		    IDS_CMD_MOVE_TO_RECYCLE_BIN                           "Přesunout do koše"
+		    IDS_CMD_PERMANENT_DELETE                              "Trvalé smazání"
+		    IDS_CMD_ABOUT                                         "O"
+		    IDS_CMD_EXTERNAL_HELP                                 "Externí nápověda"
+		    IDS_CMD_PREFERENCES                                   "Předvolby"
+		    IDS_CMD_SWAP_PANES                                    "Vyměňte tabule"
+		    IDS_CMD_REREAD_ASSOCIATIONS                           "Znovu si přečtěte asociace"
+		    IDS_CMD_TOGGLE_MENU_BAR                               "Přepnout panel nabídek"
+		    IDS_CMD_TOGGLE_FUNCTION_BAR                           "Přepnout panel funkcí"
+		    IDS_CMD_THEME_SELECT                                  "Vyberte téma"
+		    IDS_CMD_THEME_SELECT_NEXT                             "Další téma"
+		    IDS_CMD_THEME_SELECT_PREV                             "Předchozí téma"
+		    IDS_CMD_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR          "Vysoký kontrast (systém)"
+		    IDS_CMD_PLUGINS_MANAGE                                "Správce pluginů"
+		    IDS_CMD_PLUGINS_TOGGLE_ENABLED                        "Přepnout plugin povolen"
+		    IDS_CMD_PLUGINS_CONFIGURE                             "Konfigurace pluginu"
+		    IDS_CMD_OPEN_FILE_EXPLORER_KNOWN_FOLDER               "Otevřete Známou složku v Průzkumníku souborů"
+		    IDS_CMD_HISTORY_BACK                                  "Historie Zpět"
+		    IDS_CMD_HISTORY_FORWARD                               "Historie vpřed"
+		    IDS_CMD_GO_DRIVE_ROOT                                 "Přejděte do kořenového adresáře disku"
+		    IDS_FMT_CMD_GO_DRIVE_ROOT_WITH_LETTER                 "Přejít do kořenového adresáře disku ({0}:\\)"
+		    IDS_CMD_TOGGLE_FILEOPS_FAILED_ITEMS                   "Přepnout položky operace se soubory se nezdařily"
+		    IDS_CMD_FOCUS_ADDRESS_BAR                             "Zaměření adresního řádku"
+		    IDS_CMD_GO_ROOT_DIRECTORY                             "Přejděte do kořenového adresáře"
+		    IDS_CMD_SET_PATH_FROM_OTHER_PANE                      "Cesta z jiného panelu"
+		    IDS_CMD_NAVIGATE_PATH                                 "Přejděte na Cesta"
+		    IDS_CMD_SORT_BY_ATTRIBUTES                            "Seřadit podle atributů"
+		    IDS_CMD_VIEW_WITH                                     "Zobrazit s"
+		    IDS_CMD_EDIT_WITH                                     "Upravit pomocí"
+		    IDS_CMD_OPEN_COMMAND_SHELL                            "Command Shell"
+		    IDS_CMD_GO_TO_SHORTCUT_OR_LINK_TARGET                 "Přejděte na zástupce nebo cíl odkazu"
+		    IDS_CMD_MAKE_FILE_LIST                                "Vytvořte seznam souborů"
+		    IDS_CMD_NEW_FROM_TEMPLATE                             "Nové ze šablony"
+		    IDS_CMD_OPEN_SECURITY                                 "Bezpečnost"
+		    IDS_CMD_CLIPBOARD_CUT                                 "Řez"
+		    IDS_CMD_CLIPBOARD_PASTE_SHORTCUT                      "Vložit zástupce"
+		    IDS_CMD_SELECTION_SELECT_DIALOG                        "Vyberte..."
+		    IDS_CMD_SELECTION_UNSELECT_DIALOG                      "Zrušit výběr..."
+		    IDS_CMD_SELECTION_INVERT                               "Invertovat výběr"
+		    IDS_CMD_SELECTION_SELECT_ALL                            "Vyberte Vše"
+		    IDS_CMD_SELECTION_UNSELECT_ALL                          "Zrušte výběr všech"
+		    IDS_CMD_SELECTION_RESTORE                              "Obnovit výběr"
+		    IDS_CMD_SELECTION_SELECT_SAME_EXTENSION                "Vyberte možnost Stejná rozšíření"
+		    IDS_CMD_SELECTION_UNSELECT_SAME_EXTENSION              "Zrušte výběr stejných rozšíření"
+		    IDS_CMD_SELECTION_SELECT_SAME_NAME                     "Vyberte možnost Stejná jména"
+		    IDS_CMD_SELECTION_UNSELECT_SAME_NAME                   "Zrušte výběr Stejná jména"
+		    IDS_CMD_SELECTION_HIDE_SELECTED_NAMES                  "Skrýt vybraná jména"
+		    IDS_CMD_SELECTION_HIDE_UNSELECTED_NAMES                "Skrýt nevybraná jména"
+		    IDS_CMD_SELECTION_SHOW_HIDDEN_NAMES                    "Zobrazit skrytá jména"
+		    IDS_CMD_SELECTION_GOTO_PREV_SELECTED_NAME              "Přejděte na předchozí vybraný název"
+		    IDS_CMD_SELECTION_GOTO_NEXT_SELECTED_NAME              "Přejděte na další vybraný název"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_HIDDEN_FILES                "Přepnout skryté soubory"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_SYSTEM_FILES                "Přepnout systémové soubory"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_FILE_EXTENSIONS             "Přepnout přípony souborů"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_THUMBNAILS                  "Miniatury"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_PREVIEW_PANE                "Přepnout podokno náhledu"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_FILTER_BAR                  "Přepnout panel filtru"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_NAVIGATION_BAR              "Přepnout navigační panel"
+		    IDS_CMD_VIEWOPTIONS_TOGGLE_STATUS_BAR                  "Přepnout stavový řádek"
+		    IDS_CMD_SELECT_FILE_SYSTEM_PLUGIN                      "Vyberte Plugin systému souborů"
+		    IDS_PREVIEW_TAB_FOLDER                                 "Složka"
+		    IDS_PREVIEW_TAB_PREVIEW                                "Náhled"
+		    IDS_PREVIEW_EMPTY                                      "Pro náhled nebyl vybrán žádný soubor."
+		    IDS_PREVIEW_FOLDER_FMT                                 "Složka: {0}"
+		    IDS_PREVIEW_UNSUPPORTED                                "Náhled je k dispozici pro místní soubory v tomto sestavení."
+		    IDS_PREVIEW_BINARY_FALLBACK_FMT                        "Binární náhled byl vynechán. Zobrazuje se {0} bajtů."
+		    // IDS_CMD_SHORT_* resource ids use IDS_CMD_SHORT_BASE + the matching IDS_CMD_* display id.
+		    // Keep resource ids 20000-21999 reserved for command short labels.
+		    IDS_CMD_SHORTCUTS                                     "Zkratky"
+		    IDS_CMD_SHORT_ABOUT                                  "O"
+		    IDS_CMD_SHORT_EXTERNAL_HELP                          "ExtHelp"
+		    IDS_CMD_SHORT_COMPARE                                "Porovnejte"
+		    IDS_CMD_SHORT_EXIT                                   "Konec"
+		    IDS_CMD_SHORT_FULL_SCREEN                            "FullScr"
+		    IDS_CMD_SHORT_OPEN_FILE_EXPLORER_KNOWN_FOLDER        "OpenExplr"
+		    IDS_CMD_SHORT_OPEN_LEFT_DRIVE_MENU                   "LftDrv"
+		    IDS_CMD_SHORT_OPEN_RIGHT_DRIVE_MENU                  "RghtDrv"
+		    IDS_CMD_SHORT_PLUGINS_CONFIGURE                      "CfgPlugin"
+		    IDS_CMD_SHORT_PLUGINS_MANAGE                         "Pluginy"
+		    IDS_CMD_SHORT_PLUGINS_TOGGLE_ENABLED                 "PlugOnOff"
+		    IDS_CMD_SHORT_PREFERENCES                            "Pref"
+		    IDS_CMD_SHORT_REREAD_ASSOCIATIONS                    "RereadAsc"
+		    IDS_CMD_SHORT_SHORTCUTS                              "Zkratky"
+		    IDS_CMD_SHORT_SWAP_PANES                             "SwapPanes"
+		    IDS_CMD_SHORT_THEME_SELECT                           "téma"
+		    IDS_CMD_SHORT_THEME_SELECT_NEXT                      "Další Téma"
+		    IDS_CMD_SHORT_THEME_SELECT_PREV                      "Předchozí Téma"
+		    IDS_CMD_SHORT_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR   "HiContrast"
+		    IDS_CMD_SHORT_TOGGLE_FILEOPS_FAILED_ITEMS            "FailedOps"
+		    IDS_CMD_SHORT_TOGGLE_FUNCTION_BAR                    "FuncBar"
+		    IDS_CMD_SHORT_TOGGLE_MENU_BAR                        "MenuBar"
+		    IDS_CMD_SHORT_VIEW_WIDTH                             "VwWidth"
+		    IDS_CMD_SHORT_ALTERNATE_VIEW                         "AltVw"
+		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToCmd"
+		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "NameToCmd"
+		    IDS_CMD_SHORT_CHANGE_ATTRIBUTES                      "ChgAttr"
+		    IDS_CMD_SHORT_CHANGE_CASE                            "ChgCase"
+		    IDS_CMD_SHORT_CHANGE_DIRECTORY                       "ChgDir"
+		    IDS_CMD_SHORT_CLIPBOARD_COPY                         "ClipCopy"
+		    IDS_CMD_SHORT_CLIPBOARD_CUT                          "ClipCut"
+		    IDS_CMD_SHORT_CLIPBOARD_PASTE                        "ClipPaste"
+		    IDS_CMD_SHORT_CLIPBOARD_PASTE_SHORTCUT               "PasteLnk"
+		    IDS_CMD_SHORT_CONNECT                                "Připojte se"
+		    IDS_CMD_SHORT_CONNECTIONS                            "Conns"
+		    IDS_CMD_SHORT_CONTEXT_MENU                           "CtxMenu"
+		    IDS_CMD_SHORT_CONTEXT_MENU_CURRENT_DIRECTORY         "DirCtx"
+		    IDS_CMD_SHORT_COPY_NAME_AS_TEXT                      "Název kopie"
+		    IDS_CMD_SHORT_COPY_PATH_AND_NAME_AS_TEXT             "CopyPathNm"
+		    IDS_CMD_SHORT_COPY_PATH_AS_TEXT                      "CopyPath"
+		    IDS_CMD_SHORT_COPY                                   "Kopírovat"
+		    IDS_CMD_SHORT_COPY_PATH_AND_FILE_NAME                "KopírovatUNC"
+		    IDS_CMD_SHORT_MAKE_DIRECTORY                         "MakeDir"
+		    IDS_CMD_SHORT_DELETE                                 "Odstranit"
+		    IDS_CMD_SHORT_DISCONNECT                             "Odpojit"
+		    IDS_CMD_SHORT_DISPLAY_BRIEF                          "Stručně"
+		    IDS_CMD_SHORT_DISPLAY_DETAILED                       "Dtld"
+		    IDS_CMD_SHORT_DISPLAY_EXTRA_DETAILED                 "xtraDtl"
+		    IDS_CMD_SHORT_EDIT                                   "Úpravy"
+		    IDS_CMD_SHORT_EDIT_NEW                               "UpravitNový"
+		    IDS_CMD_SHORT_ALTERNATE_EDIT                         "AltEdit"
+		    IDS_CMD_SHORT_EDIT_WITH                              "EditWith"
+		    IDS_CMD_SHORT_EXECUTE_OPEN                           "ExecOpen"
+		    IDS_CMD_SHORT_FILTER                                 "Filtr"
+		    IDS_CMD_SHORT_FIND                                   "Najít"
+		    IDS_CMD_SHORT_FOCUS_ADDRESS_BAR                      "AddrBar"
+		    IDS_CMD_SHORT_GO_DRIVE_ROOT                          "DrvRoot"
+		    IDS_CMD_SHORT_GO_ROOT_DIRECTORY                      "RootDir"
+		    IDS_CMD_SHORT_GO_TO_SHORTCUT_OR_LINK_TARGET          "LnkTarget"
+		    IDS_CMD_SHORT_HISTORY_BACK                           "HistBack"
+		    IDS_CMD_SHORT_HISTORY_FORWARD                        "HistFwd"
+		    IDS_CMD_SHORT_HOT_PATH_GO                            "HotPath"
+		    IDS_CMD_SHORT_HOT_PATHS                              "HotPaths"
+		    IDS_CMD_SHORT_LIST_OPENED_FILES                      "OpenFiles"
+		    IDS_CMD_SHORT_LOAD_SELECTION                         "LoadSel"
+		    IDS_CMD_SHORT_MAKE_FILE_LIST                         "Seznam souborů"
+		    IDS_CMD_SHORT_MENU                                   "Menu"
+		    IDS_CMD_SHORT_MOVE                                   "Pohybujte se"
+		    IDS_CMD_SHORT_MOVE_TO_RECYCLE_BIN                    "Recyklujte"
+		    IDS_CMD_SHORT_NAVIGATE_PATH                          "GoPath"
+		    IDS_CMD_SHORT_NEW_FROM_TEMPLATE                      "NewTmpl"
+		    IDS_CMD_SHORT_OPEN_COMMAND_SHELL                     "CmdShell"
+		    IDS_CMD_SHORT_OPEN_CURRENT_FOLDER                    "OpenDir"
+		    IDS_CMD_SHORT_OPEN_PROPERTIES                        "Rekvizity"
+		    IDS_CMD_SHORT_OPEN_SECURITY                          "Bezpečnost"
+		    IDS_CMD_SHORT_PACK                                   "Pack"
+		    IDS_CMD_SHORT_PERMANENT_DELETE                       "Odstranit"
+		    IDS_CMD_SHORT_QUICK_SEARCH                           "QuickSrch"
+		    IDS_CMD_SHORT_REFRESH                                "Obnovit"
+		    IDS_CMD_SHORT_RENAME                                 "Přejmenovat"
+		    IDS_CMD_SHORT_SELECT_CALC_DIR_SIZE_NEXT              "SelSizeNext"
+		    IDS_CMD_SHORT_SELECT_FILE_SYSTEM_PLUGIN              "FSPplugin"
+		    IDS_CMD_SHORT_SELECT_NEXT                            "SelNext"
+		    IDS_CMD_SHORT_SELECTION_GOTO_NEXT_SELECTED_NAME      "NextSel"
+		    IDS_CMD_SHORT_SELECTION_GOTO_PREV_SELECTED_NAME      "PrevSel"
+		    IDS_CMD_SHORT_SELECTION_HIDE_SELECTED_NAMES          "HideSel"
+		    IDS_CMD_SHORT_SELECTION_HIDE_UNSELECTED_NAMES        "HideUnsel"
+		    IDS_CMD_SHORT_SELECTION_INVERT                       "Invertovat"
+		    IDS_CMD_SHORT_SELECTION_RESTORE                      "Obnovit"
+		    IDS_CMD_SHORT_SAVE_SELECTION                         "SaveSel"
+		    IDS_CMD_SHORT_SELECTION_SELECT_ALL                   "SelAll"
+		    IDS_CMD_SHORT_SELECTION_SELECT_DIALOG                "Vyberte"
+		    IDS_CMD_SHORT_SELECTION_SELECT_SAME_EXTENSION        "SelExt"
+		    IDS_CMD_SHORT_SELECTION_SELECT_SAME_NAME             "SelName"
+		    IDS_CMD_SHORT_SELECTION_SHOW_HIDDEN_NAMES            "ZobrazitHidden"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_ALL                 "UnselAll"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_DIALOG              "Zrušte výběr"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_SAME_EXTENSION      "UnselExt"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_SAME_NAME           "UnselName"
+		    IDS_CMD_SHORT_SET_HOT_PATH                           "NastavitHotPath"
+		    IDS_CMD_SHORT_SET_PATH_FROM_OTHER_PANE               "Jiná cesta"
+		    IDS_CMD_SHORT_SHARES                                 "akcie"
+		    IDS_CMD_SHORT_SHOW_FOLDERS_HISTORY                   "FolderHist"
+		    IDS_CMD_SHORT_SORT_BY_ATTRIBUTES                     "ByAttr"
+		    IDS_CMD_SHORT_SORT_BY_EXTENSION                      "ByExt"
+		    IDS_CMD_SHORT_SORT_BY_NAME                           "Podle jména"
+		    IDS_CMD_SHORT_SORT_NONE                              "NoSort"
+		    IDS_CMD_SHORT_SORT_BY_SIZE                           "Podle velikosti"
+		    IDS_CMD_SHORT_SORT_BY_TIME                           "Podle času"
+		    IDS_CMD_SHORT_SWITCH_PANE_FOCUS                      "SwtchPane"
+		    IDS_CMD_SHORT_UNPACK                                 "Rozbalit"
+		    IDS_CMD_SHORT_UP_ONE_DIRECTORY                       "UpDir"
+		    IDS_CMD_SHORT_USER_MENU                              "UsrMenu"
+		    IDS_CMD_SHORT_VIEW                                   "Zobrazení"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_FILE_EXTENSIONS     "Ext"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_FILTER_BAR          "FilterBar"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_HIDDEN_FILES        "Skrytá"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_NAVIGATION_BAR      "NavBar"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_PREVIEW_PANE        "Náhled"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_STATUS_BAR          "Stavový řádek"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_SYSTEM_FILES        "Systém"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_THUMBNAILS          "palec"
+		    IDS_CMD_SHORT_SPACE_VIEW                             "SpaceView"
+		    IDS_CMD_SHORT_VIEW_WITH                              "ViewWith"
+		    IDS_CMD_SHORT_WINDOW_MENU                            "WinMenu"
+		    IDS_CMD_SHORT_ZOOM_PANEL                             "Přiblížení"
+		    IDS_MOD_ALT                                           "Alt"
+		    IDS_MOD_SHIFT                                         "Shift"
+		    IDS_TAB_SHORTCUTS                                     "Zkratky"
+		    IDS_SHORTCUTS_GROUP_FUNCTION_BAR                      "Funkční lišta"
+		    IDS_SHORTCUTS_GROUP_FOLDER_VIEW                       "Zobrazení složky"
+		    IDS_SHORTCUTS_SEARCH_CUE                              "Vyhledávací zkratky"
+		    IDS_SHORTCUTS_COL_COMMAND                             "Název příkazu"
+		    IDS_SHORTCUTS_COL_KEY                                 "klíč"
+		    IDS_SHORTCUTS_COL_ALT                                 "Alt"
+		    IDS_SHORTCUTS_COL_SHIFT                               "Shift"
+		    IDS_FMT_SHORTCUT_CONFLICT                             "Konflikt s příkazem '{0}' ({1})"
+		    IDS_MSG_SHORTCUT_INVALID_COMMAND_ID                   "ID příkazu musí začínat „cmd/“."
+		    IDS_CMD_DESC_COMPARE                                  "Porovnejte dva panely."
+		    IDS_CMD_DESC_EXIT                                     "Ukončete aplikaci."
+		    IDS_CMD_DESC_FULL_SCREEN                              "Přepnout režim celé obrazovky."
+		    IDS_CMD_DESC_OPEN_LEFT_DRIVE_MENU                     "Otevřete levou nabídku jednotky."
+		    IDS_CMD_DESC_OPEN_RIGHT_DRIVE_MENU                    "Otevřete pravé menu disku."
+		    IDS_CMD_DESC_SHORTCUTS                                "Zobrazit všechny nakonfigurované zkratky."
+		    IDS_CMD_DESC_VIEW_WIDTH                               "Upravte šířku pohledu."
+		    IDS_CMD_DESC_ALTERNATE_VIEW                           "Přepnout alternativní režim zobrazení."
+		    IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE        "Vložte aktuální adresář do příkazového řádku."
+		    IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE           "Vložte název vybraného souboru do příkazového řádku."
+		    IDS_CMD_DESC_CHANGE_ATTRIBUTES                        "Změňte atributy souboru pro výběr."
+		    IDS_CMD_DESC_CHANGE_CASE                              "Změňte velikost písmen pro výběr."
+		    IDS_CMD_DESC_CHANGE_DIRECTORY                         "Změňte adresář pomocí výzvy k cestě."
+		    IDS_CMD_DESC_CLIPBOARD_COPY                           "Zkopírujte výběr do schránky."
+		    IDS_CMD_DESC_CLIPBOARD_PASTE                          "Vložit ze schránky."
+		    IDS_CMD_DESC_CONNECT                                  "Připojte se k místu."
+		    IDS_CMD_DESC_CONNECTIONS                              "Otevřete správce připojení."
+		    IDS_CMD_DESC_CONTEXT_MENU                             "Otevřete kontextovou nabídku pro výběr."
+		    IDS_CMD_DESC_CONTEXT_MENU_CURRENT_DIRECTORY           "Otevřete kontextovou nabídku pro aktuální adresář."
+		    IDS_CMD_DESC_COPY_NAME_AS_TEXT                        "Zkopírujte název a příponu souboru jako text."
+		    IDS_CMD_DESC_COPY_PATH_AND_FILE_NAME                  "Zkopírujte cestu UNC poskytovatele nebo cestu UNC místního počítače (například \\\\HOST\\C$\\...) jako text."
+		    IDS_CMD_DESC_COPY_PATH_AND_NAME_AS_TEXT               "Zkopírujte celou cestu a název jako text."
+		    IDS_CMD_DESC_COPY_PATH_AS_TEXT                        "Zkopírujte cestu obsahující složku jako text."
+		    IDS_CMD_DESC_COPY                                     "Zkopírujte do druhého panelu."
+		    IDS_CMD_DESC_MAKE_DIRECTORY                           "Vytvořte nový adresář."
+		    IDS_CMD_DESC_DELETE                                   "Smazat výběr."
+		    IDS_CMD_DESC_DISCONNECT                               "Odpojte se od aktuálního umístění."
+			    IDS_CMD_DESC_DISPLAY_BRIEF                            "Přepněte do režimu krátkého zobrazení."
+			    IDS_CMD_DESC_DISPLAY_DETAILED                         "Přepněte do režimu podrobného zobrazení."
+			    IDS_CMD_DESC_DISPLAY_EXTRA_DETAILED                   "Přepněte do režimu extra podrobného zobrazení."
+			    IDS_CMD_DESC_EDIT                                     "Upravte vybraný soubor."
+			    IDS_CMD_DESC_EDIT_NEW                                 "Vytvořte a upravte nový soubor."
+		    IDS_CMD_DESC_ALTERNATE_EDIT                           "Upravte vybraný soubor pomocí nakonfigurovaného alternativního editoru."
+		    IDS_CMD_DESC_EXECUTE_OPEN                             "Proveďte nebo otevřete výběr."
+		    IDS_CMD_DESC_FILTER                                   "Filtrovat aktuální panel."
+		    IDS_CMD_DESC_FIND                                     "Otevřete dialogové okno Najít soubory a adresáře."
+		    IDS_CMD_DESC_HOT_PATHS                                "Otevřete horké cesty."
+		    IDS_CMD_DESC_LIST_OPENED_FILES                        "Zobrazit seznam otevřených souborů."
+		    IDS_CMD_DESC_SHOW_FOLDERS_HISTORY                      "Zobrazit nabídku historie složky."
+		    IDS_CMD_DESC_LOAD_SELECTION                           "Načíst uložený výběr."
+		    IDS_CMD_DESC_MENU                                     "Otevřete hlavní nabídku aktivního panelu."
+		    IDS_CMD_DESC_MOVE                                     "Přesuňte se do druhého podokna."
+		    IDS_CMD_DESC_MOVE_TO_RECYCLE_BIN                      "Přesuňte výběr do koše."
+		    IDS_CMD_DESC_OPEN_CURRENT_FOLDER                      "Otevřete aktuální složku."
+		    IDS_CMD_DESC_OPEN_PROPERTIES                          "Otevřete dialogové okno vlastností pro výběr."
+		    IDS_CMD_DESC_PACK                                     "Zabalte výběr."
+		    IDS_CMD_DESC_PERMANENT_DELETE                         "Po potvrzení výběr trvale smažte."
+		    IDS_CMD_DESC_QUICK_SEARCH                             "Spusťte rychlé vyhledávání."
+		    IDS_CMD_DESC_REFRESH                                  "Obnovte aktuální panel."
+		    IDS_CMD_DESC_RENAME                                   "Přejmenujte zaměřenou položku."
+		    IDS_CMD_DESC_SAVE_SELECTION                           "Uložte aktuální výběr."
+		    IDS_CMD_DESC_SELECT_CALC_DIR_SIZE_NEXT                "Vyberte, vypočítejte velikost (složky) a přejděte na další."
+		    IDS_CMD_DESC_SELECT_NEXT                              "Vyberte a přejděte na další."
+		    IDS_CMD_DESC_SHARES                                   "Zobrazit sdílené položky v síti."
+		    IDS_CMD_DESC_SORT_BY_EXTENSION                        "Seřadit podle přípony."
+		    IDS_CMD_DESC_SORT_BY_NAME                             "Seřadit podle názvu."
+		    IDS_CMD_DESC_SORT_NONE                                "Obnovit původní objednávku."
+		    IDS_CMD_DESC_SORT_BY_SIZE                             "Seřadit podle velikosti."
+		    IDS_CMD_DESC_SORT_BY_TIME                             "Seřadit podle času."
+		    IDS_CMD_DESC_SWITCH_PANE_FOCUS                        "Přepněte fokus do druhého podokna."
+		    IDS_CMD_DESC_UNPACK                                   "Rozbalte výběr."
+		    IDS_CMD_DESC_UP_ONE_DIRECTORY                         "Přejděte o jeden adresář nahoru."
+		    IDS_CMD_DESC_USER_MENU                                "Otevřete uživatelské menu."
+		    IDS_CMD_DESC_VIEW                                     "Zobrazit vybraný soubor."
+		    IDS_CMD_DESC_SPACE_VIEW                               "Pohled do otevřeného prostoru."
+		    IDS_CMD_DESC_WINDOW_MENU                              "Otevřete nabídku okna."
+		    IDS_CMD_DESC_ZOOM_PANEL                               "Přibližte panel."
+		    IDS_CMD_DESC_ABOUT                                    "Zobrazit informace o RedSalamander."
+		    IDS_CMD_DESC_EXTERNAL_HELP                            "Otevřete externí dokumentaci RedSalamander."
+		    IDS_CMD_DESC_PREFERENCES                              "Otevřete dialogové okno předvoleb."
+		    IDS_CMD_DESC_SWAP_PANES                               "Vyměňte levý a pravý panel."
+		    IDS_CMD_DESC_REREAD_ASSOCIATIONS                      "Znovu načtěte přidružení souborů."
+		    IDS_CMD_DESC_TOGGLE_MENU_BAR                          "Zobrazit nebo skrýt panel nabídek."
+		    IDS_CMD_DESC_TOGGLE_FUNCTION_BAR                      "Zobrazit nebo skrýt panel funkcí."
+		    IDS_CMD_DESC_THEME_SELECT                             "Vyberte motiv aplikace."
+		    IDS_CMD_DESC_THEME_SELECT_NEXT                        "Vyberte další motiv aplikace."
+		    IDS_CMD_DESC_THEME_SELECT_PREV                        "Vyberte téma předchozí aplikace."
+		    IDS_CMD_DESC_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR     "Indikátor režimu vysokého kontrastu systému."
+		    IDS_CMD_DESC_PLUGINS_MANAGE                           "Otevřete správce pluginů."
+		    IDS_CMD_DESC_PLUGINS_TOGGLE_ENABLED                   "Povolit nebo zakázat plugin."
+		    IDS_CMD_DESC_PLUGINS_CONFIGURE                        "Nakonfigurujte plugin."
+		    IDS_CMD_DESC_OPEN_FILE_EXPLORER_KNOWN_FOLDER          "Otevřete známou složku v Průzkumníku souborů."
+		    IDS_CMD_DESC_HISTORY_BACK                             "Přejděte zpět do historie."
+		    IDS_CMD_DESC_HISTORY_FORWARD                          "Pohybujte se v historii vpřed."
+		    IDS_CMD_DESC_GO_DRIVE_ROOT                            "Přejděte do kořenového adresáře vybrané jednotky."
+		    IDS_CMD_DESC_TOGGLE_FILEOPS_FAILED_ITEMS              "Zobrazit nebo skrýt podokno položek, které se nezdařily při operaci se souborem."
+		    IDS_CMD_DESC_FOCUS_ADDRESS_BAR                        "Zaměřte adresní řádek pro aktivní panel."
+		    IDS_CMD_DESC_GO_ROOT_DIRECTORY                        "Přejděte do kořenového adresáře."
+		    IDS_CMD_DESC_SET_PATH_FROM_OTHER_PANE                 "Nastavte cestu z druhého panelu."
+		    IDS_CMD_DESC_NAVIGATE_PATH                            "Přejděte na konkrétní cestu."
+		    IDS_CMD_DESC_SORT_BY_ATTRIBUTES                       "Seřadit podle atributů."
+		    IDS_CMD_DESC_VIEW_WITH                                "Zobrazit s vybraným prohlížečem."
+		    IDS_CMD_DESC_EDIT_WITH                                "Upravte pomocí vybraného editoru."
+		    IDS_CMD_DESC_OPEN_COMMAND_SHELL                       "Otevřete příkazový shell."
+		    IDS_CMD_DESC_GO_TO_SHORTCUT_OR_LINK_TARGET            "Přejděte na cíl zástupce nebo odkazu."
+		    IDS_CMD_DESC_MAKE_FILE_LIST                           "Vytvořte seznam souborů."
+		    IDS_CMD_DESC_NEW_FROM_TEMPLATE                        "Vytvořte novou položku ze šablony shellu."
+		    IDS_CMD_DESC_OPEN_SECURITY                            "Otevřete nastavení zabezpečení pro výběr."
+		    IDS_CMD_DESC_CLIPBOARD_CUT                            "Vyjmout výběr do schránky."
+		    IDS_CMD_DESC_CLIPBOARD_PASTE_SHORTCUT                 "Vložte zástupce ze schránky."
+		    IDS_CMD_DESC_SELECTION_SELECT_DIALOG                  "Vyberte položky pomocí dialogu."
+		    IDS_CMD_DESC_SELECTION_UNSELECT_DIALOG                "Zrušte výběr položek pomocí dialogového okna."
+		    IDS_CMD_DESC_SELECTION_INVERT                         "Invertujte výběr."
+		    IDS_CMD_DESC_SELECTION_SELECT_ALL                     "Vyberte všechny položky."
+		    IDS_CMD_DESC_SELECTION_UNSELECT_ALL                   "Zrušte výběr."
+		    IDS_CMD_DESC_SELECTION_RESTORE                        "Obnovte předchozí výběr."
+		    IDS_CMD_DESC_SELECTION_SELECT_SAME_EXTENSION          "Vyberte položky se stejnou příponou."
+		    IDS_CMD_DESC_SELECTION_UNSELECT_SAME_EXTENSION        "Zrušte výběr položek se stejnou příponou."
+		    IDS_CMD_DESC_SELECTION_SELECT_SAME_NAME               "Vyberte položky se stejným názvem."
+		    IDS_CMD_DESC_SELECTION_UNSELECT_SAME_NAME             "Zrušte výběr položek se stejným názvem."
+		    IDS_CMD_DESC_SELECTION_HIDE_SELECTED_NAMES            "Skrýt vybraná jména."
+		    IDS_CMD_DESC_SELECTION_HIDE_UNSELECTED_NAMES          "Skrýt nevybraná jména."
+		    IDS_CMD_DESC_SELECTION_SHOW_HIDDEN_NAMES              "Zobrazit skrytá jména."
+		    IDS_CMD_DESC_SELECTION_GOTO_PREV_SELECTED_NAME        "Přejít na předchozí vybraný název."
+		    IDS_CMD_DESC_SELECTION_GOTO_NEXT_SELECTED_NAME        "Přejít na další vybraný název."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_HIDDEN_FILES          "Přepnout zobrazení skrytých souborů."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_SYSTEM_FILES          "Přepnout zobrazení systémových souborů."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_FILE_EXTENSIONS       "Přepnout zobrazování přípon souborů."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_THUMBNAILS            "Vyberte režim zobrazení miniatur."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_PREVIEW_PANE          "Přepnout zobrazení podokna náhledu."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_FILTER_BAR            "Přepnout zobrazení lišty filtrů."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_NAVIGATION_BAR        "Přepnout zobrazení navigační lišty."
+		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_STATUS_BAR            "Přepnout zobrazení stavového řádku."
+		    IDS_CMD_DESC_SELECT_FILE_SYSTEM_PLUGIN                "Vyberte plugin systému souborů."
+		END
+
+STRINGTABLE
+BEGIN
+    IDS_CMD_HOT_PATH_GO                               "Přejděte na Hot Path"
+    IDS_CMD_DESC_HOT_PATH_GO                          "Přejděte na záložku horké cesty."
+    IDS_CMD_SET_HOT_PATH                              "Nastavte Hot Path"
+    IDS_CMD_DESC_SET_HOT_PATH                         "Přiřaďte aktuální složku ke slotu horké cesty."
+    IDS_FMT_CMD_HOT_PATH_GO_WITH_DIGIT                "Přejděte na Hot Path {0}"
+    IDS_FMT_CMD_SET_HOT_PATH_WITH_DIGIT               "Nastavte Hot Path {0}"
+    IDS_HOT_PATH_CONFIRM_TITLE                        "Horké cesty"
+    IDS_HOT_PATH_CONFIRM_REPLACE                      "Slot {0} je již přiřazen k:\r\n{1}\r\n\r\nNahradit aktuální složkou?"
+    IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT               "Ctrl+{0}"
+    IDS_PREFS_HOT_PATHS_PATH_LABEL                    "Cesta"
+    IDS_PREFS_HOT_PATHS_LABEL_LABEL                   "Štítek"
+    IDS_PREFS_HOT_PATHS_SHOW_IN_MENU                  "Zobrazit v nabídce Změnit disk"
+    IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS               "Procházet..."
+    IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN          "Při přiřazování otevřete stránku předvoleb"
+    IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC     "Po přiřazení slotu z panelu otevřete stránku předvoleb Hot Paths."
+    IDS_PREFS_FILEOPS_SECTION_PRECALC                 "Předběžná kalkulace"
+    IDS_PREFS_FILEOPS_PRECALC_ENABLED_TITLE           "Povolit skenování před výpočtem"
+    IDS_PREFS_FILEOPS_PRECALC_ENABLED_DESC            "Před zahájením skenování zkopírujte a přesunete výběr, aby byly součty a odhadovaný čas k dispozici dříve."
+    IDS_PREFS_FILEOPS_PRECALC_WORKERS_TITLE           "Předkalkulační pracovníci"
+    IDS_PREFS_FILEOPS_PRECALC_WORKERS_DESC            "Počet pracovníků na pozadí použitých pro procházku hostitelským stromem před kalkulací."
+    IDS_PREFS_FILEOPS_SECTION_BANDWIDTH               "Šířka pásma"
+    IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE          "Výchozí rychlostní limit"
+    IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_DESC           "Výchozí rychlostní limit na úlohu pro nové úlohy kopírování a přesouvání. Chcete-li zadat konkrétní hodnotu, vyberte možnost Vlastní. Úkoly to mohou stále přepsat ve vyskakovacím okně průběhu."
+    IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM_TITLE          "Vlastní limit"
+    IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM_DESC           "Zadejte hodnotu šířky pásma, například 128 kB, 5 MB nebo 1 GB."
+    IDS_PREFS_FILEOPS_SECTION_ADVANCED                "Pokročilé"
+    IDS_PREFS_FILEOPS_BRIDGE_BUFFER_TITLE             "Cross-FS bridge buffer (KB)"
+    IDS_PREFS_FILEOPS_BRIDGE_BUFFER_DESC              "Velikost na vyrovnávací paměti používaná hostitelským mostem při kopírování mezi různými systémy souborů. Na jeden aktivní přenos jsou přiděleny dvě vyrovnávací paměti."
+    IDS_PREFS_FILEOPS_AUTODISMISS_TITLE                "Automaticky zavírat úspěšné úlohy"
+    IDS_PREFS_FILEOPS_AUTODISMISS_DESC                 "Automaticky zavře dokončené úspěšné nebo zrušené úlohy operací se soubory z vyskakovacího okna průběhu."
+    IDS_PREFS_FILEOPS_PLUGIN_HINT_TITLE               "Nastavení vlastněná pluginem"
+    IDS_PREFS_FILEOPS_PLUGIN_HINT_DESC                "Souběžnost pro jednotlivé pluginy, dávkování v koši a nastavení vyhledávače zůstávají v části Předvolby > Pluginy > Systém souborů."
+    IDS_PREFS_FILEOPS_BANDWIDTH_UNLIMITED             "Neomezené"
+    IDS_PREFS_FILEOPS_BANDWIDTH_1_MIB                 "1 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_5_MIB                 "5 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_10_MIB                "10 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_50_MIB                "50 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_100_MIB               "100 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB               "500 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_1_GIB                 "1 GiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM                "Vlastní"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_FIND_TITLE                                    "Najít soubory a adresáře"
+    IDS_FIND_LABEL_ROOT                               "Podívejte se:"
+    IDS_FIND_LABEL_NAME                               "s názvem:"
+    IDS_FIND_LABEL_CONTENT                            "Obsahuje:"
+    IDS_FIND_OPTION_RECURSIVE                         "Hledat podadresáře"
+    IDS_FIND_OPTION_INCLUDE_FILES                     "Zahrnout soubory"
+    IDS_FIND_OPTION_INCLUDE_DIRECTORIES               "Zahrnout adresáře"
+    IDS_FIND_OPTION_FOLLOW_SYMLINKS                   "Postupujte podle symbolických odkazů"
+    IDS_FIND_OPTION_MATCH_CASE_NAME                   "Velká a malá písmena (jméno)"
+    IDS_FIND_OPTION_MATCH_CASE_CONTENT                "Velká písmena (obsah)"
+    IDS_FIND_OPTION_PREFER_INDEX                      "Preferujte indexovaný backend"
+    IDS_FIND_OPTION_WANT_SNIPPETS                     "Zahrnout úryvky"
+    IDS_FIND_ACTION_FIND                              "Najít hned"
+    IDS_FIND_ACTION_APPEND                            "Připojit"
+    IDS_FIND_ACTION_INTERSECT                         "Protínejte se"
+    IDS_FIND_ACTION_SUBTRACT                          "Odečíst"
+    IDS_FIND_ACTION_REFINE_INTERSECT                  "Upřesnit – protínají se s nalezenými předměty"
+    IDS_FIND_ACTION_REFINE_SUBTRACT                   "Upřesnit – Odečíst od nalezených položek"
+    IDS_FIND_ACTION_APPEND_TO_FOUND                   "Připojit k nalezeným položkám"
+    IDS_FIND_ACTION_OPEN                              "Otevřít"
+    IDS_FIND_ACTION_PARENT                            "Přejděte do složky"
+    IDS_FIND_ACTION_HELP_TOOLTIP                      "Najděte výsledné akce"
+    IDS_FIND_RESULT_ACTIONS_HELP_TITLE                "Najít akce s výsledky"
+    IDS_FIND_RESULT_ACTIONS_HELP_TEXT                 "Enter / Open: otevření vybraných výsledků\r\nPřejít do složky: otevřete složku obsahující\r\nCtrl+C: zkopíruje vybrané výsledky do schránky shellu\r\nCtrl+X: označení vybraných výsledků pro přesun do schránky shellu\r\nF3 / F4: zobrazení / úprava s nakonfigurovanými akcemi\r\nF5 / F6: kopírování / přesun vybraných výsledků do druhého panelu\r\nDel: přesunutí vybraných výsledků do koše\r\nShift+Del: po potvrzení trvale smazat"
+    IDS_FIND_RESULT_ACTIONS_HELP_TEXT_FMT             "Enter / Open: otevření vybraných výsledků\r\nPřejít do složky: otevřete složku obsahující\r\nCtrl+C: zkopíruje vybrané výsledky do schránky shellu\r\nCtrl+X: označení vybraných výsledků pro přesun do schránky shellu\r\nF3 / F4: zobrazení / úprava s nakonfigurovanými akcemi\r\nF5 / F6: kopírování / přesun vybraných výsledků do druhého panelu\r\nDel: přesunutí vybraných výsledků do koše\r\nShift+Del: po potvrzení trvale smazat\r\n\r\nCílová složka: {0}"
+    IDS_FIND_STATUS_DESTINATION_FMT                   "Cíl: {0}"
+    IDS_FIND_STATUS_DESTINATION_UNAVAILABLE           "(nedostupné)"
+    IDS_FIND_LABEL_DESTINATION                        "Cíl:"
+    IDS_FIND_NAME_MODE_WILDCARD                       "Zástupný znak"
+    IDS_FIND_NAME_MODE_LITERAL                        "Doslovný"
+    IDS_FIND_NAME_MODE_REGEX                          "Regex"
+    IDS_FIND_CONTENT_MODE_DISABLED                    "Zakázáno"
+    IDS_FIND_CONTENT_MODE_LITERAL                     "Text doslovný"
+    IDS_FIND_CONTENT_MODE_REGEX                       "Textový regulární výraz"
+    IDS_FIND_COLUMN_NAME                              "Jméno"
+    IDS_FIND_COLUMN_PATH                              "Cesta"
+    IDS_FIND_COLUMN_SIZE                              "Velikost"
+    IDS_FIND_COLUMN_MODIFIED                          "Upraveno"
+    IDS_FIND_COLUMN_ATTR                              "Attr"
+    IDS_FIND_COLUMN_SNIPPET                           "Úryvek"
+    IDS_FIND_STATUS_READY                             "Připraveno"
+    IDS_FIND_STATUS_CANCELLING                        "Rušení..."
+    IDS_FIND_STATUS_RUNNING_FMT                       "Vyhledávání pomocí {0}: {1} složky, {2} soubory, {3} shody"
+    IDS_FIND_STATUS_COMPLETE_FMT                      "Dokončeno s {0}: {1} odpovídá, {2} soubory skenovány"
+    IDS_FIND_STATUS_CANCELLED_FMT                     "Zrušeno ({0}): {1} odpovídá, soubory {2} byly zkontrolovány"
+    IDS_FIND_STATUS_FAILED_FMT                        "Vyhledávání se nezdařilo s {0}: {1} (0x{2:08X})"
+    IDS_FIND_STATUS_COPY_TO_OTHER_STARTED_FMT         "Kopírování do {0} zahájeno."
+    IDS_FIND_STATUS_MOVE_TO_OTHER_STARTED_FMT         "Přesun na {0} byl zahájen."
+    IDS_FIND_BACKEND_UNKNOWN                          "neznámý backend"
+    IDS_FIND_BACKEND_SCAN                             "skenovat"
+    IDS_FIND_BACKEND_INDEX                            "index"
+    IDS_FIND_BACKEND_SERVICE                          "služby"
+    IDS_FIND_WARNING_NO_INDEX                         "index nedostupný"
+    IDS_FIND_WARNING_NO_CONTENT                       "obsah nedostupný"
+    IDS_FIND_WARNING_ACCESS_DENIED                    "přístup odepřen přeskočen"
+    IDS_FIND_WARNING_OVERFLOW                         "dosažený limit výsledku"
+    IDS_FIND_WARNING_SERVICE_UNAVAILABLE              "služba nedostupná"
+    IDS_FIND_STATUS_RUNNING_ACTIVE_FMT                "{0} Vyhledávání pomocí {1}: {2}, poslední postup {3} | Složky {4}, soubory {5}, shody {6}"
+    IDS_FIND_STATUS_RUNNING_ACTIVE_PATH_FMT           "{0} Vyhledávání pomocí {1}: {2}, poslední postup {3} | Složky {4}, soubory {5}, shody {6} | {7}"
+    IDS_FIND_STATUS_RUNNING_STALLED_FMT               "{0} Vyhledávání pomocí {1}: zastaveno v {2}, poslední postup {3} | Složky {4}, soubory {5}, shody {6}"
+    IDS_FIND_STATUS_RUNNING_STALLED_PATH_FMT          "{0} Vyhledávání pomocí {1}: zastaveno v {2}, poslední postup {3} | Složky {4}, soubory {5}, shody {6} | {7}"
+    IDS_FIND_PHASE_INITIALIZING                       "inicializace"
+    IDS_FIND_PHASE_ENUMERATING                        "vyčíslení"
+    IDS_FIND_PHASE_INDEX_LOOKUP                       "vyhledávání indexu"
+    IDS_FIND_PHASE_CONTENT_SCAN                       "skenování obsahu"
+    IDS_FIND_PHASE_COMPLETED                          "dokončeno"
+    IDS_DXUI_NO_MATCHES                               "Žádné zápasy"
+    IDS_DXUI_NO_DATA                                  "Žádná data"
+    IDS_ITEM_PROPERTIES_SECTION_GENERAL               "Generál"
+    IDS_ITEM_PROPERTIES_SECTION_TIMESTAMPS            "Časová razítka"
+    IDS_ITEM_PROPERTIES_SECTION_ATTRIBUTES            "Atributy"
+    IDS_ITEM_PROPERTIES_SECTION_REMOTE                "Dálkové"
+    IDS_ITEM_PROPERTIES_SECTION_CONNECTION            "Připojení"
+    IDS_ITEM_PROPERTIES_SECTION_DRIVE                 "řídit"
+    IDS_ITEM_PROPERTIES_SECTION_S3_TABLE              "Tabulka S3"
+    IDS_ITEM_PROPERTIES_SECTION_GRAPH_METADATA        "Metadata grafu"
+    IDS_ITEM_PROPERTIES_FIELD_NAME                    "Jméno"
+    IDS_ITEM_PROPERTIES_FIELD_PATH                    "Cesta"
+    IDS_ITEM_PROPERTIES_FIELD_TYPE                    "Typ"
+    IDS_ITEM_PROPERTIES_FIELD_SIZE                    "Velikost"
+    IDS_ITEM_PROPERTIES_FIELD_ATTRIBUTES              "Atributy"
+    IDS_ITEM_PROPERTIES_FIELD_CREATED                 "Vytvořeno"
+    IDS_ITEM_PROPERTIES_FIELD_MODIFIED                "Upraveno"
+    IDS_ITEM_PROPERTIES_FIELD_ACCESSED                "Zpřístupněno"
+    IDS_ITEM_PROPERTIES_FIELD_CHANGED                 "Změněno"
+    IDS_ITEM_PROPERTIES_FIELD_REMOTE_PATH             "Vzdálená cesta"
+    IDS_ITEM_PROPERTIES_FIELD_DISPLAY_PATH            "Zobrazit cestu"
+    IDS_ITEM_PROPERTIES_FIELD_BASE_PATH               "Základní cesta"
+    IDS_ITEM_PROPERTIES_FIELD_CONNECTION_NAME         "Název připojení"
+    IDS_ITEM_PROPERTIES_FIELD_CONNECTION_ID           "ID připojení"
+    IDS_ITEM_PROPERTIES_FIELD_AUTHENTICATION          "Autentizace"
+    IDS_ITEM_PROPERTIES_FIELD_SAVE_PASSWORD           "Uložit heslo"
+    IDS_ITEM_PROPERTIES_FIELD_REQUIRE_HELLO           "Vyžadovat ahoj"
+    IDS_ITEM_PROPERTIES_FIELD_CONNECT_TIMEOUT_MS      "Časový limit připojení (ms)"
+    IDS_ITEM_PROPERTIES_FIELD_OPERATION_TIMEOUT_MS    "Časový limit operace (ms)"
+    IDS_ITEM_PROPERTIES_FIELD_IGNORE_TLS_TRUST        "Ignorovat důvěryhodnost TLS"
+    IDS_ITEM_PROPERTIES_FIELD_USE_EPSV                "Použijte EPSV"
+    IDS_ITEM_PROPERTIES_FIELD_FROM_CONNECTION_PROFILE "Z profilu připojení"
+    IDS_ITEM_PROPERTIES_FIELD_HAS_PASSWORD            "Má heslo"
+    IDS_ITEM_PROPERTIES_FIELD_HAS_SSH_PRIVATE_KEY     "Má soukromý klíč SSH"
+    IDS_ITEM_PROPERTIES_FIELD_HAS_SSH_PUBLIC_KEY      "Má veřejný klíč SSH"
+    IDS_ITEM_PROPERTIES_FIELD_HAS_SSH_KNOWN_HOSTS     "Má známé hostitele SSH"
+    IDS_ITEM_PROPERTIES_FIELD_FULL_PATH               "Celá cesta"
+    IDS_ITEM_PROPERTIES_FIELD_SENT                    "Odesláno"
+    IDS_ITEM_PROPERTIES_FIELD_RECEIVED                "Přijato"
+    IDS_ITEM_PROPERTIES_FIELD_ARCHIVE_ITEM_INDEX      "Archivovat index položek"
+    IDS_ITEM_PROPERTIES_FIELD_ARCHIVE_PATH            "Cesta k archivu"
+    IDS_ITEM_PROPERTIES_TYPE_FILE                     "Soubor"
+    IDS_ITEM_PROPERTIES_TYPE_DIRECTORY                "Adresář"
+    IDS_ITEM_PROPERTIES_SIZE_BYTES_FMT                "{0} bajtů"
+    IDS_ITEM_PROPERTIES_FIELD_RAW                     "Syrové"
+    IDS_ITEM_PROPERTIES_FIELD_FLAGS                   "Vlajky"
+    IDS_ITEM_PROPERTIES_FIELD_KIND                    "Druh"
+    IDS_ITEM_PROPERTIES_FIELD_TARGET                  "Cíl"
+    IDS_ITEM_PROPERTIES_FIELD_ITEM_ID                 "ID položky"
+    IDS_ITEM_PROPERTIES_FIELD_DRIVE_PATH              "Cesta jízdy"
+    IDS_ITEM_PROPERTIES_FIELD_WEB_URL                 "Webová adresa URL"
+    IDS_ITEM_PROPERTIES_FIELD_DOWNLOAD_URL_AVAILABLE  "Adresa URL ke stažení je k dispozici"
+    IDS_ITEM_PROPERTIES_FIELD_DRIVE_ID                "ID disku"
+    IDS_ITEM_PROPERTIES_FIELD_SITE_ID                 "ID webu"
+    IDS_ITEM_PROPERTIES_FIELD_DRIVE_NAME              "Název disku"
+    IDS_ITEM_PROPERTIES_FIELD_VOLUME_LABEL            "Označení svazku"
+    IDS_ITEM_PROPERTIES_FIELD_DRIVE_WEB_URL           "Webová adresa URL jednotky"
+    IDS_ITEM_PROPERTIES_FIELD_USER                    "Uživatel"
+    IDS_ITEM_PROPERTIES_FIELD_AUTHORITY               "Autorita"
+    IDS_ITEM_PROPERTIES_FIELD_PROTOCOL                "Protokol"
+    IDS_FIND_ERROR_ROOT_REQUIRED                      "Je vyžadován kořen vyhledávání."
+    IDS_FIND_ERROR_TARGETS_REQUIRED                   "Před vyhledáváním povolte soubory, adresáře nebo obojí."
+    IDS_FIND_ERROR_CRITERIA_REQUIRED                  "Zadejte vzor názvu nebo povolte vyhledávání obsahu."
+    IDS_FIND_ERROR_CONTENT_REQUIRED                   "Zadejte text obsahu nebo zakažte vyhledávání obsahu."
+    IDS_FIND_ERROR_NO_FILESYSTEM                      "Aktivní podokno neodhaluje prohledávatelný souborový systém."
+    IDS_CAPTION_SETTINGS_RESTORED_DEFAULTS "Nastavení obnoveno na výchozí"
+    IDS_FMT_SETTINGS_RESTORED_DEFAULTS_BACKUP "RedSalamander nemohl načíst předchozí soubor nastavení z:\r\n\r\n{0}\r\n\r\nZálohoval tuto konfiguraci do:\r\n\r\n{1}\r\n\r\nPro tento běh byla obnovena výchozí nastavení. Chcete-li obnovit hodnoty ze zálohy, zavřete RedSalamander, porovnejte zálohu s novým souborem nastavení v původní cestě a zkopírujte zpět pouze nastavení, která stále potřebujete."
+    IDS_FMT_SETTINGS_RESTORED_DEFAULTS_UNSUPPORTED_SCHEMA_BACKUP "RedSalamander našel verzi schématu nastavení {0}, ale toto sestavení podporuje pouze verzi schématu 16.\r\n\r\nStaré nastavení nebylo migrováno automaticky. Byly zálohovány z:\r\n\r\n{1}\r\n\r\nkomu:\r\n\r\n{2}\r\n\r\nPro tento běh byla obnovena výchozí nastavení. Chcete-li obnovit asociace prohlížeče, editoru nebo akce souboru, zavřete RedSalamander, porovnejte zálohu s novým souborem nastavení v původní cestě a zkopírujte zpět pouze nastavení, která stále potřebujete."
+    IDS_FILEACTION_REASON_COMPUTER_RULE_FMT "Přepsání {0} pro {1}"
+    IDS_FILEACTION_REASON_GLOBAL_RULE_FMT "Globální pravidlo pro {0}"
+    IDS_FILEACTION_REASON_COMPUTER_DEFAULT_FMT "Výchozí pravidlo {0}"
+    IDS_FILEACTION_REASON_GLOBAL_DEFAULT "Globální výchozí pravidlo"
+    IDS_FILEACTION_REASON_ACTION_MISSING_FMT "Akce '{0}' nebyla nalezena"
+    IDS_FILEACTION_REASON_ACTION_DISABLED_FMT "Akce '{0}' je zakázána"
+    IDS_FILEACTION_REASON_ACTION_NOT_APPLICABLE_FMT "Akce '{0}' se nevztahuje na tento soubor nebo počítač"
+    IDS_FILEACTION_REASON_NO_ASSOCIATION "Žádná odpovídající asociace"
+    IDS_PREFS_FILE_ACTION_TAB_ASSOCIATIONS               "Asociace"
+    IDS_PREFS_FILE_ACTION_TAB_ACTIONS                    "Akce"
+    IDS_PREFS_FILE_ACTION_COL_MATCH                      "Shoda"
+    IDS_PREFS_FILE_ACTION_COL_COMPUTER                   "Počítač"
+    IDS_PREFS_FILE_ACTION_COL_VIEW                       "F3 Zobrazit"
+    IDS_PREFS_FILE_ACTION_COL_ALTERNATE_VIEW             "Alt+F3 Alternativní zobrazení"
+    IDS_PREFS_FILE_ACTION_COL_EDIT                       "F4 Upravit"
+    IDS_PREFS_FILE_ACTION_COL_ALTERNATE_EDIT             "Ctrl+Shift+F4 Alternativní úpravy"
+    IDS_PREFS_FILE_ACTION_COL_EDIT_NEW                   "Shift+F4 Upravit nový"
+    IDS_PREFS_FILE_ACTION_COL_STATUS                     "Stav"
+    IDS_PREFS_FILE_ACTION_COL_NAME                       "Jméno"
+    IDS_PREFS_FILE_ACTION_COL_TYPE                       "Typ"
+    IDS_PREFS_FILE_ACTION_COL_APPLIES_TO                 "Platí pro"
+    IDS_PREFS_FILE_ACTION_LABEL_MATCH_KIND               "Druh zápasu"
+    IDS_PREFS_FILE_ACTION_LABEL_MATCH_VALUE              "Hodnota shody"
+    IDS_PREFS_FILE_ACTION_LABEL_COMPUTER                 "Počítač"
+    IDS_PREFS_FILE_ACTION_LABEL_TEST_FILE                "Testovací soubor"
+    IDS_PREFS_FILE_ACTION_LABEL_ACTION_ID                "ID akce"
+    IDS_PREFS_FILE_ACTION_LABEL_ACTION_NAME              "Zobrazovaný název"
+    IDS_PREFS_FILE_ACTION_LABEL_ACTION_TYPE              "Typ akce"
+    IDS_PREFS_FILE_ACTION_LABEL_PLUGIN_ID                "Plugin prohlížeče"
+    IDS_PREFS_FILE_ACTION_LABEL_EXECUTABLE               "Program"
+    IDS_PREFS_FILE_ACTION_LABEL_ARGUMENTS                "Argumenty"
+    IDS_PREFS_FILE_ACTION_LABEL_WORKING_DIR              "Pracovní složka"
+    IDS_PREFS_FILE_ACTION_LABEL_APPLIES_TO               "Platí pro"
+    IDS_PREFS_FILE_ACTION_LABEL_COMPUTERS                "Počítače"
+    IDS_PREFS_FILE_ACTION_KIND_DEFAULT                   "Výchozí"
+    IDS_PREFS_FILE_ACTION_KIND_EXTENSION                 "Rozšíření"
+    IDS_PREFS_FILE_ACTION_KIND_PATTERN                   "Vzor"
+    IDS_PREFS_FILE_ACTION_TYPE_VIEWER_PLUGIN             "Plugin prohlížeče"
+    IDS_PREFS_FILE_ACTION_TYPE_EXTERNAL_PROGRAM          "Externí program"
+    IDS_PREFS_FILE_ACTION_ANY                            "Jakékoliv"
+    IDS_PREFS_FILE_ACTION_ENABLED                        "Povoleno"
+    IDS_PREFS_FILE_ACTION_DISABLED                       "Zakázáno"
+    IDS_PREFS_FILE_ACTION_MISSING_FMT                    "Chybí: {0}"
+    IDS_PREFS_FILE_ACTION_PREVIEW_FMT                    "{0} se vyřeší na: {1}\r\nDůvod: {2}"
+    IDS_PREFS_FILE_ACTION_PREVIEW_UNRESOLVED_FMT         "{0} není nakonfigurován.\r\nDůvod: {1}"
+    IDS_PREFS_FILE_ACTION_VALIDATION_MATCH_REQUIRED      "Zadejte hodnotu pro tento druh shody."
+    IDS_PREFS_FILE_ACTION_VALIDATION_ID_REQUIRED         "Zadejte ID akce."
+    IDS_PREFS_FILE_ACTION_VALIDATION_ACTION_MISSING_FMT  "Akce '{0}' neexistuje."
+    IDS_PREFS_FILE_ACTION_VALIDATION_PLUGIN_REQUIRED     "Vyberte plugin prohlížeče."
+    IDS_PREFS_FILE_ACTION_BUTTON_SAVE_ASSOCIATION        "Save Association"
+    IDS_PREFS_FILE_ACTION_BUTTON_SAVE_ACTION             "Uložit akci"
+    IDS_PREFS_FILE_ACTION_BUTTON_REMOVE                  "Odebrat"
+    IDS_PREFS_FILE_ACTION_BUTTON_RESET_DEFAULTS          "Obnovit výchozí"
+    IDS_PREFS_FILE_ACTION_CHECK_ENABLED                  "Povoleno"
+    IDS_PREFS_FILE_ACTION_NO_ASSOCIATIONS                "Žádné asociace"
+    IDS_PREFS_FILE_ACTION_NO_ACTIONS                     "Žádné akce"
+    IDS_PREFS_VIEWERS_ACTION_HINT                        "Nakonfigurujte pluginy prohlížeče nebo externí programy a poté je přiřaďte k F3 a Alt+F3."
+    IDS_CHANGE_ATTR_SECTION_DATETIME                     "Změnit datum a čas"
+    IDS_CHANGE_ATTR_LABEL_MODIFIED                       "Upraveno:"
+    IDS_CHANGE_ATTR_LABEL_CREATED                        "Vytvořeno:"
+    IDS_CHANGE_ATTR_LABEL_ACCESSED                       "Přístup:"
+    IDS_CHANGE_ATTR_SET_CURRENT                          "Nastavit aktuální"
+    IDS_CHANGE_ATTR_INCLUDE_SUBDIRECTORIES               "Zahrnout podadresáře"
+    IDS_MSG_CHANGE_ATTRIBUTES_INVALID_DATETIME           "Než budete pokračovat, zadejte platné datum a čas."
+    IDS_FIND_RESULT_MENU_THIS_ITEM                    "Tato položka"
+    IDS_FIND_RESULT_MENU_SELECTION_FMT                "{0} vybrané položky"
+    IDS_FIND_RESULT_MENU_COPY_TO_DESTINATION          "Kopírovat do cíle"
+    IDS_FIND_RESULT_MENU_MOVE_TO_DESTINATION          "Přesunout do cíle"
+END

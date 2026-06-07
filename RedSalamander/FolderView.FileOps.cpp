@@ -6,6 +6,49 @@
 
 namespace
 {
+#ifdef ENABLE_TESTS
+std::mutex g_debugMoveSelectedItemsDestinationMutex;
+std::optional<std::filesystem::path> g_debugMoveSelectedItemsDestination;
+std::atomic_bool g_debugDirectFileOperationFallbackEnabled{false};
+
+[[nodiscard]] std::optional<std::filesystem::path> TakeDebugMoveSelectedItemsDestinationForSelfTest() noexcept
+{
+    std::scoped_lock lock(g_debugMoveSelectedItemsDestinationMutex);
+    std::optional<std::filesystem::path> destination = std::move(g_debugMoveSelectedItemsDestination);
+    g_debugMoveSelectedItemsDestination.reset();
+    return destination;
+}
+#endif
+
+constexpr HRESULT kMissingFileOperationHostHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+[[nodiscard]] bool OpenClipboardWithRetriesForFolderView(HWND ownerWindow) noexcept
+{
+    using namespace std::chrono_literals;
+
+    constexpr uint32_t kMaxAttempts = 20u;
+    for (uint32_t attempt = 0; attempt < kMaxAttempts; ++attempt)
+    {
+        if (OpenClipboard(ownerWindow) != 0)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(10ms);
+    }
+
+    return false;
+}
+
+[[nodiscard]] bool IsDirectFileOperationFallbackEnabledForSelfTest() noexcept
+{
+#ifdef ENABLE_TESTS
+    return g_debugDirectFileOperationFallbackEnabled.load(std::memory_order_acquire);
+#else
+    return false;
+#endif
+}
+
 [[nodiscard]] bool IsBuiltinFileSystemPlugin(std::wstring_view pluginId) noexcept
 {
     return CompareStringOrdinal(pluginId.data(), static_cast<int>(pluginId.size()), L"builtin/file-system", -1, TRUE) == CSTR_EQUAL;
@@ -124,7 +167,7 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
         return false;
     }
 
-    if (OpenClipboard(ownerWindow) == 0)
+    if (! OpenClipboardWithRetriesForFolderView(ownerWindow))
     {
         Debug::Warning(L"FolderView::SetFileDropClipboard: OpenClipboard failed (error={}).", GetLastError());
         return false;
@@ -160,7 +203,7 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
 [[nodiscard]] std::vector<std::filesystem::path> ReadFileDropClipboard(HWND ownerWindow) noexcept
 {
     std::vector<std::filesystem::path> result;
-    if (OpenClipboard(ownerWindow) == 0)
+    if (! OpenClipboardWithRetriesForFolderView(ownerWindow))
     {
         return result;
     }
@@ -195,7 +238,7 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
 
 [[nodiscard]] std::optional<DWORD> ReadPreferredDropEffectClipboard(HWND ownerWindow) noexcept
 {
-    if (OpenClipboard(ownerWindow) == 0)
+    if (! OpenClipboardWithRetriesForFolderView(ownerWindow))
     {
         return std::nullopt;
     }
@@ -289,6 +332,19 @@ void ShowClipboardFormattedOverlay(FolderView& view, UINT titleStringId, UINT me
     return persist->Save(createdPath.c_str(), TRUE);
 }
 } // namespace
+
+#ifdef ENABLE_TESTS
+void FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::optional<std::filesystem::path> destination) noexcept
+{
+    std::scoped_lock lock(g_debugMoveSelectedItemsDestinationMutex);
+    g_debugMoveSelectedItemsDestination = std::move(destination);
+}
+
+void FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(bool enabled) noexcept
+{
+    g_debugDirectFileOperationFallbackEnabled.store(enabled, std::memory_order_release);
+}
+#endif
 
 void FolderView::CommandRename()
 {
@@ -432,6 +488,13 @@ HRESULT FolderView::CopySelectedItemsToFolder(const std::filesystem::path& desti
         return hrStart;
     }
 
+    if (! IsDirectFileOperationFallbackEnabledForSelfTest())
+    {
+        Debug::Error(L"FolderView::CopySelectedItemsToFolder missing FileOperationRequestCallback; refusing direct file-operation fallback");
+        ReportError(L"Copy", kMissingFileOperationHostHr);
+        return kMissingFileOperationHostHr;
+    }
+
     if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_COPY, paths, destinationFolder))
     {
         return S_FALSE;
@@ -507,6 +570,13 @@ HRESULT FolderView::MoveSelectedItemsToFolder(const std::filesystem::path& desti
         return hrStart;
     }
 
+    if (! IsDirectFileOperationFallbackEnabledForSelfTest())
+    {
+        Debug::Error(L"FolderView::MoveSelectedItemsToFolder missing FileOperationRequestCallback; refusing direct file-operation fallback");
+        ReportError(L"Move", kMissingFileOperationHostHr);
+        return kMissingFileOperationHostHr;
+    }
+
     if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_MOVE, paths, destinationFolder))
     {
         return S_FALSE;
@@ -557,6 +627,13 @@ void FolderView::DeleteSelectedItems()
         {
             ReportError(L"Delete", hrStart);
         }
+        return;
+    }
+
+    if (! IsDirectFileOperationFallbackEnabledForSelfTest())
+    {
+        Debug::Error(L"FolderView::DeleteSelectedItems missing FileOperationRequestCallback; refusing direct file-operation fallback");
+        ReportError(L"Delete", kMissingFileOperationHostHr);
         return;
     }
 
@@ -677,6 +754,13 @@ void FolderView::PasteItemsFromClipboard()
         {
             ReportError(moveRequested ? L"Move" : L"Copy", hrStart);
         }
+        return;
+    }
+
+    if (! IsDirectFileOperationFallbackEnabledForSelfTest())
+    {
+        Debug::Error(L"FolderView::PasteItemsFromClipboard missing FileOperationRequestCallback; refusing direct file-operation fallback");
+        ReportError(moveRequested ? L"Move" : L"Copy", kMissingFileOperationHostHr);
         return;
     }
 
@@ -882,26 +966,66 @@ void FolderView::MoveSelectedItems()
         return;
     }
 
-    wil::com_ptr<IFileOpenDialog> dialog;
-    if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.addressof()))))
-        return;
+    std::filesystem::path destination;
+#ifdef ENABLE_TESTS
+    if (std::optional<std::filesystem::path> debugDestination = TakeDebugMoveSelectedItemsDestinationForSelfTest(); debugDestination.has_value())
+    {
+        destination = std::move(debugDestination.value());
+        SelfTest::AppendSelfTestTrace(std::format(L"FolderView::MoveSelectedItems debug destination '{}'", destination.wstring()));
+    }
+    else
+#endif
+    {
+        wil::com_ptr<IFileOpenDialog> dialog;
+        if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.addressof()))))
+            return;
 
-    DWORD options = 0;
-    if (FAILED(dialog->GetOptions(&options)))
-        return;
-    dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
-    if (FAILED(dialog->Show(_hWnd.get())))
-        return;
+        DWORD options = 0;
+        if (FAILED(dialog->GetOptions(&options)))
+            return;
+        dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+        if (FAILED(dialog->Show(_hWnd.get())))
+            return;
 
-    wil::com_ptr<IShellItem> result;
-    if (FAILED(dialog->GetResult(result.addressof())))
-        return;
+        wil::com_ptr<IShellItem> result;
+        if (FAILED(dialog->GetResult(result.addressof())))
+            return;
 
-    wil::unique_cotaskmem_string selectedPath;
-    if (FAILED(result->GetDisplayName(SIGDN_FILESYSPATH, selectedPath.addressof())))
-        return;
+        wil::unique_cotaskmem_string selectedPath;
+        if (FAILED(result->GetDisplayName(SIGDN_FILESYSPATH, selectedPath.addressof())))
+            return;
 
-    std::filesystem::path destination(selectedPath.get());
+        destination = std::filesystem::path(selectedPath.get());
+    }
+
+    if (destination.empty())
+    {
+        return;
+    }
+
+    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+    if (_fileOperationRequestCallback)
+    {
+        FileOperationRequest request{};
+        request.operation         = FILESYSTEM_MOVE;
+        request.sourcePaths       = std::move(paths);
+        request.destinationFolder = destination;
+        request.flags             = flags;
+
+        const HRESULT hrStart = _fileOperationRequestCallback(std::move(request));
+        if (FAILED(hrStart))
+        {
+            ReportError(L"Move", hrStart);
+        }
+        return;
+    }
+
+    if (! IsDirectFileOperationFallbackEnabledForSelfTest())
+    {
+        Debug::Error(L"FolderView::MoveSelectedItems missing FileOperationRequestCallback; refusing direct file-operation fallback");
+        ReportError(L"Move", kMissingFileOperationHostHr);
+        return;
+    }
 
     if (! ConfirmNonRevertableFileOperation(_hWnd.get(), _fileSystem.get(), FILESYSTEM_MOVE, paths, destination))
     {
@@ -918,7 +1042,6 @@ void FolderView::MoveSelectedItems()
         return;
     }
 
-    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
     hr                          = _fileSystem->MoveItems(sourcePaths, count, destination.c_str(), flags, nullptr, nullptr, nullptr);
     if (FAILED(hr))
     {

@@ -272,6 +272,18 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
+    <ProjectReference Include="Lang\cs-CZ\FileSystemS3-cs-CZ.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{9b531dcf-8421-5e2b-be51-239d898ff45e}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
+    <ProjectReference Include="Lang\sk-SK\FileSystemS3-sk-SK.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{c049003a-558a-5621-93fe-9fac962d1975}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

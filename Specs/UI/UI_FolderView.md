@@ -127,6 +127,8 @@ Measured optimization gates matter: the 2026-05-19 FolderView optimization revie
 - FolderView → NavigationView: Double-click activates the focused item:
   - Folder: navigate into it (updates `FolderView` path, which updates the paired `NavigationView`).
   - File: invoke the host’s open-file callback first (used to mount virtual file systems like `7z:`), otherwise fall back to `ShellExecuteW("open")`.
+- Programmatic path changes that replace or clear the NavigationView path MUST retire any active path-edit or full-path-popup native text host before hiding/resetting that child window. A refresh of the same path MAY preserve the edit host, but a different path or empty path must deactivate it so stale TextInput/UIA callbacks cannot navigate or paint against destroyed child HWND state.
+- Embedded NavigationView instances MUST NOT use generic blur-reclaim behavior intended for the top-level pane address bar. Focus recovery after edit/popup dismissal remains owner-scoped so Find/results, file-operation popups, and other embedded hosts can close without stealing focus back to the pane.
 
 ## Visual Layout and Grid System
 
@@ -176,6 +178,11 @@ columnWidth[column] = min(columnWidth[column], windowWidth)  // Don't exceed win
 - Hit testing treats the leading gutter before column 0 as part of column 0 so
   the first visible strip remains clickable. Gaps between later columns remain
   empty hit-test space.
+- Visible body item snapshots used by rendering, hit testing, keyboard
+  navigation, and UI Automation queries MUST be built as per-call immutable
+  values or otherwise protected from concurrent mutation. Accessibility
+  navigation can arrive re-entrantly or from UIA-owned threads, so these paths
+  must not return references/views into a shared mutable visible-item cache.
 
 **Item Spacing:**
 - **Vertical spacing**:
@@ -373,7 +380,8 @@ while (entry != nullptr)
 - `CF_HDROP`: Shell-compatible file list (most important)
 - `CFSTR_SHELLIDLIST`: Shell ID list for advanced operations
 - `CFSTR_PREFERREDDROPEFFECT`: Suggests copy vs. move. FolderView paste MUST honor `DROPEFFECT_MOVE` as a real file-operation move and treat `DROPEFFECT_COPY`, missing metadata, or unsupported metadata as copy.
-- When a `FileOperationRequestCallback` is installed by `FolderWindow`, FolderView copy/move/paste/drop paths MUST delegate copy and move work without showing a local pre-confirmation. The shared File Operations layer owns the single OK/Cancel confirmation for those delegated operations. FolderView may show the same confirmation locally only for direct plugin fallback paths where no callback is installed.
+- When a `FileOperationRequestCallback` is installed by `FolderWindow`, FolderView copy/move/paste/drop paths MUST delegate copy and move work without showing a local pre-confirmation. The shared File Operations layer owns the single OK/Cancel confirmation for those delegated operations. Clipboard paste and folder-picker move MUST use the same delegated route and MUST NOT pre-grant overwrite, replace-read-only, or continue-on-error flags.
+- Missing `FileOperationRequestCallback` is a host wiring failure for normal UI paths. FolderView MUST fail visibly and log the error instead of silently running a direct plugin copy/move/delete with different conflict/progress semantics. Direct plugin fallback is reserved for explicit no-host/test scenarios with an opt-in test hook.
 
 **Drag Initiation:**
 ```cpp

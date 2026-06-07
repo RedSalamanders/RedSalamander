@@ -419,7 +419,7 @@ constexpr std::wstring_view kComboActionViewer   = L"viewerPlugin";
             return std::filesystem::path(text);
         }
     }
-    return std::filesystem::path(LoadRes(IDS_PREFS_FILE_ACTION_TEST_FILE_DEFAULT));
+    return std::filesystem::path(LoadEmbeddedStringResource(nullptr, IDS_PREFS_FILE_ACTION_TEST_FILE_DEFAULT));
 }
 
 [[nodiscard]] std::wstring CommandDisplay(const FileActionResolver::Command command)
@@ -1208,7 +1208,7 @@ bool FileActionPreferencesPage::EnsureDxPageHost(HWND parent, PreferencesDialogS
         _editNewActionCombo = _associationsPage->AddChild<ComboBox>();
     }
     _testFileLabel           = _associationsPage->AddChild<Label>();
-    _testFileField           = _associationsPage->AddChild<TextField>(LoadRes(IDS_PREFS_FILE_ACTION_TEST_FILE_DEFAULT));
+    _testFileField           = _associationsPage->AddChild<TextField>(LoadEmbeddedStringResource(nullptr, IDS_PREFS_FILE_ACTION_TEST_FILE_DEFAULT));
     _previewLabel            = _associationsPage->AddChild<Label>();
     _associationSaveButton   = _associationsPage->AddChild<Button>(LoadRes(IDS_PREFS_FILE_ACTION_BUTTON_SAVE_ASSOCIATION));
     _associationRemoveButton = _associationsPage->AddChild<Button>(LoadRes(IDS_PREFS_FILE_ACTION_BUTTON_REMOVE));
@@ -1794,9 +1794,11 @@ void FileActionPreferencesPage::LayoutPage(
     const int associationBelowGridHeight = gapY + (associationRows * (rowHeight + gapY)) + UiMetrics::ScaleDip(dpi, 58) + contentInsetY;
     const int actionAboveGridHeight      = tabHeader + contentInsetY;
     const int actionBelowGridHeight      = gapY + (actionRows * (rowHeight + gapY)) + margin + contentInsetY;
-    const int fixedPageHeightWithoutGrid = std::max(associationAboveGridHeight + associationBelowGridHeight, actionAboveGridHeight + actionBelowGridHeight);
-    const int availablePageHeight        = std::max(0, hostHeight - y - margin);
-    const int gridHeight                 = std::max(minGridHeight, availablePageHeight - fixedPageHeightWithoutGrid);
+    const int availablePageHeight = std::max(0, hostHeight - y - margin);
+    const int belowFoldPeekHeight        = UiMetrics::ScaleDip(dpi, 64);
+    const int viewportDrivenGridHeight =
+        availablePageHeight - std::max(associationAboveGridHeight, actionAboveGridHeight) - belowFoldPeekHeight;
+    const int gridHeight = std::max(minGridHeight, viewportDrivenGridHeight);
     const int associationPageHeight      = associationAboveGridHeight + gridHeight + associationBelowGridHeight;
     const int actionPageHeight           = actionAboveGridHeight + gridHeight + actionBelowGridHeight;
     const int pageHeight                 = std::max(associationPageHeight, actionPageHeight);

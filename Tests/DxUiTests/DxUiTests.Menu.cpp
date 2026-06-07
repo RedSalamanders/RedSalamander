@@ -164,7 +164,7 @@ void TestPointerInputEventMouseMoveUsesDeliveredPoint()
 
     const std::optional<PointerInputEvent> event =
         TryBuildPointerInputEvent(window.Hwnd(), WM_MOUSEMOVE, MK_CONTROL, MAKELPARAM(deliveredClientPoint.x, deliveredClientPoint.y),
-                                  PointerInputSource::WindowProc, InputGeneration{42});
+                                  PointerInputSource::WindowProc);
 
     Require(event.has_value(), "pointer move event is built from a mouse message");
     Require(event.value().source == PointerInputSource::WindowProc, "pointer move event preserves source");
@@ -176,7 +176,6 @@ void TestPointerInputEventMouseMoveUsesDeliveredPoint()
     Require(event.value().wParam == MK_CONTROL, "pointer move event records flags");
     Require(event.value().lParam == MAKELPARAM(deliveredClientPoint.x, deliveredClientPoint.y), "pointer move event records raw lParam");
     Require(event.value().messageTime == static_cast<DWORD>(GetMessageTime()), "pointer move event stores message time metadata");
-    Require(event.value().generation.value == 42u, "pointer move event preserves generation");
     Require(event.value().hasClientPoint, "pointer move event has a client point");
     Require(event.value().hasScreenPoint, "pointer move event has a screen point");
     Require(event.value().clientPointPx.x == deliveredClientPoint.x && event.value().clientPointPx.y == deliveredClientPoint.y,
@@ -201,8 +200,7 @@ void TestPointerInputEventButtonUsesDeliveredPointAndFlags()
 
     const std::optional<PointerInputEvent> event =
         TryBuildPointerInputEvent(window.Hwnd(), WM_LBUTTONDOWN, MK_LBUTTON | MK_SHIFT,
-                                  MAKELPARAM(deliveredClientPoint.x, deliveredClientPoint.y), PointerInputSource::ModalLoopMessage,
-                                  InputGeneration{7});
+                                  MAKELPARAM(deliveredClientPoint.x, deliveredClientPoint.y), PointerInputSource::ModalLoopMessage);
 
     Require(event.has_value(), "button event is built from a mouse button message");
     Require(event.value().kind == PointerInputKind::LeftDown, "button event records left-down kind");
@@ -210,7 +208,6 @@ void TestPointerInputEventButtonUsesDeliveredPointAndFlags()
     Require(event.value().targetHwnd == window.Hwnd(), "button event records target HWND");
     Require(event.value().captureHwnd == window.Hwnd(), "button event records current capture HWND");
     Require((event.value().wParam & MK_LBUTTON) != 0, "button event records MK_LBUTTON flag");
-    Require(event.value().generation.value == 7u, "button event preserves generation");
     Require(event.value().clientPointPx.x == deliveredClientPoint.x && event.value().clientPointPx.y == deliveredClientPoint.y,
             "button event uses delivered client point");
     Require(event.value().screenPointPx.x == expectedScreenPoint.x && event.value().screenPointPx.y == expectedScreenPoint.y,
@@ -231,8 +228,7 @@ void TestPointerInputEventWheelUsesDeliveredScreenPoint()
     const WPARAM wheelFlags = MAKEWPARAM(MK_RBUTTON, WHEEL_DELTA);
     const LPARAM wheelPoint = MAKELPARAM(deliveredScreenPoint.x, deliveredScreenPoint.y);
     const std::optional<PointerInputEvent> event =
-        TryBuildPointerInputEvent(window.Hwnd(), WM_MOUSEWHEEL, wheelFlags, wheelPoint, PointerInputSource::PopupWindowProc,
-                                  InputGeneration{9});
+        TryBuildPointerInputEvent(window.Hwnd(), WM_MOUSEWHEEL, wheelFlags, wheelPoint, PointerInputSource::PopupWindowProc);
 
     Require(event.has_value(), "wheel event is built from a wheel message");
     Require(event.value().kind == PointerInputKind::Wheel, "wheel event records wheel kind");
@@ -285,6 +281,20 @@ void TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate()
         Require(source.find("BumpInputGeneration") == std::string::npos, "NavigationView does not maintain synthetic input generations");
         Require(source.find("CurrentInputGeneration") == std::string::npos, "NavigationView does not stamp delivered pointer input with synthetic generations");
         Require(source.find("_inputGeneration") == std::string::npos, "NavigationView does not store synthetic pointer input generation state");
+    }
+
+    const std::array<std::filesystem::path, 4> tokenSurfacePaths = {
+        repoRoot / L"Common" / L"DxUi" / L"DxUi.PointerInput.h",
+        repoRoot / L"Common" / L"DxUi" / L"DxUi.PointerInput.cpp",
+        repoRoot / L"Specs" / L"UI" / L"UI_NavigationView.md",
+        repoRoot / L"Specs" / L"Testing" / L"Testing_TestCoverage.md",
+    };
+    for (const std::filesystem::path& sourcePath : tokenSurfacePaths)
+    {
+        std::ifstream input(sourcePath);
+        Require(input.good(), "pointer input token surface is readable for generation guard");
+        const std::string source((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        Require(source.find("InputGeneration") == std::string::npos, "pointer routing contract does not expose a vestigial InputGeneration token");
     }
 }
 

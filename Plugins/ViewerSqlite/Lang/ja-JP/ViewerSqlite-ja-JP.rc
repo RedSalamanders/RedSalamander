@@ -32,5 +32,4 @@ BEGIN
     IDS_VIEWERSQLITE_ERROR_QUERY_FAILED "SQLite クエリの実行に失敗しました。"
     IDS_VIEWERSQLITE_ERROR_QUEUE_FAILED "バックグラウンド SQLite 作業をキューに入れることができませんでした。"
     IDS_VIEWERSQLITE_ERROR_OUT_OF_MEMORY "SQLite ビューアーがメモリ不足になりました。"
-    IDS_VIEWERSQLITE_TITLE_FORMAT "{0} - {1}"
 END

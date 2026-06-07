@@ -1,0 +1,374 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+IDR_VIEWERTEXT_MENU MENU
+BEGIN
+    POPUP "&Súbor"
+    BEGIN
+        MENUITEM "&Otvoriť...\tCtrl+O", IDM_VIEWER_FILE_OPEN
+        MENUITEM "&Uložiť ako...\tCtrl+S", IDM_VIEWER_FILE_SAVE_AS
+        MENUITEM "&Obnoviť\tF5", IDM_VIEWER_FILE_REFRESH
+        POPUP "&Iné súbory"
+        BEGIN
+            MENUITEM "&Ďalej\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
+            MENUITEM "&Predchádzajúce\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
+            MENUITEM "&Po prvé\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
+            MENUITEM "&Posledný\tCtrl+End", IDM_VIEWER_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Koniec\tEsc", IDM_VIEWER_FILE_EXIT
+    END
+    POPUP "&Hľadať"
+    BEGIN
+        MENUITEM "&Nájsť...\tCtrl+F", IDM_VIEWER_SEARCH_FIND
+        MENUITEM "&Nájsť ďalší\tF3", IDM_VIEWER_SEARCH_FIND_NEXT
+        MENUITEM "&Nájsť predchádzajúci\tShift+F3", IDM_VIEWER_SEARCH_FIND_PREVIOUS
+    END
+    POPUP "&Zobrazenie"
+    BEGIN
+        MENUITEM "&Text", IDM_VIEWER_VIEW_TEXT
+        MENUITEM "&Rozdiel / Vedľa seba", IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE
+        MENUITEM "&Rozdiel / Inline", IDM_VIEWER_VIEW_DIFF_INLINE
+        MENUITEM "&Rozdiel / Zobraziť nezmenený text", IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED
+        MENUITEM "&Rozdiel / Ďalší kus\tF7", IDM_VIEWER_VIEW_DIFF_NEXT_HUNK
+        MENUITEM "&Rozdiel / Predchádzajúca časť\tShift+F7", IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK
+        MENUITEM "&Hex", IDM_VIEWER_VIEW_HEX
+        POPUP "&Farby hexadecimálnych bajtov"
+        BEGIN
+            MENUITEM "&Vedúce okusovanie (zvýraznené 00/FF)", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LEADING_NIBBLE
+            MENUITEM "&Vypnuté", IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Prejsť na začiatok\tHome", IDM_VIEWER_VIEW_GOTO_TOP
+        MENUITEM "&Prejdite nadol\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
+        MENUITEM "&Prejsť na offset...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
+        MENUITEM "&Čísla riadkov", IDM_VIEWER_VIEW_LINE_NUMBERS
+        MENUITEM "&Zabaliť", IDM_VIEWER_VIEW_WRAP
+    END
+    POPUP "&Kódovanie"
+    BEGIN
+        MENUITEM "&Ďalšie kódovanie\tF8", IDM_VIEWER_ENCODING_NEXT
+        MENUITEM "&Predchádzajúce kódovanie\tShift+F8", IDM_VIEWER_ENCODING_PREVIOUS
+        MENUITEM SEPARATOR
+        MENUITEM "&ANSI", IDM_VIEWER_ENCODING_DISPLAY_ANSI
+        MENUITEM "UTF-&7", IDM_VIEWER_ENCODING_DISPLAY_UTF7
+        MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
+        MENUITEM "&UTF-8 kusovník", IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM
+        MENUITEM "&UTF-16 BUĎ BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM
+        MENUITEM "&UTF-16 LE BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM
+        MENUITEM "&UTF-32 BUĎ BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF32BE_BOM
+        MENUITEM "&UTF-32 LE BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF32LE_BOM
+        MENUITEM SEPARATOR
+        POPUP "&Sada znakov"
+        BEGIN
+            POPUP "&arabčina"
+            BEGIN
+                MENUITEM "iso-8859-6 : ISO 8859-6 arabčina", 28596
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1256 : arabčina (Windows)", 1256
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-arabic : arabčina (Mac)", 10004
+                MENUITEM SEPARATOR
+                MENUITEM "ASMO-708: arabčina (ASMO 708)", 708
+                MENUITEM "Arabčina (ASMO-449+, BCON V4)", 709
+                MENUITEM "Arabčina - Transparentná arabčina", 710
+                MENUITEM "DOS-720: arabčina (DOS)", 720
+                MENUITEM "IBM864: arabčina (864)", 864
+                MENUITEM SEPARATOR
+                MENUITEM "IBM420: EBCDIC arabčina", 20420
+            END
+            POPUP "&Baltské more"
+            BEGIN
+                MENUITEM "iso-8859-4 : ISO 8859-4 Baltic", 28594
+                MENUITEM "iso-8859-13: ISO 8859-13 Estónčina", 28603
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1257 : Baltic (Windows)", 1257
+                MENUITEM SEPARATOR
+                MENUITEM "ibm775 : Baltic (DOS)", 775
+            END
+            POPUP "&stredoeurópsky"
+            BEGIN
+                MENUITEM "iso-8859-2 : Stredná Európa (ISO)", 28592
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1250 : stredoeurópsky (Windows)", 1250
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-ce : stredoeurópsky (Mac)", 10029
+                MENUITEM "x-mac-chorvátsky : chorvátčina (Mac)", 10082
+                MENUITEM "x-mac-rumunian : rumunčina (Mac)", 10010
+                MENUITEM SEPARATOR
+                MENUITEM "ibm852: Stredná Európa (DOS)", 852
+                MENUITEM SEPARATOR
+                MENUITEM "IBM870: EBCDIC viacjazyčná latinka 2", 870
+            END
+            POPUP "&čínsky"
+            BEGIN
+                MENUITEM "x-cp50227: zjednodušená čínština (ISO 2022)", 50227
+                MENUITEM "ISO 2022 v tradičnej čínštine", 50229
+                MENUITEM SEPARATOR
+                MENUITEM "gb2312: zjednodušená čínština (GB2312)", 936
+                MENUITEM "big5 : tradičná čínština (Big5)", 950
+                MENUITEM "x-cp20936 : zjednodušená čínština (GB2312-80)", 20936
+                MENUITEM "EUC-CN: zjednodušená čínština (EUC)", 51936
+                MENUITEM "EUC tradičná čínština", 51950
+                MENUITEM "hz-gb-2312 : zjednodušená čínština (HZ)", 52936
+                MENUITEM "GB18030: zjednodušená čínština (GB18030)", 54936
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-chinesesimp: zjednodušená čínština (Mac)", 10008
+                MENUITEM "x-mac-chinesetrad: tradičná čínština (Mac)", 10002
+                MENUITEM SEPARATOR
+                MENUITEM "x-Chinese_CNS : tradičná čínština (CNS)", 20000
+                MENUITEM "x-cp20001: TCA Taiwan", 20001
+                MENUITEM "x_Chinese-Eten : tradičná čínština (Eten)", 20002
+                MENUITEM "x-cp20003: IBM5550 Taiwan", 20003
+                MENUITEM "x-cp20004 : TeleText Taiwan", 20004
+                MENUITEM "x-cp20005: Wang Taiwan", 20005
+                MENUITEM SEPARATOR
+                MENUITEM "EBCDIC Zjednodušená čínština Rozšírená a zjednodušená čínština", 50935
+                MENUITEM "EBCDIC Zjednodušená čínština", 50936
+                MENUITEM "EBCDIC USA-Kanada a tradičná čínština", 50937
+            END
+            POPUP "&azbuka"
+            BEGIN
+                MENUITEM "iso-8859-5 : ISO 8859-5 azbuka", 28595
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1251 : azbuka (Windows)", 1251
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-cyrilika : azbuka (Mac)", 10007
+                MENUITEM "x-mac-ukrainian : ukrajinčina (Mac)", 10017
+                MENUITEM SEPARATOR
+                MENUITEM "koi8-r : azbuka (KOI8-R)", 20866
+                MENUITEM "koi8-u : azbuka (KOI8-U)", 21866
+                MENUITEM "IBM855 : OEM azbuka (predovšetkým ruština)", 855
+                MENUITEM "cp866 : Cyrilika (DOS)", 866
+                MENUITEM SEPARATOR
+                MENUITEM "IBM880: EBCDIC cyrilika v ruštine", 20880
+                MENUITEM "cp1025 : IBM EBCDIC azbuka srbsko-bulharská", 21025
+            END
+            POPUP "&grécky"
+            BEGIN
+                MENUITEM "iso-8859-7 : ISO 8859-7 grécky", 28597
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1253 : grécky (Windows)", 1253
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-greek : gréčtina (Mac)", 10006
+                MENUITEM SEPARATOR
+                MENUITEM "ibm737: gréčtina (DOS)", 737
+                MENUITEM "ibm869: grécka, moderná (DOS)", 869
+                MENUITEM SEPARATOR
+                MENUITEM "cp875 : IBM EBCDIC Greek Modern", 875
+                MENUITEM "IBM423 : EBCDIC grécky", 20423
+            END
+            POPUP "&hebrejčina"
+            BEGIN
+                MENUITEM "iso-8859-8 : hebrejčina (ISO-Visual)", 28598
+                MENUITEM "iso-8859-8-i : hebrejčina (ISO-Logical)", 38598
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1255 : hebrejčina (Windows)", 1255
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-hebrew : hebrejčina (Mac)", 10005
+                MENUITEM SEPARATOR
+                MENUITEM "DOS-862: hebrejčina (DOS)", 862
+                MENUITEM SEPARATOR
+                MENUITEM "IBM424: EBCDIC v hebrejčine", 20424
+            END
+            POPUP "&Indický / ISCII"
+            BEGIN
+                MENUITEM "x-iscii-de : ISCII Devanagari", 57002
+                MENUITEM "x-iscii-be : ISCII Bangla", 57003
+                MENUITEM "x-iscii-ta : ISCII tamilčina", 57004
+                MENUITEM "x-iscii-te : ISCII telugčina", 57005
+                MENUITEM "x-iscii-as: ISCII asámsky", 57006
+                MENUITEM "x-iscii-alebo : ISCII Odia", 57007
+                MENUITEM "x-iscii-ka : ISCII Kannada", 57008
+                MENUITEM "x-iscii-ma : ISCII malajálamčina", 57009
+                MENUITEM "x-iscii-gu : ISCII Gudžarátčina", 57010
+                MENUITEM "x-iscii-pa : ISCII pandžábčina", 57011
+            END
+            POPUP "&Japončina"
+            BEGIN
+                MENUITEM "iso-2022-jp : japončina (JIS)", 50220
+                MENUITEM "csISO2022JP : japončina (JIS-povoliť 1 bajt Kana)", 50221
+                MENUITEM "iso-2022-jp : japončina (JIS-Povoliť 1 bajt Kana – SO/SI)", 50222
+                MENUITEM SEPARATOR
+                MENUITEM "shift_jis : japončina (Shift-JIS)", 932
+                MENUITEM "EUC-JP: Japončina (JIS 0208-1990 a 0212-1990)", 20932
+                MENUITEM "euc-jp: EUC japončina", 51932
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-japanese : japončina (Mac)", 10001
+                MENUITEM SEPARATOR
+                MENUITEM "IBM290: EBCDIC Japanese Katakana Extended", 20290
+                MENUITEM "EBCDIC Japončina (Katakana) Rozšírená", 50930
+                MENUITEM "EBCDIC USA-Kanada a Japonsko", 50931
+                MENUITEM "EBCDIC Japončina (latinka) Rozšírená a Japončina", 50939
+            END
+            POPUP "&kórejský"
+            BEGIN
+                MENUITEM "iso-2022-kr : ISO 2022 kórejčina", 50225
+                MENUITEM SEPARATOR
+                MENUITEM "ks_c_5601-1987: ANSI/OEM kórejčina (zjednotený kód Hangul)", 949
+                MENUITEM "Johab: kórejčina (Johab)", 1361
+                MENUITEM "euc-kr : EUC kórejčina", 51949
+                MENUITEM "x-cp20949 : kórejský Wansung", 20949
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-korean : kórejčina (Mac)", 10003
+                MENUITEM SEPARATOR
+                MENUITEM "x-EBCDIC-KoreanExtended : IBM EBCDIC Korean Extended", 20833
+                MENUITEM "EBCDIC Korean Extended a Korean", 50933
+            END
+            POPUP "&thajčina"
+            BEGIN
+                MENUITEM "windows-874 : thajčina (Windows)", 874
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-thai : thajčina (Mac)", 10021
+                MENUITEM SEPARATOR
+                MENUITEM "IBM-Thajčina: EBCDIC Thajčina", 20838
+            END
+            POPUP "&turecký"
+            BEGIN
+                MENUITEM "iso-8859-9: ISO 8859-9 turečtina", 28599
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1254 : turečtina (Windows)", 1254
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-turkish : turečtina (Mac)", 10081
+                MENUITEM SEPARATOR
+                MENUITEM "ibm857: turečtina (DOS)", 857
+                MENUITEM SEPARATOR
+                MENUITEM "IBM1026 : EBCDIC Turečtina (latinka 5)", 1026
+                MENUITEM "IBM905: EBCDIC v turečtine", 20905
+            END
+            POPUP "&Vietnamci"
+            BEGIN
+                MENUITEM "windows-1258 : vietnamčina (Windows)", 1258
+            END
+            POPUP "&západoeurópsky"
+            BEGIN
+                MENUITEM "us-ascii : US-ASCII (7-bit)", 20127
+                MENUITEM "iso-8859-1: Západná Európa (ISO)", 28591
+                MENUITEM "iso-8859-3 : ISO 8859-3 Latin 3", 28593
+                MENUITEM "iso-8859-15 : ISO 8859-15 latinčina 9", 28605
+                MENUITEM "x-cp20269 : ISO 6937 zvýraznenie bez medzier", 20269
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1252 : Západoeurópsky (Windows)", 1252
+                MENUITEM SEPARATOR
+                MENUITEM "macintosh: západoeurópsky (Mac)", 10000
+                MENUITEM "x-mac-icelandic : islandčina (Mac)", 10079
+                MENUITEM SEPARATOR
+                MENUITEM "IBM437 : OEM Spojené štáty", 437
+                MENUITEM "ibm850: Západoeurópsky (DOS)", 850
+                MENUITEM "IBM00858 : OEM viacjazyčná latinka 1 + symbol eura", 858
+                MENUITEM "IBM860: portugalčina (DOS)", 860
+                MENUITEM "ibm861: islandčina (DOS)", 861
+                MENUITEM "IBM863: Francúzsky kanadský (DOS)", 863
+                MENUITEM "IBM865: Nordic (DOS)", 865
+                MENUITEM "x-IA5 : Západoeurópska (IA5)", 20105
+                MENUITEM "x-IA5-German : IA5 German (7-bit)", 20106
+                MENUITEM "x-IA5-nórčina: IA5 nórčina (7-bitová)", 20108
+                MENUITEM "x-IA5-Swedish : IA5 Swedish (7-bit)", 20107
+                MENUITEM "x-cp20261: T.61", 20261
+                MENUITEM "x-Europa : Európa 3", 29001
+                MENUITEM SEPARATOR
+                POPUP "&EBCDIC"
+                BEGIN
+                    MENUITEM "IBM037: EBCDIC USA-Kanada", 37
+                    MENUITEM "IBM500: EBCDIC International", 500
+                    MENUITEM "IBM01047: EBCDIC Latin 1/Open System", 1047
+                    MENUITEM "IBM01140 : EBCDIC (USA-Kanada-Euro)", 1140
+                    MENUITEM "IBM01141 : EBCDIC (Nemecko-Euro)", 1141
+                    MENUITEM "IBM01142 : EBCDIC (Dánsko-Nórsko-Euro)", 1142
+                    MENUITEM "IBM01143 : EBCDIC (Fínsko-Švédsko-Euro)", 1143
+                    MENUITEM "IBM01144 : EBCDIC (Taliansko-Euro)", 1144
+                    MENUITEM "IBM01145 : EBCDIC (Španielsko-Euro)", 1145
+                    MENUITEM "IBM01146 : EBCDIC (UK-Euro)", 1146
+                    MENUITEM "IBM01147 : EBCDIC (Francúzsko – Euro)", 1147
+                    MENUITEM "IBM01148 : EBCDIC (International-Euro)", 1148
+                    MENUITEM "IBM01149 : EBCDIC (islandské euro)", 1149
+                    MENUITEM "IBM273: EBCDIC Nemecko", 20273
+                    MENUITEM "IBM277 : EBCDIC Dánsko-Nórsko", 20277
+                    MENUITEM "IBM278: EBCDIC Fínsko-Švédsko", 20278
+                    MENUITEM "IBM280: EBCDIC Taliansko", 20280
+                    MENUITEM "IBM284: EBCDIC Latinská Amerika-Španielsko", 20284
+                    MENUITEM "IBM285 : EBCDIC Spojené kráľovstvo", 20285
+                    MENUITEM "IBM297: EBCDIC Francúzsko", 20297
+                    MENUITEM "IBM871 : EBCDIC islandčina", 20871
+                    MENUITEM "IBM00924 : EBCDIC Latin 1/Open System (1047 + symbol eura)", 20924
+                END
+            END
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Ponechajte pôvodné kódovanie", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
+        MENUITEM "&Konvertovať na Uložiť kusovník UTF-8", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
+        MENUITEM "&Konvertovať na Uložiť UTF-8", IDM_VIEWER_ENCODING_SAVE_UTF8
+        MENUITEM "&Konvertovať na Uložiť ANSI", IDM_VIEWER_ENCODING_SAVE_ANSI
+        MENUITEM "&Konvertovať na Uložiť UTF-16 BE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
+        MENUITEM "&Konvertovať na UTF-16 LE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERTEXT_NAME "Prehliadač textu"
+    IDS_VIEWERTEXT_DESCRIPTION "Vstavaný prehliadač textových súborov (s hexadecimálnym režimom)."
+    IDS_VIEWERTEXT_TITLE_FORMAT "{0} - Prehliadač"
+    IDS_VIEWERTEXT_STATUS_FORMAT "Kódovanie: {0} Veľkosť: {1}"
+    IDS_VIEWERTEXT_STATUS_TEXT_FORMAT "FS: {0} Zistené: {1} Aktívne: {2} Veľkosť: {3} Riadky: {4:L}-{5:L} z {6}"
+    IDS_VIEWERTEXT_STATUS_HEX_FORMAT "FS: {0} Zistené: {1} Aktívne: {2} Veľkosť: {3} Posuny: {4}-{5}"
+    IDS_VIEWERTEXT_STATUS_WITH_MESSAGE_FORMAT "{0} {1}"
+    IDS_VIEWERTEXT_UNKNOWN "neznámy"
+
+    IDS_VIEWERTEXT_CAPTION_ERROR "Divák"
+    IDS_VIEWERTEXT_ERR_OPEN_FAILED "Súbor sa nepodarilo otvoriť."
+    IDS_VIEWERTEXT_ERR_SAVE_FAILED "Súbor sa nepodarilo uložiť."
+
+    IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "Otvorte súbor"
+    IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "Uložiť súbor ako"
+    IDS_VIEWERTEXT_DIALOG_FILTER_ALL_FILES "Všetky súbory (*.*)"
+    IDS_VIEWERTEXT_SAVEAS_ENCODING_LABEL "kódovanie:"
+    IDS_VIEWERTEXT_FIND_CAPTION "Nájsť"
+    IDS_VIEWERTEXT_FIND_LABEL "Nájsť čo:"
+    IDS_VIEWERTEXT_GOTO_CAPTION "Prejdite na offset"
+    IDS_VIEWERTEXT_GOTO_LABEL "Offset (desatinné alebo 0x...):"
+    IDS_VIEWERTEXT_BTN_OK "OK"
+    IDS_VIEWERTEXT_BTN_CANCEL "Zrušiť"
+
+    IDS_VIEWERTEXT_COL_OFFSET "Offset"
+    IDS_VIEWERTEXT_COL_HEX "Údaje"
+    IDS_VIEWERTEXT_COL_TEXT "Text"
+    IDS_VIEWERTEXT_COL_UNICODE "Unicode"
+    IDS_VIEWERTEXT_COL_HEX_WORD "Údaje (WORD)"
+    IDS_VIEWERTEXT_COL_HEX_DWORD "Údaje (DWORD)"
+    IDS_VIEWERTEXT_COL_HEX_QWORD "Údaje (QWORD)"
+
+    IDS_VIEWERTEXT_COL_OFFSET_HEX "Offset (HEX)"
+    IDS_VIEWERTEXT_COL_OFFSET_DEC "Offset (DEC)"
+    IDS_VIEWERTEXT_COL_TEXT_ANSI "Text (ANSI)"
+IDS_VIEWERTEXT_COL_TEXT_UTF8 "Text (UTF-8)"
+IDS_VIEWERTEXT_COL_TEXT_UTF16 "Text (UTF-16)"
+
+IDS_VIEWERTEXT_MODE_TEXT "TEXT"
+IDS_VIEWERTEXT_MODE_HEX "HEX"
+IDS_VIEWERTEXT_MODE_DIFF "DIFF"
+
+    IDS_VIEWERTEXT_ENCODING_UTF16LE "UTF-16 LE"
+    IDS_VIEWERTEXT_ENCODING_UTF32LE "UTF-32 LE"
+    IDS_VIEWERTEXT_ENCODING_UTF32BE "UTF-32 BE"
+    IDS_VIEWERTEXT_ENCODING_UNKNOWN "Neznámy"
+
+    IDS_VIEWERTEXT_DETECTED_SUFFIX_BOM " (BOM)"
+    IDS_VIEWERTEXT_DETECTED_SUFFIX_GUESS " (hádajte)"
+
+IDS_VIEWERTEXT_EMPTY_WATERMARK "PRÁZDNY SÚBOR"
+IDS_VIEWERTEXT_MSG_SEARCH_WRAPPED "Vyhľadávanie je zabalené."
+IDS_VIEWERTEXT_MSG_SEARCH_HEX_INVALID "Hexadecimálne vyhľadávanie očakáva hexadecimálnu hodnotu ako 0x43 alebo 0x435678."
+IDS_VIEWERTEXT_MSG_LOADING "Načítava sa..."
+IDS_VIEWERTEXT_MSG_STREAM_TRUNCATED "Zobrazenie streamu (ďalšie načítate posúvaním)."
+IDS_VIEWERTEXT_MSG_DIFF_SHOWING_RAW_TEXT "Zobrazuje sa nespracovaný text rozdielu."
+IDS_VIEWERTEXT_MSG_DIFF_PARSE_UNAVAILABLE "Analyzovaný rozdiel nie je k dispozícii; zobrazujúci nespracovaný text."
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE "[nezmenené riadky skryté: odkazovaný súbor nie je v tomto súborovom systéme dostupný]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE "[žiadny súbor na ľavej strane: oprava pridá tento súbor]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE "[žiadny súbor na pravej strane: oprava vymaže tento súbor]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[nezmenené riadky sú skryté: odkazovaný súbor je príliš veľký na rozbalenie]"
+IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[nezmenené riadky skryté: odkazovaný súbor je binárny]"
+END

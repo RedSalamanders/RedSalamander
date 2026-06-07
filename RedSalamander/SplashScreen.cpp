@@ -305,11 +305,10 @@ void LayoutSplashUi(SplashWindowState& state) noexcept
 
 void UpdateSplashLabels(SplashWindowState& state) noexcept
 {
-    wchar_t appTitle[128]{};
-    const int titleLen = LoadStringW(GetModuleHandleW(nullptr), IDS_APP_TITLE, appTitle, static_cast<int>(std::size(appTitle)));
+    const std::wstring appTitle = LoadEmbeddedStringResource(GetModuleHandleW(nullptr), IDS_APP_TITLE);
     if (state.titleLabel)
     {
-        state.titleLabel->SetText(titleLen > 0 ? std::wstring(appTitle) : std::wstring(L"RedSalamander"));
+        state.titleLabel->SetText(! appTitle.empty() ? appTitle : std::wstring(L"RedSalamander"));
     }
     if (state.versionLabel)
     {
@@ -480,7 +479,6 @@ LRESULT CALLBACK SplashWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
             UpdateSplashWindowSize(hwnd);
             BuildSplashUi(*state);
             CenterOverOwner(hwnd, g_owner.load(std::memory_order_acquire));
-            g_hwnd.store(hwnd, std::memory_order_release);
             return 0;
         case WM_SIZE:
             if (state)
@@ -747,6 +745,7 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
 #ifdef ENABLE_TESTS
     g_debugStage.store(11, std::memory_order_release);
 #endif
+    g_hwnd.store(hwnd.get(), std::memory_order_release);
 
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0)

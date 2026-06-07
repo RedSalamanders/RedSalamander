@@ -940,6 +940,7 @@ public:
     // Debug/testing hook: access the file-operations state for automation/self-tests.
     // This will initialize file operations if they are not yet created.
     FileOperationState* DebugGetFileOperationState() noexcept;
+    void DebugSetFileOperationRequestCallbackEnabled(Pane pane, bool enabled) noexcept;
 
     enum class DebugShellActionKind : uint8_t
     {

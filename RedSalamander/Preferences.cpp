@@ -361,11 +361,6 @@ bool DebugFocusPreferencesAdvancedBypassHelloToggle() noexcept
     return PreferencesDialog::DebugFocusAdvancedBypassHelloToggle();
 }
 
-bool DebugSelectPreferencesAdvancedFilterPreset(std::wstring_view displayText) noexcept
-{
-    return PreferencesDialog::DebugSelectAdvancedFilterPreset(displayText);
-}
-
 bool DebugFocusPreferencesMonitorToolbarToggle() noexcept
 {
     return PreferencesDialog::DebugFocusMonitorToolbarToggle();

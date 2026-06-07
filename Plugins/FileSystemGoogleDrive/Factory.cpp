@@ -27,7 +27,7 @@ namespace
 {
 [[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
 {
-    static const std::wstring name        = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_NAME);
+    static const std::wstring name        = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_NAME);
     static const std::wstring description = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_DESCRIPTION);
     static const PluginMetaData metaData  = {
         .id          = L"builtin/file-system-gdrive",

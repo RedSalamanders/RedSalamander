@@ -656,6 +656,10 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return OnDriveInfoLoaded(std::move(payload));
         }
         case WndMsg::kNavigationViewRestoreFolderFocus:
+            if (_editMode || _fullPathPopupEditMode)
+            {
+                return 0;
+            }
             if (_requestFolderViewFocusCallback && _hWnd)
             {
                 const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
@@ -1074,6 +1078,12 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
 {
     if (! path)
     {
+        if (_editMode)
+        {
+            ExitEditMode(false, L"path-clear");
+        }
+        CloseFullPathPopup();
+
         if (! _currentPath.has_value() && ! _currentPluginPath.has_value() && ! _currentEditPath.has_value() && _currentInstanceContext.empty() &&
             _segments.empty() && _separators.empty() && _hoveredSegmentIndex == -1 && _hoveredSeparatorIndex == -1)
         {
@@ -1141,6 +1151,15 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
     if (samePath && _breadcrumbLayoutCacheValid)
     {
         return;
+    }
+
+    if (! samePath)
+    {
+        if (_editMode)
+        {
+            ExitEditMode(false, L"path-change");
+        }
+        CloseFullPathPopup();
     }
 
     _currentPath            = std::move(nextCurrentPath);
@@ -1482,6 +1501,20 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     out.pathRegionRect          = _sectionPathRect;
     out.historyRegionRect       = _sectionHistoryRect;
     out.diskInfoRegionRect      = _sectionDiskInfoRect;
+    out.debugEnterEditAttemptCount       = _debugEnterEditAttemptCount;
+    out.debugEnterEditSuccessCount       = _debugEnterEditSuccessCount;
+    out.debugEnterEditAbortCount         = _debugEnterEditAbortCount;
+    out.debugExitEditCount               = _debugExitEditCount;
+    out.debugDoubleClickActivateCount    = _debugDoubleClickActivateCount;
+    out.debugKeyboardActivateCount       = _debugKeyboardActivateCount;
+    out.debugLastDoubleClickOnLastSegment = _debugLastDoubleClickOnLastSegment;
+    out.debugLastDoubleClickInWhitespace  = _debugLastDoubleClickInWhitespace;
+    out.debugLastDoubleClickPoint         = _debugLastDoubleClickPoint;
+    out.debugLastDoubleClickLocalX        = _debugLastDoubleClickLocalX;
+    out.debugLastDoubleClickLocalY        = _debugLastDoubleClickLocalY;
+    out.debugLastExitEditAccepted         = _debugLastExitEditAccepted;
+    out.debugLastEnterEditAbortReason     = _debugLastEnterEditAbortReason;
+    out.debugLastExitEditReason           = _debugLastExitEditReason;
     if (! _segments.empty() && ! _segments.back().isEllipsis)
     {
         const auto& lastSegment        = _segments.back();

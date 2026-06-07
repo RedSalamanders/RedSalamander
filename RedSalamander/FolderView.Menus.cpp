@@ -214,7 +214,7 @@ void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
     const uint32_t maskedMods = modifiers & 0x7u;
     if ((maskedMods & ShortcutManager::kModCtrl) != 0)
     {
-        appendPart(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        appendPart(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
     if ((maskedMods & ShortcutManager::kModAlt) != 0)
     {

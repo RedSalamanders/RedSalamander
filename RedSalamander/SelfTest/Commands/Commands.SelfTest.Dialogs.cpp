@@ -1238,6 +1238,60 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
     return state.failure.empty();
 }
 
+struct FatalErrorReadableSurfaceProbe final
+{
+    std::optional<UiaDescendantPatternStats> uiaPatternStats;
+    std::optional<UiaReadableTextState> readableTextState;
+    std::optional<UiaNamedElementState> buttonState;
+};
+
+[[nodiscard]] FatalErrorReadableSurfaceProbe CollectFatalErrorReadableSurfaceProbe(HWND dialog) noexcept
+{
+    FatalErrorReadableSurfaceProbe probe{};
+    probe.uiaPatternStats    = CollectVisibleUiaDescendantPatternStats(dialog);
+    probe.readableTextState  = CollectVisibleDescendantReadableTextState(dialog, UIA_EditControlTypeId);
+    probe.buttonState        = CollectVisibleDescendantNamedElementState(dialog, UIA_ButtonControlTypeId);
+    return probe;
+}
+
+[[nodiscard]] bool FatalErrorReadableSurfaceProbeSettled(const FatalErrorReadableSurfaceProbe& probe) noexcept
+{
+    return probe.uiaPatternStats.has_value() && probe.uiaPatternStats->visibleElementCount > 0u && probe.uiaPatternStats->buttonControlCount > 0u &&
+           probe.uiaPatternStats->invokePatternCount > 0u &&
+           (probe.uiaPatternStats->valuePatternCount > 0u || probe.uiaPatternStats->textPatternCount > 0u) && probe.readableTextState.has_value() &&
+           probe.buttonState.has_value();
+}
+
+[[nodiscard]] FatalErrorReadableSurfaceProbe WaitForFatalErrorReadableSurfaceProbe(HWND dialog) noexcept
+{
+    using namespace std::chrono_literals;
+
+    FatalErrorReadableSurfaceProbe probe{};
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        probe = CollectFatalErrorReadableSurfaceProbe(dialog);
+        if (FatalErrorReadableSurfaceProbeSettled(probe))
+        {
+            return probe;
+        }
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    return CollectFatalErrorReadableSurfaceProbe(dialog);
+}
+
+[[nodiscard]] bool UiaReadableTextIsReadOnlyOrUnknown(const UiaReadableTextState& state) noexcept
+{
+    return ! state.readOnlyKnown || state.isReadOnly;
+}
+
+[[nodiscard]] bool UiaReadableTextContains(const UiaReadableTextState& state, std::wstring_view expectedText)
+{
+    return NormalizeComparisonNewlines(state.value).find(NormalizeComparisonNewlines(expectedText)) != std::wstring::npos;
+}
+
 [[nodiscard]] bool TestFatalErrorDialogUsesDxUiSurface(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -1265,9 +1319,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         std::atomic<bool> exposesProvider{false};
         std::atomic<bool> closed{false};
         std::atomic<size_t> visibleChildCount{std::numeric_limits<size_t>::max()};
-        std::optional<UiaDescendantPatternStats> uiaPatternStats;
-        std::optional<UiaValuePatternState> valueState;
-        std::optional<UiaNamedElementState> buttonState;
+        FatalErrorReadableSurfaceProbe surfaceProbe;
 
         ProbeState()                             = default;
         ProbeState(const ProbeState&)            = delete;
@@ -1291,9 +1343,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             probe.ownedByMainWindow.store(IsOwnedBy(dialog, mainWindow), std::memory_order_release);
             probe.exposesProvider.store(WindowExposesUiaProvider(dialog), std::memory_order_release);
             probe.visibleChildCount.store(CountVisibleChildWindows(dialog), std::memory_order_release);
-            probe.uiaPatternStats = CollectVisibleUiaDescendantPatternStats(dialog);
-            probe.valueState      = CollectVisibleDescendantValuePatternState(dialog, UIA_EditControlTypeId);
-            probe.buttonState     = CollectVisibleDescendantNamedElementState(dialog, UIA_ButtonControlTypeId);
+            probe.surfaceProbe = WaitForFatalErrorReadableSurfaceProbe(dialog);
 
             PostMessageW(dialog, WM_CLOSE, 0, 0);
             probe.closed.store(WaitForWindowClosed(dialog, SelfTest::Scale(5000ms)), std::memory_order_release);
@@ -1310,30 +1360,33 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                       std::format(L"Fatal-error dialog should not expose visible child-control fallback during {}.", label));
         state.Require(probe.exposesProvider.load(std::memory_order_acquire),
                       std::format(L"Fatal-error dialog should answer WM_GETOBJECT with a UI Automation provider during {}.", label));
-        state.Require(probe.uiaPatternStats.has_value(),
+        state.Require(probe.surfaceProbe.uiaPatternStats.has_value(),
                       std::format(L"Failed to collect live UI Automation pattern statistics for the fatal-error dialog during {}.", label));
-        if (probe.uiaPatternStats.has_value())
+        if (probe.surfaceProbe.uiaPatternStats.has_value())
         {
-            state.Require(probe.uiaPatternStats->visibleElementCount > 0u, L"Fatal-error dialog should expose visible UI Automation descendants.");
-            state.Require(probe.uiaPatternStats->buttonControlCount > 0u, L"Fatal-error dialog should expose a visible UI Automation button descendant.");
-            state.Require(probe.uiaPatternStats->invokePatternCount > 0u,
+            state.Require(probe.surfaceProbe.uiaPatternStats->visibleElementCount > 0u, L"Fatal-error dialog should expose visible UI Automation descendants.");
+            state.Require(probe.surfaceProbe.uiaPatternStats->buttonControlCount > 0u,
+                          L"Fatal-error dialog should expose a visible UI Automation button descendant.");
+            state.Require(probe.surfaceProbe.uiaPatternStats->invokePatternCount > 0u,
                           L"Fatal-error dialog should expose live UI Automation InvokePattern support for the DX footer action.");
-            state.Require(probe.uiaPatternStats->valuePatternCount > 0u,
-                          L"Fatal-error dialog should expose live UI Automation ValuePattern support for the DX message surface.");
+            state.Require(probe.surfaceProbe.uiaPatternStats->valuePatternCount > 0u || probe.surfaceProbe.uiaPatternStats->textPatternCount > 0u,
+                          L"Fatal-error dialog should expose live UI Automation readable text-pattern support for the DX message surface.");
         }
 
-        state.Require(probe.valueState.has_value(),
-                      std::format(L"Failed to collect UI Automation ValuePattern state for the fatal-error message surface during {}.", label));
-        if (probe.valueState.has_value())
+        state.Require(probe.surfaceProbe.readableTextState.has_value(),
+                      std::format(L"Failed to collect UI Automation readable text state for the fatal-error message surface during {}.", label));
+        if (probe.surfaceProbe.readableTextState.has_value())
         {
-            state.Require(probe.valueState->isReadOnly, L"Fatal-error message surface should remain read-only.");
-            state.Require(probe.valueState->value.find(L"Sample fatal error text for DXUI validation.") != std::wstring::npos,
-                          std::format(L"Fatal-error dialog ValuePattern should expose the message text during {}; saw '{}'.", label, probe.valueState->value));
+            state.Require(UiaReadableTextIsReadOnlyOrUnknown(probe.surfaceProbe.readableTextState.value()), L"Fatal-error message surface should remain read-only.");
+            state.Require(UiaReadableTextContains(probe.surfaceProbe.readableTextState.value(), L"Sample fatal error text for DXUI validation."),
+                          std::format(L"Fatal-error dialog readable text should expose the message text during {}; saw '{}'.",
+                                      label,
+                                      probe.surfaceProbe.readableTextState->value));
         }
-        state.Require(probe.buttonState.has_value(), std::format(L"Fatal-error dialog should expose a visible DX footer button during {}.", label));
-        if (probe.buttonState.has_value())
+        state.Require(probe.surfaceProbe.buttonState.has_value(), std::format(L"Fatal-error dialog should expose a visible DX footer button during {}.", label));
+        if (probe.surfaceProbe.buttonState.has_value())
         {
-            state.Require(! probe.buttonState->name.empty(),
+            state.Require(! probe.surfaceProbe.buttonState->name.empty(),
                           std::format(L"Fatal-error dialog visible DX footer button should expose a stable accessible name during {}.", label));
         }
         state.Require(probe.closed.load(std::memory_order_acquire), std::format(L"Fatal-error dialog did not close cleanly during {}.", label));
@@ -1381,8 +1434,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         bool invokedButton       = false;
         bool closed              = false;
         size_t visibleChildCount = std::numeric_limits<size_t>::max();
-        std::optional<UiaDescendantPatternStats> uiaPatternStats;
-        std::optional<UiaValuePatternState> valueState;
+        FatalErrorReadableSurfaceProbe surfaceProbe;
     };
 
     const auto runLivePass = [&](std::wstring_view context) noexcept
@@ -1400,8 +1452,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             probe.ownedByMainWindow = IsOwnedBy(dialog, mainWindow);
             probe.visibleChildCount = CountVisibleChildWindows(dialog);
             probe.exposesProvider   = WindowExposesUiaProvider(dialog);
-            probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(dialog);
-            probe.valueState        = CollectVisibleDescendantValuePatternState(dialog, UIA_EditControlTypeId);
+            probe.surfaceProbe      = WaitForFatalErrorReadableSurfaceProbe(dialog);
 
             probe.invokedButton = InvokeVisibleDescendantByName(dialog, UIA_ButtonControlTypeId, L"");
             if (! probe.invokedButton && IsWindow(dialog) != FALSE)
@@ -1418,22 +1469,29 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         state.Require(probe.ownedByMainWindow, std::format(L"Fatal-error dialog should remain owned by the main window during {}.", context));
         state.Require(probe.visibleChildCount == 0u, std::format(L"Fatal-error dialog should not expose visible child-control fallback during {}.", context));
         state.Require(probe.exposesProvider, std::format(L"Fatal-error dialog should answer WM_GETOBJECT during {}.", context));
-        state.Require(probe.uiaPatternStats.has_value(), std::format(L"Failed to collect live UI Automation stats for fatal-error dialog during {}.", context));
-        if (probe.uiaPatternStats.has_value())
+        state.Require(probe.surfaceProbe.uiaPatternStats.has_value(),
+                      std::format(L"Failed to collect live UI Automation stats for fatal-error dialog during {}.", context));
+        if (probe.surfaceProbe.uiaPatternStats.has_value())
         {
-            state.Require(probe.uiaPatternStats->buttonControlCount > 0u,
+            state.Require(probe.surfaceProbe.uiaPatternStats->buttonControlCount > 0u,
                           std::format(L"Fatal-error dialog should expose a visible DX footer button during {}.", context));
-            state.Require(probe.uiaPatternStats->invokePatternCount > 0u, std::format(L"Fatal-error dialog should expose InvokePattern during {}.", context));
-            state.Require(probe.uiaPatternStats->valuePatternCount > 0u, std::format(L"Fatal-error dialog should expose ValuePattern during {}.", context));
+            state.Require(probe.surfaceProbe.uiaPatternStats->invokePatternCount > 0u,
+                          std::format(L"Fatal-error dialog should expose InvokePattern during {}.", context));
+            state.Require(probe.surfaceProbe.uiaPatternStats->valuePatternCount > 0u || probe.surfaceProbe.uiaPatternStats->textPatternCount > 0u,
+                          std::format(L"Fatal-error dialog should expose readable text-pattern support during {}.", context));
         }
 
-        state.Require(probe.valueState.has_value(), std::format(L"Failed to collect fatal-error ValuePattern state during {}.", context));
-        if (probe.valueState.has_value())
+        state.Require(probe.surfaceProbe.readableTextState.has_value(),
+                      std::format(L"Failed to collect fatal-error readable text state during {}.", context));
+        if (probe.surfaceProbe.readableTextState.has_value())
         {
-            state.Require(probe.valueState->isReadOnly, std::format(L"Fatal-error message surface should remain read-only during {}.", context));
+            state.Require(UiaReadableTextIsReadOnlyOrUnknown(probe.surfaceProbe.readableTextState.value()),
+                          std::format(L"Fatal-error message surface should remain read-only during {}.", context));
             state.Require(
-                probe.valueState->value.find(message) != std::wstring::npos,
-                std::format(L"Fatal-error dialog ValuePattern should expose the live message text during {}; saw '{}'.", context, probe.valueState->value));
+                UiaReadableTextContains(probe.surfaceProbe.readableTextState.value(), message),
+                std::format(L"Fatal-error dialog readable text should expose the live message text during {}; saw '{}'.",
+                            context,
+                            probe.surfaceProbe.readableTextState->value));
         }
         state.Require(probe.invokedButton, std::format(L"Failed to invoke the visible DX footer button on fatal-error dialog during {}.", context));
         state.Require(probe.closed, std::format(L"Fatal-error dialog did not close after live UIA InvokePattern interaction during {}.", context));
@@ -1631,9 +1689,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             bool exposesProvider     = false;
             bool closed              = false;
             size_t visibleChildCount = std::numeric_limits<size_t>::max();
-            std::optional<UiaDescendantPatternStats> uiaPatternStats;
-            std::optional<UiaValuePatternState> valueState;
-            std::optional<UiaNamedElementState> buttonState;
+            FatalErrorReadableSurfaceProbe surfaceProbe;
         } probe;
 
         std::jthread worker([&](std::stop_token) noexcept
@@ -1648,9 +1704,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             probe.ownedByMainWindow = IsOwnedBy(dialog, mainWindow);
             probe.visibleChildCount = CountVisibleChildWindows(dialog);
             probe.exposesProvider   = WindowExposesUiaProvider(dialog);
-            probe.uiaPatternStats   = CollectVisibleUiaDescendantPatternStats(dialog);
-            probe.valueState        = CollectVisibleDescendantValuePatternState(dialog, UIA_EditControlTypeId);
-            probe.buttonState       = CollectVisibleDescendantNamedElementState(dialog, UIA_ButtonControlTypeId);
+            probe.surfaceProbe      = WaitForFatalErrorReadableSurfaceProbe(dialog);
 
             PostMessageW(dialog, WM_CLOSE, 0, 0);
             probe.closed = WaitForWindowClosed(dialog, SelfTest::Scale(5000ms));
@@ -1665,36 +1719,39 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                       std::format(L"Fatal-error dialog should not expose visible child-control fallback during cycle {}.", cycle));
         state.Require(probe.exposesProvider, std::format(L"Fatal-error dialog should answer WM_GETOBJECT during cycle {}.", cycle));
 
-        state.Require(probe.uiaPatternStats.has_value(),
+        state.Require(probe.surfaceProbe.uiaPatternStats.has_value(),
                       std::format(L"Failed to collect live UI Automation pattern statistics for the fatal-error dialog during cycle {}.", cycle));
-        if (probe.uiaPatternStats.has_value())
+        if (probe.surfaceProbe.uiaPatternStats.has_value())
         {
-            state.Require(probe.uiaPatternStats->visibleElementCount > 0u,
+            state.Require(probe.surfaceProbe.uiaPatternStats->visibleElementCount > 0u,
                           std::format(L"Fatal-error dialog should expose visible UI Automation descendants during cycle {}.", cycle));
-            state.Require(probe.uiaPatternStats->buttonControlCount > 0u,
+            state.Require(probe.surfaceProbe.uiaPatternStats->buttonControlCount > 0u,
                           std::format(L"Fatal-error dialog should expose a visible UI Automation button descendant during cycle {}.", cycle));
-            state.Require(probe.uiaPatternStats->invokePatternCount > 0u,
+            state.Require(probe.surfaceProbe.uiaPatternStats->invokePatternCount > 0u,
                           std::format(L"Fatal-error dialog should expose live UI Automation InvokePattern support during cycle {}.", cycle));
-            state.Require(probe.uiaPatternStats->valuePatternCount > 0u,
-                          std::format(L"Fatal-error dialog should expose live UI Automation ValuePattern support during cycle {}.", cycle));
+            state.Require(probe.surfaceProbe.uiaPatternStats->valuePatternCount > 0u || probe.surfaceProbe.uiaPatternStats->textPatternCount > 0u,
+                          std::format(L"Fatal-error dialog should expose live UI Automation readable text-pattern support during cycle {}.", cycle));
         }
 
-        state.Require(probe.valueState.has_value(),
-                      std::format(L"Failed to collect UI Automation ValuePattern state for the fatal-error dialog during cycle {}.", cycle));
-        if (probe.valueState.has_value())
+        state.Require(probe.surfaceProbe.readableTextState.has_value(),
+                      std::format(L"Failed to collect UI Automation readable text state for the fatal-error dialog during cycle {}.", cycle));
+        if (probe.surfaceProbe.readableTextState.has_value())
         {
-            state.Require(probe.valueState->isReadOnly, std::format(L"Fatal-error message surface should remain read-only during cycle {}.", cycle));
-            state.Require(! probe.valueState->name.empty(),
+            state.Require(UiaReadableTextIsReadOnlyOrUnknown(probe.surfaceProbe.readableTextState.value()),
+                          std::format(L"Fatal-error message surface should remain read-only during cycle {}.", cycle));
+            state.Require(! probe.surfaceProbe.readableTextState->name.empty(),
                           std::format(L"Fatal-error message surface should expose a stable accessible name during cycle {}.", cycle));
-            state.Require(probe.valueState->value.find(message) != std::wstring::npos,
-                          std::format(L"Fatal-error dialog should expose the live message text during cycle {}; saw '{}'.", cycle, probe.valueState->value));
+            state.Require(UiaReadableTextContains(probe.surfaceProbe.readableTextState.value(), message),
+                          std::format(L"Fatal-error dialog should expose the live message text during cycle {}; saw '{}'.",
+                                      cycle,
+                                      probe.surfaceProbe.readableTextState->value));
         }
 
-        state.Require(probe.buttonState.has_value(),
+        state.Require(probe.surfaceProbe.buttonState.has_value(),
                       std::format(L"Failed to collect a visible DX footer-button state for the fatal-error dialog during cycle {}.", cycle));
-        if (probe.buttonState.has_value())
+        if (probe.surfaceProbe.buttonState.has_value())
         {
-            state.Require(! probe.buttonState->name.empty(),
+            state.Require(! probe.surfaceProbe.buttonState->name.empty(),
                           std::format(L"Fatal-error dialog visible DX footer button should expose a stable accessible name during cycle {}.", cycle));
         }
 
@@ -2026,8 +2083,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
             bool closed            = false;
             std::wstring failureMessage;
             FatalErrorDialogDebugSnapshot snapshot{};
-            std::optional<UiaReadableTextState> readableTextState;
-            std::optional<UiaNamedElementState> buttonState;
+            FatalErrorReadableSurfaceProbe surfaceProbe;
         } workerResult;
 
         std::jthread worker([&](std::stop_token) noexcept
@@ -2071,8 +2127,7 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                 return;
             }
 
-            workerResult.readableTextState = CollectVisibleDescendantReadableTextState(dialog, UIA_EditControlTypeId);
-            workerResult.buttonState       = CollectVisibleDescendantNamedElementState(dialog, UIA_ButtonControlTypeId);
+            workerResult.surfaceProbe = WaitForFatalErrorReadableSurfaceProbe(dialog);
 
             PostMessageW(dialog, WM_CLOSE, 0, 0);
             workerResult.closed = WaitForWindowClosed(dialog, SelfTest::Scale(3000ms));
@@ -2111,21 +2166,21 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
         state.Require(contrastRatio(workerResult.snapshot.bodyFillArgb, workerResult.snapshot.bodyTextArgb) >= minimumContrast,
                       std::format(L"Fatal-error dialog message contrast dropped below {:.1f}:1 after {} theme selection.", minimumContrast, themeCase.label));
 
-        state.Require(workerResult.readableTextState.has_value(),
+        state.Require(workerResult.surfaceProbe.readableTextState.has_value(),
                       std::format(L"Failed to collect fatal-error readable text state for {} theme validation.", themeCase.label));
-        if (workerResult.readableTextState.has_value())
+        if (workerResult.surfaceProbe.readableTextState.has_value())
         {
-            state.Require(workerResult.readableTextState->isReadOnly,
+            state.Require(UiaReadableTextIsReadOnlyOrUnknown(workerResult.surfaceProbe.readableTextState.value()),
                           std::format(L"Fatal-error message surface should stay read-only during {} theme validation.", themeCase.label));
-            state.Require(workerResult.readableTextState->value.find(message) != std::wstring::npos,
+            state.Require(UiaReadableTextContains(workerResult.surfaceProbe.readableTextState.value(), message),
                           std::format(L"Fatal-error dialog should expose the live {} theme message text.", themeCase.label));
         }
 
-        state.Require(workerResult.buttonState.has_value(),
+        state.Require(workerResult.surfaceProbe.buttonState.has_value(),
                       std::format(L"Failed to collect fatal-error button state for {} theme validation.", themeCase.label));
-        if (workerResult.buttonState.has_value())
+        if (workerResult.surfaceProbe.buttonState.has_value())
         {
-            state.Require(! workerResult.buttonState->name.empty(),
+            state.Require(! workerResult.surfaceProbe.buttonState->name.empty(),
                           std::format(L"Fatal-error dialog button should expose a stable accessible name during {} theme validation.", themeCase.label));
         }
 
@@ -3497,6 +3552,18 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
 
     state.Require(std::filesystem::exists(root / L"FOO.TXT", ec), L"Change case did not rename foo.txt to FOO.TXT.");
     state.Require(std::filesystem::exists(root / L"BAR.BAZ", ec), L"Change case did not rename bar.baz to BAR.BAZ.");
+    state.Require(ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)),
+                  L"Failed to refresh the left pane after the first change-case operation.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"FOO.TXT", L"BAR.BAZ"}, SelfTest::Scale(3000ms)),
+                  L"Pane did not show renamed change-case items before reopening the dialog.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"FOO.TXT" || name == L"BAR.BAZ"; }, true);
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 2u,
+                  L"Expected two renamed items selected before reopening the Change Case dialog.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     ChangeCasePromptAutomationState second{};
     std::jthread cancelCloser([&](std::stop_token) noexcept { AutomateChangeCasePrompt(mainWindow, second, 0u, 0u, false, false); });

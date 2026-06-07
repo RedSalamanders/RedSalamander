@@ -1101,6 +1101,9 @@ void ViewerPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) noex
     SelfTest::AppendSelfTestTrace(std::format(L"ViewerPluginManager::Unload: module reset begin id='{}'", entry.id));
 #endif
     bool retainModuleUntilProcessExit = false;
+    // The retain vote is a process-shutdown escape hatch only. Runtime refresh
+    // reaches this path after viewer instances/callbacks have been quieted and
+    // must still release the old module so rediscovery can load a fresh DLL image.
     if (mode == ModuleUnloadMode::ProcessShutdown && entry.module)
     {
 #pragma warning(push)

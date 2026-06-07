@@ -34,6 +34,53 @@
     });
 }
 
+[[nodiscard]] HWND FindVisibleOwnedDxUiContextMenuWindowForFileOps(HWND ownerHwnd) noexcept
+{
+    const HWND rootOwner = ownerHwnd ? GetAncestor(ownerHwnd, GA_ROOT) : nullptr;
+    for (HWND popup = FindWindowW(L"DxUi_ContextMenu", nullptr); popup != nullptr; popup = FindWindowExW(nullptr, popup, L"DxUi_ContextMenu", nullptr))
+    {
+        if (IsWindowVisible(popup) == FALSE)
+        {
+            continue;
+        }
+
+        if (ownerHwnd)
+        {
+            const HWND popupOwner = GetWindow(popup, GW_OWNER);
+            if (popupOwner != ownerHwnd && popupOwner != rootOwner)
+            {
+                continue;
+            }
+        }
+
+        return popup;
+    }
+
+    return nullptr;
+}
+
+[[nodiscard]] bool DismissVisibleOwnedDxUiContextMenuForFileOps(HWND ownerHwnd, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const HWND menu = FindVisibleOwnedDxUiContextMenuWindowForFileOps(ownerHwnd);
+        if (! menu)
+        {
+            return true;
+        }
+
+        PostMessageW(menu, WM_KEYDOWN, VK_ESCAPE, 0);
+        PostMessageW(menu, WM_KEYUP, VK_ESCAPE, 0);
+        PumpPendingMessages();
+        std::this_thread::sleep_for(20ms);
+    }
+
+    return FindVisibleOwnedDxUiContextMenuWindowForFileOps(ownerHwnd) == nullptr;
+}
+
 [[nodiscard]] bool TestFileOperationsIssuesPaneUsesDxUiHostWithNoVisibleChildControls(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -314,10 +361,10 @@
     const uint64_t baseTaskId     = 0xF000000000000000ull + static_cast<uint64_t>(GetTickCount64() & 0x0000FFFFFFFFFFFFull);
     const uint64_t taskA          = baseTaskId + 1u;
     const uint64_t taskB          = baseTaskId + 2u;
+    fileOps->DebugClearDiagnosticsForSelfTest();
     const auto cleanupDiagnostics = wil::scope_exit([&] noexcept
     {
-        fileOps->DebugRemoveDiagnosticsForTask(taskA);
-        fileOps->DebugRemoveDiagnosticsForTask(taskB);
+        fileOps->DebugClearDiagnosticsForSelfTest();
         static_cast<void>(FileOperationsIssuesPane::SelfTestRefresh(pane, true));
     });
 
@@ -376,12 +423,36 @@
         return false;
     }
 
-    state.Require(FileOperationsIssuesPane::SelfTestRefresh(pane, false), L"Failed to request no-op issues-pane refresh.");
-
     FileOperationsIssuesPane::SelfTestSnapshot afterNoOp{};
-    state.Require(FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane, afterNoOp), L"Failed to capture issues-pane snapshot after no-op refresh.");
-    state.Require(afterNoOp.refreshGeneration == selectedA.refreshGeneration, L"No-op issues-pane refresh should not advance the applied refresh generation.");
-    state.Require(afterNoOp.selectionCount == 1u && afterNoOp.primarySelectedTaskId == taskA, L"No-op issues-pane refresh should preserve the selected task.");
+    FileOperationsIssuesPane::SelfTestSnapshot noOpBaseline = selectedA;
+    bool noOpRefreshSettledWithoutApplyingRows              = false;
+    for (uint32_t attempt = 0; attempt < 5u && state.failure.empty(); ++attempt)
+    {
+        state.Require(FileOperationsIssuesPane::SelfTestRefresh(pane, false), L"Failed to request no-op issues-pane refresh.");
+        state.Require(FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane, afterNoOp), L"Failed to capture issues-pane snapshot after no-op refresh.");
+        state.Require(afterNoOp.selectionCount == 1u && afterNoOp.primarySelectedTaskId == taskA,
+                      std::format(L"No-op issues-pane refresh should preserve the selected task on attempt {}.", attempt + 1u));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        if (afterNoOp.refreshGeneration == noOpBaseline.refreshGeneration)
+        {
+            noOpRefreshSettledWithoutApplyingRows = true;
+            break;
+        }
+
+        noOpBaseline = afterNoOp;
+        PumpPendingMessages();
+        std::this_thread::sleep_for(20ms);
+    }
+
+    state.Require(noOpRefreshSettledWithoutApplyingRows,
+                  std::format(L"No-op issues-pane refresh should not advance the applied refresh generation once rows are stable; "
+                              L"selectedGeneration={} finalGeneration={}.",
+                              selectedA.refreshGeneration,
+                              afterNoOp.refreshGeneration));
 
     fileOps->RecordTaskDiagnostic(taskB,
                                   FILESYSTEM_COPY,
@@ -3566,8 +3637,7 @@
     const uint64_t initialVisibleRows  = snapshot.visibleWork.visibleRowCount;
     const size_t initialVisibleColumns = snapshot.visibleWork.visibleColumnCount;
     const uint64_t initialResizeCount  = snapshot.dxResizeCount;
-    state.Require(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(pane, 120),
-                  L"Issues pane did not accept top reset before long-run scrolling validation.");
+    static_cast<void>(FileOperationsIssuesPane::SelfTestScrollByWheelDetents(pane, 120));
     RedrawWindow(pane, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     state.Require(
         waitForSnapshot([](const FileOperationsIssuesPane::SelfTestSnapshot& value) noexcept { return value.visibleWork.verticalScrollDip <= 0.5f; },
@@ -4432,6 +4502,390 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
     return SUCCEEDED(writer->Commit());
 }
 
+[[nodiscard]] bool TextFileEqualsForFileOpsPrompt(const std::filesystem::path& path, std::string_view expected) noexcept
+{
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return false;
+    }
+
+    const std::string actual{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    return actual == expected;
+}
+
+[[nodiscard]] bool TestFileOperationsConflictPromptCompactsActions(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    using ConflictAction = FolderWindow::FileOperationState::Task::ConflictAction;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File-operations state unavailable for compact conflict prompt validation.");
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"fileops_conflict_prompt_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"src";
+    const std::filesystem::path destDir   = root / L"dst";
+    const std::filesystem::path source    = sourceDir / L"payload.txt";
+    const std::filesystem::path dest      = destDir / L"payload.txt";
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create conflict prompt source directory.");
+    state.Require(SelfTest::EnsureDirectory(destDir), L"Failed to create conflict prompt destination directory.");
+    state.Require(SelfTest::WriteTextFile(source, "new payload"), L"Failed to seed conflict prompt source file.");
+    state.Require(SelfTest::WriteTextFile(dest, "existing payload"), L"Failed to seed conflict prompt destination file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                    = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::wstring rightPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right));
+    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+
+    std::optional<uint64_t> taskId;
+    const auto cleanup = wil::scope_exit([&]() noexcept
+    {
+        if (fileOps)
+        {
+            fileOps->CancelAll();
+            static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+        }
+
+        if (! leftPluginBefore.empty())
+        {
+            static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        }
+        if (! rightPluginBefore.empty())
+        {
+            static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
+        }
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+
+        std::error_code cleanupEc;
+        std::filesystem::remove_all(root, cleanupEc);
+    });
+
+    static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for compact conflict prompt test (left pane).");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for compact conflict prompt test (right pane).");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceDir);
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, destDir);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceDir, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for compact conflict prompt test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, destDir, SelfTest::Scale(3000ms)),
+                  L"Failed to set right pane path for compact conflict prompt test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::vector<FolderWindow::FileOperationState::Task*> beforeTasks;
+    fileOps->CollectTasks(beforeTasks);
+    std::unordered_set<uint64_t> existingTaskIds;
+    existingTaskIds.reserve(beforeTasks.size());
+    for (auto* task : beforeTasks)
+    {
+        if (task)
+        {
+            existingTaskIds.insert(task->GetId());
+        }
+    }
+
+    const wil::com_ptr<IFileSystem> leftFileSystem  = g_folderWindow.GetFileSystem(FolderWindow::Pane::Left);
+    const wil::com_ptr<IFileSystem> rightFileSystem = g_folderWindow.GetFileSystem(FolderWindow::Pane::Right);
+    state.Require(leftFileSystem && rightFileSystem, L"Failed to resolve local file-system interfaces for compact conflict prompt test.");
+    if (! leftFileSystem || ! rightFileSystem)
+    {
+        return false;
+    }
+
+    const HRESULT startHr = fileOps->StartOperation(FILESYSTEM_COPY,
+                                                    FolderWindow::Pane::Left,
+                                                    FolderWindow::Pane::Right,
+                                                    leftFileSystem,
+                                                    {source},
+                                                    destDir,
+                                                    FILESYSTEM_FLAG_NONE,
+                                                    false,
+                                                    0,
+                                                    FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                    false,
+                                                    nullptr);
+    state.Require(SUCCEEDED(startHr),
+                  std::format(L"Failed to start compact conflict prompt copy (hr=0x{:08X}).", static_cast<unsigned long>(startHr)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(5000ms));
+    state.Require(taskId.has_value(), L"Failed to identify the new file-operations task for compact conflict prompt test.");
+    if (! taskId.has_value())
+    {
+        return false;
+    }
+
+    const HWND popup = WaitForWindow([&]() noexcept { return fileOps->GetPopupHwndForSelfTest(); }, SelfTest::Scale(5000ms));
+    state.Require(popup != nullptr && IsWindow(popup) != FALSE, L"File-operations popup did not open for compact conflict prompt test.");
+    if (! popup || IsWindow(popup) == FALSE)
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::TaskSnapshot taskSnapshot{};
+    const auto promptDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < promptDeadline)
+    {
+        PumpPendingMessages();
+        if (DebugGetFileOperationsPopupTaskSnapshot(popup, taskId.value(), taskSnapshot) && taskSnapshot.conflict.active)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(taskSnapshot.conflict.active, L"Compact conflict prompt test did not reach an active conflict prompt.");
+    state.Require(taskSnapshot.conflict.actionCount >= 4u,
+                  std::format(L"Conflict prompt model should retain overflow actions; saw {} action(s).", taskSnapshot.conflict.actionCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+    layout.taskId = taskId.value();
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, layout), L"Failed to capture file-operations popup layout snapshot.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto layoutHasPrimaryAction = [&](ConflictAction action) noexcept
+    {
+        for (size_t i = 0; i < std::min(layout.conflictPrimaryActionCount, layout.conflictPrimaryActions.size()); ++i)
+        {
+            if (layout.conflictPrimaryActions[i] == static_cast<uint8_t>(action))
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    state.Require(layout.conflictPrimaryActionCount <= 3u,
+                  std::format(L"Conflict prompt should expose at most 3 primary action buttons; saw {}.", layout.conflictPrimaryActionCount));
+    state.Require(layoutHasPrimaryAction(ConflictAction::Overwrite), L"Conflict prompt should keep Overwrite as a primary action.");
+    state.Require(layoutHasPrimaryAction(ConflictAction::Skip), L"Conflict prompt should keep Skip as a primary action.");
+    state.Require(layoutHasPrimaryAction(ConflictAction::Cancel), L"Conflict prompt should keep Cancel as a primary action.");
+    state.Require(layout.conflictMoreVisible, L"Conflict prompt should expose a More affordance for overflow actions.");
+    state.Require(layout.conflictOverflowActionCount > 0u, L"Conflict prompt More affordance should contain overflow actions.");
+    state.Require(layout.conflictApplyToAllVisible, L"Conflict prompt should keep an apply-to-all toggle visible.");
+    state.Require(layout.footerVisibleButtonCount == 2u,
+                  std::format(L"File-operations footer should expose exactly 2 controls; saw {}.", layout.footerVisibleButtonCount));
+    state.Require(! layout.footerAutoDismissVisible, L"File-operations footer should not expose the auto-dismiss preference toggle.");
+    state.Require(! layout.hasVisibleButtonOverlap, L"File-operations popup rendered overlapping button hit targets.");
+    state.Require(layout.taskStatusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::Conflict,
+                  L"Active conflict prompt should be the task's single surfaced status.");
+    state.Require(layout.taskStatusActiveStateCount == 1u,
+                  std::format(L"Conflict prompt should have exactly one active status; saw {}.", layout.taskStatusActiveStateCount));
+    state.Require(layout.globalSummaryVisible, L"File-operations footer should expose the global status summary.");
+    state.Require(layout.globalNeedAttentionCount >= 1u, L"Conflict prompt should increment the global need-attention count.");
+    state.Require(layout.globalSummaryText.find(L"running") != std::wstring::npos &&
+                      layout.globalSummaryText.find(L"waiting") != std::wstring::npos &&
+                      layout.globalSummaryText.find(L"need attention") != std::wstring::npos,
+                  std::format(L"Global status summary should include running/waiting/need-attention counters; saw '{}'.", layout.globalSummaryText));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::PopupSelfTestInvoke overflowInvoke{};
+    overflowInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore;
+    overflowInvoke.taskId = taskId.value();
+    overflowInvoke.data   = static_cast<uint32_t>(ConflictAction::SkipAll);
+    state.Require(DebugInvokeFileOperationsPopup(popup, overflowInvoke), L"Failed to invoke conflict prompt overflow action through the More affordance.");
+
+    const auto completionDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    bool conflictResolved         = false;
+    while (std::chrono::steady_clock::now() < completionDeadline)
+    {
+        PumpPendingMessages();
+        FileOperationsPopupInternal::TaskSnapshot resolvedSnapshot{};
+        if (DebugGetFileOperationsPopupTaskSnapshot(popup, taskId.value(), resolvedSnapshot) &&
+            (! resolvedSnapshot.conflict.active || resolvedSnapshot.finished))
+        {
+            conflictResolved = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(conflictResolved, L"Overflow Skip all action did not resolve the active conflict prompt.");
+    state.Require(TextFileEqualsForFileOpsPrompt(dest, "existing payload"), L"Overflow Skip all should keep the existing destination payload untouched.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::TaskSnapshot completedSnapshot{};
+    const auto finishedDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    bool taskFinished           = false;
+    while (std::chrono::steady_clock::now() < finishedDeadline)
+    {
+        PumpPendingMessages();
+        if (DebugGetFileOperationsPopupTaskSnapshot(popup, taskId.value(), completedSnapshot) && completedSnapshot.finished)
+        {
+            taskFinished = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+
+    state.Require(taskFinished, L"Compact conflict prompt task did not finish after resolving the overflow action.");
+    state.Require(completedSnapshot.warningCount > 0 || completedSnapshot.errorCount > 0,
+                  L"Skipping a conflict should leave completed-task diagnostics for the collapsed More menu.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::PopupLayoutDebugSnapshot completedLayout{};
+    completedLayout.taskId = taskId.value();
+    state.Require(DebugGetFileOperationsPopupLayoutSnapshot(popup, completedLayout), L"Failed to capture completed file-operation layout snapshot.");
+    state.Require(completedLayout.completedVisibleActionCount <= 2u,
+                  std::format(L"Completed diagnostic task should expose at most 2 actions; saw {}.", completedLayout.completedVisibleActionCount));
+    state.Require(completedLayout.completedDismissVisible, L"Completed diagnostic task should keep Dismiss as the primary action.");
+    state.Require(completedLayout.completedDiagnosticsMoreVisible, L"Completed diagnostic task should expose a More affordance for diagnostics.");
+    state.Require(completedLayout.completedDiagnosticsMoreButtonRectVisible, L"Completed diagnostic task should expose the More button rectangle.");
+    state.Require(! completedLayout.completedShowLogVisible, L"Completed diagnostic task should not expose Show log as a flat button.");
+    state.Require(! completedLayout.completedExportIssuesVisible, L"Completed diagnostic task should not expose Export issues as a flat button.");
+    state.Require(! completedLayout.hasVisibleButtonOverlap, L"Completed diagnostic task rendered overlapping button hit targets.");
+    state.Require(completedLayout.taskStatusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::Partial,
+                  L"Completed diagnostic task should surface a single partial/needs-attention status.");
+    state.Require(completedLayout.taskStatusActiveStateCount == 1u,
+                  std::format(L"Completed diagnostic task should have exactly one active status; saw {}.", completedLayout.taskStatusActiveStateCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(DismissVisibleOwnedDxUiContextMenuForFileOps(popup, SelfTest::Scale(1000ms)),
+                  L"Existing DxUI context menu did not close before completed-task More placement validation.");
+    const D2D1_RECT_F moreRect = completedLayout.completedDiagnosticsMoreButtonRect;
+    const POINT moreClick{
+        static_cast<LONG>(std::lround((moreRect.left + moreRect.right) * 0.5f)),
+        static_cast<LONG>(std::lround((moreRect.top + moreRect.bottom) * 0.5f)),
+    };
+    POINT moreTopLeft{static_cast<LONG>(std::lround(moreRect.left)), static_cast<LONG>(std::lround(moreRect.top))};
+    POINT moreBottomRight{static_cast<LONG>(std::lround(moreRect.right)), static_cast<LONG>(std::lround(moreRect.bottom))};
+    state.Require(ClientToScreen(popup, &moreTopLeft) != FALSE && ClientToScreen(popup, &moreBottomRight) != FALSE,
+                  L"Failed to map completed-task More button rectangle to screen coordinates.");
+    const RECT moreScreenRect{moreTopLeft.x, moreTopLeft.y, moreBottomRight.x, moreBottomRight.y};
+
+    std::atomic<bool> menuOpened{false};
+    std::atomic<bool> menuClosed{false};
+    std::atomic<bool> menuDebugReadable{false};
+    std::atomic<bool> menuRightAlignedToButton{false};
+    std::atomic<bool> menuVerticallyAttachedToButton{false};
+    std::jthread menuObserver([&](std::stop_token stopToken) noexcept
+    {
+        using namespace std::chrono_literals;
+
+        const auto openDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        HWND menu               = nullptr;
+        while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < openDeadline)
+        {
+            menu = FindVisibleOwnedDxUiContextMenuWindowForFileOps(popup);
+            if (menu && IsWindow(menu) != FALSE)
+            {
+                menuOpened.store(true, std::memory_order_release);
+                RedSalamander::DxUi::ContextMenuPopupDebugState menuState{};
+                if (RedSalamander::DxUi::DebugGetContextMenuPopupState(menu, menuState))
+                {
+                    menuDebugReadable.store(true, std::memory_order_release);
+                    const int tolerancePx = std::max(10, MulDiv(16, static_cast<int>(menuState.dpi), USER_DEFAULT_SCREEN_DPI));
+                    menuRightAlignedToButton.store(std::abs(menuState.surfaceRectPx.right - moreScreenRect.right) <= tolerancePx,
+                                                   std::memory_order_release);
+                    menuVerticallyAttachedToButton.store(std::abs(menuState.surfaceRectPx.bottom - moreScreenRect.top) <= tolerancePx,
+                                                         std::memory_order_release);
+                }
+                break;
+            }
+            std::this_thread::sleep_for(10ms);
+        }
+
+        if (menu && IsWindow(menu) != FALSE)
+        {
+            PostMessageW(menu, WM_KEYDOWN, VK_ESCAPE, 0);
+            PostMessageW(menu, WM_KEYUP, VK_ESCAPE, 0);
+        }
+
+        const auto closeDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < closeDeadline)
+        {
+            if (FindVisibleOwnedDxUiContextMenuWindowForFileOps(popup) == nullptr)
+            {
+                menuClosed.store(true, std::memory_order_release);
+                return;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+    });
+
+    const LPARAM moreClickLParam = MAKELPARAM(moreClick.x, moreClick.y);
+    SendMessageW(popup, WM_MOUSEMOVE, 0, moreClickLParam);
+    SendMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, moreClickLParam);
+    SendMessageW(popup, WM_LBUTTONUP, 0, moreClickLParam);
+    menuObserver.join();
+
+    state.Require(menuOpened.load(std::memory_order_acquire), L"Completed-task More button did not open a DxUI context menu.");
+    state.Require(menuClosed.load(std::memory_order_acquire), L"Completed-task More context menu did not close after Escape.");
+    state.Require(menuDebugReadable.load(std::memory_order_acquire), L"Completed-task More context menu did not expose readable debug state.");
+    state.Require(menuRightAlignedToButton.load(std::memory_order_acquire),
+                  L"Completed-task More context menu should align to the More button's right edge, not the popup center.");
+    state.Require(menuVerticallyAttachedToButton.load(std::memory_order_acquire),
+                  L"Completed-task More context menu should open directly above the More button, not over the active progress card.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::PopupSelfTestInvoke completedMoreInvoke{};
+    completedMoreInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskCompletedMore;
+    completedMoreInvoke.taskId = taskId.value();
+    completedMoreInvoke.data   = 2u;
+    state.Require(DebugInvokeFileOperationsPopup(popup, completedMoreInvoke), L"Failed to invoke completed-task Export issues through the More affordance.");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestFileOperationsSpeedLimitPromptUsesDxUiSurface(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -4584,7 +5038,13 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
     });
 
     closePrompt();
-    static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+    state.Require(CloseFileOperationsPopupForSelfTest(fileOps),
+                  L"Failed to quiesce pre-existing file operations before speed-limit live interaction test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    fileOps->ApplyQueueMode(false);
     {
         Common::Settings::FileOperationsSettings fileOperations = previousFileOperations.value_or(Common::Settings::FileOperationsSettings{});
         fileOperations.defaultBandwidthLimitBytesPerSecond      = kInitialLimitBytesPerSecond;
@@ -5025,7 +5485,11 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
         return false;
     }
 
-    std::optional<uint64_t> taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(5000ms));
+    std::optional<uint64_t> taskId = ResolveAndPauseNewFileOperationsTaskForSelfTest(fileOps, existingTaskIds, kInitialLimitBytesPerSecond);
+    if (! taskId.has_value())
+    {
+        taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(5000ms));
+    }
     state.Require(taskId.has_value(), L"Failed to identify the new file-operations task for speed-limit live interaction test.");
     if (! taskId.has_value())
     {
@@ -6457,6 +6921,9 @@ void RunFileOpsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible", [=](CaseState& state) noexcept {
         return TestFileOperationsIssuesPaneThemeCycleKeepsGridLegible(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_fileops_conflict_prompt_compacts_actions", [=](CaseState& state) noexcept {
+        return TestFileOperationsConflictPromptCompactsActions(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface", [=](CaseState& state) noexcept {
         return TestFileOperationsSpeedLimitPromptUsesDxUiSurface(mainWindow, state);

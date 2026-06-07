@@ -133,7 +133,7 @@ std::wstring FormatChordText(uint32_t vk, uint32_t modifiers) noexcept
 
     if ((modifiers & 1u) != 0)
     {
-        parts.push_back(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        parts.push_back(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
 
     if ((modifiers & 2u) != 0)

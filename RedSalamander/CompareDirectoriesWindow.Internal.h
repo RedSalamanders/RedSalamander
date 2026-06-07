@@ -112,6 +112,9 @@ private:
     bool OnCreate(HWND hwnd) noexcept;
     void OnDestroy() noexcept;
     void OnNcDestroy() noexcept;
+    [[nodiscard]] HWND ResolveRestoreFolderViewWindow() const noexcept;
+    void UpdateOwnerWindow(HWND owner) noexcept;
+    void RestoreOwnerFocusAfterClose() noexcept;
     void OnSize() noexcept;
     void OnDpiChanged(UINT newDpi, const RECT* newRect) noexcept;
     void OnCommand(UINT id) noexcept;
@@ -622,6 +625,8 @@ private:
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
     const ShortcutManager* _shortcuts = nullptr;
+    HWND _ownerWindow                  = nullptr;
+    HWND _restoreFolderViewWindow      = nullptr;
     CompareDirectoriesPaneContext _leftContext;
     CompareDirectoriesPaneContext _rightContext;
 

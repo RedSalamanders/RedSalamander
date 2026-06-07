@@ -449,15 +449,17 @@ namespace Win32Text
 }
 } // namespace Win32Text
 
-// LoadString from resource ID
-template <typename string_type, size_t stackBufferLength = 256>
-int LoadStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type& result) WI_NOEXCEPT
+// Loads directly from the embedded module, bypassing localization satellites.
+template <typename string_type>
+int LoadEmbeddedStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type& result) WI_NOEXCEPT
 {
-    static_assert(stackBufferLength <= INT_MAX, "stackBufferLength must fit in int");
     const HINSTANCE instance = hInstance ? hInstance : GetModuleHandleW(nullptr);
-#if defined(COMMON_EXPORTS) || defined(REDSAL_USE_COMMON_LOCALIZATION)
-    return Localization::LoadString(instance, uID, result);
-#else
+    if (! instance)
+    {
+        result.clear();
+        return 0;
+    }
+
     // LoadStringW supports returning a pointer directly to the resource string when cchBufferMax == 0.
     // This avoids guessing the required buffer size and supports embedded NULs (e.g. file dialog filters).
     PCWSTR ptr       = nullptr;
@@ -470,6 +472,25 @@ int LoadStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type&
 
     result.assign(ptr, static_cast<size_t>(length));
     return length;
+}
+
+inline std::wstring LoadEmbeddedStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID) WI_NOEXCEPT
+{
+    std::wstring result;
+    LoadEmbeddedStringResource(hInstance, uID, result);
+    return result;
+}
+
+// LoadString from resource ID
+template <typename string_type, size_t stackBufferLength = 256>
+int LoadStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type& result) WI_NOEXCEPT
+{
+    static_assert(stackBufferLength <= INT_MAX, "stackBufferLength must fit in int");
+    const HINSTANCE instance = hInstance ? hInstance : GetModuleHandleW(nullptr);
+#if defined(COMMON_EXPORTS) || defined(REDSAL_USE_COMMON_LOCALIZATION)
+    return Localization::LoadString(instance, uID, result);
+#else
+    return LoadEmbeddedStringResource(instance, uID, result);
 #endif
 }
 
@@ -519,6 +540,13 @@ template <typename... Args> std::wstring FormatStringResource(_In_opt_ HINSTANCE
 {
     std::wstring fmt;
     LoadStringResource(hInstance, uID, fmt);
+    return FormatLoadedStringResource(uID, std::wstring_view(fmt), args...);
+}
+
+template <typename... Args> std::wstring FormatEmbeddedStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, Args... args)
+{
+    std::wstring fmt;
+    LoadEmbeddedStringResource(hInstance, uID, fmt);
     return FormatLoadedStringResource(uID, std::wstring_view(fmt), args...);
 }
 

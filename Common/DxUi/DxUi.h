@@ -1429,6 +1429,8 @@ public:
     void SetMnemonicTarget(Control* target) noexcept;
 
     void Paint(WindowHost& host) const override;
+    Control* HitTest(D2D1_POINT_2F point) override;
+    const Control* HitTest(D2D1_POINT_2F point) const override;
     bool OnMnemonic(WindowHost& host) override;
 
 private:
@@ -1709,6 +1711,7 @@ public:
     void SetOnOpenItem(OpenItemCallback onOpenItem);
     void SetOnHoverChanged(HoverChangedCallback onHoverChanged);
     void SetSelectedIndex(std::optional<size_t> index) noexcept;
+    void ClearInteractionState() noexcept;
     void SetRetainSelectedIndexOnFocusLost(bool retain) noexcept;
     [[nodiscard]] std::optional<size_t> GetSelectedIndex() const noexcept;
     [[nodiscard]] std::optional<size_t> GetHoveredIndex() const noexcept;
@@ -2854,7 +2857,6 @@ private:
     mutable std::vector<size_t> _columnDisplayOrder;
     mutable std::vector<size_t> _columnDisplayIndexByModel;
     mutable std::vector<GridGroupDesc> _cachedGroups;
-    mutable std::vector<VisibleBodyItem> _cachedVisibleItems;
     GridSelectionModel _selectionModel;
     GridSelectionMode _selectionMode = GridSelectionMode::Extended;
     GridVisualMode _visualMode       = GridVisualMode::Standard;
@@ -3088,6 +3090,7 @@ public:
     [[nodiscard]] bool HasActiveTextInput() const noexcept;
     [[nodiscard]] HWND GetTextInputHwnd() const noexcept;
     void CaptureMouse(Control* control) noexcept;
+    [[nodiscard]] Control* GetCapturedControl() const noexcept;
     void ReleaseMouseCapture() noexcept;
     [[nodiscard]] HWND GetHwnd() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetClientBoundsDip() const noexcept;

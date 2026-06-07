@@ -9,6 +9,10 @@ LET IT ALONE THERE (HUMAN MANAGED)
 
 
 ------------------------------------------------------------------------------------------------------
+## Ctrl +X / Ctrl +V 
+after Ctrl+X Ctrl+V remove the content of the clipboard to avoid multiple move  with error and because there is no need to keep the content in the clipboard after pasting it in the file explorer or RedSalamander. 
+
+------------------------------------------------------------------------------------------------------
 ## password in connection manager is not wolrking 
 you could type what you want nothing happen
 

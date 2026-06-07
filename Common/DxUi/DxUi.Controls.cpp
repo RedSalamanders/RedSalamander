@@ -1582,6 +1582,16 @@ void Label::Paint(WindowHost& host) const
         host, _text, GetBounds(), _fontRole, style.text, GetMnemonic(), _alignment, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, _multiline, GetFlowDirection());
 }
 
+Control* Label::HitTest(D2D1_POINT_2F /*point*/)
+{
+    return nullptr;
+}
+
+const Control* Label::HitTest(D2D1_POINT_2F /*point*/) const
+{
+    return nullptr;
+}
+
 bool Label::OnMnemonic(WindowHost& host)
 {
     if (_mnemonicTarget && ControlBelongsToBranch(host.GetRoot(), _mnemonicTarget))
@@ -1925,7 +1935,16 @@ bool Button::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers)
 bool Button::OnMouseLeave(WindowHost& host)
 {
     const bool handled = Control::OnMouseLeave(host);
-    if (_pressed)
+    TraceButtonDiagnostics(L"dxui.button.mouse-leave",
+                           L"hwnd={:#x} text=\"{}\" variant={} pressedBefore={} pressedDropDownBefore={} enabled={} visible={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           _pressed ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0);
+    if (_pressed && host.GetCapturedControl() != this)
     {
         _pressed         = false;
         _pressedDropDown = false;
@@ -1964,6 +1983,15 @@ void Button::SetPressedVisual(bool pressed) noexcept
 
 void Button::OnCaptureLost(WindowHost& host)
 {
+    TraceButtonDiagnostics(L"dxui.button.capture-lost",
+                           L"hwnd={:#x} text=\"{}\" variant={} pressedBefore={} pressedDropDownBefore={} enabled={} visible={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           _pressed ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0);
     if (_pressed)
     {
         _pressed         = false;
@@ -3298,6 +3326,18 @@ void MenuBar::SetSelectedIndex(std::optional<size_t> index) noexcept
     if (_selectedIndex != index)
     {
         _selectedIndex = index;
+        RequestInvalidate();
+    }
+}
+
+void MenuBar::ClearInteractionState() noexcept
+{
+    const bool changed = _selectedIndex.has_value() || _hoveredIndex.has_value() || _pressedIndex.has_value();
+    _selectedIndex.reset();
+    _hoveredIndex.reset();
+    _pressedIndex.reset();
+    if (changed)
+    {
         RequestInvalidate();
     }
 }

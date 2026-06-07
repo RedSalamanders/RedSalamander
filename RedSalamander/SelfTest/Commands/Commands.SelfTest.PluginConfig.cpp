@@ -4608,6 +4608,48 @@ private:
                       closeAllViewersPos < releaseFileSystemsPos && releaseFileSystemsPos < fileSystemRefreshPos && closeAllViewersPos < viewerRefreshPos,
                   L"Runtime plugin refresh must close live viewers and release pane file-system references before rediscovering/unloading plugin DLLs.");
 
+    std::string viewerSpaceSource;
+    const std::filesystem::path viewerSpacePath = repoRoot / L"Plugins" / L"ViewerSpace" / L"ViewerSpace.cpp";
+    state.Require(ReadSourceFileUtf8(viewerSpacePath, viewerSpaceSource), std::format(L"Failed to read {}.", viewerSpacePath.wstring()));
+    state.Require(viewerSpaceSource.find("std::unique_ptr<ScanScheduler> g_scanScheduler") != std::string::npos,
+                  L"ViewerSpace scan scheduler module state must be a resettable unique_ptr.");
+    state.Require(viewerSpaceSource.find("std::mutex g_scanSchedulerMutex") != std::string::npos,
+                  L"ViewerSpace scan scheduler lazy initialization must be guarded by a mutex.");
+    state.Require(viewerSpaceSource.find("ScanScheduler* g_scanScheduler") == std::string::npos,
+                  L"ViewerSpace scan scheduler must not regress to an unlocked raw pointer singleton.");
+    state.Require(viewerSpaceSource.find("std::unique_ptr<ScanResultCache> g_scanResultCache") != std::string::npos,
+                  L"ViewerSpace scan result cache module state must be a resettable unique_ptr.");
+    state.Require(viewerSpaceSource.find("std::mutex g_scanResultCacheMutex") != std::string::npos,
+                  L"ViewerSpace scan result cache lazy initialization must be guarded by a mutex.");
+    state.Require(viewerSpaceSource.find("ScanResultCache* g_scanResultCache") == std::string::npos,
+                  L"ViewerSpace scan result cache must not regress to an unlocked raw pointer singleton.");
+    state.Require(viewerSpaceSource.find("uint32_t ViewerSpace::ComputeAdaptiveFileCandidateBudget() const noexcept") != std::string::npos,
+                  L"ViewerSpace must derive file-candidate retention through an explicit adaptive-budget helper.");
+    state.Require(viewerSpaceSource.find("_scanTopFilesPerDirectory = effectiveTopFilesPerDirectory;") != std::string::npos,
+                  L"ViewerSpace scan startup must retain the effective file-candidate budget for later cache storage.");
+    state.Require(viewerSpaceSource.find("cacheKey.topFilesPerDirectory = effectiveTopFilesPerDirectory;") != std::string::npos,
+                  L"ViewerSpace scan-cache lookup keys must use the same adaptive file-candidate budget as live scans.");
+    state.Require(viewerSpaceSource.find("cacheKey.topFilesPerDirectory = _scanTopFilesPerDirectory;") != std::string::npos,
+                  L"ViewerSpace scan-cache storage keys must use the stored scan-start file-candidate budget.");
+    state.Require(viewerSpaceSource.find("constexpr uint32_t kAdaptiveFileCandidateCeiling = 20000u;") != std::string::npos,
+                  L"ViewerSpace adaptive file-candidate cap must be named as a ceiling.");
+    state.Require(viewerSpaceSource.find("kAdaptiveFileCandidateFloor") == std::string::npos,
+                  L"ViewerSpace adaptive file-candidate cap must not use the misleading Floor name.");
+    state.Require(viewerSpaceSource.find("std::max(topFilesPerDirectoryConfig, kAdaptiveFileCandidateCeiling)") == std::string::npos,
+                  L"ViewerSpace must not collapse topFilesPerDirectory to the 20k ceiling during scan startup.");
+    state.Require(viewerSpaceSource.find("std::max(_config.topFilesPerDirectory, kAdaptiveFileCandidateCeiling)") == std::string::npos,
+                  L"ViewerSpace must not collapse topFilesPerDirectory to the 20k ceiling when building scan-cache keys.");
+
+    std::string viewerSpaceFactorySource;
+    const std::filesystem::path viewerSpaceFactoryPath = repoRoot / L"Plugins" / L"ViewerSpace" / L"Factory.cpp";
+    state.Require(ReadSourceFileUtf8(viewerSpaceFactoryPath, viewerSpaceFactorySource), std::format(L"Failed to read {}.", viewerSpaceFactoryPath.wstring()));
+    state.Require(viewerSpaceFactorySource.find("std::unique_ptr<PluginMetaDataStorage> g_pluginMetaDataStorage") != std::string::npos,
+                  L"ViewerSpace plugin metadata module state must be a resettable unique_ptr.");
+    state.Require(viewerSpaceFactorySource.find("std::mutex g_pluginMetaDataStorageMutex") != std::string::npos,
+                  L"ViewerSpace plugin metadata lazy initialization must be guarded by a mutex.");
+    state.Require(viewerSpaceFactorySource.find("PluginMetaDataStorage* g_pluginMetaDataStorage") == std::string::npos,
+                  L"ViewerSpace plugin metadata must not regress to an unlocked raw pointer singleton.");
+
     return state.failure.empty();
 }
 
@@ -4653,6 +4695,20 @@ private:
                   L"FileSystemPluginManager::Unload must call optional plugin shutdown hooks before unloading.");
     state.Require(unloadBody.find("RedSalamanderPluginRetainModuleUntilProcessExit") != std::string_view::npos,
                   L"FileSystemPluginManager::Unload must honor process-shutdown module retention hooks.");
+
+    std::string folderWindowSource;
+    const std::filesystem::path folderWindowPath = repoRoot / L"RedSalamander" / L"FolderWindow.FileSystem.cpp";
+    state.Require(ReadSourceFileUtf8(folderWindowPath, folderWindowSource), std::format(L"Failed to read {}.", folderWindowPath.wstring()));
+    if (folderWindowSource.empty())
+    {
+        return false;
+    }
+
+    const std::string_view releaseBody =
+        SourceBetween(folderWindowSource, "void FolderWindow::ReleaseFileSystemPluginsForRefresh", "HRESULT FolderWindow::SetFileSystemPluginForPane");
+    state.Require(! releaseBody.empty(), L"FolderWindow::ReleaseFileSystemPluginsForRefresh body was not found.");
+    state.Require(releaseBody.find("state.fileSystemModule.reset();") != std::string_view::npos,
+                  L"FolderWindow::ReleaseFileSystemPluginsForRefresh must release pane module keep-alive handles before plugin-manager refresh unloads DLLs.");
 
     return state.failure.empty();
 }

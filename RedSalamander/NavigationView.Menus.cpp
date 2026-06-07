@@ -261,7 +261,15 @@ struct MenuInfoLineText
     const std::wstring decodedLabel = DecodeMenuPresentationText(item.label ? item.label : L"").label;
     const auto labelMatches         = [&](const UINT resourceId) -> bool
     {
-        const std::wstring expected = LoadStringResource(nullptr, resourceId);
+        std::wstring expected;
+        if (resourceId == IDS_MENU_NAV_ONEDRIVE)
+        {
+            expected = LoadEmbeddedStringResource(nullptr, resourceId);
+        }
+        else
+        {
+            expected = LoadStringResource(nullptr, resourceId);
+        }
         return ! expected.empty() &&
                CompareStringOrdinal(decodedLabel.data(), static_cast<int>(decodedLabel.size()), expected.data(), static_cast<int>(expected.size()), TRUE) ==
                    CSTR_EQUAL;

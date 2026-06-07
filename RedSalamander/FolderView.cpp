@@ -215,6 +215,7 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
 
     if (! folderPath)
     {
+        DismissAlertOverlay();
         _hiddenNames.store(std::shared_ptr<const HiddenNamesFilter>{}, std::memory_order_release);
         _pendingExternalCommandAfterEnumeration.reset();
         ClearErrorOverlay(ErrorOverlayKind::Enumeration);
@@ -228,8 +229,11 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
         return;
     }
 
-    if (! _currentFolder.has_value() || ! OrdinalString::EqualsNoCasePath(_currentFolder.value(), folderPath.value()))
+    const bool folderChanged = ! _currentFolder.has_value() || ! OrdinalString::EqualsNoCasePath(_currentFolder.value(), folderPath.value());
+    if (folderChanged)
     {
+        DismissAlertOverlay();
+
         const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
         if (hiddenNames && ! hiddenNames->names.empty())
         {
@@ -476,8 +480,19 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 {
     CancelPendingEnumeration();
     StopEnumerationThread();
+    DrainPendingEnumerationPayloadMessages();
 
     _directoryCachePin = DirectoryInfoCache::Pin{};
+    _items.clear();
+    _itemsArenaBuffer.reset();
+    _itemsFolder.clear();
+    _columnLayout.clear();
+    _columnCounts.clear();
+    _columnPrefixSums.clear();
+    _focusedIndex      = static_cast<size_t>(-1);
+    _anchorIndex       = static_cast<size_t>(-1);
+    _hoveredIndex      = static_cast<size_t>(-1);
+    _itemMetricsCached = false;
     _fileSystem        = fileSystem;
     _displayedFolder.reset();
     _focusMemory.clear();
@@ -528,6 +543,13 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
     else
     {
         _directoryCachePin = DirectoryInfoCache::Pin{};
+    }
+
+    LayoutItems();
+    UpdateScrollMetrics();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
 }
 
@@ -1006,6 +1028,8 @@ void FolderView::SetDisplayMode(DisplayMode mode)
         {
             item.icon.reset();
             item.thumbnail.reset();
+            item.thumbnailFallbackResolved = false;
+            item.thumbnailFallbackTargetPx = 0u;
             item.labelLayout.reset();
             item.labelMetrics = {};
             item.detailsLayout.reset();
@@ -1077,6 +1101,8 @@ void FolderView::SetThumbnailSizeDip(uint32_t sizeDip)
     for (auto& item : _items)
     {
         item.thumbnail.reset();
+        item.thumbnailFallbackResolved = false;
+        item.thumbnailFallbackTargetPx = 0u;
         item.icon.reset();
         item.labelLayout.reset();
         item.labelMetrics = {};

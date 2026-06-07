@@ -208,7 +208,7 @@ constexpr uint64_t kGroupStableIdFolderView  = 2u;
 
     if ((modifiers & ShortcutManager::kModCtrl) != 0)
     {
-        parts.push_back(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        parts.push_back(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
     if ((modifiers & ShortcutManager::kModAlt) != 0)
     {
@@ -289,7 +289,15 @@ struct ShortcutKeySortKey final
     std::wstring result;
     const auto appendPart = [&](UINT stringId)
     {
-        const std::wstring part = LoadStringResource(nullptr, stringId);
+        std::wstring part;
+        if (stringId == IDS_MOD_CTRL)
+        {
+            part = LoadEmbeddedStringResource(nullptr, stringId);
+        }
+        else
+        {
+            part = LoadStringResource(nullptr, stringId);
+        }
         if (part.empty())
         {
             return;

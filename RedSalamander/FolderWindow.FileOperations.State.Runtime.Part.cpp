@@ -33,6 +33,12 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         return S_FALSE;
     }
 
+    if (! destinationFileSystem && ! IsSameProviderOperationSupportedByCapabilities(fileSystem, operation))
+    {
+        Debug::Error(L"FolderWindow StartOperation provider rejected same-filesystem operation op={}", static_cast<unsigned int>(operation));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
     const std::wstring& sourcePluginId      = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginId : _owner._rightPane.pluginId;
     const std::wstring& sourcePluginShortId = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginShortId : _owner._rightPane.pluginShortId;
 

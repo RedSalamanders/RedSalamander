@@ -213,6 +213,9 @@ public:
         return static_cast<bool>(_fileOperationRequestCallback);
     }
 
+    static void DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::optional<std::filesystem::path> destination) noexcept;
+    static void DebugSetDirectFileOperationFallbackEnabledForSelfTest(bool enabled) noexcept;
+
     [[nodiscard]] uint64_t DebugGetForceRefreshCount() const noexcept
     {
         return _debugForceRefreshCount;
@@ -725,6 +728,7 @@ private:
         uint64_t thumbnailLoadBatchId  = 0;
         uint64_t enumerationGeneration = 0;
         size_t itemIndex               = static_cast<size_t>(-1);
+        uint32_t targetPx              = 0;
         std::chrono::steady_clock::time_point postedAt{};
         wil::unique_hbitmap hBitmap = nullptr;
         PixelBuffer pixels;
@@ -753,6 +757,8 @@ private:
         D2D1_RECT_F bounds{};
         wil::com_ptr<ID2D1Bitmap1> icon;
         wil::com_ptr<ID2D1Bitmap1> thumbnail;
+        bool thumbnailFallbackResolved = false;
+        uint32_t thumbnailFallbackTargetPx = 0;
         int iconIndex = -1; // System image list icon index from SHGetFileInfo
         int column    = 0;
         int row       = 0;
@@ -1215,6 +1221,7 @@ private:
     void UpdateCompareNoDifferencesState() noexcept;
     void EnsureEnumerationThread();
     void EnumerationWorker(std::stop_token stopToken);
+    void DrainPendingEnumerationPayloadMessages() noexcept;
     std::unique_ptr<EnumerationPayload> ExecuteEnumeration(const std::filesystem::path& folder, uint64_t generation, std::stop_token stopToken);
     void ApplyCurrentSort();
     void ApplyCurrentSort(std::wstring_view focusedPath, size_t fallbackFocusIndex);
@@ -1375,6 +1382,7 @@ private:
 
     struct ThumbnailLoadRequest
     {
+        uint64_t thumbnailLoadBatchId  = 0;
         uint64_t enumerationGeneration = 0;
         size_t itemIndex               = static_cast<size_t>(-1);
         std::filesystem::path fullPath;

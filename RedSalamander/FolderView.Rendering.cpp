@@ -662,6 +662,8 @@ void FolderView::DiscardDeviceResources()
     {
         item.icon.reset();
         item.thumbnail.reset();
+        item.thumbnailFallbackResolved = false;
+        item.thumbnailFallbackTargetPx = 0u;
     }
 
     wil::com_ptr<ID2D1Device> oldD2DDevice;

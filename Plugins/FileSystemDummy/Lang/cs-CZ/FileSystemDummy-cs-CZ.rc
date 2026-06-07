@@ -1,0 +1,11 @@
+#pragma code_page(65001)
+#include "../../FileSystemDummyResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMDUMMY_NAME "Figurína souborového systému"
+    IDS_FILESYSTEMDUMMY_DESCRIPTION "Deterministický in-memory fiktivní souborový systém pro testování."
+END

@@ -4314,6 +4314,8 @@ void FolderWindow::ReleaseFileSystemPluginsForRefresh() noexcept
         state.folderView.SetFileSystem(emptyFileSystem);
         state.navigationView.SetFileSystem(emptyFileSystem);
         state.fileSystem.reset();
+        // Release the pane's explicit LoadLibrary pin before plugin-manager refresh unloads/reloads DLLs.
+        state.fileSystemModule.reset();
     };
 
     releasePane(_leftPane);
@@ -4324,9 +4326,8 @@ HRESULT FolderWindow::SetFileSystemPluginForPane(Pane pane, std::wstring_view pl
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
-    if (! state.pluginId.empty() && EqualsNoCase(state.pluginId, pluginId))
+    if (state.fileSystem && ! state.pluginId.empty() && EqualsNoCase(state.pluginId, pluginId))
     {
-        state.navigationView.SetFileSystem(state.fileSystem);
         state.navigationView.SetHistory(_folderHistory);
         if (state.currentPath.has_value())
         {

@@ -3182,6 +3182,7 @@ struct OwnedMenuSessionEscapeResult
     } menuResult;
 
     const std::wstring desktopLabel                   = LoadStringResource(nullptr, IDS_MENU_NAV_DESKTOP);
+    const std::wstring oneDriveLabel                  = LoadEmbeddedStringResource(nullptr, IDS_MENU_NAV_ONEDRIVE);
     const std::vector<std::wstring> quickAccessLabels = {
         desktopLabel,
         LoadStringResource(nullptr, IDS_MENU_NAV_DOCUMENTS),
@@ -3189,7 +3190,7 @@ struct OwnedMenuSessionEscapeResult
         LoadStringResource(nullptr, IDS_MENU_NAV_PICTURES),
         LoadStringResource(nullptr, IDS_MENU_NAV_MUSIC),
         LoadStringResource(nullptr, IDS_MENU_NAV_VIDEOS),
-        LoadStringResource(nullptr, IDS_MENU_NAV_ONEDRIVE),
+        oneDriveLabel,
     };
     const std::wstring connectionsLabel = LoadStringResource(nullptr, IDS_MENU_CONNECTIONS);
     const std::wstring goToLabel        = LoadStringResource(nullptr, IDS_MENU_GO_TO);
@@ -3503,6 +3504,7 @@ struct OwnedMenuSessionEscapeResult
     } menuResult;
 
     const std::wstring commonFoldersLabel                = LoadStringResource(nullptr, IDS_MENU_COMMON_FOLDERS);
+    const std::wstring oneDriveLabel                     = LoadEmbeddedStringResource(nullptr, IDS_MENU_NAV_ONEDRIVE);
     const std::array<std::wstring, 7> commonFolderLabels = {
         LoadStringResource(nullptr, IDS_MENU_NAV_DESKTOP),
         LoadStringResource(nullptr, IDS_MENU_NAV_DOCUMENTS),
@@ -3510,7 +3512,7 @@ struct OwnedMenuSessionEscapeResult
         LoadStringResource(nullptr, IDS_MENU_NAV_PICTURES),
         LoadStringResource(nullptr, IDS_MENU_NAV_MUSIC),
         LoadStringResource(nullptr, IDS_MENU_NAV_VIDEOS),
-        LoadStringResource(nullptr, IDS_MENU_NAV_ONEDRIVE),
+        oneDriveLabel,
     };
 
     state.Require(! commonFoldersLabel.empty(), L"Common Folders resource string should be available for nonstandard menu validation.");
@@ -6340,7 +6342,7 @@ struct OwnedMenuSessionEscapeResult
     state.Require(shellRestored,
                   std::format(L"Navigation shell did not restore cleanly after Find close; focusTarget={}, editMode={}, historyVisible={}, "
                               L"suggestVisible={}, popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', historyCount={}, refreshCount={}, "
-                              L"itemCount={}, selectedCount={}, focusedItem='{}'.",
+                              L"itemCount={}, selectedCount={}, focusedItem='{}', focusedFolderView=0x{:X}, expectedFolderView=0x{:X}.",
                               static_cast<unsigned>(snapshot.focusTarget),
                               snapshot.editMode ? L"yes" : L"no",
                               snapshot.historyDropdownVisible ? L"yes" : L"no",
@@ -6353,7 +6355,9 @@ struct OwnedMenuSessionEscapeResult
                               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
                               g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
                               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
-                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left)));
+                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                              reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                              reinterpret_cast<uintptr_t>(folderView)));
     return state.failure.empty();
 }
 
@@ -6552,7 +6556,7 @@ struct OwnedMenuSessionEscapeResult
     state.Require(shellRestored,
                   std::format(L"Navigation shell did not restore cleanly after Connection Manager close; focusTarget={}, editMode={}, historyVisible={}, "
                               L"suggestVisible={}, popupVisible={}, childWindows={}, currentPath='{}', panePath='{}', historyCount={}, refreshCount={}, "
-                              L"itemCount={}, selectedCount={}, focusedItem='{}'.",
+                              L"itemCount={}, selectedCount={}, focusedItem='{}', focusedFolderView=0x{:X}, expectedFolderView=0x{:X}.",
                               static_cast<unsigned>(snapshot.focusTarget),
                               snapshot.editMode ? L"yes" : L"no",
                               snapshot.historyDropdownVisible ? L"yes" : L"no",
@@ -6565,7 +6569,9 @@ struct OwnedMenuSessionEscapeResult
                               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
                               g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
                               g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left),
-                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left)));
+                              g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left),
+                              reinterpret_cast<uintptr_t>(g_folderWindow.GetFocusedFolderViewHwnd()),
+                              reinterpret_cast<uintptr_t>(folderView)));
     return state.failure.empty();
 }
 

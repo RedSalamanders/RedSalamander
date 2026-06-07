@@ -1,3 +1,294 @@
+case SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus:
+{
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 120'000ull))
+    {
+        Fail(L"FileOps_CrossVolumeMovePartialFailureStatus timed out.");
+        return true;
+    }
+
+    const std::filesystem::path srcRoot  = state.tempRoot / L"phase4-partial-move-source";
+    const std::filesystem::path dstRoot  = state.tempRoot / L"phase4-partial-move-destination";
+    const std::filesystem::path srcFile  = srcRoot / L"locked.bin";
+    const std::filesystem::path dstFile  = dstRoot / srcRoot.filename() / srcFile.filename();
+    const std::filesystem::path dstItem  = dstRoot / srcRoot.filename();
+
+    if (state.stepState == 0)
+    {
+        if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot) || ! RecreateEmptyDirectory(dstItem) ||
+            ! WriteTestFile(srcFile, 256ull * 1024ull))
+        {
+            Fail(L"Partial move status test failed to prepare source/destination folders.");
+            return true;
+        }
+        if (! SetFileAttributesW(srcFile.c_str(), FILE_ATTRIBUTE_READONLY))
+        {
+            Fail(L"Partial move status test failed to make the source file read-only.");
+            return true;
+        }
+
+        if (! state.forceMoveCopyFallbackEnvBackedUp)
+        {
+            state.forceMoveCopyFallbackEnvOriginal    = GetEnvVarTrimmed(kSelfTestEnvForceMoveCopyFallback);
+            state.forceMoveCopyFallbackEnvHadOriginal = ! state.forceMoveCopyFallbackEnvOriginal.empty();
+            state.forceMoveCopyFallbackEnvBackedUp    = true;
+        }
+        if (! SetEnvironmentVariableW(kSelfTestEnvForceMoveCopyFallback.data(), L"1"))
+        {
+            Fail(L"Partial move status test failed to enable forced move-copy fallback.");
+            return true;
+        }
+
+        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE);
+        state.taskA                 = StartFileOperationAndGetId(
+            state.fileOps, FILESYSTEM_MOVE, FolderWindow::Pane::Left, FolderWindow::Pane::Right, state.fsLocal, {srcRoot}, dstRoot, flags, false);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Partial move status test failed to start the move task.");
+            return true;
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (state.stepState == 1)
+    {
+        const auto completed = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+        if (completed == state.completedTasks.end())
+        {
+            return false;
+        }
+
+        if (state.forceMoveCopyFallbackEnvBackedUp)
+        {
+            static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvForceMoveCopyFallback.data(),
+                                                      state.forceMoveCopyFallbackEnvHadOriginal ? state.forceMoveCopyFallbackEnvOriginal.c_str() : nullptr));
+            state.forceMoveCopyFallbackEnvBackedUp    = false;
+            state.forceMoveCopyFallbackEnvHadOriginal = false;
+            state.forceMoveCopyFallbackEnvOriginal.clear();
+        }
+
+        const HRESULT expectedPartial = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        if (completed->second.hr != expectedPartial)
+        {
+            Fail(std::format(L"Partial move status expected ERROR_PARTIAL_COPY, got 0x{:08X}.", static_cast<unsigned long>(completed->second.hr)));
+            return true;
+        }
+
+        std::error_code ec;
+        if (! std::filesystem::exists(srcFile, ec) || ec)
+        {
+            Fail(L"Partial move status test did not preserve the locked source file.");
+            return true;
+        }
+        ec.clear();
+        if (! std::filesystem::exists(dstFile, ec) || ec)
+        {
+            Fail(L"Partial move status test did not leave the locked destination copy.");
+            return true;
+        }
+
+        std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> summaries;
+        state.fileOps->CollectCompletedTasks(summaries);
+        const auto summaryIt = std::find_if(summaries.begin(), summaries.end(), [&](const auto& summary) noexcept {
+            return state.taskA.has_value() && summary.taskId == state.taskA.value();
+        });
+        if (summaryIt == summaries.end())
+        {
+            Fail(L"Partial move status test could not find the completed task summary.");
+            return true;
+        }
+
+        bool foundExplicitIssue = false;
+        for (const auto& issue : summaryIt->issueDiagnostics)
+        {
+            if (issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Warning &&
+                ContainsIgnoreCase(issue.message, L"source preserved") && ContainsIgnoreCase(issue.message, L"partial copy left"))
+            {
+                foundExplicitIssue = true;
+                break;
+            }
+        }
+        if (! foundExplicitIssue)
+        {
+            Fail(L"Partial move status test did not find a 'source preserved / partial copy left' issue row.");
+            return true;
+        }
+
+        Debug::Perf::Emit(L"FileOps.SelfTest.CrossVolumeMovePartialFailureStatus",
+                          L"shape=debug-forced-copy-delete-rollback-failure",
+                          completed->second.progressCompletedBytes,
+                          summaryIt->issueDiagnostics.size(),
+                          1,
+                          completed->second.hr);
+
+        static_cast<void>(SetFileAttributesW(srcFile.c_str(), FILE_ATTRIBUTE_NORMAL));
+        static_cast<void>(SetFileAttributesW(dstFile.c_str(), FILE_ATTRIBUTE_NORMAL));
+        NextStep(state, SelfTestState::Step::FileOps_ReparseRetargetDestinationContainment);
+        return false;
+    }
+
+    return false;
+}
+
+case SelfTestState::Step::FileOps_ReparseRetargetDestinationContainment:
+{
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 60'000ull))
+    {
+        Fail(L"FileOps_ReparseRetargetDestinationContainment timed out.");
+        return true;
+    }
+
+    static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"reparsePointPolicy":"copyReparse"})json"));
+
+    const std::filesystem::path srcRoot       = state.tempRoot / L"phase4-retarget-src";
+    const std::filesystem::path dstRoot       = state.tempRoot / L"phase4-retarget-dst";
+    const std::filesystem::path insideTarget  = srcRoot / L"inside-target";
+    const std::filesystem::path outsideTarget = state.tempRoot / L"phase4-retarget-outside";
+    const std::filesystem::path insideLink    = srcRoot / L"inside-link";
+    const std::filesystem::path outsideLink   = srcRoot / L"outside-link";
+
+    if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot) || ! RecreateEmptyDirectory(insideTarget) ||
+        ! RecreateEmptyDirectory(outsideTarget))
+    {
+        Fail(L"Reparse containment test failed to prepare directories.");
+        return true;
+    }
+    if (! WriteTestFile(insideTarget / L"inside.bin", 64) || ! WriteTestFile(outsideTarget / L"outside.bin", 64))
+    {
+        Fail(L"Reparse containment test failed to seed target files.");
+        return true;
+    }
+    if (! TryCreateJunction(insideLink, insideTarget) || ! TryCreateJunction(outsideLink, outsideTarget))
+    {
+        Fail(L"Reparse containment test failed to create source junctions.");
+        return true;
+    }
+
+    const std::filesystem::path copiedRoot = dstRoot / srcRoot.filename();
+    const HRESULT copyHr =
+        state.fsLocal->CopyItem(srcRoot.c_str(), copiedRoot.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
+    if (FAILED(copyHr))
+    {
+        Fail(std::format(L"Reparse containment copy failed: 0x{:08X}.", static_cast<unsigned long>(copyHr)));
+        return true;
+    }
+
+    const auto copiedInsideTarget = TryGetDirectoryReparseTargetAbsolute(copiedRoot / insideLink.filename());
+    if (! copiedInsideTarget.has_value())
+    {
+        Fail(L"Reparse containment test could not read copied in-tree link target.");
+        return true;
+    }
+
+    const std::wstring expectedInsideTarget = NormalizePathForCompare((copiedRoot / insideTarget.filename()).wstring());
+    if (copiedInsideTarget.value() != expectedInsideTarget)
+    {
+        Fail(std::format(L"Copied in-tree reparse target escaped or was not retargeted. expected='{}' actual='{}'.",
+                         expectedInsideTarget,
+                         copiedInsideTarget.value()));
+        return true;
+    }
+
+    const auto copiedOutsideTarget = TryGetDirectoryReparseTargetAbsolute(copiedRoot / outsideLink.filename());
+    if (! copiedOutsideTarget.has_value())
+    {
+        Fail(L"Reparse containment test could not read copied out-of-tree link target.");
+        return true;
+    }
+
+    const std::wstring expectedOutsideTarget = NormalizePathForCompare(std::filesystem::absolute(outsideTarget).wstring());
+    if (copiedOutsideTarget.value() != expectedOutsideTarget)
+    {
+        Fail(std::format(L"Copied out-of-tree reparse target should not be retargeted. expected='{}' actual='{}'.",
+                         expectedOutsideTarget,
+                         copiedOutsideTarget.value()));
+        return true;
+    }
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.ReparseRetargetDestinationContainment",
+                      L"shape=in-tree-retarget-plus-out-of-tree-preserve",
+                      2,
+                      CountFilesRecursive(copiedRoot),
+                      1,
+                      S_OK);
+
+    NextStep(state, SelfTestState::Step::FileOps_DeleteToctouSwapGuard);
+    return false;
+}
+
+case SelfTestState::Step::FileOps_DeleteToctouSwapGuard:
+{
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 60'000ull))
+    {
+        Fail(L"FileOps_DeleteToctouSwapGuard timed out.");
+        return true;
+    }
+
+    static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"concurrencyMode":"manual","deleteMaxConcurrency":8})json"));
+
+    const std::filesystem::path deleteRoot = state.tempRoot / L"phase4-toctou-delete-root";
+    const std::filesystem::path victimDir  = deleteRoot / L"victim-dir";
+    const std::filesystem::path targetRoot = state.tempRoot / L"phase4-toctou-outside-target";
+    const std::filesystem::path targetFile = targetRoot / L"must-survive.bin";
+    const std::filesystem::path sibling    = deleteRoot / L"sibling.bin";
+
+    if (! RecreateEmptyDirectory(deleteRoot) || ! RecreateEmptyDirectory(victimDir) || ! RecreateEmptyDirectory(targetRoot))
+    {
+        Fail(L"Delete TOCTOU guard test failed to prepare directories.");
+        return true;
+    }
+    if (! WriteTestFile(targetFile, 128) || ! WriteTestFile(sibling, 128))
+    {
+        Fail(L"Delete TOCTOU guard test failed to seed files.");
+        return true;
+    }
+
+    if (! SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapPath.data(), victimDir.c_str()) ||
+        ! SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapTarget.data(), targetRoot.c_str()))
+    {
+        Fail(L"Delete TOCTOU guard test failed to arm the debug swap hook.");
+        return true;
+    }
+
+    const HRESULT deleteHr =
+        state.fsLocal->DeleteItem(deleteRoot.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapPath.data(), nullptr));
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapTarget.data(), nullptr));
+    if (FAILED(deleteHr))
+    {
+        Fail(std::format(L"Delete TOCTOU guard test delete failed: 0x{:08X}.", static_cast<unsigned long>(deleteHr)));
+        return true;
+    }
+
+    std::error_code ec;
+    if (std::filesystem::exists(deleteRoot, ec) || ec)
+    {
+        Fail(L"Delete TOCTOU guard test did not remove the requested root.");
+        return true;
+    }
+
+    ec.clear();
+    if (! std::filesystem::exists(targetFile, ec) || ec)
+    {
+        Fail(L"Delete TOCTOU guard removed an out-of-tree target through a swapped junction.");
+        return true;
+    }
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.DeleteToctouSwapGuard",
+                      L"shape=dir-to-reparse-swap-during-parallel-flatten",
+                      1,
+                      CountFilesRecursive(targetRoot),
+                      1,
+                      S_OK);
+
+    NextStep(state, SelfTestState::Step::Phase5_PreCalcSettingsApplied);
+    return false;
+}
+
 case SelfTestState::Step::Phase10_PermanentDelete:
 {
     const ULONGLONG nowTick = GetTickCount64();
@@ -1031,6 +1322,7 @@ case SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines:
     const ULONGLONG nowTick = GetTickCount64();
     if (HasTimedOut(state, nowTick, 240'000ull))
     {
+        SetFileOpsBridgeProducerDelayForSelfTest(0);
         Fail(L"Phase11_BridgeMultiFolderParallelCopyInFlightLines timed out.");
         return true;
     }
@@ -1038,10 +1330,11 @@ case SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines:
     const std::filesystem::path srcDir = state.tempRoot / L"bridge-multifolder-src";
     const std::wstring dummyRoot       = L"/bridge-multifolder";
 
-    constexpr int kFolderCount        = 2;
+    constexpr int kFolderCount        = 6;
     constexpr int kFilesPerFolder     = 8;
     constexpr size_t kFileBytes       = 2ull * 1024ull * 1024ull;
     constexpr uint64_t kSpeedLimitBps = 1ull * 1024ull * 1024ull;
+    constexpr unsigned int kProducerDelayMs = 20u;
 
     if (state.stepState == 0)
     {
@@ -1089,6 +1382,7 @@ case SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines:
         const FileSystemFlags flags =
             static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
 
+        SetFileOpsBridgeProducerDelayForSelfTest(kProducerDelayMs);
         state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                  FILESYSTEM_COPY,
                                                  FolderWindow::Pane::Left,
@@ -1185,7 +1479,34 @@ case SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines:
 
     if (FAILED(it->second.hr))
     {
+        SetFileOpsBridgeProducerDelayForSelfTest(0);
         Fail(std::format(L"Bridge multi-folder copy failed: 0x{:08X}.", static_cast<unsigned long>(it->second.hr)));
+        return true;
+    }
+
+    SetFileOpsBridgeProducerDelayForSelfTest(0);
+
+    Debug::Perf::Emit(L"FileOps.SelfTest.BridgeWideShallowDirectoryEnsures",
+                      std::format(L"folders={} filesPerFolder={} producerDelayMs={}", kFolderCount, kFilesPerFolder, kProducerDelayMs),
+                      0u,
+                      it->second.bridgeDirectoryEnsureCount,
+                      it->second.bridgeAdmissionMaxQueueDepth,
+                      it->second.hr);
+    Debug::Perf::Emit(L"FileOps.SelfTest.BridgeWideShallowEarlyFileStarts",
+                      std::format(L"folders={} filesPerFolder={} producerDelayMs={}", kFolderCount, kFilesPerFolder, kProducerDelayMs),
+                      0u,
+                      it->second.bridgeEarlyFileStartCount,
+                      it->second.bridgeFileAdmissionCount,
+                      it->second.hr);
+
+    if (it->second.bridgeFileAdmissionCount == 0)
+    {
+        Fail(L"Bridge wide-shallow test did not observe any file admission counters.");
+        return true;
+    }
+    if (it->second.bridgeEarlyFileStartCount == 0)
+    {
+        Fail(L"Bridge wide-shallow test expected file copying to start before directory producer completion.");
         return true;
     }
 

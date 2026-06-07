@@ -196,6 +196,10 @@ struct FolderWindow::FileOperationState
             uint64_t bridgeWriterWaitUs                  = 0;
             uint64_t bridgeReadUs                        = 0;
             uint64_t bridgeWriteUs                       = 0;
+            uint64_t bridgeDirectoryEnsureCount          = 0;
+            uint64_t bridgeFileAdmissionCount            = 0;
+            uint64_t bridgeFileStartedBeforeProducerDone = 0;
+            uint64_t bridgeAdmissionMaxQueueDepth        = 0;
             uint64_t preCalcUs                           = 0;
             uint64_t preCalcCallbackCount                = 0;
             uint64_t preCalcCallbackUs                   = 0;
@@ -469,6 +473,10 @@ struct FolderWindow::FileOperationState
         size_t _conflictWorkerPerfCount = 0;
 
         PerfStats _perf{};
+        std::atomic<uint64_t> _bridgeDirectoryEnsureCount{0};
+        std::atomic<uint64_t> _bridgeFileAdmissionCount{0};
+        std::atomic<uint64_t> _bridgeFileStartedBeforeProducerDone{0};
+        std::atomic<uint64_t> _bridgeAdmissionMaxQueueDepth{0};
 
 #ifdef ENABLE_TESTS
         unsigned int _dbgConfiguredMaxConcurrency      = 1;
@@ -544,6 +552,7 @@ struct FolderWindow::FileOperationState
     HWND GetPopupHwndForSelfTest() noexcept;
     HWND GetIssuesPaneHwndForSelfTest() noexcept;
     void DebugResetIssuesPaneForSelfTest() noexcept;
+    void DebugClearDiagnosticsForSelfTest() noexcept;
     void DebugRemoveDiagnosticsForTask(uint64_t taskId) noexcept;
 #endif
 
@@ -617,4 +626,6 @@ enum class FileOpsBridgePipelineMode : unsigned char
 
 void SetFileOpsBridgePipelineModeForSelfTest(FileOpsBridgePipelineMode mode) noexcept;
 FileOpsBridgePipelineMode GetFileOpsBridgePipelineModeForSelfTest() noexcept;
+void SetFileOpsBridgeProducerDelayForSelfTest(unsigned int delayMs) noexcept;
+unsigned int GetFileOpsBridgeProducerDelayForSelfTest() noexcept;
 #endif

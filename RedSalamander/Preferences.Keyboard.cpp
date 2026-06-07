@@ -917,7 +917,9 @@ void KeyboardPane::LayoutDxPage(HWND host,
     }
 
     const int buttonHeight = std::max(1, UiMetrics::ScaleDip(dpi, 26));
-    const int buttonsTop   = std::max(localY, hostContentBottom - buttonHeight);
+    const int minListHeight = std::max(1, UiMetrics::ScaleDip(dpi, 30 + 48));
+    const int minButtonsTop = localY + minListHeight + gapY + hintHeight + gapY;
+    const int buttonsTop   = std::max(minButtonsTop, hostContentBottom - buttonHeight);
     const int hintTop      = std::max(localY, buttonsTop - gapY - hintHeight);
     const int listTop      = localY;
     const int listBottom   = std::max(listTop, hintTop - gapY);
@@ -973,7 +975,7 @@ void KeyboardPane::LayoutDxPage(HWND host,
     }
 
     _pageHostDx->Invalidate();
-    y = hostContentBottom;
+    y = std::max(hostContentBottom, buttonsTop + buttonHeight);
 }
 
 #ifdef ENABLE_TESTS
@@ -2327,7 +2329,7 @@ void KeyboardPane::BeginCapture(HWND host, PreferencesDialogState& state) noexce
 
     if ((modifiers & ShortcutManager::kModCtrl) != 0)
     {
-        parts.push_back(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        parts.push_back(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
     if ((modifiers & ShortcutManager::kModAlt) != 0)
     {

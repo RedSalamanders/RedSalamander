@@ -6654,7 +6654,15 @@ void ViewerText::OnPaint()
     {
         modeId = _diffPresentation == DiffPresentationMode::RawText ? IDS_VIEWERTEXT_MODE_RAW : IDS_VIEWERTEXT_MODE_DIFF;
     }
-    const std::wstring modeText   = LoadStringResource(g_hInstance, modeId);
+    std::wstring modeText;
+    if (modeId == IDS_VIEWERTEXT_MODE_RAW)
+    {
+        modeText = LoadEmbeddedStringResource(g_hInstance, modeId);
+    }
+    else
+    {
+        modeText = LoadStringResource(g_hInstance, modeId);
+    }
     const std::wstring statusText = BuildStatusText();
 
     const auto drawChrome = [&](ID2D1RenderTarget* target, ID2D1SolidColorBrush* brush) noexcept
@@ -9107,7 +9115,8 @@ std::wstring ViewerText::EncodingLabel() const
         default: id = IDS_VIEWERTEXT_ENCODING_UNKNOWN; break;
     }
 
-    return LoadStringResource(g_hInstance, id);
+    return (id == IDS_VIEWERTEXT_ENCODING_UTF8 || id == IDS_VIEWERTEXT_ENCODING_UTF16BE) ? LoadEmbeddedStringResource(g_hInstance, id)
+                                                                                         : LoadStringResource(g_hInstance, id);
 }
 
 std::wstring ViewerText::BuildStatusText() const
@@ -9155,11 +9164,11 @@ std::wstring ViewerText::BuildStatusText() const
     {
         if (_detectedCodePage == CP_UTF8)
         {
-            detected = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_ENCODING_UTF8);
+            detected = LoadEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_ENCODING_UTF8);
         }
         else
         {
-            detected = FormatStringResource(g_hInstance, IDS_VIEWERTEXT_CODEPAGE_FORMAT, _detectedCodePage);
+            detected = FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_CODEPAGE_FORMAT, _detectedCodePage);
         }
 
         if (_detectedCodePageIsGuess)

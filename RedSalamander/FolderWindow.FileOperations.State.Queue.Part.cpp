@@ -36,6 +36,23 @@ void FolderWindow::FileOperationState::DebugResetIssuesPaneForSelfTest() noexcep
     SaveIssuesPaneViewState(L"", false, {});
 }
 
+void FolderWindow::FileOperationState::DebugClearDiagnosticsForSelfTest() noexcept
+{
+    {
+        std::scoped_lock lock(_diagnosticsMutex);
+        _diagnosticsInMemory.clear();
+        _diagnosticsPendingFlush.clear();
+        _taskDiagnosticCounts.clear();
+        _taskLastDiagnosticMessage.clear();
+        _taskIssueDiagnostics.clear();
+    }
+
+    {
+        std::scoped_lock lock(_mutex);
+        _completedTasks.clear();
+    }
+}
+
 void FolderWindow::FileOperationState::DebugRemoveDiagnosticsForTask(uint64_t taskId) noexcept
 {
     {
@@ -62,6 +79,16 @@ void SetFileOpsBridgePipelineModeForSelfTest(FileOpsBridgePipelineMode mode) noe
 FileOpsBridgePipelineMode GetFileOpsBridgePipelineModeForSelfTest() noexcept
 {
     return GetBridgePipelineModeOverride();
+}
+
+void SetFileOpsBridgeProducerDelayForSelfTest(unsigned int delayMs) noexcept
+{
+    g_fileOpsBridgeProducerDelayMs.store(delayMs, std::memory_order_release);
+}
+
+unsigned int GetFileOpsBridgeProducerDelayForSelfTest() noexcept
+{
+    return GetBridgeProducerDelayMsForSelfTest();
 }
 #endif
 

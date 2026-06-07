@@ -5,9 +5,9 @@
 This document provides a comprehensive inventory of every declared test case across all
 RedSalamander test suites. It serves as the authoritative reference for test coverage.
 
-Current runner-native inventory as of 2026-06-03:
+Current runner-native inventory as of 2026-06-07:
 
-- Commands: 651 listed cases.
+- Commands: 668 listed cases.
 - CompareDirectories: 149 listed cases.
 - FileOperations: 75 listed phases: 73 active ordered phases, plus setup and
   cleanup.
@@ -28,12 +28,108 @@ equivalent to runner-listed cases.
 
 Current source-derived fallback counts:
 
-- Commands: 621 static `SelfTest::RunCase` call-site registrations.
+- Commands: 638 static `SelfTest::RunCase` call-site registrations.
 - CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
 - FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
 
 Recent focused coverage updates:
 
+- 2026-06-07 ViewerSpace renderer resize/device-loss polish: Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260607_150528_070.log` (`0 warning(s), 0
+  error(s)`). Focused command runs used visible `Start-Process -Wait` with
+  `--commands-selftest --selftest-case=...`: forced device-loss recovery
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-07_150722/` (`1 passed`)
+  forces both `D2DERR_RECREATE_TARGET` and `DXGI_ERROR_DEVICE_REMOVED`
+  through the paint path and waits for a recreated device-context renderer.
+  The final `cmd_viewer_space_` sweep archived at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-07_150827/` (`14 passed`,
+  `1 skipped` opt-in) includes the resize fast-path guard proving
+  `rendererBrushCreateCount` and `rendererTextFormatCreateCount` stay
+  unchanged while `swapChainResizeCount` advances.
+- 2026-06-07 ViewerSpace TurboTreemap review follow-up: Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260607_132437_315.log` (`0 warning(s), 0
+  error(s)`). Focused red evidence included the renderer resize guard at
+  `Specs/TestRuns/4cb089111a23/SelfTest/2026-06-07_131727/`, where the
+  client grew to `1184x780` but the swap chain stayed `978x644`, and the
+  animated hit-grid guard at
+  `Specs/TestRuns/4cb089111a23/SelfTest/2026-06-07_132323/`, where one
+  sampled point differed from the reverse-linear fallback. The corrected
+  focused matrix passed with visible `Start-Process -Wait` runs:
+  renderer resize `2026-06-07_132749`, adaptive scan budget
+  `2026-06-07_132751`, dense-file LOD/detail `2026-06-07_132752`, animated
+  hit-grid parity `2026-06-07_132754`, serial/parallel byte golden
+  `2026-06-07_132801`, queue storm `2026-06-07_132807`, hover static-cache
+  stability `2026-06-07_132809`, and the source lifecycle guard
+  `2026-06-07_132810`.
+- 2026-06-06 ViewerSpace large-sibling detail follow-up: Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260606_235706_934.log` (`0 warning(s), 0
+  error(s)`). Filtered runner inventory now reports 13 `cmd_viewer_space_`
+  cases and 2 `viewer_space_perf_` cases, including
+  `cmd_viewer_space_large_sibling_folders_expose_nested_detail`. The red
+  archive at `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_235254/`
+  showed the 14 large sibling folders staying flat with
+  `viewer.space.layout.visible_tiles=14` and
+  `viewer.space.render.tile_draw_count=14` after scanning 896 files. The
+  post-change run exited `0` at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_235859/` and exposed
+  nested detail with `viewer.space.layout.visible_tiles=910`,
+  `viewer.space.render.tile_draw_count=910`,
+  `viewer.space.layout.rebuild_us=2365`, `viewer.space.render.paint_us=5811`,
+  `viewer.space.hit_grid.max_candidates=25`, and
+  `viewer.space.queue.pending_bytes=0`.
+- 2026-06-06 ViewerSpace TurboTreemap closeout: Debug `RedSalamander`
+  build passed with `.build/logs/msbuild-20260606_205744_268.log` (`0
+  warning(s), 0 error(s)`). Filtered runner inventory reports 12
+  `cmd_viewer_space_` cases and 2 `viewer_space_perf_` cases. The full
+  `cmd_viewer_space_` sweep exited `0` at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_210644/` (`12 passed, 0
+  failed, 0 skipped`), including device-context readiness, static-cache hover,
+  dense-file retention, spatial-grid parity, serial-vs-parallel scanner totals,
+  cancellation/teardown stress, scan-cache cap/skip, queue storm, memory
+  settle, and opt-in 20k visible-tile coverage. Its perf rows include
+  `viewer.space.model.file_candidate_count=20000`,
+  `viewer.space.render.tile_draw_count=20000`,
+  `viewer.space.layout.visible_tiles=20000`,
+  `viewer.space.hit_grid.cells=276`,
+  `viewer.space.hit_grid.max_candidates=90`,
+  `viewer.space.queue.pending_bytes=0`,
+  `viewer.space.queue.coalesced_count=47`,
+  `viewer.space.model.cache_skipped_large=83366`, and
+  `viewer.space.scan.active_workers=8`. The `viewer_space_perf_` sweep exited
+  `0` at `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_210710/`; the
+  bounded default small-progressive scenario passed and the large scenario
+  skipped by design without `REDSALAMANDER_VIEWERSPACE_LARGE_PERF=1`.
+- 2026-06-06 ViewerSpace TurboTreemap implementation slice: Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260606_191021_398.log` (`0 warning(s), 0
+  error(s)`). `--selftest-list-cases --commands-selftest
+  --selftest-case=cmd_viewer_space_` now lists five focused ViewerSpace command
+  cases, including
+  `cmd_viewer_space_renderer_device_context_ready_resize_close`,
+  `cmd_viewer_space_hover_does_not_rebuild_static_cache`, and
+  `cmd_viewer_space_dense_files_exposes_more_than_legacy_topk`. Focused runs
+  exited `0` and archived under
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_191215/`,
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_191225/`, and
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_191228/`. The post-change
+  `viewer_space_perf_small_progressive` run exited `0` at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_191303/`; its scenario
+  artifact reports renderer mode `DeviceContext`, `10000` retained file
+  candidates, `20` visible tiles, `0` culled tiles, `last_paint_us=1081`,
+  `last_layout_us=80`, and `last_working_set_bytes=147644416`.
+- 2026-06-06 ViewerSpace Phase 0 perf instrumentation: Debug `RedSalamander`
+  build passed with `.build/logs/msbuild-20260606_182424_290.log`
+  (`0 warning(s), 0 error(s)`). The rebuilt runner lists two Commands perf
+  cases for the `viewer_space_perf_` prefix:
+  `viewer_space_perf_small_progressive` and `viewer_space_perf_large_optin`.
+  The focused archived run for `viewer_space_perf_small_progressive` exited
+  `0` and archived `commands_results.json`, `commands_trace.txt`,
+  `perf/perf_metrics.jsonl`, and
+  `perf/viewer_space_perf_small_progressive_metrics.json` under
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-06_182818/`.
 - 2026-06-05 Find Look-in NavigationView/result context menu coverage:
   Debug `RedSalamander` build passed with
   `.build/logs/msbuild-20260605_191128_989.log` (`0 warning(s), 0 error(s)`),
@@ -78,7 +174,7 @@ Recent focused coverage updates:
   `Specs/TestRuns/7d3a1247382a/Commands/2026-06-04_180358/`, and the focused
   unavailable-clipboard run is archived at `2026-06-04_212254/`. The final
   source guard `powershell -NoProfile -ExecutionPolicy Bypass -File
-  .\Scripts\VerifyNoProductionGetCursorPos.ps1` reported
+  .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1` reported
   `No production GetCursorPos violations found.`; `git diff --check -- Common
   RedSalamander Plugins Specs\UI Specs\Testing Scripts Tests` exited 0 with
   only line-ending normalization warnings.
@@ -87,7 +183,7 @@ Recent focused coverage updates:
   contract): production routing under `Common`, `RedSalamander`, and `Plugins`
   now treats delivered pointer message coordinates or explicit owner/control
   anchors as authoritative. The whole-tree source guard
-  `powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1`
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1`
   first failed with 30 production `GetCursorPos()` violations, then passed with
   `No production GetCursorPos violations found.` after the migration. Raw
   `GetCursorPos()` remains only in selftests or same-line annotated
@@ -105,11 +201,10 @@ Recent focused coverage updates:
   green batch runs from `2026-06-03_202334/` through
   `2026-06-03_202346_001/` for the Find destination, Find popup/Escape,
   result-shortcut/help overlay, and ViewerText/ViewerSpace delivered
-  anchor/hover cases. NavigationView now carries the shared
-  `DxUi::InputGeneration` token, stamps delivered owner pointer events with it,
-  exposes it in debug snapshots, and bumps it on layout/DPI/path,
-  file-system/menu/dropdown, edit-mode, popup, focus/theme, and teardown
-  transitions.
+  anchor/hover cases. NavigationView now routes delivered owner pointer events
+  from target HWND and client-point metadata only; stale edit hosts and owner
+  residue are rejected by target/capture/message-order and explicit teardown
+  checks instead of a synthetic input-generation token.
   Final operator-style live validation used the Debug app with
   `REDSALAMANDER_DXUI_MENU_TRACE=1` and per-case
   `REDSALAMANDER_DXUI_MENU_TRACE_FILE` outputs under
@@ -134,7 +229,7 @@ Recent focused coverage updates:
   `cmd_pane_find_dialog_escape_closes_popup_before_cancel`, and
   `cmd_pane_find_dialog_escape_from_dx_control_closes_cancel`, all `EXIT=0`).
   The new whole-tree guard
-  `powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\VerifyNoProductionGetCursorPos.ps1`
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .\Tools\Tests\VerifyNoProductionGetCursorPos.Tests.ps1`
   is intentionally red at the start of the migration, reporting 30 production
   `GetCursorPos()` violations across `Common`, `RedSalamander`, and `Plugins`.
 - 2026-06-03 Find destination near-owner queued click classification:
@@ -1021,14 +1116,14 @@ Connection Manager closeout requires:
 | `cmd_pane_find_dialog_opens_from_focused_pane_and_allows_multiple_instances` | Focused-pane initial root and multiple modeless Find windows |
 | `cmd_pane_find_dialog_pointer_click_toggles_recursive_checkbox` | Recursive toggle |
 | `cmd_pane_find_dialog_compact_mode_shrinks_results_grid_metrics` | Compact mode result-grid density |
-| `cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing` | Destination NavigationView accepts delivered input after stale edit-host retirement without synthetic input-generation gates |
+| `cmd_pane_find_dialog_destination_navigation_stale_edit_host_hit_testing` | Destination NavigationView accepts delivered input after stale edit-host retirement without synthetic generation gates |
 | `cmd_pane_find_dialog_editable_combo_keyboard_editing_keys` | Editable combo keyboard editing keys |
 | `cmd_pane_find_dialog_recursive_local_search_and_index_availability` | Local recursive subfolder results, Path column subfolder text, shell icon indices, forced scan when indexed preference is unchecked, and indexed-backend availability |
 | `cmd_pane_find_dialog_reordered_columns_survive_search_rerun` | Column order persistence |
 | `cmd_pane_find_dialog_reordered_columns_survive_sort_cycles` | Column order through sort |
 | `cmd_pane_find_dialog_reordered_resized_columns_survive_search_rerun` | Reorder+resize persistence |
 | `cmd_pane_find_dialog_reordered_resized_columns_survive_sort_cycles` | Reorder+resize through sort |
-| `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions` | Result-grid configured command shortcut resolution for shell clipboard, multi-subfolder `Ctrl+X` file-drop/text fallback, compact result-action help button including captured owner/anchor backdrop, applied scrim opacity, visible-owner-resize backdrop refresh, and visible first-frame modal paint without mouse movement, action-row status plus bottom destination NavigationView embedded presentation/history seeding/live history-arrow popup behavior, stale footer NavigationView hover/click rejection after the live pointer leaves the child control, rendered first-frame destination popup state, footer-top anchored compact scroll-capped embedded destination dropdowns, explicit F5/F6 destination override, viewer/editor dispatch without scheduled Find foreground/focus restoration, row removal after accepted move/delete, canceled permanent-delete row preservation, move-to-recycle delete, and permanent-delete confirmation |
+| `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions` | Result-grid configured command shortcut resolution for shell clipboard, multi-subfolder `Ctrl+X` file-drop/text fallback, two-section result context-menu clicked-item/selection dispatch, menu-driven copy-to-destination and move-to-recycle actions, compact result-action help button including captured owner/anchor backdrop, applied scrim opacity, visible-owner-resize backdrop refresh, and visible first-frame modal paint without mouse movement, action-row status plus bottom destination NavigationView embedded presentation/history seeding/live history-arrow popup behavior, stale footer NavigationView hover/click rejection after the live pointer leaves the child control, rendered first-frame destination popup state, footer-top anchored compact scroll-capped embedded destination dropdowns, explicit F5/F6 destination override, viewer/editor dispatch without scheduled Find foreground/focus restoration, row removal after accepted move/delete, canceled permanent-delete row preservation, and permanent-delete confirmation |
 | `cmd_pane_find_dialog_resized_columns_survive_search_rerun` | Resize persistence |
 | `cmd_pane_find_dialog_resized_columns_survive_sort_cycles` | Resize through sort |
 | `cmd_pane_find_dialog_restored_combined_view_state_*` | (10 sub-cases) Combined view state restoration |

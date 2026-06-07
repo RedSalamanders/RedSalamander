@@ -8,6 +8,10 @@ RedSalamander is a Windows dual-pane file manager with:
 - Viewer plugins (Text/Hex, SQLite, Images/RAW, WebView2-based viewers, …)
 - A themed Preferences experience (themes, plugins, shortcuts, associations)
 
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/RedSalamanders/RedSalamander/total?style=plastic)
+
+
+
 ![RedSalamander main window](docs/res/main-window.png)
 
 [Complete User Documentation](docs/UserGuide.md)

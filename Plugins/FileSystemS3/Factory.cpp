@@ -37,7 +37,7 @@ struct LocalizedPluginMetaDataSet
 
     LocalizedPluginMetaDataSet()
     {
-        LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME, s3Name);
+        LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME, s3Name);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_DESCRIPTION, s3Description);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMS3TABLE_NAME, s3TableName);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMS3TABLE_DESCRIPTION, s3TableDescription);

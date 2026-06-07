@@ -199,6 +199,17 @@ struct TokenResponse
     return std::wstring(fallback);
 }
 
+[[nodiscard]] std::wstring LoadEmbeddedStringResourceOrFallback(unsigned int id, std::wstring_view fallback) noexcept
+{
+    std::wstring text = LoadEmbeddedStringResource(g_hInstance, id);
+    if (! text.empty())
+    {
+        return text;
+    }
+
+    return std::wstring(fallback);
+}
+
 [[nodiscard]] const wchar_t* LocalizedPluginName(FileSystemMicrosoftDriveMode mode) noexcept
 {
     switch (mode)
@@ -215,12 +226,12 @@ struct TokenResponse
         }
         case FileSystemMicrosoftDriveMode::SharePoint:
         {
-            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME);
+            static const std::wstring text = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME);
             return text.c_str();
         }
     }
 
-    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_NAME);
+    static const std::wstring fallback = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_NAME);
     return fallback.c_str();
 }
 
@@ -515,7 +526,7 @@ struct AuthPageMessageVariant
 }
 [[nodiscard]] std::string BuildAuthResultHttpResponse(bool success) noexcept
 {
-    const std::string appTitle = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE, L"RedSalamander"));
+    const std::string appTitle = HtmlEscapeUtf8(LoadEmbeddedStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE, L"RedSalamander"));
     const std::string brandKicker =
         HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BRAND_KICKER, L"Microsoft Drive connection"));
     const std::string title = HtmlEscapeUtf8(

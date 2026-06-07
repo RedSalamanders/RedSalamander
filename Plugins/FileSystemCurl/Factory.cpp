@@ -42,13 +42,13 @@ struct LocalizedPluginMetaDataSet
 
     LocalizedPluginMetaDataSet()
     {
-        LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_NAME, ftpName);
+        LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_NAME, ftpName);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_DESCRIPTION, ftpDescription);
-        LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME, sftpName);
+        LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME, sftpName);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_DESCRIPTION, sftpDescription);
-        LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_NAME, scpName);
+        LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_NAME, scpName);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_DESCRIPTION, scpDescription);
-        LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_NAME, imapName);
+        LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_NAME, imapName);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_DESCRIPTION, imapDescription);
 
         // PluginMetaData keeps raw wchar_t* pointers, so bind them only after the

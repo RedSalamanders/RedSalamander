@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -138,6 +139,10 @@ inline constexpr int kMinComboWidthDip    = 80;
 inline constexpr int kMediumComboWidthDip = 140;
 inline constexpr int kLargeComboWidthDip  = 180;
 } // namespace PrefsLayoutConstants
+
+void PrefsReorderPanelChildren(
+    RedSalamander::DxUi::Panel* root,
+    std::span<RedSalamander::DxUi::Control* const> orderedControls);
 
 // Monitor filter mask bits for the Monitor Preferences page.
 enum class MonitorFilterBit : uint32_t

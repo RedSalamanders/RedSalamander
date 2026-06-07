@@ -14,6 +14,7 @@
 
 #ifdef ENABLE_TESTS
 void DebugResetConnectionManagerConnectNavigation() noexcept;
+void DebugSetConnectionManagerConnectNavigationSuppressed(bool suppressed) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerConnectNavigation(uint8_t& outPane, std::wstring& outName) noexcept;
 #endif
 

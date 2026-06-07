@@ -28,7 +28,6 @@ namespace
     WPARAM wParam,
     LPARAM lParam,
     PointerInputSource source,
-    InputGeneration generation,
     DWORD messageTime,
     PointerInputKind kind) noexcept
 {
@@ -42,7 +41,6 @@ namespace
     event.wParam      = wParam;
     event.lParam      = lParam;
     event.messageTime = messageTime;
-    event.generation  = generation;
     event.wheelDelta  = (message == WM_MOUSEWHEEL) ? GET_WHEEL_DELTA_WPARAM(wParam) : 0;
     return event;
 }
@@ -79,7 +77,6 @@ void FillScreenPoint(PointerInputEvent& event, HWND targetHwnd, LPARAM lParam) n
     WPARAM wParam,
     LPARAM lParam,
     PointerInputSource source,
-    InputGeneration generation,
     DWORD messageTime) noexcept
 {
     const std::optional<PointerInputKind> kind = PointerInputKindFromMessage(message);
@@ -88,7 +85,7 @@ void FillScreenPoint(PointerInputEvent& event, HWND targetHwnd, LPARAM lParam) n
         return std::nullopt;
     }
 
-    PointerInputEvent event = BuildBaseEvent(targetHwnd, message, wParam, lParam, source, generation, messageTime, kind.value());
+    PointerInputEvent event = BuildBaseEvent(targetHwnd, message, wParam, lParam, source, messageTime, kind.value());
     if (IsClientPointMouseMessage(message))
     {
         FillClientPoint(event, targetHwnd, lParam);
@@ -132,19 +129,15 @@ std::optional<PointerInputEvent> TryBuildPointerInputEvent(
     UINT message,
     WPARAM wParam,
     LPARAM lParam,
-    PointerInputSource source,
-    InputGeneration generation) noexcept
+    PointerInputSource source) noexcept
 {
-    return TryBuildPointerInputEventWithMessageTime(
-        targetHwnd, message, wParam, lParam, source, generation, static_cast<DWORD>(GetMessageTime()));
+    return TryBuildPointerInputEventWithMessageTime(targetHwnd, message, wParam, lParam, source, static_cast<DWORD>(GetMessageTime()));
 }
 
 std::optional<PointerInputEvent> TryBuildPointerInputEventFromMsg(
     const MSG& message,
-    PointerInputSource source,
-    InputGeneration generation) noexcept
+    PointerInputSource source) noexcept
 {
-    return TryBuildPointerInputEventWithMessageTime(
-        message.hwnd, message.message, message.wParam, message.lParam, source, generation, message.time);
+    return TryBuildPointerInputEventWithMessageTime(message.hwnd, message.message, message.wParam, message.lParam, source, message.time);
 }
 } // namespace RedSalamander::DxUi

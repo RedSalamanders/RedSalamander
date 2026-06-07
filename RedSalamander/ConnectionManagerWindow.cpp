@@ -29,6 +29,7 @@
 #include "DxUi/DxUi.Typography.h"
 #include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
+#include "FolderWindow.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "SettingsHotReload.h"
@@ -39,6 +40,8 @@
 #include "WindowSizing.h"
 #include "WindowsHello.h"
 #include "resource.h"
+
+extern FolderWindow g_folderWindow;
 
 // Single-canvas DxUi Connection Manager window.
 //
@@ -858,6 +861,10 @@ public:
     {
         return DebugSetTextFieldText(_editUser, text);
     }
+    [[nodiscard]] bool DebugSetNameText(std::wstring_view text) noexcept
+    {
+        return DebugSetTextFieldText(_editName, text);
+    }
     [[nodiscard]] bool DebugSetSecretText(std::wstring_view text) noexcept
     {
         return DebugSetTextFieldText(_editSecret, text);
@@ -891,6 +898,10 @@ public:
     {
         return _toggleSavePassword;
     }
+    [[nodiscard]] bool DebugScrollSavePasswordToggleIntoView() noexcept
+    {
+        return DebugScrollEditorControlIntoView(_toggleSavePassword);
+    }
     [[nodiscard]] Toggle* DebugGetS3UseHttpsToggle() noexcept
     {
         return _toggleS3UseHttps;
@@ -914,6 +925,9 @@ private:
     void OnNcActivate(bool active) noexcept;
     void OnClose() noexcept;
     void OnNcDestroy() noexcept;
+    [[nodiscard]] HWND ResolveRestoreFolderViewWindow() const noexcept;
+    void CaptureRestoreFolderViewWindow() noexcept;
+    void RestoreOwnerFocusAfterClose() noexcept;
     void ApplyTheme() noexcept;
     void Layout() noexcept;
     void BuildUi();
@@ -971,6 +985,7 @@ private:
     wil::unique_hwnd _hwnd;
     HWND _closingHwnd = nullptr;
     WindowHost _dxHost;
+    HWND _restoreFolderViewWindow = nullptr;
 
     Panel* _root                                          = nullptr;
     Panel* _listPane                                      = nullptr;
@@ -1087,6 +1102,7 @@ private:
 bool WindowImpl::Create() noexcept
 {
     HINSTANCE instance = GetModuleHandleW(nullptr);
+    CaptureRestoreFolderViewWindow();
 
     static ATOM classAtom = 0;
     if (classAtom == 0)
@@ -1251,6 +1267,11 @@ void WindowImpl::BuildEditorForm()
         slot = _editorPane->AddChild<Label>(LoadStringResource(nullptr, stringId));
         slot->SetFontRole(FontRole::BodyStrong);
     };
+    auto addEmbeddedSection = [this](Label*& slot, UINT stringId)
+    {
+        slot = _editorPane->AddChild<Label>(LoadEmbeddedStringResource(nullptr, stringId));
+        slot->SetFontRole(FontRole::BodyStrong);
+    };
     auto addLabel = [this](Label*& slot, UINT stringId, wchar_t mnemonic = L'\0')
     {
         slot = _editorPane->AddChild<Label>(LoadStringResource(nullptr, stringId));
@@ -1275,8 +1296,8 @@ void WindowImpl::BuildEditorForm()
     // Section headers
     addSection(_sectionConnection, IDS_CONNECTIONS_SECTION_CONNECTION);
     addSection(_sectionAuth, IDS_CONNECTIONS_SECTION_AUTH);
-    addSection(_sectionS3, IDS_CONNECTIONS_SECTION_S3);
-    addSection(_sectionSsh, IDS_CONNECTIONS_SECTION_SSH);
+    addEmbeddedSection(_sectionS3, IDS_CONNECTIONS_SECTION_S3);
+    addEmbeddedSection(_sectionSsh, IDS_CONNECTIONS_SECTION_SSH);
 
     // Connection group
     addLabel(_labelName, IDS_CONNECTIONS_LABEL_NAME, L'N');
@@ -2829,9 +2850,73 @@ void WindowImpl::OnNcDestroy() noexcept
     }
     _closingHwnd = nullptr;
 
+    if (! _isModalFacade)
+    {
+        RestoreOwnerFocusAfterClose();
+    }
+    _restoreFolderViewWindow = nullptr;
+
     _deletePending = true;
     // Actual `delete this` happens once the thunk's outermost dispatch unwinds,
     // see `WndProcThunk` below.
+}
+
+HWND WindowImpl::ResolveRestoreFolderViewWindow() const noexcept
+{
+    const HWND folderWindow = g_folderWindow.GetHwnd();
+    if (! folderWindow || IsWindow(folderWindow) == FALSE)
+    {
+        return nullptr;
+    }
+
+    HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+    if (! focusedFolderView)
+    {
+        focusedFolderView = g_folderWindow.GetFolderViewHwnd(g_folderWindow.GetFocusedPane());
+    }
+
+    if (! focusedFolderView || IsWindow(focusedFolderView) == FALSE)
+    {
+        return nullptr;
+    }
+
+    return focusedFolderView;
+}
+
+void WindowImpl::CaptureRestoreFolderViewWindow() noexcept
+{
+    _restoreFolderViewWindow = ResolveRestoreFolderViewWindow();
+}
+
+void WindowImpl::RestoreOwnerFocusAfterClose() noexcept
+{
+    const HWND restoreOwner = (_notifyOwner && IsWindow(_notifyOwner) != FALSE) ? _notifyOwner : nullptr;
+    const HWND restoreFocus = (_restoreFolderViewWindow && IsWindow(_restoreFolderViewWindow) != FALSE) ? _restoreFolderViewWindow
+                                                                                                       : ResolveRestoreFolderViewWindow();
+
+    if (restoreOwner)
+    {
+        if (IsIconic(restoreOwner) != FALSE)
+        {
+            ::ShowWindow(restoreOwner, SW_RESTORE);
+        }
+        static_cast<void>(SetActiveWindow(restoreOwner));
+        static_cast<void>(SetForegroundWindow(restoreOwner));
+        static_cast<void>(SetFocus(restoreOwner));
+    }
+
+    if (restoreFocus)
+    {
+        g_folderWindow.RequestRestoreFolderViewFocus(restoreFocus);
+        if (restoreOwner)
+        {
+            static_cast<void>(SendMessageW(restoreOwner, WndMsg::kPaneRestoreFolderFocus, 0, 0));
+        }
+    }
+    else if (restoreOwner)
+    {
+        static_cast<void>(SendMessageW(restoreOwner, WndMsg::kPaneRestoreFolderFocus, 0, 0));
+    }
 }
 
 void WindowImpl::UpdateTheme(const AppTheme& theme) noexcept
@@ -2847,6 +2932,7 @@ void WindowImpl::UpdateContext(const AppTheme& theme, std::wstring_view filterPl
     _filterPluginId.assign(filterPluginId);
     _notifyOwner = notifyOwner;
     _targetPane  = targetPane;
+    CaptureRestoreFolderViewWindow();
     ReloadConnectionsFromSettingsPreservingSelection();
     _dirtySinceLastSettingsLoad = false;
     _staleExternalSettings      = false;
@@ -4623,6 +4709,17 @@ bool DebugSetUserText(std::wstring_view text) noexcept
     return impl && impl->DebugSetUserText(text);
 }
 
+bool DebugSetNameText(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugSetNameText(text);
+}
+
 bool DebugSetSecretText(std::wstring_view text) noexcept
 {
     const HWND hwnd = GetWindowHandle();
@@ -4769,6 +4866,17 @@ bool DebugScrollS3UseHttpsToggleIntoView() noexcept
     }
     auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     return impl && impl->DebugScrollS3UseHttpsToggleIntoView();
+}
+
+bool DebugScrollSavePasswordToggleIntoView() noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugScrollSavePasswordToggleIntoView();
 }
 
 bool DebugGetSavePasswordToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept
@@ -5006,6 +5114,11 @@ bool DebugSetConnectionManagerUserText(std::wstring_view text) noexcept
     return RedSalamander::ConnectionManager::SingleCanvas::DebugSetUserText(text);
 }
 
+bool DebugSetConnectionManagerNameText(std::wstring_view text) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugSetNameText(text);
+}
+
 bool DebugSetConnectionManagerSecretText(std::wstring_view text) noexcept
 {
     return RedSalamander::ConnectionManager::SingleCanvas::DebugSetSecretText(text);
@@ -5059,6 +5172,11 @@ bool DebugAcknowledgeConnectionManagerS3InsecureTlsPrompt() noexcept
 bool DebugScrollConnectionManagerS3UseHttpsToggleIntoView() noexcept
 {
     return RedSalamander::ConnectionManager::SingleCanvas::DebugScrollS3UseHttpsToggleIntoView();
+}
+
+bool DebugScrollConnectionManagerSavePasswordToggleIntoView() noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugScrollSavePasswordToggleIntoView();
 }
 
 bool DebugGetConnectionManagerSavePasswordToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept

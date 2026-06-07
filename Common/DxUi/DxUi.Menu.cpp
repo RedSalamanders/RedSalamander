@@ -160,6 +160,7 @@ struct MenuPopup;
     return message >= WM_MOUSEFIRST && message <= WM_MOUSELAST;
 }
 
+#if DXUI_MENU_PERSISTENT_DIAGNOSTICS
 [[nodiscard]] bool IsMenuNonClientMouseMessage(UINT message) noexcept
 {
     return message >= WM_NCMOUSEMOVE && message <= WM_NCXBUTTONDBLCLK;
@@ -174,6 +175,7 @@ struct MenuPopup;
 {
     return IsMenuClientMouseMessage(message) || IsMenuNonClientMouseMessage(message) || IsMenuKeyMessage(message);
 }
+#endif
 
 [[nodiscard]] bool PeekMenuPriorityMessage(MSG& msg) noexcept
 {
@@ -3029,7 +3031,7 @@ bool CreateMenuPopupWindow(MenuController& controller,
     const int heightPx = windowRect.bottom - windowRect.top;
     SetWindowPos(hwnd, HWND_TOP, windowRect.left, windowRect.top, widthPx, heightPx, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
     ApplyMenuPopupWindowRegion(hwnd, registeredPopup->shadowMargins, registeredPopup->dpi, widthPx, heightPx);
-    const bool initialFrameReady =
+    [[maybe_unused]] const bool initialFrameReady =
         forceInitialRender ? registeredPopup->host.RenderInitialFrameForShow() : registeredPopup->host.PrimeForShow();
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 

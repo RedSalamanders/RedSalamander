@@ -15,6 +15,8 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
 - Use resource helpers from `Common/Helpers.h`:
   - `LoadStringResource()`
   - `FormatStringResource()`
+  - `LoadEmbeddedStringResource()` for documented language-neutral strings
+  - `FormatEmbeddedStringResource()` for documented language-neutral format skeletons
   - `MessageBoxResource()`
 - Formatted resource strings use `std::format` syntax and MUST use positional placeholders such as `{0}` and `{1:08X}` so translators can reorder arguments. Bare `{}` and unindexed format specs such as `{:08X}` are forbidden in `.rc` resources.
 - Embedded/source resource strings MUST introduce placeholders in argument order (`{0}`, then `{1}`, then `{2}`, etc.) with no skipped indexes. The `FormatStringResource(...)` argument list MUST follow that same source-string order. Translated satellite strings MAY reorder placeholders for grammar, but they MUST use the same placeholder tokens as the source string; translations must not add, drop, duplicate, renumber, or change format specs such as `:L` or `:08X`.
@@ -23,6 +25,17 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
   - Full display names (`IDS_CMD_*`) for menus, Preferences, and shortcut lists.
   - Short display names (`IDS_CMD_SHORT_BASE + IDS_CMD_*`) for compact surfaces such as the function bar; every command must provide one.
   - Resource ids `20000..21999` are reserved for command short labels so the arithmetic mapping cannot collide with unrelated strings.
+
+## Language-neutral resources
+
+- Language-neutral strings are still resources, but they are owned only by the embedded English resource module for the executable or plugin that defines them.
+- Language-neutral resources MUST remain in the owning `.rc` file and MUST NOT be duplicated into `Lang\<culture>\` satellite `.rc` files.
+- Code that consumes a language-neutral string MUST load it explicitly with `LoadEmbeddedStringResource(ownerInstance, id)`.
+- Code that consumes a language-neutral format skeleton MUST use `FormatEmbeddedStringResource(ownerInstance, id, ...)`.
+- Plugin code MUST pass the plugin DLL `HINSTANCE` (for example `g_hInstance`) when loading plugin-owned neutral resources. Passing `nullptr` loads from the main executable and is only correct for main-app resources.
+- The language-neutral inventory is owner-scoped and documented in `Tools/Tests/ResourceLocalizationContracts.Tests.ps1`; that test verifies each ID exists in the embedded owner resources, is absent from every satellite for that owner, and is the only allowed missing-string exception for satellite parity.
+- Language-neutral IDs are reserved for stable non-translatable tokens: language autonyms used in language pickers, product/protocol/brand names, file format identifiers, keyboard glyphs that are not localized by platform convention, sample technical paths, placeholder-only layout skeletons, and technical status skeletons such as hex/HRESULT formats.
+- Ordinary UI words, sentences, command labels, tooltips, and grammar-bearing formats MUST stay localized even when the current translations happen to match English.
 
 ## Satellite resource DLLs
 
@@ -45,6 +58,7 @@ Resource forms that RedConfigure can parse but cannot safely rewrite yet must re
 - Plugins register their resource owner immediately after the plugin DLL loads and unregister it before the module unloads.
 - The persisted language setting selects either the Windows preferred UI language chain (`system`) or a concrete BCP-style culture tag such as `fr` or `fr-FR`.
 - Lookup tries the selected culture chain in satellite DLLs first, then falls back to the owner module's embedded English resource.
+- Language-neutral lookup intentionally bypasses satellite DLLs through the embedded string helpers; this is not fallback behavior and must be visible at the call site.
 - Missing satellite DLLs, missing satellite resource IDs, and invalid or unavailable culture selections must not block startup or UI creation; embedded English is the fallback.
 - App/Common string helper calls route through the localization manager. Plugins that opt in with `REDSAL_USE_COMMON_LOCALIZATION` use the same string helper route.
 - Menus, accelerators, dialogs, and other non-string resources that are migrated to satellite support must use localization manager resource-loading helpers instead of direct owner-module loads.

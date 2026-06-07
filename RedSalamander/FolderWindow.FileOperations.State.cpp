@@ -36,6 +36,7 @@ using Task = FolderWindow::FileOperationState::Task;
 
 #ifdef ENABLE_TESTS
 std::atomic<unsigned int> g_fileOpsBridgePipelineMode{static_cast<unsigned int>(FileOpsBridgePipelineMode::Default)};
+std::atomic<unsigned int> g_fileOpsBridgeProducerDelayMs{0};
 
 [[nodiscard]] unsigned long GetInFlightFileCountSnapshot(Task& task) noexcept
 {
@@ -55,6 +56,14 @@ std::atomic<unsigned int> g_fileOpsBridgePipelineMode{static_cast<unsigned int>(
     return (nowUs >= startUs) ? (nowUs - startUs) : 0;
 }
 
+void AtomicMax(std::atomic<uint64_t>& target, uint64_t value) noexcept
+{
+    uint64_t current = target.load(std::memory_order_acquire);
+    while (current < value && ! target.compare_exchange_weak(current, value, std::memory_order_acq_rel, std::memory_order_acquire))
+    {
+    }
+}
+
 #ifdef ENABLE_TESTS
 [[nodiscard]] FileOpsBridgePipelineMode GetBridgePipelineModeOverride() noexcept
 {
@@ -66,6 +75,11 @@ std::atomic<unsigned int> g_fileOpsBridgePipelineMode{static_cast<unsigned int>(
         case FileOpsBridgePipelineMode::Enabled: return FileOpsBridgePipelineMode::Enabled;
         default: return FileOpsBridgePipelineMode::Default;
     }
+}
+
+[[nodiscard]] unsigned int GetBridgeProducerDelayMsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeProducerDelayMs.load(std::memory_order_acquire);
 }
 #endif
 
@@ -1793,6 +1807,58 @@ struct ProcessMemorySnapshot
     }
     result.append(leaf);
     return result;
+}
+
+[[nodiscard]] bool IsSameProviderOperationSupportedByCapabilities(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
+{
+    if (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE && operation != FILESYSTEM_DELETE)
+    {
+        return true;
+    }
+
+    if (! fileSystem)
+    {
+        return false;
+    }
+
+    const char* capabilitiesText = nullptr;
+    if (FAILED(fileSystem->GetCapabilities(&capabilitiesText)) || ! capabilitiesText || capabilitiesText[0] == '\0')
+    {
+        return false;
+    }
+
+    const std::string_view capabilitiesView(capabilitiesText);
+    std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
+        yyjson_read(capabilitiesView.data(), capabilitiesView.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM), &yyjson_doc_free);
+    if (! doc)
+    {
+        return false;
+    }
+
+    yyjson_val* root = yyjson_doc_get_root(doc.get());
+    if (! root || ! yyjson_is_obj(root))
+    {
+        return false;
+    }
+
+    yyjson_val* ops = yyjson_obj_get(root, "operations");
+    if (! ops || ! yyjson_is_obj(ops))
+    {
+        return false;
+    }
+
+    const char* key = nullptr;
+    switch (operation)
+    {
+        case FILESYSTEM_COPY: key = "copy"; break;
+        case FILESYSTEM_MOVE: key = "move"; break;
+        case FILESYSTEM_DELETE: key = "delete"; break;
+        case FILESYSTEM_RENAME: return true;
+        default: return true;
+    }
+
+    yyjson_val* value = yyjson_obj_get(ops, key);
+    return value && yyjson_is_bool(value) && yyjson_get_bool(value) != 0;
 }
 
 [[nodiscard]] unsigned int DetermineConfiguredPerItemMaxConcurrency(const wil::com_ptr<IFileSystem>& fileSystem,
@@ -4607,12 +4673,23 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         std::wstring message;
         if (hr == partialCopyHr)
         {
-            message = std::format(L"Task completed with skipped or partial items (op={}, items={:L}/{:L}, bytes={:L}/{:L}).",
-                                  OperationToString(_operation),
-                                  progressSnapshot.completedItems,
-                                  progressSnapshot.totalItems,
-                                  progressSnapshot.completedBytes,
-                                  progressSnapshot.totalBytes);
+            if (_operation == FILESYSTEM_MOVE)
+            {
+                message = std::format(L"Move completed partially: source preserved; partial copy left at destination (items={:L}/{:L}, bytes={:L}/{:L}).",
+                                      progressSnapshot.completedItems,
+                                      progressSnapshot.totalItems,
+                                      progressSnapshot.completedBytes,
+                                      progressSnapshot.totalBytes);
+            }
+            else
+            {
+                message = std::format(L"Task completed with skipped or partial items (op={}, items={:L}/{:L}, bytes={:L}/{:L}).",
+                                      OperationToString(_operation),
+                                      progressSnapshot.completedItems,
+                                      progressSnapshot.totalItems,
+                                      progressSnapshot.completedBytes,
+                                      progressSnapshot.totalBytes);
+            }
         }
         else if (IsCancellationStatus(hr))
         {
@@ -4675,7 +4752,11 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         const uint64_t durationUs   = static_cast<uint64_t>(elapsedMs) * 1000ull;
 
         const PublishedProgressSnapshot progressSnapshot = LoadPublishedProgressSnapshot(*this);
-        const auto perfStats                             = _perf;
+        auto perfStats                                   = _perf;
+        perfStats.bridgeDirectoryEnsureCount             = _bridgeDirectoryEnsureCount.load(std::memory_order_acquire);
+        perfStats.bridgeFileAdmissionCount               = _bridgeFileAdmissionCount.load(std::memory_order_acquire);
+        perfStats.bridgeFileStartedBeforeProducerDone    = _bridgeFileStartedBeforeProducerDone.load(std::memory_order_acquire);
+        perfStats.bridgeAdmissionMaxQueueDepth           = _bridgeAdmissionMaxQueueDepth.load(std::memory_order_acquire);
         std::array<ProgressStreamPerf, kMaxInFlightFiles> progressStreamPerf{};
         size_t progressStreamPerfCount = 0;
         {
@@ -4719,7 +4800,7 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         const std::wstring detail = std::format(
             L"id={} op={} desired={} effective={} sources={} items={} queueWaitUs={} schedulerWaitUs={} schedulerWorkUs={} bridgeCopyUs={} bridgeReadUs={} "
             L"bridgeWriteUs={} bridgeReaderWaitUs={} bridgeWriterWaitUs={} preCalcUs={} progressUs={} firstProgressMs={} maxProgressGapMs={} "
-            L"maxProgressGapBytes={} "
+            L"maxProgressGapBytes={} bridgeDirs={} bridgeFiles={} bridgeEarlyFiles={} bridgeQueueMax={} "
             L"itemCompletedUs={} conflictWaitUs={} pauseWaitUs={}",
             _taskId,
             OperationToString(_operation),
@@ -4740,6 +4821,10 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
             perfStats.progressFirstCallbackDelayMs,
             progressStreamMaxGapMs,
             progressStreamMaxGapBytes,
+            perfStats.bridgeDirectoryEnsureCount,
+            perfStats.bridgeFileAdmissionCount,
+            perfStats.bridgeFileStartedBeforeProducerDone,
+            perfStats.bridgeAdmissionMaxQueueDepth,
             perfStats.itemCompletedCallbackUs,
             perfStats.conflictWaitUs,
             perfStats.pauseWaitUs);
@@ -4751,6 +4836,11 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
             L"FileOps.Bridge.ReaderWaitUs", L"", perfStats.bridgeReaderWaitUs, progressSnapshot.completedBytes, progressSnapshot.completedItems, hr);
         Debug::Perf::Emit(
             L"FileOps.Bridge.WriterWaitUs", L"", perfStats.bridgeWriterWaitUs, progressSnapshot.completedBytes, progressSnapshot.completedItems, hr);
+        Debug::Perf::Emit(L"FileOps.Bridge.DirectoryEnsureCount", L"", 0u, perfStats.bridgeDirectoryEnsureCount, 0u, hr);
+        Debug::Perf::Emit(L"FileOps.Bridge.FileAdmissionCount", L"", 0u, perfStats.bridgeFileAdmissionCount, 0u, hr);
+        Debug::Perf::Emit(
+            L"FileOps.Bridge.FileStartedBeforeProducerDone", L"", 0u, perfStats.bridgeFileStartedBeforeProducerDone, 0u, hr);
+        Debug::Perf::Emit(L"FileOps.Bridge.AdmissionMaxQueueDepth", L"", 0u, perfStats.bridgeAdmissionMaxQueueDepth, 0u, hr);
         Debug::Perf::Emit(L"FileOps.PreCalc.TotalUs", L"", perfStats.preCalcUs, progressSnapshot.completedBytes, progressSnapshot.completedItems, hr);
         Debug::Perf::Emit(L"FileOps.PreCalc.CallbackCount", L"", 0u, perfStats.preCalcCallbackCount, 0u, hr);
         Debug::Perf::Emit(
@@ -6947,20 +7037,145 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     std::wstring destination;
                 };
 
-                std::vector<WorkItem> workItems;
-                workItems.reserve(256u);
+                std::deque<WorkItem> workItems;
+                std::mutex workMutex;
+                std::condition_variable workCv;
+                std::atomic<uint64_t> overallCompletedBytes(completedBytes);
+                std::atomic<bool> producerDone{false};
+                std::atomic<uint64_t> fileStartedBeforeProducerDone{0};
+                std::atomic<bool> stopRequested{false};
+                std::atomic<bool> hadWorkerFailure{false};
+                std::atomic<HRESULT> firstFailure{S_OK};
+                uint64_t directoryEnsureCount   = 1;
+                uint64_t fileAdmissionCount     = 0;
+                uint64_t maxAdmissionQueueDepth = 0;
+
+                const auto workerProc = [&](size_t workerIndex) noexcept -> HRESULT
+                {
+                    auto localBuffer = std::unique_ptr<std::byte[]>(new (std::nothrow) std::byte[bufferBytes]);
+                    if (! localBuffer)
+                    {
+                        hadWorkerFailure.store(true, std::memory_order_release);
+                        if (! continueOnError)
+                        {
+                            stopRequested.store(true, std::memory_order_release);
+                            HRESULT expected = S_OK;
+                            static_cast<void>(firstFailure.compare_exchange_strong(expected, E_OUTOFMEMORY));
+                        }
+                        return E_OUTOFMEMORY;
+                    }
+
+                    const unsigned long localBufferBytes = bufferBytes;
+                    const uint64_t progressStreamId      = static_cast<uint64_t>(workerIndex);
+                    const auto recordFailure = [&](HRESULT failure) noexcept
+                    {
+                        hadWorkerFailure.store(true, std::memory_order_release);
+                        const bool cancellation = failure == HRESULT_FROM_WIN32(ERROR_CANCELLED) || failure == E_ABORT;
+                        if (cancellation || ! continueOnError)
+                        {
+                            stopRequested.store(true, std::memory_order_release);
+                            HRESULT expected = S_OK;
+                            static_cast<void>(firstFailure.compare_exchange_strong(expected, failure));
+                            workCv.notify_all();
+                        }
+                    };
+
+                    for (;;)
+                    {
+                        task.WaitWhilePaused();
+
+                        if (CancelRequested())
+                        {
+                            recordFailure(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+                            break;
+                        }
+
+                        WorkItem item{};
+                        {
+                            std::unique_lock lock(workMutex);
+                            while (workItems.empty() && ! producerDone.load(std::memory_order_acquire) && ! stopRequested.load(std::memory_order_acquire) &&
+                                   ! CancelRequested())
+                            {
+                                workCv.wait_for(lock, std::chrono::milliseconds(50));
+                            }
+
+                            if (CancelRequested())
+                            {
+                                recordFailure(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+                                break;
+                            }
+
+                            if (workItems.empty())
+                            {
+                                if (producerDone.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire))
+                                {
+                                    break;
+                                }
+                                continue;
+                            }
+
+                            if (stopRequested.load(std::memory_order_acquire))
+                            {
+                                break;
+                            }
+
+                            item = std::move(workItems.front());
+                            workItems.pop_front();
+                        }
+
+                        if (! producerDone.load(std::memory_order_acquire))
+                        {
+                            fileStartedBeforeProducerDone.fetch_add(1u, std::memory_order_acq_rel);
+                        }
+                        const HRESULT hrItem =
+                            CopyFileWithBuffer(item.source, item.destination, localBuffer.get(), localBufferBytes, progressStreamId, overallCompletedBytes);
+                        if (FAILED(hrItem))
+                        {
+                            recordFailure(hrItem);
+                        }
+                    }
+
+                    return S_OK;
+                };
+
+                auto& scheduler              = GetPerItemTaskScheduler();
+                const auto schedulerStart    = scheduler.CapturePerfSnapshot();
+                const uint64_t schedulerWall = PerfNowUs();
+
+                auto job = scheduler.StartJob(&task, withinFolderBudget, withinFolderBudget, workerProc);
+
+                const auto recordProducerFailure = [&](HRESULT failure) noexcept
+                {
+                    hadWorkerFailure.store(true, std::memory_order_release);
+                    const bool cancellation = failure == HRESULT_FROM_WIN32(ERROR_CANCELLED) || failure == E_ABORT;
+                    if (cancellation || ! continueOnError)
+                    {
+                        stopRequested.store(true, std::memory_order_release);
+                        HRESULT expected = S_OK;
+                        static_cast<void>(firstFailure.compare_exchange_strong(expected, failure));
+                    }
+                    workCv.notify_all();
+                };
+
+                const auto enqueueWork = [&](WorkItem item) noexcept
+                {
+                    std::scoped_lock lock(workMutex);
+                    workItems.push_back(std::move(item));
+                    ++fileAdmissionCount;
+                    maxAdmissionQueueDepth = (std::max)(maxAdmissionQueueDepth, static_cast<uint64_t>(workItems.size()));
+                    workCv.notify_one();
+                };
 
                 std::vector<std::pair<std::wstring, std::wstring>> stack;
                 stack.emplace_back(sourcePath, destinationPath);
 
-                bool hadFailure = false;
-
-                while (! stack.empty())
+                while (! stack.empty() && ! stopRequested.load(std::memory_order_acquire))
                 {
                     task.WaitWhilePaused();
                     if (CancelRequested())
                     {
-                        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                        recordProducerFailure(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+                        break;
                     }
 
                     auto [currentSource, currentDest] = std::move(stack.back());
@@ -6969,23 +7184,24 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     HRESULT hr = EnsureDestinationDirectory(currentDest);
                     if (FAILED(hr))
                     {
+                        recordProducerFailure(hr);
                         if (! continueOnError)
                         {
-                            return hr;
+                            break;
                         }
-                        hadFailure = true;
                         continue;
                     }
+                    ++directoryEnsureCount;
 
                     wil::com_ptr<IFilesInformation> info;
                     hr = sourceFs.ReadDirectoryInfo(currentSource.c_str(), info.addressof());
                     if (FAILED(hr))
                     {
+                        recordProducerFailure(hr);
                         if (! continueOnError)
                         {
-                            return hr;
+                            break;
                         }
-                        hadFailure = true;
                         continue;
                     }
 
@@ -6993,12 +7209,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     hr              = info->GetBuffer(&entry);
                     if (FAILED(hr) || entry == nullptr)
                     {
-                        hr = FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+                        recordProducerFailure(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
                         if (! continueOnError)
                         {
-                            return hr;
+                            break;
                         }
-                        hadFailure = true;
                         continue;
                     }
 
@@ -7006,12 +7221,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     hr                       = info->GetBufferSize(&bufferSize);
                     if (FAILED(hr) || bufferSize < sizeof(FileInfo))
                     {
-                        hr = FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+                        recordProducerFailure(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
                         if (! continueOnError)
                         {
-                            return hr;
+                            break;
                         }
-                        hadFailure = true;
                         continue;
                     }
 
@@ -7023,7 +7237,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         task.WaitWhilePaused();
                         if (CancelRequested())
                         {
-                            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                            recordProducerFailure(HRESULT_FROM_WIN32(ERROR_CANCELLED));
+                            break;
                         }
 
                         const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
@@ -7054,10 +7269,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                                            childSource,
                                                            childDest);
                                         unsupportedDirectoryReparseEncountered = true;
-                                        hadFailure                             = true;
+                                        recordProducerFailure(HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED));
                                         if (! continueOnError)
                                         {
-                                            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                                            break;
                                         }
                                     }
                                 }
@@ -7071,126 +7286,49 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                 WorkItem item{};
                                 item.source      = std::move(childSource);
                                 item.destination = std::move(childDest);
-                                workItems.push_back(std::move(item));
+                                enqueueWork(std::move(item));
                             }
                         }
 
-                        if (entry->NextEntryOffset == 0)
+                        if (stopRequested.load(std::memory_order_acquire) || entry->NextEntryOffset == 0)
                         {
                             break;
                         }
 
                         if (entry->NextEntryOffset < sizeof(FileInfo))
                         {
-                            hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                            if (! continueOnError)
-                            {
-                                return hr;
-                            }
-                            hadFailure = true;
+                            recordProducerFailure(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
                             break;
                         }
 
                         std::byte* next = reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset;
                         if (next < base || next + sizeof(FileInfo) > end)
                         {
-                            hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                            if (! continueOnError)
-                            {
-                                return hr;
-                            }
-                            hadFailure = true;
+                            recordProducerFailure(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
                             break;
                         }
 
                         entry = reinterpret_cast<FileInfo*>(next);
                     }
+
+#ifdef ENABLE_TESTS
+                    const unsigned int producerDelayMs = GetBridgeProducerDelayMsForSelfTest();
+                    if (producerDelayMs > 0)
+                    {
+                        SleepResponsive(producerDelayMs);
+                    }
+#endif
                 }
 
-                if (workItems.empty())
-                {
-                    if (continueOnError && hadFailure)
-                    {
-                        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
-                    }
-                    return S_OK;
-                }
-
-                std::atomic<uint64_t> overallCompletedBytes(completedBytes);
-                std::atomic<size_t> nextIndex{0};
-
-                std::atomic<bool> stopRequested{false};
-                std::atomic<bool> hadWorkerFailure{hadFailure};
-                std::atomic<HRESULT> firstFailure{S_OK};
-
-                const auto workerProc = [&](size_t workerIndex) noexcept -> HRESULT
-                {
-                    auto localBuffer = std::unique_ptr<std::byte[]>(new (std::nothrow) std::byte[bufferBytes]);
-                    if (! localBuffer)
-                    {
-                        hadWorkerFailure.store(true, std::memory_order_release);
-                        if (! continueOnError)
-                        {
-                            stopRequested.store(true, std::memory_order_release);
-                            HRESULT expected = S_OK;
-                            static_cast<void>(firstFailure.compare_exchange_strong(expected, E_OUTOFMEMORY));
-                        }
-                        return E_OUTOFMEMORY;
-                    }
-
-                    const unsigned long localBufferBytes = bufferBytes;
-                    const uint64_t progressStreamId      = static_cast<uint64_t>(workerIndex);
-
-                    for (;;)
-                    {
-                        task.WaitWhilePaused();
-
-                        if (CancelRequested())
-                        {
-                            stopRequested.store(true, std::memory_order_release);
-                            HRESULT expected = S_OK;
-                            static_cast<void>(firstFailure.compare_exchange_strong(expected, HRESULT_FROM_WIN32(ERROR_CANCELLED)));
-                            break;
-                        }
-
-                        if (stopRequested.load(std::memory_order_acquire))
-                        {
-                            break;
-                        }
-
-                        const size_t index = nextIndex.fetch_add(1, std::memory_order_acq_rel);
-                        if (index >= workItems.size())
-                        {
-                            break;
-                        }
-
-                        const WorkItem& item = workItems[index];
-                        const HRESULT hrItem =
-                            CopyFileWithBuffer(item.source, item.destination, localBuffer.get(), localBufferBytes, progressStreamId, overallCompletedBytes);
-                        if (FAILED(hrItem))
-                        {
-                            hadWorkerFailure.store(true, std::memory_order_release);
-                            if (! continueOnError)
-                            {
-                                stopRequested.store(true, std::memory_order_release);
-                                HRESULT expected = S_OK;
-                                static_cast<void>(firstFailure.compare_exchange_strong(expected, hrItem));
-                                break;
-                            }
-                        }
-                    }
-
-                    return S_OK;
-                };
-
-                auto& scheduler              = GetPerItemTaskScheduler();
-                const auto schedulerStart    = scheduler.CapturePerfSnapshot();
-                const uint64_t schedulerWall = PerfNowUs();
-
-                auto job = scheduler.StartJob(&task, withinFolderBudget, withinFolderBudget, workerProc);
+                producerDone.store(true, std::memory_order_release);
+                workCv.notify_all();
                 scheduler.WaitJob(job);
 
                 const auto schedulerEnd = scheduler.CapturePerfSnapshot();
+                task._bridgeDirectoryEnsureCount.fetch_add(directoryEnsureCount, std::memory_order_acq_rel);
+                task._bridgeFileAdmissionCount.fetch_add(fileAdmissionCount, std::memory_order_acq_rel);
+                task._bridgeFileStartedBeforeProducerDone.fetch_add(fileStartedBeforeProducerDone.load(std::memory_order_acquire), std::memory_order_acq_rel);
+                AtomicMax(task._bridgeAdmissionMaxQueueDepth, maxAdmissionQueueDepth);
                 task._perf.schedulerWaitUs += PerfElapsedUs(schedulerWall);
                 task._perf.schedulerDequeueAttempts +=
                     (schedulerEnd.dequeueAttempts >= schedulerStart.dequeueAttempts) ? (schedulerEnd.dequeueAttempts - schedulerStart.dequeueAttempts) : 0;
