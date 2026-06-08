@@ -1,6 +1,10 @@
-param(
-    [string]$Root = (Resolve-Path "$PSScriptRoot\..").Path
-)
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+
+function Get-RSGetCursorPosViolations {
+    $Root = $repoRoot
 
 $allowedPathPatterns = @(
     '\\SelfTest\\',
