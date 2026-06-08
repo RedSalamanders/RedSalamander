@@ -3,13 +3,13 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
-function Get-RSGetCursorPosViolations {
-    $Root = $repoRoot
+$Root = $repoRoot
 
 $allowedPathPatterns = @(
     '\\SelfTest\\',
     '\\Tests\\',
-    '\\Scripts\\VerifyNoProductionGetCursorPos\.ps1$'
+    '\\Tools\\Tests\\VerifyNoProductionGetCursorPos\.Tests\.ps1$'
+)
 $requiredDiagnosticAnnotation = 'getcursorpos-allow:'
 $files = @(
     (Join-Path $Root 'Common'),
@@ -23,7 +23,7 @@ foreach ($fileRoot in $files) {
         continue
     }
 
-    foreach ($item in Get-ChildItem -Path $fileRoot -Recurse -Include *.cpp,*.h) {
+    foreach ($item in Get-ChildItem -Path $fileRoot -Recurse -File -Include *.cpp,*.h) {
         $path = $item.FullName
         $relative = $path.Substring($Root.Length).TrimStart('\')
         if ($allowedPathPatterns | Where-Object { $relative -match $_ }) {
