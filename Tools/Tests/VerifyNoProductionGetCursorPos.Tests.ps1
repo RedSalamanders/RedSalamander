@@ -46,11 +46,16 @@ foreach ($fileRoot in $files) {
     }
 }
 
-if ($violations.Count -gt 0) {
-    Write-Host 'Production GetCursorPos violations:'
-    $violations | ForEach-Object { Write-Host $_ }
-    exit 1
+    return $violations
 }
 
-Write-Host 'No production GetCursorPos violations found.'
-exit 0
+Describe 'VerifyNoProductionGetCursorPos' {
+    It 'finds no production GetCursorPos() usage outside SelfTest/Tests sources' {
+        $violations = Get-RSGetCursorPosViolations
+        if ($violations.Count -gt 0) {
+            Write-Host 'Production GetCursorPos violations:'
+            $violations | ForEach-Object { Write-Host $_ }
+        }
+        $violations.Count | Should Be 0
+    }
+}
