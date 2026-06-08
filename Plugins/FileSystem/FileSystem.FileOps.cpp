@@ -1261,6 +1261,7 @@ constexpr std::wstring_view kBandwidthThrottleWorkerModeEnvVar = L"REDSALAMANDER
 constexpr std::wstring_view kForceMoveCopyFallbackEnvVar       = L"REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK";
 constexpr std::wstring_view kDeleteToctouSwapPathEnvVar        = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_PATH";
 constexpr std::wstring_view kDeleteToctouSwapTargetEnvVar      = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_TARGET";
+constexpr std::wstring_view kDeleteToctouSwapFiredEnvVar       = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_FIRED";
 #endif
 
 constexpr uint64_t SaturatingBytesForElapsedMs(uint64_t bytesPerSecond, uint64_t elapsedMs) noexcept
@@ -1635,6 +1636,7 @@ void MaybeInjectDeleteToctouSwapForSelfTest(const std::wstring& candidateExtende
     }
 
     Debug::Perf::EmitCounter(L"FileOps.Delete.DebugToctouSwapInjected");
+    static_cast<void>(::SetEnvironmentVariableW(kDeleteToctouSwapFiredEnvVar.data(), L"1"));
 }
 #endif
 

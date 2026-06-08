@@ -105,6 +105,7 @@ constexpr std::wstring_view kSelfTestEnvBandwidthThrottleWorkerMode = L"REDSALAM
 constexpr std::wstring_view kSelfTestEnvForceMoveCopyFallback       = L"REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK";
 constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapPath        = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_PATH";
 constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapTarget      = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_TARGET";
+constexpr std::wstring_view kSelfTestEnvDeleteToctouSwapFired       = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_FIRED";
 
 constexpr std::wstring_view kSelfTestDefaultConnFtp              = L"FileOpsSelfTest FTP";
 constexpr std::wstring_view kSelfTestDefaultConnSftp             = L"FileOpsSelfTest SFTP";
@@ -1338,6 +1339,7 @@ void PerformCleanup(SelfTestState& state) noexcept
     }
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapPath.data(), nullptr));
     static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapTarget.data(), nullptr));
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapFired.data(), nullptr));
     AppendLog(L"PerformCleanup: restore plugin/config state done");
 
     AppendLog(L"PerformCleanup: remote cleanup");

@@ -215,6 +215,10 @@ public:
 
     static void DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::optional<std::filesystem::path> destination) noexcept;
     static void DebugSetDirectFileOperationFallbackEnabledForSelfTest(bool enabled) noexcept;
+    [[nodiscard]] static bool DebugIsDirectFileOperationFallbackEnabledForSelfTest() noexcept;
+    [[nodiscard]] HRESULT DebugPerformFileDropForSelfTest(const std::vector<std::filesystem::path>& paths,
+                                                          DWORD effect,
+                                                          DWORD* performedEffect = nullptr) noexcept;
 
     [[nodiscard]] uint64_t DebugGetForceRefreshCount() const noexcept
     {

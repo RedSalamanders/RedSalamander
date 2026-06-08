@@ -1,5 +1,19 @@
 #include "FolderViewInternal.h"
 
+namespace
+{
+constexpr HRESULT kMissingFileOperationHostHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+
+[[nodiscard]] bool IsDirectFileOperationFallbackEnabledForDropSelfTest() noexcept
+{
+#ifdef ENABLE_TESTS
+    return FolderView::DebugIsDirectFileOperationFallbackEnabledForSelfTest();
+#else
+    return false;
+#endif
+}
+} // namespace
+
 class FolderView::DropTarget final : public IDropTarget
 {
 public:
@@ -242,6 +256,28 @@ void FolderView::BeginDragDrop()
 
     _drag.dragging = false;
 }
+
+#ifdef ENABLE_TESTS
+HRESULT FolderView::DebugPerformFileDropForSelfTest(const std::vector<std::filesystem::path>& paths, DWORD effect, DWORD* performedEffect) noexcept
+{
+    DWORD localPerformed = DROPEFFECT_NONE;
+    if (! performedEffect)
+    {
+        performedEffect = &localPerformed;
+    }
+    *performedEffect = DROPEFFECT_NONE;
+
+    auto* dataObjectRaw = new (std::nothrow) FolderViewDataObject(paths, L"builtin/file-system", std::wstring{}, effect, true);
+    if (! dataObjectRaw)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    wil::com_ptr<IDataObject> dataObject;
+    dataObject.attach(dataObjectRaw);
+    return PerformDrop(dataObject.get(), 0, effect, performedEffect);
+}
+#endif
 
 DWORD FolderView::ResolveDropEffect(DWORD keyState, DWORD allowedEffects) const
 {
@@ -537,6 +573,13 @@ HRESULT FolderView::PerformDrop(IDataObject* dataObject, DWORD keyState, DWORD a
                 request.flags                  = flags;
 
                 operationHr = _fileOperationRequestCallback(std::move(request));
+                break;
+            }
+
+            if (! IsDirectFileOperationFallbackEnabledForDropSelfTest())
+            {
+                Debug::Error(L"FolderView::PerformDrop missing FileOperationRequestCallback; refusing direct file-operation fallback");
+                operationHr = kMissingFileOperationHostHr;
                 break;
             }
 

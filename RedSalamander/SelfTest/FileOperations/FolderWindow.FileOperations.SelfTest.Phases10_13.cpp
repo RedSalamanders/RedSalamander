@@ -247,20 +247,31 @@ case SelfTestState::Step::FileOps_DeleteToctouSwapGuard:
         return true;
     }
 
+    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapFired.data(), nullptr));
     if (! SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapPath.data(), victimDir.c_str()) ||
         ! SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapTarget.data(), targetRoot.c_str()))
     {
         Fail(L"Delete TOCTOU guard test failed to arm the debug swap hook.");
         return true;
     }
+    auto clearDeleteToctouSwapEnv = wil::scope_exit([]() noexcept
+    {
+        static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapPath.data(), nullptr));
+        static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapTarget.data(), nullptr));
+        static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapFired.data(), nullptr));
+    });
 
     const HRESULT deleteHr =
         state.fsLocal->DeleteItem(deleteRoot.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
-    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapPath.data(), nullptr));
-    static_cast<void>(SetEnvironmentVariableW(kSelfTestEnvDeleteToctouSwapTarget.data(), nullptr));
     if (FAILED(deleteHr))
     {
         Fail(std::format(L"Delete TOCTOU guard test delete failed: 0x{:08X}.", static_cast<unsigned long>(deleteHr)));
+        return true;
+    }
+
+    if (GetEnvVarTrimmed(kSelfTestEnvDeleteToctouSwapFired) != L"1")
+    {
+        Fail(L"Delete TOCTOU guard test did not inject the debug dir-to-junction swap.");
         return true;
     }
 
@@ -3503,10 +3514,21 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
             return true;
         }
 
+        const uint64_t warningTaskId = 0xC200000000000000ull | (static_cast<uint64_t>(GetTickCount64()) & 0x0000FFFFFFFFFFFFull);
+        FolderWindow::FileOperationState::CompletedTaskSummary warningSummary{};
+        warningSummary.taskId                = warningTaskId;
+        warningSummary.operation             = FILESYSTEM_COPY;
+        warningSummary.resultHr              = S_OK;
+        warningSummary.warningCount          = 1;
+        warningSummary.completedTick         = GetTickCount64();
+        warningSummary.lastDiagnosticMessage = L"Selftest warning summary should require attention.";
+        state.fileOps->DebugAppendCompletedTaskForSelfTest(std::move(warningSummary));
+
         // Enabling auto-dismiss should immediately remove already-completed success tasks.
         state.fileOps->SetAutoDismissSuccess(true);
         summaries.clear();
         state.fileOps->CollectCompletedTasks(summaries);
+        bool warningRetained = false;
         for (const auto& summary : summaries)
         {
             if (summary.taskId == state.taskA.value())
@@ -3514,6 +3536,16 @@ case SelfTestState::Step::Phase13_PostMortemDiagnostics:
                 Fail(L"Phase13_PostMortemDiagnostics enabling auto-dismiss did not remove the existing success task.");
                 return true;
             }
+            if (summary.taskId == warningTaskId)
+            {
+                warningRetained = true;
+            }
+        }
+
+        if (! warningRetained)
+        {
+            Fail(L"Phase13_PostMortemDiagnostics auto-dismiss removed an S_OK task that had warnings.");
+            return true;
         }
 
         // Auto-dismiss should also apply to canceled tasks.

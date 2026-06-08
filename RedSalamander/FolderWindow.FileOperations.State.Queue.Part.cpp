@@ -198,7 +198,7 @@ void FolderWindow::FileOperationState::LeaveOperation() noexcept
 
 void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
 {
-    RecordCompletedTask(task);
+    const CompletedTaskSummary summary = RecordCompletedTask(task);
 
     HWND owner = _owner.GetHwnd();
     if (! owner)
@@ -209,6 +209,8 @@ void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
     auto payload    = std::make_unique<TaskCompletedPayload>();
     payload->taskId = task._taskId;
     payload->hr     = task.GetResult();
+    payload->warningCount = summary.warningCount;
+    payload->errorCount   = summary.errorCount;
 
     static_cast<void>(PostMessagePayload(owner, WndMsg::kFileOperationCompleted, 0, std::move(payload)));
 }

@@ -469,11 +469,15 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
                                                   IFileSystemCallback* callback    = nullptr,
                                                   void* cookie                     = nullptr) noexcept = 0;
 
-    // Optional: returns filesystem capabilities as a UTF-8 JSON document.
+    // Mandatory: returns filesystem capabilities as a UTF-8 JSON document.
     // Notes:
     // - Returned pointers are owned by the plugin and remain valid until the next call to GetCapabilities or object release.
     // - JSON strings are UTF-8, NUL-terminated.
-    // - Host-recognized optional shape:
+    // - Implementations MUST return S_OK and a non-empty JSON document with "version": 1, "operations",
+    //   "concurrency", and "crossFileSystem".
+    // - Unsupported operations MUST be advertised with false operation fields or empty policy lists; returning
+    //   ERROR_NOT_SUPPORTED or a null pointer violates the provider contract.
+    // - Host-recognized shape:
     //   {
     //     "version": 1,
     //     "operations": { ... },
@@ -481,10 +485,9 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
     //       "copyMoveMax": 4,
     //       "deleteMax": 8,
     //       "deleteRecycleBinMax": 2
-    //     }
+    //     },
+    //     "crossFileSystem": { ... }
     //   }
-    //   If "concurrency" is absent, host per-item concurrency falls back to 1.
-    // - Implementations SHOULD return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) when unsupported.
     virtual HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept = 0;
 
     // Transfer hints for cross-filesystem bridge buffering and progress cadence.

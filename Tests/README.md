@@ -104,7 +104,7 @@ Organised into 12 families spanning phases 5–16.
 
 | Family | Phases | Coverage |
 |--------|--------|----------|
-| Phase 05 — PreCalc | 7 | Pre-calculation settings, cancel, latency, mode switching |
+| Phase 05 — PreCalc | 7 | Pre-calculation settings, cancel, latency, mode switching, preflight Speed Limit affordance |
 | Phase 06 — PopupAndDelete | 5 | Popup, rate smoothing, bandwidth throttle, delete operations |
 | Phase 07 — WatchAndParallelism | 17 | Watchers, cache, parallelism, concurrency |
 | Phase 08 — Validation | 5 | Defaults, destinations, size bytes |

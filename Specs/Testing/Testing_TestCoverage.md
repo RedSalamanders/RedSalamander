@@ -34,6 +34,19 @@ Current source-derived fallback counts:
 
 Recent focused coverage updates:
 
+- 2026-06-08 ViewerSpace synthetic-bucket snapshot metric fix: Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260608_114330_167.log` (`0 warning(s), 0
+  error(s)`). Red evidence archived at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-08_114210/`: the new
+  `cmd_viewer_space_synthetic_bucket_metrics_match_root_bytes` guard failed
+  because retained scan "Other" plus transient layout "Other" reported
+  `syntheticCount=2` for a files-only root that should have exactly one
+  retained bucket. The focused green run archived at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-08_114530/` (`1 passed`).
+  The filtered `cmd_viewer_space_` sweep archived at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-08_114653/` (`15 passed`,
+  `1 skipped` opt-in), including the synthetic-byte reconciliation guard.
 - 2026-06-07 ViewerSpace renderer resize/device-loss polish: Debug
   `RedSalamander` build passed with
   `.build/logs/msbuild-20260607_150528_070.log` (`0 warning(s), 0
@@ -1444,7 +1457,7 @@ Each phase represents a test case that exercises one aspect of the file operatio
 | Case Name | Coverage Area |
 |-----------|---------------|
 | `Phase5_PreCalcSettingsApplied` | Pre-calc settings application |
-| `Phase5_PreCalcCancelReleasesSlot` | Cancel releases pre-calc slot |
+| `Phase5_PreCalcCancelReleasesSlot` | Cancel releases pre-calc slot; preflight copy card exposes collapse, Skip, Speed Limit, and Cancel |
 | `Phase5_PreCalcCancelLatencyLocal` | Cancel latency measurement |
 | `Phase5_PreCalcSkipContinues` | Skip continues operation |
 | `Phase5_CancelQueuedTask` | Queued task cancellation |

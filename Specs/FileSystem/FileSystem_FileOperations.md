@@ -215,7 +215,7 @@ Focused teardown coverage is split across `--fileops-selftest --selftest-case=Ph
 
 - **Same-context copy/move**:
   - If both panes are operating on the same effective file system context (same filesystem plugin id + same per-instance mount context when the plugin uses `IFileSystemInitialize`), the host SHOULD execute Copy/Move using that plugin instance directly.
-  - Before creating a same-context Copy/Move/Delete task, the host MUST read `IFileSystem::GetCapabilities()` and reject the operation when the provider advertises the corresponding operation as unsupported (`operations.copy`, `operations.move`, or `operations.delete` is `false`). Rejection MUST happen before task creation, popup allocation, or worker-thread start, and MUST show localized pane feedback.
+  - Before creating a same-context Copy/Move/Delete task, the host MUST read `IFileSystem::GetCapabilities()` and reject the operation when capabilities fail, are missing/empty/invalid, or advertise the corresponding operation as unsupported (`operations.copy`, `operations.move`, or `operations.delete` is `false`). Rejection MUST happen before task creation, popup allocation, or worker-thread start, and MUST show localized pane feedback.
   - If an unsupported provider API is reached directly despite the host guard, the provider MUST return `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` without mutating provider state.
 
 - **Cross-context (cross-filesystem) copy/move**:
@@ -226,7 +226,7 @@ Focused teardown coverage is split across `--fileops-selftest --selftest-case=Ph
 
 ### Built-in Provider Capability Matrix (Normative)
 
-`IFileSystem::GetCapabilities()` is the source of truth for host enablement. Same-provider API support below applies to both singular and bulk APIs: `CopyItem` + `CopyItems`, `MoveItem` + `MoveItems`, and `DeleteItem` + `DeleteItems`.
+`IFileSystem::GetCapabilities()` is mandatory and is the source of truth for host enablement. Missing, empty, invalid, or failed capability responses are provider contract violations and host-side rejections. Same-provider API support below applies to both singular and bulk APIs: `CopyItem` + `CopyItems`, `MoveItem` + `MoveItems`, and `DeleteItem` + `DeleteItems`.
 
 | Provider | Same-provider Copy | Same-provider Move | Same-provider Delete | Cross-FS export copy/move | Cross-FS import copy/move | Advertised concurrency | Progress-stream contract |
 |----------|--------------------|--------------------|----------------------|---------------------------|---------------------------|------------------------|--------------------------|
@@ -491,7 +491,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
 - During normal running: `IDS_FMT_FILEOPS_OP_COUNTS` (e.g. `Copy: 3/12`)
   - For Copy/Move, when pre-calc totals (files + folders) are available, the host SHOULD use those totals for the `X/Y` counts; if per-entry completion counts are not available, `X` MAY be estimated from byte progress for display.
 - Terminal results use `IDS_FILEOPS_STATUS_COMPLETED`, `IDS_FILEOPS_STATUS_CANCELED`, `IDS_FILEOPS_STATUS_PARTIAL`, or `IDS_FMT_FILEOPS_STATUS_FAILED`.
-- A per-task collapse/expand chevron
+- A per-task collapse/expand chevron rendered through the shared icon-glyph path (Segoe Fluent Icons preferred, Unicode fallback); operation-card chevrons MUST NOT be hand-drawn with ad hoc stroke geometry.
 
 **Body (expanded)**
 - During pre-calc: display the currently accumulated **item totals** (files + folders) and total bytes so far (as they are discovered).
@@ -536,14 +536,16 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
     - Waiting/queued: `IDS_FILEOPS_GRAPH_WAITING` (graph frozen)
 
 **Controls**
-- During pre-calc: **Skip** + **Cancel**
+- During pre-calc:
+  - Copy/Move: **Skip**, **Speed Limit**, **Cancel**
+  - Delete: **Skip**, **Cancel**
 - During operation:
   - Copy/Move: **Pause/Resume**, **Speed Limit**, **Cancel**
   - Delete: **Pause/Resume**, **Cancel**
 - Completed tasks:
   - **Dismiss** MUST remain the primary completed-task action.
   - When diagnostics are available, **Show log** and **Export issues** MUST be reachable through one **More...** menu affordance rather than rendered as separate flat buttons beside Dismiss.
-- Menus launched from operation-card controls (destination selector, speed limit, conflict **More...**, and completed-task **More...**) MUST anchor to the invoking button using the shared DxUI popup-menu placement callbacks. A completed-task **More...** menu near the trailing edge MUST open right-aligned above that button, not centered over another task's live graph or progress display.
+- Menus launched from operation-card controls (destination selector, speed limit, conflict **More...**, and completed-task **More...**) MUST use the standard split menu-button affordance, including a glyph-rendered chevron, and MUST anchor to the invoking button using the shared DxUI popup-menu placement callbacks. A completed-task **More...** menu near the trailing edge MUST open right-aligned above that button, not centered over another task's live graph or progress display.
 
 **Conflict prompts (inline)**
 - When a task is blocked on a conflict decision, the popup MUST display an inline prompt associated with that task (not a separate modal dialog).
@@ -579,6 +581,7 @@ When paths do not fit, the UI MUST truncate using a **middle ellipsis** (`…`) 
 - Presets (bytes/sec):
   - 1 MiB/s, 5 MiB/s, 10 MiB/s, 50 MiB/s, 100 MiB/s, 1 GiB/s
 - The speed-limit preset menu MUST use the shared DxUI popup-menu contract rather than a native `TrackPopupMenu` surface.
+- Copy/Move cards MUST expose the **Speed Limit** menu button during pre-calc/preflight so the user can adjust the per-task limit before transfer bytes start moving.
 - `Custom...` opens an owned DirectX prompt surface. It MUST NOT regress to a visible native dialog template or visible child-control fallback.
 - The custom speed-limit prompt is task-scoped: it MUST target the selected live/unfinished Copy/Move task, be owned by the file-operations popup, and preserve the surrounding navigation shell focus/ownership when it is opened, canceled, accepted, or reopened.
 - Command selftests for this prompt MUST keep the target task observable until the prompt cycle completes so broad all-Commands sweeps exercise the same task-scoped path without racing against an already-completed dummy operation.

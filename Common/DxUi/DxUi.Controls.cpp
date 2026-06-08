@@ -1584,6 +1584,7 @@ void Label::Paint(WindowHost& host) const
 
 Control* Label::HitTest(D2D1_POINT_2F /*point*/)
 {
+    // Labels are text/mnemonic surfaces; pointer-interactive label-like UI should use a button/link control.
     return nullptr;
 }
 

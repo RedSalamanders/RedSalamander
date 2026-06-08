@@ -23,8 +23,10 @@ struct FolderWindow::FileOperationState
 
     struct TaskCompletedPayload
     {
-        uint64_t taskId = 0;
-        HRESULT hr      = S_OK;
+        uint64_t taskId             = 0;
+        HRESULT hr                  = S_OK;
+        unsigned long warningCount  = 0;
+        unsigned long errorCount    = 0;
     };
 
     struct TaskDiagnosticEntry
@@ -554,6 +556,7 @@ struct FolderWindow::FileOperationState
     void DebugResetIssuesPaneForSelfTest() noexcept;
     void DebugClearDiagnosticsForSelfTest() noexcept;
     void DebugRemoveDiagnosticsForTask(uint64_t taskId) noexcept;
+    void DebugAppendCompletedTaskForSelfTest(CompletedTaskSummary summary) noexcept;
 #endif
 
     void RecordTaskDiagnostic(uint64_t taskId,
@@ -575,7 +578,7 @@ struct FolderWindow::FileOperationState
 
 private:
     void EnsurePopupVisible() noexcept;
-    void RecordCompletedTask(Task& task) noexcept;
+    CompletedTaskSummary RecordCompletedTask(Task& task) noexcept;
     void FlushDiagnostics(bool force) noexcept;
     static std::filesystem::path GetDiagnosticsLogDirectory() noexcept;
     static std::filesystem::path GetDiagnosticsLogPathForDate(const SYSTEMTIME& localTime) noexcept;
@@ -615,6 +618,9 @@ private:
 
     std::atomic<bool> _queueNewTasks{true};
 };
+
+[[nodiscard]] bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept;
+[[nodiscard]] bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long warningCount, unsigned long errorCount) noexcept;
 
 #ifdef ENABLE_TESTS
 enum class FileOpsBridgePipelineMode : unsigned char

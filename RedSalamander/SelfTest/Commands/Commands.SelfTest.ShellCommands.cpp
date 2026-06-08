@@ -57,6 +57,16 @@ struct ShellActionProbeState final
     return ids;
 }
 
+[[nodiscard]] FolderView* GetFolderViewForShellCommandTest(FolderWindow::Pane pane) noexcept
+{
+    const HWND folderViewHwnd = g_folderWindow.GetFolderViewHwnd(pane);
+    if (! folderViewHwnd || IsWindow(folderViewHwnd) == FALSE)
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<FolderView*>(GetWindowLongPtrW(folderViewHwnd, GWLP_USERDATA));
+}
+
 [[nodiscard]] bool RequireQueuedShellFileOperationTask(CaseState& state,
                                                        FolderWindow::FileOperationState* fileOps,
                                                        const std::unordered_set<uint64_t>& existingTaskIds,
@@ -2649,6 +2659,115 @@ struct ClipboardDropEffectReadStatus
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestFileOpsDragDropMissingCallbackRejectsDirectFallback(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File Operations state unavailable for drag/drop missing-callback fallback test.");
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+    const auto closeFileOps = wil::scope_exit([&] { static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps)); });
+    FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(false);
+    const auto restoreDirectFallback = wil::scope_exit([]() noexcept { FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(false); });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"dragdrop_missing_callback_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"source";
+    const std::filesystem::path destRoot  = root / L"dest";
+    const std::filesystem::path source    = sourceDir / L"drop-alpha.txt";
+    const std::filesystem::path copied    = destRoot / L"drop-alpha.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create drag/drop missing-callback source directory.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create drag/drop missing-callback destination directory.");
+    state.Require(SelfTest::WriteTextFile(source, "source"), L"Failed to create drag/drop missing-callback source file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, true);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for drag/drop missing-callback fallback test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for drag/drop missing-callback fallback test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, false);
+
+    FolderView* folderView = GetFolderViewForShellCommandTest(FolderWindow::Pane::Left);
+    state.Require(folderView != nullptr, L"FolderView unavailable for drag/drop missing-callback fallback test.");
+    if (! folderView)
+    {
+        return false;
+    }
+
+    DWORD performed = DROPEFFECT_COPY;
+    const HRESULT dropHr = folderView->DebugPerformFileDropForSelfTest({source}, DROPEFFECT_COPY, &performed);
+    PumpPendingMessages();
+
+    const std::optional<uint64_t> taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms));
+    state.Require(dropHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                  std::format(L"Missing drag/drop callback should fail visibly with ERROR_NOT_SUPPORTED; got 0x{:08X}.",
+                              static_cast<unsigned long>(dropHr)));
+    state.Require(performed == DROPEFFECT_NONE,
+                  std::format(L"Missing drag/drop callback should report no performed drop effect; got {}.", static_cast<unsigned long>(performed)));
+    state.Require(! taskId.has_value(), L"Missing drag/drop callback should not create a host task or silently use the direct plugin fallback.");
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Missing drag/drop callback should fail before any local confirmation prompt; saw {} prompts.", HostGetTestPromptRequestCount()));
+    state.Require(! std::filesystem::exists(copied, ec), L"Missing drag/drop callback should not copy via direct fallback by default.");
+    ec.clear();
+    state.Require(std::filesystem::exists(source, ec), L"Missing drag/drop callback should leave the source file untouched.");
+    ec.clear();
+
+    FolderView::AlertOverlayDebugSnapshot alert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert),
+                  L"Missing drag/drop callback fallback test should expose a pane alert snapshot.");
+    state.Require(alert.visible, L"Missing drag/drop callback should show visible pane feedback.");
+    state.Require(alert.severity == FolderView::OverlaySeverity::Error, L"Missing drag/drop callback pane feedback should be an error.");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestPaneClipboardPasteShortcutCreatesLinks(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -2882,6 +3001,8 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     { return TestFileOpsFolderPickerMoveUsesHostQueue(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"Commands_FileOpsMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
     { return TestFileOpsMissingCallbackRejectsDirectFallback(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
+    { return TestFileOpsDragDropMissingCallbackRejectsDirectFallback(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept
     { return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths", [=](CaseState& state) noexcept

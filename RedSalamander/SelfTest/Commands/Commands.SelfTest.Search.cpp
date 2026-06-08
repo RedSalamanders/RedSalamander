@@ -14848,7 +14848,6 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         }
         return false;
     };
-
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not have stable focus before Quick Search activation; {}.", focusDiagnostics()));
     if (! state.failure.empty())
@@ -15008,23 +15007,68 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     sendQuickSearchChar(L'c');
     sendQuickSearchChar(L'e');
 
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/selectCalculateDirectorySizeNext"),
-                  L"Shortcut-routed Space should dispatch while Quick Search is active.");
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space";
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search should be active with query 'space' before shortcut-routed Space; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not retain stable focus before shortcut-routed Space; {}.", focusDiagnostics()));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space";
+    }, SelfTest::Scale(500ms), &snapshot),
+                  std::format(L"Quick Search should remain active after stabilizing focus before shortcut-routed Space; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const bool shortcutSpaceDispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/selectCalculateDirectorySizeNext");
+    state.Require(shortcutSpaceDispatched, L"Shortcut-routed Space should dispatch while Quick Search is active.");
     PumpPendingMessages();
-    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
-                  L"Quick Search snapshot should be available after shortcut-routed Space.");
-    state.Require(snapshot.active, L"Quick Search should stay active after shortcut-routed Space.");
-    state.Require(snapshot.query == L"space ", std::format(L"Quick Search should include shortcut-routed Space in the query; got '{}'.", snapshot.query));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space ";
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search should include shortcut-routed Space in the query; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
     state.Require(snapshot.focusedDisplayName == L"space name.txt",
                   std::format(L"Quick Search should keep focus on the spaced filename; got '{}'.", snapshot.focusedDisplayName));
     state.Require(QuickSearchSnapshotHasMatch(snapshot, L"space name.txt", 0u, 6u, true),
                   L"Quick Search should expose a prefix match that includes shortcut-routed Space.");
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not retain stable focus after shortcut-routed Space; {}.", focusDiagnostics()));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space ";
+    }, SelfTest::Scale(500ms), &snapshot),
+                  std::format(L"Quick Search should remain active after stabilizing focus after shortcut-routed Space; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     sendQuickSearchChar(L'n');
-    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
-                  L"Quick Search snapshot should be available after typing after shortcut-routed Space.");
-    state.Require(snapshot.query == L"space n",
-                  std::format(L"Quick Search should preserve shortcut-routed Space before the next character; got '{}'.", snapshot.query));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space n";
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search should preserve shortcut-routed Space before the next character; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
     state.Require(snapshot.focusedDisplayName == L"space name.txt",
                   std::format(L"Quick Search should keep focus on the spaced filename after the next character; got '{}'.", snapshot.focusedDisplayName));
 

@@ -243,7 +243,7 @@ void TraceNavigationWindowRaw(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
         return true;
     }
 
-    return lhs->native() == rhs->native();
+    return OrdinalString::EqualsNoCasePath(lhs.value(), rhs.value());
 }
 } // namespace
 

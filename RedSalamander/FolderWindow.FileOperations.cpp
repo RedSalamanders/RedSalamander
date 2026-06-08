@@ -184,7 +184,7 @@ struct FileSystemCapabilitiesV1
     return TryParseCapabilitiesJson(jsonView);
 }
 
-[[nodiscard]] bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
+[[nodiscard]] bool CanSameFileSystemOperationFromCapabilities(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
 {
     const std::optional<FileSystemCapabilitiesV1> capabilities = TryGetCapabilities(fileSystem);
     if (! capabilities.has_value())
@@ -259,6 +259,11 @@ struct FileSystemCapabilitiesV1
     return IdListAllows(exportList, destinationPluginId) && IdListAllows(importList, sourcePluginId);
 }
 } // namespace
+
+bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
+{
+    return CanSameFileSystemOperationFromCapabilities(fileSystem, operation);
+}
 
 void FolderWindow::FileOperationStateDeleter::operator()(FileOperationState* state) const noexcept
 {
@@ -1265,8 +1270,8 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
 
     const bool autoDismissSuccess = _fileOperations->GetAutoDismissSuccess();
     _fileOperations->RemoveTask(payload->taskId);
-    constexpr HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-    if (autoDismissSuccess && (SUCCEEDED(payload->hr) || payload->hr == cancelledHr || payload->hr == E_ABORT))
+    if (autoDismissSuccess &&
+        IsAutoDismissableFileOperationCompletion(payload->hr, payload->warningCount, payload->errorCount))
     {
         _fileOperations->DismissCompletedTask(payload->taskId);
     }

@@ -55,6 +55,29 @@ constexpr int kViewerImgRawFileComboId               = 2001;
 constexpr int kViewerTextFileComboId                 = 1003;
 constexpr UINT kViewerTextFindCommandId              = 40101u;
 constexpr UINT kViewerTextGotoCommandId              = 40203u;
+constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
+{
+  "version": 1,
+  "operations": {
+    "copy": false,
+    "move": false,
+    "delete": false,
+    "rename": false,
+    "properties": false,
+    "read": true,
+    "write": false
+  },
+  "concurrency": {
+    "copyMoveMax": 1,
+    "deleteMax": 1,
+    "deleteRecycleBinMax": 1
+  },
+  "crossFileSystem": {
+    "export": { "copy": [], "move": [] },
+    "import": { "copy": [], "move": [] }
+  }
+}
+)json";
 constexpr auto kViewerHarnessDefaultTimeout          = 120000ms;
 constexpr auto kViewerShellComboLongRunTimeout       = 600000ms;
 static_assert(kViewerShellComboLongRunTimeout > kViewerHarnessDefaultTimeout);
@@ -1599,8 +1622,8 @@ public:
             return E_POINTER;
         }
 
-        *jsonUtf8 = nullptr;
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        *jsonUtf8 = kReadOnlyFileSystemCapabilitiesJson;
+        return S_OK;
     }
 
     HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override

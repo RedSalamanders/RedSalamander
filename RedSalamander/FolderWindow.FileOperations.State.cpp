@@ -1328,8 +1328,14 @@ void CleanupDiagnosticsFilesInDirectory(const std::filesystem::path& directory,
         return;
     }
 
+    struct DiagnosticsFileForCleanup final
+    {
+        std::filesystem::path path;
+        std::filesystem::file_time_type lastWriteTime{};
+    };
+
     std::error_code ec;
-    std::vector<std::filesystem::path> files;
+    std::vector<DiagnosticsFileForCleanup> files;
     for (std::filesystem::directory_iterator it(directory, ec), end; ! ec && it != end; it.increment(ec))
     {
         const std::filesystem::directory_entry& de = *it;
@@ -1352,7 +1358,12 @@ void CleanupDiagnosticsFilesInDirectory(const std::filesystem::path& directory,
             continue;
         }
 
-        files.push_back(de.path());
+        std::error_code timeEc;
+        const std::filesystem::file_time_type lastWriteTime = de.last_write_time(timeEc);
+        files.push_back(DiagnosticsFileForCleanup{
+            .path          = de.path(),
+            .lastWriteTime = timeEc ? std::filesystem::file_time_type::min() : lastWriteTime,
+        });
     }
 
     if (files.size() <= maxFilesToKeep)
@@ -1360,10 +1371,16 @@ void CleanupDiagnosticsFilesInDirectory(const std::filesystem::path& directory,
         return;
     }
 
-    std::sort(files.begin(), files.end(), std::greater<std::filesystem::path>());
+    std::sort(files.begin(), files.end(), [](const DiagnosticsFileForCleanup& left, const DiagnosticsFileForCleanup& right) {
+        if (left.lastWriteTime != right.lastWriteTime)
+        {
+            return left.lastWriteTime > right.lastWriteTime;
+        }
+        return left.path > right.path;
+    });
     for (size_t i = maxFilesToKeep; i < files.size(); ++i)
     {
-        std::filesystem::remove(files[i], ec);
+        std::filesystem::remove(files[i].path, ec);
     }
 }
 
@@ -1807,58 +1824,6 @@ struct ProcessMemorySnapshot
     }
     result.append(leaf);
     return result;
-}
-
-[[nodiscard]] bool IsSameProviderOperationSupportedByCapabilities(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
-{
-    if (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE && operation != FILESYSTEM_DELETE)
-    {
-        return true;
-    }
-
-    if (! fileSystem)
-    {
-        return false;
-    }
-
-    const char* capabilitiesText = nullptr;
-    if (FAILED(fileSystem->GetCapabilities(&capabilitiesText)) || ! capabilitiesText || capabilitiesText[0] == '\0')
-    {
-        return false;
-    }
-
-    const std::string_view capabilitiesView(capabilitiesText);
-    std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> doc(
-        yyjson_read(capabilitiesView.data(), capabilitiesView.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM), &yyjson_doc_free);
-    if (! doc)
-    {
-        return false;
-    }
-
-    yyjson_val* root = yyjson_doc_get_root(doc.get());
-    if (! root || ! yyjson_is_obj(root))
-    {
-        return false;
-    }
-
-    yyjson_val* ops = yyjson_obj_get(root, "operations");
-    if (! ops || ! yyjson_is_obj(ops))
-    {
-        return false;
-    }
-
-    const char* key = nullptr;
-    switch (operation)
-    {
-        case FILESYSTEM_COPY: key = "copy"; break;
-        case FILESYSTEM_MOVE: key = "move"; break;
-        case FILESYSTEM_DELETE: key = "delete"; break;
-        case FILESYSTEM_RENAME: return true;
-        default: return true;
-    }
-
-    yyjson_val* value = yyjson_obj_get(ops, key);
-    return value && yyjson_is_bool(value) && yyjson_get_bool(value) != 0;
 }
 
 [[nodiscard]] unsigned int DetermineConfiguredPerItemMaxConcurrency(const wil::com_ptr<IFileSystem>& fileSystem,

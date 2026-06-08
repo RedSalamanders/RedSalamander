@@ -6267,11 +6267,16 @@ private:
         return false;
     }
 
-    const std::filesystem::path root = suiteRoot / L"work" / (L"navigation_view_edit_refresh_" + NewGuidText());
+    const std::filesystem::path root          = suiteRoot / L"work" / (L"navigation_view_edit_refresh_" + NewGuidText());
+    const std::filesystem::path differentRoot = suiteRoot / L"work" / (L"navigation_view_edit_retire_" + NewGuidText());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
+    std::filesystem::remove_all(differentRoot, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create navigation-view edit refresh root.");
+    state.Require(SelfTest::EnsureDirectory(differentRoot), L"Failed to create navigation-view edit retirement root.");
     state.Require(SelfTest::WriteTextFile(root / L"anchor.txt", "anchor"), L"Failed to create anchor.txt for navigation-view edit refresh test.");
+    state.Require(SelfTest::WriteTextFile(differentRoot / L"other.txt", "other"),
+                  L"Failed to create other.txt for navigation-view edit retirement test.");
     if (! state.failure.empty())
     {
         return false;
@@ -6318,6 +6323,21 @@ private:
     }
 
     const std::wstring rootText = root.wstring();
+    const auto makeCaseVariantPath = [](std::wstring text) noexcept
+    {
+        for (wchar_t& ch : text)
+        {
+            if (ch >= L'a' && ch <= L'z')
+            {
+                ch = static_cast<wchar_t>(L'A' + (ch - L'a'));
+            }
+            else if (ch >= L'A' && ch <= L'Z')
+            {
+                ch = static_cast<wchar_t>(L'a' + (ch - L'A'));
+            }
+        }
+        return std::filesystem::path(std::move(text));
+    };
     state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::Path),
                   L"Failed to focus the NavigationView path region before edit refresh test.");
     SendMessageW(navigationView, WM_KEYDOWN, VK_RETURN, 0);
@@ -6441,6 +6461,73 @@ private:
     },
                                                 SelfTest::Scale(1000ms)),
                   L"Navigation path edit should keep accepting typed input after an external redraw refresh.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND editHostBeforeCaseOnlyRefresh  = displayRefreshSnapshot.currentEditHostHwnd;
+    const HWND editInputBeforeCaseOnlyRefresh = displayRefreshSnapshot.currentEditInputHwnd;
+    const std::filesystem::path caseOnlyRoot  = makeCaseVariantPath(root.wstring());
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, caseOnlyRoot);
+    PumpPendingMessages();
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Case-only path refresh did not settle on the existing pane path.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    NavigationViewDebugSnapshot caseOnlyRefreshSnapshot{};
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode && value.currentEditText == expectedText &&
+               value.visibleChildWindowCount == 1u && value.currentEditHostHwnd == editHostBeforeCaseOnlyRefresh &&
+               value.currentEditInputHwnd == editInputBeforeCaseOnlyRefresh &&
+               OrdinalString::EqualsNoCasePath(std::filesystem::path(value.currentPathText), root);
+    },
+                                                SelfTest::Scale(3000ms),
+                                                &caseOnlyRefreshSnapshot),
+                  std::format(L"Navigation path edit should survive a case-only path refresh. focusTarget={} editMode={} visibleChildren={} host={} input={} "
+                              L"lastExit='{}' currentEdit='{}' currentPath='{}' caseOnlyPath='{}'. visibility=[{}]",
+                              static_cast<int>(caseOnlyRefreshSnapshot.focusTarget),
+                              caseOnlyRefreshSnapshot.editMode,
+                              caseOnlyRefreshSnapshot.visibleChildWindowCount,
+                              DescribeWindowHandleForSelfTest(caseOnlyRefreshSnapshot.currentEditHostHwnd),
+                              DescribeWindowHandleForSelfTest(caseOnlyRefreshSnapshot.currentEditInputHwnd),
+                              caseOnlyRefreshSnapshot.debugLastExitEditReason,
+                              caseOnlyRefreshSnapshot.currentEditText,
+                              caseOnlyRefreshSnapshot.currentPathText,
+                              caseOnlyRoot.wstring(),
+                              DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane::Left, navigationView)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, differentRoot);
+    PumpPendingMessages();
+
+    NavigationViewDebugSnapshot differentPathSnapshot{};
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return ! value.editMode && value.focusTarget != NavigationViewDebugFocusTarget::PathEdit && value.visibleChildWindowCount == 0u &&
+               value.currentEditHostHwnd == nullptr && value.currentEditInputHwnd == nullptr &&
+               OrdinalString::EqualsNoCasePath(std::filesystem::path(value.currentPathText), differentRoot);
+    },
+                                                SelfTest::Scale(3000ms),
+                                                &differentPathSnapshot),
+                  std::format(L"Navigation path edit should retire on a real path change. focusTarget={} editMode={} visibleChildren={} host={} input={} "
+                              L"currentEdit='{}' currentPath='{}'.",
+                              static_cast<int>(differentPathSnapshot.focusTarget),
+                              differentPathSnapshot.editMode,
+                              differentPathSnapshot.visibleChildWindowCount,
+                              DescribeWindowHandleForSelfTest(differentPathSnapshot.currentEditHostHwnd),
+                              DescribeWindowHandleForSelfTest(differentPathSnapshot.currentEditInputHwnd),
+                              differentPathSnapshot.currentEditText,
+                              differentPathSnapshot.currentPathText));
     return state.failure.empty();
 }
 
@@ -15764,6 +15851,81 @@ struct FolderViewFrameMetricPresenceRecord
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestViewerSpaceSyntheticBucketMetricsMatchRootBytes([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace synthetic-bucket metrics test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_synthetic_bucket_metrics_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace synthetic-bucket root.");
+
+    static constexpr size_t kFileCount                  = 5000u;
+    static constexpr size_t kExpectedFileCandidateCount = 4096u;
+    uint64_t expectedTotalBytes                         = 0u;
+    for (size_t index = 0; index < kFileCount; ++index)
+    {
+        const std::filesystem::path filePath = root / std::format(L"synthetic_{:04}.bin", index);
+        const size_t payloadBytes            = 24u;
+        expectedTotalBytes += static_cast<uint64_t>(payloadBytes);
+        state.Require(SelfTest::WriteTextFile(filePath, std::string(payloadBytes, 's')), std::format(L"Failed to create '{}'.", filePath.native()));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    static constexpr std::string_view kConfig =
+        R"({"topFilesPerDirectory":96,"scanThreads":1,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":0,"cacheMaxEntries":0})";
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace synthetic bucket metrics", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe, kConfig),
+                  L"Failed to open ViewerSpace for synthetic-bucket metrics test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 420, 320, L"ViewerSpace synthetic bucket metrics small"),
+                  L"Failed to resize ViewerSpace synthetic-bucket metrics test.");
+    SendMessageW(probe.hwnd, WM_KEYDOWN, VK_F5, 0);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      snapshot,
+                      [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& current) noexcept
+    {
+        return current.scanState == WndMsg::ViewerSpacePerfScanState::Done && current.rootTotalBytes == expectedTotalBytes &&
+               current.fileCandidateCount == kExpectedFileCandidateCount && current.syntheticCount > 0u && current.syntheticBytes > 0u;
+    },
+                      SelfTest::Scale(15000ms)),
+                  std::format(L"ViewerSpace synthetic-bucket metrics test did not settle. state={}, rootBytes={}, fileCandidates={}, syntheticCount={}, syntheticBytes={}.",
+                              static_cast<unsigned int>(snapshot.scanState),
+                              snapshot.rootTotalBytes,
+                              snapshot.fileCandidateCount,
+                              snapshot.syntheticCount,
+                              snapshot.syntheticBytes));
+
+    state.Require(snapshot.syntheticCount == 1u,
+                  std::format(L"ViewerSpace files-only synthetic bucket count should be exactly 1, got {}.", snapshot.syntheticCount));
+    state.Require(snapshot.rootTotalBytes == snapshot.fileCandidateBytes + snapshot.syntheticBytes,
+                  std::format(L"ViewerSpace synthetic bucket bytes should reconcile with the root total. root={}, fileCandidates={}, synthetic={}.",
+                              snapshot.rootTotalBytes,
+                              snapshot.fileCandidateBytes,
+                              snapshot.syntheticBytes));
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestViewerSpaceAdaptiveScanBudgetTracksWindowArea([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -18407,6 +18569,9 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"cmd_viewer_space_dense_files_exposes_more_than_legacy_topk", [=](CaseState& state) noexcept {
         return TestViewerSpaceDenseFilesExposeMoreThanLegacyTopK(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_synthetic_bucket_metrics_match_root_bytes", [=](CaseState& state) noexcept {
+        return TestViewerSpaceSyntheticBucketMetricsMatchRootBytes(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_viewer_space_adaptive_scan_budget_tracks_window_area", [=](CaseState& state) noexcept {
         return TestViewerSpaceAdaptiveScanBudgetTracksWindowArea(mainWindow, state);

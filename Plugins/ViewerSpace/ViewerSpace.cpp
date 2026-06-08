@@ -2253,13 +2253,6 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             {
                 snapshot->rootTotalBytes = root->totalBytes;
             }
-            for (const auto& [id, syntheticNode] : _syntheticNodes)
-            {
-                (void)id;
-                snapshot->syntheticBytes += syntheticNode.totalBytes;
-            }
-            snapshot->syntheticCount += _syntheticNodes.size();
-
             {
                 std::scoped_lock lock(_updateMutex);
                 snapshot->pendingQueueCount = _pendingUpdates.size();

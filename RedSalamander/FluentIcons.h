@@ -47,6 +47,7 @@ inline constexpr wchar_t kCommandPrompt     = L'\uE756';
 // Fallback glyphs (standard Unicode) when Segoe Fluent Icons isn't installed.
 inline constexpr wchar_t kFallbackChevronRight = L'\u203A'; // ›
 inline constexpr wchar_t kFallbackChevronDown  = L'\u25BE'; // ▾
+inline constexpr wchar_t kFallbackChevronUp    = L'\u25B4';
 inline constexpr wchar_t kFallbackCheckMark    = L'\u2713'; // ✓
 inline constexpr wchar_t kFallbackWarning      = L'\u26A0'; // ⚠
 inline constexpr wchar_t kFallbackError        = L'\u2716'; // ✖

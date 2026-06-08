@@ -4710,7 +4710,6 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
     state.Require(layout.conflictApplyToAllVisible, L"Conflict prompt should keep an apply-to-all toggle visible.");
     state.Require(layout.footerVisibleButtonCount == 2u,
                   std::format(L"File-operations footer should expose exactly 2 controls; saw {}.", layout.footerVisibleButtonCount));
-    state.Require(! layout.footerAutoDismissVisible, L"File-operations footer should not expose the auto-dismiss preference toggle.");
     state.Require(! layout.hasVisibleButtonOverlap, L"File-operations popup rendered overlapping button hit targets.");
     state.Require(layout.taskStatusKind == FileOperationsPopupInternal::TaskSnapshot::StatusKind::Conflict,
                   L"Active conflict prompt should be the task's single surfaced status.");

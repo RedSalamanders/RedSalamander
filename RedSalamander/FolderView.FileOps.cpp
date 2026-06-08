@@ -24,9 +24,8 @@ constexpr HRESULT kMissingFileOperationHostHr = HRESULT_FROM_WIN32(ERROR_NOT_SUP
 
 [[nodiscard]] bool OpenClipboardWithRetriesForFolderView(HWND ownerWindow) noexcept
 {
-    using namespace std::chrono_literals;
-
-    constexpr uint32_t kMaxAttempts = 20u;
+    constexpr uint32_t kMaxAttempts = 6u;
+    constexpr DWORD kRetryWaitMs    = 5u;
     for (uint32_t attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
         if (OpenClipboard(ownerWindow) != 0)
@@ -34,7 +33,10 @@ constexpr HRESULT kMissingFileOperationHostHr = HRESULT_FROM_WIN32(ERROR_NOT_SUP
             return true;
         }
 
-        std::this_thread::sleep_for(10ms);
+        if (attempt + 1u < kMaxAttempts)
+        {
+            Sleep(kRetryWaitMs);
+        }
     }
 
     return false;
@@ -343,6 +345,11 @@ void FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::option
 void FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(bool enabled) noexcept
 {
     g_debugDirectFileOperationFallbackEnabled.store(enabled, std::memory_order_release);
+}
+
+bool FolderView::DebugIsDirectFileOperationFallbackEnabledForSelfTest() noexcept
+{
+    return IsDirectFileOperationFallbackEnabledForSelfTest();
 }
 #endif
 

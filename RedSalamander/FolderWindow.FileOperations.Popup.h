@@ -19,7 +19,6 @@ struct PopupHitTest
         None,
         FooterCancelAll,
         FooterQueueMode,
-        FooterAutoDismissSuccess,
         TaskToggleCollapse,
         TaskPause,
         TaskCancel,
@@ -198,7 +197,6 @@ struct PopupLayoutDebugSnapshot
 
     size_t visibleButtonCount          = 0u;
     size_t footerVisibleButtonCount    = 0u;
-    bool footerAutoDismissVisible      = false;
     bool hasVisibleButtonOverlap       = false;
     bool conflictApplyToAllVisible     = false;
     bool conflictMoreVisible           = false;
@@ -207,6 +205,11 @@ struct PopupLayoutDebugSnapshot
     bool completedShowLogVisible       = false;
     bool completedExportIssuesVisible  = false;
     bool completedDismissVisible       = false;
+    bool taskToggleCollapseVisible     = false;
+    bool taskPauseVisible              = false;
+    bool taskCancelVisible             = false;
+    bool taskSkipVisible               = false;
+    bool taskSpeedLimitVisible         = false;
     D2D1_RECT_F completedDiagnosticsMoreButtonRect{};
     size_t conflictPrimaryActionCount  = 0u;
     size_t conflictOverflowActionCount = 0u;
@@ -357,6 +360,7 @@ private:
     void AutoResizeWindow(HWND hwnd, float desiredContentHeight, size_t taskCount) noexcept;
 
     void DrawButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept;
+    bool DrawCenteredChevronGlyph(const D2D1_RECT_F& rc, wchar_t fluentGlyph, wchar_t fallbackGlyph) noexcept;
     void DrawMenuButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept;
     void DrawCheckboxBox(const D2D1_RECT_F& rect, bool checked) noexcept;
     void DrawCollapseChevron(const D2D1_RECT_F& rc, bool collapsed) noexcept;

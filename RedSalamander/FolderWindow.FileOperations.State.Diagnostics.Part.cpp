@@ -938,7 +938,7 @@ void FolderWindow::FileOperationState::EnqueueTaskDiagnostic(TaskDiagnosticEntry
     }
 }
 
-void FolderWindow::FileOperationState::RecordCompletedTask(Task& task) noexcept
+FolderWindow::FileOperationState::CompletedTaskSummary FolderWindow::FileOperationState::RecordCompletedTask(Task& task) noexcept
 {
     CompletedTaskSummary summary{};
     SYSTEMTIME localNow{};
@@ -1099,7 +1099,7 @@ void FolderWindow::FileOperationState::RecordCompletedTask(Task& task) noexcept
 
     {
         std::scoped_lock lock(_mutex);
-        _completedTasks.push_front(std::move(summary));
+        _completedTasks.push_front(summary);
         while (_completedTasks.size() > kMaxCompletedTaskSummaries)
         {
             _completedTasks.pop_back();
@@ -1107,4 +1107,5 @@ void FolderWindow::FileOperationState::RecordCompletedTask(Task& task) noexcept
     }
 
     FlushDiagnostics(true);
+    return summary;
 }

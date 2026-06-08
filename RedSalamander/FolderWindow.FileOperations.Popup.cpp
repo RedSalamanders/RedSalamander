@@ -3065,6 +3065,29 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawButton(const Pop
     }
 }
 
+bool FileOperationsPopupInternal::FileOperationsPopupState::DrawCenteredChevronGlyph(const D2D1_RECT_F& rc,
+                                                                                     wchar_t fluentGlyph,
+                                                                                     wchar_t fallbackGlyph) noexcept
+{
+    if (! _target || ! _textBrush || rc.right <= rc.left || rc.bottom <= rc.top)
+    {
+        return false;
+    }
+
+    const bool useFluentGlyph = _statusIconFormat != nullptr && DirectWriteFormatHasGlyph(_dwriteFactory.get(), _statusIconFormat.get(), fluentGlyph);
+    const wchar_t glyph       = useFluentGlyph ? fluentGlyph : fallbackGlyph;
+    IDWriteTextFormat* format = useFluentGlyph ? _statusIconFormat.get()
+                                               : (_statusIconFallbackFormat ? _statusIconFallbackFormat.get() : _buttonSmallFormat.get());
+    if (! format || glyph == 0)
+    {
+        return false;
+    }
+
+    const wchar_t text[2]{glyph, 0};
+    _target->DrawTextW(text, 1u, format, rc, _textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    return true;
+}
+
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawMenuButton(const PopupButton& button,
                                                                            IDWriteTextFormat* format,
                                                                            std::wstring_view text) noexcept
@@ -3110,18 +3133,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawMenuButton(const
         _target->DrawLine(D2D1::Point2F(separatorX, rc.top + lineInset), D2D1::Point2F(separatorX, rc.bottom - lineInset), _borderBrush.get(), 1.0f);
     }
 
-    if (_textBrush)
-    {
-        const float centerX = (separatorX + rc.right) * 0.5f;
-        const float centerY = (rc.top + rc.bottom) * 0.5f;
-
-        const float halfW     = DipsToPixels(4.0f, _dpi);
-        const float halfH     = DipsToPixels(2.5f, _dpi);
-        const float thickness = DipsToPixels(1.5f, _dpi);
-
-        _target->DrawLine(D2D1::Point2F(centerX - halfW, centerY - halfH), D2D1::Point2F(centerX, centerY + halfH), _textBrush.get(), thickness);
-        _target->DrawLine(D2D1::Point2F(centerX, centerY + halfH), D2D1::Point2F(centerX + halfW, centerY - halfH), _textBrush.get(), thickness);
-    }
+    const D2D1_RECT_F arrowRc = D2D1::RectF(separatorX, rc.top, rc.right, rc.bottom);
+    DrawCenteredChevronGlyph(arrowRc, FluentIcons::kChevronDown, FluentIcons::kFallbackChevronDown);
 
     if (format && ! text.empty() && _textBrush)
     {
@@ -3188,29 +3201,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawCheckboxBox(cons
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawCollapseChevron(const D2D1_RECT_F& rc, bool collapsed) noexcept
 {
-    if (! _target || ! _textBrush)
+    if (collapsed)
     {
+        DrawCenteredChevronGlyph(rc, FluentIcons::kChevronDown, FluentIcons::kFallbackChevronDown);
         return;
     }
 
-    const float centerX   = (rc.left + rc.right) * 0.5f;
-    const float centerY   = (rc.top + rc.bottom) * 0.5f;
-    const float halfW     = DipsToPixels(4.0f, _dpi);
-    const float halfH     = DipsToPixels(2.5f, _dpi);
-    const float thickness = DipsToPixels(1.5f, _dpi);
-
-    if (collapsed)
-    {
-        // Draw a down chevron (expand).
-        _target->DrawLine(D2D1::Point2F(centerX - halfW, centerY - halfH), D2D1::Point2F(centerX, centerY + halfH), _textBrush.get(), thickness);
-        _target->DrawLine(D2D1::Point2F(centerX, centerY + halfH), D2D1::Point2F(centerX + halfW, centerY - halfH), _textBrush.get(), thickness);
-    }
-    else
-    {
-        // Draw an up chevron (collapse).
-        _target->DrawLine(D2D1::Point2F(centerX - halfW, centerY + halfH), D2D1::Point2F(centerX, centerY - halfH), _textBrush.get(), thickness);
-        _target->DrawLine(D2D1::Point2F(centerX, centerY - halfH), D2D1::Point2F(centerX + halfW, centerY + halfH), _textBrush.get(), thickness);
-    }
+    DrawCenteredChevronGlyph(rc, FluentIcons::kChevronUp, FluentIcons::kFallbackChevronUp);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(const D2D1_RECT_F& rect,
@@ -5392,26 +5389,84 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 }
                             }
                         }
-                        // During pre-calculation, show Skip and Cancel buttons
+                        // During copy/move pre-calculation, keep the transfer controls available before bytes start moving.
                         else if (task.preCalcInProgress)
                         {
                             const std::wstring skipText = LoadStringResource(nullptr, IDS_FILEOPS_BTN_SKIP);
-                            const float skipW           = std::max(0.0f, (rowW - btnGapX) * 0.5f);
-                            const float calcCancelW     = std::max(0.0f, rowW - btnGapX - skipW);
+                            if (showCopyMoveControls && ! speedLimitText.empty())
+                            {
+                                const float available = std::max(0.0f, rowW - btnGapX * 2.0f);
+                                const float minEach   = DipsToPixels(68.0f, _dpi);
 
-                            PopupButton skipBtn{};
-                            skipBtn.bounds     = D2D1::RectF(textX, rowTop, textX + skipW, rowBottom);
-                            skipBtn.hit.kind   = PopupHitTest::Kind::TaskSkip;
-                            skipBtn.hit.taskId = task.taskId;
-                            _buttons.push_back(skipBtn);
-                            DrawButton(skipBtn, _buttonSmallFormat.get(), skipText);
+                                float skipW   = DipsToPixels(84.0f, _dpi);
+                                float cancelW = DipsToPixels(84.0f, _dpi);
+                                float limitW  = std::max(0.0f, available - skipW - cancelW);
 
-                            PopupButton calcCancelBtn{};
-                            calcCancelBtn.bounds     = D2D1::RectF(textX + skipW + btnGapX, rowTop, textX + skipW + btnGapX + calcCancelW, rowBottom);
-                            calcCancelBtn.hit.kind   = PopupHitTest::Kind::TaskCancel;
-                            calcCancelBtn.hit.taskId = task.taskId;
-                            _buttons.push_back(calcCancelBtn);
-                            DrawButton(calcCancelBtn, _buttonSmallFormat.get(), cancelText);
+                                if (available < minEach * 3.0f)
+                                {
+                                    const float eachW = available / 3.0f;
+                                    skipW             = eachW;
+                                    cancelW           = eachW;
+                                    limitW            = eachW;
+                                }
+                                else
+                                {
+                                    const float minLimitW = DipsToPixels(140.0f, _dpi);
+                                    if (limitW < minLimitW)
+                                    {
+                                        const float minSideW          = DipsToPixels(72.0f, _dpi);
+                                        const float remainingForSides = std::max(0.0f, available - minLimitW);
+                                        const float sideW             = std::max(minSideW, remainingForSides / 2.0f);
+                                        skipW                         = std::min(skipW, sideW);
+                                        cancelW                       = std::min(cancelW, sideW);
+                                        limitW                        = std::max(0.0f, available - skipW - cancelW);
+                                    }
+                                }
+
+                                float xBtn = textX;
+
+                                PopupButton skipBtn{};
+                                skipBtn.bounds     = D2D1::RectF(xBtn, rowTop, xBtn + skipW, rowBottom);
+                                skipBtn.hit.kind   = PopupHitTest::Kind::TaskSkip;
+                                skipBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(skipBtn);
+                                DrawButton(skipBtn, _buttonSmallFormat.get(), skipText);
+                                xBtn += skipW + btnGapX;
+
+                                PopupButton limitBtn{};
+                                limitBtn.bounds     = D2D1::RectF(xBtn, rowTop, xBtn + limitW, rowBottom);
+                                limitBtn.hit.kind   = PopupHitTest::Kind::TaskSpeedLimit;
+                                limitBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(limitBtn);
+                                DrawMenuButton(limitBtn, _buttonSmallFormat.get(), speedLimitText);
+                                xBtn += limitW + btnGapX;
+
+                                PopupButton calcCancelBtn{};
+                                calcCancelBtn.bounds     = D2D1::RectF(xBtn, rowTop, xBtn + cancelW, rowBottom);
+                                calcCancelBtn.hit.kind   = PopupHitTest::Kind::TaskCancel;
+                                calcCancelBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(calcCancelBtn);
+                                DrawButton(calcCancelBtn, _buttonSmallFormat.get(), cancelText);
+                            }
+                            else
+                            {
+                                const float skipW       = std::max(0.0f, (rowW - btnGapX) * 0.5f);
+                                const float calcCancelW = std::max(0.0f, rowW - btnGapX - skipW);
+
+                                PopupButton skipBtn{};
+                                skipBtn.bounds     = D2D1::RectF(textX, rowTop, textX + skipW, rowBottom);
+                                skipBtn.hit.kind   = PopupHitTest::Kind::TaskSkip;
+                                skipBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(skipBtn);
+                                DrawButton(skipBtn, _buttonSmallFormat.get(), skipText);
+
+                                PopupButton calcCancelBtn{};
+                                calcCancelBtn.bounds     = D2D1::RectF(textX + skipW + btnGapX, rowTop, textX + skipW + btnGapX + calcCancelW, rowBottom);
+                                calcCancelBtn.hit.kind   = PopupHitTest::Kind::TaskCancel;
+                                calcCancelBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(calcCancelBtn);
+                                DrawButton(calcCancelBtn, _buttonSmallFormat.get(), cancelText);
+                            }
                         }
                         else if (showCopyMoveControls && ! speedLimitText.empty())
                         {
@@ -6792,17 +6847,6 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
         return 0;
     }
 
-    if (hit.kind == PopupHitTest::Kind::FooterAutoDismissSuccess)
-    {
-        if (fileOps)
-        {
-            const bool enabled = fileOps->GetAutoDismissSuccess();
-            fileOps->SetAutoDismissSuccess(! enabled);
-        }
-        Invalidate(hwnd);
-        return 0;
-    }
-
     if (hit.kind == PopupHitTest::Kind::TaskDismiss)
     {
         if (fileOps)
@@ -7073,10 +7117,6 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
             case PopupHitTest::Kind::FooterQueueMode:
                 ++result.footerVisibleButtonCount;
                 break;
-            case PopupHitTest::Kind::FooterAutoDismissSuccess:
-                result.footerAutoDismissVisible = true;
-                ++result.footerVisibleButtonCount;
-                break;
             case PopupHitTest::Kind::TaskConflictToggleApplyToAll:
                 if (result.found && button.hit.taskId == result.taskId)
                 {
@@ -7125,13 +7165,38 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
                     ++result.completedVisibleActionCount;
                 }
                 break;
-            case PopupHitTest::Kind::None:
             case PopupHitTest::Kind::TaskToggleCollapse:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.taskToggleCollapseVisible = true;
+                }
+                break;
             case PopupHitTest::Kind::TaskPause:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.taskPauseVisible = true;
+                }
+                break;
             case PopupHitTest::Kind::TaskCancel:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.taskCancelVisible = true;
+                }
+                break;
             case PopupHitTest::Kind::TaskSkip:
-            case PopupHitTest::Kind::TaskDestination:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.taskSkipVisible = true;
+                }
+                break;
             case PopupHitTest::Kind::TaskSpeedLimit:
+                if (result.found && button.hit.taskId == result.taskId)
+                {
+                    result.taskSpeedLimitVisible = true;
+                }
+                break;
+            case PopupHitTest::Kind::None:
+            case PopupHitTest::Kind::TaskDestination:
             default:
                 break;
         }

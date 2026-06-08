@@ -1000,6 +1000,37 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
         FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
         if (taskA && taskA->_preCalcInProgress.load(std::memory_order_acquire))
         {
+            const HWND popup = state.fileOps ? state.fileOps->GetPopupHwndForSelfTest() : nullptr;
+            if (! popup || IsWindow(popup) == FALSE)
+            {
+                Fail(L"Pre-calc copy task did not expose the File Operations popup for layout validation.");
+                return true;
+            }
+
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+            layout.taskId = state.taskA.value();
+            if (! DebugGetFileOperationsPopupLayoutSnapshot(popup, layout))
+            {
+                Fail(L"Failed to capture File Operations popup layout while copy pre-calc was in progress.");
+                return true;
+            }
+
+            if (layout.taskStatusKind != FileOperationsPopupInternal::TaskSnapshot::StatusKind::Calculating)
+            {
+                Fail(L"Pre-calc copy task layout should report the Calculating status.");
+                return true;
+            }
+
+            if (! layout.taskToggleCollapseVisible || ! layout.taskSkipVisible || ! layout.taskCancelVisible || ! layout.taskSpeedLimitVisible)
+            {
+                Fail(std::format(L"Pre-calc copy task should expose collapse, Skip, Speed Limit, and Cancel controls; collapse={} skip={} speedLimit={} cancel={}.",
+                                 layout.taskToggleCollapseVisible ? 1 : 0,
+                                 layout.taskSkipVisible ? 1 : 0,
+                                 layout.taskSpeedLimitVisible ? 1 : 0,
+                                 layout.taskCancelVisible ? 1 : 0));
+                return true;
+            }
+
             taskA->RequestCancel();
             state.stepState = 2;
         }

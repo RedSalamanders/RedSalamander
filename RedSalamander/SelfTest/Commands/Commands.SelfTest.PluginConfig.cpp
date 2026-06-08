@@ -4564,6 +4564,54 @@ private:
     return source.substr(begin, end - begin);
 }
 
+[[nodiscard]] std::vector<std::string_view> SourceFunctionBodies(std::string_view source, std::string_view signatureMarker)
+{
+    std::vector<std::string_view> bodies;
+    size_t searchOffset = 0u;
+    while (searchOffset < source.size())
+    {
+        const size_t signature = source.find(signatureMarker, searchOffset);
+        if (signature == std::string_view::npos)
+        {
+            break;
+        }
+
+        const size_t openBrace = source.find('{', signature + signatureMarker.size());
+        if (openBrace == std::string_view::npos)
+        {
+            break;
+        }
+
+        int depth = 0;
+        bool foundEnd = false;
+        for (size_t index = openBrace; index < source.size(); ++index)
+        {
+            if (source[index] == '{')
+            {
+                ++depth;
+            }
+            else if (source[index] == '}')
+            {
+                --depth;
+                if (depth == 0)
+                {
+                    bodies.push_back(source.substr(signature, index + 1u - signature));
+                    searchOffset = index + 1u;
+                    foundEnd = true;
+                    break;
+                }
+            }
+        }
+
+        if (! foundEnd)
+        {
+            break;
+        }
+    }
+
+    return bodies;
+}
+
 [[nodiscard]] bool TestViewerPluginManagerUnloadLifecycleSourceGuard(CaseState& state) noexcept
 {
     const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
@@ -4713,6 +4761,96 @@ private:
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestFileSystemCapabilitiesContractSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for filesystem capabilities contract source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string interfaceSource;
+    const std::filesystem::path interfacePath = repoRoot / L"Common" / L"PlugInterfaces" / L"FileSystem.h";
+    state.Require(ReadSourceFileUtf8(interfacePath, interfaceSource), std::format(L"Failed to read {}.", interfacePath.wstring()));
+    state.Require(interfaceSource.find("// Mandatory: returns filesystem capabilities as a UTF-8 JSON document.") != std::string::npos,
+                  L"IFileSystem::GetCapabilities must be documented as mandatory in the shared interface.");
+    state.Require(interfaceSource.find("// Optional: returns filesystem capabilities") == std::string::npos,
+                  L"IFileSystem::GetCapabilities must not be documented as optional.");
+
+    std::string pluginSpec;
+    const std::filesystem::path pluginSpecPath = repoRoot / L"Specs" / L"Plugins" / L"Plugins_VirtualFileSystem.md";
+    state.Require(ReadSourceFileUtf8(pluginSpecPath, pluginSpec), std::format(L"Failed to read {}.", pluginSpecPath.wstring()));
+    state.Require(pluginSpec.find("### 4d. Capabilities (`IFileSystem::GetCapabilities`) (mandatory)") != std::string::npos,
+                  L"Virtual filesystem plugin spec must mark GetCapabilities as mandatory.");
+    state.Require(pluginSpec.find("Capabilities (`IFileSystem::GetCapabilities`) (optional)") == std::string::npos,
+                  L"Virtual filesystem plugin spec must not mark GetCapabilities as optional.");
+
+    const std::array<std::filesystem::path, 3> testAdapterPaths{
+        repoRoot / L"Tests" / L"ViewerSqliteTests" / L"ViewerSqliteTests.cpp",
+        repoRoot / L"Tests" / L"ViewerPETests" / L"ViewerPETests.cpp",
+        repoRoot / L"Tests" / L"PerformanceTests2" / L"FolderViewRefreshDuplicatePathPerfTest.cpp",
+    };
+
+    for (const std::filesystem::path& path : testAdapterPaths)
+    {
+        std::string source;
+        state.Require(ReadSourceFileUtf8(path, source), std::format(L"Failed to read {}.", path.wstring()));
+        if (source.empty())
+        {
+            return false;
+        }
+
+        const std::string pathText(path.string());
+        const std::wstring pathMessage(pathText.begin(), pathText.end());
+        const std::vector<std::string_view> capabilitiesBodies = SourceFunctionBodies(source, "HRESULT STDMETHODCALLTYPE GetCapabilities");
+        state.Require(! capabilitiesBodies.empty(),
+                      std::format(L"{} must implement GetCapabilities.", std::wstring(pathText.begin(), pathText.end())));
+        for (const std::string_view capabilitiesBody : capabilitiesBodies)
+        {
+            state.Require(capabilitiesBody.find("return E_NOTIMPL;") == std::string_view::npos,
+                          std::format(L"{} must not use E_NOTIMPL for mandatory GetCapabilities.", pathMessage));
+            state.Require(capabilitiesBody.find("return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);") == std::string_view::npos,
+                          std::format(L"{} must not use ERROR_NOT_SUPPORTED for mandatory GetCapabilities.", pathMessage));
+            state.Require(capabilitiesBody.find("*jsonUtf8 = nullptr;") == std::string_view::npos &&
+                              capabilitiesBody.find("*jsonUtf8=nullptr;") == std::string_view::npos,
+                          std::format(L"{} must return a non-empty capabilities JSON pointer.", pathMessage));
+        }
+    }
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewClipboardRetryNoReentrantPumpSourceGuard(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = FindRepoRootForPluginManagerSourceGuard();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for FolderView clipboard retry source guard.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string source;
+    const std::filesystem::path folderViewFileOpsPath = repoRoot / L"RedSalamander" / L"FolderView.FileOps.cpp";
+    state.Require(ReadSourceFileUtf8(folderViewFileOpsPath, source), std::format(L"Failed to read {}.", folderViewFileOpsPath.wstring()));
+    if (source.empty())
+    {
+        return false;
+    }
+
+    const std::string_view retryBody =
+        SourceBetween(source, "[[nodiscard]] bool OpenClipboardWithRetriesForFolderView", "[[nodiscard]] bool IsDirectFileOperationFallbackEnabledForSelfTest");
+    state.Require(! retryBody.empty(), L"OpenClipboardWithRetriesForFolderView body was not found.");
+    state.Require(retryBody.find("DispatchMessageW") == std::string_view::npos,
+                  L"FolderView clipboard retry must not dispatch arbitrary UI messages while retrying OpenClipboard.");
+    state.Require(retryBody.find("TranslateMessage") == std::string_view::npos,
+                  L"FolderView clipboard retry must not translate arbitrary UI messages while retrying OpenClipboard.");
+    state.Require(retryBody.find("PeekMessageW") == std::string_view::npos,
+                  L"FolderView clipboard retry must not remove/pump arbitrary UI messages while retrying OpenClipboard.");
+
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -4732,6 +4870,12 @@ void RunPluginConfigCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"file_system_plugin_manager_unload_lifecycle_source_guard", [](CaseState& state) noexcept {
         return TestFileSystemPluginManagerUnloadLifecycleSourceGuard(state);
+    });
+    SelfTest::RunCase(options, suite, L"file_system_capabilities_contract_source_guard", [](CaseState& state) noexcept {
+        return TestFileSystemCapabilitiesContractSourceGuard(state);
+    });
+    SelfTest::RunCase(options, suite, L"folder_view_clipboard_retry_no_reentrant_message_pump_source_guard", [](CaseState& state) noexcept {
+        return TestFolderViewClipboardRetryNoReentrantPumpSourceGuard(state);
     });
     SelfTest::RunCase(options, suite, L"cmd_plugin_configuration_dialog_uses_dxui_command_buttons", [=](CaseState& state) noexcept {
         return TestPluginConfigurationDialogUsesDxUiFormSurface(mainWindow, state);

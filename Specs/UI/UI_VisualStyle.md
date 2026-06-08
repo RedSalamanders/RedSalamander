@@ -76,6 +76,7 @@ NavigationView reflects the **focused pane** (not only whether NavigationView it
 - **Color**: submenu chevrons are rendered using the theme’s *secondary* color (e.g. `MenuTheme.shortcutText` / selected variant), not the main label text color.
 - **Color (glyph icons)**: menu item glyph icons (Segoe Fluent Icons) are rendered using the same color as the menu label text (`MenuTheme.text` / `MenuTheme.selectionText` / `MenuTheme.disabledText`) so they remain legible in dark theme.
 - **Size (glyph icons)**: Segoe Fluent icon fonts default to `15 DIP` (see `FluentIcons::kDefaultSizeDip`) and scale with DPI.
+- App-owned operation-card menu buttons and collapse/expand controls render chevrons with the same icon-glyph path (Segoe Fluent Icons preferred; Unicode fallback) rather than custom line strokes, so the affordance matches popup menus and navigation glyphs.
 - **Owner-draw arrow gotcha (MUST)**: when using `MFT_OWNERDRAW`, Windows may still paint the default submenu arrow *after* `WM_DRAWITEM`. To ensure only the custom chevron is visible, the draw handler must clip out the arrow area after drawing it:
   - Set an initial clip region to the item rect (so exclusions don’t leak).
   - Compute an arrow rect at the right edge using `max(customArrowAreaWidth, GetSystemMetricsForDpi(SM_CXMENUCHECK, dpi))`.
