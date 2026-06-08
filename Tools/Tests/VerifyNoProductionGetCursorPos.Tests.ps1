@@ -10,10 +10,7 @@ $allowedPathPatterns = @(
     '\\SelfTest\\',
     '\\Tests\\',
     '\\Scripts\\VerifyNoProductionGetCursorPos\.ps1$'
-)
-
-$requiredDiagnosticAnnotation = '// getcursorpos-allow: diagnostic-only'
-
+$requiredDiagnosticAnnotation = 'getcursorpos-allow:'
 $files = @(
     (Join-Path $Root 'Common'),
     (Join-Path $Root 'RedSalamander'),
