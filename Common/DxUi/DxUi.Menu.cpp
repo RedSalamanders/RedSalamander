@@ -1318,6 +1318,7 @@ struct MenuController; // forward
 [[nodiscard]] D2D1_RECT_F GetItemRect(
     const MenuFlyoutItem* items, size_t count, size_t targetIndex, float menuWidthDip, float itemHeightDip, float headerHeightDip) noexcept;
 [[nodiscard]] bool ProcessMenuPopupMessage(MenuController& controller, HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+void FinalizeAsyncMenuController(MenuController& controller) noexcept;
 void DestroyMenuPopupWindow(MenuPopup& popup) noexcept;
 
 struct MenuPopup
@@ -1562,8 +1563,14 @@ struct MenuController
     ThemePalette theme;
     MenuItemVisualStyle style;
     ContextMenuSessionCallbacks sessionCallbacks;
+    ContextMenuClosedCallback asyncOnClosed;
     std::optional<int> result;
     bool running = true;
+    bool asyncSession = false;
+    bool asyncFinalizing = false;
+    bool asyncInteractionActive = false;
+    HWND previousCapture = nullptr;
+    HWND previousFocus = nullptr;
     bool ignoreInitialLeftButtonUp = false;
     bool ignoreInitialRightButtonUp = false;
     bool leftButtonDownInPopup = false;
@@ -1950,6 +1957,7 @@ static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     auto* popup = reinterpret_cast<MenuPopup*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (popup)
     {
+        MenuController* const controller = popup->controller;
 #if defined(ENABLE_TESTS)
         if (msg == kMenuDebugCaptureBitmapMessage)
         {
@@ -2021,6 +2029,11 @@ static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 popup->hwnd = nullptr;
             }
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            if (controller && controller->asyncSession && ! controller->asyncFinalizing)
+            {
+                controller->Dismiss();
+                FinalizeAsyncMenuController(*controller);
+            }
             return DefWindowProcW(hwnd, msg, wp, lp);
         }
         if (msg == WM_NCHITTEST)
@@ -2034,8 +2047,30 @@ static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return HTCLIENT;
         }
 
-        if (popup->controller && ProcessMenuPopupMessage(*popup->controller, hwnd, msg, wp, lp))
+        if (controller && controller->asyncSession && controller->asyncInteractionActive && ! controller->asyncFinalizing)
         {
+            const bool dismissForActivation =
+                (msg == WM_ACTIVATEAPP && wp == FALSE) ||
+                (msg == WM_ACTIVATE && LOWORD(static_cast<DWORD_PTR>(wp)) == WA_INACTIVE) ||
+                (msg == WM_NCACTIVATE && wp == FALSE);
+            const bool dismissForCancel = msg == WM_CANCELMODE;
+            const bool dismissForCaptureLoss =
+                msg == WM_CAPTURECHANGED &&
+                (! controller->GetRootPopup() || reinterpret_cast<HWND>(lp) != controller->GetRootPopup()->hwnd);
+            if (dismissForActivation || dismissForCancel || dismissForCaptureLoss)
+            {
+                controller->Dismiss();
+                FinalizeAsyncMenuController(*controller);
+                return 0;
+            }
+        }
+
+        if (controller && ProcessMenuPopupMessage(*controller, hwnd, msg, wp, lp))
+        {
+            if (controller->asyncSession && ! controller->running)
+            {
+                FinalizeAsyncMenuController(*controller);
+            }
             return 0;
         }
 
@@ -3331,6 +3366,107 @@ void ActivatePopupForKeyboard(MenuPopup& popup) noexcept
     SetFocus(popup.hwnd);
 }
 
+std::vector<std::unique_ptr<MenuController>>& ActiveAsyncMenuControllers() noexcept
+{
+    thread_local std::vector<std::unique_ptr<MenuController>> controllers;
+    return controllers;
+}
+
+[[nodiscard]] bool BeginAsyncMenuInteraction(MenuController& controller) noexcept
+{
+    MenuPopup* root = controller.GetRootPopup();
+    if (! root || ! root->hwnd)
+    {
+        return false;
+    }
+
+    controller.previousCapture            = GetCapture();
+    controller.previousFocus              = GetFocus();
+    controller.ignoreInitialLeftButtonUp  = controller.sessionCallbacks.ignoreInitialLeftButtonUp || (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+    controller.ignoreInitialRightButtonUp = controller.sessionCallbacks.ignoreInitialRightButtonUp || (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+    controller.leftButtonDownInPopup      = false;
+    controller.rightButtonDownInPopup     = false;
+
+    SetCapture(root->hwnd);
+    ActivatePopupForKeyboard(*root);
+    controller.asyncInteractionActive = true;
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.async-start",
+                              L"owner={:#x} root={:#x} previousCapture={:#x} previousFocus={:#x} currentCapture={:#x} popupCount={} items={} "
+                              L"ignoreLeft={} ignoreRight={}",
+                              TraceHwndValue(controller.ownerHwnd),
+                              TraceHwndValue(root->hwnd),
+                              TraceHwndValue(controller.previousCapture),
+                              TraceHwndValue(controller.previousFocus),
+                              TraceHwndValue(GetCapture()),
+                              controller.popups.size(),
+                              controller.rootItems.size(),
+                              TraceBool(controller.ignoreInitialLeftButtonUp),
+                              TraceBool(controller.ignoreInitialRightButtonUp));
+    return true;
+}
+
+void EndAsyncMenuInteraction(MenuController& controller) noexcept
+{
+    controller.asyncInteractionActive = false;
+    if (const HWND captured = GetCapture(); captured && controller.FindPopupForHwnd(captured))
+    {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.async-release-capture",
+                                  L"captured={:#x} owner={:#x}",
+                                  TraceHwndValue(captured),
+                                  TraceHwndValue(controller.ownerHwnd));
+        ReleaseCapture();
+    }
+
+    const HWND currentFocus = GetFocus();
+    if (controller.previousFocus && IsWindow(controller.previousFocus) != FALSE && currentFocus && controller.FindPopupForHwnd(currentFocus))
+    {
+        SetFocus(controller.previousFocus);
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.async-restore-focus",
+                                  L"previousFocus={:#x} focusAfter={:#x}",
+                                  TraceHwndValue(controller.previousFocus),
+                                  TraceHwndValue(GetFocus()));
+    }
+}
+
+void FinalizeAsyncMenuController(MenuController& controller) noexcept
+{
+    if (! controller.asyncSession || controller.asyncFinalizing)
+    {
+        return;
+    }
+
+    controller.asyncFinalizing = true;
+
+    std::unique_ptr<MenuController> ownedController;
+    auto& controllers = ActiveAsyncMenuControllers();
+    const auto it     = std::find_if(controllers.begin(), controllers.end(), [&controller](const std::unique_ptr<MenuController>& candidate) noexcept {
+        return candidate.get() == &controller;
+    });
+    if (it != controllers.end())
+    {
+        ownedController = std::move(*it);
+        controllers.erase(it);
+    }
+
+    MenuController& target               = ownedController ? *ownedController : controller;
+    const std::optional<int> result      = target.result;
+    ContextMenuClosedCallback onClosed   = std::move(target.asyncOnClosed);
+    EndAsyncMenuInteraction(target);
+    DestroyPopupChain(target);
+
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.async-end",
+                              L"owner={:#x} result={} captureAfter={:#x} focusAfter={:#x}",
+                              TraceHwndValue(target.ownerHwnd),
+                              result.value_or(-1),
+                              TraceHwndValue(GetCapture()),
+                              TraceHwndValue(GetFocus()));
+
+    if (onClosed)
+    {
+        onClosed(result);
+    }
+}
+
 [[nodiscard]] bool SwitchRootPopup(MenuController& controller,
                                    ContextMenuRootSwitchRequest request,
                                    std::wstring_view popupDetail,
@@ -4262,6 +4398,35 @@ void TraceMenuKeyboardRoute(
         return false;
     }
 
+    if (msg == WM_TIMER && wp == kSubmenuHoverTimerId)
+    {
+        MenuPopup* popup = controller.FindPopupForHwnd(hwnd);
+        if (! popup || popup->hoverTimerId == 0 || popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::None)
+        {
+            return true;
+        }
+
+        if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingOpen && popup->hoverTimerItemIndex < popup->itemCount)
+        {
+            KillTimer(popup->hwnd, kSubmenuHoverTimerId);
+            popup->hoverTimerId        = 0;
+            popup->hoverTimerKind      = MenuPopup::SubmenuHoverTimerKind::None;
+            const size_t openItemIndex = popup->hoverTimerItemIndex;
+            popup->hoverTimerItemIndex = SIZE_MAX;
+            OpenSubmenu(controller, *popup, openItemIndex, false);
+        }
+        else if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingClose)
+        {
+            KillTimer(popup->hwnd, kSubmenuHoverTimerId);
+            popup->hoverTimerId        = 0;
+            popup->hoverTimerKind      = MenuPopup::SubmenuHoverTimerKind::None;
+            popup->hoverTimerItemIndex = SIZE_MAX;
+            CloseSubmenuChainFrom(controller, *popup);
+        }
+
+        return true;
+    }
+
     if (msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST)
     {
         const std::optional<MenuPointerKind> kind = MenuPointerKindFromMessage(msg);
@@ -4847,6 +5012,96 @@ std::optional<int> ContextMenu::Show(
                               TraceHwndValue(GetFocus()));
 
     return controller.result;
+}
+
+bool ContextMenu::ShowAsync(HWND ownerHwnd,
+                            POINT screenPoint,
+                            std::span<const MenuFlyoutItem> items,
+                            const ThemePalette& theme,
+                            ContextMenuClosedCallback onClosed,
+                            const ContextMenuSessionCallbacks& sessionCallbacks)
+{
+    if (items.empty() || ! ownerHwnd)
+    {
+        return false;
+    }
+
+    DXUI_MENU_TRACE(
+        L"DxUi::MenuTrace ContextMenu show-async-begin owner={:#x} point=({}, {}) items={} focusFirst={} ignoreInitialUp=({}, {}) captureBefore={:#x}",
+        reinterpret_cast<uintptr_t>(ownerHwnd),
+        screenPoint.x,
+        screenPoint.y,
+        items.size(),
+        sessionCallbacks.focusFirstNavigableItem ? L"true" : L"false",
+        sessionCallbacks.ignoreInitialLeftButtonUp ? L"true" : L"false",
+        sessionCallbacks.ignoreInitialRightButtonUp ? L"true" : L"false",
+        reinterpret_cast<uintptr_t>(GetCapture()));
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.show-async-begin",
+                              L"owner={:#x} point=({}, {}) items={} focusFirst={} ignoreInitialLeftUp={} ignoreInitialRightUp={} maxRootHeightDip={:.1f} "
+                              L"captureBefore={:#x} focusBefore={:#x} activeBefore={:#x} hitWindow={:#x}",
+                              TraceHwndValue(ownerHwnd),
+                              screenPoint.x,
+                              screenPoint.y,
+                              items.size(),
+                              TraceBool(sessionCallbacks.focusFirstNavigableItem),
+                              TraceBool(sessionCallbacks.ignoreInitialLeftButtonUp),
+                              TraceBool(sessionCallbacks.ignoreInitialRightButtonUp),
+                              sessionCallbacks.maxRootHeightDip,
+                              TraceHwndValue(GetCapture()),
+                              TraceHwndValue(GetFocus()),
+                              TraceHwndValue(GetActiveWindow()),
+                              TraceHwndValue(WindowFromPoint(screenPoint)));
+
+    auto controller = std::make_unique<MenuController>();
+    controller->ownerHwnd        = ownerHwnd;
+    controller->theme            = theme;
+    controller->style            = ResolveMenuVisualStyle(theme);
+    controller->sessionCallbacks = sessionCallbacks;
+    controller->asyncOnClosed    = std::move(onClosed);
+    controller->asyncSession     = true;
+    if (sessionCallbacks.focusFirstNavigableItem)
+    {
+        RememberKeyboardRootSwitchMessageTime(*controller, CurrentMessageTime());
+    }
+
+    controller->rootItems.assign(items.begin(), items.end());
+
+    const auto startedAt = std::chrono::steady_clock::now();
+    if (! CreateMenuPopupWindow(*controller,
+                                controller->rootItems.data(),
+                                controller->rootItems.size(),
+                                screenPoint,
+                                false,
+                                nullptr,
+                                nullptr,
+                                true,
+                                sessionCallbacks.focusFirstNavigableItem))
+    {
+        DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.show-async-create-failed",
+                                  L"owner={:#x} point=({}, {}) items={}",
+                                  TraceHwndValue(ownerHwnd),
+                                  screenPoint.x,
+                                  screenPoint.y,
+                                  items.size());
+        return false;
+    }
+    Debug::Perf::Emit(L"DxUI::PopupShow", L"root_async", Debug::Perf::ElapsedUs(startedAt), static_cast<uint64_t>(controller->rootItems.size()), 0u);
+
+    MenuController& controllerRef = *controller;
+    ActiveAsyncMenuControllers().push_back(std::move(controller));
+    if (! BeginAsyncMenuInteraction(controllerRef))
+    {
+        FinalizeAsyncMenuController(controllerRef);
+        return false;
+    }
+
+    DXUI_MENU_DIAGNOSTICS_TRACE(L"menu.show-async-end",
+                              L"owner={:#x} root={:#x} captureAfter={:#x} focusAfter={:#x}",
+                              TraceHwndValue(ownerHwnd),
+                              TraceHwndValue(controllerRef.GetRootPopup() ? controllerRef.GetRootPopup()->hwnd : nullptr),
+                              TraceHwndValue(GetCapture()),
+                              TraceHwndValue(GetFocus()));
+    return true;
 }
 
 #if defined(ENABLE_TESTS)

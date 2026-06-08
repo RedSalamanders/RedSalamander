@@ -34,6 +34,33 @@ Current source-derived fallback counts:
 
 Recent focused coverage updates:
 
+- 2026-06-08 DxUi button/menu chrome and AlertOverlay closeout: Debug
+  `DxUiTests` build passed with
+  `.build/logs/msbuild-20260608_172213_729.log` (`0 warning(s), 0
+  error(s)`), and `.build/x64/Debug/DxUiTests.exe --suite=NewControls`
+  exited 0 with the shared split/dropdown layout and custom AlertOverlay
+  style guards green. Debug `RedSalamander` build passed with
+  `.build/logs/msbuild-20260608_172231_835.log` (`0 warning(s), 0
+  error(s)`). Focused command selftests archived green at
+  `Specs/TestRuns/4cb089111a23/Commands/2026-06-08_172503/`
+  (`cmd_app_prompt_uses_alert_overlay_window`, `1 passed`),
+  `.../2026-06-08_172521/`
+  (`cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions`,
+  `1 passed`), `.../2026-06-08_172527/`
+  (`cmd_compare_directories_window_uses_dxui_menu_bar_and_banner_buttons`,
+  `1 passed`), `.../2026-06-08_172540/`
+  (`cmd_plugin_configuration_dialog_uses_dxui_`, `2 passed`), and
+  `.../2026-06-08_172546/`
+  (`cmd_preferences_dialog_themes_page_uses_dxui_shell_chrome`,
+  `1 passed`). The operation-window popup smoke rerun is archived at
+  `Specs/TestRuns/4cb089111a23/FileOps/2026-06-08_172552/` (`3 passed`,
+  `0 failed`). The broad native-control audit bundle is archived at
+  `Specs/TestRuns/4cb089111a23/Audit/2026-06-08_172148/`, with
+  `Audit-RemainingWin32UiDependencies.ps1 -FailOnFindings`,
+  `Audit-VisibleNativeSurfaces.ps1`, and `Audit-ComctlReportSurfaces.ps1`
+  all exiting 0. Release `RedSalamander` build passed with
+  `.build/logs/msbuild-20260608_172738_771.log` (`0 warning(s), 0
+  error(s)`), covering the warning gate for this change.
 - 2026-06-08 ViewerSpace synthetic-bucket snapshot metric fix: Debug
   `RedSalamander` build passed with
   `.build/logs/msbuild-20260608_114330_167.log` (`0 warning(s), 0

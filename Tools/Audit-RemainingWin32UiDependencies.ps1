@@ -98,6 +98,33 @@ $allowedResidualDependencies = @(
     },
     @{
         Category      = 'HDC text/selection bridge'
+        Path          = 'RedSalamander\Ui\AlertOverlayWindow.cpp'
+        LinePattern   = 'GetDC\(nullptr\)|SelectObject\(memoryDc\.get\(\), bitmap\.get\(\)\)'
+        Visibility    = 'visual bitmap interop'
+        Owner         = 'AlertOverlayWindow'
+        Reason        = 'Modal alert overlays use a memory DC only to capture the owner backdrop before Direct2D scrim composition; it does not render native text, fonts, or controls.'
+        ExitCondition = 'Replace when the alert-overlay backdrop path moves to DirectComposition/WIC-only capture or the captured-backdrop effect is removed.'
+    },
+    @{
+        Category      = 'Native visible control creation'
+        Path          = 'Plugins\ViewerVLC\ViewerVLC.cpp'
+        LinePattern   = 'SS_BLACKRECT'
+        Visibility    = 'test-only synthetic child'
+        Owner         = 'ViewerVLC wheel-forwarding self-tests'
+        Reason        = 'ENABLE_TESTS creates a tiny synthetic Static child only to exercise VLC child-window wheel forwarding; it is not production app chrome.'
+        ExitCondition = 'Remove if the wheel-forwarding test can use a non-HWND child probe.'
+    },
+    @{
+        Category      = 'Native visible control creation'
+        Path          = 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        LinePattern   = 'CreateWindowExW\(0, L"STATIC", L"", WS_(POPUP|CHILD)'
+        Visibility    = 'test-only hidden queue probe'
+        Owner         = 'Find dialog command self-tests'
+        Reason        = 'The queue-order test creates hidden Static probe windows without WS_VISIBLE to verify parent/child input-drain ordering.'
+        ExitCondition = 'Remove if the drain-order test gains a non-HWND message queue probe.'
+    },
+    @{
+        Category      = 'HDC text/selection bridge'
         Path          = 'Tests\DxUiTests\DxUiTests.Menu.cpp'
         LinePattern   = 'GetDC\(nullptr\)'
         Visibility    = 'test-only'

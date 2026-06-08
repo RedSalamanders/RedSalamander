@@ -2,7 +2,7 @@
 
 **Author:** Ripley (Lead / Reviewer)
 **Date:** 2026-04-04
-**Last Updated:** 2026-04-29
+**Last Updated:** 2026-06-08
 **Status:** Authoritative design and behavior contract for `DxUi`; rollout closure and archived validation history live in `Specs/Plans/Done/UI_DxUiWinUIDesignAlignmentPlan.md`
 **Scope:** Design system tokens, control specifications, retained-host behavior, and verification requirements
 **Inspiration:** WinUI 3 / Windows 11 Fluent Design System
@@ -79,6 +79,7 @@ Current implementation status on 2026-04-26:
 - all Preferences page layout signatures now receive `PreferencesTypographyContext`; Preferences shell dialog font propagation is retired, and the former Preferences HDC paint/bitmap audit seams are now behind the shared Direct2D-on-HDC bridge rather than native font state,
 - `Common/DxUi/DxUi.Typography.h` owns HFONT-free DirectWrite measurement (`MeasureSingleLineTextMetrics`, `MeasureSingleLineTextWidthPx`, and `MeasureWrappedTextHeightPx`) and no longer exposes measurement helpers that derive DirectWrite formats from caller-owned `HFONT` or helper APIs that create native fonts,
 - `Common/DxUi` now routes `TextField` and editable `ComboBox` input through the host-HWND native text-input backend. The former hidden `DxUiTextInputBridgeWindow`, bridge WndProc, bridge window messages, bridge audit allowlist rows, private `HFONT`, `WM_SETFONT`, `DebugGetNonVisibleTextServiceBridgeFont(...)`, and durable `LOGFONT` contract are retired.
+- `RedSalamander/Ui/AlertOverlay.h` uses the shared raw `DxUi::DrawButtonChrome` helper for retained-D2D footer-button chrome and the close-affordance hover backplate while preserving the existing AlertOverlay-specific appearance. This is the expected pattern for non-`WindowHost` retained surfaces that cannot host a full `DxUi::Button` but still need standardized button-chrome behavior.
 - `Plugins/ViewerWeb/ViewerWeb.cpp` renders its status message with Direct2D/DirectWrite instead of creating an app-owned `HFONT` or using GDI `DrawTextW`,
 - `Plugins/ViewerPE/ViewerPE.cpp` and `Plugins/ViewerImgRaw/ViewerImgRaw.cpp` no longer keep unused native `_uiFont` handles,
 - `RedSalamander/FolderWindow.FileSystem.cpp` no longer carries the dead fenced change-case and selection-mask dialog implementations or their unused hook helpers; the live route for those commands is the owned DxUi prompt-window path, with fresh focused archives on 2026-04-22,
@@ -393,6 +394,12 @@ This double-ring ensures visibility on any background. Replace current single-st
 | **Icon** | Icon-only, no text, square aspect | **New** — add icon-only layout mode |
 | **Repeat** | Fires continuously while held | **New** — add repeat timer mode |
 
+#### Shared Button Chrome Contract
+
+- `DxUi::Button` and custom Direct2D hosts that need button chrome MUST share the same layout metrics and visual-state resolver rather than repainting private button styles.
+- Custom D2D surfaces SHOULD use `DxUi::ComputeButtonChromeLayout(...)` and `DxUi::DrawButtonChrome(...)` (or host real `DxUi::Button` controls where practical) so standard, drop-down, split, hover, pressed, focus, and primary states remain consistent.
+- Drop-down buttons use a 20 DIP chevron slot with no divider; split buttons use a 32 DIP drop-down segment with a divider line. Menu-only actions MUST use `ButtonVariant::DropDown`, not `ButtonVariant::Split`.
+
 ### 3.2 Menu System
 
 DxUI now owns the retained menu/flyout system used by the main menu bar, context menus, the migrated navigation drive/history dropdown surfaces, and the migrated viewer top menu bars.
@@ -453,6 +460,7 @@ Windows that still source commands from a resource `HMENU` MAY keep that `HMENU`
 - **Light dismiss:** Click outside or press Escape closes the menu.
 - **App deactivation:** Menu popup windows are transient owned flyouts, not global topmost overlays. Losing app activation dismisses the full popup chain.
 - **Input ownership:** `ContextMenu::Show(...)` owns hover, keyboard highlight, pressed-item state, invocation, dismissal, submenu timers, and root switching for the active popup chain. Popup window procedures translate popup Win32 messages into the shared menu router; the modal loop pumps and dispatches popup messages instead of pre-consuming them. Non-popup/global menu coordination such as activation loss, menu-bar root switching, and submenu timers may stay in the modal loop, but no second popup input state machine is allowed. Callers choose when to open a menu; any menu opened from a DxUI control mouse-up/dropdown callback MUST be deferred through the owning window's message queue before entering `ContextMenu::Show(...)`.
+- **Non-modal ownership:** `ContextMenu::ShowAsync(...)` uses the same DxUI popup windows, renderer, theme tokens, hit testing, keyboard routing, submenu timers, and light-dismiss contract as `ContextMenu::Show(...)`, but owns the active popup chain through an asynchronous controller and returns to the caller immediately. Async callers MUST apply the selected command from the close callback on the owner UI thread and revalidate target HWND/model state before mutating domain state. Async popup startup messages must not be treated as dismissals; only capture/activation loss after the initial capture/focus handoff can close the menu. Use this mode for modeless progress, animation, or monitoring surfaces that must continue processing owner-window paint/timer/progress messages while a menu is open.
 - **Immediate visual feedback:** Popup hover, scrollbar, submenu-close, and keyboard-highlight state changes must invalidate the affected popup and then flow through the normal popup `WM_PAINT` dispatch in the active menu loop. Newly created popup hosts must prepare their initial frame through `WindowHost` rendering, not `UpdateWindow`; the first visible frame must not depend on pointer movement, title-bar activation, or unrelated owner-window messages. Invoking or dismissing a popup must end the menu loop from the popup message route itself, so the selected command returns without requiring an unrelated owner-window or title-bar message.
 - **Pointer routing resilience:** While a DxUI popup menu is open, the menu loop MUST keep capture on the root popup and dispatch popup messages through the popup window procedure. Delivered popup/menu messages are authoritative for hit-testing, hover highlight, item invocation, outside-click light-dismiss, submenu timing, and root-menu switching. Production menu routing MUST NOT call `GetCursorPos()` or run cursor/button-state polling as a second input source; `GetCursorPos()` is allowed only for diagnostic logging and selftest/repro evidence. The modal loop MUST prioritize pending mouse and keyboard messages ahead of generic owner-window traffic so `WM_PAINT`, `WM_NULL`, and other owner floods cannot starve popup hover or item invocation.
 - **Owner hover handoff:** A `WindowHost` receiving `WM_MOUSELEAVE` while a popup/foreign HWND covers the owner client area, or while a non-owner HWND owns mouse capture, MUST clear owner hover and stop tracking the owner. It MUST NOT re-arm `TrackMouseEvent` merely because the cursor is still geometrically inside the owner client rectangle; re-arming is only valid when `WindowFromPoint` is the owner host or its descendant and mouse capture is absent or belongs to the owner host/descendant.

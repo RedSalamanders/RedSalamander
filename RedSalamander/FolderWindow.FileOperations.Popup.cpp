@@ -663,10 +663,12 @@ struct GlobalFileOperationsStatusSummary
                                 static_cast<unsigned long>(summary.needAttention));
 }
 
+#ifdef ENABLE_TESTS
 [[nodiscard]] size_t SurfacedTaskStatusCount(TaskStatusKind status) noexcept
 {
     return status == TaskStatusKind::None ? 0u : 1u;
 }
+#endif
 
 bool IsAsciiSpace(wchar_t ch) noexcept
 {
@@ -1869,8 +1871,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DiscardDeviceResourc
     _graphDynamicBrush.reset();
     _graphTextShadowBrush.reset();
     _buttonBgBrush.reset();
-    _buttonHoverBrush.reset();
-    _buttonPressedBrush.reset();
+    _buttonChromeBrush.reset();
     _captionGlyphBrush.reset();
 }
 
@@ -2319,9 +2320,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
         _graphTextShadowBrush->SetColor(shadowColor);
     }
 
-    const D2D1::ColorF btnBg      = ColorFromCOLORREF(theme.menu.background);
-    const D2D1::ColorF btnHover   = ColorFromCOLORREF(theme.menu.selectionBg, 0.15f);
-    const D2D1::ColorF btnPressed = ColorFromCOLORREF(theme.menu.selectionBg, 0.25f);
+    const D2D1::ColorF btnBg = ColorFromCOLORREF(theme.menu.background);
 
     if (! _buttonBgBrush)
     {
@@ -2332,22 +2331,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
         _buttonBgBrush->SetColor(btnBg);
     }
 
-    if (! _buttonHoverBrush)
+    if (! _buttonChromeBrush)
     {
-        _target->CreateSolidColorBrush(btnHover, _buttonHoverBrush.addressof());
-    }
-    else
-    {
-        _buttonHoverBrush->SetColor(btnHover);
-    }
-
-    if (! _buttonPressedBrush)
-    {
-        _target->CreateSolidColorBrush(btnPressed, _buttonPressedBrush.addressof());
-    }
-    else
-    {
-        _buttonPressedBrush->SetColor(btnPressed);
+        _target->CreateSolidColorBrush(btnBg, _buttonChromeBrush.addressof());
     }
 
     const D2D1::ColorF checkboxFill = ColorFromCOLORREF(theme.menu.selectionBg);
@@ -3023,46 +3009,40 @@ void FileOperationsPopupInternal::FileOperationsPopupState::AutoResizeWindow(HWN
     _maxAutoSizedWindowHeight = std::max(_maxAutoSizedWindowHeight, desiredWindowHeight);
 }
 
-void FileOperationsPopupInternal::FileOperationsPopupState::DrawButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept
+void FileOperationsPopupInternal::FileOperationsPopupState::DrawDxUiButtonChrome(const PopupButton& button,
+                                                                                 IDWriteTextFormat* format,
+                                                                                 std::wstring_view text,
+                                                                                 RedSalamander::DxUi::ButtonVariant variant) noexcept
 {
-    if (! _target || ! _borderBrush)
+    if (! _target || ! _buttonChromeBrush || ! folderWindow || ! hostLifetime.lock())
     {
         return;
     }
 
-    const bool hot       = button.hit.kind == _hotHit.kind && button.hit.taskId == _hotHit.taskId && button.hit.data == _hotHit.data;
-    const bool pressed   = button.hit.kind == _pressedHit.kind && button.hit.taskId == _pressedHit.taskId && button.hit.data == _pressedHit.data;
-    const D2D1_RECT_F rc = button.bounds;
+    RedSalamander::DxUi::ButtonChromeDrawSpec spec{};
+    spec.bounds         = button.bounds;
+    spec.text           = text;
+    spec.variant        = variant;
+    spec.hovered        = button.hit.kind == _hotHit.kind && button.hit.taskId == _hotHit.taskId && button.hit.data == _hotHit.data;
+    spec.pressed        = button.hit.kind == _pressedHit.kind && button.hit.taskId == _pressedHit.taskId && button.hit.data == _pressedHit.data;
+    spec.scale          = static_cast<float>(_dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
+    spec.chevronGlyph   = FluentIcons::kChevronDown;
 
-    if (_buttonBgBrush)
+    IDWriteTextFormat* iconFormat = _statusIconFormat.get();
+    if (! iconFormat || ! DirectWriteFormatHasGlyph(_dwriteFactory.get(), iconFormat, spec.chevronGlyph))
     {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->FillRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _buttonBgBrush.get());
+        spec.chevronGlyph = FluentIcons::kFallbackChevronDown;
+        iconFormat        = _statusIconFallbackFormat ? _statusIconFallbackFormat.get() : format;
     }
 
-    if (hot && _buttonHoverBrush)
-    {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->FillRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _buttonHoverBrush.get());
-    }
+    const AppTheme& appTheme = folderWindow->GetTheme();
+    RedSalamander::DxUi::DrawButtonChrome(
+        _target.get(), _buttonChromeBrush.get(), format, iconFormat, MakeAppThemeDxPalette(appTheme, appTheme.windowBackground), spec);
+}
 
-    if (pressed && _buttonPressedBrush)
-    {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->FillRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _buttonPressedBrush.get());
-    }
-
-    {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->DrawRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _borderBrush.get(), 1.0f);
-    }
-
-    if (format && ! text.empty() && _textBrush)
-    {
-        const float inset        = DipsToPixels(6.0f, _dpi);
-        const D2D1_RECT_F textRc = D2D1::RectF(rc.left + inset, rc.top, rc.right - inset, rc.bottom);
-        _target->DrawTextW(text.data(), static_cast<UINT32>(text.size()), format, textRc, _textBrush.get());
-    }
+void FileOperationsPopupInternal::FileOperationsPopupState::DrawButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept
+{
+    DrawDxUiButtonChrome(button, format, text, RedSalamander::DxUi::ButtonVariant::Standard);
 }
 
 bool FileOperationsPopupInternal::FileOperationsPopupState::DrawCenteredChevronGlyph(const D2D1_RECT_F& rc,
@@ -3092,57 +3072,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawMenuButton(const
                                                                            IDWriteTextFormat* format,
                                                                            std::wstring_view text) noexcept
 {
-    if (! _target || ! _borderBrush)
-    {
-        return;
-    }
-
-    const bool hot       = button.hit.kind == _hotHit.kind && button.hit.taskId == _hotHit.taskId && button.hit.data == _hotHit.data;
-    const bool pressed   = button.hit.kind == _pressedHit.kind && button.hit.taskId == _pressedHit.taskId && button.hit.data == _pressedHit.data;
-    const D2D1_RECT_F rc = button.bounds;
-
-    if (_buttonBgBrush)
-    {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->FillRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _buttonBgBrush.get());
-    }
-
-    if (hot && _buttonHoverBrush)
-    {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->FillRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _buttonHoverBrush.get());
-    }
-
-    if (pressed && _buttonPressedBrush)
-    {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->FillRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _buttonPressedBrush.get());
-    }
-
-    {
-        const float radius = ClampCornerRadius(rc, DipsToPixels(2.0f, _dpi));
-        _target->DrawRoundedRectangle(D2D1::RoundedRect(rc, radius, radius), _borderBrush.get(), 1.0f);
-    }
-
-    const float arrowSectionW = DipsToPixels(22.0f, _dpi);
-    const float separatorX    = std::clamp(rc.right - arrowSectionW, rc.left, rc.right);
-
-    if (separatorX > rc.left && separatorX < rc.right)
-    {
-        const float lineInset = DipsToPixels(2.0f, _dpi);
-        _target->DrawLine(D2D1::Point2F(separatorX, rc.top + lineInset), D2D1::Point2F(separatorX, rc.bottom - lineInset), _borderBrush.get(), 1.0f);
-    }
-
-    const D2D1_RECT_F arrowRc = D2D1::RectF(separatorX, rc.top, rc.right, rc.bottom);
-    DrawCenteredChevronGlyph(arrowRc, FluentIcons::kChevronDown, FluentIcons::kFallbackChevronDown);
-
-    if (format && ! text.empty() && _textBrush)
-    {
-        const float inset        = DipsToPixels(6.0f, _dpi);
-        const float right        = std::max(rc.left + inset, separatorX - inset);
-        const D2D1_RECT_F textRc = D2D1::RectF(rc.left + inset, rc.top, right, rc.bottom);
-        _target->DrawTextW(text.data(), static_cast<UINT32>(text.size()), format, textRc, _textBrush.get());
-    }
+    DrawDxUiButtonChrome(button, format, text, RedSalamander::DxUi::ButtonVariant::DropDown);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawCheckboxBox(const D2D1_RECT_F& rect, bool checked) noexcept
@@ -6011,35 +5941,77 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
-    if (! chosenOpt.has_value())
-    {
-        return;
-    }
-    const UINT chosen = static_cast<UINT>(chosenOpt.value());
-
-    uint64_t newLimit = currentLimit;
-    if (chosen == kCmdUnlimited)
-    {
-        newLimit = 0;
-    }
-    else if (chosen >= kCmdPresetBase && chosen < (kCmdPresetBase + static_cast<UINT>(kPresets.size())))
-    {
-        const size_t index = static_cast<size_t>(chosen - kCmdPresetBase);
-        newLimit           = kPresets[index];
-    }
-    else if (chosen == kCmdCustom)
-    {
-        const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
-        if (! promptResult.has_value())
+    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(
+        hwnd,
+        pt,
+        items,
+        MakeAppThemeDxPalette(folderWindow->GetTheme()),
+        [this, hwnd, taskId](std::optional<int> chosenOpt) noexcept
         {
-            return;
-        }
+            if (! chosenOpt.has_value())
+            {
+                return;
+            }
 
-        newLimit = promptResult.value();
-    }
+            if (! hwnd || IsWindow(hwnd) == FALSE || ! hostLifetime.lock() || ! fileOps || ! folderWindow)
+            {
+                return;
+            }
 
-    task->SetDesiredSpeedLimit(newLimit);
+            FolderWindow::FileOperationState::Task* selectedTask = fileOps->FindTask(taskId);
+            if (! selectedTask)
+            {
+                return;
+            }
+
+            const FileSystemOperation selectedOperation = selectedTask->GetOperation();
+            if (selectedOperation != FILESYSTEM_COPY && selectedOperation != FILESYSTEM_MOVE)
+            {
+                return;
+            }
+
+            const UINT chosen      = static_cast<UINT>(chosenOpt.value());
+            uint64_t newLimit      = selectedTask->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+            const uint64_t current = newLimit;
+            if (chosen == kCmdUnlimited)
+            {
+                newLimit = 0;
+            }
+            else if (chosen >= kCmdPresetBase && chosen < (kCmdPresetBase + static_cast<UINT>(kPresets.size())))
+            {
+                const size_t index = static_cast<size_t>(chosen - kCmdPresetBase);
+                newLimit           = kPresets[index];
+            }
+            else if (chosen == kCmdCustom)
+            {
+                const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), current);
+                if (! promptResult.has_value())
+                {
+                    return;
+                }
+
+                newLimit = promptResult.value();
+                selectedTask = fileOps->FindTask(taskId);
+                if (! selectedTask)
+                {
+                    return;
+                }
+
+                const FileSystemOperation postPromptOperation = selectedTask->GetOperation();
+                if (postPromptOperation != FILESYSTEM_COPY && postPromptOperation != FILESYSTEM_MOVE)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                return;
+            }
+
+            selectedTask->SetDesiredSpeedLimit(newLimit);
+            Invalidate(hwnd);
+        },
+        sessionCallbacks));
 }
 
 bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimitPromptForTask(HWND hwnd, uint64_t requestedTaskId) noexcept
@@ -6217,27 +6189,54 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
-    if (! chosenOpt.has_value())
-    {
-        return;
-    }
-    const UINT chosen = static_cast<UINT>(chosenOpt.value());
-
-    if (chosen == kCmdOtherPanel)
-    {
-        if (otherPanelPath.has_value())
+    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(
+        hwnd,
+        pt,
+        items,
+        MakeAppThemeDxPalette(folderWindow->GetTheme()),
+        [this, hwnd, taskId, otherPanelPath, entries = std::move(entries)](std::optional<int> chosenOpt) noexcept
         {
-            task->SetDestinationFolder(otherPanelPath.value());
-        }
-        return;
-    }
+            if (! chosenOpt.has_value())
+            {
+                return;
+            }
 
-    if (chosen >= kCmdHistoryBase && chosen < (kCmdHistoryBase + static_cast<UINT>(entries.size())))
-    {
-        const size_t index = static_cast<size_t>(chosen - kCmdHistoryBase);
-        task->SetDestinationFolder(entries[index].folder);
-    }
+            if (! hwnd || IsWindow(hwnd) == FALSE || ! hostLifetime.lock() || ! fileOps)
+            {
+                return;
+            }
+
+            FolderWindow::FileOperationState::Task* selectedTask = fileOps->FindTask(taskId);
+            if (! selectedTask)
+            {
+                return;
+            }
+
+            const FileSystemOperation selectedOperation = selectedTask->GetOperation();
+            if ((selectedOperation != FILESYSTEM_COPY && selectedOperation != FILESYSTEM_MOVE) || selectedTask->HasStarted())
+            {
+                return;
+            }
+
+            const UINT chosen = static_cast<UINT>(chosenOpt.value());
+            if (chosen == kCmdOtherPanel)
+            {
+                if (otherPanelPath.has_value())
+                {
+                    selectedTask->SetDestinationFolder(otherPanelPath.value());
+                    Invalidate(hwnd);
+                }
+                return;
+            }
+
+            if (chosen >= kCmdHistoryBase && chosen < (kCmdHistoryBase + static_cast<UINT>(entries.size())))
+            {
+                const size_t index = static_cast<size_t>(chosen - kCmdHistoryBase);
+                selectedTask->SetDestinationFolder(entries[index].folder);
+                Invalidate(hwnd);
+            }
+        },
+        sessionCallbacks));
 }
 
 bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitCompletedOverflowAction(
@@ -6313,17 +6312,30 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
-    if (! chosenOpt.has_value())
-    {
-        return;
-    }
+    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(
+        hwnd,
+        pt,
+        items,
+        MakeAppThemeDxPalette(folderWindow->GetTheme()),
+        [this, hwnd, taskId](std::optional<int> chosenOpt) noexcept
+        {
+            if (! chosenOpt.has_value())
+            {
+                return;
+            }
 
-    const UINT chosen = static_cast<UINT>(chosenOpt.value());
-    if (chosen == kCmdShowLog || chosen == kCmdExportIssues)
-    {
-        static_cast<void>(SubmitCompletedOverflowAction(hwnd, taskId, chosen, true));
-    }
+            if (! hwnd || IsWindow(hwnd) == FALSE || ! hostLifetime.lock())
+            {
+                return;
+            }
+
+            const UINT chosen = static_cast<UINT>(chosenOpt.value());
+            if (chosen == kCmdShowLog || chosen == kCmdExportIssues)
+            {
+                static_cast<void>(SubmitCompletedOverflowAction(hwnd, taskId, chosen, true));
+            }
+        },
+        sessionCallbacks));
 }
 
 bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitConflictOverflowAction(HWND hwnd, uint64_t taskId, uint32_t rawAction) noexcept
@@ -6424,12 +6436,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflow
     constexpr UINT kCmdOverflowBase = 1u;
     std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
     items.reserve(std::min(layout.overflowCount, layout.overflow.size()));
+    std::vector<uint32_t> overflowActions;
+    overflowActions.reserve(std::min(layout.overflowCount, layout.overflow.size()));
     for (size_t i = 0; i < layout.overflowCount && i < layout.overflow.size(); ++i)
     {
         RedSalamander::DxUi::MenuFlyoutItem item{};
         item.text      = ConflictActionText(layout.overflow[i]);
         item.commandId = static_cast<int>(kCmdOverflowBase + static_cast<UINT>(i));
         items.push_back(std::move(item));
+        overflowActions.push_back(static_cast<uint32_t>(RawConflictAction(layout.overflow[i])));
     }
 
     RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
@@ -6442,23 +6457,33 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflow
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()), sessionCallbacks);
-    if (! chosenOpt.has_value())
-    {
-        return;
-    }
+    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(
+        hwnd,
+        pt,
+        items,
+        MakeAppThemeDxPalette(folderWindow->GetTheme()),
+        [this, hwnd, taskId, overflowActions = std::move(overflowActions)](std::optional<int> chosenOpt) noexcept
+        {
+            if (! chosenOpt.has_value())
+            {
+                return;
+            }
 
-    const UINT chosen = static_cast<UINT>(chosenOpt.value());
-    if (chosen < kCmdOverflowBase || chosen >= kCmdOverflowBase + static_cast<UINT>(items.size()))
-    {
-        return;
-    }
+            if (! hwnd || IsWindow(hwnd) == FALSE || ! hostLifetime.lock())
+            {
+                return;
+            }
 
-    const size_t index = static_cast<size_t>(chosen - kCmdOverflowBase);
-    if (index < layout.overflowCount && index < layout.overflow.size())
-    {
-        static_cast<void>(SubmitConflictOverflowAction(hwnd, taskId, static_cast<uint32_t>(RawConflictAction(layout.overflow[index]))));
-    }
+            const UINT chosen = static_cast<UINT>(chosenOpt.value());
+            if (chosen < kCmdOverflowBase || chosen >= kCmdOverflowBase + static_cast<UINT>(overflowActions.size()))
+            {
+                return;
+            }
+
+            const size_t index = static_cast<size_t>(chosen - kCmdOverflowBase);
+            static_cast<void>(SubmitConflictOverflowAction(hwnd, taskId, overflowActions[index]));
+        },
+        sessionCallbacks));
 }
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnCreate(HWND hwnd) noexcept

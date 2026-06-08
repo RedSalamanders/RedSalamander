@@ -76,7 +76,7 @@ NavigationView reflects the **focused pane** (not only whether NavigationView it
 - **Color**: submenu chevrons are rendered using the theme’s *secondary* color (e.g. `MenuTheme.shortcutText` / selected variant), not the main label text color.
 - **Color (glyph icons)**: menu item glyph icons (Segoe Fluent Icons) are rendered using the same color as the menu label text (`MenuTheme.text` / `MenuTheme.selectionText` / `MenuTheme.disabledText`) so they remain legible in dark theme.
 - **Size (glyph icons)**: Segoe Fluent icon fonts default to `15 DIP` (see `FluentIcons::kDefaultSizeDip`) and scale with DPI.
-- App-owned operation-card menu buttons and collapse/expand controls render chevrons with the same icon-glyph path (Segoe Fluent Icons preferred; Unicode fallback) rather than custom line strokes, so the affordance matches popup menus and navigation glyphs.
+- App-owned operation-card buttons use shared DxUI button chrome. Menu-only affordances such as speed limit, destination selector, conflict **More...**, and completed-task **More...** render as DxUI drop-down buttons with a glyph chevron and no split divider; split-button chrome is reserved for controls with a separate primary action plus menu action. Collapse/expand controls render chevrons with the same icon-glyph path (Segoe Fluent Icons preferred; Unicode fallback) rather than custom line strokes, so the affordance matches popup menus and navigation glyphs.
 - **Owner-draw arrow gotcha (MUST)**: when using `MFT_OWNERDRAW`, Windows may still paint the default submenu arrow *after* `WM_DRAWITEM`. To ensure only the custom chevron is visible, the draw handler must clip out the arrow area after drawing it:
   - Set an initial clip region to the item rect (so exclusions don’t leak).
   - Compute an arrow rect at the right edge using `max(customArrowAreaWidth, GetSystemMetricsForDpi(SM_CXMENUCHECK, dpi))`.
@@ -102,6 +102,7 @@ Windows common controls do not automatically inherit dark-mode styling in all ca
 Standard dialog push buttons (`OK`, `Cancel`, `Create`, etc.) MUST be theme-aware so they do not render as light-mode controls on dark dialogs.
 
 - Migrated dialogs SHOULD use `RedSalamander::DxUi::Button` hosted by `RedSalamander::DxUi::WindowHost` so button fill, focus, hover, pressed, primary, and accessibility behavior come from the shared DxUi path.
+- `Ui::AlertOverlay` is an owned Direct2D overlay surface, not a regular `DxUi::WindowHost` dialog. Its footer buttons and close affordance MUST render through the shared `DxUi::DrawButtonChrome` low-level chrome path with an AlertOverlay-specific custom style so the current overlay look remains unchanged: 6 DIP footer-button corners, transparent secondary idle fill, accent-tinted secondary hover fill, accent primary fill, single 2 DIP focus outline, and the existing two-stroke close glyph.
 - Legacy Win32 dialogs that have not migrated yet MAY keep native buttons, but must still apply the current dialog theme and avoid reintroducing retired `ThemedControls` owner-draw helpers.
 - In high-contrast themes, dialogs MUST NOT force owner-draw; the system must remain in full control of colors.
 

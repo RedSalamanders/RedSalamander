@@ -32,6 +32,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUi.h"
 #include "DxUi/DxUi.Typography.h"
 
 namespace RedSalamander::Ui
@@ -266,6 +267,16 @@ public:
     {
         return _closeRect;
     }
+
+    [[nodiscard]] bool DebugUsesSharedCloseChromeForTest() const noexcept
+    {
+        return _debugUsesSharedCloseChrome;
+    }
+
+    [[nodiscard]] bool DebugUsesSharedButtonChromeForTest() const noexcept
+    {
+        return _debugUsesSharedButtonChrome;
+    }
 #endif
 
     [[nodiscard]] bool EnsureLayout(IDWriteFactory* dwriteFactory, float clientWidthDip, float clientHeightDip) noexcept
@@ -477,6 +488,10 @@ public:
 
     void Draw(ID2D1RenderTarget* target, IDWriteFactory* dwriteFactory, float clientWidthDip, float clientHeightDip, uint64_t nowTickMs) noexcept
     {
+#if defined(ENABLE_TESTS)
+        _debugUsesSharedCloseChrome  = false;
+        _debugUsesSharedButtonChrome = false;
+#endif
         if (! target || ! dwriteFactory)
         {
             return;
@@ -936,20 +951,29 @@ private:
         }
 
         const bool hot = (_hot.part == AlertHitTest::Part::Close);
-        if (hot)
-        {
-            const D2D1::ColorF bg = D2D1::ColorF(accentColor.r, accentColor.g, accentColor.b, 0.14f);
-            _backgroundBrush->SetColor(bg);
-            _backgroundBrush->SetOpacity(opacity);
-            const float r = std::min(rect.right - rect.left, rect.bottom - rect.top) * 0.35f;
-            target->FillRoundedRectangle(D2D1::RoundedRect(rect, r, r), _backgroundBrush.get());
-        }
-
         const float w      = std::max(0.0f, rect.right - rect.left);
         const float h      = std::max(0.0f, rect.bottom - rect.top);
         const float size   = std::min(w, h);
         const float stroke = std::clamp(size * 0.10f, 1.5f, 2.5f);
         const float pad    = size * 0.28f;
+        const float radius = size * 0.35f;
+
+        _backgroundBrush->SetOpacity(opacity);
+        RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
+        chrome.bounds      = rect;
+        chrome.variant     = RedSalamander::DxUi::ButtonVariant::IconOnly;
+        chrome.hovered     = hot;
+        chrome.customStyle = RedSalamander::DxUi::ButtonChromeCustomStyle{
+            .fill            = D2D1::ColorF(accentColor.r, accentColor.g, accentColor.b, 0.14f),
+            .showFill        = hot,
+            .showBorder      = false,
+            .showFocus       = false,
+            .cornerRadiusDip = radius,
+        };
+        RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, nullptr, RedSalamander::DxUi::ThemePalette{}, chrome);
+#if defined(ENABLE_TESTS)
+        _debugUsesSharedCloseChrome = true;
+#endif
 
         const D2D1_POINT_2F a = D2D1::Point2F(rect.left + pad, rect.top + pad);
         const D2D1_POINT_2F b = D2D1::Point2F(rect.right - pad, rect.bottom - pad);
@@ -997,6 +1021,43 @@ private:
         std::reverse(_buttonRects.begin(), _buttonRects.end());
     }
 
+    [[nodiscard]] RedSalamander::DxUi::ButtonChromeCustomStyle MakeOverlayButtonChromeStyle(const ButtonRect& btn, bool hot, bool focused, float cornerDip) const
+        noexcept
+    {
+        if (btn.primary)
+        {
+            return RedSalamander::DxUi::ButtonChromeCustomStyle{
+                .fill            = hot ? D2D1::ColorF(_theme.accent.r, _theme.accent.g, _theme.accent.b, 0.95f) : _theme.accent,
+                .border          = _theme.selectionText,
+                .focus           = _theme.selectionText,
+                .text            = _theme.selectionText,
+                .showFill        = true,
+                .showBorder      = true,
+                .showFocus       = focused,
+                .cornerRadiusDip = cornerDip,
+                .borderStrokeDip = 1.0f,
+                .focusOutsetDip  = 2.0f,
+                .focusStrokeDip  = 2.0f,
+            };
+        }
+
+        const D2D1::ColorF border = hot ? _theme.accent : _theme.text;
+        const D2D1::ColorF fill   = hot ? D2D1::ColorF(border.r, border.g, border.b, 0.10f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+        return RedSalamander::DxUi::ButtonChromeCustomStyle{
+            .fill            = fill,
+            .border          = border,
+            .focus           = _theme.accent,
+            .text            = _theme.text,
+            .showFill        = hot,
+            .showBorder      = true,
+            .showFocus       = focused,
+            .cornerRadiusDip = cornerDip,
+            .borderStrokeDip = 1.0f,
+            .focusOutsetDip  = 2.0f,
+            .focusStrokeDip  = 2.0f,
+        };
+    }
+
     void DrawButtons(ID2D1RenderTarget* target, float opacity, float cornerDip) noexcept
     {
         if (! target || ! _backgroundBrush || ! _textBrush)
@@ -1009,57 +1070,19 @@ private:
             const bool hot     = (_hot.part == AlertHitTest::Part::Button && _hot.buttonId == btn.id);
             const bool focused = (_focusedButtonId.has_value() && _focusedButtonId.value() == btn.id);
 
-            const D2D1_ROUNDED_RECT rr = D2D1::RoundedRect(btn.rect, cornerDip, cornerDip);
-            if (btn.primary)
-            {
-                const D2D1::ColorF bg = hot ? D2D1::ColorF(_theme.accent.r, _theme.accent.g, _theme.accent.b, 0.95f) : _theme.accent;
-                _backgroundBrush->SetColor(bg);
-                _backgroundBrush->SetOpacity(opacity);
-                target->FillRoundedRectangle(rr, _backgroundBrush.get());
-
-                _textBrush->SetColor(_theme.selectionText);
-                _textBrush->SetOpacity(opacity);
-                target->DrawRoundedRectangle(rr, _textBrush.get(), 1.0f);
-            }
-            else
-            {
-                const D2D1::ColorF border = hot ? _theme.accent : _theme.text;
-                const D2D1::ColorF bg     = hot ? D2D1::ColorF(border.r, border.g, border.b, 0.10f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
-
-                _backgroundBrush->SetColor(bg);
-                _backgroundBrush->SetOpacity(opacity);
-                target->FillRoundedRectangle(rr, _backgroundBrush.get());
-
-                _textBrush->SetColor(border);
-                _textBrush->SetOpacity(opacity);
-                target->DrawRoundedRectangle(rr, _textBrush.get(), 1.0f);
-            }
-
-            if (! btn.label.empty())
-            {
-                _textBrush->SetColor(btn.primary ? _theme.selectionText : _theme.text);
-                _textBrush->SetOpacity(opacity);
-                target->DrawTextW(btn.label.data(), static_cast<UINT32>(btn.label.size()), _buttonFormat.get(), btn.rect, _textBrush.get());
-            }
-
-            if (focused)
-            {
-                constexpr float kFocusOutsetDip = 2.0f;
-
-                D2D1_RECT_F focusRect = btn.rect;
-                focusRect.left -= kFocusOutsetDip;
-                focusRect.top -= kFocusOutsetDip;
-                focusRect.right += kFocusOutsetDip;
-                focusRect.bottom += kFocusOutsetDip;
-
-                const float focusCorner         = cornerDip + kFocusOutsetDip;
-                const D2D1_ROUNDED_RECT focusRr = D2D1::RoundedRect(focusRect, focusCorner, focusCorner);
-
-                const D2D1::ColorF focusColor = btn.primary ? _theme.selectionText : _theme.accent;
-                _textBrush->SetColor(focusColor);
-                _textBrush->SetOpacity(opacity);
-                target->DrawRoundedRectangle(focusRr, _textBrush.get(), 2.0f);
-            }
+            _backgroundBrush->SetOpacity(opacity);
+            RedSalamander::DxUi::ButtonChromeDrawSpec chrome{};
+            chrome.bounds          = btn.rect;
+            chrome.text            = btn.label;
+            chrome.primary         = btn.primary;
+            chrome.hovered         = hot;
+            chrome.focused         = focused;
+            chrome.keyboardFocused = focused;
+            chrome.customStyle     = MakeOverlayButtonChromeStyle(btn, hot, focused, cornerDip);
+            RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, RedSalamander::DxUi::ThemePalette{}, chrome);
+#if defined(ENABLE_TESTS)
+            _debugUsesSharedButtonChrome = true;
+#endif
         }
     }
 
@@ -1237,6 +1260,8 @@ private:
 #if defined(ENABLE_TESTS)
     float _debugLastDrawOpacity = 0.0f;
     float _debugLastDrawScrimOpacity = 0.0f;
+    bool _debugUsesSharedCloseChrome = false;
+    bool _debugUsesSharedButtonChrome = false;
 #endif
 };
 } // namespace RedSalamander::Ui

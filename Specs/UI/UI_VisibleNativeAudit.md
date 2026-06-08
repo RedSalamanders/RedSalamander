@@ -1,6 +1,6 @@
 # Visible Native Surface Audit
 
-Last updated: 2026-05-17
+Last updated: 2026-06-08
 
 ## Scope
 
@@ -35,15 +35,20 @@ Closeout gate status: `Tools/Audit-RemainingWin32UiDependencies.ps1 -FailOnFindi
 
 2026-05-17 native text-input command-line update: the FolderWindow pane command-line input no longer creates visible native `STATIC` / `EDIT` controls, no longer subclasses an edit HWND, and no longer uses `DEFAULT_GUI_FONT` / `WM_SETFONT`. It is now a `FolderWindow` DxUi host with a native-backend retained `TextField`, guarded by `cmd_pane_command_line_insertion_and_execute`.
 
+2026-06-08 AlertOverlay/button-chrome update: the shared `Ui::AlertOverlay` retained D2D surface now renders its footer-button chrome and close-affordance hover backplate through the shared `DxUi::DrawButtonChrome` raw chrome helper while preserving the existing AlertOverlay visual style. `cmd_app_prompt_uses_alert_overlay_window` guards the footer-button/close chrome path, and `cmd_pane_find_dialog_result_shortcuts_use_shell_clipboard_and_file_actions` guards the close-only Find help overlay path. The remaining AlertOverlayWindow `GetDC` / `SelectObject` rows are classified as captured-backdrop bitmap interop for Direct2D scrim composition, not native text/control rendering.
+
+2026-06-08 hidden fallback status: `CompareDirectoriesWindow` may still create native banner push-button fallback HWNDs, but live snapshots and command selftests require `usesDxUiBannerButtons == true` with `visibleLegacyBannerButtonCount == 0`. `ManagePluginsDialog` may still create legacy backing form controls before `AttachDxFieldHosts(...)`, but its active path hides those HWNDs and reports zero visible legacy form controls. `Preferences.Themes` still contains the retired owner-draw color-swatch handler for the legacy page, but the active Themes page is guarded as a shared DX page surface with zero visible legacy swatch.
+
 Allowed residuals in the broad audit:
 
 | File | Pattern | Visibility | Reason | Removal owner | Exit condition |
 |------|---------|------------|--------|---------------|----------------|
 | `Common/DxUi/DxUi.ComboBox.cpp`, `Common/DxUi/DxUi.Menu.cpp`, `Tests/DxUiTests/DxUiTests.Menu.cpp` | `GetDC`, `SelectObject` | visual bitmap interop / test-only | Popup backdrop capture/test bitmap work, not visible text or native control layout. | DxUi popup/menu | Replace when popup backdrop snapshots no longer require GDI-compatible bitmap capture. |
+| `RedSalamander/Ui/AlertOverlayWindow.cpp` | `GetDC`, `SelectObject` | visual bitmap interop | Modal AlertOverlay backdrop capture before Direct2D scrim composition, not visible text or native control layout. | AlertOverlayWindow | Replace when alert-overlay backdrop snapshots no longer require GDI-compatible bitmap capture. |
 | `RedSalamander/FolderView.Icons.cpp` | `GetDC` | test-only bitmap interop | `ENABLE_TESTS` synthetic thumbnail generation uses a screen DC only to create deterministic DIB thumbnails. | FolderView thumbnail self-tests | Replace if thumbnail self-tests gain a non-HDC bitmap factory helper. |
 | `RedSalamander/FolderView.Rendering.cpp`, `RedSalamander/IconCache.cpp` | `GetDC`, `SelectObject` | shell icon bitmap interop | Shell icon and shortcut overlay conversion into D2D-compatible bitmaps. | FolderView/IconCache | Replace when shell icon extraction has a pure WIC/D2D path. |
 | `RedSalamander/NavigationViewInternal.h` | `SelectObject` | bitmap alpha-blend compatibility | Compatibility DIB alpha-blend fallback, not text or control layout. | NavigationView | Replace when the fallback alpha blend path is retired. |
-| `RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp`, `Tests/DxUiTests/DxUiTestHelpers.h`, `Tests/ViewerPETests/ViewerPETests.cpp` | HDC/HFONT mentions | test-only | Pixel probe, hidden clipboard owner, and assertion text. | Test owners | Remove when equivalent test helpers avoid native probes/text. |
+| `RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp`, `RedSalamander/SelfTest/Commands/Commands.SelfTest.Search.cpp`, `Plugins/ViewerVLC/ViewerVLC.cpp`, `Tests/DxUiTests/DxUiTestHelpers.h`, `Tests/ViewerPETests/ViewerPETests.cpp` | HDC/HFONT/native probe mentions | test-only | Pixel probe, hidden message-queue probe windows, synthetic VLC child probe, hidden clipboard owner, and assertion text. | Test owners | Remove when equivalent test helpers avoid native probes/text. |
 
 No unallowlisted blockers remain in the broad audit. The formerly unallowlisted app-owned HDC paint/selection seams now route through `RedSalamander/D2DHdcPaint.*`, and the last Compare Options legacy `STATIC` fallback was replaced by the custom Dx host class.
 

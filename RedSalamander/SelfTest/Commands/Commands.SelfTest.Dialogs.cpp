@@ -885,6 +885,18 @@ template <typename WorkerFunc> void RunPaneFilterPromptModalCycle(HWND mainWindo
                               std::format(L"Alert overlay prompt should expose live UI Automation InvokePattern support during {}.", operationName));
             }
 
+            PumpPendingMessages();
+            RedSalamander::Ui::AlertOverlayWindowDebugSnapshot overlayChrome{};
+            state.Require(RedSalamander::Ui::DebugGetAlertOverlayWindowSnapshot(overlay, overlayChrome),
+                          std::format(L"Alert overlay prompt should expose debug chrome state during {}.", operationName));
+            state.Require(overlayChrome.usesSharedButtonChrome && overlayChrome.usesSharedCloseChrome,
+                          std::format(L"Alert overlay prompt should render footer/close chrome through shared AlertOverlay/DxUi chrome during {}; "
+                                      L"button={}, close={}, paints={}.",
+                                      operationName,
+                                      overlayChrome.usesSharedButtonChrome ? 1 : 0,
+                                      overlayChrome.usesSharedCloseChrome ? 1 : 0,
+                                      overlayChrome.paintCount));
+
             if (! state.failure.empty())
             {
                 SendMessageW(overlay, WM_KEYDOWN, closeKey, 0);

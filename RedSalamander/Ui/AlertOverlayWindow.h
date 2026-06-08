@@ -23,6 +23,8 @@ struct AlertOverlayWindowDebugSnapshot
     SIZE clientSizePx{};
     SIZE backdropSizePx{};
     RECT closeRectPx{};
+    bool usesSharedCloseChrome = false;
+    bool usesSharedButtonChrome = false;
     uint64_t mouseDownCount = 0;
     uint64_t mouseUpCount = 0;
     uint64_t dismissCount = 0;

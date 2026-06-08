@@ -4098,6 +4098,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                                   overlayPaint.minimumDrawOpacity));
         state.Require(overlayPaint.lastDrawScrimOpacity >= 0.45f,
                       std::format(L"Find result actions help should apply a real modal scrim opacity; saw {:.3f}.", overlayPaint.lastDrawScrimOpacity));
+        state.Require(overlayPaint.usesSharedCloseChrome,
+                      L"Find result actions help close affordance should render through shared AlertOverlay/DxUi chrome while preserving the overlay glyph.");
         RECT originalFindWindowRect{};
         state.Require(GetWindowRect(findWindow, &originalFindWindowRect) != FALSE,
                       L"Failed to capture the Find window rectangle before modal backdrop resize validation.");

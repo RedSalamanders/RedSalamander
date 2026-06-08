@@ -4923,6 +4923,72 @@ void TestMenuAcrylicBackdropScenarioEmitsMetrics()
                       S_OK);
 }
 
+void TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen()
+{
+    using namespace RedSalamander::DxUi;
+
+    const std::vector<MenuFlyoutItem> items = {
+        {.text = L"Async One", .commandId = 7701},
+        {.text = L"Async Two", .commandId = 7702},
+    };
+
+    AttachedHostWindow ownerWindow;
+    SetWindowPos(ownerWindow.Hwnd(), nullptr, 160, 160, 320, 220, SWP_NOZORDER | SWP_NOACTIVATE);
+    ownerWindow.Host().SetRoot(std::make_unique<StripedBackdropControl>(8));
+    ShowWindow(ownerWindow.Hwnd(), SW_SHOWNOACTIVATE);
+    InvalidateRect(ownerWindow.Hwnd(), nullptr, FALSE);
+    UpdateWindow(ownerWindow.Hwnd());
+    ownerWindow.PumpMessages();
+
+    const POINT menuPoint = ClientScreenPointForTest(ownerWindow.Hwnd(), 72, 48, "async context menu anchor maps to screen coordinates");
+    bool callbackInvoked = false;
+    std::optional<int> callbackResult;
+    const bool shown = ContextMenu::ShowAsync(ownerWindow.Hwnd(),
+                                              menuPoint,
+                                              items,
+                                              ownerWindow.Host().GetTheme(),
+                                              [&](std::optional<int> commandId) noexcept
+                                              {
+                                                  callbackInvoked = true;
+                                                  callbackResult  = commandId;
+                                              });
+    Require(shown, "async context menu show succeeds");
+    Require(! callbackInvoked, "async context menu returns before any item is invoked");
+
+    const HWND popupHwnd = WaitForOwnedContextMenuPopupWindowByFirstItemText(ownerWindow.Hwnd(), L"Async One");
+    Require(popupHwnd != nullptr, "async context menu popup window appears");
+
+    const uint64_t renderCountBefore = ownerWindow.Host().DebugGetRenderCount();
+    InvalidateRect(ownerWindow.Hwnd(), nullptr, FALSE);
+    UpdateWindow(ownerWindow.Hwnd());
+    ownerWindow.PumpMessages();
+    Require(ownerWindow.Host().DebugGetRenderCount() > renderCountBefore, "owner host repaints while async context menu is open");
+
+    ContextMenuPopupDebugState popupState{};
+    D2D1_RECT_F rowRectDip{};
+    Require(WaitForContextMenuPopupState(popupHwnd, [](const ContextMenuPopupDebugState& state) noexcept {
+        return state.visibleWidthDip > 0.0f && state.visibleHeightDip > 0.0f;
+    }, popupState) &&
+                WaitForContextMenuPopupItemRect(popupHwnd, 1u, rowRectDip),
+            "async context menu exposes the second row geometry");
+
+    POINT rowCenter{
+        static_cast<LONG>(std::lround((rowRectDip.left + rowRectDip.right) * 0.5f * static_cast<float>(popupState.dpi) /
+                                      static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+        static_cast<LONG>(std::lround((rowRectDip.top + rowRectDip.bottom) * 0.5f * static_cast<float>(popupState.dpi) /
+                                      static_cast<float>(USER_DEFAULT_SCREEN_DPI))),
+    };
+    Require(ClientToScreen(popupHwnd, &rowCenter) != FALSE, "async context menu row center maps to screen coordinates");
+
+    static_cast<void>(SendCapturedMouseMessageForMenuSuite(popupHwnd, WM_LBUTTONDOWN, MK_LBUTTON, rowCenter));
+    static_cast<void>(SendCapturedMouseMessageForMenuSuite(popupHwnd, WM_LBUTTONUP, 0, rowCenter));
+    ownerWindow.PumpMessages();
+
+    Require(callbackInvoked, "async context menu invokes callback after item click");
+    Require(callbackResult == std::optional<int>{7702}, "async context menu callback receives invoked command");
+    Require(WaitForWindowDestroyed(popupHwnd), "async context menu closes after item click");
+}
+
 } // namespace
 
 void RunMenuTests()
@@ -4943,6 +5009,7 @@ void RunMenuTests()
     runTest("TestPointerInputEventWheelUsesDeliveredScreenPoint", TestPointerInputEventWheelUsesDeliveredScreenPoint);
     runTest("TestPointerInputEventHasNoLiveCursorState", TestPointerInputEventHasNoLiveCursorState);
     runTest("TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate", TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate);
+    runTest("TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen", TestContextMenuShowAsyncKeepsOwnerPaintableWhileOpen);
     runTest("TestMenuMnemonicHonorsExplicitAmpersandLabels", TestMenuMnemonicHonorsExplicitAmpersandLabels);
     runTest("TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface", TestMenuOpeningPointerUpCanBeIgnoredOutsideVisibleSurface);
     runTest("TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands", TestEmbeddedViewerContextMenuNativeConversionFiltersStandaloneCommands);

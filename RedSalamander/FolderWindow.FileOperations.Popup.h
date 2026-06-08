@@ -359,6 +359,10 @@ private:
     void UpdateScrollBar(HWND hwnd, float viewH, float contentH) noexcept;
     void AutoResizeWindow(HWND hwnd, float desiredContentHeight, size_t taskCount) noexcept;
 
+    void DrawDxUiButtonChrome(const PopupButton& button,
+                              IDWriteTextFormat* format,
+                              std::wstring_view text,
+                              RedSalamander::DxUi::ButtonVariant variant) noexcept;
     void DrawButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept;
     bool DrawCenteredChevronGlyph(const D2D1_RECT_F& rc, wchar_t fluentGlyph, wchar_t fallbackGlyph) noexcept;
     void DrawMenuButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept;
@@ -490,8 +494,7 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _graphDynamicBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _graphTextShadowBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _buttonBgBrush;
-    wil::com_ptr<ID2D1SolidColorBrush> _buttonHoverBrush;
-    wil::com_ptr<ID2D1SolidColorBrush> _buttonPressedBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _buttonChromeBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _captionGlyphBrush;
     D2D1::ColorF _graphFillBaseColor = D2D1::ColorF(D2D1::ColorF::Black);
     UINT _captionGlyphDpi            = 0;

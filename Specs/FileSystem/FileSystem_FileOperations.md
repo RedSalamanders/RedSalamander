@@ -545,7 +545,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
 - Completed tasks:
   - **Dismiss** MUST remain the primary completed-task action.
   - When diagnostics are available, **Show log** and **Export issues** MUST be reachable through one **More...** menu affordance rather than rendered as separate flat buttons beside Dismiss.
-- Menus launched from operation-card controls (destination selector, speed limit, conflict **More...**, and completed-task **More...**) MUST use the standard split menu-button affordance, including a glyph-rendered chevron, and MUST anchor to the invoking button using the shared DxUI popup-menu placement callbacks. A completed-task **More...** menu near the trailing edge MUST open right-aligned above that button, not centered over another task's live graph or progress display.
+- Menus launched from operation-card controls (destination selector, speed limit, conflict **More...**, and completed-task **More...**) MUST use the standard DxUI drop-down menu-button chrome, including a glyph-rendered chevron, and MUST NOT render as split buttons unless the control has a separate primary action beside the menu action. These controls MUST anchor to the invoking button using the shared DxUI popup-menu placement callbacks. These menus MUST use the shared non-modal DxUI context-menu session (`ContextMenu::ShowAsync` or equivalent), not a nested modal menu loop, so the File Operations popup continues to process timers, animation, progress painting, and other owner-window messages while the menu is open. Menu-result callbacks MUST revalidate the target HWND/task before applying changes. A completed-task **More...** menu near the trailing edge MUST open right-aligned above that button, not centered over another task's live graph or progress display.
 
 **Conflict prompts (inline)**
 - When a task is blocked on a conflict decision, the popup MUST display an inline prompt associated with that task (not a separate modal dialog).
@@ -580,7 +580,7 @@ When paths do not fit, the UI MUST truncate using a **middle ellipsis** (`…`) 
 - Plugins MAY clamp the host-provided limit and report an effective applied limit by writing back to `FileSystemOptions::bandwidthLimitBytesPerSecond` before progress callbacks.
 - Presets (bytes/sec):
   - 1 MiB/s, 5 MiB/s, 10 MiB/s, 50 MiB/s, 100 MiB/s, 1 GiB/s
-- The speed-limit preset menu MUST use the shared DxUI popup-menu contract rather than a native `TrackPopupMenu` surface.
+- The speed-limit preset menu MUST use the shared non-modal DxUI popup-menu contract rather than a native `TrackPopupMenu` surface or blocking nested menu loop.
 - Copy/Move cards MUST expose the **Speed Limit** menu button during pre-calc/preflight so the user can adjust the per-task limit before transfer bytes start moving.
 - `Custom...` opens an owned DirectX prompt surface. It MUST NOT regress to a visible native dialog template or visible child-control fallback.
 - The custom speed-limit prompt is task-scoped: it MUST target the selected live/unfinished Copy/Move task, be owned by the file-operations popup, and preserve the surrounding navigation shell focus/ownership when it is opened, canceled, accepted, or reopened.

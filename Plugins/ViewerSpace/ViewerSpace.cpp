@@ -118,6 +118,7 @@ constexpr uint32_t kRendererDiscardUnknown = 26u;
     return kMaxScanCacheSnapshotBytes;
 }
 
+#ifdef ENABLE_TESTS
 [[nodiscard]] uint64_t SampleCurrentWorkingSetBytes() noexcept
 {
     PROCESS_MEMORY_COUNTERS_EX counters{};
@@ -129,6 +130,7 @@ constexpr uint32_t kRendererDiscardUnknown = 26u;
 
     return static_cast<uint64_t>(counters.WorkingSetSize);
 }
+#endif
 
 [[nodiscard]] uint32_t DefaultWin32ScanThreads() noexcept
 {

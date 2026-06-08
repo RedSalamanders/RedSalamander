@@ -558,10 +558,11 @@ void NavigationView::EnterEditMode()
 
     const auto abortEnterEditMode = [this](std::wstring_view reason) noexcept
     {
+        static_cast<void>(reason);
 #ifdef ENABLE_TESTS
         ++_debugEnterEditAbortCount;
         _debugLastEnterEditAbortReason.assign(reason);
-        #endif
+#endif
         _editMode = false;
         _pathEditBlurSuppressUntilTickMs = 0;
         _renderMode = RenderMode::Breadcrumb;
@@ -825,6 +826,8 @@ void NavigationView::EnterEditMode()
 
 void NavigationView::ExitEditMode(bool accept, std::wstring_view reason)
 {
+    static_cast<void>(reason);
+
     if (! _editMode)
         return;
 
