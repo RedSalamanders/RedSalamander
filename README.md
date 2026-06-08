@@ -10,8 +10,7 @@ RedSalamander is a Windows dual-pane file manager with:
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/RedSalamanders/RedSalamander/total?style=plastic)
 
-
-
+![RedSalamander main window](docs/res/main-window.png)
 ![RedSalamander main window](docs/res/main-window.png)
 
 [Complete User Documentation](docs/UserGuide.md)
