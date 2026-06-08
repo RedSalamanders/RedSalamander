@@ -755,6 +755,25 @@ void NavigationView::ShowFullPathPopup()
 
 void NavigationView::CloseFullPathPopup()
 {
+    if (_fullPathPopupEdit)
+    {
+        if (_fullPathPopupEdit->field)
+        {
+            ClearEditValidationError(*_fullPathPopupEdit);
+            _fullPathPopupEdit->field->SetOnTextChanged({});
+            _fullPathPopupEdit->field->SetOnSubmitted({});
+            _fullPathPopupEdit->field->SetOnBlur({});
+        }
+        _fullPathPopupEdit->host.SetOnEscape({});
+        _fullPathPopupEdit->host.SetOnTabBoundary({});
+        _fullPathPopupEdit->DeactivateForHideOrDestroy();
+        if (_fullPathPopupEdit->hwnd && IsWindow(_fullPathPopupEdit->hwnd.get()) != FALSE)
+        {
+            ShowWindow(_fullPathPopupEdit->hwnd.get(), SW_HIDE);
+        }
+    }
+    _fullPathPopupEditMode = false;
+
     if (_fullPathPopup)
     {
         _fullPathPopup.reset();
@@ -1188,6 +1207,7 @@ void NavigationView::ExitFullPathPopupEditMode(bool accept)
         }
 
         _fullPathPopupEditMode = false;
+        _fullPathPopupEdit->DeactivateForHideOrDestroy();
         const HWND focused     = GetFocus();
         if (focused && _fullPathPopupEdit->hwnd &&
             (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetTextInputHwnd() ||

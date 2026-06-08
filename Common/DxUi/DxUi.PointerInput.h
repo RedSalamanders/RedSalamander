@@ -31,11 +31,6 @@ enum class PointerInputKind : uint8_t
     Unknown,
 };
 
-struct InputGeneration
-{
-    uint64_t value = 0;
-};
-
 struct PointerInputEvent
 {
     PointerInputSource source = PointerInputSource::WindowProc;
@@ -49,7 +44,6 @@ struct PointerInputEvent
     DWORD messageTime         = 0;
     POINT clientPointPx{};
     POINT screenPointPx{};
-    InputGeneration generation{};
     int wheelDelta     = 0;
     bool hasClientPoint = false;
     bool hasScreenPoint = false;
@@ -61,10 +55,8 @@ struct PointerInputEvent
     UINT message,
     WPARAM wParam,
     LPARAM lParam,
-    PointerInputSource source,
-    InputGeneration generation = {}) noexcept;
+    PointerInputSource source) noexcept;
 [[nodiscard]] std::optional<PointerInputEvent> TryBuildPointerInputEventFromMsg(
     const MSG& message,
-    PointerInputSource source,
-    InputGeneration generation = {}) noexcept;
+    PointerInputSource source) noexcept;
 } // namespace RedSalamander::DxUi

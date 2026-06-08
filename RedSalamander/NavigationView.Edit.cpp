@@ -535,10 +535,55 @@ LRESULT NavigationView::EditSuggestPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, 
 
 void NavigationView::EnterEditMode()
 {
-    if (_editMode || ! _currentPath)
+#ifdef ENABLE_TESTS
+    ++_debugEnterEditAttemptCount;
+    _debugLastEnterEditAbortReason.clear();
+#endif
+
+    if (_editMode)
+    {
+#ifdef ENABLE_TESTS
+        _debugLastEnterEditAbortReason = L"already-edit-mode";
+#endif
         return;
+    }
+
+    if (! _currentPath)
+    {
+#ifdef ENABLE_TESTS
+        _debugLastEnterEditAbortReason = L"missing-current-path";
+#endif
+        return;
+    }
+
+    const auto abortEnterEditMode = [this](std::wstring_view reason) noexcept
+    {
+        static_cast<void>(reason);
+#ifdef ENABLE_TESTS
+        ++_debugEnterEditAbortCount;
+        _debugLastEnterEditAbortReason.assign(reason);
+#endif
+        _editMode = false;
+        _pathEditBlurSuppressUntilTickMs = 0;
+        _renderMode = RenderMode::Breadcrumb;
+        _currentEditPath.reset();
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+        UpdateHoverTimerState();
+    };
+
+    if (_pathEdit &&
+        (! _pathEdit->field || ! _pathEdit->hwnd || IsWindow(_pathEdit->hwnd.get()) == FALSE || IsWindowVisible(_pathEdit->hwnd.get()) == FALSE))
+    {
+        _pathEdit->DeactivateForHideOrDestroy();
+        _pathEdit.reset();
+    }
+
     _editMode   = true;
     _renderMode = RenderMode::Edit;
+    _pathEditBlurSuppressUntilTickMs = _embeddedDestinationMode ? 0u : (GetTickCount64() + 250u);
     _editSuggestItems.clear();
     _editSuggestHighlightText.clear();
     CloseEditSuggestPopup();
@@ -550,7 +595,7 @@ void NavigationView::EnterEditMode()
     {
         if (! RegisterDxHostWndClass(_hInstance))
         {
-            _editMode = false;
+            abortEnterEditMode(L"register-dx-host-class");
             return;
         }
 
@@ -558,10 +603,15 @@ void NavigationView::EnterEditMode()
         const auto chrome     = ComputeEditChromeRects(editBounds, _dpi);
         const int hostWidth   = static_cast<int>((std::max)(0L, chrome.editRect.right - chrome.editRect.left));
         const int hostHeight  = static_cast<int>((std::max)(0L, chrome.editRect.bottom - chrome.editRect.top));
+        if (hostWidth <= 0 || hostHeight <= 0)
+        {
+            abortEnterEditMode(L"empty-edit-host-bounds");
+            return;
+        }
 
         auto hostState = std::make_unique<NavigationDxTextHost>();
         HWND hwnd      = CreateWindowExW(0,
-                                         kDxHostClassName,
+                                          kDxHostClassName,
                                          L"",
                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
                                          chrome.editRect.left,
@@ -570,11 +620,11 @@ void NavigationView::EnterEditMode()
                                          hostHeight,
                                          _hWnd.get(),
                                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_PATH_EDIT)),
-                                         _hInstance,
-                                         &hostState->host);
+                                          _hInstance,
+                                          &hostState->host);
         if (! hwnd)
         {
-            _editMode = false;
+            abortEnterEditMode(L"create-edit-host-window");
             return;
         }
 
@@ -595,7 +645,7 @@ void NavigationView::EnterEditMode()
 
     if (! _pathEdit || ! _pathEdit->field || ! _pathEdit->hwnd)
     {
-        _editMode = false;
+        abortEnterEditMode(L"missing-edit-host-state");
         return;
     }
 
@@ -616,7 +666,7 @@ void NavigationView::EnterEditMode()
             return;
         }
 
-        ExitEditMode(true);
+        ExitEditMode(true, L"submitted");
         if (! _editMode && _requestFolderViewFocusCallback)
         {
             _requestFolderViewFocusCallback();
@@ -701,9 +751,15 @@ void NavigationView::EnterEditMode()
         {
             return;
         }
+        if (! _embeddedDestinationMode && _pathEditBlurSuppressUntilTickMs != 0u && GetTickCount64() <= _pathEditBlurSuppressUntilTickMs && _pathEdit && _pathEdit->hwnd &&
+            IsWindowVisible(_pathEdit->hwnd.get()) != FALSE)
+        {
+            SetFocus(_pathEdit->hwnd.get());
+            return;
+        }
         if (_editMode)
         {
-            ExitEditMode(false);
+            ExitEditMode(false, L"blur");
         }
     });
     _pathEdit->host.SetOnEscape([this]() -> bool
@@ -714,7 +770,7 @@ void NavigationView::EnterEditMode()
             return true;
         }
 
-        ExitEditMode(false);
+        ExitEditMode(false, L"escape");
         if (_requestFolderViewFocusCallback)
         {
             _requestFolderViewFocusCallback();
@@ -723,7 +779,7 @@ void NavigationView::EnterEditMode()
     });
     _pathEdit->host.SetOnTabBoundary([this](bool reverse) -> bool
     {
-        ExitEditMode(false);
+        ExitEditMode(false, L"tab-boundary");
         if (_requestFolderViewFocusCallback)
         {
             _requestFolderViewFocusCallback();
@@ -760,13 +816,26 @@ void NavigationView::EnterEditMode()
         InvalidateRect(_hWnd.get(), &editBounds, FALSE);
     }
 
+#ifdef ENABLE_TESTS
+    ++_debugEnterEditSuccessCount;
+    _debugLastEnterEditAbortReason.clear();
+#endif
+
     UpdateHoverTimerState();
 }
 
-void NavigationView::ExitEditMode(bool accept)
+void NavigationView::ExitEditMode(bool accept, std::wstring_view reason)
 {
+    static_cast<void>(reason);
+
     if (! _editMode)
         return;
+
+#ifdef ENABLE_TESTS
+    ++_debugExitEditCount;
+    _debugLastExitEditAccepted = accept;
+    _debugLastExitEditReason.assign(reason);
+#endif
 
     CloseEditSuggestPopup();
     static_cast<void>(_editSuggestRequestId.fetch_add(1, std::memory_order_acq_rel));
@@ -829,6 +898,7 @@ void NavigationView::ExitEditMode(bool accept)
     }
 
     _editMode = false;
+    _pathEditBlurSuppressUntilTickMs = 0;
 
     if (_pathEdit && _pathEdit->hwnd)
     {
@@ -842,6 +912,7 @@ void NavigationView::ExitEditMode(bool accept)
         }
         _pathEdit->host.SetOnEscape({});
         _pathEdit->host.SetOnTabBoundary({});
+        _pathEdit->DeactivateForHideOrDestroy();
 
         const HWND focused = GetFocus();
         if (focused && (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetTextInputHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE) &&
@@ -1890,7 +1961,14 @@ bool NavigationView::TryHandleEditClipboardCommand(UINT commandId) noexcept
         return false;
     }
 
-    SetFocus(_pathEdit->hwnd.get());
+    const HWND editHwnd = _pathEdit->hwnd.get();
+    const HWND focus    = GetFocus();
+    if (focus != editHwnd && (focus == nullptr || IsChild(editHwnd, focus) == FALSE))
+    {
+        return false;
+    }
+
+    SetFocus(editHwnd);
     _pathEdit->host.SetFocusControl(_pathEdit->field);
     const auto syncTextInput = [this]() noexcept { _pathEdit->host.SyncTextInput(_pathEdit->field); };
 
@@ -2821,7 +2899,7 @@ bool NavigationView::TryRetireInactiveEditTextHostForPointer(HWND hwnd, UINT msg
 
     if (_pathEdit.get() == textHost && _editMode)
     {
-        ExitEditMode(false);
+        ExitEditMode(false, L"retire-pointer");
     }
     else if (_fullPathPopupEdit.get() == textHost && _fullPathPopupEditMode)
     {
@@ -2829,6 +2907,7 @@ bool NavigationView::TryRetireInactiveEditTextHostForPointer(HWND hwnd, UINT msg
     }
     else
     {
+        textHost->DeactivateForHideOrDestroy();
         ShowWindow(textHost->hwnd.get(), SW_HIDE);
     }
 

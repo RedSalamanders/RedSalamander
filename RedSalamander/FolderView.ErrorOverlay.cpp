@@ -590,7 +590,7 @@ void FolderView::ReportError(const std::wstring& context, HRESULT hr) const
         hrText.pop_back();
     }
 
-    std::wstring details = FormatStringResource(nullptr, IDS_FMT_HRESULT_DETAILS, static_cast<unsigned>(hr), hrText);
+    std::wstring details = FormatEmbeddedStringResource(nullptr, IDS_FMT_HRESULT_DETAILS, static_cast<unsigned>(hr), hrText);
     if (details.empty())
     {
         details = std::format(L"0x{:08X}: {}", static_cast<unsigned long>(hr), hrText);
@@ -1067,7 +1067,7 @@ void FolderView::DebugShowOverlaySample(ErrorOverlayKind kind, OverlaySeverity s
             overlay.title = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_OPERATION_FAILED);
 
             const std::wstring hrText  = FormatHResult(overlay.hr);
-            const std::wstring details = FormatStringResource(nullptr, IDS_FMT_HRESULT_DETAILS, static_cast<unsigned>(overlay.hr), hrText);
+            const std::wstring details = FormatEmbeddedStringResource(nullptr, IDS_FMT_HRESULT_DETAILS, static_cast<unsigned>(overlay.hr), hrText);
             overlay.message            = FormatStringResource(nullptr, IDS_OVERLAY_DEBUG_SAMPLE_MSG_ERROR_FMT, details);
             if (overlay.message.empty())
             {
@@ -1094,7 +1094,7 @@ void FolderView::DebugShowOverlaySample(ErrorOverlayKind kind, OverlaySeverity s
             }
             else
             {
-                const std::wstring sampleFolder = LoadStringResource(nullptr, IDS_OVERLAY_DEBUG_SAMPLE_FOLDER_PATH);
+                const std::wstring sampleFolder = LoadEmbeddedStringResource(nullptr, IDS_OVERLAY_DEBUG_SAMPLE_FOLDER_PATH);
                 if (! sampleFolder.empty())
                 {
                     folder = std::filesystem::path(sampleFolder);

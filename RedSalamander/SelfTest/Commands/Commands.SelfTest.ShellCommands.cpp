@@ -36,6 +36,85 @@ struct ShellActionProbeState final
     return result;
 }
 
+[[nodiscard]] std::unordered_set<uint64_t> CollectFileOperationTaskIdsForShellCommandTest(FolderWindow::FileOperationState* fileOps) noexcept
+{
+    std::unordered_set<uint64_t> ids;
+    if (! fileOps)
+    {
+        return ids;
+    }
+
+    std::vector<FolderWindow::FileOperationState::Task*> tasks;
+    fileOps->CollectTasks(tasks);
+    ids.reserve(tasks.size());
+    for (const auto* task : tasks)
+    {
+        if (task)
+        {
+            ids.insert(task->GetId());
+        }
+    }
+    return ids;
+}
+
+[[nodiscard]] FolderView* GetFolderViewForShellCommandTest(FolderWindow::Pane pane) noexcept
+{
+    const HWND folderViewHwnd = g_folderWindow.GetFolderViewHwnd(pane);
+    if (! folderViewHwnd || IsWindow(folderViewHwnd) == FALSE)
+    {
+        return nullptr;
+    }
+    return reinterpret_cast<FolderView*>(GetWindowLongPtrW(folderViewHwnd, GWLP_USERDATA));
+}
+
+[[nodiscard]] bool RequireQueuedShellFileOperationTask(CaseState& state,
+                                                       FolderWindow::FileOperationState* fileOps,
+                                                       const std::unordered_set<uint64_t>& existingTaskIds,
+                                                       FileSystemOperation expectedOperation,
+                                                       const std::filesystem::path& expectedDestination,
+                                                       std::wstring_view context) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::optional<uint64_t> taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(5000ms));
+    state.Require(taskId.has_value(), std::format(L"{} should create a queued File Operations task.", context));
+    if (! taskId.has_value() || ! fileOps)
+    {
+        return false;
+    }
+
+    auto* task = fileOps->FindTask(taskId.value());
+    state.Require(task != nullptr, std::format(L"{} queued task should remain visible for validation.", context));
+    if (! task)
+    {
+        return false;
+    }
+
+    state.Require(task->GetOperation() == expectedOperation,
+                  std::format(L"{} should queue operation {} but queued {}.",
+                              context,
+                              static_cast<unsigned>(expectedOperation),
+                              static_cast<unsigned>(task->GetOperation())));
+    state.Require(task->GetDestinationFolder() == expectedDestination,
+                  std::format(L"{} should target destination '{}', got '{}'.",
+                              context,
+                              DescribePathForShellCommandTest(expectedDestination),
+                              DescribePathForShellCommandTest(task->GetDestinationFolder())));
+
+    const uint32_t flags           = static_cast<uint32_t>(task->_flags);
+    const uint32_t destructiveMask = static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
+                                     static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) |
+                                     static_cast<uint32_t>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    state.Require((flags & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u,
+                  std::format(L"{} should preserve recursive operation coverage.", context));
+    state.Require((flags & destructiveMask) == 0u,
+                  std::format(L"{} should not grant overwrite, replace-readonly, or continue-on-error flags by default (flags=0x{:X}).",
+                              context,
+                              flags));
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestPaneOpenSecurityRoutesFocusedItem(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -1610,6 +1689,27 @@ struct MountPointReparseDataBufferForShellCommandTest final
     return true;
 }
 
+template <typename Duration>
+[[nodiscard]] bool WaitForHostPromptRequestCountAtLeast(size_t expectedCount, Duration timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (HostGetTestPromptRequestCount() >= expectedCount)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    PumpPendingMessages();
+    return HostGetTestPromptRequestCount() >= expectedCount;
+}
+
 struct ClipboardDropPathsReadStatus
 {
     bool opened              = false;
@@ -1883,6 +1983,7 @@ struct ClipboardDropEffectReadStatus
     }
 
     ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
     const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
                   L"Failed to stabilize left folder-view focus before Clipboard Cut.");
@@ -2003,6 +2104,7 @@ struct ClipboardDropEffectReadStatus
     }
 
     ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
     state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {alphaPath, betaPath}, DROPEFFECT_MOVE),
                   L"Failed to seed CF_HDROP clipboard paths with Preferred DropEffect MOVE.");
     const std::optional<DWORD> seededDropEffect = ReadClipboardPreferredDropEffectForShellCommandTest(mainWindow);
@@ -2026,7 +2128,7 @@ struct ClipboardDropEffectReadStatus
     const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
-    PumpPendingMessages();
+    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
     state.Require(HostGetTestPromptRequestCount() == 1u,
                   std::format(L"Paste after Ctrl+X should show exactly one move confirmation prompt; saw {}.",
                               HostGetTestPromptRequestCount()));
@@ -2046,6 +2148,622 @@ struct ClipboardDropEffectReadStatus
     state.Require(! std::filesystem::exists(alphaPath, ec), L"Paste after Ctrl+X should move alpha.txt out of source-a, not copy it.");
     ec.clear();
     state.Require(! std::filesystem::exists(betaPath, ec), L"Paste after Ctrl+X should move beta.txt out of source-b, not copy it.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneClipboardPasteIgnoresStaleOverlayAfterPathChange(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root       = suiteRoot / L"work" / (L"clipboard_stale_overlay_" + NewGuidText());
+    const std::filesystem::path staleRoot  = root / L"stale";
+    const std::filesystem::path sourceRoot = root / L"source";
+    const std::filesystem::path destRoot   = root / L"dest";
+    const std::filesystem::path source     = sourceRoot / L"alpha.txt";
+    const std::filesystem::path copied     = destRoot / L"alpha.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(staleRoot), L"Failed to create stale-overlay source folder.");
+    state.Require(SelfTest::EnsureDirectory(sourceRoot), L"Failed to create stale-overlay clipboard source folder.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create stale-overlay destination folder.");
+    state.Require(SelfTest::WriteTextFile(source, "alpha"), L"Failed to create stale-overlay clipboard source file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for stale-overlay clipboard test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, staleRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, staleRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set stale-overlay initial pane path.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.ShowPaneAlertOverlay(FolderWindow::Pane::Left,
+                                        FolderView::ErrorOverlayKind::Operation,
+                                        FolderView::OverlaySeverity::Warning,
+                                        L"Stale operation",
+                                        L"Stale operation",
+                                        S_OK,
+                                        true,
+                                        true);
+
+    FolderView::AlertOverlayDebugSnapshot staleAlert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, staleAlert) && staleAlert.visible && staleAlert.blocksInput,
+                  L"Stale-overlay fixture should expose a blocking pane alert before navigation.");
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set stale-overlay destination pane path.");
+
+    FolderView::AlertOverlayDebugSnapshot clearedAlert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, clearedAlert) && ! clearedAlert.visible,
+                  L"Changing folder paths should clear stale blocking pane alerts.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY),
+                  L"Failed to seed stale-overlay clipboard CF_HDROP source.");
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before stale-overlay Paste.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
+    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
+    state.Require(HostGetTestPromptRequestCount() == 1u,
+                  std::format(L"Paste after a path-cleared stale overlay should show one confirmation prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                  std::format(L"Paste after a path-cleared stale overlay should refresh the destination; destEntries='{}'.",
+                              DescribeDirectoryEntriesForShellCommandTest(destRoot)));
+    state.Require(std::filesystem::exists(copied, ec), L"Paste after a path-cleared stale overlay should copy alpha.txt into the destination.");
+    ec.clear();
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneClipboardPasteIgnoresUnfocusedNavigationEdit(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"clipboard_stale_nav_edit_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"source";
+    const std::filesystem::path destRoot  = root / L"dest";
+    const std::filesystem::path source    = sourceDir / L"alpha.txt";
+    const std::filesystem::path moved     = destRoot / L"alpha.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create stale-navigation clipboard source directory.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create stale-navigation clipboard destination directory.");
+    state.Require(SelfTest::WriteTextFile(source, "alpha"), L"Failed to create stale-navigation clipboard source file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for stale-navigation clipboard test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for stale-navigation clipboard test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_MOVE),
+                  L"Failed to seed stale-navigation clipboard CF_HDROP source.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.CommandChangeDirectory(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to refocus left folder view after opening the navigation edit field.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CLIPBOARD_PASTE, 0), 0);
+    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
+
+    state.Require(HostGetTestPromptRequestCount() == 1u,
+                  std::format(L"Pane Paste should bypass an unfocused navigation edit session and show one move prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                  std::format(L"Pane Paste should refresh destination after bypassing stale navigation edit; destEntries='{}'.",
+                              DescribeDirectoryEntriesForShellCommandTest(destRoot)));
+    state.Require(std::filesystem::exists(moved, ec), L"Pane Paste should move alpha.txt into the destination.");
+    ec.clear();
+    state.Require(! std::filesystem::exists(source, ec), L"Pane Paste should not leave alpha.txt in the source.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOpsClipboardPasteUsesHostQueue(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File Operations state unavailable for clipboard paste queue test.");
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+    const auto closeFileOps = wil::scope_exit([&] { static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps)); });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"clipboard_paste_queue_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"source";
+    const std::filesystem::path destRoot  = root / L"dest";
+    const std::filesystem::path source    = sourceDir / L"alpha.txt";
+    const std::filesystem::path existing  = destRoot / L"alpha.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create clipboard paste queue source directory.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create clipboard paste queue destination directory.");
+    state.Require(SelfTest::WriteTextFile(source, "source"), L"Failed to create clipboard paste queue source file.");
+    state.Require(SelfTest::WriteTextFile(existing, "existing"), L"Failed to create clipboard paste queue destination collision.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for clipboard paste queue test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for clipboard paste queue test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for clipboard paste queue test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    const auto clearClipboard = wil::scope_exit([&]() noexcept { ClearClipboardContents(mainWindow); });
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY),
+                  L"Failed to seed clipboard paste queue CF_HDROP source.");
+    const auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before clipboard paste queue test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SendMessageW(leftView, WM_COMMAND, MAKEWPARAM(IDM_FOLDERVIEW_CONTEXT_PASTE, 0), 0);
+    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
+
+    state.Require(HostGetTestPromptRequestCount() == 1u,
+                  std::format(L"Clipboard paste queue route should show one File Operations confirmation prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
+    return RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_COPY, destRoot, L"Clipboard paste");
+}
+
+[[nodiscard]] bool TestFileOpsFolderPickerMoveUsesHostQueue(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File Operations state unavailable for folder-picker move queue test.");
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+    const auto closeFileOps = wil::scope_exit([&] { static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps)); });
+    const auto clearPickerOverride = wil::scope_exit([]() noexcept { FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(std::nullopt); });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"folder_picker_move_queue_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"source";
+    const std::filesystem::path destRoot  = root / L"dest";
+    const std::filesystem::path source    = sourceDir / L"alpha.txt";
+    const std::filesystem::path existing  = destRoot / L"alpha.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create folder-picker move queue source directory.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create folder-picker move queue destination directory.");
+    state.Require(SelfTest::WriteTextFile(source, "source"), L"Failed to create folder-picker move queue source file.");
+    state.Require(SelfTest::WriteTextFile(existing, "existing"), L"Failed to create folder-picker move queue destination collision.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for folder-picker move queue test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, sourceDir);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, sourceDir, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for folder-picker move queue test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for folder-picker move queue test.");
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left,
+                                                          [](std::wstring_view name) noexcept { return name == L"alpha.txt"; },
+                                                          true);
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
+                  L"Expected one selected file before folder-picker move queue test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    FolderView::DebugSetNextMoveSelectedItemsDestinationForSelfTest(destRoot);
+
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before folder-picker move queue test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SendMessageW(leftView, WM_COMMAND, MAKEWPARAM(IDM_FOLDERVIEW_CONTEXT_MOVE, 0), 0);
+    static_cast<void>(WaitForHostPromptRequestCountAtLeast(1u, SelfTest::Scale(1000ms)));
+
+    state.Require(HostGetTestPromptRequestCount() == 1u,
+                  std::format(L"Folder-picker move queue route should show one File Operations confirmation prompt; saw {}.",
+                              HostGetTestPromptRequestCount()));
+    return RequireQueuedShellFileOperationTask(state, fileOps, existingTaskIds, FILESYSTEM_MOVE, destRoot, L"Folder-picker move");
+}
+
+[[nodiscard]] bool TestFileOpsMissingCallbackRejectsDirectFallback(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File Operations state unavailable for missing-callback fallback test.");
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+    const auto closeFileOps = wil::scope_exit([&] { static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps)); });
+    FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(false);
+    const auto restoreDirectFallback = wil::scope_exit([]() noexcept { FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(false); });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"missing_callback_fallback_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"source";
+    const std::filesystem::path destRoot  = root / L"dest";
+    const std::filesystem::path source    = sourceDir / L"alpha.txt";
+    const std::filesystem::path copied    = destRoot / L"alpha.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create missing-callback source directory.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create missing-callback destination directory.");
+    state.Require(SelfTest::WriteTextFile(source, "source"), L"Failed to create missing-callback source file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, true);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for missing-callback fallback test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for missing-callback fallback test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ClearClipboardContents(mainWindow);
+    state.Require(SetClipboardDropPathsForShellCommandTest(mainWindow, {source}, DROPEFFECT_COPY),
+                  L"Failed to seed missing-callback fallback CF_HDROP source.");
+    const auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+
+    HostResetTestPromptRequestCount();
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, false);
+
+    const HWND leftView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, leftView, SelfTest::Scale(1000ms)),
+                  L"Failed to stabilize left folder-view focus before missing-callback fallback test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    SendMessageW(leftView, WM_COMMAND, MAKEWPARAM(IDM_FOLDERVIEW_CONTEXT_PASTE, 0), 0);
+    PumpPendingMessages();
+
+    const std::optional<uint64_t> taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms));
+    state.Require(! taskId.has_value(), L"Missing callback should not create a host task or silently use the direct plugin fallback.");
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Missing callback should fail before any local confirmation prompt; saw {} prompts.", HostGetTestPromptRequestCount()));
+    state.Require(! std::filesystem::exists(copied, ec), L"Missing callback should not copy via direct fallback by default.");
+    ec.clear();
+    state.Require(std::filesystem::exists(source, ec), L"Missing callback should leave the source file untouched.");
+    ec.clear();
+
+    FolderView::AlertOverlayDebugSnapshot alert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert),
+                  L"Missing callback fallback test should expose a pane alert snapshot.");
+    state.Require(alert.visible, L"Missing callback should show visible pane feedback.");
+    state.Require(alert.severity == FolderView::OverlaySeverity::Error, L"Missing callback pane feedback should be an error.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFileOpsDragDropMissingCallbackRejectsDirectFallback(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    auto* fileOps = g_folderWindow.DebugGetFileOperationState();
+    state.Require(fileOps != nullptr, L"File Operations state unavailable for drag/drop missing-callback fallback test.");
+    if (! fileOps)
+    {
+        return false;
+    }
+
+    static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps));
+    const auto closeFileOps = wil::scope_exit([&] { static_cast<void>(CloseFileOperationsPopupForSelfTest(fileOps)); });
+    FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(false);
+    const auto restoreDirectFallback = wil::scope_exit([]() noexcept { FolderView::DebugSetDirectFileOperationFallbackEnabledForSelfTest(false); });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"dragdrop_missing_callback_" + NewGuidText());
+    const std::filesystem::path sourceDir = root / L"source";
+    const std::filesystem::path destRoot  = root / L"dest";
+    const std::filesystem::path source    = sourceDir / L"drop-alpha.txt";
+    const std::filesystem::path copied    = destRoot / L"drop-alpha.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create drag/drop missing-callback source directory.");
+    state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create drag/drop missing-callback destination directory.");
+    state.Require(SelfTest::WriteTextFile(source, "source"), L"Failed to create drag/drop missing-callback source file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                       = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftPathBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                    = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, true);
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftPathBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftPathBefore.value());
+        }
+    });
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to activate builtin file-system for drag/drop missing-callback fallback test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, destRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, destRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for drag/drop missing-callback fallback test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto existingTaskIds = CollectFileOperationTaskIdsForShellCommandTest(fileOps);
+    HostResetTestPromptRequestCount();
+    HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
+    const auto clearPromptOverride = wil::scope_exit([]() noexcept { HostClearTestPromptResultOverride(); });
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.DebugSetFileOperationRequestCallbackEnabled(FolderWindow::Pane::Left, false);
+
+    FolderView* folderView = GetFolderViewForShellCommandTest(FolderWindow::Pane::Left);
+    state.Require(folderView != nullptr, L"FolderView unavailable for drag/drop missing-callback fallback test.");
+    if (! folderView)
+    {
+        return false;
+    }
+
+    DWORD performed = DROPEFFECT_COPY;
+    const HRESULT dropHr = folderView->DebugPerformFileDropForSelfTest({source}, DROPEFFECT_COPY, &performed);
+    PumpPendingMessages();
+
+    const std::optional<uint64_t> taskId = ResolveNewFileOperationsTaskIdForSelfTest(fileOps, existingTaskIds, SelfTest::Scale(250ms));
+    state.Require(dropHr == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                  std::format(L"Missing drag/drop callback should fail visibly with ERROR_NOT_SUPPORTED; got 0x{:08X}.",
+                              static_cast<unsigned long>(dropHr)));
+    state.Require(performed == DROPEFFECT_NONE,
+                  std::format(L"Missing drag/drop callback should report no performed drop effect; got {}.", static_cast<unsigned long>(performed)));
+    state.Require(! taskId.has_value(), L"Missing drag/drop callback should not create a host task or silently use the direct plugin fallback.");
+    state.Require(HostGetTestPromptRequestCount() == 0u,
+                  std::format(L"Missing drag/drop callback should fail before any local confirmation prompt; saw {} prompts.", HostGetTestPromptRequestCount()));
+    state.Require(! std::filesystem::exists(copied, ec), L"Missing drag/drop callback should not copy via direct fallback by default.");
+    ec.clear();
+    state.Require(std::filesystem::exists(source, ec), L"Missing drag/drop callback should leave the source file untouched.");
+    ec.clear();
+
+    FolderView::AlertOverlayDebugSnapshot alert{};
+    state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, alert),
+                  L"Missing drag/drop callback fallback test should expose a pane alert snapshot.");
+    state.Require(alert.visible, L"Missing drag/drop callback should show visible pane feedback.");
+    state.Require(alert.severity == FolderView::OverlaySeverity::Error, L"Missing drag/drop callback pane feedback should be an error.");
 
     return state.failure.empty();
 }
@@ -2273,6 +2991,18 @@ void RunShellCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpti
     { return TestPaneClipboardCutSetsMoveDropEffect(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_uses_preferred_move_effect", [=](CaseState& state) noexcept
     { return TestPaneClipboardPasteUsesPreferredMoveEffect(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_path_change_clears_stale_overlay", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteIgnoresStaleOverlayAfterPathChange(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPaste_ignores_unfocused_navigation_edit", [=](CaseState& state) noexcept
+    { return TestPaneClipboardPasteIgnoresUnfocusedNavigationEdit(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsClipboardPasteUsesHostQueue", [=](CaseState& state) noexcept
+    { return TestFileOpsClipboardPasteUsesHostQueue(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsFolderPickerMoveUsesHostQueue", [=](CaseState& state) noexcept
+    { return TestFileOpsFolderPickerMoveUsesHostQueue(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
+    { return TestFileOpsMissingCallbackRejectsDirectFallback(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"Commands_FileOpsDragDropMissingCallbackRejectsDirectFallback", [=](CaseState& state) noexcept
+    { return TestFileOpsDragDropMissingCallbackRejectsDirectFallback(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_creates_unique_links", [=](CaseState& state) noexcept
     { return TestPaneClipboardPasteShortcutCreatesLinks(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_clipboardPasteShortcut_rejects_missing_clipboard_paths", [=](CaseState& state) noexcept

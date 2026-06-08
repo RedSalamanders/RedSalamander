@@ -2233,7 +2233,14 @@ void ShowChangeAttributesReportOverlay(FolderWindow& window, FolderWindow::Pane 
     std::wstring title = LoadStringResource(nullptr, IDS_CMD_CHANGE_ATTRIBUTES);
     if (title.empty())
     {
-        title = LoadStringResource(nullptr, report.failures == 0u ? IDS_APP_TITLE : IDS_CAPTION_WARNING);
+        if (report.failures == 0u)
+        {
+            title = LoadEmbeddedStringResource(nullptr, IDS_APP_TITLE);
+        }
+        else
+        {
+            title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+        }
     }
 
     std::wstring message = report.summary;
@@ -3054,10 +3061,13 @@ struct MakeFileListOptionsPromptDebugStatePayload final
 [[nodiscard]] std::vector<RedSalamander::DxUi::ComboBox::Item> BuildMakeFileListFormatItems()
 {
     using RedSalamander::DxUi::ComboBox;
+    const std::wstring textFormat = LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FORMAT_TEXT);
+    const std::wstring csvFormat  = LoadEmbeddedStringResource(nullptr, IDS_MAKE_FILE_LIST_FORMAT_CSV);
+    const std::wstring jsonFormat = LoadEmbeddedStringResource(nullptr, IDS_MAKE_FILE_LIST_FORMAT_JSON);
     return {
-        ComboBox::Item{L"text", LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FORMAT_TEXT)},
-        ComboBox::Item{L"csv", LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FORMAT_CSV)},
-        ComboBox::Item{L"json", LoadStringResource(nullptr, IDS_MAKE_FILE_LIST_FORMAT_JSON)},
+        ComboBox::Item{L"text", textFormat},
+        ComboBox::Item{L"csv", csvFormat},
+        ComboBox::Item{L"json", jsonFormat},
     };
 }
 

@@ -127,6 +127,59 @@ void TestButtonVariantPaintPathsHandleMissingDeviceContext()
     Require(true, "button variant paint paths tolerate a missing device context");
 }
 
+void TestButtonChromeLayoutDifferentiatesDropDownAndSplit()
+{
+    using namespace RedSalamander::DxUi;
+
+    const D2D1_RECT_F bounds = D2D1::RectF(10.0f, 20.0f, 130.0f, 52.0f);
+
+    const ButtonChromeLayout dropDown = ComputeButtonChromeLayout(bounds, ButtonVariant::DropDown, 1.0f);
+    Require(dropDown.hasChevron, "drop-down button chrome exposes a chevron slot");
+    Require(! dropDown.hasDivider, "drop-down button chrome does not draw a split divider");
+    RequireFloatNear(dropDown.chevronRect.left, 110.0f, 0.001f, "drop-down button chrome uses the standard 20-DIP chevron slot");
+    RequireFloatNear(dropDown.textRect.right, 110.0f, 0.001f, "drop-down button text ends before the chevron slot");
+
+    const ButtonChromeLayout split = ComputeButtonChromeLayout(bounds, ButtonVariant::Split, 1.0f);
+    Require(split.hasChevron, "split button chrome exposes a chevron slot");
+    Require(split.hasDivider, "split button chrome draws a split divider");
+    RequireFloatNear(split.dividerX, 98.0f, 0.001f, "split button chrome uses the standard 32-DIP drop-down segment");
+    RequireFloatNear(split.chevronRect.left, split.dividerX, 0.001f, "split button chevron starts at the divider");
+
+    const ButtonChromeLayout scaledDropDown = ComputeButtonChromeLayout(bounds, ButtonVariant::DropDown, 1.5f);
+    RequireFloatNear(scaledDropDown.chevronRect.left, 100.0f, 0.001f, "drop-down chrome scales the chevron slot with DPI");
+}
+
+void TestButtonChromeCustomStylePreservesOverlayMetrics()
+{
+    using namespace RedSalamander::DxUi;
+
+    ButtonChromeDrawSpec spec{};
+    spec.bounds            = D2D1::RectF(10.0f, 12.0f, 110.0f, 44.0f);
+    spec.text              = L"Close";
+    spec.customStyle       = ButtonChromeCustomStyle{
+        .fill              = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f),
+        .border            = D2D1::ColorF(0.2f, 0.3f, 0.4f, 1.0f),
+        .focus             = D2D1::ColorF(0.1f, 0.6f, 0.9f, 1.0f),
+        .text              = D2D1::ColorF(0.7f, 0.8f, 0.9f, 1.0f),
+        .showFill          = false,
+        .showBorder        = true,
+        .showFocus         = true,
+        .cornerRadiusDip   = 6.0f,
+        .borderStrokeDip   = 1.0f,
+        .focusOutsetDip    = 2.0f,
+        .focusStrokeDip    = 2.0f,
+    };
+
+    const ButtonChromeResolvedStyle resolved = ResolveButtonChromeResolvedStyle(MakeDefaultThemePalette(false), spec);
+    Require(! resolved.showFill, "custom overlay button chrome can suppress the fill while preserving a paintable border");
+    Require(resolved.showBorder, "custom overlay button chrome keeps the border visible");
+    Require(resolved.showFocus, "custom overlay button chrome keeps the focus ring visible");
+    RequireFloatNear(resolved.cornerRadiusDip, 6.0f, 0.001f, "custom overlay button chrome preserves the current overlay corner radius");
+    RequireFloatNear(resolved.focusOutsetDip, 2.0f, 0.001f, "custom overlay button chrome preserves the current overlay focus outset");
+    RequireFloatNear(resolved.focusStrokeDip, 2.0f, 0.001f, "custom overlay button chrome preserves the current overlay focus stroke");
+    RequireFloatNear(resolved.text.r, 0.7f, 0.001f, "custom overlay button chrome preserves caller-provided text color");
+}
+
 void TestHyperlinkButtonClickInvokesCallback()
 {
     using namespace RedSalamander::DxUi;
@@ -1369,6 +1422,8 @@ void RunNewControlTests()
     TestButtonVariantDefaultIsStandard();
     TestButtonVariantRoundtripsAllValues();
     TestButtonVariantPaintPathsHandleMissingDeviceContext();
+    TestButtonChromeLayoutDifferentiatesDropDownAndSplit();
+    TestButtonChromeCustomStylePreservesOverlayMetrics();
     TestHyperlinkButtonClickInvokesCallback();
     TestDropDownButtonKeyboardActivationInvokesDropDownCallback();
     TestDropDownButtonMnemonicInvokesDropDownCallback();

@@ -135,6 +135,20 @@ struct NavigationViewDebugSnapshot
     std::wstring fullPathPopupAncestorTargetText;
     std::wstring currentEditText;
     std::wstring currentEditHelpText;
+    uint64_t debugEnterEditAttemptCount    = 0;
+    uint64_t debugEnterEditSuccessCount    = 0;
+    uint64_t debugEnterEditAbortCount      = 0;
+    uint64_t debugExitEditCount            = 0;
+    uint64_t debugDoubleClickActivateCount = 0;
+    uint64_t debugKeyboardActivateCount    = 0;
+    bool debugLastDoubleClickOnLastSegment = false;
+    bool debugLastDoubleClickInWhitespace  = false;
+    POINT debugLastDoubleClickPoint        = {};
+    float debugLastDoubleClickLocalX       = 0.0f;
+    float debugLastDoubleClickLocalY       = 0.0f;
+    bool debugLastExitEditAccepted         = false;
+    std::wstring debugLastEnterEditAbortReason;
+    std::wstring debugLastExitEditReason;
 };
 
 #endif
@@ -340,6 +354,7 @@ private:
     RECT _sectionDiskInfoRect = {}; // Disk info
 
     std::unique_ptr<NavigationDxTextHost> _pathEdit;
+    uint64_t _pathEditBlurSuppressUntilTickMs = 0;
 
     // Direct2D rendering for all sections
     void EnsureD2DResources();
@@ -382,7 +397,7 @@ private:
 
     // Path editing
     void EnterEditMode();
-    void ExitEditMode(bool accept);
+    void ExitEditMode(bool accept, std::wstring_view reason = L"unspecified");
     void EnterFullPathPopupEditMode();
     void ExitFullPathPopupEditMode(bool accept);
     void UpdatePathEditHostLayout() noexcept;
@@ -682,6 +697,23 @@ private:
     PathChangedCallback _pathChangedCallback;
     RequestFolderViewFocusCallback _requestFolderViewFocusCallback;
     FocusRegion _focusedRegion = FocusRegion::Path;
+
+#ifdef ENABLE_TESTS
+    uint64_t _debugEnterEditAttemptCount    = 0;
+    uint64_t _debugEnterEditSuccessCount    = 0;
+    uint64_t _debugEnterEditAbortCount      = 0;
+    uint64_t _debugExitEditCount            = 0;
+    uint64_t _debugDoubleClickActivateCount = 0;
+    uint64_t _debugKeyboardActivateCount    = 0;
+    bool _debugLastDoubleClickOnLastSegment = false;
+    bool _debugLastDoubleClickInWhitespace  = false;
+    POINT _debugLastDoubleClickPoint        = {};
+    float _debugLastDoubleClickLocalX       = 0.0f;
+    float _debugLastDoubleClickLocalY       = 0.0f;
+    bool _debugLastExitEditAccepted         = false;
+    std::wstring _debugLastEnterEditAbortReason;
+    std::wstring _debugLastExitEditReason;
+#endif
 
     // Disk data
     std::wstring _diskSpaceText;

@@ -1183,6 +1183,9 @@ void FileSystemPluginManager::Unload(PluginEntry& entry, ModuleUnloadMode mode) 
     }
 
     bool retainModuleUntilProcessExit = false;
+    // The retain vote is a process-shutdown escape hatch only. Runtime refresh
+    // reaches this path after instances/callbacks have been quieted and must
+    // still release the old module so rediscovery can load a fresh DLL image.
     if (mode == ModuleUnloadMode::ProcessShutdown && entry.module)
     {
 #pragma warning(push)

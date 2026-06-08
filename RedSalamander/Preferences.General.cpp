@@ -98,7 +98,25 @@ void UpdateUiFromWindowBackdropSelection(PreferencesDialogState& state, Common::
 {
     std::vector<ComboBox::Item> items;
     items.push_back({L"system", LoadStringResource(nullptr, IDS_PREFS_GENERAL_OPTION_LANGUAGE_SYSTEM)});
-    items.push_back({L"en", LoadStringResource(nullptr, IDS_PREFS_GENERAL_OPTION_LANGUAGE_ENGLISH)});
+    std::wstring englishDisplay = LoadEmbeddedStringResource(nullptr, IDS_PREFS_GENERAL_OPTION_LANGUAGE_ENGLISH);
+    items.push_back({L"en", englishDisplay.empty() ? L"en" : englishDisplay});
+
+    const auto getCultureDisplayName = [](const std::wstring& culture)
+    {
+        const UINT resourceId = culture == L"cs-CZ"   ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_CZECH
+                                : culture == L"fr-FR" ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_FRENCH
+                                : culture == L"ja-JP" ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_JAPANESE
+                                : culture == L"sk-SK" ? IDS_PREFS_GENERAL_OPTION_LANGUAGE_SLOVAK
+                                                       : 0u;
+        if (resourceId == 0u)
+        {
+            return culture;
+        }
+
+        // Language autonyms are stable labels for selecting a UI culture, not text translated into the active UI culture.
+        std::wstring display = LoadEmbeddedStringResource(nullptr, resourceId);
+        return display.empty() ? culture : display;
+    };
 
     for (const std::wstring& culture : Localization::DiscoverAvailableCultures())
     {
@@ -111,7 +129,7 @@ void UpdateUiFromWindowBackdropSelection(PreferencesDialogState& state, Common::
             std::find_if(items.begin(), items.end(), [&](const ComboBox::Item& item) noexcept { return item.value == culture; }) != items.end();
         if (! alreadyAdded)
         {
-            items.push_back({culture, culture});
+            items.push_back({culture, getCultureDisplayName(culture)});
         }
     }
 
@@ -487,7 +505,7 @@ void GeneralPane::SyncDxControlsFromState(const PreferencesDialogState& state) n
     }
     if (page.dxUiHeader)
     {
-        page.dxUiHeader->SetText(LoadStringResource(nullptr, IDS_PREFS_GENERAL_SECTION_DXUI));
+        page.dxUiHeader->SetText(LoadEmbeddedStringResource(nullptr, IDS_PREFS_GENERAL_SECTION_DXUI));
     }
     if (page.startupHeader)
     {
@@ -806,7 +824,7 @@ void GeneralPane::LayoutDxPage(HWND host, PreferencesDialogState& state, int x, 
                     dxPage ? dxPage->languageDescription : nullptr,
                     dxPage ? dxPage->languageCombo : nullptr);
     y += sectionSpacingY;
-    layoutHeader(dxPage ? dxPage->dxUiHeader : nullptr, LoadStringResource(nullptr, IDS_PREFS_GENERAL_SECTION_DXUI));
+    layoutHeader(dxPage ? dxPage->dxUiHeader : nullptr, LoadEmbeddedStringResource(nullptr, IDS_PREFS_GENERAL_SECTION_DXUI));
     layoutToggleCard(compactModeDesc,
                      dxPage ? dxPage->compactModeCard : nullptr,
                      dxPage ? dxPage->compactModeTitle : nullptr,

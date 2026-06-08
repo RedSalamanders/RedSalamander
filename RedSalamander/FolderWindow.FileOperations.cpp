@@ -16,6 +16,8 @@ namespace
 {
 struct FileSystemCapabilitiesV1
 {
+    bool copyOperation   = false;
+    bool moveOperation   = false;
     bool read            = false;
     bool write           = false;
     bool deleteOperation = false;
@@ -121,6 +123,14 @@ struct FileSystemCapabilitiesV1
 
     if (yyjson_val* ops = yyjson_obj_get(root, "operations"); ops && yyjson_is_obj(ops))
     {
+        if (yyjson_val* v = yyjson_obj_get(ops, "copy"); v && yyjson_is_bool(v))
+        {
+            out.copyOperation = yyjson_get_bool(v);
+        }
+        if (yyjson_val* v = yyjson_obj_get(ops, "move"); v && yyjson_is_bool(v))
+        {
+            out.moveOperation = yyjson_get_bool(v);
+        }
         if (yyjson_val* v = yyjson_obj_get(ops, "read"); v && yyjson_is_bool(v))
         {
             out.read = yyjson_get_bool(v);
@@ -172,6 +182,24 @@ struct FileSystemCapabilitiesV1
 
     const std::string_view jsonView(jsonUtf8);
     return TryParseCapabilitiesJson(jsonView);
+}
+
+[[nodiscard]] bool CanSameFileSystemOperationFromCapabilities(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
+{
+    const std::optional<FileSystemCapabilitiesV1> capabilities = TryGetCapabilities(fileSystem);
+    if (! capabilities.has_value())
+    {
+        return false;
+    }
+
+    switch (operation)
+    {
+        case FILESYSTEM_COPY: return capabilities->copyOperation;
+        case FILESYSTEM_MOVE: return capabilities->moveOperation;
+        case FILESYSTEM_DELETE: return capabilities->deleteOperation;
+        case FILESYSTEM_RENAME: return true;
+        default: return true;
+    }
 }
 
 [[nodiscard]] bool IdListAllows(const std::vector<std::wstring>& allowedIds, std::wstring_view otherPluginId) noexcept
@@ -231,6 +259,11 @@ struct FileSystemCapabilitiesV1
     return IdListAllows(exportList, destinationPluginId) && IdListAllows(importList, sourcePluginId);
 }
 } // namespace
+
+bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
+{
+    return CanSameFileSystemOperationFromCapabilities(fileSystem, operation);
+}
 
 void FolderWindow::FileOperationStateDeleter::operator()(FileOperationState* state) const noexcept
 {
@@ -375,6 +408,19 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
                                      NavigationLocation::EqualsNoCase(sourceState.instanceContext, destinationState.instanceContext);
             destinationFileSystem  = contextSame ? nullptr : destinationState.fileSystem;
         }
+    }
+
+    if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, request.operation))
+    {
+        const std::wstring& pluginId = sourcePane == Pane::Left ? _leftPane.pluginId : _rightPane.pluginId;
+        Debug::Error(L"FolderWindow::StartFileOperationFromFolderView provider rejected same-filesystem operation plugin:{} op:{}.",
+                     pluginId,
+                     static_cast<unsigned int>(request.operation));
+        destinationState.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                                     FolderView::OverlaySeverity::Error,
+                                                     LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                                     LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
     const bool waitForOthers                = _fileOperations->ShouldQueueNewTask();
@@ -529,6 +575,18 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
         return E_POINTER;
     }
 
+    if (! CanSameFileSystemOperation(sourceState.fileSystem, operation))
+    {
+        Debug::Error(L"FolderWindow::StartFileOperationForResolvedPaths provider rejected operation plugin:{} op:{}.",
+                     sourceState.pluginId,
+                     static_cast<unsigned int>(operation));
+        sourceState.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                                FolderView::OverlaySeverity::Error,
+                                                LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                                LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
     const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
     return _fileOperations->StartOperation(operation,
                                            sourcePane,
@@ -605,6 +663,17 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToOtherPane(std::wstring
     const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                                       NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
     wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
+    if (! destinationFileSystem && ! CanSameFileSystemOperation(src.fileSystem, operation))
+    {
+        Debug::Error(L"FolderWindow::StartFileOperationForResolvedPathsToOtherPane provider rejected same-filesystem operation plugin:{} op:{}.",
+                     src.pluginId,
+                     static_cast<unsigned int>(operation));
+        src.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                        FolderView::OverlaySeverity::Error,
+                                        LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                        LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
     return _fileOperations->StartOperation(operation,
                                            sourcePane,
                                            destPane,
@@ -660,6 +729,18 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToDestination(std::wstri
         return E_POINTER;
     }
 
+    if (! CanSameFileSystemOperation(src.fileSystem, operation))
+    {
+        Debug::Error(L"FolderWindow::StartFileOperationForResolvedPathsToDestination provider rejected same-filesystem operation plugin:{} op:{}.",
+                     src.pluginId,
+                     static_cast<unsigned int>(operation));
+        src.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                        FolderView::OverlaySeverity::Error,
+                                        LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                        LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
     const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
     return _fileOperations->StartOperation(operation,
                                            sourcePane,
@@ -713,6 +794,19 @@ FolderWindow::FileOperationState* FolderWindow::DebugGetFileOperationState() noe
 {
     EnsureFileOperations();
     return _fileOperations.get();
+}
+
+void FolderWindow::DebugSetFileOperationRequestCallbackEnabled(Pane pane, bool enabled) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! enabled)
+    {
+        state.folderView.SetFileOperationRequestCallback({});
+        return;
+    }
+
+    state.folderView.SetFileOperationRequestCallback([this, pane](FolderView::FileOperationRequest request) noexcept -> HRESULT
+    { return StartFileOperationFromFolderView(pane, std::move(request)); });
 }
 #endif
 
@@ -774,6 +868,16 @@ void FolderWindow::CommandDelete(Pane pane)
         return;
     }
 
+    if (! CanSameFileSystemOperation(state.fileSystem, FILESYSTEM_DELETE))
+    {
+        Debug::Error(L"FolderWindow::CommandDelete provider rejected delete plugin:{}.", state.pluginId);
+        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                          FolderView::OverlaySeverity::Error,
+                                          LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                          LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
+        return;
+    }
+
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN);
 
     const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
@@ -795,6 +899,16 @@ void FolderWindow::CommandPermanentDelete(Pane pane)
     std::vector<std::filesystem::path> paths = state.folderView.GetSelectedOrFocusedPaths();
     if (paths.empty())
     {
+        return;
+    }
+
+    if (! CanSameFileSystemOperation(state.fileSystem, FILESYSTEM_DELETE))
+    {
+        Debug::Error(L"FolderWindow::CommandPermanentDelete provider rejected delete plugin:{}.", state.pluginId);
+        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
+                                          FolderView::OverlaySeverity::Error,
+                                          LoadStringResource(nullptr, IDS_CAPTION_ERROR),
+                                          LoadStringResource(nullptr, IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS));
         return;
     }
 
@@ -870,6 +984,14 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
                          static_cast<unsigned int>(operation));
             ok = false;
         }
+    }
+    else if (ok && ! contextsDiffer && ! CanSameFileSystemOperation(src.fileSystem, operation))
+    {
+        Debug::Error(L"FolderWindow::SanityCheckBothPanes provider rejected same-filesystem operation plugin:{} op:{}.",
+                     src.pluginId,
+                     static_cast<unsigned int>(operation));
+        contextsDiffer = true;
+        ok             = false;
     }
 
     if (! ok && _hWnd)
@@ -1012,6 +1134,54 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
     PaneState& src            = sourcePane == Pane::Left ? _leftPane : _rightPane;
     DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
 
+    const auto trimTrailingSeparators = [](std::wstring_view path) noexcept -> std::wstring_view
+    {
+        while (path.size() > 1u && (path.back() == L'\\' || path.back() == L'/'))
+        {
+            path.remove_suffix(1);
+        }
+        return path;
+    };
+
+    const auto foldersEqual = [&](const std::filesystem::path& left, const std::filesystem::path& right) noexcept -> bool
+    {
+        const std::wstring_view leftText  = trimTrailingSeparators(left.native());
+        const std::wstring_view rightText = trimTrailingSeparators(right.native());
+        return NavigationLocation::EqualsNoCase(leftText, rightText);
+    };
+
+    const auto forceRefreshIfShowingFolder = [&](PaneState& paneState, const std::filesystem::path& folder) noexcept
+    {
+        if (folder.empty())
+        {
+            return;
+        }
+
+        const auto paneFolder = paneState.folderView.GetFolderPath();
+        if (paneFolder.has_value() && foldersEqual(paneFolder.value(), folder))
+        {
+            paneState.folderView.ForceRefresh();
+        }
+    };
+
+    const auto forceRefreshVisibleFolder = [&](const std::filesystem::path& folder) noexcept
+    {
+        forceRefreshIfShowingFolder(_leftPane, folder);
+        forceRefreshIfShowingFolder(_rightPane, folder);
+    };
+
+    const auto forceRefreshVisibleSourceParents = [&]() noexcept
+    {
+        for (const auto& sourcePath : task->_sourcePaths)
+        {
+            const std::filesystem::path parent = sourcePath.parent_path();
+            if (! parent.empty())
+            {
+                forceRefreshVisibleFolder(parent);
+            }
+        }
+    };
+
     const auto forceRefreshPane = [&](PaneState& paneState)
     {
         const auto folder = paneState.folderView.GetFolderPath();
@@ -1034,6 +1204,7 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
                 {
                     cache.NotifyFolderContentsChanged(dst->fileSystem.get(), task->GetDestinationFolder());
                 }
+                forceRefreshVisibleFolder(task->GetDestinationFolder());
                 break;
             case FILESYSTEM_MOVE:
                 if (sameContext && src.fileSystem)
@@ -1058,6 +1229,8 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
                         cache.NotifyFolderContentsChanged(dst->fileSystem.get(), task->GetDestinationFolder());
                     }
                 }
+                forceRefreshVisibleSourceParents();
+                forceRefreshVisibleFolder(task->GetDestinationFolder());
                 break;
             case FILESYSTEM_DELETE:
                 if (src.fileSystem)
@@ -1067,6 +1240,7 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
                         cache.NotifyPathDeleted(src.fileSystem.get(), sourcePath);
                     }
                 }
+                forceRefreshVisibleSourceParents();
                 break;
             case FILESYSTEM_RENAME:
                 forceRefreshPane(src);
@@ -1096,8 +1270,8 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
 
     const bool autoDismissSuccess = _fileOperations->GetAutoDismissSuccess();
     _fileOperations->RemoveTask(payload->taskId);
-    constexpr HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-    if (autoDismissSuccess && (SUCCEEDED(payload->hr) || payload->hr == cancelledHr || payload->hr == E_ABORT))
+    if (autoDismissSuccess &&
+        IsAutoDismissableFileOperationCompletion(payload->hr, payload->warningCount, payload->errorCount))
     {
         _fileOperations->DismissCompletedTask(payload->taskId);
     }

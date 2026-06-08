@@ -246,6 +246,29 @@ void FolderView::StopEnumerationThread() noexcept
     _enumerationThreadStarted = false;
 }
 
+void FolderView::DrainPendingEnumerationPayloadMessages() noexcept
+{
+    if (! _hWnd)
+    {
+        return;
+    }
+
+    size_t drainedCount = 0u;
+    MSG msg{};
+    while (PeekMessageW(&msg, _hWnd.get(), WndMsg::kFolderViewEnumerateComplete, WndMsg::kFolderViewEnumerateComplete, PM_REMOVE) != FALSE)
+    {
+        auto payload = TakeMessagePayload<EnumerationPayload>(msg.lParam);
+        ++drainedCount;
+    }
+
+#ifdef ENABLE_TESTS
+    if (drainedCount > 0u)
+    {
+        SelfTest::AppendSelfTestTrace(std::format(L"FolderView::DrainPendingEnumerationPayloadMessages: drained={}", drainedCount));
+    }
+#endif
+}
+
 void FolderView::EnumerationWorker(std::stop_token stopToken)
 {
     // Icon extraction calls COM (IImageList::GetIcon via IconCache::ExtractSystemIcon). This worker runs in the background,

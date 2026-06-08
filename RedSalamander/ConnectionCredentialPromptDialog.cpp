@@ -678,6 +678,9 @@ LRESULT ConnectionCredentialPromptWindow::OnDebugMessage(WPARAM command, LPARAM 
             snapshot->themeRainbow            = _theme.menu.rainbowMode;
             snapshot->secretLength            = _secretField ? _secretField->GetText().size() : 0u;
             snapshot->visibleChildWindowCount = CountVisibleChildWindows(_hWnd.get());
+            snapshot->toggleSecretChecked     = _toggleSecretButton ? _toggleSecretButton->IsChecked() : false;
+            snapshot->toggleSecretPressed     = _toggleSecretButton ? _toggleSecretButton->DebugIsPressed() : false;
+            snapshot->hostHasCapture          = _hWnd && GetCapture() == _hWnd.get();
             snapshot->userNameText            = _userField ? std::wstring(_userField->GetText()) : std::wstring{};
             snapshot->validationText          = _validationText;
 

@@ -95,6 +95,7 @@ struct FileOperationsDxPage
     FileOperationsEditCardDx customBandwidth{};
 
     Label* advancedHeader = nullptr;
+    FileOperationsToggleCardDx autoDismissSuccess{};
     FileOperationsEditCardDx bridgeBuffer{};
     FileOperationsNoteCardDx pluginHint{};
 
@@ -107,6 +108,7 @@ struct FileOperationsDxPage
         bandwidthPreset = {};
         customBandwidth = {};
         advancedHeader  = nullptr;
+        autoDismissSuccess = {};
         bridgeBuffer    = {};
         pluginHint      = {};
     }
@@ -601,6 +603,44 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
     dxState->page.advancedHeader = root->AddChild<Label>();
     dxState->page.advancedHeader->SetFontRole(FontRole::Header);
 
+    dxState->page.autoDismissSuccess.card  = root->AddChild<CardPanel>();
+    dxState->page.autoDismissSuccess.title = root->AddChild<Label>();
+    dxState->page.autoDismissSuccess.title->SetFontRole(FontRole::Body);
+    dxState->page.autoDismissSuccess.description = root->AddChild<Label>();
+    dxState->page.autoDismissSuccess.description->SetFontRole(FontRole::Small);
+    dxState->page.autoDismissSuccess.description->SetMultiline(true);
+    dxState->page.autoDismissSuccess.toggle = root->AddChild<Toggle>();
+    dxState->page.autoDismissSuccess.title->SetMnemonicTarget(dxState->page.autoDismissSuccess.toggle);
+    dxState->page.autoDismissSuccess.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF), LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+    dxState->page.autoDismissSuccess.toggle->SetOnToggled([this, host = parent](bool checked) noexcept
+    {
+        if (! host || IsWindow(host) == FALSE)
+        {
+            return;
+        }
+
+        auto* dialogState = PrefsUi::GetDialogState(host);
+        if (! dialogState)
+        {
+            return;
+        }
+
+        auto* fileOperations = EnsureWorkingFileOperationsSettings(dialogState->workingSettings);
+        if (! fileOperations)
+        {
+            return;
+        }
+
+        if (fileOperations->autoDismissSuccess != checked)
+        {
+            fileOperations->autoDismissSuccess = checked;
+            MaybeResetWorkingFileOperationsSettingsIfEmpty(dialogState->workingSettings);
+            SetDirty(GetParent(host), *dialogState);
+        }
+
+        Refresh(host, *dialogState);
+    });
+
     dxState->page.bridgeBuffer.card  = root->AddChild<CardPanel>();
     dxState->page.bridgeBuffer.title = root->AddChild<Label>();
     dxState->page.bridgeBuffer.title->SetFontRole(FontRole::Body);
@@ -729,6 +769,11 @@ void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& s
     _syncingDxCustomBandwidthEdit = false;
 
     page.advancedHeader->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_SECTION_ADVANCED));
+    page.autoDismissSuccess.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_AUTODISMISS_TITLE));
+    page.autoDismissSuccess.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_AUTODISMISS_DESC));
+    page.autoDismissSuccess.toggle->SetChecked(fileOperations.autoDismissSuccess);
+    page.autoDismissSuccess.toggle->SetEnabled(true);
+
     page.bridgeBuffer.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BRIDGE_BUFFER_TITLE));
     page.bridgeBuffer.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BRIDGE_BUFFER_DESC));
     _syncingDxBridgeBufferEdit = true;
@@ -914,6 +959,7 @@ void FileOperationsPane::LayoutDxPage(
     hideComboCard(page.preCalcWorkers);
     hideComboCard(page.bandwidthPreset);
     hideEditCard(page.customBandwidth);
+    hideToggleCard(page.autoDismissSuccess);
     hideEditCard(page.bridgeBuffer);
     hideNoteCard(page.pluginHint);
 
@@ -1047,6 +1093,7 @@ void FileOperationsPane::LayoutDxPage(
     }
 
     layoutHeader(page.advancedHeader);
+    layoutToggleCard(page.autoDismissSuccess);
     layoutEditCard(page.bridgeBuffer);
     layoutNoteCard(page.pluginHint);
 
@@ -1128,6 +1175,10 @@ PreferencesFileOperationsDebugFocusTarget FileOperationsPane::DebugGetFocusTarge
     if (page.customBandwidth.edit == focused && page.customBandwidth.edit && page.customBandwidth.edit->IsVisible())
     {
         return PreferencesFileOperationsDebugFocusTarget::CustomBandwidthEdit;
+    }
+    if (page.autoDismissSuccess.toggle == focused)
+    {
+        return PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle;
     }
     if (page.bridgeBuffer.edit == focused)
     {

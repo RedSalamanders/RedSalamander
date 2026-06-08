@@ -1,0 +1,12 @@
+#pragma code_page(65001)
+#include "../../FileSystemGoogleDriveResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMGOOGLEDRIVE_DESCRIPTION "Virtuálny súborový systém Disku Google."
+    IDS_FILESYSTEMGOOGLEDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "Prihlasovanie sa nedá spustiť"
+    IDS_FILESYSTEMGOOGLEDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT "{0} potrebuje na otvorenie uloženého pripojenia ID klienta Google OAuth.\r\n\r\nOtvorte Plugins -> Plugin Manager, vyberte '{0}' a nastavte predvolené ID klienta OAuth."
+END

@@ -21,6 +21,30 @@ using namespace Microsoft::VisualStudio::CppUnitTestFramework;
 
 namespace
 {
+constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
+{
+  "version": 1,
+  "operations": {
+    "copy": false,
+    "move": false,
+    "delete": false,
+    "rename": false,
+    "properties": false,
+    "read": false,
+    "write": false
+  },
+  "concurrency": {
+    "copyMoveMax": 1,
+    "deleteMax": 1,
+    "deleteRecycleBinMax": 1
+  },
+  "crossFileSystem": {
+    "export": { "copy": [], "move": [] },
+    "import": { "copy": [], "move": [] }
+  }
+}
+)json";
+
 class TestFilesInformation final : public IFilesInformation
 {
 public:
@@ -273,9 +297,15 @@ public:
     {
         return E_NOTIMPL;
     }
-    HRESULT STDMETHODCALLTYPE GetCapabilities(const char**) noexcept override
+    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
     {
-        return E_NOTIMPL;
+        if (! jsonUtf8)
+        {
+            return E_POINTER;
+        }
+
+        *jsonUtf8 = kReadOnlyFileSystemCapabilitiesJson;
+        return S_OK;
     }
     HRESULT STDMETHODCALLTYPE GetTransferHints([[maybe_unused]] const wchar_t* path,
                                                [[maybe_unused]] FileSystemOperation operationType,

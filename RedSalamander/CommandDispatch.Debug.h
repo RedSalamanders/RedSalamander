@@ -13,6 +13,9 @@
 // Debug-only hook for automation/self-tests: dispatch a command by its canonical command id (e.g., "cmd/pane/refresh").
 [[nodiscard]] bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept;
 
+// Debug-only hook for self-tests that temporarily replace shortcut settings.
+void DebugReloadShortcutsFromSettings() noexcept;
+
 // Debug-only hook for menu-contract self-tests: returns the Fluent icon glyph for a menu command, or 0 when none is assigned.
 [[nodiscard]] wchar_t DebugGetMainMenuIconGlyph(UINT menuCommandId) noexcept;
 

@@ -685,6 +685,248 @@ void DrawDropShadow(
     }
 }
 
+namespace
+{
+[[nodiscard]] float ResolveButtonChromeScale(float scale) noexcept
+{
+    return std::isfinite(scale) && scale > 0.0f ? scale : 1.0f;
+}
+
+[[nodiscard]] D2D1_RECT_F OffsetButtonChromeRect(const D2D1_RECT_F& rect, float dx, float dy) noexcept
+{
+    return D2D1::RectF(rect.left + dx, rect.top + dy, rect.right + dx, rect.bottom + dy);
+}
+
+[[nodiscard]] bool HasPaintableArea(const D2D1_RECT_F& rect) noexcept
+{
+    return rect.right > rect.left && rect.bottom > rect.top;
+}
+
+void DrawRawFocusRing(ID2D1RenderTarget* target,
+                      ID2D1SolidColorBrush* brush,
+                      const ThemePalette& theme,
+                      const D2D1_RECT_F& bounds,
+                      float cornerRadius) noexcept
+{
+    if (! target || ! brush || ! HasPaintableArea(bounds))
+    {
+        return;
+    }
+
+    const float scale = (std::max)(0.01f, cornerRadius / kButtonCornerRadiusDip);
+
+    const float outerOffset = 2.0f * scale;
+    const float outerStroke = 2.0f * scale;
+    const D2D1_RECT_F outerRect =
+        D2D1::RectF(bounds.left - outerOffset, bounds.top - outerOffset, bounds.right + outerOffset, bounds.bottom + outerOffset);
+    const float outerRadius = cornerRadius + outerOffset;
+    brush->SetColor(theme.focusStrokeOuter);
+    target->DrawRoundedRectangle(D2D1::RoundedRect(outerRect, outerRadius, outerRadius), brush, outerStroke);
+
+    const float innerOffset = 1.0f * scale;
+    const float innerStroke = 1.0f * scale;
+    const D2D1_RECT_F innerRect =
+        D2D1::RectF(bounds.left - innerOffset, bounds.top - innerOffset, bounds.right + innerOffset, bounds.bottom + innerOffset);
+    const float innerRadius = cornerRadius + innerOffset;
+    brush->SetColor(theme.focusStrokeInner);
+    target->DrawRoundedRectangle(D2D1::RoundedRect(innerRect, innerRadius, innerRadius), brush, innerStroke);
+}
+
+void DrawSingleFocusRing(ID2D1RenderTarget* target,
+                         ID2D1SolidColorBrush* brush,
+                         const D2D1_RECT_F& bounds,
+                         const D2D1_COLOR_F& color,
+                         float cornerRadius,
+                         float focusOutset,
+                         float focusStroke) noexcept
+{
+    if (! target || ! brush || ! HasPaintableArea(bounds) || focusStroke <= 0.0f)
+    {
+        return;
+    }
+
+    const D2D1_RECT_F focusRect =
+        D2D1::RectF(bounds.left - focusOutset, bounds.top - focusOutset, bounds.right + focusOutset, bounds.bottom + focusOutset);
+    brush->SetColor(color);
+    target->DrawRoundedRectangle(D2D1::RoundedRect(focusRect, cornerRadius + focusOutset, cornerRadius + focusOutset), brush, focusStroke);
+}
+
+void DrawRawCenteredText(ID2D1RenderTarget* target,
+                         ID2D1SolidColorBrush* brush,
+                         IDWriteTextFormat* format,
+                         std::wstring_view text,
+                         const D2D1_RECT_F& rect,
+                         const D2D1_COLOR_F& color) noexcept
+{
+    if (! target || ! brush || ! format || text.empty() || ! HasPaintableArea(rect))
+    {
+        return;
+    }
+
+    brush->SetColor(color);
+    target->DrawTextW(text.data(), static_cast<UINT32>(text.size()), format, rect, brush, kTextDrawOptions, DWRITE_MEASURING_MODE_NATURAL);
+}
+
+} // namespace
+
+float GetButtonChromeDropDownSegmentWidthDip(ButtonVariant variant) noexcept
+{
+    switch (variant)
+    {
+        case ButtonVariant::DropDown: return kButtonDropDownChevronWidthDip;
+        case ButtonVariant::Split: return kButtonSplitDropDownSegmentDip;
+        case ButtonVariant::Standard:
+        case ButtonVariant::Hyperlink:
+        case ButtonVariant::IconOnly:
+        case ButtonVariant::Repeat: return 0.0f;
+    }
+
+    return 0.0f;
+}
+
+ButtonChromeLayout ComputeButtonChromeLayout(const D2D1_RECT_F& bounds, ButtonVariant variant, float scale) noexcept
+{
+    ButtonChromeLayout layout{};
+    layout.textRect = bounds;
+
+    const float segmentWidth = GetButtonChromeDropDownSegmentWidthDip(variant) * ResolveButtonChromeScale(scale);
+    if (segmentWidth <= 0.0f)
+    {
+        return layout;
+    }
+
+    const float segmentLeft = (std::max)(bounds.left, bounds.right - segmentWidth);
+    layout.hasChevron       = true;
+    layout.chevronRect      = D2D1::RectF(segmentLeft, bounds.top, bounds.right, bounds.bottom);
+    layout.textRect.right   = segmentLeft;
+
+    if (variant == ButtonVariant::Split)
+    {
+        layout.hasDivider = true;
+        layout.dividerX   = segmentLeft;
+    }
+
+    return layout;
+}
+
+ButtonChromeResolvedStyle ResolveButtonChromeResolvedStyle(const ThemePalette& theme, const ButtonChromeDrawSpec& spec) noexcept
+{
+    const float hoverStrength = spec.hoverStrength >= 0.0f ? spec.hoverStrength : (spec.hovered ? 1.0f : 0.0f);
+    const float focusStrength = spec.focusStrength >= 0.0f ? spec.focusStrength : (spec.focused ? 1.0f : 0.0f);
+
+    if (spec.customStyle.has_value())
+    {
+        const ButtonChromeCustomStyle& custom = spec.customStyle.value();
+        ButtonChromeResolvedStyle resolved{};
+        resolved.fill            = custom.fill;
+        resolved.border          = custom.border;
+        resolved.focus           = custom.focus;
+        resolved.text            = custom.text;
+        resolved.showFill        = custom.showFill && custom.fill.a > 0.0f;
+        resolved.showBorder      = custom.showBorder && custom.border.a > 0.0f;
+        resolved.showFocus       = custom.showFocus && custom.focus.a > 0.0f;
+        resolved.cornerRadiusDip = (std::max)(0.0f, custom.cornerRadiusDip);
+        resolved.borderStrokeDip = (std::max)(0.0f, custom.borderStrokeDip);
+        resolved.focusOutsetDip  = (std::max)(0.0f, custom.focusOutsetDip);
+        resolved.focusStrokeDip  = (std::max)(0.0f, custom.focusStrokeDip);
+        resolved.textOffsetXDip  = custom.textOffsetXDip;
+        resolved.textOffsetYDip  = custom.textOffsetYDip;
+        resolved.focusRing       = custom.focusRing;
+        return resolved;
+    }
+
+    const ButtonVisualStyle style =
+        ResolveButtonVisualStyle(theme, spec.enabled, spec.hovered, spec.pressed, spec.focused, spec.keyboardFocused, spec.primary, hoverStrength, focusStrength);
+    ButtonChromeResolvedStyle resolved{};
+    resolved.fill            = style.fill;
+    resolved.border          = style.border;
+    resolved.focus           = style.focus;
+    resolved.text            = style.text;
+    resolved.showFill        = true;
+    resolved.showBorder      = style.showBorder && style.border.a > 0.0f;
+    resolved.showFocus       = style.showFocus;
+    resolved.cornerRadiusDip = kButtonCornerRadiusDip;
+    resolved.borderStrokeDip = 1.0f;
+    resolved.focusOutsetDip  = 2.0f;
+    resolved.focusStrokeDip  = 2.0f;
+    resolved.textOffsetXDip  = style.textOffsetXDip;
+    resolved.textOffsetYDip  = style.textOffsetYDip;
+    resolved.focusRing       = ButtonChromeFocusRing::Standard;
+    return resolved;
+}
+
+void DrawButtonChrome(ID2D1RenderTarget* target,
+                      ID2D1SolidColorBrush* brush,
+                      IDWriteTextFormat* textFormat,
+                      IDWriteTextFormat* iconFormat,
+                      const ThemePalette& theme,
+                      const ButtonChromeDrawSpec& spec) noexcept
+{
+    if (! target || ! brush || ! HasPaintableArea(spec.bounds))
+    {
+        return;
+    }
+
+    const float scale                            = ResolveButtonChromeScale(spec.scale);
+    const ButtonChromeResolvedStyle style        = ResolveButtonChromeResolvedStyle(theme, spec);
+    const float cornerRadius                     = style.cornerRadiusDip * scale;
+    const D2D1_ROUNDED_RECT roundedButton        = D2D1::RoundedRect(spec.bounds, cornerRadius, cornerRadius);
+    const ButtonChromeLayout layout              = ComputeButtonChromeLayout(spec.bounds, spec.variant, scale);
+    const float offsetX                          = style.textOffsetXDip * scale;
+    const float offsetY                          = style.textOffsetYDip * scale;
+    const float borderStroke                     = style.borderStrokeDip * scale;
+    const bool drawBorder                        = style.showBorder && borderStroke > 0.0f && style.border.a > 0.0f;
+
+    if (style.showFill && style.fill.a > 0.0f)
+    {
+        brush->SetColor(style.fill);
+        target->FillRoundedRectangle(roundedButton, brush);
+    }
+
+    if (drawBorder)
+    {
+        brush->SetColor(style.border);
+        target->DrawRoundedRectangle(roundedButton, brush, borderStroke);
+    }
+
+    if (style.showFocus)
+    {
+        if (style.focusRing == ButtonChromeFocusRing::Standard)
+        {
+            DrawRawFocusRing(target, brush, theme, spec.bounds, cornerRadius);
+        }
+        else
+        {
+            DrawSingleFocusRing(target, brush, spec.bounds, style.focus, cornerRadius, style.focusOutsetDip * scale, style.focusStrokeDip * scale);
+        }
+    }
+
+    if (spec.variant == ButtonVariant::IconOnly)
+    {
+        DrawRawCenteredText(target, brush, iconFormat ? iconFormat : textFormat, spec.text, OffsetButtonChromeRect(spec.bounds, offsetX, offsetY), style.text);
+        return;
+    }
+
+    if (layout.hasDivider)
+    {
+        brush->SetColor(style.border);
+        const float lineInset = 6.0f * scale;
+        target->DrawLine(D2D1::Point2F(layout.dividerX, spec.bounds.top + lineInset),
+                         D2D1::Point2F(layout.dividerX, spec.bounds.bottom - lineInset),
+                         brush,
+                         1.0f * scale);
+    }
+
+    const D2D1_RECT_F textRect = OffsetButtonChromeRect(layout.textRect, offsetX, offsetY);
+    DrawRawCenteredText(target, brush, textFormat, spec.text, textRect, style.text);
+
+    if (layout.hasChevron)
+    {
+        const wchar_t chevronText[2]{spec.chevronGlyph != L'\0' ? spec.chevronGlyph : kButtonDropDownChevronGlyph, L'\0'};
+        DrawRawCenteredText(target, brush, iconFormat ? iconFormat : textFormat, std::wstring_view(chevronText, 1u), layout.chevronRect, style.text);
+    }
+}
+
 void DrawCenteredText(WindowHost& host,
                       std::wstring_view text,
                       const D2D1_RECT_F& rect,
@@ -1582,6 +1824,17 @@ void Label::Paint(WindowHost& host) const
         host, _text, GetBounds(), _fontRole, style.text, GetMnemonic(), _alignment, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, _multiline, GetFlowDirection());
 }
 
+Control* Label::HitTest(D2D1_POINT_2F /*point*/)
+{
+    // Labels are text/mnemonic surfaces; pointer-interactive label-like UI should use a button/link control.
+    return nullptr;
+}
+
+const Control* Label::HitTest(D2D1_POINT_2F /*point*/) const
+{
+    return nullptr;
+}
+
 bool Label::OnMnemonic(WindowHost& host)
 {
     if (_mnemonicTarget && ControlBelongsToBranch(host.GetRoot(), _mnemonicTarget))
@@ -1697,8 +1950,7 @@ void Button::Paint(WindowHost& host) const
                                                                       _primary || host.GetDefaultButton() == this,
                                                                       ResolveHoverAnimationProgress(host),
                                                                       ResolveFocusAnimationProgress(host));
-    constexpr float kButtonCornerRadiusDip = 4.0f;
-    const D2D1_COLOR_F transparent         = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    const D2D1_COLOR_F transparent = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
 
     if (_variant == ButtonVariant::Hyperlink)
     {
@@ -1734,27 +1986,27 @@ void Button::Paint(WindowHost& host) const
 
     if (_variant == ButtonVariant::DropDown)
     {
-        const D2D1_RECT_F textRect = D2D1::RectF(GetBounds().left + style.textOffsetXDip,
-                                                 GetBounds().top + style.textOffsetYDip,
-                                                 GetBounds().right - _dropDownChevronWidthDip + style.textOffsetXDip,
-                                                 GetBounds().bottom + style.textOffsetYDip);
+        const ButtonChromeLayout layout = ComputeButtonChromeLayout(GetBounds(), _variant);
+        const D2D1_RECT_F textRect      = D2D1::RectF(layout.textRect.left + style.textOffsetXDip,
+                                                      layout.textRect.top + style.textOffsetYDip,
+                                                      layout.textRect.right + style.textOffsetXDip,
+                                                      layout.textRect.bottom + style.textOffsetYDip);
         DrawCenteredText(
             host, _text, textRect, FontRole::Body, style.text, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, flowDirection);
-        const D2D1_RECT_F chevronRect = D2D1::RectF(GetBounds().right - _dropDownChevronWidthDip, GetBounds().top, GetBounds().right, GetBounds().bottom);
-        DrawCenteredText(host, L"\xE70D", chevronRect, FontRole::Icon, style.text);
+        DrawCenteredText(host, std::wstring_view(&kButtonDropDownChevronGlyph, 1u), layout.chevronRect, FontRole::Icon, style.text);
     }
     else if (_variant == ButtonVariant::Split)
     {
-        const float dividerX       = GetBounds().right - _splitDropDownWidthDip;
-        const D2D1_RECT_F textRect = D2D1::RectF(GetBounds().left + style.textOffsetXDip,
-                                                 GetBounds().top + style.textOffsetYDip,
-                                                 dividerX + style.textOffsetXDip,
-                                                 GetBounds().bottom + style.textOffsetYDip);
+        const ButtonChromeLayout layout = ComputeButtonChromeLayout(GetBounds(), _variant);
+        const D2D1_RECT_F textRect      = D2D1::RectF(layout.textRect.left + style.textOffsetXDip,
+                                                      layout.textRect.top + style.textOffsetYDip,
+                                                      layout.textRect.right + style.textOffsetXDip,
+                                                      layout.textRect.bottom + style.textOffsetYDip);
         DrawCenteredText(
             host, _text, textRect, FontRole::Body, style.text, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false, flowDirection);
-        DrawLineWithColor(host, D2D1::Point2F(dividerX, GetBounds().top + 6.0f), D2D1::Point2F(dividerX, GetBounds().bottom - 6.0f), style.border, 1.0f);
-        const D2D1_RECT_F chevronRect = D2D1::RectF(dividerX, GetBounds().top, GetBounds().right, GetBounds().bottom);
-        DrawCenteredText(host, L"\xE70D", chevronRect, FontRole::Icon, style.text);
+        DrawLineWithColor(
+            host, D2D1::Point2F(layout.dividerX, GetBounds().top + 6.0f), D2D1::Point2F(layout.dividerX, GetBounds().bottom - 6.0f), style.border, 1.0f);
+        DrawCenteredText(host, std::wstring_view(&kButtonDropDownChevronGlyph, 1u), layout.chevronRect, FontRole::Icon, style.text);
     }
     else if (_variant == ButtonVariant::IconOnly)
     {
@@ -1925,7 +2177,16 @@ bool Button::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers)
 bool Button::OnMouseLeave(WindowHost& host)
 {
     const bool handled = Control::OnMouseLeave(host);
-    if (_pressed)
+    TraceButtonDiagnostics(L"dxui.button.mouse-leave",
+                           L"hwnd={:#x} text=\"{}\" variant={} pressedBefore={} pressedDropDownBefore={} enabled={} visible={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           _pressed ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0);
+    if (_pressed && host.GetCapturedControl() != this)
     {
         _pressed         = false;
         _pressedDropDown = false;
@@ -1964,6 +2225,15 @@ void Button::SetPressedVisual(bool pressed) noexcept
 
 void Button::OnCaptureLost(WindowHost& host)
 {
+    TraceButtonDiagnostics(L"dxui.button.capture-lost",
+                           L"hwnd={:#x} text=\"{}\" variant={} pressedBefore={} pressedDropDownBefore={} enabled={} visible={}",
+                           reinterpret_cast<uintptr_t>(host.GetHwnd()),
+                           TraceLimitedText(_text),
+                           TraceButtonVariantName(_variant),
+                           _pressed ? 1 : 0,
+                           _pressedDropDown ? 1 : 0,
+                           IsEnabled() ? 1 : 0,
+                           IsVisible() ? 1 : 0);
     if (_pressed)
     {
         _pressed         = false;
@@ -2018,6 +2288,10 @@ bool Button::InvokeDropDown(WindowHost& host)
     const std::function<void()> onDropDownClick = _onDropDownClick;
     const std::weak_ptr<int> lifetime           = GetLifetimeToken();
     onDropDownClick();
+    if (lifetime.expired())
+    {
+        return true;
+    }
     TraceButtonDiagnostics(L"dxui.button.dropdown-return",
                            L"hwnd={:#x} text=\"{}\" variant={} pressed={} pressedDropDown={} open={}",
                            reinterpret_cast<uintptr_t>(host.GetHwnd()),
@@ -3298,6 +3572,18 @@ void MenuBar::SetSelectedIndex(std::optional<size_t> index) noexcept
     if (_selectedIndex != index)
     {
         _selectedIndex = index;
+        RequestInvalidate();
+    }
+}
+
+void MenuBar::ClearInteractionState() noexcept
+{
+    const bool changed = _selectedIndex.has_value() || _hoveredIndex.has_value() || _pressedIndex.has_value();
+    _selectedIndex.reset();
+    _hoveredIndex.reset();
+    _pressedIndex.reset();
+    if (changed)
+    {
         RequestInvalidate();
     }
 }

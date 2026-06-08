@@ -1037,22 +1037,22 @@ std::wstring BuildSingleItemSummaryText(const FolderView::SelectionStats::Select
         std::wstring sizeText{directorySizeText};
         if (sizeText.empty())
         {
-            sizeText = LoadStringResource(nullptr, IDS_STATUS_SIZE_UNKNOWN);
+            sizeText = LoadEmbeddedStringResource(nullptr, IDS_STATUS_SIZE_UNKNOWN);
         }
 
         if (! timeText.empty())
         {
-            return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, timeText, attrsText);
+            return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_TIME_ATTRS, sizeText, timeText, attrsText);
         }
-        return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS, sizeText, attrsText);
+        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS, sizeText, attrsText);
     }
 
     const std::wstring sizeText = FormatBytesCompact(details.sizeBytes);
     if (! timeText.empty())
     {
-        return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, timeText, attrsText);
+        return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_TIME_ATTRS, sizeText, timeText, attrsText);
     }
-    return FormatStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS, sizeText, attrsText);
+    return FormatEmbeddedStringResource(nullptr, IDS_FMT_STATUS_SELECTED_SINGLE_FILE_SIZE_ATTRS, sizeText, attrsText);
 }
 
 std::wstring BuildSelectionSummaryText(const FolderView::SelectionStats& stats,
@@ -1100,7 +1100,7 @@ std::wstring BuildSortIndicatorText(FolderView::SortBy sortBy, FolderView::SortD
             return std::wstring(1, FluentIcons::kSort);
         }
 
-        std::wstring placeholder = LoadStringResource(nullptr, IDS_STATUS_SORT_INDICATOR);
+        std::wstring placeholder = LoadEmbeddedStringResource(nullptr, IDS_STATUS_SORT_INDICATOR);
         if (placeholder.empty())
         {
             placeholder.assign(1, FluentIcons::kFallbackSort);
@@ -1189,7 +1189,7 @@ void FolderWindow::UpdatePaneStatusBar(Pane pane)
             }
             else if (! state.selectionFolderBytesValid)
             {
-                selectionSizeText = LoadStringResource(nullptr, IDS_STATUS_SIZE_UNKNOWN);
+                selectionSizeText = LoadEmbeddedStringResource(nullptr, IDS_STATUS_SIZE_UNKNOWN);
             }
             else
             {

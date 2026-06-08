@@ -132,6 +132,7 @@ std::mutex g_debugConnectionManagerConnectMutex;
 bool g_debugConnectionManagerConnectSeen    = false;
 uint8_t g_debugConnectionManagerConnectPane = 0u;
 std::wstring g_debugConnectionManagerConnectName;
+bool g_debugConnectionManagerConnectSuppressNavigation = false;
 std::mutex g_debugRereadAssociationsMutex;
 const Common::Settings::Settings* g_debugRereadAssociationsSettingsOverride = nullptr;
 RereadAssociationsDebugSnapshot g_debugRereadAssociationsSnapshot{};
@@ -816,7 +817,7 @@ public:
             }
         });
 
-        const std::wstring caption = _caption.empty() ? LoadStringResource(nullptr, IDS_APP_TITLE) : _caption;
+        const std::wstring caption = _caption.empty() ? LoadEmbeddedStringResource(nullptr, IDS_APP_TITLE) : _caption;
         const HWND hwnd            = CreateWindowExW(exStyle,
                                                      kFatalErrorDialogWindowClassName,
                                                      caption.c_str(),
@@ -4185,7 +4186,7 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
     const uint32_t maskedMods = modifiers & 0x7u;
     if ((maskedMods & ShortcutManager::kModCtrl) != 0)
     {
-        appendPart(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        appendPart(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
     if ((maskedMods & ShortcutManager::kModAlt) != 0)
     {
@@ -4620,7 +4621,7 @@ public:
         EnsureMenuHandles(_ownerWindow);
         _menuBar->SetItems(BuildDxMenuBarItems(g_mainMenuHandle));
         _menuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) { OpenPopup(index, screenPoint, keyboardInvocation); });
-        _menuBar->SetOnHoverChanged([this](std::optional<size_t>) { PostPendingMenuBarHoverRootSwitch(); });
+        _menuBar->SetOnHoverChanged([this](std::optional<size_t> hoverIndex) { PostPendingMenuBarHoverRootSwitch(hoverIndex); });
         UpdateSelectedIndexSnapshot();
     }
 
@@ -4813,12 +4814,100 @@ private:
 
     void ClearMenuSessionFocusState() noexcept
     {
+        DrainPendingMenuBarHoverMessages();
+        ArmMenuBarHoverSuppressionAtCursor();
         if (_menuBar)
         {
-            _menuBar->SetSelectedIndex(std::nullopt);
+            _menuBar->ClearInteractionState();
         }
         _host.SetFocusControl(nullptr);
         UpdateSelectedIndexSnapshot();
+    }
+
+    void DrainPendingMenuBarHoverMessages() noexcept
+    {
+        if (! _hwnd || IsWindow(_hwnd.get()) == FALSE)
+        {
+            return;
+        }
+
+        MSG message{};
+        while (PeekMessageW(&message, _hwnd.get(), WM_MOUSEMOVE, WM_MOUSEMOVE, PM_REMOVE) != FALSE)
+        {
+            // Discard stale hover messages queued while the popup owned the nested loop.
+        }
+    }
+
+    void ArmMenuBarHoverSuppressionAtCursor() noexcept
+    {
+        _suppressedMenuBarHoverPoint.reset();
+        if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
+        {
+            return;
+        }
+
+        POINT cursor{};
+        if (GetCursorPos(&cursor) == FALSE) // getcursorpos-allow: suppressing stale post-menu hover only
+        {
+            return;
+        }
+        if (! HitTestScreenPoint(cursor).has_value())
+        {
+            return;
+        }
+
+        _suppressedMenuBarHoverPoint = cursor;
+    }
+
+    void ArmMismatchedLiveCursorHoverSuppression(size_t activeIndex) noexcept
+    {
+        _suppressedMenuBarHoverPoint.reset();
+        if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
+        {
+            return;
+        }
+
+        POINT cursor{};
+        if (GetCursorPos(&cursor) == FALSE) // getcursorpos-allow: suppressing stale live cursor hover during menu activation only
+        {
+            return;
+        }
+
+        const std::optional<size_t> cursorHit = HitTestScreenPoint(cursor);
+        if (cursorHit.has_value() && cursorHit.value() != activeIndex)
+        {
+            _suppressedMenuBarHoverPoint = cursor;
+        }
+    }
+
+    [[nodiscard]] bool ShouldSuppressMenuBarHoverAtScreenPoint(POINT screenPoint) noexcept
+    {
+        if (! _suppressedMenuBarHoverPoint.has_value())
+        {
+            return false;
+        }
+
+        const POINT suppressedPoint = _suppressedMenuBarHoverPoint.value();
+        if (screenPoint.x == suppressedPoint.x && screenPoint.y == suppressedPoint.y)
+        {
+            return true;
+        }
+
+        _suppressedMenuBarHoverPoint.reset();
+        return false;
+    }
+
+    [[nodiscard]] bool ShouldSuppressMenuBarHoverAtPoint(HWND hwnd, LPARAM lParam) noexcept
+    {
+        POINT screenPoint{static_cast<LONG>(static_cast<short>(LOWORD(static_cast<DWORD_PTR>(lParam)))),
+                          static_cast<LONG>(static_cast<short>(HIWORD(static_cast<DWORD_PTR>(lParam))))};
+        if (ClientToScreen(hwnd, &screenPoint) == FALSE)
+        {
+            _suppressedMenuBarHoverPoint.reset();
+            return false;
+        }
+
+        return ShouldSuppressMenuBarHoverAtScreenPoint(screenPoint);
     }
 
     [[nodiscard]] bool RestoreFocusAfterMenuSession() noexcept
@@ -4941,7 +5030,6 @@ private:
 
         OnInitMenuPopup(_ownerWindow, popupMenu);
         SyncMenuModel();
-        SetActiveMenuBarRoot(index, true);
 
         const std::optional<POINT> screenPoint = GetItemAnchorScreenPoint(index);
         if (! screenPoint.has_value())
@@ -4962,6 +5050,7 @@ private:
                         screenPoint->y);
             return std::nullopt;
         }
+        SetActiveMenuBarRoot(index, true);
         Debug::Info(L"RedSalamander::MenuTrace MainMenu build-root-switch accepted index={} rawIndex={} point=({}, {}) items={}",
                     index,
                     rawIndex.value(),
@@ -5028,25 +5117,31 @@ private:
         return std::nullopt;
     }
 
-    void PostPendingMenuBarHoverRootSwitch() noexcept
+    void PostPendingMenuBarHoverRootSwitch(std::optional<size_t> hoverIndex) noexcept
     {
         if (! _popupSessionActive || ! _menuBar)
         {
+            _pendingHoverRootSwitchIndex.reset();
             return;
         }
 
-        const std::optional<size_t> hoverIndex = _menuBar->GetHoveredIndex();
         if (! hoverIndex.has_value())
         {
+            _pendingHoverRootSwitchIndex.reset();
+            if (_activePopupIndex.has_value())
+            {
+                SetActiveMenuBarRoot(_activePopupIndex.value(), true);
+            }
             return;
         }
-
-        SetActiveMenuBarRoot(hoverIndex.value(), true);
 
         if (_activePopupIndex.has_value() && hoverIndex.value() == _activePopupIndex.value())
         {
+            _pendingHoverRootSwitchIndex.reset();
+            SetActiveMenuBarRoot(hoverIndex.value(), true);
             return;
         }
+
         if (_pendingHoverRootSwitchIndex == hoverIndex)
         {
             return;
@@ -5061,8 +5156,13 @@ private:
         if (! target || IsWindow(target) == FALSE)
         {
             Debug::Info(L"RedSalamander::MenuTrace MainMenu hover-switch no-target hover={} active={}",
-                        hoverIndex.value(),
-                        _activePopupIndex.value_or(static_cast<size_t>(-1)));
+                         hoverIndex.value(),
+                         _activePopupIndex.value_or(static_cast<size_t>(-1)));
+            _pendingHoverRootSwitchIndex = std::nullopt;
+            if (_activePopupIndex.has_value())
+            {
+                SetActiveMenuBarRoot(_activePopupIndex.value(), true);
+            }
             return;
         }
 
@@ -5073,6 +5173,10 @@ private:
                         hoverIndex.value(),
                         _activePopupIndex.value_or(static_cast<size_t>(-1)));
             _pendingHoverRootSwitchIndex = std::nullopt;
+            if (_activePopupIndex.has_value())
+            {
+                SetActiveMenuBarRoot(_activePopupIndex.value(), true);
+            }
             return;
         }
 
@@ -5128,6 +5232,7 @@ private:
         _popupSessionActive = true;
         _activePopupIndex   = index;
         _pendingHoverRootSwitchIndex.reset();
+        ArmMismatchedLiveCursorHoverSuppression(index);
         const auto popupSessionState = wil::scope_exit([this]() noexcept
         {
             _popupSessionActive = false;
@@ -5145,6 +5250,16 @@ private:
 
         sessionCallbacks.switchRootFromPointer = [this](POINT hoverScreenPoint) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
         {
+            if (ShouldSuppressMenuBarHoverAtScreenPoint(hoverScreenPoint))
+            {
+                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch pointer suppressed stale point=({}, {}) active={} capture={:#x}",
+                            hoverScreenPoint.x,
+                            hoverScreenPoint.y,
+                            _activePopupIndex.value_or(static_cast<size_t>(-1)),
+                            reinterpret_cast<uintptr_t>(GetCapture()));
+                return std::nullopt;
+            }
+
             const std::optional<size_t> hitIndex = HitTestScreenPoint(hoverScreenPoint);
             if (! hitIndex.has_value())
             {
@@ -5182,6 +5297,20 @@ private:
             {
                 Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover no-pending active={}",
                             _activePopupIndex.value_or(static_cast<size_t>(-1)));
+                return std::nullopt;
+            }
+
+            const std::optional<size_t> currentHoverIndex = _menuBar ? _menuBar->GetHoveredIndex() : std::nullopt;
+            if (currentHoverIndex != hoverIndex)
+            {
+                Debug::Info(L"RedSalamander::MenuTrace MainMenu root-switch menu-bar-hover stale pending={} currentHover={} active={}",
+                            hoverIndex.value(),
+                            currentHoverIndex.value_or(static_cast<size_t>(-1)),
+                            _activePopupIndex.value_or(static_cast<size_t>(-1)));
+                if (_activePopupIndex.has_value())
+                {
+                    SetActiveMenuBarRoot(_activePopupIndex.value(), true);
+                }
                 return std::nullopt;
             }
 
@@ -5249,6 +5378,22 @@ private:
 
         if (self)
         {
+            if (message == WM_MOUSELEAVE)
+            {
+                if (self->_popupSessionActive)
+                {
+                    self->ArmMenuBarHoverSuppressionAtCursor();
+                }
+                else
+                {
+                    self->_suppressedMenuBarHoverPoint.reset();
+                }
+            }
+            else if (message == WM_MOUSEMOVE && self->ShouldSuppressMenuBarHoverAtPoint(hwnd, lParam))
+            {
+                return 0;
+            }
+
             if (IsMainMenuTraceMessage(message))
             {
                 const bool pointerMessage =
@@ -5302,7 +5447,7 @@ private:
                     self->UpdateSelectedIndexSnapshot();
                     if (message == WM_MOUSEMOVE)
                     {
-                        self->PostPendingMenuBarHoverRootSwitch();
+                        self->PostPendingMenuBarHoverRootSwitch(self->_menuBar ? self->_menuBar->GetHoveredIndex() : std::nullopt);
                     }
                 }
                 if (message == WM_KILLFOCUS && g_menuBarTemporarilyShown && ! g_menuBarVisible && ! self->_popupSessionActive)
@@ -5380,6 +5525,7 @@ private:
     bool _popupSessionActive = false;
     std::optional<size_t> _activePopupIndex;
     std::optional<size_t> _pendingHoverRootSwitchIndex;
+    std::optional<POINT> _suppressedMenuBarHoverPoint;
 };
 
 MainMenuBarHost g_mainMenuBarHost;
@@ -6785,6 +6931,11 @@ bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId)
     return DispatchShortcutCommand(ownerWindow, commandId);
 }
 
+void DebugReloadShortcutsFromSettings() noexcept
+{
+    ReloadShortcutsFromSettings();
+}
+
 void DebugSetRereadAssociationsSettingsForTest(const Common::Settings::Settings* settings) noexcept
 {
     const std::scoped_lock lock(g_debugRereadAssociationsMutex);
@@ -7706,8 +7857,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
     }
 #endif
 
-    std::wstring szTitle(MAX_LOADSTRING, L'\0');
-    LoadStringW(hInstance, IDS_APP_TITLE, szTitle.data(), MAX_LOADSTRING);
+    std::wstring szTitle = LoadEmbeddedStringResource(hInstance, IDS_APP_TITLE);
 
     wil::unique_hwnd hWnd;
     {
@@ -10561,11 +10711,17 @@ LRESULT OnMainWindowConnectionManagerConnect([[maybe_unused]] HWND hWnd, WPARAM 
     }
 
 #ifdef ENABLE_TESTS
+    bool suppressNavigation = false;
     {
         const std::scoped_lock lock(g_debugConnectionManagerConnectMutex);
         g_debugConnectionManagerConnectSeen = true;
         g_debugConnectionManagerConnectPane = static_cast<uint8_t>(wParam == 1u ? 1u : 0u);
         g_debugConnectionManagerConnectName = *name;
+        suppressNavigation                  = g_debugConnectionManagerConnectSuppressNavigation;
+    }
+    if (suppressNavigation)
+    {
+        return 0;
     }
 #endif
 
@@ -10768,6 +10924,12 @@ void DebugResetConnectionManagerConnectNavigation() noexcept
     g_debugConnectionManagerConnectSeen = false;
     g_debugConnectionManagerConnectPane = 0u;
     g_debugConnectionManagerConnectName.clear();
+}
+
+void DebugSetConnectionManagerConnectNavigationSuppressed(bool suppressed) noexcept
+{
+    const std::scoped_lock lock(g_debugConnectionManagerConnectMutex);
+    g_debugConnectionManagerConnectSuppressNavigation = suppressed;
 }
 
 bool DebugGetConnectionManagerConnectNavigation(uint8_t& outPane, std::wstring& outName) noexcept

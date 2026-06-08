@@ -6,14 +6,12 @@ LANGUAGE LANG_JAPANESE, SUBLANG_DEFAULT
 
 STRINGTABLE
 BEGIN
-    IDS_VIEWERVLC_NAME "VLC"
     IDS_VIEWERVLC_DESCRIPTION "VLC メディア プレーヤー (libVLC) を使用してビデオ ファイルを再生します。"
     IDS_VIEWERVLC_WINDOW_CAPTION "VLC ビューアー"
     IDS_VIEWERVLC_BUTTON_PLAY "再生"
     IDS_VIEWERVLC_BUTTON_PAUSE "一時停止"
     IDS_VIEWERVLC_BUTTON_STOP "停止"
     IDS_VIEWERVLC_BUTTON_SNAPSHOT_ELLIPSIS "スナップショット..."
-    IDS_VIEWERVLC_LABEL_TIME_UNKNOWN "--:-- / --:--"
     IDS_VIEWERVLC_MISSING_TITLE "VLC メディア プレーヤーが必要です。"
     IDS_VIEWERVLC_MISSING_BODY "VLC メディア プレーヤーをインストールするか、[環境設定] > [プラグイン] > [VLC ビューアー] で VLC インストール フォルダーを設定します。"
     IDS_VIEWERVLC_MISSING_LINK "<a href=""https://www.videolan.org/vlc/"">VLC メディア プレーヤーをダウンロード</a>"

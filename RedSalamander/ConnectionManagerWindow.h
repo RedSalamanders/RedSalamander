@@ -144,6 +144,7 @@ struct ConnectionManagerDebugSnapshot
 [[nodiscard]] bool DebugRouteConnectionManagerTab(bool reverse) noexcept;
 [[nodiscard]] bool DebugSetConnectionManagerProtocolPluginId(std::wstring_view pluginId) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerAlternateProtocolPluginId(std::wstring_view baselinePluginId, std::wstring& outPluginId) noexcept;
+[[nodiscard]] bool DebugSetConnectionManagerNameText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetConnectionManagerUserText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetConnectionManagerSecretText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerUserText(std::wstring& outText) noexcept;
@@ -155,6 +156,7 @@ struct ConnectionManagerDebugSnapshot
 [[nodiscard]] bool DebugGetConnectionManagerListHostHandle(HWND& outHost) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerNameHostHandle(HWND& outHost) noexcept;
 [[nodiscard]] bool DebugAcknowledgeConnectionManagerS3InsecureTlsPrompt() noexcept;
+[[nodiscard]] bool DebugScrollConnectionManagerSavePasswordToggleIntoView() noexcept;
 [[nodiscard]] bool DebugScrollConnectionManagerS3UseHttpsToggleIntoView() noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerSavePasswordToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept;
 [[nodiscard]] bool DebugGetConnectionManagerSavePasswordToggleState(bool& outChecked, std::wstring& outLabel) noexcept;
@@ -211,6 +213,7 @@ void UpdateTheme(const AppTheme& theme) noexcept;
 [[nodiscard]] bool DebugRouteTab(bool reverse) noexcept;
 [[nodiscard]] bool DebugSetProtocolPluginId(std::wstring_view pluginId) noexcept;
 [[nodiscard]] bool DebugGetAlternateProtocolPluginId(std::wstring_view baselinePluginId, std::wstring& outPluginId) noexcept;
+[[nodiscard]] bool DebugSetNameText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetUserText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugSetSecretText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugGetUserText(std::wstring& outText) noexcept;

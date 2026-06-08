@@ -102,6 +102,12 @@ bool TestSatelliteOverridesEmbeddedString() noexcept
     const std::wstring present = LoadStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT);
     Check(present == L"Chaine de test francaise", L"satellite string overrides embedded English", success);
 
+    const std::wstring embeddedPresent = LoadEmbeddedStringResource(instance, IDS_LOCALIZATION_TEST_PRESENT);
+    Check(embeddedPresent == L"Embedded English test string", L"embedded string helper bypasses satellite string", success);
+
+    const std::wstring embeddedFormatted = FormatEmbeddedStringResource(instance, IDS_LOCALIZATION_TEST_EMBEDDED_FORMAT, std::wstring(L"token"), 42u);
+    Check(embeddedFormatted == L"Embedded token 0x0000002A", L"embedded format helper bypasses satellite format string", success);
+
     wil::unique_hmenu menu(Localization::LoadMenuResource(instance, IDR_LOCALIZATION_TEST_MENU));
     Check(static_cast<bool>(menu), L"satellite menu resource loads", success);
     if (menu)

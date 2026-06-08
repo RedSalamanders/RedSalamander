@@ -803,7 +803,7 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     try
     {
         const std::wstring details =
-            FormatStringResource(nullptr, IDS_FMT_HRESULT_DETAILS, 0x80070002u, std::wstring(L"The system cannot find the file specified."));
+            FormatEmbeddedStringResource(nullptr, IDS_FMT_HRESULT_DETAILS, 0x80070002u, std::wstring(L"The system cannot find the file specified."));
         state.Require(details.find(L"80070002") != std::wstring::npos, L"HRESULT details should include the formatted HRESULT.");
         state.Require(details.find(L"The system cannot find the file specified.") != std::wstring::npos,
                       L"HRESULT details should include the system error text.");
@@ -5311,6 +5311,37 @@ template <typename Predicate>
     return false;
 }
 
+[[nodiscard]] bool ForceRefreshPaneForCommandSelfTest(HWND mainWindow, FolderWindow::Pane pane, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        return false;
+    }
+
+    g_folderWindow.SetActivePane(pane);
+    const uint64_t refreshBefore = g_folderWindow.DebugGetForceRefreshCount(pane);
+    if (! DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/refresh"))
+    {
+        return false;
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetForceRefreshCount(pane) >= refreshBefore + 1u)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    return g_folderWindow.DebugGetForceRefreshCount(pane) >= refreshBefore + 1u;
+}
+
 [[nodiscard]] std::wstring DescribeFindSnapshotBrief(const FindFilesDebugSnapshot& snapshot);
 
 [[nodiscard]] bool OpenFindWindowFromLocalPaneRoot(HWND mainWindow,
@@ -8372,6 +8403,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     cp437EntryName.append(".txt");
     state.Require(WriteStoredZipFixtureForCommandSelfTest(cp437ArchivePath, cp437EntryName, 0u, "cp437"), L"Failed to create CP437 ZIP fixture.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
+    state.Require(ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)),
+                  L"Failed to refresh archive output folder for CP437 ZIP fixture.");
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, outputRoot, SelfTest::Scale(3000ms)),
                   L"Failed to refresh archive output folder for CP437 ZIP fixture.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"cp437.zip"}, SelfTest::Scale(3000ms)), L"Archive output folder did not show cp437.zip.");
@@ -8400,6 +8433,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(WriteStoredZipFixtureForCommandSelfTest(cp437ARingArchivePath, cp437ARingEntryName, 0u, "aring"),
                   L"Failed to create CP437 ZIP fixture with A-ring path.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
+    state.Require(ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)),
+                  L"Failed to refresh archive output folder for CP437 A-ring ZIP fixture.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"cp437_a_ring.zip"}, SelfTest::Scale(3000ms)),
                   L"Archive output folder did not show cp437_a_ring.zip.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"cp437_a_ring.zip"), L"Failed to focus CP437 A-ring ZIP fixture.");
@@ -8423,6 +8458,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     const std::filesystem::path reservedArchivePath = outputRoot / L"reserved.zip";
     state.Require(WriteStoredZipFixtureForCommandSelfTest(reservedArchivePath, "CON.txt", 0x0800u, "reserved"), L"Failed to create reserved-name ZIP fixture.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
+    state.Require(ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)),
+                  L"Failed to refresh archive output folder for reserved-name ZIP fixture.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"reserved.zip"}, SelfTest::Scale(3000ms)), L"Archive output folder did not show reserved.zip.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"reserved.zip"), L"Failed to focus reserved-name ZIP fixture.");
     const std::filesystem::path reservedExtractRoot = root / L"reserved-extracted";
@@ -8448,6 +8485,8 @@ struct StoredZipDeclaredEntryForCommandSelfTest
                                                                        {.rawEntryName = "huge-c.bin", .flags = 0x0800u, .declaredSize = 0xFFFFFFFFu}}),
                   L"Failed to create declared-size ZIP bomb fixture.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, outputRoot);
+    state.Require(ForceRefreshPaneForCommandSelfTest(mainWindow, FolderWindow::Pane::Left, SelfTest::Scale(3000ms)),
+                  L"Failed to refresh archive output folder for zip-bomb ZIP fixture.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"zip-bomb.zip"}, SelfTest::Scale(3000ms)), L"Archive output folder did not show zip-bomb.zip.");
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"zip-bomb.zip"), L"Failed to focus declared-size ZIP bomb fixture.");
     const std::filesystem::path bombExtractRoot = root / L"zip-bomb-extracted";

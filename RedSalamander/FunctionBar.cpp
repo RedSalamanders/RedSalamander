@@ -389,7 +389,15 @@ void DrawFunctionBarText(FunctionBarRenderResources& resources, std::wstring_vie
 
     auto append = [&](UINT stringId) noexcept
     {
-        const std::wstring text = LoadStringResource(nullptr, stringId);
+        std::wstring text;
+        if (stringId == IDS_MOD_CTRL)
+        {
+            text = LoadEmbeddedStringResource(nullptr, stringId);
+        }
+        else
+        {
+            text = LoadStringResource(nullptr, stringId);
+        }
         if (text.empty())
         {
             return;

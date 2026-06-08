@@ -6,14 +6,12 @@ LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
 
 STRINGTABLE
 BEGIN
-    IDS_VIEWERVLC_NAME "VLC"
     IDS_VIEWERVLC_DESCRIPTION "Lire des fichiers vidéo avec le lecteur multimédia VLC (libVLC)."
     IDS_VIEWERVLC_WINDOW_CAPTION "Visionneuse VLC"
     IDS_VIEWERVLC_BUTTON_PLAY "Lire"
     IDS_VIEWERVLC_BUTTON_PAUSE "Pause"
     IDS_VIEWERVLC_BUTTON_STOP "Arrêter"
     IDS_VIEWERVLC_BUTTON_SNAPSHOT_ELLIPSIS "Capture..."
-    IDS_VIEWERVLC_LABEL_TIME_UNKNOWN "--:-- / --:--"
     IDS_VIEWERVLC_MISSING_TITLE "Le lecteur multimédia VLC est requis."
     IDS_VIEWERVLC_MISSING_BODY "Installez le lecteur multimédia VLC ou définissez le dossier d’installation de VLC dans Préférences > Plug-ins > Visionneuse VLC."
     IDS_VIEWERVLC_MISSING_LINK "<a href=""https://www.videolan.org/vlc/"">Télécharger VLC media player</a>"

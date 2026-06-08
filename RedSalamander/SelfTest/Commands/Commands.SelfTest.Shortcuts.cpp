@@ -134,7 +134,7 @@ void SendShortcutsHeaderClick(HWND shortcuts, D2D1_RECT_F headerRect) noexcept
     parts.reserve(4u);
     if ((modifiers & ShortcutManager::kModCtrl) != 0)
     {
-        parts.push_back(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        parts.push_back(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
     if ((modifiers & ShortcutManager::kModAlt) != 0)
     {
@@ -1217,7 +1217,9 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
 
     for (size_t chunk = 0; chunk < 8u; ++chunk)
     {
-        state.Require(DebugScrollShortcutsWindowByWheelDetents(-12), std::format(L"Shortcuts grid did not accept long-run scroll chunk {}.", chunk));
+        const int scrollDetents = chunk % 2u == 0u ? -3 : 3;
+        state.Require(DebugScrollShortcutsWindowByWheelDetents(scrollDetents),
+                      std::format(L"Shortcuts grid did not accept long-run scroll chunk {} detents {}.", chunk, scrollDetents));
         if (! state.failure.empty())
         {
             return false;
@@ -2285,12 +2287,18 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     {
         return false;
     }
+    const std::wstring findCommandSearchQuery = FormatShortcutKeyTextForTest(VK_F7, ShortcutManager::kModAlt);
+    state.Require(! findCommandSearchQuery.empty(), L"Find command search query should not be empty.");
+    if (findCommandSearchQuery.empty())
+    {
+        return false;
+    }
 
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName), std::format(L"Failed to search Shortcuts for '{}'.", findCommandDisplayName));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery), std::format(L"Failed to search Shortcuts for '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u &&
                value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos && value.visibleChildWindowCount == 0u &&
                value.resizeFailureCount == 0u;
     },
@@ -2306,7 +2314,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.focusTarget == ShortcutsWindowDebugFocusTarget::Grid && value.rowCount == 1u &&
+        return value.focusTarget == ShortcutsWindowDebugFocusTarget::Grid && value.rowCount == 1u && value.searchText == findCommandSearchQuery &&
                value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos && value.resizeFailureCount == 0u;
     },
                       snapshot),
@@ -2326,7 +2334,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.rowCount == 1u && value.searchText == findCommandDisplayName && value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos &&
+        return value.rowCount == 1u && value.searchText == findCommandSearchQuery && value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos &&
                value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
     },
                       snapshot),
@@ -2428,12 +2436,18 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     {
         return false;
     }
+    const std::wstring findCommandSearchQuery = FormatShortcutKeyTextForTest(VK_F7, ShortcutManager::kModAlt);
+    state.Require(! findCommandSearchQuery.empty(), L"Find command search query should not be empty.");
+    if (findCommandSearchQuery.empty())
+    {
+        return false;
+    }
 
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName), std::format(L"Failed to search Shortcuts for '{}'.", findCommandDisplayName));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery), std::format(L"Failed to search Shortcuts for '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u &&
                value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos && value.visibleChildWindowCount == 0u &&
                value.resizeFailureCount == 0u;
     },
@@ -2448,7 +2462,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.rowCount == 1u && value.searchText == findCommandDisplayName && value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos &&
+        return value.rowCount == 1u && value.searchText == findCommandSearchQuery && value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos &&
                value.selectedRowKeyCellRect.right > value.selectedRowKeyCellRect.left &&
                value.selectedRowKeyCellRect.bottom > value.selectedRowKeyCellRect.top && value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
     },
@@ -2476,7 +2490,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.rowCount == 1u && value.searchText == findCommandDisplayName && value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos &&
+        return value.rowCount == 1u && value.searchText == findCommandSearchQuery && value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos &&
                value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
     },
                       snapshot),
@@ -2587,12 +2601,18 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     {
         return false;
     }
+    const std::wstring findCommandSearchQuery = FormatShortcutKeyTextForTest(VK_F7, ShortcutManager::kModAlt);
+    state.Require(! findCommandSearchQuery.empty(), L"Find command search query should not be empty.");
+    if (findCommandSearchQuery.empty())
+    {
+        return false;
+    }
 
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName), std::format(L"Failed to search Shortcuts for '{}'.", findCommandDisplayName));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery), std::format(L"Failed to search Shortcuts for '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u &&
                value.firstVisibleRowName.find(findCommandDisplayName) != std::wstring::npos &&
                value.firstVisibleKeyCellRect.right > value.firstVisibleKeyCellRect.left &&
                value.firstVisibleKeyCellRect.bottom > value.firstVisibleKeyCellRect.top && value.visibleChildWindowCount == 0u &&
@@ -4365,14 +4385,20 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     {
         return false;
     }
+    const std::wstring findCommandSearchQuery = FormatShortcutKeyTextForTest(VK_F7, ShortcutManager::kModAlt);
+    state.Require(! findCommandSearchQuery.empty(), L"Find command search query should not be empty.");
+    if (findCommandSearchQuery.empty())
+    {
+        return false;
+    }
 
-    Trace(std::format(L"shortcuts_reordered_resized_copy_search: filtering to '{}'", findCommandDisplayName));
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName),
-                  std::format(L"Failed to set the Shortcuts search text to '{}'.", findCommandDisplayName));
+    Trace(std::format(L"shortcuts_reordered_resized_copy_search: filtering to '{}'", findCommandSearchQuery));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery),
+                  std::format(L"Failed to set the Shortcuts search text to '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"command" &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"command" &&
                value.secondDisplayColumnId == L"key" && value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
     },
                       snapshot),
@@ -4392,7 +4418,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         state.Require(waitForSnapshot(
                           [&](const ShortcutsWindowDebugSnapshot& value) noexcept
         {
-            return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u &&
+            return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u &&
                    value.selectedRowName.find(findCommandDisplayName) != std::wstring::npos && ! value.selectedRowKeyText.empty() &&
                    value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
         },
@@ -4439,7 +4465,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
                value.secondDisplayColumnId == L"command" && value.selectedRowName == baselineSelectedName &&
                value.selectedRowKeyText == baselineSelectedKeyText && value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
     },
@@ -4471,13 +4497,13 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     }
     SelfTest::AppendSuiteTrace(kSuite, L"Shortcuts reordered-resized copy/search roundtrip: no-match settled");
 
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName),
-                  std::format(L"Failed to restore the Shortcuts search text to '{}'.", findCommandDisplayName));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery),
+                  std::format(L"Failed to restore the Shortcuts search text to '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
         const float currentFirstHeaderWidth = std::max(0.0f, value.firstColumnHeaderRect.right - value.firstColumnHeaderRect.left);
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
                value.secondDisplayColumnId == L"command" && std::fabs(currentFirstHeaderWidth - resizedFirstHeaderWidth) <= 2.0f &&
                value.selectedRowName == baselineSelectedName && value.selectedRowKeyText == baselineSelectedKeyText && value.visibleChildWindowCount == 0u &&
                value.resizeFailureCount == 0u;
@@ -5189,14 +5215,20 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     {
         return false;
     }
+    const std::wstring findCommandSearchQuery = FormatShortcutKeyTextForTest(VK_F7, ShortcutManager::kModAlt);
+    state.Require(! findCommandSearchQuery.empty(), L"Find command search query should not be empty.");
+    if (findCommandSearchQuery.empty())
+    {
+        return false;
+    }
 
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName),
-                  std::format(L"Failed to set the Shortcuts search text to '{}'.", findCommandDisplayName));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery),
+                  std::format(L"Failed to set the Shortcuts search text to '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
         const float currentFirstHeaderWidth = std::max(0.0f, value.firstColumnHeaderRect.right - value.firstColumnHeaderRect.left);
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
                value.secondDisplayColumnId == L"command" && std::fabs(currentFirstHeaderWidth - resizedFirstHeaderWidth) <= 2.0f &&
                std::fabs(value.secondColumnHeaderRect.left - resizedSecondHeaderLeft) <= 2.0f && value.sortDirection != 0xFFu &&
                value.sortColumnIndex == sortColumnIndex && value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
@@ -5402,14 +5434,20 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
     {
         return false;
     }
+    const std::wstring findCommandSearchQuery = FormatShortcutKeyTextForTest(VK_F7, ShortcutManager::kModAlt);
+    state.Require(! findCommandSearchQuery.empty(), L"Find command search query should not be empty.");
+    if (findCommandSearchQuery.empty())
+    {
+        return false;
+    }
 
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName),
-                  std::format(L"Failed to set the Shortcuts search text to '{}'.", findCommandDisplayName));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery),
+                  std::format(L"Failed to set the Shortcuts search text to '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
         const float currentFirstHeaderWidth = std::max(0.0f, value.firstColumnHeaderRect.right - value.firstColumnHeaderRect.left);
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
                value.secondDisplayColumnId == L"command" && std::fabs(currentFirstHeaderWidth - resizedFirstHeaderWidth) <= 2.0f &&
                std::fabs(value.secondColumnHeaderRect.left - resizedSecondHeaderLeft) <= 2.0f && value.sortDirection != 0xFFu &&
                value.sortColumnIndex == sortColumnIndex && value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
@@ -5438,13 +5476,13 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         return false;
     }
 
-    state.Require(DebugSetShortcutsWindowSearchText(findCommandDisplayName),
-                  std::format(L"Failed to restore the Shortcuts search text to '{}'.", findCommandDisplayName));
+    state.Require(DebugSetShortcutsWindowSearchText(findCommandSearchQuery),
+                  std::format(L"Failed to restore the Shortcuts search text to '{}'.", findCommandSearchQuery));
     state.Require(waitForSnapshot(
                       [&](const ShortcutsWindowDebugSnapshot& value) noexcept
     {
         const float currentFirstHeaderWidth = std::max(0.0f, value.firstColumnHeaderRect.right - value.firstColumnHeaderRect.left);
-        return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
+        return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u && value.firstDisplayColumnId == L"key" &&
                value.secondDisplayColumnId == L"command" && std::fabs(currentFirstHeaderWidth - resizedFirstHeaderWidth) <= 2.0f &&
                std::fabs(value.secondColumnHeaderRect.left - resizedSecondHeaderLeft) <= 2.0f && value.sortDirection != 0xFFu &&
                value.sortColumnIndex == sortColumnIndex && value.visibleChildWindowCount == 0u && value.resizeFailureCount == 0u;
@@ -5463,7 +5501,7 @@ void RunIsolatedShortcutsCase(const SelfTest::SelfTestOptions& options, SelfTest
         state.Require(waitForSnapshot(
                           [&](const ShortcutsWindowDebugSnapshot& value) noexcept
         {
-            return value.searchText == findCommandDisplayName && value.rowCount == 1u && value.groupCount == 1u && ! value.selectedRowName.empty() &&
+            return value.searchText == findCommandSearchQuery && value.rowCount == 1u && value.groupCount == 1u && ! value.selectedRowName.empty() &&
                    ! value.selectedRowKeyText.empty() && value.firstDisplayColumnId == L"key" && value.secondDisplayColumnId == L"command" &&
                    value.sortDirection != 0xFFu && value.sortColumnIndex == sortColumnIndex && value.visibleChildWindowCount == 0u &&
                    value.resizeFailureCount == 0u;

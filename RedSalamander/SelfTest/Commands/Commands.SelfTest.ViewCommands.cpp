@@ -357,6 +357,67 @@ struct WindowColorScan final
     return windows.empty() ? nullptr : windows.front();
 }
 
+[[nodiscard]] bool DismissVisibleOwnedDxUiContextMenus(HWND ownerHwnd, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const std::vector<HWND> popups = FindVisibleOwnedDxUiContextMenuWindows(ownerHwnd);
+        if (popups.empty())
+        {
+            return true;
+        }
+
+        for (const HWND popup : popups)
+        {
+            if (popup && IsWindow(popup) != FALSE)
+            {
+                PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+                PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+            }
+        }
+
+        PumpPendingMessages();
+        std::this_thread::sleep_for(20ms);
+    }
+
+    return FindVisibleOwnedDxUiContextMenuWindows(ownerHwnd).empty();
+}
+
+void JoinPopupDriverWithUiPumping(std::jthread& popupDriver,
+                                  const std::atomic<bool>& popupDriverDone,
+                                  HWND ownerHwnd,
+                                  std::chrono::milliseconds deadlineTimeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + deadlineTimeout;
+    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+
+    if (! popupDriverDone.load(std::memory_order_acquire))
+    {
+        popupDriver.request_stop();
+        static_cast<void>(DismissVisibleOwnedDxUiContextMenus(ownerHwnd, SelfTest::Scale(2000ms)));
+    }
+
+    while (! popupDriverDone.load(std::memory_order_acquire))
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+
+    if (popupDriver.joinable())
+    {
+        popupDriver.join();
+    }
+}
+
 [[nodiscard]] bool WaitForOwnedDxUiContextMenuWindowCount(HWND ownerHwnd,
                                                           size_t expectedCount,
                                                           std::chrono::milliseconds timeout,
@@ -1206,6 +1267,11 @@ struct TopLevelMenuMapping
             static_cast<void>(WaitForMainMenuBarVisibility(mainWindow, baselineMenuBarVisible, SelfTest::Scale(std::chrono::milliseconds{1000})));
         }
 
+        g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+        g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Right);
+        g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+        static_cast<void>(g_folderWindow.TryRestoreActivePaneFolderViewFocus());
+
         PumpPendingMessages();
     };
 
@@ -1925,6 +1991,8 @@ private:
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Right);
     g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for navigation-view traversal test.");
@@ -1958,8 +2026,8 @@ private:
         g_folderWindow.SetNavigationBarVisible(FolderWindow::Pane::Right, originalRightNavigationBarVisible);
     });
 
-    const std::wstring expectedFocusedItem = L"alpha.txt";
     const uint64_t baselineRefreshCount    = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    const std::wstring expectedFocusedItem = L"alpha.txt";
     const size_t baselineItemCount         = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
     const size_t baselineSelectedCount     = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
 
@@ -1989,21 +2057,47 @@ private:
 
     const auto focusAddressBarAndWait = [&](std::wstring_view context, NavigationViewDebugSnapshot& snapshot) noexcept
     {
-        if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow && GetActiveWindow() != rootWindow)
+        const auto prepareFocusAddressBarCommand = [&]() noexcept
         {
-            SetActiveWindow(rootWindow);
-        }
-        state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/focusAddressBar"),
-                      std::format(L"Shortcut dispatch failed for cmd/pane/focusAddressBar during {}.", context));
-        const bool editModeReady = WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
-                                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
+            if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow && GetActiveWindow() != rootWindow)
+            {
+                SetActiveWindow(rootWindow);
+            }
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            FocusFolderViewPane(FolderWindow::Pane::Left);
+            PumpPendingMessages();
+            return waitForFolderFocus(context);
+        };
+
+        const auto waitForEditMode = [&]() noexcept
+        {
+            return WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
         {
             return g_folderWindow.GetNavigationBarVisible(FolderWindow::Pane::Left) && value.focusTarget == NavigationViewDebugFocusTarget::PathEdit &&
                    value.editMode && ! value.currentEditText.empty() && value.visibleChildWindowCount == 1u && ! value.fullPathPopupVisible &&
                    ! value.fullPathPopupEditMode && value.currentPathText == root.wstring();
         },
-                                                                 SelfTest::Scale(3000ms),
-                                                                 &snapshot);
+                                                 SelfTest::Scale(3000ms),
+                                                 &snapshot);
+        };
+
+        state.Require(prepareFocusAddressBarCommand(), std::format(L"Left pane was not ready before address-bar focus dispatch during {}.", context));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        bool shortcutDispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/focusAddressBar");
+        bool editModeReady      = shortcutDispatched && waitForEditMode();
+        if (! editModeReady)
+        {
+            static_cast<void>(prepareFocusAddressBarCommand());
+            shortcutDispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/focusAddressBar");
+            editModeReady      = shortcutDispatched && waitForEditMode();
+        }
+
+        state.Require(shortcutDispatched, std::format(L"Shortcut dispatch failed for cmd/pane/focusAddressBar during {}.", context));
         state.Require(editModeReady,
                       std::format(L"Navigation view did not enter address-bar edit mode during {}; focusTarget={}, editMode={}, editText='{}', "
                                   L"pathText='{}', visibleChildren={}, navigationBarVisible={}, fullPathPopupVisible={}, fullPathPopupEditMode={}, "
@@ -2385,7 +2479,8 @@ private:
     return state.failure.empty();
 }
 
-[[nodiscard]] bool TestPaneNavigationViewPathDoubleClickEntersEditMode(HWND mainWindow, CaseState& state) noexcept
+[[nodiscard]] bool TestPaneNavigationViewPathDoubleClickEntersEditMode(
+    HWND mainWindow, CaseState& state, bool queueStaleRestoreFolderFocus = false) noexcept
 {
     using namespace std::chrono_literals;
 
@@ -2457,9 +2552,34 @@ private:
     {
         return false;
     }
+    const auto cleanupNavigationEdit = wil::scope_exit([&]() noexcept
+    {
+        NavigationViewDebugSnapshot cleanupSnapshot{};
+        if (! g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, cleanupSnapshot))
+        {
+            return;
+        }
 
-    const std::wstring expectedFocusedItem = L"alpha.txt";
+        if (! cleanupSnapshot.editMode && ! cleanupSnapshot.fullPathPopupVisible && ! cleanupSnapshot.fullPathPopupEditMode)
+        {
+            return;
+        }
+
+        const HWND escapeTarget = (cleanupSnapshot.currentEditInputHwnd && IsWindow(cleanupSnapshot.currentEditInputHwnd) != FALSE)
+                                      ? cleanupSnapshot.currentEditInputHwnd
+                                      : ((cleanupSnapshot.currentEditHostHwnd && IsWindow(cleanupSnapshot.currentEditHostHwnd) != FALSE)
+                                             ? cleanupSnapshot.currentEditHostHwnd
+                                             : navigationView);
+        if (escapeTarget && IsWindow(escapeTarget) != FALSE)
+        {
+            SendMessageW(escapeTarget, WM_KEYDOWN, VK_ESCAPE, 0);
+            SendMessageW(escapeTarget, WM_KEYUP, VK_ESCAPE, 0);
+            PumpPendingMessages();
+        }
+    });
+
     const uint64_t baselineRefreshCount    = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    const std::wstring expectedFocusedItem = L"alpha.txt";
     const size_t baselineItemCount         = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
     const size_t baselineSelectedCount     = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
     NavigationViewDebugSnapshot baselineSnapshot{};
@@ -2488,10 +2608,17 @@ private:
 
     const auto makePathClickPoint = [](const NavigationViewDebugSnapshot& snapshot) noexcept
     {
-        const RECT& target = snapshot.pathLastSegmentVisible ? snapshot.pathLastSegmentRect : snapshot.pathRegionRect;
         POINT point{};
-        point.x = (target.left + target.right) / 2;
-        point.y = (target.top + target.bottom) / 2;
+        point.y = (snapshot.pathRegionRect.top + snapshot.pathRegionRect.bottom) / 2;
+        if (snapshot.pathLastSegmentVisible && snapshot.pathLastSegmentRect.right + 16 < snapshot.pathRegionRect.right)
+        {
+            point.x = snapshot.pathLastSegmentRect.right + ((snapshot.pathRegionRect.right - snapshot.pathLastSegmentRect.right) / 2);
+            return point;
+        }
+
+        const RECT& target = snapshot.pathLastSegmentVisible ? snapshot.pathLastSegmentRect : snapshot.pathRegionRect;
+        point.x            = (target.left + target.right) / 2;
+        point.y            = (target.top + target.bottom) / 2;
         return point;
     };
 
@@ -2598,6 +2725,35 @@ private:
     const LPARAM targetClickPoint =
         (clickTarget != nullptr && IsWindow(clickTarget) != FALSE) ? MapClientPointLParam(navigationView, clickTarget, clickPointLParam) : clickPointLParam;
 
+    if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow)
+    {
+        BringWindowToTop(rootWindow);
+        SetForegroundWindow(rootWindow);
+        if (GetActiveWindow() != rootWindow)
+        {
+            SetActiveWindow(rootWindow);
+        }
+    }
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    SetFocus(navigationView);
+    PumpPendingMessages();
+    if (queueStaleRestoreFolderFocus)
+    {
+        state.Require(PostMessageW(navigationView, WndMsg::kNavigationViewRestoreFolderFocus, 0, 0) != FALSE,
+                      L"Failed to queue stale navigation-view folder-focus restore before path double-click.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+    {
+        POINT clickScreenPoint{clickPoint.x, clickPoint.y};
+        if (ClientToScreen(navigationView, &clickScreenPoint) != FALSE)
+        {
+            SetCursorPos(clickScreenPoint.x, clickScreenPoint.y);
+        }
+    }
+
     SendMessageW(messageTarget, WM_MOUSEMOVE, 0, targetClickPoint);
     SendMessageW(messageTarget, WM_LBUTTONDOWN, MK_LBUTTON, targetClickPoint);
     SendMessageW(messageTarget, WM_LBUTTONUP, 0, targetClickPoint);
@@ -2631,6 +2787,8 @@ private:
                               L"pathRect=({},{}-{},{}), ellipsisVisible={}, ellipsisRect=({},{}-{},{}), prePath='{}', preRect=({},{}-{},{}), "
                               L"lastVisible={}, lastRect=({},{}-{},{}), leadingSnapshot={}, leadingPath='{}', leadingEditMode={}, "
                               L"leadingRect=({},{}-{},{}), leadingLastVisible={}, leadingLastRect=({},{}-{},{}), leadingChildren={}, "
+                              L"debugEnter={}/{}/{}, debugExit={}, debugDblActivate={}, debugKeyActivate={}, debugDblLast={}, debugDblWhitespace={}, "
+                              L"debugDblPoint=({},{}), debugDblLocal=({:.1f},{:.1f}), debugAbort='{}', debugExitReason='{}', "
                               L"panePath='{}', refresh={}/{}, items={}/{}, selected={}/{}.",
                               static_cast<int>(editSnapshot.focusTarget),
                               editSnapshot.editMode ? 1 : 0,
@@ -2687,6 +2845,20 @@ private:
                               afterLeadingClickSnapshot.pathLastSegmentRect.right,
                               afterLeadingClickSnapshot.pathLastSegmentRect.bottom,
                               afterLeadingClickSnapshot.visibleChildWindowCount,
+                              editSnapshot.debugEnterEditAttemptCount,
+                              editSnapshot.debugEnterEditSuccessCount,
+                              editSnapshot.debugEnterEditAbortCount,
+                              editSnapshot.debugExitEditCount,
+                              editSnapshot.debugDoubleClickActivateCount,
+                              editSnapshot.debugKeyboardActivateCount,
+                              editSnapshot.debugLastDoubleClickOnLastSegment ? 1 : 0,
+                              editSnapshot.debugLastDoubleClickInWhitespace ? 1 : 0,
+                              editSnapshot.debugLastDoubleClickPoint.x,
+                              editSnapshot.debugLastDoubleClickPoint.y,
+                              editSnapshot.debugLastDoubleClickLocalX,
+                              editSnapshot.debugLastDoubleClickLocalY,
+                              editSnapshot.debugLastEnterEditAbortReason,
+                              editSnapshot.debugLastExitEditReason,
                               panePathAfterDouble.has_value() ? panePathAfterDouble->wstring() : std::wstring(),
                               g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left),
                               baselineRefreshCount,
@@ -2871,8 +3043,32 @@ private:
     {
         return false;
     }
+    const auto cleanupNavigationEdit = wil::scope_exit([&]() noexcept
+    {
+        NavigationViewDebugSnapshot cleanupSnapshot{};
+        if (! g_folderWindow.DebugGetNavigationViewSnapshot(FolderWindow::Pane::Left, cleanupSnapshot))
+        {
+            return;
+        }
 
-    const uint64_t baselineRefreshCount    = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+        if (! cleanupSnapshot.editMode && ! cleanupSnapshot.fullPathPopupVisible && ! cleanupSnapshot.fullPathPopupEditMode)
+        {
+            return;
+        }
+
+        const HWND escapeTarget = (cleanupSnapshot.currentEditInputHwnd && IsWindow(cleanupSnapshot.currentEditInputHwnd) != FALSE)
+                                      ? cleanupSnapshot.currentEditInputHwnd
+                                      : ((cleanupSnapshot.currentEditHostHwnd && IsWindow(cleanupSnapshot.currentEditHostHwnd) != FALSE)
+                                             ? cleanupSnapshot.currentEditHostHwnd
+                                             : navigationView);
+        if (escapeTarget && IsWindow(escapeTarget) != FALSE)
+        {
+            SendMessageW(escapeTarget, WM_KEYDOWN, VK_ESCAPE, 0);
+            SendMessageW(escapeTarget, WM_KEYUP, VK_ESCAPE, 0);
+            PumpPendingMessages();
+        }
+    });
+
     const size_t baselineItemCount         = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
     const size_t baselineSelectedCount     = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
     const std::wstring expectedFocusedItem = L"alpha.txt";
@@ -2885,8 +3081,7 @@ private:
         {
             return value.focusTarget == NavigationViewDebugFocusTarget::PathRegion && ! value.editMode && ! value.historyDropdownVisible &&
                    ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
-                   value.currentPathText == root.wstring() && g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
-                   g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                   value.currentPathText == root.wstring() && g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
         },
                                                     SelfTest::Scale(3000ms),
@@ -2905,7 +3100,6 @@ private:
                    ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
                    value.currentPathText == root.wstring() && g_folderWindow.GetFocusedFolderViewHwnd() == folderView &&
                    g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == expectedFocusedItem &&
-                   g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
                    g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
         },
@@ -2917,6 +3111,19 @@ private:
 
     const auto activatePathRegionAndExit = [&](const WPARAM virtualKey, std::wstring_view label) noexcept
     {
+        if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow)
+        {
+            BringWindowToTop(rootWindow);
+            SetForegroundWindow(rootWindow);
+            if (GetActiveWindow() != rootWindow)
+            {
+                SetActiveWindow(rootWindow);
+            }
+        }
+        g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+        SetFocus(navigationView);
+        PumpPendingMessages();
+
         state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::Path),
                       std::format(L"Failed to focus the navigation-view path region before {}.", label));
         if (! state.failure.empty())
@@ -2931,6 +3138,8 @@ private:
             return false;
         }
 
+        SetFocus(navigationView);
+        PumpPendingMessages();
         SendMessageW(navigationView, WM_KEYDOWN, virtualKey, 0);
         SendMessageW(navigationView, WM_KEYUP, virtualKey, 0);
         PumpPendingMessages();
@@ -2943,13 +3152,32 @@ private:
                    value.visibleChildWindowCount == 1u && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
                    ! value.fullPathPopupEditMode && value.currentEditUsesNativeTextInput && value.currentPathText == root.wstring() &&
                    value.currentEditText.find(root.wstring()) != std::wstring::npos && value.currentEditCaretScreenRectValid &&
-                   ! value.currentEditHasActiveComposition && g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
-                   g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                   ! value.currentEditHasActiveComposition && g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
                    g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
         },
                                                     SelfTest::Scale(3000ms),
                                                     &editSnapshot),
-                      std::format(L"Navigation view did not enter path edit mode after {}.", label));
+                      std::format(L"Navigation view did not enter path edit mode after {}; editMode={} focusTarget={} childWindows={} currentPath='{}' "
+                                  L"editText='{}' nativeInput={} caret={} debugEnter={}/{}/{} debugExit={} debugDblActivate={} "
+                                  L"debugKeyActivate={} debugAbort='{}' debugExitReason='{}' itemCount={} selectedCount={}.",
+                                  label,
+                                  editSnapshot.editMode ? 1 : 0,
+                                  static_cast<int>(editSnapshot.focusTarget),
+                                  editSnapshot.visibleChildWindowCount,
+                                  editSnapshot.currentPathText,
+                                  editSnapshot.currentEditText,
+                                  editSnapshot.currentEditUsesNativeTextInput ? 1 : 0,
+                                  editSnapshot.currentEditCaretScreenRectValid ? 1 : 0,
+                                  editSnapshot.debugEnterEditAttemptCount,
+                                  editSnapshot.debugEnterEditSuccessCount,
+                                  editSnapshot.debugEnterEditAbortCount,
+                                  editSnapshot.debugExitEditCount,
+                                  editSnapshot.debugDoubleClickActivateCount,
+                                  editSnapshot.debugKeyboardActivateCount,
+                                  editSnapshot.debugLastEnterEditAbortReason,
+                                  editSnapshot.debugLastExitEditReason,
+                                  g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                                  g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left)));
         if (! state.failure.empty())
         {
             return false;
@@ -6039,11 +6267,16 @@ private:
         return false;
     }
 
-    const std::filesystem::path root = suiteRoot / L"work" / (L"navigation_view_edit_refresh_" + NewGuidText());
+    const std::filesystem::path root          = suiteRoot / L"work" / (L"navigation_view_edit_refresh_" + NewGuidText());
+    const std::filesystem::path differentRoot = suiteRoot / L"work" / (L"navigation_view_edit_retire_" + NewGuidText());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
+    std::filesystem::remove_all(differentRoot, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create navigation-view edit refresh root.");
+    state.Require(SelfTest::EnsureDirectory(differentRoot), L"Failed to create navigation-view edit retirement root.");
     state.Require(SelfTest::WriteTextFile(root / L"anchor.txt", "anchor"), L"Failed to create anchor.txt for navigation-view edit refresh test.");
+    state.Require(SelfTest::WriteTextFile(differentRoot / L"other.txt", "other"),
+                  L"Failed to create other.txt for navigation-view edit retirement test.");
     if (! state.failure.empty())
     {
         return false;
@@ -6090,6 +6323,21 @@ private:
     }
 
     const std::wstring rootText = root.wstring();
+    const auto makeCaseVariantPath = [](std::wstring text) noexcept
+    {
+        for (wchar_t& ch : text)
+        {
+            if (ch >= L'a' && ch <= L'z')
+            {
+                ch = static_cast<wchar_t>(L'A' + (ch - L'a'));
+            }
+            else if (ch >= L'A' && ch <= L'Z')
+            {
+                ch = static_cast<wchar_t>(L'a' + (ch - L'A'));
+            }
+        }
+        return std::filesystem::path(std::move(text));
+    };
     state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::Path),
                   L"Failed to focus the NavigationView path region before edit refresh test.");
     SendMessageW(navigationView, WM_KEYDOWN, VK_RETURN, 0);
@@ -6213,6 +6461,73 @@ private:
     },
                                                 SelfTest::Scale(1000ms)),
                   L"Navigation path edit should keep accepting typed input after an external redraw refresh.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HWND editHostBeforeCaseOnlyRefresh  = displayRefreshSnapshot.currentEditHostHwnd;
+    const HWND editInputBeforeCaseOnlyRefresh = displayRefreshSnapshot.currentEditInputHwnd;
+    const std::filesystem::path caseOnlyRoot  = makeCaseVariantPath(root.wstring());
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, caseOnlyRoot);
+    PumpPendingMessages();
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Case-only path refresh did not settle on the existing pane path.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    NavigationViewDebugSnapshot caseOnlyRefreshSnapshot{};
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return value.focusTarget == NavigationViewDebugFocusTarget::PathEdit && value.editMode && value.currentEditText == expectedText &&
+               value.visibleChildWindowCount == 1u && value.currentEditHostHwnd == editHostBeforeCaseOnlyRefresh &&
+               value.currentEditInputHwnd == editInputBeforeCaseOnlyRefresh &&
+               OrdinalString::EqualsNoCasePath(std::filesystem::path(value.currentPathText), root);
+    },
+                                                SelfTest::Scale(3000ms),
+                                                &caseOnlyRefreshSnapshot),
+                  std::format(L"Navigation path edit should survive a case-only path refresh. focusTarget={} editMode={} visibleChildren={} host={} input={} "
+                              L"lastExit='{}' currentEdit='{}' currentPath='{}' caseOnlyPath='{}'. visibility=[{}]",
+                              static_cast<int>(caseOnlyRefreshSnapshot.focusTarget),
+                              caseOnlyRefreshSnapshot.editMode,
+                              caseOnlyRefreshSnapshot.visibleChildWindowCount,
+                              DescribeWindowHandleForSelfTest(caseOnlyRefreshSnapshot.currentEditHostHwnd),
+                              DescribeWindowHandleForSelfTest(caseOnlyRefreshSnapshot.currentEditInputHwnd),
+                              caseOnlyRefreshSnapshot.debugLastExitEditReason,
+                              caseOnlyRefreshSnapshot.currentEditText,
+                              caseOnlyRefreshSnapshot.currentPathText,
+                              caseOnlyRoot.wstring(),
+                              DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane::Left, navigationView)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, differentRoot);
+    PumpPendingMessages();
+
+    NavigationViewDebugSnapshot differentPathSnapshot{};
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return ! value.editMode && value.focusTarget != NavigationViewDebugFocusTarget::PathEdit && value.visibleChildWindowCount == 0u &&
+               value.currentEditHostHwnd == nullptr && value.currentEditInputHwnd == nullptr &&
+               OrdinalString::EqualsNoCasePath(std::filesystem::path(value.currentPathText), differentRoot);
+    },
+                                                SelfTest::Scale(3000ms),
+                                                &differentPathSnapshot),
+                  std::format(L"Navigation path edit should retire on a real path change. focusTarget={} editMode={} visibleChildren={} host={} input={} "
+                              L"currentEdit='{}' currentPath='{}'.",
+                              static_cast<int>(differentPathSnapshot.focusTarget),
+                              differentPathSnapshot.editMode,
+                              differentPathSnapshot.visibleChildWindowCount,
+                              DescribeWindowHandleForSelfTest(differentPathSnapshot.currentEditHostHwnd),
+                              DescribeWindowHandleForSelfTest(differentPathSnapshot.currentEditInputHwnd),
+                              differentPathSnapshot.currentEditText,
+                              differentPathSnapshot.currentPathText));
     return state.failure.empty();
 }
 
@@ -6667,6 +6982,16 @@ private:
         return false;
     }
 
+    const std::optional<Common::Settings::ShortcutsSettings> shortcutsBefore = g_settings.shortcuts;
+    const auto restoreShortcuts = wil::scope_exit([&] noexcept
+    {
+        g_settings.shortcuts = shortcutsBefore;
+        DebugReloadShortcutsFromSettings();
+    });
+
+    g_settings.shortcuts = ShortcutDefaults::CreateDefaultShortcuts();
+    DebugReloadShortcutsFromSettings();
+
     FocusFolderViewPane(FolderWindow::Pane::Left);
     const uint64_t before = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
     SendMessageW(mainWindow, WndMsg::kFunctionBarInvoke, VK_F9, static_cast<LPARAM>(ShortcutManager::kModCtrl));
@@ -6711,7 +7036,8 @@ void CloseExistingStandaloneViewerWindows(std::wstring_view windowClassName) noe
                                                        std::wstring_view pluginId,
                                                        std::wstring_view windowClassName,
                                                        const std::filesystem::path& samplePath,
-                                                       StandaloneViewerPointerProbe& out) noexcept
+                                                       StandaloneViewerPointerProbe& out,
+                                                       std::string_view configurationJsonUtf8 = {}) noexcept
 {
     out = {};
     out.windowClassName = std::wstring(windowClassName);
@@ -6733,6 +7059,31 @@ void CloseExistingStandaloneViewerWindows(std::wstring_view windowClassName) noe
     if (FAILED(createHr) || ! out.viewer)
     {
         return false;
+    }
+
+    if (! configurationJsonUtf8.empty())
+    {
+        wil::com_ptr<IInformations> informations;
+        const HRESULT qiInfos = out.viewer->QueryInterface(__uuidof(IInformations), informations.put_void());
+        state.Require(SUCCEEDED(qiInfos) && informations,
+                      std::format(L"{}: failed to query viewer configuration interface. hr=0x{:08X}",
+                                  scenarioName,
+                                  static_cast<unsigned long>(qiInfos)));
+        if (FAILED(qiInfos) || ! informations)
+        {
+            return false;
+        }
+
+        const std::string configuration(configurationJsonUtf8);
+        const HRESULT configHr = informations->SetConfiguration(configuration.c_str());
+        state.Require(SUCCEEDED(configHr),
+                      std::format(L"{}: failed to apply viewer configuration. hr=0x{:08X}",
+                                  scenarioName,
+                                  static_cast<unsigned long>(configHr)));
+        if (FAILED(configHr))
+        {
+            return false;
+        }
     }
 
     const std::wstring samplePathText = samplePath.wstring();
@@ -6788,6 +7139,41 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     probe.viewer.reset();
     probe.fileSystem = {};
     PumpPendingMessages();
+}
+
+[[nodiscard]] bool ResizeStandaloneViewerClientToDip(CaseState& state, HWND hwnd, int widthDip, int heightDip, std::wstring_view scenarioName) noexcept
+{
+    RECT windowRect{};
+    state.Require(GetWindowRect(hwnd, &windowRect) != FALSE, std::format(L"{}: failed to read viewer window rect.", scenarioName));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const UINT dpi = std::max<UINT>(GetDpiForWindow(hwnd), USER_DEFAULT_SCREEN_DPI);
+    RECT requestedClient{0,
+                         0,
+                         MulDiv(std::max(1, widthDip), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI),
+                         MulDiv(std::max(1, heightDip), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)};
+    const DWORD style   = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
+    const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+    state.Require(AdjustWindowRectExForDpi(&requestedClient, style, FALSE, exStyle, dpi) != FALSE,
+                  std::format(L"{}: failed to calculate viewer window size.", scenarioName));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const int requestedWidth  = static_cast<int>(std::max<LONG>(1, requestedClient.right - requestedClient.left));
+    const int requestedHeight = static_cast<int>(std::max<LONG>(1, requestedClient.bottom - requestedClient.top));
+    state.Require(SetWindowPos(hwnd, nullptr, windowRect.left, windowRect.top, requestedWidth, requestedHeight, SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+                  std::format(L"{}: failed to resize viewer window.", scenarioName));
+    PumpPendingMessages();
+    InvalidateRect(hwnd, nullptr, FALSE);
+    UpdateWindow(hwnd);
+    RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    PumpPendingMessages();
+    return state.failure.empty();
 }
 
 [[nodiscard]] LPARAM MakeSelfTestPointLParam(POINT pt) noexcept
@@ -6884,6 +7270,47 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     if (viewerWindow && IsWindow(viewerWindow) != FALSE)
     {
         static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetTooltipSnapshot, 0, reinterpret_cast<LPARAM>(&outSnapshot)));
+    }
+    return false;
+}
+
+[[nodiscard]] bool WaitForViewerSpacePerfSnapshot(HWND viewerWindow,
+                                                  WndMsg::ViewerSpacePerfDebugSnapshot& outSnapshot,
+                                                  auto&& predicate,
+                                                  std::chrono::milliseconds timeout) noexcept
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    WndMsg::ViewerSpacePerfDebugSnapshot lastSnapshot{};
+    bool hasLastSnapshot = false;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+
+        WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
+        if (viewerWindow && IsWindow(viewerWindow) != FALSE &&
+            SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE)
+        {
+            lastSnapshot = snapshot;
+            hasLastSnapshot = true;
+            if (predicate(snapshot))
+            {
+                outSnapshot = snapshot;
+                return true;
+            }
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    }
+
+    outSnapshot = {};
+    if (viewerWindow && IsWindow(viewerWindow) != FALSE)
+    {
+        static_cast<void>(SendMessageW(viewerWindow, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0, reinterpret_cast<LPARAM>(&outSnapshot)));
+    }
+    if (hasLastSnapshot && outSnapshot.rendererMode == WndMsg::ViewerSpacePerfRendererMode::None && outSnapshot.lastPaintUs == 0u &&
+        outSnapshot.drawItemCount == 0u)
+    {
+        outSnapshot = lastSnapshot;
     }
     return false;
 }
@@ -8052,6 +8479,16 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
+    POINT originalCursor{};
+    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
+
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> hoverMessageDelivered{false};
     std::atomic<bool> firstMenuSelected{false};
@@ -8066,7 +8503,10 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::jthread popupDriver([&](std::stop_token) noexcept
     {
         const auto done = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
+        const auto dismissPopupOnExit =
+            wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
+        static_cast<void>(SetCursorPos(firstScreenPoint.x, firstScreenPoint.y));
         PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(firstPoint.x, firstPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(firstPoint.x, firstPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(firstPoint.x, firstPoint.y));
@@ -8081,8 +8521,9 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         initialPopupObserved.store(true, std::memory_order_release);
         if (IsWindow(menuBarWindow) != FALSE)
         {
-            static_cast<void>(SendMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(secondPoint.x, secondPoint.y)));
-            hoverMessageDelivered.store(true, std::memory_order_release);
+            static_cast<void>(SetCursorPos(secondScreenPoint.x, secondScreenPoint.y));
+            hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(secondPoint.x, secondPoint.y)) != FALSE,
+                                        std::memory_order_release);
         }
         if (! hoverMessageDelivered.load(std::memory_order_acquire))
         {
@@ -8111,13 +8552,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         replacementPopupClosed.store(WaitForWindowClosed(replacementPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
     });
 
-    const auto driverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < driverDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    popupDriver.join();
+    JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
 
     state.Require(firstMenuSelected.load(std::memory_order_acquire), L"Menu-bar click did not select the expected first top-level menu.");
     state.Require(initialPopupObserved.load(std::memory_order_acquire), L"Menu-bar click did not open the initial DxUI popup.");
@@ -8223,10 +8658,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    const LONG lowerHoverY = secondItemRect.bottom < (menuBarWindowRect.bottom - 1)
-                                 ? secondItemRect.bottom + std::max<LONG>(1, (menuBarWindowRect.bottom - secondItemRect.bottom) / 2)
-                                 : secondScreenPoint.y;
-    const POINT secondLowerEdgeScreenPoint{secondScreenPoint.x, std::min<LONG>(lowerHoverY, menuBarWindowRect.bottom - 1)};
+    const POINT secondLowerEdgeScreenPoint{secondScreenPoint.x, secondScreenPoint.y};
     POINT secondLowerEdgeClientPoint = secondLowerEdgeScreenPoint;
     state.Require(ScreenToClient(menuBarWindow, &secondLowerEdgeClientPoint) != FALSE,
                   L"Failed to map the neighboring persistent menu-bar hover point to client coordinates.");
@@ -8234,6 +8666,16 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     {
         return false;
     }
+
+    POINT originalCursor{};
+    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
 
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> clickInputSent{false};
@@ -8249,10 +8691,13 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::jthread popupDriver([&](std::stop_token) noexcept
     {
         const auto done = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
+        const auto dismissPopupOnExit =
+            wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
         BringWindowToTop(mainWindow);
         SetForegroundWindow(mainWindow);
 
+        static_cast<void>(SetCursorPos(firstScreenPoint.x, firstScreenPoint.y));
         const bool postedOpen = PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE;
@@ -8280,8 +8725,9 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
         if (IsWindow(menuBarWindow) != FALSE)
         {
-            static_cast<void>(SendMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(secondLowerEdgeClientPoint.x, secondLowerEdgeClientPoint.y)));
-            hoverMessageDelivered.store(true, std::memory_order_release);
+            static_cast<void>(SetCursorPos(secondLowerEdgeScreenPoint.x, secondLowerEdgeScreenPoint.y));
+            hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(secondLowerEdgeClientPoint.x, secondLowerEdgeClientPoint.y)) != FALSE,
+                                        std::memory_order_release);
         }
         if (! hoverMessageDelivered.load(std::memory_order_acquire))
         {
@@ -8306,13 +8752,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         replacementPopupClosed.store(WaitForWindowClosed(replacementPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
     });
 
-    const auto driverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < driverDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    popupDriver.join();
+    JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
 
     state.Require(clickInputSent.load(std::memory_order_acquire), L"Failed to post a mouse click on the persistent menu bar.");
     state.Require(hoverMessageDelivered.load(std::memory_order_acquire), L"Failed to deliver the neighboring persistent menu-bar hover message.");
@@ -8437,10 +8877,33 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
+    POINT originalCursor{};
+    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
+
+    bool prepositionedLiveCursor = false;
+    if (hoverViaMouseLeaveRefresh)
+    {
+        using namespace std::chrono_literals;
+        prepositionedLiveCursor = SetCursorPos(pluginsScreenPoint.x, pluginsScreenPoint.y) != FALSE;
+        const auto drainDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
+        while (std::chrono::steady_clock::now() < drainDeadline)
+        {
+            PumpPendingMessages();
+            std::this_thread::sleep_for(10ms);
+        }
+    }
+
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> clickInputSent{false};
     std::atomic<bool> hoverMessageDelivered{false};
-    std::atomic<bool> hoverCursorMoved{! hoverViaMouseLeaveRefresh};
+    std::atomic<bool> hoverCursorMoved{hoverViaMouseLeaveRefresh ? prepositionedLiveCursor : true};
     std::atomic<bool> viewMenuSelected{false};
     std::atomic<bool> initialPopupObserved{false};
     std::atomic<bool> pluginsMenuSelected{false};
@@ -8451,15 +8914,22 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::atomic<int> hoverHitIndexAfterMove{-1};
     std::atomic<int> cursorAfterMoveX{0};
     std::atomic<int> cursorAfterMoveY{0};
+    std::atomic<int> selectedIndexBeforeHoverMessage{-2};
     std::atomic<int> selectedIndexAfterHoverWait{-2};
     std::atomic<unsigned long long> rootPointerSwitchCount{0};
     std::jthread popupDriver([&](std::stop_token) noexcept
     {
         const auto done = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
+        const auto dismissPopupOnExit =
+            wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
         BringWindowToTop(mainWindow);
         SetForegroundWindow(mainWindow);
 
+        if (! hoverViaMouseLeaveRefresh)
+        {
+            static_cast<void>(SetCursorPos(viewScreenPoint.x, viewScreenPoint.y));
+        }
         const bool postedOpen = PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(viewClientPoint.x, viewClientPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(viewClientPoint.x, viewClientPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(viewClientPoint.x, viewClientPoint.y)) != FALSE;
@@ -8477,6 +8947,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         }
 
         initialPopupObserved.store(true, std::memory_order_release);
+        selectedIndexBeforeHoverMessage.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
 
         RECT livePluginsItemRect{};
         POINT livePluginsScreenPoint = pluginsScreenPoint;
@@ -8497,21 +8968,9 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
         if (hoverViaMouseLeaveRefresh)
         {
-            POINT originalCursor{};
-            const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-            const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
-            {
-                if (restoreCursor)
-                {
-                    SetCursorPos(originalCursor.x, originalCursor.y);
-                }
-            });
-
-            hoverCursorMoved.store(SetCursorPos(livePluginsScreenPoint.x, livePluginsScreenPoint.y) != FALSE, std::memory_order_release);
             if (hoverCursorMoved.load(std::memory_order_acquire) && IsWindow(menuBarWindow) != FALSE)
             {
-                static_cast<void>(SendMessageW(menuBarWindow, WM_MOUSELEAVE, 0, 0));
-                hoverMessageDelivered.store(true, std::memory_order_release);
+                hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSELEAVE, 0, 0) != FALSE, std::memory_order_release);
             }
         }
         else
@@ -8519,8 +8978,9 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             POINT livePluginsClientPoint = livePluginsScreenPoint;
             if (ScreenToClient(menuBarWindow, &livePluginsClientPoint) != FALSE && IsWindow(menuBarWindow) != FALSE)
             {
-                static_cast<void>(SendMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)));
-                hoverMessageDelivered.store(true, std::memory_order_release);
+                static_cast<void>(SetCursorPos(livePluginsScreenPoint.x, livePluginsScreenPoint.y));
+                hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)) != FALSE,
+                                            std::memory_order_release);
             }
         }
         if (! hoverMessageDelivered.load(std::memory_order_acquire))
@@ -8571,25 +9031,20 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         replacementPopupClosed.store(WaitForWindowClosed(replacementPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
     });
 
-    const auto driverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < driverDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    popupDriver.join();
+    JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
 
     state.Require(clickInputSent.load(std::memory_order_acquire), L"Failed to post a mouse click on the View top-level menu.");
     state.Require(viewMenuSelected.load(std::memory_order_acquire), L"Clicking View did not select the View top-level menu.");
     state.Require(initialPopupObserved.load(std::memory_order_acquire), L"Clicking View did not open the initial DxUI popup.");
-    state.Require(hoverCursorMoved.load(std::memory_order_acquire), L"Failed to move the real cursor from View to Plugins.");
+    state.Require(hoverCursorMoved.load(std::memory_order_acquire), L"Failed to park the real cursor on Plugins before mouse-leave validation.");
     state.Require(hoverMessageDelivered.load(std::memory_order_acquire),
                   L"Failed to deliver the captured-session hover message to the persistent DxUI menu bar.");
     if (hoverViaMouseLeaveRefresh)
     {
         state.Require(! pluginsMenuSelected.load(std::memory_order_acquire),
-                      std::format(L"WM_MOUSELEAVE must not switch the active top-level menu from the later live cursor (selectedAfterWait={}, "
+                      std::format(L"WM_MOUSELEAVE must not switch the active top-level menu from the later live cursor (selectedBeforeHover={}, selectedAfterWait={}, "
                                   L"expectedView={}, plugins={}, pointerSwitches={}).",
+                                  selectedIndexBeforeHoverMessage.load(std::memory_order_acquire),
                                   selectedIndexAfterHoverWait.load(std::memory_order_acquire),
                                   viewMapping->visualIndex,
                                   pluginsMapping->visualIndex,
@@ -8757,14 +9212,14 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         static_cast<void>(SetCursorPos(filesScreenPoint.x, filesScreenPoint.y));
         if (IsWindow(menuBarWindow) != FALSE)
         {
-            static_cast<void>(SendMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(filesClientPoint.x, filesClientPoint.y)));
-            hoverMessageDelivered.store(true, std::memory_order_release);
+            hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(filesClientPoint.x, filesClientPoint.y)) != FALSE,
+                                        std::memory_order_release);
         }
 
+        const bool filesHighlightMatched = WaitForMainMenuBarVisualHighlightIndex(filesMapping->visualIndex, SelfTest::Scale(1000ms));
         highlightIndexAfterHover.store(DebugGetMainMenuBarVisualHighlightIndex(), std::memory_order_release);
         selectedIndexAfterHover.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
-        filesMenuHighlighted.store(highlightIndexAfterHover.load(std::memory_order_acquire) == static_cast<int>(filesMapping->visualIndex),
-                                   std::memory_order_release);
+        filesMenuHighlighted.store(filesHighlightMatched, std::memory_order_release);
 
         const HWND replacementPopup = WaitForReplacementDxUiContextMenuWindow(initialPopup, SelfTest::Scale(2000ms));
         if (! replacementPopup)
@@ -8780,13 +9235,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         replacementPopupClosed.store(WaitForWindowClosed(replacementPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
     });
 
-    const auto driverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < driverDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    popupDriver.join();
+    JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
 
     state.Require(clickInputSent.load(std::memory_order_acquire), L"Failed to post a mouse click on the View top-level menu.");
     state.Require(viewMenuSelected.load(std::memory_order_acquire), L"Clicking View did not select the View top-level menu.");
@@ -8900,12 +9349,23 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT clickPoint{itemRect.left + ((itemRect.right - itemRect.left) / 2), itemRect.top + ((itemRect.bottom - itemRect.top) / 2)};
+    const POINT clickScreenPoint{itemRect.left + ((itemRect.right - itemRect.left) / 2), itemRect.top + ((itemRect.bottom - itemRect.top) / 2)};
+    POINT clickPoint = clickScreenPoint;
     state.Require(ScreenToClient(menuBarWindow, &clickPoint) != FALSE, L"Failed to map the menu-bar click point to client coordinates.");
     if (! state.failure.empty())
     {
         return false;
     }
+
+    POINT originalCursor{};
+    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
 
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> popupObserved{false};
@@ -8918,7 +9378,10 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::jthread popupDriver([&](std::stop_token) noexcept
     {
         const auto done = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
+        const auto dismissPopupOnExit =
+            wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
+        static_cast<void>(SetCursorPos(clickScreenPoint.x, clickScreenPoint.y));
         PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
@@ -8964,13 +9427,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         popupClosed.store(WaitForWindowClosed(popup, SelfTest::Scale(2000ms)), std::memory_order_release);
     });
 
-    const auto driverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < driverDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    popupDriver.join();
+    JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
 
     state.Require(popupObserved.load(std::memory_order_acquire), L"Mouse click on the pane top-level menu did not open a DxUI popup.");
     state.Require(popupStateReadable.load(std::memory_order_acquire), L"Mouse-opened DxUI popup did not expose debug state.");
@@ -8994,8 +9451,15 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                     DescribeWindowHandleForSelfTest(GetFocus())));
     state.Require(WaitForMainMenuBarSelectedIndex(std::nullopt, SelfTest::Scale(2000ms)),
                   L"Mouse-opened main menu popup should clear the selected top-level menu after closing.");
-    state.Require(WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms)),
-                  L"Mouse-opened main menu popup should clear the menu-bar visual highlight after closing.");
+    const bool firstHighlightCleared = WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms));
+    state.Require(firstHighlightCleared,
+                  std::format(L"Mouse-opened main menu popup should clear the menu-bar visual highlight after closing; selectedIndex={}, "
+                              L"highlightCount={}, highlightIndex={}, focus={}, expectedFocus={}.",
+                              DebugGetMainMenuBarSelectedIndex(),
+                              DebugGetMainMenuBarVisualHighlightCount(),
+                              DebugGetMainMenuBarVisualHighlightIndex(),
+                              DescribeWindowHandleForSelfTest(GetFocus()),
+                              DescribeWindowHandleForSelfTest(expectedFolderView)));
     if (! state.failure.empty())
     {
         return false;
@@ -9014,7 +9478,10 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::jthread secondPopupDriver([&](std::stop_token) noexcept
     {
         const auto done = wil::scope_exit([&]() noexcept { secondPopupDriverDone.store(true, std::memory_order_release); });
+        const auto dismissPopupOnExit =
+            wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
+        static_cast<void>(SetCursorPos(clickScreenPoint.x, clickScreenPoint.y));
         PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
@@ -9049,8 +9516,15 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                     DescribeWindowHandleForSelfTest(GetFocus())));
     state.Require(WaitForMainMenuBarSelectedIndex(std::nullopt, SelfTest::Scale(2000ms)),
                   L"Second mouse-opened main menu popup should clear the selected top-level menu after closing.");
-    state.Require(WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms)),
-                  L"Second mouse-opened main menu popup should clear the menu-bar visual highlight after closing.");
+    const bool secondHighlightCleared = WaitForMainMenuBarVisualHighlightCount(0, SelfTest::Scale(2000ms));
+    state.Require(secondHighlightCleared,
+                  std::format(L"Second mouse-opened main menu popup should clear the menu-bar visual highlight after closing; selectedIndex={}, "
+                              L"highlightCount={}, highlightIndex={}, focus={}, expectedFocus={}.",
+                              DebugGetMainMenuBarSelectedIndex(),
+                              DebugGetMainMenuBarVisualHighlightCount(),
+                              DebugGetMainMenuBarVisualHighlightIndex(),
+                              DescribeWindowHandleForSelfTest(GetFocus()),
+                              DescribeWindowHandleForSelfTest(expectedFolderView)));
 
     return state.failure.empty();
 }
@@ -9128,12 +9602,23 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT clickPoint{itemRect.left + ((itemRect.right - itemRect.left) / 2), itemRect.top + ((itemRect.bottom - itemRect.top) / 2)};
+    const POINT clickScreenPoint{itemRect.left + ((itemRect.right - itemRect.left) / 2), itemRect.top + ((itemRect.bottom - itemRect.top) / 2)};
+    POINT clickPoint = clickScreenPoint;
     state.Require(ScreenToClient(menuBarWindow, &clickPoint) != FALSE, L"Failed to map the menu-bar click point to client coordinates.");
     if (! state.failure.empty())
     {
         return false;
     }
+
+    POINT originalCursor{};
+    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
 
     std::atomic<bool> popupDriverDone{false};
     std::atomic<bool> clickInputSent{false};
@@ -9153,11 +9638,14 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     std::jthread popupDriver([&](std::stop_token) noexcept
     {
         const auto done = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
+        const auto dismissPopupOnExit =
+            wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
         BringWindowToTop(mainWindow);
         SetForegroundWindow(mainWindow);
         SetFocus(menuBarWindow);
 
+        static_cast<void>(SetCursorPos(clickScreenPoint.x, clickScreenPoint.y));
         const bool postedOpen = PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickPoint.x, clickPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickPoint.x, clickPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickPoint.x, clickPoint.y)) != FALSE;
@@ -9223,13 +9711,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         popupClosed.store(WaitForWindowClosed(popup, SelfTest::Scale(2000ms)), std::memory_order_release);
     });
 
-    const auto driverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
-    while (! popupDriverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < driverDeadline)
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(10ms);
-    }
-    popupDriver.join();
+    JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
 
     state.Require(clickInputSent.load(std::memory_order_acquire), L"Failed to post a mouse click on the top-level menu.");
     state.Require(popupObserved.load(std::memory_order_acquire), L"Mouse click on the top-level menu did not open a DxUI popup.");
@@ -9566,6 +10048,25 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         if (! state.failure.empty())
         {
             return false;
+        }
+    }
+
+    POINT originalCursor{};
+    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
+    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    {
+        if (restoreCursor)
+        {
+            SetCursorPos(originalCursor.x, originalCursor.y);
+        }
+    });
+    RECT mainClient{};
+    if (GetClientRect(mainWindow, &mainClient) != FALSE)
+    {
+        POINT neutralClient{mainClient.left + 8, mainClient.bottom - 8};
+        if (ClientToScreen(mainWindow, &neutralClient) != FALSE)
+        {
+            static_cast<void>(SetCursorPos(neutralClient.x, neutralClient.y));
         }
     }
 
@@ -13488,11 +13989,46 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
         }
     });
 
-    if (haveOriginalWindowRect)
+    const auto resizeMainWindowForThumbnailTest = [&](int width, int height, std::wstring_view /*label*/) noexcept
     {
-        SetWindowPos(mainWindow, nullptr, originalWindowRect.left, originalWindowRect.top, 760, 520, SWP_NOZORDER | SWP_NOACTIVATE);
-        PumpPendingMessages();
-    }
+        if (! haveOriginalWindowRect)
+        {
+            return true;
+        }
+
+        ShowWindow(mainWindow, SW_RESTORE);
+        ShowWindow(mainWindow, SW_SHOW);
+        if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow)
+        {
+            SetActiveWindow(rootWindow);
+        }
+        g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+
+        if (SetWindowPos(mainWindow, nullptr, originalWindowRect.left, originalWindowRect.top, width, height, SWP_NOZORDER) == FALSE)
+        {
+            return false;
+        }
+
+        UpdateWindow(mainWindow);
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            RECT rect{};
+            if (GetWindowRect(mainWindow, &rect) != FALSE && rect.right - rect.left >= width - 8 && rect.bottom - rect.top >= height - 8)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+
+        RECT rect{};
+        return GetWindowRect(mainWindow, &rect) != FALSE && rect.right - rect.left >= width - 8 && rect.bottom - rect.top >= height - 8;
+    };
+
+    state.Require(resizeMainWindowForThumbnailTest(760, 520, L"narrow thumbnail resize setup"),
+                  L"Failed to resize the main window for the narrow thumbnail resize-requeue setup.");
 
     g_folderWindow.DebugSetThumbnailProviderMode(FolderWindow::Pane::Left, FolderView::DebugThumbnailProviderMode::ForceSyntheticSuccess);
     g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Detailed);
@@ -13526,20 +14062,48 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
         return false;
     }
 
-    if (haveOriginalWindowRect)
+    state.Require(resizeMainWindowForThumbnailTest(1700, 720, L"wide thumbnail resize validation"),
+                  L"Failed to resize the main window for the wide thumbnail resize-requeue validation.");
+    if (! state.failure.empty())
     {
-        SetWindowPos(mainWindow, nullptr, originalWindowRect.left, originalWindowRect.top, 1700, 720, SWP_NOZORDER | SWP_NOACTIVATE);
+        return false;
+    }
+
+    FolderView::DebugColumnLayoutSnapshot afterResizeLayout{};
+    const auto layoutDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(4000ms);
+    bool wideLayoutSettled    = false;
+    while (std::chrono::steady_clock::now() < layoutDeadline)
+    {
         PumpPendingMessages();
+        if (g_folderWindow.DebugGetPaneColumnLayoutSnapshot(FolderWindow::Pane::Left, afterResizeLayout) &&
+            afterResizeLayout.clientWidthDip > 0.0f && afterResizeLayout.clientHeightDip > 0.0f && afterResizeLayout.tileWidthDip > 0.0f &&
+            afterResizeLayout.tileHeightDip > 0.0f && afterResizeLayout.columns.size() > 0u && afterResizeLayout.visibleItems.size() > 0u)
+        {
+            wideLayoutSettled = true;
+            break;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(wideLayoutSettled,
+                  std::format(L"Resize should settle a thumbnail layout before thumbnail queue validation; before={} layoutVisible={} first={} last={} "
+                              L"columns={} client=({:.1f}x{:.1f}) tile=({:.1f}x{:.1f}) offset={:.1f} max={:.1f}.",
+                              initialVisible,
+                              afterResizeLayout.visibleItems.size(),
+                              afterResizeLayout.firstVisibleIndex,
+                              afterResizeLayout.lastVisibleIndex,
+                              afterResizeLayout.columns.size(),
+                              afterResizeLayout.clientWidthDip,
+                              afterResizeLayout.clientHeightDip,
+                              afterResizeLayout.tileWidthDip,
+                              afterResizeLayout.tileHeightDip,
+                              afterResizeLayout.horizontalOffsetDip,
+                              afterResizeLayout.maxHorizontalOffsetDip));
+    if (! state.failure.empty())
+    {
+        return false;
     }
 
     FolderWindow::PaneViewOptionsDebugSnapshot afterResize{};
-    state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
-                                            [initialVisible](const FolderWindow::PaneViewOptionsDebugSnapshot& snapshot) noexcept
-    { return snapshot.thumbnailVisibleItemCount > initialVisible; },
-                                            SelfTest::Scale(3000ms),
-                                            &afterResize),
-                  std::format(L"Resize should reveal more thumbnail items; before={} after={}.", initialVisible, afterResize.thumbnailVisibleItemCount));
-
     state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
                                             [](const FolderWindow::PaneViewOptionsDebugSnapshot& snapshot) noexcept
     {
@@ -13548,12 +14112,19 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
     },
                                             SelfTest::Scale(3000ms),
                                             &afterResize),
-                  std::format(L"Resize should requeue thumbnails for newly visible columns; visible={} visibleThumb={} totalThumb={} queued={} pending={}.",
+                  std::format(L"Resize should requeue thumbnails for the post-resize visible set; before={} layoutVisible={} visible={} visibleThumb={} "
+                              L"totalThumb={} queued={} pending={}.",
+                              initialVisible,
+                              afterResizeLayout.visibleItems.size(),
                               afterResize.thumbnailVisibleItemCount,
                               afterResize.thumbnailVisibleThumbnailCount,
                               afterResize.thumbnailTotalThumbnailCount,
                               afterResize.thumbnailQueuedCount,
                               afterResize.thumbnailPendingCount));
+    state.Require(afterResize.thumbnailVisibleItemCount == static_cast<uint64_t>(afterResizeLayout.visibleItems.size()),
+                  std::format(L"Thumbnail stats should match the post-resize visible layout; statsVisible={} layoutVisible={}.",
+                              afterResize.thumbnailVisibleItemCount,
+                              afterResizeLayout.visibleItems.size()));
 
     return state.failure.empty();
 }
@@ -14636,6 +15207,1534 @@ struct FolderViewFrameMetricPresenceRecord
     }
 
     return count;
+}
+
+[[nodiscard]] uint64_t SampleSelfTestWorkingSetBytes() noexcept
+{
+    PROCESS_MEMORY_COUNTERS_EX counters{};
+    counters.cb = static_cast<DWORD>(sizeof(counters));
+    if (K32GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), counters.cb) == 0)
+    {
+        return 0u;
+    }
+
+    return static_cast<uint64_t>(counters.WorkingSetSize);
+}
+
+[[nodiscard]] bool CreateViewerSpaceProgressivePerfFixture(CaseState& state, const std::filesystem::path& root) noexcept
+{
+    static constexpr size_t kTopDirectoryCount    = 20u;
+    static constexpr size_t kNestedDirectoryCount = 5u;
+    static constexpr size_t kFilesPerNestedFolder = 100u;
+    static constexpr size_t kExpectedFileCount    = kTopDirectoryCount * kNestedDirectoryCount * kFilesPerNestedFolder;
+    static constexpr size_t kExpectedFolderCount  = kTopDirectoryCount + (kTopDirectoryCount * kNestedDirectoryCount);
+
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace progressive root.");
+
+    size_t fileCount   = 0u;
+    size_t folderCount = 0u;
+    for (size_t top = 0; top < kTopDirectoryCount; ++top)
+    {
+        const std::filesystem::path topDir = root / std::format(L"dir_{:02}", top);
+        state.Require(SelfTest::EnsureDirectory(topDir), std::format(L"Failed to create '{}'.", topDir.native()));
+        ++folderCount;
+
+        for (size_t nested = 0; nested < kNestedDirectoryCount; ++nested)
+        {
+            const std::filesystem::path nestedDir = topDir / std::format(L"group_{:02}", nested);
+            state.Require(SelfTest::EnsureDirectory(nestedDir), std::format(L"Failed to create '{}'.", nestedDir.native()));
+            ++folderCount;
+
+            for (size_t fileIndex = 0; fileIndex < kFilesPerNestedFolder; ++fileIndex)
+            {
+                const std::filesystem::path filePath = nestedDir / std::format(L"file_{:03}.dat", fileIndex);
+                const std::string payload(static_cast<size_t>(16u + ((top + nested + fileIndex) % 29u)), 'a');
+                state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to write '{}'.", filePath.native()));
+                ++fileCount;
+
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
+    state.Require(fileCount == kExpectedFileCount,
+                  std::format(L"ViewerSpace progressive fixture file count mismatch: expected {}, got {}.", kExpectedFileCount, fileCount));
+    state.Require(folderCount == kExpectedFolderCount,
+                  std::format(L"ViewerSpace progressive fixture folder count mismatch: expected {}, got {}.", kExpectedFolderCount, folderCount));
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpacePerfSmallProgressive([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace progressive perf test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_perf_small_progressive_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(CreateViewerSpaceProgressivePerfFixture(state, root), L"Failed to create ViewerSpace progressive perf fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace small progressive perf", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for small progressive perf test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot firstPaint{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      firstPaint,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.hasRenderTarget && snapshot.lastPaintUs > 0u;
+    },
+                      SelfTest::Scale(5000ms)),
+                  L"ViewerSpace progressive perf test did not reach first paint.");
+
+    WndMsg::ViewerSpacePerfDebugSnapshot settled{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      settled,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.realDirectoryCount >= 100u && snapshot.drawItemCount > 0u &&
+               snapshot.lastLayoutUs > 0u;
+    },
+                      SelfTest::Scale(20000ms)),
+                  std::format(L"ViewerSpace progressive perf test did not settle. state={}, dirs={}, drawItems={}, layoutUs={}.",
+                              static_cast<unsigned int>(settled.scanState),
+                              settled.realDirectoryCount,
+                              settled.drawItemCount,
+                              settled.lastLayoutUs));
+
+    struct MetricExpectation final
+    {
+        std::wstring_view metric;
+        uint64_t count = 0u;
+    };
+
+    std::vector<MetricExpectation> metricCounts{
+        {L"viewer.space.render.paint_us", 0u},
+        {L"viewer.space.layout.rebuild_us", 0u},
+        {L"viewer.space.queue.posted_count", 0u},
+        {L"viewer.space.queue.drain_us", 0u},
+        {L"viewer.space.scan.total_us", 0u},
+        {L"viewer.space.scan.files", 0u},
+        {L"viewer.space.scan.folders", 0u},
+        {L"viewer.space.scan.bytes", 0u},
+    };
+
+    for (MetricExpectation& expected : metricCounts)
+    {
+        expected.count = FolderViewPerfMetricCountInRun(expected.metric, metricScanOffset);
+        state.Require(expected.count > 0u, std::format(L"Missing ViewerSpace perf metric '{}'.", expected.metric));
+    }
+
+    std::wstring metricPresenceJson;
+    for (size_t i = 0; i < metricCounts.size(); ++i)
+    {
+        const MetricExpectation& expected = metricCounts[i];
+        metricPresenceJson.append(std::format(L"    {{\"metric\":\"{}\",\"count\":{}}}", expected.metric, expected.count));
+        metricPresenceJson.append((i + 1u) < metricCounts.size() ? L",\n" : L"\n");
+    }
+
+    std::wstring artifactText;
+    artifactText.append(L"{\n");
+    artifactText.append(L"  \"scenario\": \"viewer_space_perf_small_progressive\",\n");
+    artifactText.append(L"  \"fixture\": {\n");
+    artifactText.append(L"    \"top_directories\": 20,\n");
+    artifactText.append(L"    \"nested_directories_per_top\": 5,\n");
+    artifactText.append(L"    \"files_per_nested_directory\": 100,\n");
+    artifactText.append(L"    \"expected_files\": 10000\n");
+    artifactText.append(L"  },\n");
+    artifactText.append(std::format(L"  \"renderer_mode\": {},\n", static_cast<unsigned int>(settled.rendererMode)));
+    artifactText.append(std::format(L"  \"scan_state\": {},\n", static_cast<unsigned int>(settled.scanState)));
+    artifactText.append(std::format(L"  \"real_directory_count\": {},\n", settled.realDirectoryCount));
+    artifactText.append(std::format(L"  \"file_candidate_count\": {},\n", settled.fileCandidateCount));
+    artifactText.append(std::format(L"  \"synthetic_count\": {},\n", settled.syntheticCount));
+    artifactText.append(std::format(L"  \"pending_queue_count\": {},\n", settled.pendingQueueCount));
+    artifactText.append(std::format(L"  \"pending_queue_bytes\": {},\n", settled.pendingQueueBytes));
+    artifactText.append(std::format(L"  \"draw_item_count\": {},\n", settled.drawItemCount));
+    artifactText.append(std::format(L"  \"visible_tile_count\": {},\n", settled.visibleTileCount));
+    artifactText.append(std::format(L"  \"culled_tile_count\": {},\n", settled.culledTileCount));
+    artifactText.append(std::format(L"  \"last_paint_us\": {},\n", settled.lastPaintUs));
+    artifactText.append(std::format(L"  \"last_layout_us\": {},\n", settled.lastLayoutUs));
+    artifactText.append(std::format(L"  \"last_drain_us\": {},\n", settled.lastDrainUs));
+    artifactText.append(std::format(L"  \"last_working_set_bytes\": {},\n", settled.lastWorkingSetBytes));
+    artifactText.append(L"  \"metric_presence\": [\n");
+    artifactText.append(metricPresenceJson);
+    artifactText.append(L"  ]\n");
+    artifactText.append(L"}\n");
+
+    const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"viewer_space_perf_small_progressive_metrics.json");
+    const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifactText);
+    const bool artifactExists                = ! artifactPath.empty() && SelfTest::PathExists(artifactPath);
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+                               std::format(L"viewer_space_perf_small_progressive artifact path='{}' writeOk={} exists={}.",
+                                           artifactPath.native(),
+                                           artifactWriteOk ? 1 : 0,
+                                           artifactExists ? 1 : 0));
+    state.Require(artifactWriteOk && artifactExists, L"Failed to write ViewerSpace progressive perf artifact.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceRendererDeviceContextReadyResizeClose([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace renderer migration test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_renderer_device_context_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace renderer fixture root.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpha.bin", "alpha"), L"Failed to create alpha.bin.");
+    state.Require(SelfTest::WriteTextFile(root / L"beta.bin", "beta"), L"Failed to create beta.bin.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace device-context renderer", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for device-context renderer test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot ready{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      ready,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.rendererMode == WndMsg::ViewerSpacePerfRendererMode::DeviceContext && snapshot.hasRenderTarget && snapshot.lastPaintUs > 0u;
+    },
+                      SelfTest::Scale(5000ms)),
+                  std::format(L"ViewerSpace renderer did not become device-context ready. mode={}, hasTarget={}, paintUs={}.",
+                              static_cast<unsigned int>(ready.rendererMode),
+                              ready.hasRenderTarget ? 1 : 0,
+                              ready.lastPaintUs));
+
+    state.Require(ready.rendererDeviceCreateCount > 0u,
+                  std::format(L"ViewerSpace renderer did not report a device creation before resize. creates={}.",
+                              ready.rendererDeviceCreateCount));
+    state.Require(ready.rendererBrushCreateCount > 0u,
+                  std::format(L"ViewerSpace renderer did not report brush creation before resize. brushCreates={}.",
+                              ready.rendererBrushCreateCount));
+    state.Require(ready.rendererTextFormatCreateCount > 0u,
+                  std::format(L"ViewerSpace renderer did not report text-format creation before resize. textFormatCreates={}.",
+                              ready.rendererTextFormatCreateCount));
+    state.Require(ready.swapChainWidthPx > 0u && ready.swapChainHeightPx > 0u,
+                  std::format(L"ViewerSpace renderer did not report an initialized swap chain before resize. widthPx={}, heightPx={}.",
+                              ready.swapChainWidthPx,
+                              ready.swapChainHeightPx));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RECT readyClient{};
+    state.Require(GetClientRect(probe.hwnd, &readyClient) != FALSE, L"Failed to read ViewerSpace renderer test client rect.");
+    const UINT readyDpi = std::max<UINT>(GetDpiForWindow(probe.hwnd), USER_DEFAULT_SCREEN_DPI);
+    const int resizedWidthDip =
+        MulDiv(static_cast<int>(std::max<LONG>(1, readyClient.right - readyClient.left)), USER_DEFAULT_SCREEN_DPI, static_cast<int>(readyDpi)) + 137;
+    const int resizedHeightDip =
+        MulDiv(static_cast<int>(std::max<LONG>(1, readyClient.bottom - readyClient.top)), USER_DEFAULT_SCREEN_DPI, static_cast<int>(readyDpi)) + 91;
+
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, resizedWidthDip, resizedHeightDip, L"ViewerSpace renderer resize fast path"),
+                  L"Failed to resize ViewerSpace renderer test window.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot resized{};
+    const bool resizeObserved = WaitForViewerSpacePerfSnapshot(
+        probe.hwnd,
+        resized,
+        [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        const bool swapChainSizeChanged = snapshot.swapChainWidthPx != ready.swapChainWidthPx || snapshot.swapChainHeightPx != ready.swapChainHeightPx;
+        return snapshot.rendererMode == WndMsg::ViewerSpacePerfRendererMode::DeviceContext && snapshot.hasRenderTarget && snapshot.lastPaintUs > 0u &&
+               swapChainSizeChanged;
+    },
+        SelfTest::Scale(5000ms));
+    RECT afterClient{};
+    const bool hasAfterClient = GetClientRect(probe.hwnd, &afterClient) != FALSE;
+    state.Require(resizeObserved,
+                  std::format(L"ViewerSpace renderer did not redraw with resized swap-chain dimensions after WM_SIZE. mode={}, hasTarget={}, paintUs={}, beforeSize={}x{}, afterSize={}x{}, beforeResizeCount={}, afterResizeCount={}, beforeCreates={}, afterCreates={}, drawItems={}, dirs={}, client={}x{}, failureStage={}, failureHr=0x{:08X}.",
+                              static_cast<unsigned int>(resized.rendererMode),
+                              resized.hasRenderTarget ? 1 : 0,
+                              resized.lastPaintUs,
+                              ready.swapChainWidthPx,
+                              ready.swapChainHeightPx,
+                              resized.swapChainWidthPx,
+                              resized.swapChainHeightPx,
+                              ready.swapChainResizeCount,
+                              resized.swapChainResizeCount,
+                              ready.rendererDeviceCreateCount,
+                              resized.rendererDeviceCreateCount,
+                              resized.drawItemCount,
+                              resized.realDirectoryCount,
+                              hasAfterClient ? std::max<LONG>(0, afterClient.right - afterClient.left) : 0L,
+                              hasAfterClient ? std::max<LONG>(0, afterClient.bottom - afterClient.top) : 0L,
+                              resized.rendererFailureStage,
+                              resized.rendererFailureHr));
+
+    state.Require(resized.swapChainResizeCount > ready.swapChainResizeCount,
+                  std::format(L"ViewerSpace resized the swap-chain dimensions without reporting ResizeBuffers. beforeCount={}, afterCount={}, beforeSize={}x{}, afterSize={}x{}, failureStage={}, failureHr=0x{:08X}.",
+                              ready.swapChainResizeCount,
+                              resized.swapChainResizeCount,
+                              ready.swapChainWidthPx,
+                              ready.swapChainHeightPx,
+                              resized.swapChainWidthPx,
+                              resized.swapChainHeightPx,
+                              resized.rendererFailureStage,
+                              resized.rendererFailureHr));
+    state.Require(resized.rendererDeviceCreateCount == ready.rendererDeviceCreateCount,
+                  std::format(L"ViewerSpace recreated the D3D device during ordinary resize. beforeCreates={}, afterCreates={}.",
+                              ready.rendererDeviceCreateCount,
+                              resized.rendererDeviceCreateCount));
+    state.Require(resized.rendererBrushCreateCount == ready.rendererBrushCreateCount,
+                  std::format(L"ViewerSpace recreated D2D brushes during ordinary resize. beforeBrushCreates={}, afterBrushCreates={}.",
+                              ready.rendererBrushCreateCount,
+                              resized.rendererBrushCreateCount));
+    state.Require(resized.rendererTextFormatCreateCount == ready.rendererTextFormatCreateCount,
+                  std::format(L"ViewerSpace recreated DirectWrite text formats during ordinary resize. beforeTextFormatCreates={}, afterTextFormatCreates={}.",
+                              ready.rendererTextFormatCreateCount,
+                              resized.rendererTextFormatCreateCount));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceRendererRecoversFromForcedDeviceLoss([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace forced device-loss test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_forced_device_loss_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace forced device-loss fixture root.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpha.bin", std::string(2048, 'a')), L"Failed to create alpha.bin.");
+    state.Require(SelfTest::WriteTextFile(root / L"beta.bin", std::string(1536, 'b')), L"Failed to create beta.bin.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace forced device loss", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for forced device-loss test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot ready{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      ready,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.rendererMode == WndMsg::ViewerSpacePerfRendererMode::DeviceContext && snapshot.hasRenderTarget && snapshot.lastPaintUs > 0u &&
+               snapshot.rendererDeviceCreateCount > 0u;
+    },
+                      SelfTest::Scale(5000ms)),
+                  std::format(L"ViewerSpace renderer did not become ready before forced device-loss test. mode={}, hasTarget={}, paintUs={}, creates={}.",
+                              static_cast<unsigned int>(ready.rendererMode),
+                              ready.hasRenderTarget ? 1 : 0,
+                              ready.lastPaintUs,
+                              ready.rendererDeviceCreateCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto forceMode = static_cast<WPARAM>(WndMsg::ViewerSpaceRendererFaultDebugMode::D2DRecreateTarget);
+    state.Require(SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugForceRendererFault, forceMode, 0) != FALSE,
+                  L"ViewerSpace forced device-loss debug hook was not accepted.");
+    InvalidateRect(probe.hwnd, nullptr, FALSE);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpacePerfDebugSnapshot recovered{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      recovered,
+                      [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.rendererMode == WndMsg::ViewerSpacePerfRendererMode::DeviceContext && snapshot.hasRenderTarget && snapshot.lastPaintUs > 0u &&
+               snapshot.rendererDeviceCreateCount > ready.rendererDeviceCreateCount && snapshot.swapChainWidthPx > 0u && snapshot.swapChainHeightPx > 0u;
+    },
+                      SelfTest::Scale(5000ms)),
+                  std::format(L"ViewerSpace renderer did not recover after forced D2DERR_RECREATE_TARGET. mode={}, hasTarget={}, paintUs={}, beforeCreates={}, afterCreates={}, failureStage={}, failureHr=0x{:08X}.",
+                              static_cast<unsigned int>(recovered.rendererMode),
+                              recovered.hasRenderTarget ? 1 : 0,
+                              recovered.lastPaintUs,
+                              ready.rendererDeviceCreateCount,
+                              recovered.rendererDeviceCreateCount,
+                              recovered.rendererFailureStage,
+                              recovered.rendererFailureHr));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const WndMsg::ViewerSpacePerfDebugSnapshot d2dRecovered = recovered;
+    const auto forceDxgiMode = static_cast<WPARAM>(WndMsg::ViewerSpaceRendererFaultDebugMode::DxgiDeviceRemoved);
+    state.Require(SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugForceRendererFault, forceDxgiMode, 0) != FALSE,
+                  L"ViewerSpace forced DXGI device-removed debug hook was not accepted.");
+    InvalidateRect(probe.hwnd, nullptr, FALSE);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpacePerfDebugSnapshot dxgiRecovered{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      dxgiRecovered,
+                      [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.rendererMode == WndMsg::ViewerSpacePerfRendererMode::DeviceContext && snapshot.hasRenderTarget && snapshot.lastPaintUs > 0u &&
+               snapshot.rendererDeviceCreateCount > d2dRecovered.rendererDeviceCreateCount && snapshot.swapChainWidthPx > 0u && snapshot.swapChainHeightPx > 0u;
+    },
+                      SelfTest::Scale(5000ms)),
+                  std::format(L"ViewerSpace renderer did not recover after forced DXGI_ERROR_DEVICE_REMOVED. mode={}, hasTarget={}, paintUs={}, beforeCreates={}, afterCreates={}, failureStage={}, failureHr=0x{:08X}.",
+                              static_cast<unsigned int>(dxgiRecovered.rendererMode),
+                              dxgiRecovered.hasRenderTarget ? 1 : 0,
+                              dxgiRecovered.lastPaintUs,
+                              d2dRecovered.rendererDeviceCreateCount,
+                              dxgiRecovered.rendererDeviceCreateCount,
+                              dxgiRecovered.rendererFailureStage,
+                              dxgiRecovered.rendererFailureHr));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceHoverDoesNotRebuildStaticCache([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace hover static-cache test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_hover_static_cache_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root / L"nested"), L"Failed to create ViewerSpace hover static-cache root.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpha.bin", std::string(2048, 'a')), L"Failed to create alpha.bin.");
+    state.Require(SelfTest::WriteTextFile(root / L"beta.bin", std::string(1536, 'b')), L"Failed to create beta.bin.");
+    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"gamma.bin", std::string(1024, 'c')), L"Failed to create nested gamma.bin.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace hover static cache", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for hover static-cache test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot settled{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      settled,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.rendererMode == WndMsg::ViewerSpacePerfRendererMode::DeviceContext &&
+               snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.drawItemCount > 0u;
+    },
+                      SelfTest::Scale(8000ms)),
+                  std::format(L"ViewerSpace hover static-cache test did not settle. mode={}, state={}, drawItems={}.",
+                              static_cast<unsigned int>(settled.rendererMode),
+                              static_cast<unsigned int>(settled.scanState),
+                              settled.drawItemCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::this_thread::sleep_for(SelfTest::Scale(1600ms));
+
+    WndMsg::ViewerSpacePerfDebugSnapshot cacheReady{};
+    bool sawCacheRecord = false;
+    for (int attempt = 0; attempt < 40 && ! sawCacheRecord; ++attempt)
+    {
+        InvalidateRect(probe.hwnd, nullptr, FALSE);
+        PumpPendingMessages();
+        sawCacheRecord = WaitForViewerSpacePerfSnapshot(
+            probe.hwnd,
+            cacheReady,
+            [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+        {
+            return snapshot.staticCacheRecordCount > 0u && snapshot.staticCacheBytes > 0u && snapshot.lastStaticCacheRecordUs > 0u;
+        },
+            SelfTest::Scale(100ms));
+    }
+
+    state.Require(sawCacheRecord,
+                  std::format(L"ViewerSpace static cache did not record before hover. records={}, bytes={}, recordUs={}, hits={}, misses={}.",
+                              cacheReady.staticCacheRecordCount,
+                              cacheReady.staticCacheBytes,
+                              cacheReady.lastStaticCacheRecordUs,
+                              cacheReady.staticCacheHits,
+                              cacheReady.staticCacheMisses));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RECT client{};
+    state.Require(GetClientRect(probe.hwnd, &client) != FALSE, L"Failed to get ViewerSpace hover static-cache client rect.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const POINT hoverClient{std::max<LONG>(12, (client.right - client.left) / 2), std::max<LONG>(120, (client.bottom - client.top) / 2)};
+    SendMessageW(probe.hwnd, WM_MOUSEMOVE, 0, MakeSelfTestPointLParam(hoverClient));
+    InvalidateRect(probe.hwnd, nullptr, FALSE);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpaceTooltipDebugSnapshot hoverSnapshot{};
+    state.Require(WaitForViewerSpacePointerSnapshot(
+                      probe.hwnd,
+                      hoverSnapshot,
+                      [&](const WndMsg::ViewerSpaceTooltipDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.hasLastMouseMoveClientPoint && snapshot.lastMouseMoveClientX == hoverClient.x && snapshot.lastMouseMoveClientY == hoverClient.y;
+    },
+                      SelfTest::Scale(1000ms)),
+                  std::format(L"ViewerSpace hover static-cache test did not process delivered hover point. delivered=({},{}), snapshot=({},{}), has={}.",
+                              hoverClient.x,
+                              hoverClient.y,
+                              hoverSnapshot.lastMouseMoveClientX,
+                              hoverSnapshot.lastMouseMoveClientY,
+                              hoverSnapshot.hasLastMouseMoveClientPoint ? 1 : 0));
+
+    WndMsg::ViewerSpacePerfDebugSnapshot afterHover{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      afterHover,
+                      [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.staticCacheHits > cacheReady.staticCacheHits;
+    },
+                      SelfTest::Scale(3000ms)),
+                  std::format(L"ViewerSpace hover did not replay the static cache. beforeHits={}, afterHits={}, records={}.",
+                              cacheReady.staticCacheHits,
+                              afterHover.staticCacheHits,
+                              afterHover.staticCacheRecordCount));
+
+    state.Require(afterHover.staticCacheRecordCount == cacheReady.staticCacheRecordCount,
+                  std::format(L"ViewerSpace hover rebuilt the static cache. beforeRecords={}, afterRecords={}.",
+                              cacheReady.staticCacheRecordCount,
+                              afterHover.staticCacheRecordCount));
+    state.Require(afterHover.staticCacheGeneration == cacheReady.staticCacheGeneration,
+                  std::format(L"ViewerSpace hover dirtied the static cache generation. beforeGeneration={}, afterGeneration={}.",
+                              cacheReady.staticCacheGeneration,
+                              afterHover.staticCacheGeneration));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceDenseFilesExposeMoreThanLegacyTopK([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace dense-files test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_dense_files_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace dense-files root.");
+
+    static constexpr size_t kDenseFileCount = 320u;
+    for (size_t index = 0; index < kDenseFileCount; ++index)
+    {
+        const std::filesystem::path filePath = root / std::format(L"dense_{:03}.bin", index);
+        const std::string payload(static_cast<size_t>(32u + index), 'd');
+        state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to create '{}'.", filePath.native()));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace dense files", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for dense-files test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot dense{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      dense,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.fileCandidateCount > 96u &&
+               snapshot.drawItemCount > 96u && snapshot.visibleTileCount > 96u && snapshot.hitGridCellCount > 0u;
+    },
+                      SelfTest::Scale(10000ms)),
+                  std::format(L"ViewerSpace dense-files test did not expose expanded detail. state={}, files={}, drawItems={}, visible={}, culled={}, gridCells={}.",
+                              static_cast<unsigned int>(dense.scanState),
+                              dense.fileCandidateCount,
+                              dense.drawItemCount,
+                              dense.visibleTileCount,
+                              dense.culledTileCount,
+                              dense.hitGridCellCount));
+
+    state.Require(dense.hitGridMaxCandidatesPerCell > 0u,
+                  std::format(L"ViewerSpace dense-files hit grid had no candidates. gridCells={}, maxCandidates={}.",
+                              dense.hitGridCellCount,
+                              dense.hitGridMaxCandidatesPerCell));
+    state.Require(dense.lastTileDrawCount >= dense.visibleTileCount && dense.lastTileDrawCount > 0u,
+                  std::format(L"ViewerSpace dense-files snapshot did not expose tile draw count. lastTileDraws={}, visible={}.",
+                              dense.lastTileDrawCount,
+                              dense.visibleTileCount));
+    state.Require(dense.lastTextDrawCount < dense.lastTileDrawCount,
+                  std::format(L"ViewerSpace dense-files LOD rendered text for too many tiles. textDraws={}, tileDraws={}.",
+                              dense.lastTextDrawCount,
+                              dense.lastTileDrawCount));
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceSyntheticBucketMetricsMatchRootBytes([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace synthetic-bucket metrics test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_synthetic_bucket_metrics_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace synthetic-bucket root.");
+
+    static constexpr size_t kFileCount                  = 5000u;
+    static constexpr size_t kExpectedFileCandidateCount = 4096u;
+    uint64_t expectedTotalBytes                         = 0u;
+    for (size_t index = 0; index < kFileCount; ++index)
+    {
+        const std::filesystem::path filePath = root / std::format(L"synthetic_{:04}.bin", index);
+        const size_t payloadBytes            = 24u;
+        expectedTotalBytes += static_cast<uint64_t>(payloadBytes);
+        state.Require(SelfTest::WriteTextFile(filePath, std::string(payloadBytes, 's')), std::format(L"Failed to create '{}'.", filePath.native()));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    static constexpr std::string_view kConfig =
+        R"({"topFilesPerDirectory":96,"scanThreads":1,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":0,"cacheMaxEntries":0})";
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace synthetic bucket metrics", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe, kConfig),
+                  L"Failed to open ViewerSpace for synthetic-bucket metrics test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 420, 320, L"ViewerSpace synthetic bucket metrics small"),
+                  L"Failed to resize ViewerSpace synthetic-bucket metrics test.");
+    SendMessageW(probe.hwnd, WM_KEYDOWN, VK_F5, 0);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      snapshot,
+                      [expectedTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& current) noexcept
+    {
+        return current.scanState == WndMsg::ViewerSpacePerfScanState::Done && current.rootTotalBytes == expectedTotalBytes &&
+               current.fileCandidateCount == kExpectedFileCandidateCount && current.syntheticCount > 0u && current.syntheticBytes > 0u;
+    },
+                      SelfTest::Scale(15000ms)),
+                  std::format(L"ViewerSpace synthetic-bucket metrics test did not settle. state={}, rootBytes={}, fileCandidates={}, syntheticCount={}, syntheticBytes={}.",
+                              static_cast<unsigned int>(snapshot.scanState),
+                              snapshot.rootTotalBytes,
+                              snapshot.fileCandidateCount,
+                              snapshot.syntheticCount,
+                              snapshot.syntheticBytes));
+
+    state.Require(snapshot.syntheticCount == 1u,
+                  std::format(L"ViewerSpace files-only synthetic bucket count should be exactly 1, got {}.", snapshot.syntheticCount));
+    state.Require(snapshot.rootTotalBytes == snapshot.fileCandidateBytes + snapshot.syntheticBytes,
+                  std::format(L"ViewerSpace synthetic bucket bytes should reconcile with the root total. root={}, fileCandidates={}, synthetic={}.",
+                              snapshot.rootTotalBytes,
+                              snapshot.fileCandidateBytes,
+                              snapshot.syntheticBytes));
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceAdaptiveScanBudgetTracksWindowArea([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace adaptive-budget test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_adaptive_budget_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace adaptive-budget root.");
+
+    static constexpr size_t kFileCount = 128u;
+    for (size_t index = 0; index < kFileCount; ++index)
+    {
+        const std::filesystem::path filePath = root / std::format(L"budget_{:03}.bin", index);
+        const std::string payload(static_cast<size_t>(16u + (index % 11u)), 'b');
+        state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to create '{}'.", filePath.native()));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    static constexpr std::string_view kConfig =
+        R"({"topFilesPerDirectory":96,"scanThreads":1,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":0,"cacheMaxEntries":0})";
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace adaptive scan budget", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe, kConfig),
+                  L"Failed to open ViewerSpace for adaptive-budget test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 420, 320, L"ViewerSpace adaptive scan budget small"),
+                  L"Failed to resize ViewerSpace adaptive-budget test to the small viewport.");
+    SendMessageW(probe.hwnd, WM_KEYDOWN, VK_F5, 0);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpacePerfDebugSnapshot smallSnapshot{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      smallSnapshot,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.effectiveFileCandidateBudget > 0u;
+    },
+                      SelfTest::Scale(10000ms)),
+                  std::format(L"ViewerSpace adaptive-budget small scan did not settle. state={}, budget={}.",
+                              static_cast<unsigned int>(smallSnapshot.scanState),
+                              smallSnapshot.effectiveFileCandidateBudget));
+    state.Require(smallSnapshot.effectiveFileCandidateBudget > 96u && smallSnapshot.effectiveFileCandidateBudget < 20000u,
+                  std::format(L"ViewerSpace adaptive-budget small viewport collapsed to the configured floor or ceiling. budget={}.",
+                              smallSnapshot.effectiveFileCandidateBudget));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 1800, 920, L"ViewerSpace adaptive scan budget large"),
+                  L"Failed to resize ViewerSpace adaptive-budget test to the large viewport.");
+    SendMessageW(probe.hwnd, WM_KEYDOWN, VK_F5, 0);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpacePerfDebugSnapshot largeSnapshot{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      largeSnapshot,
+                      [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done &&
+               snapshot.effectiveFileCandidateBudget > smallSnapshot.effectiveFileCandidateBudget;
+    },
+                      SelfTest::Scale(10000ms)),
+                  std::format(L"ViewerSpace adaptive-budget large scan did not increase detail. smallBudget={}, state={}, largeBudget={}.",
+                              smallSnapshot.effectiveFileCandidateBudget,
+                              static_cast<unsigned int>(largeSnapshot.scanState),
+                              largeSnapshot.effectiveFileCandidateBudget));
+    state.Require(largeSnapshot.effectiveFileCandidateBudget <= 20000u,
+                  std::format(L"ViewerSpace adaptive-budget large viewport exceeded the scan ceiling. budget={}.",
+                              largeSnapshot.effectiveFileCandidateBudget));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceLargeSiblingFoldersExposeNestedDetail([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace large-sibling detail test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_large_siblings_{0}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace large-sibling detail root.");
+
+    static constexpr size_t kFolderCount       = 14u;
+    static constexpr size_t kFilesPerFolder    = 64u;
+    static constexpr size_t kExpectedFileCount = kFolderCount * kFilesPerFolder;
+    const std::string payload(32u, 's');
+    for (size_t folderIndex = 0; folderIndex < kFolderCount; ++folderIndex)
+    {
+        const std::filesystem::path folder = root / std::format(L"sibling_{0:02}", folderIndex);
+        state.Require(SelfTest::EnsureDirectory(folder), std::format(L"Failed to create '{0}'.", folder.native()));
+        for (size_t fileIndex = 0; fileIndex < kFilesPerFolder; ++fileIndex)
+        {
+            const std::filesystem::path filePath = folder / std::format(L"tile_{0:02}.bin", fileIndex);
+            state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to create '{0}'.", filePath.native()));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+        }
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    static constexpr std::string_view kConfig =
+        R"({"topFilesPerDirectory":2048,"scanThreads":8,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":0,"cacheMaxEntries":0})";
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace large sibling detail", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe, kConfig),
+                  L"Failed to open ViewerSpace for large-sibling detail test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RECT windowRect{};
+    state.Require(GetWindowRect(probe.hwnd, &windowRect) != FALSE, L"Failed to read ViewerSpace large-sibling detail window rect.");
+    const UINT dpi = std::max<UINT>(GetDpiForWindow(probe.hwnd), USER_DEFAULT_SCREEN_DPI);
+    RECT requestedClient{0, 0, MulDiv(1800, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI), MulDiv(920, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)};
+    const DWORD style   = static_cast<DWORD>(GetWindowLongPtrW(probe.hwnd, GWL_STYLE));
+    const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(probe.hwnd, GWL_EXSTYLE));
+    state.Require(AdjustWindowRectExForDpi(&requestedClient, style, FALSE, exStyle, dpi) != FALSE,
+                  L"Failed to calculate ViewerSpace large-sibling detail window size.");
+    const int requestedWidth  = static_cast<int>(std::max<LONG>(1, requestedClient.right - requestedClient.left));
+    const int requestedHeight = static_cast<int>(std::max<LONG>(1, requestedClient.bottom - requestedClient.top));
+    state.Require(SetWindowPos(probe.hwnd, nullptr, windowRect.left, windowRect.top, requestedWidth, requestedHeight, SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+                  L"Failed to resize ViewerSpace large-sibling detail window.");
+    PumpPendingMessages();
+    InvalidateRect(probe.hwnd, nullptr, FALSE);
+
+    WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
+    const bool exposedNestedDetail = WaitForViewerSpacePerfSnapshot(
+        probe.hwnd,
+        snapshot,
+        [](const WndMsg::ViewerSpacePerfDebugSnapshot& current) noexcept
+    {
+        return current.scanState == WndMsg::ViewerSpacePerfScanState::Done && current.fileCandidateCount >= kExpectedFileCount &&
+               current.drawItemCount >= kExpectedFileCount / 2u && current.visibleTileCount >= kExpectedFileCount / 2u && current.hitGridCellCount > 0u;
+    },
+        SelfTest::Scale(20000ms));
+    state.Require(exposedNestedDetail,
+                  std::format(L"ViewerSpace large sibling folders stayed too flat. state={0}, files={1}, drawItems={2}, visible={3}, culled={4}, gridCells={5}, layoutUs={6}, paintUs={7}.",
+                              static_cast<unsigned int>(snapshot.scanState),
+                              snapshot.fileCandidateCount,
+                              snapshot.drawItemCount,
+                              snapshot.visibleTileCount,
+                              snapshot.culledTileCount,
+                              snapshot.hitGridCellCount,
+                              snapshot.lastLayoutUs,
+                              snapshot.lastPaintUs));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceHitGridMatchesLinear([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace hit-grid test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_hit_grid_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace hit-grid root.");
+
+    static constexpr size_t kFileCount = 480u;
+    for (size_t index = 0; index < kFileCount; ++index)
+    {
+        const std::filesystem::path filePath = root / std::format(L"hit_{:03}.bin", index);
+        const std::string payload(static_cast<size_t>(48u + (index % 97u)), 'h');
+        state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to create '{}'.", filePath.native()));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace hit grid", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for hit-grid test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot settled{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      settled,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.visibleTileCount > 128u && snapshot.hitGridCellCount > 0u &&
+               snapshot.hitGridMaxCandidatesPerCell > 0u;
+    },
+                      SelfTest::Scale(10000ms)),
+                  std::format(L"ViewerSpace hit-grid test did not settle. state={}, visible={}, gridCells={}, maxCandidates={}.",
+                              static_cast<unsigned int>(settled.scanState),
+                              settled.visibleTileCount,
+                              settled.hitGridCellCount,
+                              settled.hitGridMaxCandidatesPerCell));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::this_thread::sleep_for(SelfTest::Scale(250ms));
+    InvalidateRect(probe.hwnd, nullptr, FALSE);
+    UpdateWindow(probe.hwnd);
+    PumpPendingMessages();
+
+    WndMsg::ViewerSpaceHitTestDebugSnapshot hitSnapshot{};
+    state.Require(SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugCompareHitTesting, 0, reinterpret_cast<LPARAM>(&hitSnapshot)) != FALSE,
+                  L"ViewerSpace hit-grid comparison message failed.");
+    state.Require(hitSnapshot.sampleCount >= 64u,
+                  std::format(L"ViewerSpace hit-grid comparison sampled too few tiles. samples={}.", hitSnapshot.sampleCount));
+    state.Require(hitSnapshot.mismatchCount == 0u,
+                  std::format(L"ViewerSpace hit-grid mismatch count was nonzero. samples={}, mismatches={}, gridNode={}, linearNode={}.",
+                              hitSnapshot.sampleCount,
+                              hitSnapshot.mismatchCount,
+                              hitSnapshot.lastMismatchGridNodeId,
+                              hitSnapshot.lastMismatchLinearNodeId));
+    state.Require(hitSnapshot.gridHitCount == hitSnapshot.linearHitCount,
+                  std::format(L"ViewerSpace hit-grid hit counts differed. gridHits={}, linearHits={}.",
+                              hitSnapshot.gridHitCount,
+                              hitSnapshot.linearHitCount));
+    state.Require(hitSnapshot.maxGridCandidatesChecked > 0u && hitSnapshot.maxGridCandidatesChecked < hitSnapshot.maxLinearCandidatesChecked,
+                  std::format(L"ViewerSpace hit-grid did not reduce sampled candidate checks. gridMax={}, linearMax={}.",
+                              hitSnapshot.maxGridCandidatesChecked,
+                              hitSnapshot.maxLinearCandidatesChecked));
+
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 940, 620, L"ViewerSpace hit-grid animated resize"),
+                  L"Failed to resize ViewerSpace hit-grid test window.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot resized{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      resized,
+                      [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.layoutGeneration > settled.layoutGeneration && snapshot.visibleTileCount > 128u && snapshot.hitGridCellCount > 0u;
+    },
+                      SelfTest::Scale(2000ms)),
+                  std::format(L"ViewerSpace hit-grid test did not rebuild layout after resize. beforeGeneration={}, afterGeneration={}, visible={}, gridCells={}.",
+                              settled.layoutGeneration,
+                              resized.layoutGeneration,
+                              resized.visibleTileCount,
+                              resized.hitGridCellCount));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpaceHitTestDebugSnapshot animatedHitSnapshot{};
+    state.Require(SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugCompareHitTesting, 0, reinterpret_cast<LPARAM>(&animatedHitSnapshot)) != FALSE,
+                  L"ViewerSpace animated hit-grid comparison message failed.");
+    state.Require(animatedHitSnapshot.sampleCount >= 64u,
+                  std::format(L"ViewerSpace animated hit-grid comparison sampled too few tiles. samples={}.",
+                              animatedHitSnapshot.sampleCount));
+    state.Require(animatedHitSnapshot.mismatchCount == 0u,
+                  std::format(L"ViewerSpace animated hit-grid mismatch count was nonzero. samples={}, mismatches={}, gridNode={}, linearNode={}.",
+                              animatedHitSnapshot.sampleCount,
+                              animatedHitSnapshot.mismatchCount,
+                              animatedHitSnapshot.lastMismatchGridNodeId,
+                              animatedHitSnapshot.lastMismatchLinearNodeId));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool CreateViewerSpaceQueueStormFixture(CaseState& state, const std::filesystem::path& root, uint64_t* outTotalBytes = nullptr) noexcept
+{
+    static constexpr size_t kDirectoryCount = 96u;
+    static constexpr size_t kFilesPerDirectory = 12u;
+
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace queue-storm root.");
+    uint64_t totalBytes = 0u;
+    for (size_t dirIndex = 0; dirIndex < kDirectoryCount; ++dirIndex)
+    {
+        const std::filesystem::path dir = root / std::format(L"queue_{:03}", dirIndex);
+        state.Require(SelfTest::EnsureDirectory(dir), std::format(L"Failed to create '{}'.", dir.native()));
+        for (size_t fileIndex = 0; fileIndex < kFilesPerDirectory; ++fileIndex)
+        {
+            const std::filesystem::path filePath = dir / std::format(L"file_{:02}.dat", fileIndex);
+            const std::string payload(static_cast<size_t>(24u + ((dirIndex + fileIndex) % 31u)), 'q');
+            totalBytes += static_cast<uint64_t>(payload.size());
+            state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to create '{}'.", filePath.native()));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+        }
+    }
+
+    if (outTotalBytes != nullptr)
+    {
+        *outTotalBytes = totalBytes;
+    }
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool WaitForViewerSpaceSettled(HWND hwnd,
+                                             WndMsg::ViewerSpacePerfDebugSnapshot& outSnapshot,
+                                             size_t minimumDirectories,
+                                             size_t minimumFiles,
+                                             std::chrono::milliseconds timeout) noexcept
+{
+    return WaitForViewerSpacePerfSnapshot(
+        hwnd,
+        outSnapshot,
+        [minimumDirectories, minimumFiles](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.realDirectoryCount >= minimumDirectories &&
+               snapshot.fileCandidateCount >= minimumFiles && snapshot.pendingQueueBytes == 0u;
+    },
+        timeout);
+}
+
+[[nodiscard]] bool TestViewerSpaceParallelScanSerialGolden([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace serial/parallel golden test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_scan_golden_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    uint64_t expectedTotalBytes = 0u;
+    state.Require(CreateViewerSpaceQueueStormFixture(state, root, &expectedTotalBytes), L"Failed to create ViewerSpace serial/parallel golden fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
+    static constexpr size_t kExpectedDirectories = 97u;
+    static constexpr size_t kExpectedFiles       = 96u * 12u;
+
+    const std::string serialConfig =
+        R"({"topFilesPerDirectory":2048,"scanThreads":1,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":0,"cacheMaxEntries":0})";
+    StandaloneViewerPointerProbe serialProbe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace serial scan golden", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, serialProbe, serialConfig),
+                  L"Failed to open ViewerSpace serial golden run.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot serialSnapshot{};
+    state.Require(WaitForViewerSpaceSettled(serialProbe.hwnd, serialSnapshot, kExpectedDirectories, kExpectedFiles, SelfTest::Scale(20000ms)),
+                  std::format(L"ViewerSpace serial golden did not settle. state={}, dirs={}, files={}, pendingBytes={}.",
+                              static_cast<unsigned int>(serialSnapshot.scanState),
+                              serialSnapshot.realDirectoryCount,
+                              serialSnapshot.fileCandidateCount,
+                              serialSnapshot.pendingQueueBytes));
+    CleanupStandaloneViewerPointerProbe(serialProbe);
+    PumpPendingMessages();
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::string parallelConfig =
+        R"({"topFilesPerDirectory":2048,"scanThreads":8,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":0,"cacheMaxEntries":0})";
+    StandaloneViewerPointerProbe parallelProbe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(
+                      state, L"ViewerSpace parallel scan golden", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, parallelProbe, parallelConfig),
+                  L"Failed to open ViewerSpace parallel golden run.");
+    auto cleanupParallel = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(parallelProbe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot parallelSnapshot{};
+    state.Require(WaitForViewerSpaceSettled(parallelProbe.hwnd, parallelSnapshot, kExpectedDirectories, kExpectedFiles, SelfTest::Scale(20000ms)),
+                  std::format(L"ViewerSpace parallel golden did not settle. state={}, dirs={}, files={}, pendingBytes={}.",
+                              static_cast<unsigned int>(parallelSnapshot.scanState),
+                              parallelSnapshot.realDirectoryCount,
+                              parallelSnapshot.fileCandidateCount,
+                              parallelSnapshot.pendingQueueBytes));
+
+    state.Require(serialSnapshot.realDirectoryCount == parallelSnapshot.realDirectoryCount,
+                  std::format(L"ViewerSpace serial/parallel directory totals differ. serial={}, parallel={}.",
+                              serialSnapshot.realDirectoryCount,
+                              parallelSnapshot.realDirectoryCount));
+    state.Require(serialSnapshot.fileCandidateCount == parallelSnapshot.fileCandidateCount,
+                  std::format(L"ViewerSpace serial/parallel file candidate totals differ. serial={}, parallel={}.",
+                              serialSnapshot.fileCandidateCount,
+                              parallelSnapshot.fileCandidateCount));
+    state.Require(serialSnapshot.rootTotalBytes == expectedTotalBytes,
+                  std::format(L"ViewerSpace serial root byte total differs from the fixture. expected={}, serial={}.",
+                              expectedTotalBytes,
+                              serialSnapshot.rootTotalBytes));
+    state.Require(parallelSnapshot.rootTotalBytes == expectedTotalBytes,
+                  std::format(L"ViewerSpace parallel root byte total differs from the fixture. expected={}, parallel={}.",
+                              expectedTotalBytes,
+                              parallelSnapshot.rootTotalBytes));
+    state.Require(serialSnapshot.rootTotalBytes == parallelSnapshot.rootTotalBytes,
+                  std::format(L"ViewerSpace serial/parallel root byte totals differ. serial={}, parallel={}.",
+                              serialSnapshot.rootTotalBytes,
+                              parallelSnapshot.rootTotalBytes));
+    state.Require(serialSnapshot.fileCandidateBytes == parallelSnapshot.fileCandidateBytes,
+                  std::format(L"ViewerSpace serial/parallel retained file byte totals differ. serial={}, parallel={}.",
+                              serialSnapshot.fileCandidateBytes,
+                              parallelSnapshot.fileCandidateBytes));
+    state.Require(serialSnapshot.syntheticBytes == parallelSnapshot.syntheticBytes,
+                  std::format(L"ViewerSpace serial/parallel synthetic byte totals differ. serial={}, parallel={}.",
+                              serialSnapshot.syntheticBytes,
+                              parallelSnapshot.syntheticBytes));
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.total_us", metricScanOffset) >= 2u,
+                  L"ViewerSpace serial/parallel golden missing scan summary metrics.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.frontier_depth_peak", metricScanOffset) > 0u,
+                  L"ViewerSpace serial/parallel golden missing frontier-depth metric.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceCancelTeardownStress([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace cancel teardown test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_cancel_teardown_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(CreateViewerSpaceProgressivePerfFixture(state, root), L"Failed to create ViewerSpace cancel teardown fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::string config =
+        R"({"topFilesPerDirectory":2048,"scanThreads":8,"maxConcurrentScansPerVolume":1,"cacheEnabled":"0","cacheTtlSeconds":0,"cacheMaxEntries":0})";
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace cancel teardown", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe, config),
+                  L"Failed to open ViewerSpace cancel teardown run.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot active{};
+    static_cast<void>(WaitForViewerSpacePerfSnapshot(
+        probe.hwnd,
+        active,
+        [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Queued || snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Scanning ||
+               snapshot.pendingQueueBytes > 0u || snapshot.lastPaintUs > 0u;
+    },
+        SelfTest::Scale(3000ms)));
+
+    const HWND hwnd = probe.hwnd;
+    CleanupStandaloneViewerPointerProbe(probe);
+    state.Require(hwnd == nullptr || IsWindow(hwnd) == FALSE || WaitForWindowClosed(hwnd, SelfTest::Scale(5000ms)),
+                  L"ViewerSpace cancel teardown window did not close cleanly.");
+    PumpPendingMessages();
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceCacheSkipsOrCapsLargeSnapshot([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace scan-cache cap test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    std::array<wchar_t, 64> previousCap{};
+    const DWORD previousCapChars = GetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_CACHE_CAP_BYTES",
+                                                           previousCap.data(),
+                                                           static_cast<DWORD>(previousCap.size()));
+    const bool hadPreviousCap = previousCapChars > 0 && previousCapChars < previousCap.size();
+    const std::wstring previousCapValue = hadPreviousCap ? std::wstring(previousCap.data(), previousCapChars) : std::wstring{};
+    auto restoreCap = wil::scope_exit([&]() noexcept
+    {
+        SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_CACHE_CAP_BYTES", hadPreviousCap ? previousCapValue.c_str() : nullptr);
+    });
+    SetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_TEST_CACHE_CAP_BYTES", L"16384");
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_cache_cap_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(CreateViewerSpaceQueueStormFixture(state, root), L"Failed to create ViewerSpace scan-cache cap fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
+    const std::string config =
+        R"({"topFilesPerDirectory":2048,"scanThreads":4,"maxConcurrentScansPerVolume":1,"cacheEnabled":"1","cacheTtlSeconds":60,"cacheMaxEntries":1})";
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace scan-cache cap", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe, config),
+                  L"Failed to open ViewerSpace scan-cache cap run.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot capped{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      capped,
+                      [metricScanOffset](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done &&
+               (snapshot.scanCacheSnapshotBytes > 16384u ||
+                FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_skipped_large", metricScanOffset) > 0u);
+    },
+                      SelfTest::Scale(15000ms)),
+                  std::format(L"ViewerSpace scan cache did not report a capped/skipped snapshot. state={}, cacheBytes={}.",
+                              static_cast<unsigned int>(capped.scanState),
+                              capped.scanCacheSnapshotBytes));
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.model.cache_skipped_large", metricScanOffset) > 0u,
+                  L"Missing ViewerSpace scan-cache skipped-large metric.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceQueueStormStaysBounded([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace queue-storm test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_queue_storm_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(CreateViewerSpaceQueueStormFixture(state, root), L"Failed to create ViewerSpace queue-storm fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace queue storm", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for queue-storm test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot settled{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      settled,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.realDirectoryCount >= 96u && snapshot.fileCandidateCount >= 1000u &&
+               snapshot.lastDrainUs > 0u;
+    },
+                      SelfTest::Scale(15000ms)),
+                  std::format(L"ViewerSpace queue-storm test did not settle. state={}, dirs={}, files={}, pendingBytes={}, drainUs={}.",
+                              static_cast<unsigned int>(settled.scanState),
+                              settled.realDirectoryCount,
+                              settled.fileCandidateCount,
+                              settled.pendingQueueBytes,
+                              settled.lastDrainUs));
+
+    state.Require(settled.pendingQueueBytes <= (2ull * 1024ull * 1024ull),
+                  std::format(L"ViewerSpace queue-storm pending bytes stayed too high after settle: {}.", settled.pendingQueueBytes));
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.queue.drain_us", metricScanOffset) > 0u, L"Missing ViewerSpace queue drain metric.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.queue.pending_bytes", metricScanOffset) > 0u, L"Missing ViewerSpace pending-bytes metric.");
+    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.frontier_depth_peak", metricScanOffset) > 0u, L"Missing ViewerSpace frontier-depth metric.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpaceMemorySettlesAfterClose([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace memory test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_memory_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(CreateViewerSpaceQueueStormFixture(state, root), L"Failed to create ViewerSpace memory fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const uint64_t beforeOpenWorkingSet = SampleSelfTestWorkingSetBytes();
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace memory", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for memory test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    WndMsg::ViewerSpacePerfDebugSnapshot settled{};
+    state.Require(WaitForViewerSpacePerfSnapshot(
+                      probe.hwnd,
+                      settled,
+                      [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+    {
+        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.fileCandidateCount >= 1000u && snapshot.lastWorkingSetBytes > 0u;
+    },
+                      SelfTest::Scale(15000ms)),
+                  std::format(L"ViewerSpace memory test did not settle. state={}, files={}, workingSet={}.",
+                              static_cast<unsigned int>(settled.scanState),
+                              settled.fileCandidateCount,
+                              settled.lastWorkingSetBytes));
+
+    const uint64_t settledWorkingSet = settled.lastWorkingSetBytes;
+    CleanupStandaloneViewerPointerProbe(probe);
+    std::this_thread::sleep_for(SelfTest::Scale(500ms));
+    PumpPendingMessages();
+    const uint64_t afterCloseWorkingSet = SampleSelfTestWorkingSetBytes();
+
+    static constexpr uint64_t kAllowedPostCloseRetainedBytes = 96ull * 1024ull * 1024ull;
+    state.Require(beforeOpenWorkingSet > 0u && settledWorkingSet > 0u && afterCloseWorkingSet > 0u,
+                  std::format(L"ViewerSpace memory samples were incomplete. before={}, settled={}, after={}.",
+                              beforeOpenWorkingSet,
+                              settledWorkingSet,
+                              afterCloseWorkingSet));
+    state.Require(afterCloseWorkingSet <= settledWorkingSet + kAllowedPostCloseRetainedBytes,
+                  std::format(L"ViewerSpace memory did not settle after close. before={}, settled={}, after={}, allowance={}.",
+                              beforeOpenWorkingSet,
+                              settledWorkingSet,
+                              afterCloseWorkingSet,
+                              kAllowedPostCloseRetainedBytes));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool IsViewerSpaceLargePerfEnabled() noexcept
+{
+    std::array<wchar_t, 16> value{};
+    const DWORD chars = GetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_LARGE_PERF", value.data(), static_cast<DWORD>(value.size()));
+    if (chars == 0 || chars >= value.size())
+    {
+        return false;
+    }
+
+    const std::wstring_view text(value.data(), chars);
+    return text == L"1" || OrdinalString::EqualsNoCase(text, L"true") || OrdinalString::EqualsNoCase(text, L"yes");
+}
+
+[[nodiscard]] bool IsViewerSpace20kLayoutEnabled() noexcept
+{
+    std::array<wchar_t, 16> value{};
+    const DWORD chars = GetEnvironmentVariableW(L"REDSALAMANDER_VIEWERSPACE_20K_LAYOUT", value.data(), static_cast<DWORD>(value.size()));
+    if (chars == 0 || chars >= value.size())
+    {
+        return false;
+    }
+
+    const std::wstring_view text(value.data(), chars);
+    return text == L"1" || OrdinalString::EqualsNoCase(text, L"true") || OrdinalString::EqualsNoCase(text, L"yes");
+}
+
+[[nodiscard]] bool TestViewerSpaceLayout20kVisibleOptIn([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! IsViewerSpace20kLayoutEnabled())
+    {
+        return state.Skip(L"Set REDSALAMANDER_VIEWERSPACE_20K_LAYOUT=1 to run the opt-in ViewerSpace 20k layout scenario.");
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace 20k layout test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_layout_20k_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace 20k layout root.");
+
+    static constexpr size_t kFileCount = 20000u;
+    const std::string payload(1u, 'x');
+    for (size_t index = 0; index < kFileCount; ++index)
+    {
+        const std::filesystem::path filePath = root / std::format(L"tile_{:05}.bin", index);
+        state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to create '{}'.", filePath.native()));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    StandaloneViewerPointerProbe probe{};
+    state.Require(OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace 20k layout", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+                  L"Failed to open ViewerSpace for 20k layout test.");
+    auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RECT windowRect{};
+    state.Require(GetWindowRect(probe.hwnd, &windowRect) != FALSE, L"Failed to read ViewerSpace 20k layout window rect.");
+    const UINT dpi = std::max<UINT>(GetDpiForWindow(probe.hwnd), USER_DEFAULT_SCREEN_DPI);
+    RECT requestedClient{0, 0, MulDiv(2200, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI), MulDiv(1200, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI)};
+    const DWORD style   = static_cast<DWORD>(GetWindowLongPtrW(probe.hwnd, GWL_STYLE));
+    const DWORD exStyle = static_cast<DWORD>(GetWindowLongPtrW(probe.hwnd, GWL_EXSTYLE));
+    state.Require(AdjustWindowRectExForDpi(&requestedClient, style, FALSE, exStyle, dpi) != FALSE,
+                  L"Failed to calculate ViewerSpace 20k layout window size.");
+    const int requestedWidth  = static_cast<int>(std::max<LONG>(1, requestedClient.right - requestedClient.left));
+    const int requestedHeight = static_cast<int>(std::max<LONG>(1, requestedClient.bottom - requestedClient.top));
+    state.Require(SetWindowPos(probe.hwnd, nullptr, windowRect.left, windowRect.top, requestedWidth, requestedHeight, SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
+                  L"Failed to resize ViewerSpace 20k layout window.");
+    PumpPendingMessages();
+    InvalidateRect(probe.hwnd, nullptr, FALSE);
+
+    WndMsg::ViewerSpacePerfDebugSnapshot snapshot{};
+    const bool reached20k = WaitForViewerSpacePerfSnapshot(
+        probe.hwnd,
+        snapshot,
+        [](const WndMsg::ViewerSpacePerfDebugSnapshot& current) noexcept
+    {
+        return current.scanState == WndMsg::ViewerSpacePerfScanState::Done && current.fileCandidateCount >= kFileCount &&
+               current.drawItemCount >= kFileCount && current.visibleTileCount >= kFileCount && current.hitGridCellCount > 0u &&
+               current.hitGridMaxCandidatesPerCell > 0u;
+    },
+        SelfTest::Scale(120000ms));
+    state.Require(reached20k,
+                  std::format(L"ViewerSpace 20k layout did not expose expected visible detail. state={}, files={}, drawItems={}, visible={}, culled={}, gridCells={}, maxCandidates={}, layoutUs={}, paintUs={}.",
+                              static_cast<unsigned int>(snapshot.scanState),
+                              snapshot.fileCandidateCount,
+                              snapshot.drawItemCount,
+                              snapshot.visibleTileCount,
+                              snapshot.culledTileCount,
+                              snapshot.hitGridCellCount,
+                              snapshot.hitGridMaxCandidatesPerCell,
+                              snapshot.lastLayoutUs,
+                              snapshot.lastPaintUs));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestViewerSpacePerfLargeOptIn([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    if (! IsViewerSpaceLargePerfEnabled())
+    {
+        return state.Skip(L"Set REDSALAMANDER_VIEWERSPACE_LARGE_PERF=1 to run the opt-in ViewerSpace large perf scenario.");
+    }
+
+    return TestViewerSpacePerfSmallProgressive(mainWindow, state);
 }
 
 void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollStepPerfRecord& record, std::wstring_view indent)
@@ -16391,6 +18490,12 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_path_doubleClick_enters_edit_mode", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewPathDoubleClickEntersEditMode(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_path_doubleClick_ignores_stale_restore_focus", [=](CaseState& state) noexcept {
+        return TestPaneNavigationViewPathDoubleClickEntersEditMode(mainWindow, state, true);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal", [=](CaseState& state) noexcept {
+        return TestPaneFocusAddressBarTabTraversal(mainWindow, state) && TestPaneNavigationViewPathDoubleClickEntersEditMode(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode", [=](CaseState& state) noexcept {
         return TestPaneNavigationViewPathRegionKeyboardActivationEntersEditMode(mainWindow, state);
     });
@@ -16449,6 +18554,54 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
     });
     SelfTest::RunCase(options, suite, L"cmd_viewer_space_hover_uses_delivered_point", [=](CaseState& state) noexcept {
         return TestViewerSpaceHoverUsesDeliveredPoint(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"viewer_space_perf_small_progressive", [=](CaseState& state) noexcept {
+        return TestViewerSpacePerfSmallProgressive(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_renderer_device_context_ready_resize_close", [=](CaseState& state) noexcept {
+        return TestViewerSpaceRendererDeviceContextReadyResizeClose(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_renderer_recovers_from_forced_device_loss", [=](CaseState& state) noexcept {
+        return TestViewerSpaceRendererRecoversFromForcedDeviceLoss(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_hover_does_not_rebuild_static_cache", [=](CaseState& state) noexcept {
+        return TestViewerSpaceHoverDoesNotRebuildStaticCache(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_dense_files_exposes_more_than_legacy_topk", [=](CaseState& state) noexcept {
+        return TestViewerSpaceDenseFilesExposeMoreThanLegacyTopK(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_synthetic_bucket_metrics_match_root_bytes", [=](CaseState& state) noexcept {
+        return TestViewerSpaceSyntheticBucketMetricsMatchRootBytes(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_adaptive_scan_budget_tracks_window_area", [=](CaseState& state) noexcept {
+        return TestViewerSpaceAdaptiveScanBudgetTracksWindowArea(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_large_sibling_folders_expose_nested_detail", [=](CaseState& state) noexcept {
+        return TestViewerSpaceLargeSiblingFoldersExposeNestedDetail(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_hit_grid_matches_linear", [=](CaseState& state) noexcept {
+        return TestViewerSpaceHitGridMatchesLinear(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_parallel_scan_serial_golden", [=](CaseState& state) noexcept {
+        return TestViewerSpaceParallelScanSerialGolden(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_cancel_teardown_stress", [=](CaseState& state) noexcept {
+        return TestViewerSpaceCancelTeardownStress(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_cache_skips_or_caps_large_snapshot", [=](CaseState& state) noexcept {
+        return TestViewerSpaceCacheSkipsOrCapsLargeSnapshot(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_queue_storm_stays_bounded", [=](CaseState& state) noexcept {
+        return TestViewerSpaceQueueStormStaysBounded(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_memory_settles_after_close", [=](CaseState& state) noexcept {
+        return TestViewerSpaceMemorySettlesAfterClose(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_viewer_space_layout_20k_visible_optin", [=](CaseState& state) noexcept {
+        return TestViewerSpaceLayout20kVisibleOptIn(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"viewer_space_perf_large_optin", [=](CaseState& state) noexcept {
+        return TestViewerSpacePerfLargeOptIn(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_viewSpace", [=](CaseState& state) noexcept { return TestViewSpace(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_app_toggleUiChrome", [=](CaseState& state) noexcept { return TestToggleUiChrome(mainWindow, state); });

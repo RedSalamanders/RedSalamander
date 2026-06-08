@@ -6,6 +6,8 @@
 
 #include <windowsx.h>
 
+extern FolderWindow g_folderWindow;
+
 namespace CompareDirectoriesWindowInternal
 {
 // UI-thread-only registry for theme refresh.
@@ -535,6 +537,8 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
 
 bool CompareDirectoriesWindow::Create(HWND owner) noexcept
 {
+    UpdateOwnerWindow(owner);
+
     const HINSTANCE instance = GetModuleHandleW(nullptr);
     if (! RegisterWndClass(instance))
     {
@@ -612,6 +616,60 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
 
     ShowWindow(created, _restoreShowCmd);
     return true;
+}
+
+HWND CompareDirectoriesWindow::ResolveRestoreFolderViewWindow() const noexcept
+{
+    const HWND folderWindow = g_folderWindow.GetHwnd();
+    if (! folderWindow || IsWindow(folderWindow) == FALSE)
+    {
+        return nullptr;
+    }
+
+    HWND focusedFolderView = g_folderWindow.GetFocusedFolderViewHwnd();
+    if (! focusedFolderView)
+    {
+        focusedFolderView = g_folderWindow.GetFolderViewHwnd(g_folderWindow.GetFocusedPane());
+    }
+
+    if (! focusedFolderView || IsWindow(focusedFolderView) == FALSE)
+    {
+        return nullptr;
+    }
+
+    return focusedFolderView;
+}
+
+void CompareDirectoriesWindow::UpdateOwnerWindow(HWND owner) noexcept
+{
+    _ownerWindow             = (owner && IsWindow(owner) != FALSE) ? GetAncestor(owner, GA_ROOT) : nullptr;
+    _restoreFolderViewWindow = ResolveRestoreFolderViewWindow();
+}
+
+void CompareDirectoriesWindow::RestoreOwnerFocusAfterClose() noexcept
+{
+    const HWND restoreOwner = (_ownerWindow && IsWindow(_ownerWindow) != FALSE) ? _ownerWindow : nullptr;
+    const HWND restoreFocus = (_restoreFolderViewWindow && IsWindow(_restoreFolderViewWindow) != FALSE) ? _restoreFolderViewWindow
+                                                                                                       : ResolveRestoreFolderViewWindow();
+
+    if (restoreOwner)
+    {
+        if (IsIconic(restoreOwner) != FALSE)
+        {
+            ShowWindow(restoreOwner, SW_RESTORE);
+        }
+        static_cast<void>(SetActiveWindow(restoreOwner));
+        static_cast<void>(SetForegroundWindow(restoreOwner));
+    }
+
+    if (restoreFocus)
+    {
+        g_folderWindow.RequestRestoreFolderViewFocus(restoreFocus);
+    }
+    else if (restoreOwner)
+    {
+        static_cast<void>(SetFocus(restoreOwner));
+    }
 }
 
 bool CompareDirectoriesWindow::OnCreate(HWND hwnd) noexcept
@@ -739,6 +797,9 @@ void CompareDirectoriesWindow::OnNcDestroy() noexcept
         SetWindowLongPtrW(_hWnd.get(), GWLP_USERDATA, 0);
         _hWnd.release();
     }
+    RestoreOwnerFocusAfterClose();
+    _ownerWindow             = nullptr;
+    _restoreFolderViewWindow = nullptr;
     _deletePending = true;
     if (_dispatchDepth == 0u)
     {

@@ -32,5 +32,4 @@ BEGIN
     IDS_VIEWERSQLITE_ERROR_QUERY_FAILED "Impossible d’exécuter la requête SQLite."
     IDS_VIEWERSQLITE_ERROR_QUEUE_FAILED "Impossible de mettre en file d’attente le travail SQLite en arrière-plan."
     IDS_VIEWERSQLITE_ERROR_OUT_OF_MEMORY "La visionneuse SQLite a épuisé la mémoire."
-    IDS_VIEWERSQLITE_TITLE_FORMAT "{0} - {1}"
 END

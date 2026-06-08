@@ -1,0 +1,45 @@
+#pragma code_page(65001)
+#include "../../FileSystemMicrosoftDriveResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME "OneDrive Personal"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION "Osobné úložisko Microsoft OneDrive cez Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME "OneDrive Business"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION "Úložisko Microsoft OneDrive for Business cez Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION "Knižnice dokumentov Microsoft SharePoint cez Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "Prihlasovanie sa nedá spustiť"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT "{0} potrebuje pred otvorením prihlasovacieho procesu prehliadača ID klienta Microsoft Graph.\r\n\r\nUpravte nastavenia JSON a obnovte rozšírenú hodnotu „clientId“ pre „{0}“."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS "Pripojenie dokončené"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS "iskrí|Podanie ruky v cloude je dokončené. Vaše súbory sú pripravené na pohyb."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE "Spojenie prerušené"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE "varovanie|Prihlásenie stratilo pôdu pod nohami. Vráťte sa na ďalší pokus."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT "Túto kartu môžete zavrieť a vrátiť sa späť na RedSalamander."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_2 "party|Microsoft otvoril bránu. RedSalamander môže zamieriť dovnútra."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_3 "raketa|To prihlásenie sa spustilo čisto. Skočte späť a pokračujte v pohybe."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_4 "kompas|Trasa je nastavená. RedSalamander vie, kam ísť ďalej."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_5 "oblak|Cesta oblakov je voľná. Vaše ďalšie kliknutie patrí do aplikácie."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_6 "glowstar|Všetko zoradené. Čas pokračovať v dobrodružstve."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_7 "check|Pripojenie zabezpečené. RedSalamander je pripravený na ďalšie prehliadanie."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_8 "oheň|To prihlásenie dopadlo nádherne. Udržujte tempo."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_9 "rainbow|Na strane Microsoftu je všetko jasné. Vráťte sa a vychutnajte si výhľad."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_10 "wave|Dokázali ste to cez prehliadač. RedSalamander čaká."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_2 "dážď|Privalil sa malý oblak. RedSalamander môže reštartovať trasu."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_3 "opraviť|To podanie ruky si vyžaduje ešte jeden prechod. Skúste pripojenie znova."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_4 "obchádzka|Prehliadač urobil obchádzku. Vráťte sa a znovu otvorte cestu."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_5 "kotva|Spätné volanie sa neukotvilo čisto. RedSalamander to môže skúsiť znova."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_6 "flash|Niečo prerušilo posledný krok. Ďalší pokus by mal pomôcť."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_7 "dáždnik|Žiadne škody. Vráťte sa do aplikácie a skúste sa prihlásiť znova."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_8 "mapa|Cesta späť od spoločnosti Microsoft bola neúplná. Začnite to ešte raz."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_9 "nástroje|Toto pripojenie vyžaduje rýchlu opravu. RedSalamander je pripravený, keď ste vy."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_10 "zopakovať|Skoro tam. Vráťte sa k RedSalamanderovi a dajte mu ešte jeden pokus."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_STATUS_SUCCESS "Prihlásenie do spoločnosti Microsoft je dokončené"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_STATUS_FAILURE "Prihlásenie do Microsoftu bolo prerušené"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_SUCCESS "Váš účet Microsoft je prepojený. Vráťte sa na RedSalamander a pokračujte v prehliadaní."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_FAILURE "Prihlásenie spoločnosti Microsoft sa na tejto karte prehliadača nedokončilo. Vráťte sa do RedSalamander a skúste to znova."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FUN_LABEL "Signál Salamandra"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BRAND_KICKER "Pripojenie k službe Microsoft Drive"
+END

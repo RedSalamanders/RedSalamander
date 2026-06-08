@@ -1,0 +1,11 @@
+#pragma code_page(65001)
+#include "../../FileSystem7zResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEM7Z_NAME "7-Zips"
+    IDS_FILESYSTEM7Z_DESCRIPTION "Prehliadajte archívne súbory ako virtuálny súborový systém."
+END

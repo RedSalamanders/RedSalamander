@@ -1,0 +1,35 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSQLITE_NAME "Prohlížeč SQLite"
+    IDS_VIEWERSQLITE_DESCRIPTION "Prohlížeč databáze SQLite pouze pro čtení s procházením stránkovaných tabulek."
+    IDS_VIEWERSQLITE_LABEL_FILE "Soubor:"
+    IDS_VIEWERSQLITE_LABEL_TABLE "Tabulka:"
+    IDS_VIEWERSQLITE_LABEL_QUERY "dotaz:"
+    IDS_VIEWERSQLITE_BUTTON_RELOAD "Znovu načíst"
+    IDS_VIEWERSQLITE_BUTTON_PREVIOUS "Předchozí"
+    IDS_VIEWERSQLITE_BUTTON_NEXT "Další"
+    IDS_VIEWERSQLITE_BUTTON_RUN_QUERY "Spusťte dotaz"
+    IDS_VIEWERSQLITE_BUTTON_TABLE_PREVIEW "Náhled tabulky"
+    IDS_VIEWERSQLITE_COLUMN_RESULT "Výsledek"
+    IDS_VIEWERSQLITE_STATUS_READY "Připraveno."
+    IDS_VIEWERSQLITE_STATUS_LOADING "Otevírání databáze..."
+    IDS_VIEWERSQLITE_STATUS_LOADING_ROWS "Načítání řádků..."
+    IDS_VIEWERSQLITE_STATUS_RUNNING_QUERY "Probíhá dotaz..."
+    IDS_VIEWERSQLITE_STATUS_ENTER_QUERY "Zadejte dotaz SQL pouze pro čtení."
+    IDS_VIEWERSQLITE_STATUS_SELECT_TABLE "Vyberte tabulku, kterou chcete zobrazit."
+    IDS_VIEWERSQLITE_STATUS_NO_TABLES "Nebyly nalezeny žádné tabulky ani pohledy."
+    IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_FMT "Tabulka {0}: řádky {1:L}-{2:L}"
+    IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_MORE_FMT "Tabulka {0}: řádky {1:L}-{2:L}+"
+    IDS_VIEWERSQLITE_STATUS_QUERY_FMT "Dotaz vrátil {0:L} řádků."
+    IDS_VIEWERSQLITE_STATUS_QUERY_TRUNCATED_FMT "Dotaz vrátil řádky {0:L}+ (zkrácené)."
+    IDS_VIEWERSQLITE_ERROR_OPEN_FAILED "Nepodařilo se otevřít databázi SQLite."
+    IDS_VIEWERSQLITE_ERROR_QUERY_FAILED "Nepodařilo se spustit dotaz SQLite."
+    IDS_VIEWERSQLITE_ERROR_QUEUE_FAILED "Nepodařilo se zařadit do fronty práci SQLite na pozadí."
+    IDS_VIEWERSQLITE_ERROR_OUT_OF_MEMORY "Prohlížeči SQLite došla paměť."
+END

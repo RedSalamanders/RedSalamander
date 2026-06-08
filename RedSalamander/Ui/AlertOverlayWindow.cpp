@@ -1974,6 +1974,8 @@ bool DebugGetAlertOverlayWindowSnapshot(HWND hwnd, AlertOverlayWindowDebugSnapsh
     out.closeRectPx.top            = window->PxFromDipFloor(closeRectDip.top);
     out.closeRectPx.right          = window->PxFromDipCeil(closeRectDip.right);
     out.closeRectPx.bottom         = window->PxFromDipCeil(closeRectDip.bottom);
+    out.usesSharedCloseChrome      = window->_overlay.DebugUsesSharedCloseChromeForTest();
+    out.usesSharedButtonChrome     = window->_overlay.DebugUsesSharedButtonChromeForTest();
     out.mouseDownCount             = window->_debugMouseDownCount;
     out.mouseUpCount               = window->_debugMouseUpCount;
     out.dismissCount               = window->_debugDismissCount;

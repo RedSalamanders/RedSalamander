@@ -1,0 +1,147 @@
+#pragma code_page(65001)
+#include "../../Resource.h"
+#include "../../../Common/Version.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+IDC_REDSALAMANDERMONITOR MENU
+BEGIN
+    POPUP "&Súbor"
+    BEGIN
+        MENUITEM "&Nové\tCtrl+N",                IDM_FILE_NEW
+        MENUITEM "&Otvoriť...\tCtrl+O",            IDM_FILE_OPEN
+        MENUITEM "&Uložiť ako...",                 IDM_FILE_SAVE_AS
+        MENUITEM SEPARATOR
+        MENUITEM "&Koniec",                       IDM_EXIT
+    END
+    POPUP "&Úpravy"
+    BEGIN
+        MENUITEM "&Kopírovať\tCtrl+C",               IDM_EDIT_COPY
+        MENUITEM SEPARATOR
+        MENUITEM "&Nájsť...\tCtrl+F",            IDM_EDIT_FIND
+        MENUITEM "&Nájsť ďalší\tF3",              IDM_EDIT_FIND_NEXT
+        MENUITEM "&Nájsť predchádzajúci\tShift+F3",    IDM_EDIT_FIND_PREV
+    END
+    POPUP "&Zobrazenie"
+    BEGIN
+        MENUITEM "&Panel s nástrojmi",                    IDM_VIEW_TOOLBAR
+        MENUITEM "&Čísla riadkov",               IDM_VIEW_LINE_NUMBERS
+        MENUITEM SEPARATOR
+        POPUP "&Téma"
+        BEGIN
+            MENUITEM "&Vysoký kontrast (systém)",     IDM_VIEW_THEME_HIGH_CONTRAST, GRAYED
+            MENUITEM SEPARATOR
+            MENUITEM "&Systém",                     IDM_VIEW_THEME_SYSTEM
+            MENUITEM "&Svetlý",                      IDM_VIEW_THEME_LIGHT
+            MENUITEM "&Tmavý",                       IDM_VIEW_THEME_DARK
+            MENUITEM "&Dúha",                    IDM_VIEW_THEME_RAINBOW
+            MENUITEM "&Vysoký kontrast (aplikácia)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP
+        END
+    END
+    POPUP "&Možnosť"
+    BEGIN
+        MENUITEM "&Vždy na vrchole",              IDM_OPTION_TOP
+        MENUITEM "&Automatické posúvanie\tEnd",           IDM_OPTION_AUTO_SCROLL
+        MENUITEM SEPARATOR
+        MENUITEM "&Zobraziť ID procesu/ID vlákna",  IDM_OPTION_ID
+        MENUITEM SEPARATOR
+        POPUP "&Aktívny filter"
+        BEGIN
+            MENUITEM "&Zobraziť text",              IDM_FILTER_TEXT, CHECKED
+            MENUITEM "&Zobraziť chyby",            IDM_FILTER_ERROR, CHECKED
+            MENUITEM "&Zobraziť upozornenia",          IDM_FILTER_WARNING, CHECKED
+            MENUITEM "&Zobraziť informácie",              IDM_FILTER_INFO, CHECKED
+            MENUITEM "&Zobraziť Perf",              IDM_FILTER_PERF, CHECKED
+            MENUITEM "&Zobraziť ladenie",             IDM_FILTER_DEBUG, CHECKED
+            MENUITEM SEPARATOR
+            MENUITEM "Prednastavené: Len chyby",     IDM_FILTER_PRESET_ERRORS_ONLY
+            MENUITEM "Prednastavené: Chyby+Upozornenia", IDM_FILTER_PRESET_ERRORS_WARNINGS
+            MENUITEM "Prednastavené: chyby + výkon + ladenie", IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "Prednastavené: Všetky typy",       IDM_FILTER_PRESET_ALL
+        END
+    END
+    POPUP "&Pomocník"
+    BEGIN
+        MENUITEM "&O...",                  IDM_ABOUT
+    END
+END
+
+IDD_ABOUTBOX DIALOGEX 0, 0, 260, 78
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "O RedSalamanderMonitor"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    ICON            IDI_REDSALAMANDERMONITOR,IDC_STATIC,14,14,21,20
+    LTEXT           "RedSalamanderMonitor",IDC_STATIC,42,14,180,8,SS_NOPREFIX
+    LTEXT           "",IDC_ABOUT_VERSION,42,27,205,18,SS_NOPREFIX
+    LTEXT           VERSINFO_COPYRIGHT,IDC_STATIC,42,47,205,8
+    DEFPUSHBUTTON   "OK",IDOK,203,57,50,14,WS_GROUP
+END
+
+IDD_MODAL_MESSAGE DIALOGEX 0, 0, 360, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "RedSalamander Monitor"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_MODAL_MESSAGE_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
+    DEFPUSHBUTTON   "",IDOK,303,142,50,14,WS_GROUP
+END
+
+IDD_MODAL_CONFIRM DIALOGEX 0, 0, 360, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "RedSalamander Monitor"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_MODAL_MESSAGE_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
+    DEFPUSHBUTTON   "",IDYES,247,142,50,14,WS_GROUP
+    PUSHBUTTON      "",IDNO,303,142,50,14
+END
+
+STRINGTABLE
+BEGIN
+    IDS_APP_TITLE           "RedSalamander Monitor"
+    IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) nie je spustený. RedSalamander nebude schopný zvládnuť potenciálne havárie. Reštartujte RedSalamander."
+    IDS_CAPTION_ERROR "Chyba"
+    IDS_CAPTION_OPEN "Otvoriť"
+    IDS_CAPTION_PRINT "Tlačiť"
+    IDS_CAPTION_ETW_WARNING "Upozornenie pre poslucháča ETW"
+    IDS_BTN_OK              "OK"
+    IDS_BTN_YES             "Áno"
+    IDS_BTN_NO              "Nie"
+    IDS_FIND_LABEL "Nájsť:"
+    IDS_FIND_CASE_LABEL "Aa"
+    IDS_FIND_FROM_CURRENT_POSITION "Aktuálna pozícia"
+    IDS_FIND_FROM_TOP "Hore"
+    IDS_FIND_FROM_BOTTOM "Spodná časť"
+    IDS_MSG_OPEN_FAILED_READ "Súbor sa nepodarilo prečítať alebo je súbor prázdny."
+    IDS_MSG_CREATE_COLORTEXTVIEW_FAILED "Nepodarilo sa vytvoriť ColorTextView."
+    IDS_MSG_INSTANCE_GUARD_FAILED "Nie je možné vytvoriť strážcu inštancie monitora RedSalamander."
+    IDS_MSG_PRINT_NOT_IMPLEMENTED "Tlač ešte nie je implementovaná."
+    IDS_MSG_ETW_STARTED "ETW Listener sa úspešne spustil - monitorovanie udalostí v reálnom čase je aktívne"
+    IDS_FMT_ETW_START_FAILED "ETW Listener sa nepodarilo spustiť: {0}"
+    IDS_MSG_ETW_ELEVATE_PROMPT "RedSalamander Monitor nemohol spustiť svoj ETW poslucháč s aktuálnymi privilégiami.\n\nReštartovať teraz ako správca?\n\n(Ak chcete pokračovať bez monitorovania ETW v reálnom čase, vyberte možnosť Nie. Ak sa chcete vyhnúť výzvam UAC, pridajte svojho používateľa do skupiny Users Log Users a odhláste sa/prihláste sa.)"
+    IDS_FATAL_ERROR_CAPTION "Monitor RedSalamander – fatálna chyba"
+    IDS_FATAL_EXCEPTION_FMT "Fatálna výnimka v RedSalamanderMonitor\n\nVýnimka: {0} (0x{1:08X})\n\nAplikácia sa teraz ukončí."
+    IDS_FILE_FILTER_OPEN "Textové súbory (*.txt;*.log)\0*.txt;*.log\0Všetky súbory (*.*)\0*.*\0\0"
+    IDS_FILE_FILTER_SAVE "Textové súbory (*.txt)\0*.txt\0Všetky súbory (*.*)\0*.*\0\0"
+    IDS_FILE_DEFAULT_EXT_TXT "txt"
+    IDS_FILTER_TYPE_TEXT "Text"
+    IDS_FILTER_TYPE_ERROR "Chyba"
+    IDS_FILTER_TYPE_WARNING "Upozornenie"
+    IDS_FILTER_TYPE_INFO "Informácie"
+    IDS_FILTER_TYPE_PERF "Výkon"
+    IDS_FILTER_TYPE_DEBUG "Ladenie"
+    IDS_STATUS_FILTER_ALL "Filter: Všetky"
+    IDS_STATUS_FILTER_NONE "Filter: Žiadny"
+    IDS_STATUS_FILTER_ONE_FMT "Filter: {0}"
+    IDS_STATUS_FILTER_MULTI_PREFIX "Filter: "
+    IDS_STATUS_VISIBLE_FMT "Viditeľné: {0:L}"
+    IDS_STATUS_TOTAL_FMT "Celkom: {0:L}"
+    IDS_STATUS_ETW_RECEIVED_FMT "Prijaté ETW: {0:L}"
+    IDS_STATUS_FILTER_MULTI_JOINER "+"
+    IDS_STATUS_AUTOSCROLL_ON "Auto: Zap"
+    IDS_STATUS_AUTOSCROLL_OFF "Auto: Vyp"
+    IDS_SAMPLE_TEXT "ColorTextView bol úspešne inicializovaný!\nToto je pravý panel.\n"
+    IDC_REDSALAMANDERMONITOR "REDSALAMANDERMONITOR"
+END

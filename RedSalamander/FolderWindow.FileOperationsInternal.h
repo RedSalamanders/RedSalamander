@@ -23,8 +23,10 @@ struct FolderWindow::FileOperationState
 
     struct TaskCompletedPayload
     {
-        uint64_t taskId = 0;
-        HRESULT hr      = S_OK;
+        uint64_t taskId             = 0;
+        HRESULT hr                  = S_OK;
+        unsigned long warningCount  = 0;
+        unsigned long errorCount    = 0;
     };
 
     struct TaskDiagnosticEntry
@@ -196,6 +198,10 @@ struct FolderWindow::FileOperationState
             uint64_t bridgeWriterWaitUs                  = 0;
             uint64_t bridgeReadUs                        = 0;
             uint64_t bridgeWriteUs                       = 0;
+            uint64_t bridgeDirectoryEnsureCount          = 0;
+            uint64_t bridgeFileAdmissionCount            = 0;
+            uint64_t bridgeFileStartedBeforeProducerDone = 0;
+            uint64_t bridgeAdmissionMaxQueueDepth        = 0;
             uint64_t preCalcUs                           = 0;
             uint64_t preCalcCallbackCount                = 0;
             uint64_t preCalcCallbackUs                   = 0;
@@ -469,6 +475,10 @@ struct FolderWindow::FileOperationState
         size_t _conflictWorkerPerfCount = 0;
 
         PerfStats _perf{};
+        std::atomic<uint64_t> _bridgeDirectoryEnsureCount{0};
+        std::atomic<uint64_t> _bridgeFileAdmissionCount{0};
+        std::atomic<uint64_t> _bridgeFileStartedBeforeProducerDone{0};
+        std::atomic<uint64_t> _bridgeAdmissionMaxQueueDepth{0};
 
 #ifdef ENABLE_TESTS
         unsigned int _dbgConfiguredMaxConcurrency      = 1;
@@ -544,7 +554,9 @@ struct FolderWindow::FileOperationState
     HWND GetPopupHwndForSelfTest() noexcept;
     HWND GetIssuesPaneHwndForSelfTest() noexcept;
     void DebugResetIssuesPaneForSelfTest() noexcept;
+    void DebugClearDiagnosticsForSelfTest() noexcept;
     void DebugRemoveDiagnosticsForTask(uint64_t taskId) noexcept;
+    void DebugAppendCompletedTaskForSelfTest(CompletedTaskSummary summary) noexcept;
 #endif
 
     void RecordTaskDiagnostic(uint64_t taskId,
@@ -566,7 +578,7 @@ struct FolderWindow::FileOperationState
 
 private:
     void EnsurePopupVisible() noexcept;
-    void RecordCompletedTask(Task& task) noexcept;
+    CompletedTaskSummary RecordCompletedTask(Task& task) noexcept;
     void FlushDiagnostics(bool force) noexcept;
     static std::filesystem::path GetDiagnosticsLogDirectory() noexcept;
     static std::filesystem::path GetDiagnosticsLogPathForDate(const SYSTEMTIME& localTime) noexcept;
@@ -607,6 +619,9 @@ private:
     std::atomic<bool> _queueNewTasks{true};
 };
 
+[[nodiscard]] bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept;
+[[nodiscard]] bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long warningCount, unsigned long errorCount) noexcept;
+
 #ifdef ENABLE_TESTS
 enum class FileOpsBridgePipelineMode : unsigned char
 {
@@ -617,4 +632,6 @@ enum class FileOpsBridgePipelineMode : unsigned char
 
 void SetFileOpsBridgePipelineModeForSelfTest(FileOpsBridgePipelineMode mode) noexcept;
 FileOpsBridgePipelineMode GetFileOpsBridgePipelineModeForSelfTest() noexcept;
+void SetFileOpsBridgeProducerDelayForSelfTest(unsigned int delayMs) noexcept;
+unsigned int GetFileOpsBridgeProducerDelayForSelfTest() noexcept;
 #endif

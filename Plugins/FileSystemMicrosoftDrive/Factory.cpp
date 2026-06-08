@@ -52,7 +52,7 @@ struct LocalizedPluginMetaDataSet
         LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION, oneDrivePersonalDescription);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME, oneDriveBusinessName);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION, oneDriveBusinessDescription);
-        LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME, sharePointName);
+        LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME, sharePointName);
         LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION, sharePointDescription);
 
         // PluginMetaData keeps raw wchar_t* pointers, so bind them only after the

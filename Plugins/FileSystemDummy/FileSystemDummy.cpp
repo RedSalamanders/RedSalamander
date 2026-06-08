@@ -4174,6 +4174,15 @@ HRESULT FileSystemDummy::CreateDirectoryClone(
     DummyNode* existing = FindChild(&destinationParent, destinationName);
     if (existing != nullptr)
     {
+        if (existing->isDirectory)
+        {
+            if (outDirectory)
+            {
+                *outDirectory = existing;
+            }
+            return S_OK;
+        }
+
         if (! HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE))
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
@@ -4212,6 +4221,82 @@ HRESULT FileSystemDummy::CreateDirectoryClone(
         *outDirectory = added;
     }
 
+    return S_OK;
+}
+
+HRESULT FileSystemDummy::MergeCopyDirectory(DummyNode& sourceDirectory, DummyNode& destinationDirectory, FileSystemFlags flags, uint64_t* outBytes)
+{
+    if (! sourceDirectory.isDirectory || ! destinationDirectory.isDirectory)
+    {
+        return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
+    }
+
+    EnsureChildrenGenerated(sourceDirectory);
+    EnsureChildrenGenerated(destinationDirectory);
+
+    uint64_t copiedBytes = 0;
+    for (const auto& child : sourceDirectory.children)
+    {
+        if (! child)
+        {
+            continue;
+        }
+
+        uint64_t childBytes = 0;
+        const HRESULT hr    = CopyNode(*child, destinationDirectory, child->name, flags, &childBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        copiedBytes += childBytes;
+    }
+
+    TouchNode(destinationDirectory);
+    if (outBytes)
+    {
+        *outBytes = copiedBytes;
+    }
+    return S_OK;
+}
+
+HRESULT FileSystemDummy::MergeMoveDirectory(DummyNode& sourceDirectory, DummyNode& destinationDirectory, FileSystemFlags flags, uint64_t* outBytes)
+{
+    if (! sourceDirectory.isDirectory || ! destinationDirectory.isDirectory)
+    {
+        return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
+    }
+
+    EnsureChildrenGenerated(sourceDirectory);
+    EnsureChildrenGenerated(destinationDirectory);
+
+    uint64_t movedBytes = 0;
+    while (! sourceDirectory.children.empty())
+    {
+        DummyNode* child = sourceDirectory.children.front().get();
+        if (! child)
+        {
+            sourceDirectory.children.erase(sourceDirectory.children.begin());
+            continue;
+        }
+
+        uint64_t childBytes = 0;
+        const HRESULT hr    = MoveNode(*child, destinationDirectory, child->name, flags, &childBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        movedBytes += childBytes;
+    }
+
+    sourceDirectory.plannedChildCount = 0;
+    TouchNode(destinationDirectory);
+    TouchNode(sourceDirectory);
+    if (outBytes)
+    {
+        *outBytes = movedBytes;
+    }
     return S_OK;
 }
 
@@ -4255,6 +4340,11 @@ FileSystemDummy::CopyNode(DummyNode& source, DummyNode& destinationParent, std::
     DummyNode* existing = FindChild(&destinationParent, destinationName);
     if (existing)
     {
+        if (source.isDirectory && existing->isDirectory)
+        {
+            return MergeCopyDirectory(source, *existing, flags, outBytes);
+        }
+
         if (! HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE))
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
@@ -4337,6 +4427,18 @@ FileSystemDummy::MoveNode(DummyNode& source, DummyNode& destinationParent, std::
     DummyNode* existing = FindChild(&destinationParent, destinationName);
     if (existing && existing != &source)
     {
+        if (source.isDirectory && existing->isDirectory)
+        {
+            const HRESULT mergeHr = MergeMoveDirectory(source, *existing, flags, outBytes);
+            if (FAILED(mergeHr))
+            {
+                return mergeHr;
+            }
+
+            auto removed = ExtractChild(sourceParent, &source);
+            return removed ? S_OK : E_FAIL;
+        }
+
         if (! HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE))
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);

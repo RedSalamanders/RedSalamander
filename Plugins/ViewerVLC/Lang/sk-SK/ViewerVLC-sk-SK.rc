@@ -1,0 +1,35 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERVLC_DESCRIPTION "Prehrávajte video súbory pomocou prehrávača médií VLC (libVLC)."
+    IDS_VIEWERVLC_WINDOW_CAPTION "Prehliadač VLC"
+    IDS_VIEWERVLC_BUTTON_PLAY "Hrať"
+    IDS_VIEWERVLC_BUTTON_PAUSE "Pauza"
+    IDS_VIEWERVLC_BUTTON_STOP "Zastaviť"
+    IDS_VIEWERVLC_BUTTON_SNAPSHOT_ELLIPSIS "Snímka..."
+    IDS_VIEWERVLC_MISSING_TITLE "Vyžaduje sa prehrávač médií VLC."
+    IDS_VIEWERVLC_MISSING_BODY "Nainštalujte VLC media player alebo nastavte inštalačný priečinok VLC v Preferences > Plugins > VLC Viewer."
+    IDS_VIEWERVLC_MISSING_LINK "<a href=""https://www.videolan.org/vlc/"">Stiahnite si prehrávač médií VLC</a>"
+    IDS_VIEWERVLC_MISSING_LINK_LABEL "Stiahnite si prehrávač médií VLC"
+    IDS_VIEWERVLC_FILEDLG_FILTER_PNG "Súbory PNG (*.png)\0*.png\0Všetky súbory (*.*)\0*.*\0"
+    IDS_VIEWERVLC_FILEDLG_TITLE_SNAPSHOT "Uložiť snímku"
+    IDS_VIEWERVLC_DETAILS_CONFIGURED_PATH_INVALID_FMT "Nakonfigurovaná cesta VLC nie je inštalačný priečinok VLC:\r\n{0}"
+    IDS_VIEWERVLC_DETAILS_INSTALL_NOT_FOUND "Inštalácia VLC sa nenašla."
+    IDS_VIEWERVLC_DETAILS_EXPORTS_MISSING "Nepodarilo sa vyriešiť exporty libVLC z libvlc.dll."
+    IDS_VIEWERVLC_DETAILS_LIBVLC_NEW_FAILED "libvlc_new zlyhal."
+    IDS_VIEWERVLC_DETAILS_PATH_EMPTY "Cesta k súboru je prázdna."
+    IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE "Tento súbor nie je dostupný ako lokálna cesta k súboru."
+    IDS_VIEWERVLC_DETAILS_LIBVLC_UNAVAILABLE "libVLC nie je k dispozícii."
+    IDS_VIEWERVLC_DETAILS_UTF8_PATH_FAILED "Nepodarilo sa konvertovať cestu k súboru na UTF-8."
+    IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED "libvlc_media_new_path zlyhala."
+    IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED "libvlc_media_player_new_from_media zlyhal."
+    IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT "libvlc_media_player_play zlyhal (kód {0})."
+    IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Snímka zlyhala (kód {0})."
+    IDS_VIEWERVLC_LOADING_TITLE "Spúšťa sa VLC..."
+    IDS_VIEWERVLC_LOADING_BODY "Načítava sa motor VLC. Prehrávanie sa spustí automaticky."
+END

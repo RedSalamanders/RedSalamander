@@ -33,7 +33,7 @@ constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
 
 [[nodiscard]] const wchar_t* LocalizedPluginName() noexcept
 {
-    static const std::wstring name = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_NAME);
+    static const std::wstring name = LoadEmbeddedStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_NAME);
     return name.c_str();
 }
 

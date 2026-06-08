@@ -1,3 +1,18 @@
+bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long warningCount, unsigned long errorCount) noexcept
+{
+    if (IsCancellationStatus(resultHr))
+    {
+        return true;
+    }
+
+    if (FAILED(resultHr))
+    {
+        return false;
+    }
+
+    return warningCount == 0 && errorCount == 0;
+}
+
 FolderWindow::FileOperationState::FileOperationState(FolderWindow& owner) : _owner(owner)
 {
     _uiLifetime = std::make_shared<int>(0);
@@ -31,6 +46,12 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
     {
         Debug::Error(L"FolderWindow StartOperation sourcePath empty");
         return S_FALSE;
+    }
+
+    if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, operation))
+    {
+        Debug::Error(L"FolderWindow StartOperation provider rejected same-filesystem operation op={}", static_cast<unsigned int>(operation));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
     const std::wstring& sourcePluginId      = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginId : _owner._rightPane.pluginId;
@@ -859,6 +880,14 @@ void FolderWindow::FileOperationState::DismissCompletedTask(uint64_t taskId) noe
     }
 }
 
+#ifdef ENABLE_TESTS
+void FolderWindow::FileOperationState::DebugAppendCompletedTaskForSelfTest(CompletedTaskSummary summary) noexcept
+{
+    std::scoped_lock lock(_mutex);
+    _completedTasks.push_back(std::move(summary));
+}
+#endif
+
 uint64_t FolderWindow::FileOperationState::CreateOrUpdateInformationalTask(const FolderWindow::InformationalTaskUpdate& update) noexcept
 {
     bool createdNew    = false;
@@ -900,7 +929,7 @@ uint64_t FolderWindow::FileOperationState::CreateOrUpdateInformationalTask(const
         }
 
         const bool autoDismissSuccess = _owner._settings ? GetAutoDismissSuccessFromSettings(*_owner._settings) : false;
-        if (autoDismissSuccess && update.finished && (SUCCEEDED(update.resultHr) || IsCancellationStatus(update.resultHr)))
+        if (autoDismissSuccess && update.finished && IsAutoDismissableFileOperationCompletion(update.resultHr, 0, 0))
         {
             _informationalTasks.erase(std::remove_if(_informationalTasks.begin(),
                                                      _informationalTasks.end(),
@@ -1006,13 +1035,13 @@ void FolderWindow::FileOperationState::SetAutoDismissSuccess(bool enabled) noexc
             _completedTasks.erase(std::remove_if(_completedTasks.begin(),
                                                  _completedTasks.end(),
                                                  [](const CompletedTaskSummary& summary) noexcept
-            { return SUCCEEDED(summary.resultHr) || IsCancellationStatus(summary.resultHr); }),
+            { return IsAutoDismissableFileOperationCompletion(summary.resultHr, summary.warningCount, summary.errorCount); }),
                                   _completedTasks.end());
 
             _informationalTasks.erase(std::remove_if(_informationalTasks.begin(),
                                                      _informationalTasks.end(),
                                                      [](const FolderWindow::InformationalTaskUpdate& task) noexcept
-            { return task.finished && (SUCCEEDED(task.resultHr) || IsCancellationStatus(task.resultHr)); }),
+            { return task.finished && IsAutoDismissableFileOperationCompletion(task.resultHr, 0, 0); }),
                                       _informationalTasks.end());
 
             if (_tasks.empty() && _completedTasks.empty() && _informationalTasks.empty())

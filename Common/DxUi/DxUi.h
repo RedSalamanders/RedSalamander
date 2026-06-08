@@ -270,6 +270,8 @@ struct ContextMenuSessionCallbacks
 // (ThemePalette is defined later in this header; forward declaration suffices for reference parameter.)
 struct ThemePalette;
 
+using ContextMenuClosedCallback = std::function<void(std::optional<int> commandId)>;
+
 class ContextMenu final
 {
 public:
@@ -278,6 +280,14 @@ public:
                                                  std::span<const MenuFlyoutItem> items,
                                                  const ThemePalette& theme,
                                                  const ContextMenuSessionCallbacks& sessionCallbacks = {});
+    // Shows a context menu without a nested message loop. The callback runs on
+    // the owning UI thread when an item is invoked or the menu is dismissed.
+    [[nodiscard]] static bool ShowAsync(HWND ownerHwnd,
+                                        POINT screenPoint,
+                                        std::span<const MenuFlyoutItem> items,
+                                        const ThemePalette& theme,
+                                        ContextMenuClosedCallback onClosed,
+                                        const ContextMenuSessionCallbacks& sessionCallbacks = {});
 };
 
 // Persistent menu file tracing is compiled out of retail builds. To reactivate
@@ -766,6 +776,90 @@ struct ButtonVisualStyle
     float textOffsetXDip = 0.0f;
     float textOffsetYDip = 0.0f;
 };
+
+inline constexpr float kButtonCornerRadiusDip           = 4.0f;
+inline constexpr float kButtonDropDownChevronWidthDip   = 20.0f;
+inline constexpr float kButtonSplitDropDownSegmentDip   = 32.0f;
+inline constexpr wchar_t kButtonDropDownChevronGlyph    = L'\xE70D';
+
+enum class ButtonChromeFocusRing : uint8_t
+{
+    Standard,
+    Single,
+};
+
+struct ButtonChromeLayout
+{
+    D2D1_RECT_F textRect{};
+    D2D1_RECT_F chevronRect{};
+    float dividerX  = 0.0f;
+    bool hasChevron = false;
+    bool hasDivider = false;
+};
+
+struct ButtonChromeCustomStyle
+{
+    D2D1_COLOR_F fill   = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F border = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F focus  = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F text   = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    bool showFill       = true;
+    bool showBorder     = false;
+    bool showFocus      = false;
+    float cornerRadiusDip = kButtonCornerRadiusDip;
+    float borderStrokeDip = 1.0f;
+    float focusOutsetDip  = 2.0f;
+    float focusStrokeDip  = 2.0f;
+    float textOffsetXDip  = 0.0f;
+    float textOffsetYDip  = 0.0f;
+    ButtonChromeFocusRing focusRing = ButtonChromeFocusRing::Single;
+};
+
+struct ButtonChromeResolvedStyle
+{
+    D2D1_COLOR_F fill   = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F border = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F focus  = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    D2D1_COLOR_F text   = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
+    bool showFill       = true;
+    bool showBorder     = false;
+    bool showFocus      = false;
+    float cornerRadiusDip = kButtonCornerRadiusDip;
+    float borderStrokeDip = 1.0f;
+    float focusOutsetDip  = 2.0f;
+    float focusStrokeDip  = 2.0f;
+    float textOffsetXDip  = 0.0f;
+    float textOffsetYDip  = 0.0f;
+    ButtonChromeFocusRing focusRing = ButtonChromeFocusRing::Standard;
+};
+
+struct ButtonChromeDrawSpec
+{
+    D2D1_RECT_F bounds{};
+    std::wstring_view text;
+    ButtonVariant variant = ButtonVariant::Standard;
+    bool primary          = false;
+    bool enabled          = true;
+    bool hovered          = false;
+    bool pressed          = false;
+    bool focused          = false;
+    bool keyboardFocused  = false;
+    float hoverStrength   = -1.0f;
+    float focusStrength   = -1.0f;
+    float scale           = 1.0f;
+    wchar_t chevronGlyph  = kButtonDropDownChevronGlyph;
+    std::optional<ButtonChromeCustomStyle> customStyle;
+};
+
+[[nodiscard]] float GetButtonChromeDropDownSegmentWidthDip(ButtonVariant variant) noexcept;
+[[nodiscard]] ButtonChromeLayout ComputeButtonChromeLayout(const D2D1_RECT_F& bounds, ButtonVariant variant, float scale = 1.0f) noexcept;
+[[nodiscard]] ButtonChromeResolvedStyle ResolveButtonChromeResolvedStyle(const ThemePalette& theme, const ButtonChromeDrawSpec& spec) noexcept;
+void DrawButtonChrome(ID2D1RenderTarget* target,
+                      ID2D1SolidColorBrush* brush,
+                      IDWriteTextFormat* textFormat,
+                      IDWriteTextFormat* iconFormat,
+                      const ThemePalette& theme,
+                      const ButtonChromeDrawSpec& spec) noexcept;
 
 struct LabelVisualStyle
 {
@@ -1429,6 +1523,8 @@ public:
     void SetMnemonicTarget(Control* target) noexcept;
 
     void Paint(WindowHost& host) const override;
+    Control* HitTest(D2D1_POINT_2F point) override;
+    const Control* HitTest(D2D1_POINT_2F point) const override;
     bool OnMnemonic(WindowHost& host) override;
 
 private:
@@ -1497,8 +1593,8 @@ private:
     [[nodiscard]] bool InvokeDropDown(WindowHost& host);
 
     static constexpr uint64_t _interactionAnimationDurationMs = 140u;
-    static constexpr float _dropDownChevronWidthDip           = 20.0f;
-    static constexpr float _splitDropDownWidthDip             = 32.0f;
+    static constexpr float _dropDownChevronWidthDip           = kButtonDropDownChevronWidthDip;
+    static constexpr float _splitDropDownWidthDip             = kButtonSplitDropDownSegmentDip;
     std::wstring _text;
     std::wstring _tooltipText;
     std::function<void()> _onClick;
@@ -1709,6 +1805,7 @@ public:
     void SetOnOpenItem(OpenItemCallback onOpenItem);
     void SetOnHoverChanged(HoverChangedCallback onHoverChanged);
     void SetSelectedIndex(std::optional<size_t> index) noexcept;
+    void ClearInteractionState() noexcept;
     void SetRetainSelectedIndexOnFocusLost(bool retain) noexcept;
     [[nodiscard]] std::optional<size_t> GetSelectedIndex() const noexcept;
     [[nodiscard]] std::optional<size_t> GetHoveredIndex() const noexcept;
@@ -2854,7 +2951,6 @@ private:
     mutable std::vector<size_t> _columnDisplayOrder;
     mutable std::vector<size_t> _columnDisplayIndexByModel;
     mutable std::vector<GridGroupDesc> _cachedGroups;
-    mutable std::vector<VisibleBodyItem> _cachedVisibleItems;
     GridSelectionModel _selectionModel;
     GridSelectionMode _selectionMode = GridSelectionMode::Extended;
     GridVisualMode _visualMode       = GridVisualMode::Standard;
@@ -3088,6 +3184,7 @@ public:
     [[nodiscard]] bool HasActiveTextInput() const noexcept;
     [[nodiscard]] HWND GetTextInputHwnd() const noexcept;
     void CaptureMouse(Control* control) noexcept;
+    [[nodiscard]] Control* GetCapturedControl() const noexcept;
     void ReleaseMouseCapture() noexcept;
     [[nodiscard]] HWND GetHwnd() const noexcept;
     [[nodiscard]] D2D1_RECT_F GetClientBoundsDip() const noexcept;

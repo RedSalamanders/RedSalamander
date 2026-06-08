@@ -4747,11 +4747,80 @@ struct CaseFolders
     std::filesystem::path right;
 };
 
+void ClearAttributesForRemoval(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return;
+    }
+
+    const DWORD attrs = GetFileAttributesW(path.c_str());
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+    {
+        return;
+    }
+
+    const DWORD writableAttrs = attrs & ~(FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+    static_cast<void>(SetFileAttributesW(path.c_str(), writableAttrs == 0 ? FILE_ATTRIBUTE_NORMAL : writableAttrs));
+}
+
+void ClearTreeAttributesForRemoval(const std::filesystem::path& root) noexcept
+{
+    std::error_code ec;
+    if (! std::filesystem::exists(root, ec))
+    {
+        return;
+    }
+
+    std::vector<std::filesystem::path> paths;
+    for (std::filesystem::recursive_directory_iterator it(root, std::filesystem::directory_options::skip_permission_denied, ec), end; it != end;)
+    {
+        paths.push_back(it->path());
+        it.increment(ec);
+        if (ec)
+        {
+            ec.clear();
+        }
+    }
+
+    for (auto it = paths.rbegin(); it != paths.rend(); ++it)
+    {
+        ClearAttributesForRemoval(*it);
+    }
+
+    ClearAttributesForRemoval(root);
+}
+
+[[nodiscard]] bool RemoveCaseRootForSetup(const std::filesystem::path& caseRoot) noexcept
+{
+    std::error_code ec;
+    if (! std::filesystem::exists(caseRoot, ec))
+    {
+        return true;
+    }
+
+    std::filesystem::remove_all(caseRoot, ec);
+    if (! ec && ! std::filesystem::exists(caseRoot, ec))
+    {
+        return true;
+    }
+
+    ClearTreeAttributesForRemoval(caseRoot);
+    ec.clear();
+    std::filesystem::remove_all(caseRoot, ec);
+    return ! ec && ! std::filesystem::exists(caseRoot, ec);
+}
+
 [[nodiscard]] std::optional<CaseFolders> CreateCaseFolders(const std::filesystem::path& base, std::wstring_view caseName) noexcept
 {
     std::filesystem::path caseRoot = base / std::filesystem::path(caseName);
     std::filesystem::path left     = caseRoot / L"left";
     std::filesystem::path right    = caseRoot / L"right";
+
+    if (! RemoveCaseRootForSetup(caseRoot))
+    {
+        return std::nullopt;
+    }
 
     SelfTest::EnsureDirectory(left);
     SelfTest::EnsureDirectory(right);

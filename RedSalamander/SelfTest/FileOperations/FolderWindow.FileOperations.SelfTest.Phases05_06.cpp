@@ -1,3 +1,592 @@
+case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder:
+{
+    using Task              = FolderWindow::FileOperationState::Task;
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 120'000ull))
+    {
+        Fail(L"FileOps_CopyMergeIntoExistingFolder timed out.");
+        return true;
+    }
+
+    const std::filesystem::path srcRoot      = state.tempRoot / L"clearflow-copy-merge-src";
+    const std::filesystem::path dstRoot      = state.tempRoot / L"clearflow-copy-merge-dst";
+    const std::filesystem::path srcFoo       = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo       = dstRoot / L"Foo";
+    const std::filesystem::path srcConflict  = srcFoo / L"a.bin";
+    const std::filesystem::path dstConflict  = dstFoo / L"a.bin";
+    const std::filesystem::path srcNested    = srcFoo / L"nested" / L"c.bin";
+    const std::filesystem::path dstNested    = dstFoo / L"nested" / L"c.bin";
+    const std::filesystem::path dstKeep      = dstFoo / L"keep.bin";
+
+    if (state.stepState == 0)
+    {
+        if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot))
+        {
+            Fail(L"Failed to reset copy-merge directories.");
+            return true;
+        }
+
+        if (! WriteTestFile(srcConflict, 16 * 1024) || ! WriteTestFile(srcNested, 8 * 1024) || ! WriteTestFile(dstConflict, 1024) ||
+            ! WriteTestFile(dstKeep, 2 * 1024))
+        {
+            Fail(L"Failed to seed copy-merge test tree.");
+            return true;
+        }
+
+        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+        state.taskA                 = StartFileOperationAndGetId(state.fileOps,
+                                                                 FILESYSTEM_COPY,
+                                                                 FolderWindow::Pane::Left,
+                                                                 FolderWindow::Pane::Right,
+                                                                 state.fsLocal,
+                                                                 {srcFoo},
+                                                                 dstRoot,
+                                                                 flags,
+                                                                 false,
+                                                                 0,
+                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        if (! state.taskA.has_value())
+        {
+            Fail(L"Failed to start copy-merge task.");
+            return true;
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (state.stepState == 1)
+    {
+        Task* task        = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+        const auto prompt = TryGetConflictPromptCopy(task);
+        if (! prompt.has_value())
+        {
+            return false;
+        }
+
+        if (prompt->bucket != Task::ConflictBucket::Exists || ! PromptHasAction(prompt.value(), Task::ConflictAction::Overwrite))
+        {
+            Fail(L"Copy-merge expected an Exists prompt with Overwrite for the colliding file.");
+            return true;
+        }
+
+        const std::wstring expectedSource = NormalizePathForCompare(srcConflict.wstring());
+        const std::wstring expectedDest   = NormalizePathForCompare(dstConflict.wstring());
+        const std::wstring actualSource   = NormalizePathForCompare(prompt->sourcePath);
+        const std::wstring actualDest     = NormalizePathForCompare(prompt->destinationPath);
+        if (actualSource != expectedSource || actualDest != expectedDest)
+        {
+            Fail(std::format(L"Copy-merge prompted for the wrong item. expected='{}' -> '{}' actual='{}' -> '{}'.",
+                             expectedSource,
+                             expectedDest,
+                             actualSource,
+                             actualDest));
+            return true;
+        }
+
+        task->SubmitConflictDecision(Task::ConflictAction::Overwrite, false);
+        state.markerTick = nowTick;
+        state.stepState  = 2;
+        return false;
+    }
+
+    if (state.stepState == 2)
+    {
+        if (Task* task = state.fileOps && state.taskA.has_value() ? state.fileOps->FindTask(state.taskA.value()) : nullptr)
+        {
+            if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
+            {
+                const std::wstring actualSource = NormalizePathForCompare(prompt->sourcePath);
+                if ((nowTick - state.markerTick) < 500ull && actualSource == NormalizePathForCompare(srcConflict.wstring()))
+                {
+                    return false;
+                }
+
+                Fail(std::format(L"Copy-merge raised an unexpected second prompt for '{}'.", actualSource));
+                return true;
+            }
+        }
+
+        const auto it = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+        if (it == state.completedTasks.end())
+        {
+            return false;
+        }
+
+        if (FAILED(it->second.hr))
+        {
+            Fail(std::format(L"Copy-merge task failed: 0x{:08X}.", static_cast<unsigned long>(it->second.hr)));
+            return true;
+        }
+
+        if (it->second.conflictPromptCount != 1u)
+        {
+            Fail(std::format(L"Copy-merge expected exactly one file conflict prompt, saw {}.", it->second.conflictPromptCount));
+            return true;
+        }
+
+        if (! FilesEqualBytes(srcConflict, dstConflict) || ! FilesEqualBytes(srcNested, dstNested) || ! FileSizeEquals(dstKeep, 2 * 1024))
+        {
+            Fail(L"Copy-merge destination tree failed byte-for-byte integrity checks.");
+            return true;
+        }
+
+        Debug::Perf::Emit(L"FileOps.SelfTest.CopyMergeIntoExistingFolder.PromptCount", L"", 0u, it->second.conflictPromptCount, 0u, S_OK);
+        NextStep(state, SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume);
+        return false;
+    }
+
+    return false;
+}
+case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume:
+{
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 120'000ull))
+    {
+        Fail(L"FileOps_MoveMergeIntoExistingFolderSameVolume timed out.");
+        return true;
+    }
+
+    const std::filesystem::path srcRoot   = state.tempRoot / L"clearflow-move-merge-src";
+    const std::filesystem::path dstRoot   = state.tempRoot / L"clearflow-move-merge-dst";
+    const std::filesystem::path srcFoo    = srcRoot / L"Foo";
+    const std::filesystem::path dstFoo    = dstRoot / L"Foo";
+    const std::filesystem::path srcFile   = srcFoo / L"new.bin";
+    const std::filesystem::path dstFile   = dstFoo / L"new.bin";
+    const std::filesystem::path srcNested = srcFoo / L"nested" / L"child.bin";
+    const std::filesystem::path dstNested = dstFoo / L"nested" / L"child.bin";
+    const std::filesystem::path dstKeep   = dstFoo / L"keep.bin";
+
+    if (state.stepState == 0)
+    {
+        if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot))
+        {
+            Fail(L"Failed to reset move-merge directories.");
+            return true;
+        }
+
+        if (! WriteTestFile(srcFile, 4 * 1024) || ! WriteTestFile(srcNested, 6 * 1024) || ! WriteTestFile(dstKeep, 3 * 1024))
+        {
+            Fail(L"Failed to seed move-merge test tree.");
+            return true;
+        }
+
+        const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
+        state.taskB                 = StartFileOperationAndGetId(state.fileOps,
+                                                                 FILESYSTEM_MOVE,
+                                                                 FolderWindow::Pane::Left,
+                                                                 FolderWindow::Pane::Right,
+                                                                 state.fsLocal,
+                                                                 {srcFoo},
+                                                                 dstRoot,
+                                                                 flags,
+                                                                 false,
+                                                                 0,
+                                                                 FolderWindow::FileOperationState::ExecutionMode::PerItem);
+        if (! state.taskB.has_value())
+        {
+            Fail(L"Failed to start same-volume move-merge task.");
+            return true;
+        }
+
+        state.stepState = 1;
+        return false;
+    }
+
+    if (state.stepState == 1)
+    {
+        if (auto* task = state.fileOps && state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr)
+        {
+            if (const auto prompt = TryGetConflictPromptCopy(task); prompt.has_value())
+            {
+                Fail(std::format(L"Same-volume move-merge unexpectedly prompted for '{}' -> '{}'.", prompt->sourcePath, prompt->destinationPath));
+                return true;
+            }
+        }
+
+        const auto it = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
+        if (it == state.completedTasks.end())
+        {
+            return false;
+        }
+
+        if (FAILED(it->second.hr))
+        {
+            Fail(std::format(L"Same-volume move-merge task failed: 0x{:08X}.", static_cast<unsigned long>(it->second.hr)));
+            return true;
+        }
+
+        std::error_code ec;
+        if (std::filesystem::exists(srcFoo, ec))
+        {
+            Fail(L"Same-volume move-merge left the source directory behind.");
+            return true;
+        }
+
+        if (it->second.conflictPromptCount != 0u || ! FileSizeEquals(dstFile, 4 * 1024) || ! FileSizeEquals(dstNested, 6 * 1024) ||
+            ! FileSizeEquals(dstKeep, 3 * 1024))
+        {
+            Fail(std::format(L"Same-volume move-merge integrity failure (promptCount={}).", it->second.conflictPromptCount));
+            return true;
+        }
+
+        Debug::Perf::Emit(L"FileOps.SelfTest.MoveMergeIntoExistingFolderSameVolume.PromptCount", L"", 0u, it->second.conflictPromptCount, 0u, S_OK);
+        NextStep(state, SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder);
+        return false;
+    }
+
+    return false;
+}
+case SelfTestState::Step::FileOps_ReparseDirectoryMergeIntoExistingFolder:
+{
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 60'000ull))
+    {
+        Fail(L"FileOps_ReparseDirectoryMergeIntoExistingFolder timed out.");
+        return true;
+    }
+
+    const std::filesystem::path srcRoot       = state.tempRoot / L"clearflow-reparse-merge-src";
+    const std::filesystem::path dstRoot       = state.tempRoot / L"clearflow-reparse-merge-dst";
+    const std::filesystem::path targetRoot    = state.tempRoot / L"clearflow-reparse-merge-target";
+    const std::filesystem::path targetFile    = targetRoot / L"payload.bin";
+    const std::filesystem::path sourceLink    = srcRoot / L"linkToTarget";
+    const std::filesystem::path destinationLink = dstRoot / L"linkToTarget";
+
+    if (state.stepState == 0)
+    {
+        static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), R"json({"reparsePointPolicy":"copyReparse"})json"));
+
+        if (! RecreateEmptyDirectory(srcRoot) || ! RecreateEmptyDirectory(dstRoot) || ! RecreateEmptyDirectory(targetRoot) || ! WriteTestFile(targetFile, 512))
+        {
+            Fail(L"Failed to reset reparse merge directories.");
+            return true;
+        }
+
+        if (! TryCreateJunction(sourceLink, targetRoot))
+        {
+            Fail(L"Failed to create source junction for reparse merge test.");
+            return true;
+        }
+
+        std::error_code ec;
+        std::filesystem::create_directories(destinationLink, ec);
+        if (ec)
+        {
+            Fail(L"Failed to create existing destination directory for reparse merge test.");
+            return true;
+        }
+
+        const HRESULT copyHr = state.fsLocal->CopyItem(
+            sourceLink.c_str(), destinationLink.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE), nullptr, nullptr, nullptr);
+        if (FAILED(copyHr))
+        {
+            Fail(std::format(L"Reparse merge copy failed: 0x{:08X}.", static_cast<unsigned long>(copyHr)));
+            return true;
+        }
+
+        const auto tag = TryGetReparseTag(destinationLink);
+        if (! tag.has_value() || tag.value() != IO_REPARSE_TAG_MOUNT_POINT)
+        {
+            Fail(L"Reparse merge destination did not become a directory junction.");
+            return true;
+        }
+
+        const auto copiedTarget = TryGetDirectoryReparseTargetAbsolute(destinationLink);
+        if (! copiedTarget.has_value())
+        {
+            Fail(L"Reparse merge destination target could not be read.");
+            return true;
+        }
+
+        const std::wstring expectedTarget = NormalizePathForCompare(std::filesystem::absolute(targetRoot).wstring());
+        if (copiedTarget.value() != expectedTarget)
+        {
+            Fail(std::format(L"Reparse merge target mismatch. expected='{}' actual='{}'.", expectedTarget, copiedTarget.value()));
+            return true;
+        }
+
+        NextStep(state, SelfTestState::Step::FileOps_ProviderCapabilityMatrix);
+        return false;
+    }
+
+    return false;
+}
+case SelfTestState::Step::FileOps_ProviderCapabilityMatrix:
+{
+    const ULONGLONG nowTick = GetTickCount64();
+    if (HasTimedOut(state, nowTick, 30'000ull))
+    {
+        Fail(L"FileOps_ProviderCapabilityMatrix timed out.");
+        return true;
+    }
+
+    if (state.stepState == 0)
+    {
+        const auto requireCapabilities = [&](IFileSystem* fs, std::wstring_view providerName, ProviderCapabilitySnapshot& snapshot) noexcept -> bool
+        {
+            std::wstring reason;
+            if (! TryReadProviderCapabilities(fs, snapshot, reason))
+            {
+                Fail(std::format(L"{} capabilities failed: {}.", providerName, reason));
+                return false;
+            }
+            return true;
+        };
+
+        ProviderCapabilitySnapshot localCaps{};
+        ProviderCapabilitySnapshot dummyCaps{};
+        ProviderCapabilitySnapshot sevenZipCaps{};
+        if (! requireCapabilities(state.fsLocal.get(), L"Local FileSystem", localCaps) ||
+            ! requireCapabilities(state.fsDummy.get(), L"FileSystemDummy", dummyCaps) ||
+            ! requireCapabilities(state.fs7z.get(), L"FileSystem7z", sevenZipCaps))
+        {
+            return true;
+        }
+
+        const auto require = [&](bool condition, std::wstring_view message) noexcept -> bool
+        {
+            if (! condition)
+            {
+                Fail(message);
+                return false;
+            }
+            return true;
+        };
+
+        if (! require(localCaps.copyOperation && localCaps.moveOperation && localCaps.deleteOperation && localCaps.read && localCaps.write,
+                      L"Local FileSystem should advertise copy/move/delete/read/write support.") ||
+            ! require(localCaps.copyMoveMax >= 1u && localCaps.deleteMax >= 1u && localCaps.deleteRecycleMax >= 1u,
+                      L"Local FileSystem should advertise positive concurrency limits.") ||
+            ! require(localCaps.exportCopyWildcard && localCaps.exportMoveWildcard && localCaps.importCopyWildcard && localCaps.importMoveWildcard,
+                      L"Local FileSystem should advertise wildcard cross-filesystem copy/move import/export."))
+        {
+            return true;
+        }
+
+        if (! require(dummyCaps.copyOperation && dummyCaps.moveOperation && dummyCaps.deleteOperation && dummyCaps.read && dummyCaps.write,
+                      L"FileSystemDummy should advertise copy/move/delete/read/write support.") ||
+            ! require(dummyCaps.copyMoveMax == 4u && dummyCaps.deleteMax == 8u && dummyCaps.deleteRecycleMax == 2u,
+                      L"FileSystemDummy should advertise the expected deterministic concurrency matrix.") ||
+            ! require(dummyCaps.exportCopyWildcard && dummyCaps.exportMoveWildcard && dummyCaps.importCopyWildcard && dummyCaps.importMoveWildcard,
+                      L"FileSystemDummy should advertise wildcard cross-filesystem copy/move import/export."))
+        {
+            return true;
+        }
+
+        if (! require(! sevenZipCaps.copyOperation && ! sevenZipCaps.moveOperation && ! sevenZipCaps.deleteOperation && sevenZipCaps.properties &&
+                          sevenZipCaps.read && ! sevenZipCaps.write,
+                      L"FileSystem7z should advertise read/properties only for same-provider operations.") ||
+            ! require(sevenZipCaps.copyMoveMax == 1u && sevenZipCaps.deleteMax == 1u && sevenZipCaps.deleteRecycleMax == 1u,
+                      L"FileSystem7z should advertise single-stream concurrency limits.") ||
+            ! require(sevenZipCaps.exportCopyWildcard && ! sevenZipCaps.exportMoveWildcard && ! sevenZipCaps.importCopyWildcard &&
+                          ! sevenZipCaps.importMoveWildcard,
+                      L"FileSystem7z should advertise export-copy only for cross-filesystem transfers."))
+        {
+            return true;
+        }
+
+        constexpr HRESULT kUnsupported = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        const wchar_t* sevenZipSources[] = {L"/missing.txt"};
+        const auto requireUnsupported = [&](HRESULT hr, std::wstring_view label) noexcept -> bool
+        {
+            if (hr != kUnsupported)
+            {
+                Fail(std::format(L"FileSystem7z {} should return ERROR_NOT_SUPPORTED, got 0x{:08X}.", label, static_cast<unsigned long>(hr)));
+                return false;
+            }
+            return true;
+        };
+
+        if (! requireUnsupported(state.fs7z->CopyItem(L"/missing.txt", L"/dest.txt", FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr), L"CopyItem") ||
+            ! requireUnsupported(state.fs7z->CopyItems(sevenZipSources, 1, L"/dest", FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr), L"CopyItems") ||
+            ! requireUnsupported(state.fs7z->MoveItem(L"/missing.txt", L"/dest.txt", FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr), L"MoveItem") ||
+            ! requireUnsupported(state.fs7z->MoveItems(sevenZipSources, 1, L"/dest", FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr), L"MoveItems") ||
+            ! requireUnsupported(state.fs7z->DeleteItem(L"/missing.txt", FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr), L"DeleteItem") ||
+            ! requireUnsupported(state.fs7z->DeleteItems(sevenZipSources, 1, FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr), L"DeleteItems"))
+        {
+            return true;
+        }
+
+        if (! state.fileOps)
+        {
+            Fail(L"Provider capability matrix test lost FileOperationState.");
+            return true;
+        }
+
+        std::vector<FolderWindow::FileOperationState::Task*> tasksBefore;
+        state.fileOps->CollectTasks(tasksBefore);
+        const HRESULT rejectedStart = state.fileOps->StartOperation(FILESYSTEM_COPY,
+                                                                    FolderWindow::Pane::Left,
+                                                                    std::nullopt,
+                                                                    state.fs7z,
+                                                                    {std::filesystem::path(L"/missing.txt")},
+                                                                    std::filesystem::path(L"/dest"),
+                                                                    FILESYSTEM_FLAG_NONE,
+                                                                    false,
+                                                                    0,
+                                                                    FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                                    false);
+        std::vector<FolderWindow::FileOperationState::Task*> tasksAfter;
+        state.fileOps->CollectTasks(tasksAfter);
+        if (rejectedStart != kUnsupported || tasksAfter.size() != tasksBefore.size())
+        {
+            Fail(std::format(L"Host StartOperation should reject 7z copy before task creation (hr=0x{:08X} before={} after={}).",
+                             static_cast<unsigned long>(rejectedStart),
+                             tasksBefore.size(),
+                             tasksAfter.size()));
+            return true;
+        }
+
+        wil::com_ptr<IFileSystemIO> dummyIo;
+        const HRESULT hrDummyIo = state.fsDummy->QueryInterface(IID_PPV_ARGS(dummyIo.addressof()));
+        if (FAILED(hrDummyIo) || ! dummyIo)
+        {
+            Fail(std::format(L"FileSystemDummy should expose IFileSystemIO for conformance reads (hr=0x{:08X}).", static_cast<unsigned long>(hrDummyIo)));
+            return true;
+        }
+
+        const std::wstring root = std::format(L"/clearflow-provider-matrix-{}", GetTickCount64());
+        const auto cleanup     = wil::scope_exit([&]() noexcept
+        {
+            static_cast<void>(state.fsDummy->DeleteItem(
+                root.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
+        });
+
+        const std::filesystem::path rootPath(root);
+        const std::filesystem::path copySrcFoo       = rootPath / L"copy-src" / L"Foo";
+        const std::filesystem::path copySrcNested    = copySrcFoo / L"nested";
+        const std::filesystem::path copyDstRoot      = rootPath / L"copy-dst";
+        const std::filesystem::path copyDstFoo       = copyDstRoot / L"Foo";
+        const std::filesystem::path copyDstKeep      = copyDstFoo / L"keep.txt";
+        const std::filesystem::path copyDstNew       = copyDstFoo / L"new.txt";
+        const std::filesystem::path copyDstNestedNew = copyDstFoo / L"nested" / L"child.txt";
+
+        const auto ensureDummyDir = [&](const std::filesystem::path& path) noexcept -> bool
+        {
+            return EnsureDummyFolderExists(state.fsDummy.get(), path.generic_wstring());
+        };
+
+        if (! ensureDummyDir(rootPath) || ! ensureDummyDir(rootPath / L"copy-src") || ! ensureDummyDir(copySrcFoo) || ! ensureDummyDir(copySrcNested) ||
+            ! ensureDummyDir(copyDstRoot) || ! ensureDummyDir(copyDstFoo))
+        {
+            Fail(L"FileSystemDummy provider conformance failed to seed copy-merge directories.");
+            return true;
+        }
+
+        if (! DummyWriteTextFile(state.fsDummy.get(), (copySrcFoo / L"new.txt").generic_wstring(), "new") ||
+            ! DummyWriteTextFile(state.fsDummy.get(), (copySrcNested / L"child.txt").generic_wstring(), "child") ||
+            ! DummyWriteTextFile(state.fsDummy.get(), copyDstKeep.generic_wstring(), "keep"))
+        {
+            Fail(L"FileSystemDummy provider conformance failed to seed copy-merge files.");
+            return true;
+        }
+
+        FileOpsRecursiveProgressRecorder copyProgress{};
+        const std::wstring copySrcFooText = copySrcFoo.generic_wstring();
+        const std::wstring copyDstRootText = copyDstRoot.generic_wstring();
+        const wchar_t* copySources[]      = {copySrcFooText.c_str()};
+        const HRESULT copyHr              = state.fsDummy->CopyItems(copySources,
+                                                        1,
+                                                        copyDstRootText.c_str(),
+                                                        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                        nullptr,
+                                                        &copyProgress,
+                                                        nullptr);
+        if (FAILED(copyHr))
+        {
+            Fail(std::format(L"FileSystemDummy directory copy merge failed: 0x{:08X}.", static_cast<unsigned long>(copyHr)));
+            return true;
+        }
+
+        std::string text;
+        if (! ReadFileTextFsIo(dummyIo, copyDstKeep, text) || text != "keep" || ! ReadFileTextFsIo(dummyIo, copyDstNew, text) || text != "new" ||
+            ! ReadFileTextFsIo(dummyIo, copyDstNestedNew, text) || text != "child")
+        {
+            Fail(L"FileSystemDummy directory copy merge failed byte-for-byte destination checks.");
+            return true;
+        }
+
+        if (copyProgress.progressCount == 0 || copyProgress.completedCount == 0 || copyProgress.streamCount == 0)
+        {
+            Fail(std::format(L"FileSystemDummy copy progress contract incomplete (progress={} completed={} streams={}).",
+                             copyProgress.progressCount,
+                             copyProgress.completedCount,
+                             copyProgress.streamCount));
+            return true;
+        }
+
+        const std::filesystem::path moveSrcFoo    = rootPath / L"move-src" / L"Foo";
+        const std::filesystem::path moveDstRoot   = rootPath / L"move-dst";
+        const std::filesystem::path moveDstFoo    = moveDstRoot / L"Foo";
+        const std::filesystem::path moveDstKeep   = moveDstFoo / L"keep.txt";
+        const std::filesystem::path moveDstNew    = moveDstFoo / L"moved.txt";
+        const std::filesystem::path moveSrcNew    = moveSrcFoo / L"moved.txt";
+        const std::filesystem::path moveSrcNested = moveSrcFoo / L"nested";
+        const std::filesystem::path moveDstNested = moveDstFoo / L"nested" / L"moved-child.txt";
+        if (! ensureDummyDir(rootPath / L"move-src") || ! ensureDummyDir(moveSrcFoo) || ! ensureDummyDir(moveSrcNested) || ! ensureDummyDir(moveDstRoot) ||
+            ! ensureDummyDir(moveDstFoo))
+        {
+            Fail(L"FileSystemDummy provider conformance failed to seed move-merge directories.");
+            return true;
+        }
+
+        if (! DummyWriteTextFile(state.fsDummy.get(), moveSrcNew.generic_wstring(), "moved") ||
+            ! DummyWriteTextFile(state.fsDummy.get(), (moveSrcNested / L"moved-child.txt").generic_wstring(), "moved-child") ||
+            ! DummyWriteTextFile(state.fsDummy.get(), moveDstKeep.generic_wstring(), "keep-move"))
+        {
+            Fail(L"FileSystemDummy provider conformance failed to seed move-merge files.");
+            return true;
+        }
+
+        FileOpsRecursiveProgressRecorder moveProgress{};
+        const std::wstring moveSrcFooText = moveSrcFoo.generic_wstring();
+        const std::wstring moveDstRootText = moveDstRoot.generic_wstring();
+        const wchar_t* moveSources[]      = {moveSrcFooText.c_str()};
+        const HRESULT moveHr              = state.fsDummy->MoveItems(moveSources,
+                                                        1,
+                                                        moveDstRootText.c_str(),
+                                                        static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE),
+                                                        nullptr,
+                                                        &moveProgress,
+                                                        nullptr);
+        if (FAILED(moveHr))
+        {
+            Fail(std::format(L"FileSystemDummy directory move merge failed: 0x{:08X}.", static_cast<unsigned long>(moveHr)));
+            return true;
+        }
+
+        unsigned long attributes = 0;
+        if (PathExistsFsIo(dummyIo, moveSrcFoo, &attributes))
+        {
+            Fail(L"FileSystemDummy directory move merge left the source directory behind.");
+            return true;
+        }
+
+        if (! ReadFileTextFsIo(dummyIo, moveDstKeep, text) || text != "keep-move" || ! ReadFileTextFsIo(dummyIo, moveDstNew, text) || text != "moved" ||
+            ! ReadFileTextFsIo(dummyIo, moveDstNested, text) || text != "moved-child")
+        {
+            Fail(L"FileSystemDummy directory move merge failed byte-for-byte destination checks.");
+            return true;
+        }
+
+        if (moveProgress.progressCount == 0 || moveProgress.completedCount == 0 || moveProgress.streamCount == 0)
+        {
+            Fail(std::format(L"FileSystemDummy move progress contract incomplete (progress={} completed={} streams={}).",
+                             moveProgress.progressCount,
+                             moveProgress.completedCount,
+                             moveProgress.streamCount));
+            return true;
+        }
+
+        Debug::Perf::Emit(L"FileOps.SelfTest.ProviderCapabilityMatrix.CopyProgressStreams", L"dummy", 0u, copyProgress.streamCount, 0u, S_OK);
+        Debug::Perf::Emit(L"FileOps.SelfTest.ProviderCapabilityMatrix.MoveProgressStreams", L"dummy", 0u, moveProgress.streamCount, 0u, S_OK);
+        NextStep(state, SelfTestState::Step::Phase5_PreCalcSettingsApplied);
+        return false;
+    }
+
+    return false;
+}
 case SelfTestState::Step::Phase5_PreCalcSettingsApplied:
 {
     const ULONGLONG nowTick = GetTickCount64();
@@ -191,6 +780,12 @@ case SelfTestState::Step::Phase5_PreCalcSettingsApplied:
                              completion.preCalcWorkerCountUsed));
             return true;
         }
+        Debug::Perf::Emit(L"FileOps.SelfTest.ClearflowPreCalcMultiRootWorkers",
+                          L"shape=8-root-delete workerBudget=4",
+                          completion.preCalcDurationUs,
+                          completion.preCalcWorkerCountUsed,
+                          completion.preCalcTotalBytes,
+                          completion.hr);
         if (! allPathsDeleted(buildPerfSources(L"precalc-settings-perf4")))
         {
             Fail(L"Worker-budget-4 pre-calc delete did not remove all perf source trees.");
@@ -239,6 +834,12 @@ case SelfTestState::Step::Phase5_PreCalcSettingsApplied:
                              completion.preCalcWorkerCountUsed));
             return true;
         }
+        Debug::Perf::Emit(L"FileOps.SelfTest.ClearflowPreCalcMultiRootWorkers",
+                          L"shape=8-root-delete workerBudget=8",
+                          completion.preCalcDurationUs,
+                          completion.preCalcWorkerCountUsed,
+                          completion.preCalcTotalBytes,
+                          completion.hr);
         if (! allPathsDeleted(buildPerfSources(L"precalc-settings-perf8")))
         {
             Fail(L"Worker-budget-8 pre-calc delete did not remove all perf source trees.");
@@ -329,6 +930,12 @@ case SelfTestState::Step::Phase5_PreCalcSettingsApplied:
                          completion.preCalcWorkerCountUsed));
         return true;
     }
+    Debug::Perf::Emit(L"FileOps.SelfTest.ClearflowPreCalcSingleRootFanOutWorkers",
+                      L"shape=single-root-wide-fanout workerBudget=4",
+                      completion.preCalcDurationUs,
+                      completion.preCalcWorkerCountUsed,
+                      completion.preCalcTotalBytes,
+                      completion.hr);
     if (! pathDeleted(preCalcFanOutBudget4))
     {
         Fail(L"Single-root worker-budget-4 pre-calc delete did not remove the source tree.");
@@ -393,6 +1000,37 @@ case SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot:
         FolderWindow::FileOperationState::Task* taskA = state.fileOps->FindTask(state.taskA.value());
         if (taskA && taskA->_preCalcInProgress.load(std::memory_order_acquire))
         {
+            const HWND popup = state.fileOps ? state.fileOps->GetPopupHwndForSelfTest() : nullptr;
+            if (! popup || IsWindow(popup) == FALSE)
+            {
+                Fail(L"Pre-calc copy task did not expose the File Operations popup for layout validation.");
+                return true;
+            }
+
+            FileOperationsPopupInternal::PopupLayoutDebugSnapshot layout{};
+            layout.taskId = state.taskA.value();
+            if (! DebugGetFileOperationsPopupLayoutSnapshot(popup, layout))
+            {
+                Fail(L"Failed to capture File Operations popup layout while copy pre-calc was in progress.");
+                return true;
+            }
+
+            if (layout.taskStatusKind != FileOperationsPopupInternal::TaskSnapshot::StatusKind::Calculating)
+            {
+                Fail(L"Pre-calc copy task layout should report the Calculating status.");
+                return true;
+            }
+
+            if (! layout.taskToggleCollapseVisible || ! layout.taskSkipVisible || ! layout.taskCancelVisible || ! layout.taskSpeedLimitVisible)
+            {
+                Fail(std::format(L"Pre-calc copy task should expose collapse, Skip, Speed Limit, and Cancel controls; collapse={} skip={} speedLimit={} cancel={}.",
+                                 layout.taskToggleCollapseVisible ? 1 : 0,
+                                 layout.taskSkipVisible ? 1 : 0,
+                                 layout.taskSpeedLimitVisible ? 1 : 0,
+                                 layout.taskCancelVisible ? 1 : 0));
+                return true;
+            }
+
             taskA->RequestCancel();
             state.stepState = 2;
         }

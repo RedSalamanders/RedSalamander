@@ -26,9 +26,9 @@ void SendScaledHeaderResizeDrag(HWND activePage, const RECT& headerRect) noexcep
 {
     using namespace std::chrono_literals;
 
-    constexpr size_t kRequiredStableSamples = 12u;
+    constexpr size_t kRequiredStableSamples = 24u;
 
-    const auto deadline          = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+    const auto deadline          = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
     uint64_t previousRenderCount = 0u;
     size_t stableSamples         = 0u;
     bool haveSample              = false;
@@ -259,6 +259,14 @@ private:
         {
             return focusedWindow;
         }
+        if (snapshotMatches)
+        {
+            if (const HWND prefs = GetPreferencesDialogHandle(); prefs && IsWindow(prefs) != FALSE)
+            {
+                SetActiveWindow(prefs);
+            }
+            static_cast<void>(DebugFocusPreferencesKeyboardSearchField());
+        }
 
         std::this_thread::sleep_for(20ms);
     }
@@ -270,6 +278,16 @@ private:
         outSnapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::SearchField && focusedWindow && IsWindow(focusedWindow) != FALSE)
     {
         return focusedWindow;
+    }
+    if (outSnapshot.currentCategory == kPrefCategoryKeyboard && outSnapshot.keyboardFocusTarget == PreferencesKeyboardDebugFocusTarget::SearchField)
+    {
+        static_cast<void>(DebugFocusPreferencesKeyboardSearchField());
+        PumpPendingMessages();
+        const HWND refocusedWindow = GetFocus();
+        if (refocusedWindow && IsWindow(refocusedWindow) != FALSE)
+        {
+            return refocusedWindow;
+        }
     }
 
     return nullptr;

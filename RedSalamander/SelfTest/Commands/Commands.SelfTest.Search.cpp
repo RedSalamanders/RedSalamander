@@ -164,6 +164,28 @@ struct BlockingDirectoryWatchCallback final : IFileSystemDirectoryWatchCallback
     return windows.empty() ? nullptr : windows.front();
 }
 
+void DismissVisibleOwnedDxUiContextMenusForSearchTest(HWND ownerHwnd) noexcept
+{
+    using namespace std::chrono_literals;
+
+    for (size_t attempt = 0u; attempt < 20u; ++attempt)
+    {
+        const std::vector<HWND> windows = FindVisibleOwnedDxUiContextMenuWindowsForSearchTest(ownerHwnd);
+        if (windows.empty())
+        {
+            return;
+        }
+
+        for (const HWND popup : windows)
+        {
+            PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+            PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+        }
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+}
+
 void CloseAllFindFilesWindowsForSearchTest() noexcept
 {
     for (size_t attempt = 0; attempt < 16u && DebugGetFindFilesWindowCount() != 0u; ++attempt)
@@ -524,7 +546,7 @@ void SendFindResultCommand(HWND findWindow, unsigned int commandId) noexcept
 
     if ((chord.modifiers & ShortcutManager::kModCtrl) != 0u)
     {
-        appendPart(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        appendPart(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
     if ((chord.modifiers & ShortcutManager::kModAlt) != 0u)
     {
@@ -600,6 +622,8 @@ enum class FindResultContextMenuOpenMode
         return false;
     }
 
+    DismissVisibleOwnedDxUiContextMenusForSearchTest(ownerWindow);
+
     std::atomic<bool> sawPopup{false};
     std::atomic<bool> stateReadable{false};
     std::atomic<bool> itemFound{false};
@@ -645,9 +669,17 @@ enum class FindResultContextMenuOpenMode
                                                                 static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
                 const int clickY = static_cast<int>(std::lround((itemRectDip.top + itemRectDip.bottom) * 0.5f * static_cast<float>(popupState.dpi) /
                                                                 static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
-                const BOOL postedDown = PostMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
-                const BOOL postedUp   = PostMessageW(popup, WM_LBUTTONUP, 0, MAKELPARAM(clickX, clickY));
-                itemInvoked.store(postedDown != FALSE && postedUp != FALSE, std::memory_order_release);
+                SendMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickX, clickY));
+                if (IsWindow(popup) != FALSE)
+                {
+                    SendMessageW(popup, WM_LBUTTONUP, 0, MAKELPARAM(clickX, clickY));
+                }
+                itemInvoked.store(true, std::memory_order_release);
+            }
+            else
+            {
+                std::this_thread::sleep_for(10ms);
+                continue;
             }
 
             const auto closeDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
@@ -2791,6 +2823,59 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestLocalProviderReselectAfterIndexStreamStaysResponsive(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::wstring leftPluginBefore                  = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const auto restorePane                               = wil::scope_exit([&]
+    {
+        if (! leftPluginBefore.empty())
+        {
+            static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        }
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"search_local_provider_reselect_after_index_stream: begin");
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"search_local_provider_reselect_after_index_stream: watch-drain setup begin");
+    if (! TestLocalPluginWatchUnwatchDrainsInflightCallback(state))
+    {
+        return false;
+    }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"search_local_provider_reselect_after_index_stream: index-stream setup begin");
+    if (! TestLocalSearchIndexEnumerateStopsAfterFirstCandidate(state))
+    {
+        return false;
+    }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"search_local_provider_reselect_after_index_stream: predecessor setup done");
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"search_local_provider_reselect_after_index_stream: setting left pane local provider");
+    const HRESULT hr = g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system");
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::Commands,
+        std::format(L"search_local_provider_reselect_after_index_stream: provider returned 0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(SUCCEEDED(hr), std::format(L"Local provider reselect failed after search-index stream selftest: 0x{:08X}.", static_cast<unsigned long>(hr)));
+    const ULONGLONG pumpUntil = GetTickCount64() + static_cast<ULONGLONG>(SelfTest::Scale(50ms).count());
+    while (GetTickCount64() < pumpUntil)
+    {
+        PumpPendingMessages();
+        Sleep(1);
+    }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"search_local_provider_reselect_after_index_stream: done");
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestFindDialogSearchOps(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -2814,6 +2899,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     {
         return false;
     }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: start");
 
     const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
@@ -2842,14 +2928,11 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    const std::filesystem::path root = suiteRoot / L"work" / L"find_dialog";
+    const std::filesystem::path root = suiteRoot / L"work" / (L"find_dialog_" + NewGuidText());
     const std::filesystem::path sub  = root / L"sub";
     const std::filesystem::path bulk = root / L"bulk";
 
-    std::error_code ec;
-    std::filesystem::remove_all(root, ec);
-    ec.clear();
-
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, std::format(L"find_dialog_search_ops: creating fixtures root='{}'", root.native()));
     state.Require(SelfTest::EnsureDirectory(sub), L"Failed to create find dialog subdirectory.");
     state.Require(SelfTest::EnsureDirectory(bulk), L"Failed to create find dialog bulk directory.");
     state.Require(SelfTest::WriteTextFile(root / L"a.jsonl", "{\"message\":\"needle alpha\"}"), L"Failed to create a.jsonl.");
@@ -2860,8 +2943,10 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     {
         return false;
     }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: fixture files ready");
 
     g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: setting left pane local provider");
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for find dialog test.");
     if (! state.failure.empty())
@@ -2880,6 +2965,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     });
     const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: navigating left pane");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for find dialog test.");
     state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)), L"Enumeration did not complete for find dialog test.");
@@ -2889,14 +2975,17 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     {
         return false;
     }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: left pane ready");
 
     if (const HWND existing = GetFindFilesWindowHandle(); existing && IsWindow(existing))
     {
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: closing existing Find window");
         PostMessageW(existing, WM_CLOSE, 0, 0);
         state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)), L"Existing Find window did not close before find dialog test.");
     }
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: dispatching find command");
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/find"), L"Shortcut dispatch failed for cmd/pane/find.");
 
     const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
@@ -2905,6 +2994,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     {
         return false;
     }
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: Find window opened");
 
     state.Require(! IsOwnedBy(findWindow, mainWindow), L"Find window should be an independent top-level window.");
     state.Require(DebugSetFindFilesWindowOptions(true, true, false, true, true), L"Failed to configure Find window options.");
@@ -3026,6 +3116,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     };
 
     const RenderSnapshot findRenderBefore = captureRenderCounts();
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting Find");
     state.Require(DebugConfigureFindFilesWindow(
                       root.native(), L"*.jsonl", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
                   L"Failed to configure Find window for wildcard search.");
@@ -3035,6 +3126,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     requireSnapshotCount(2u, L"Find", {root / L"a.jsonl", sub / L"c.jsonl"});
 
     const RenderSnapshot appendRenderBefore = captureRenderCounts();
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting Append");
     state.Require(
         DebugConfigureFindFilesWindow(root.native(), L"*.txt", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
         L"Failed to configure Find window for append search.");
@@ -3043,6 +3135,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     requireRenderedAfter(appendRenderBefore, L"Append");
     requireSnapshotCount(4u, L"Append", {root / L"a.jsonl", root / L"b.txt", sub / L"c.jsonl", sub / L"d.txt"});
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting Intersect");
     state.Require(
         DebugConfigureFindFilesWindow(root.native(), L"a*", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
         L"Failed to configure Find window for intersect search.");
@@ -3050,12 +3143,14 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     requireIdle(L"Intersect");
     requireSnapshotCount(1u, L"Intersect", {root / L"a.jsonl"});
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting Subtract");
     state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Subtract), L"Failed to start Subtract operation.");
     requireIdle(L"Subtract");
     requireSnapshotCount(0u, L"Subtract", {});
 
     std::wstring wildcardAllWithTranslatedControl = L"*";
     wildcardAllWithTranslatedControl.push_back(static_cast<wchar_t>(0x7F));
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting wildcard-all Find");
     state.Require(DebugConfigureFindFilesWindow(root.native(),
                                                 std::move(wildcardAllWithTranslatedControl),
                                                 L"",
@@ -3076,6 +3171,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                   std::format(L"Find dialog should sanitize translated control characters from wildcard-all patterns; got length {}.",
                               wildcardAllSnapshot.namePatternText.size()));
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting content Find");
     state.Require(DebugConfigureFindFilesWindow(
                       root.native(), L"", L"needle", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::TextLiteral),
                   L"Failed to configure Find window for content search.");
@@ -3096,7 +3192,9 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: bulk fixtures ready");
     const RenderSnapshot sortedRenderBefore = captureRenderCounts();
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting sorted Find");
     state.Require(DebugSetFindFilesWindowResultSort(0u, false), L"Failed to enable ascending Name sort for Find results.");
     state.Require(
         DebugConfigureFindFilesWindow(root.native(), L"*.txt", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
@@ -3107,6 +3205,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     requireRenderedAfter(sortedRenderBefore, L"sorted Find");
     requireSortedResultNames(50u, L"sorted Find");
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting cancellation Find");
     state.Require(
         DebugConfigureFindFilesWindow(
             root.native(), L"*.txt", L"ZZZ_NOT_PRESENT_123456789", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::TextRegex),
@@ -3586,9 +3685,11 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     const auto cleanup = wil::scope_exit([&] noexcept
     {
         CloseAllFindFilesWindowsForSearchTest();
+        static_cast<void>(CloseFileOperationsPopupForSelfTest(g_folderWindow.DebugGetFileOperationState()));
         g_settings.fileActions.viewers = viewersBefore;
         g_settings.fileActions.editors = editorsBefore;
         g_settings.shortcuts           = shortcutsBefore;
+        DebugReloadShortcutsFromSettings();
         g_settings.search              = previousSearch;
         HostClearTestPromptResultOverride();
         HostResetTestPromptRequestCount();
@@ -3599,6 +3700,12 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     });
 
     CloseAllFindFilesWindowsForSearchTest();
+    state.Require(CloseFileOperationsPopupForSelfTest(g_folderWindow.DebugGetFileOperationState()),
+                  L"Failed to quiesce pre-existing file operations before Find shortcut file-action validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
@@ -3747,6 +3854,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     state.Require(DebugWaitForFindFilesWindowIdle(static_cast<uint32_t>(SelfTest::Scale(10000ms).count())),
                   L"Find shortcut search did not become idle.");
     state.Require(DebugSelectFindFilesWindowResult(file.native()), L"Failed to select Find shortcut result.");
+    RaiseSelfTestWindowForInput(findWindow);
+    PumpPendingMessages();
     state.Require(DebugFocusFindFilesWindowTarget(FindFilesDebugFocusTarget::ResultsGrid), L"Failed to focus Find results grid for shortcut test.");
     FindFilesDebugSnapshot focusSnapshot{};
     state.Require(WaitForFindSnapshot([](const FindFilesDebugSnapshot& value) noexcept {
@@ -3989,6 +4098,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                                   overlayPaint.minimumDrawOpacity));
         state.Require(overlayPaint.lastDrawScrimOpacity >= 0.45f,
                       std::format(L"Find result actions help should apply a real modal scrim opacity; saw {:.3f}.", overlayPaint.lastDrawScrimOpacity));
+        state.Require(overlayPaint.usesSharedCloseChrome,
+                      L"Find result actions help close affordance should render through shared AlertOverlay/DxUi chrome while preserving the overlay glyph.");
         RECT originalFindWindowRect{};
         state.Require(GetWindowRect(findWindow, &originalFindWindowRect) != FALSE,
                       L"Failed to capture the Find window rectangle before modal backdrop resize validation.");
@@ -4149,16 +4260,25 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     const std::wstring clickedSectionText   = LoadStringResource(nullptr, IDS_FIND_RESULT_MENU_THIS_ITEM);
     const std::wstring selectionSectionText = FormatStringResource(nullptr, IDS_FIND_RESULT_MENU_SELECTION_FMT, 2u);
     const std::wstring clipboardCopyText    = LoadStringResource(nullptr, IDS_CMD_CLIPBOARD_COPY);
+    const std::wstring copyToDestinationText = LoadStringResource(nullptr, IDS_FIND_RESULT_MENU_COPY_TO_DESTINATION);
+    const std::wstring deleteText            = LoadStringResource(nullptr, IDS_CMD_MOVE_TO_RECYCLE_BIN);
     ShortcutManager resultMenuShortcutManager;
     state.Require(g_settings.shortcuts.has_value(), L"Find result context menu shortcut test should have active shortcut settings.");
     if (g_settings.shortcuts.has_value())
     {
         resultMenuShortcutManager.Load(g_settings.shortcuts.value());
     }
+    const auto resolveResultMenuShortcutText = [&](std::wstring_view commandId) -> std::wstring
+    {
+        const std::optional<ShortcutManager::ShortcutChord> chord = resultMenuShortcutManager.TryGetShortcutForCommand(commandId);
+        return chord.has_value() ? FormatFindResultMenuShortcutForTest(chord.value()) : std::wstring{};
+    };
     const std::optional<ShortcutManager::ShortcutChord> clipboardCopyChord =
         resultMenuShortcutManager.TryGetShortcutForCommand(L"cmd/pane/clipboardCopy");
     state.Require(clipboardCopyChord.has_value(), L"Find result context menu should resolve Clipboard Copy through ShortcutManager.");
     const std::wstring clipboardCopyAccel = clipboardCopyChord.has_value() ? FormatFindResultMenuShortcutForTest(clipboardCopyChord.value()) : std::wstring{};
+    const std::wstring copyToDestinationAccel = resolveResultMenuShortcutText(L"cmd/pane/copyToOtherPane");
+    const std::wstring deleteAccel            = resolveResultMenuShortcutText(L"cmd/pane/moveToRecycleBin");
     if (! state.failure.empty())
     {
         return false;
@@ -4309,10 +4429,20 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                               DescribeFindSnapshotBrief(explicitDestinationSnapshot)));
     state.Require(DebugSelectFindFilesWindowResult(explicitCopyFile.native()), L"Failed to select Find shortcut explicit copy result.");
     state.Require(DebugFocusFindFilesWindowTarget(FindFilesDebugFocusTarget::ResultsGrid), L"Failed to refocus Find results grid before explicit copy.");
-    SendFindResultCommand(findWindow, IDM_PANE_COPY_TO_OTHER);
+    state.Require(InvokeFindResultContextMenuItem(
+                      findWindow,
+                      findWindow,
+                      state,
+                      [&](const RedSalamander::DxUi::ContextMenuPopupDebugState& popupState) noexcept -> std::optional<size_t>
+    {
+        return FindMenuItemInSection(popupState, std::wstring_view{}, copyToDestinationText, copyToDestinationAccel);
+    },
+                      FindResultContextMenuOpenMode::Keyboard,
+                      L"Find result context menu Copy to Destination"),
+                  L"Find result context menu Copy to Destination failed.");
     const std::filesystem::path explicitCopiedFile = explicitRoot / explicitCopyFile.filename();
     state.Require(waitForPath(explicitCopiedFile, SelfTest::Scale(5000ms)),
-                  L"Find configured copy-to-other-pane command should honor the explicit destination navigation path.");
+                  L"Find context-menu copy-to-destination action should honor the explicit destination navigation path.");
     state.Require(! SelfTest::PathExists(rightRoot / explicitCopyFile.filename()),
                   L"Find explicit destination copy should not fall back to the opposite pane destination.");
     state.Require(SelfTest::PathExists(explicitCopyFile), L"Find explicit destination copy should keep the source file.");
@@ -4372,9 +4502,19 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
     state.Require(DebugSelectFindFilesWindowResult(deleteFile.native()), L"Failed to select Find shortcut delete result.");
     state.Require(DebugFocusFindFilesWindowTarget(FindFilesDebugFocusTarget::ResultsGrid), L"Failed to refocus Find results grid before delete.");
-    SendFindResultCommand(findWindow, IDM_PANE_MOVE_TO_RECYCLE_BIN);
+    state.Require(InvokeFindResultContextMenuItem(
+                      findWindow,
+                      findWindow,
+                      state,
+                      [&](const RedSalamander::DxUi::ContextMenuPopupDebugState& popupState) noexcept -> std::optional<size_t>
+    {
+        return FindMenuItemInSection(popupState, std::wstring_view{}, deleteText, deleteAccel);
+    },
+                      FindResultContextMenuOpenMode::Pointer,
+                      L"Find result context menu Move to Recycle Bin"),
+                  L"Find result context menu Move to Recycle Bin failed.");
     state.Require(waitForPathMissing(deleteFile, SelfTest::Scale(5000ms)),
-                  L"Find configured move-to-recycle command should delete the selected result through file operations.");
+                  L"Find context-menu move-to-recycle action should delete the selected result through file operations.");
     FindFilesDebugSnapshot afterRecycleDelete{};
     state.Require(WaitForFindSnapshot(
                       [&](const FindFilesDebugSnapshot& value) noexcept
@@ -6727,17 +6867,21 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         state.Require(WaitForFindSnapshot(
                           [&](const FindFilesDebugSnapshot& value) noexcept
         {
-            return value.usesDxUiHost && value.focusTarget == FindFilesDebugFocusTarget::RootCombo && value.rootText == expected &&
-                   value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
+            return value.usesDxUiHost && value.focusTarget == FindFilesDebugFocusTarget::RootCombo && value.rootNavigationEditMode &&
+                   value.rootNavigationText == expected && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
         },
                           SelfTest::Scale(2000ms),
                           &snapshot),
-                      std::format(L"Find root combo text should be '{}' after {} but was '{}'.", expected, label, snapshot.rootText));
+                      std::format(L"Find root navigation edit text should be '{}' after {} but was '{}'.",
+                                  expected,
+                                  label,
+                                  snapshot.rootNavigationText));
     };
 
     const auto prepareRootText = [&](std::wstring text) noexcept -> HWND
     {
         const size_t caretIndex = text.size();
+        const std::wstring expectedText = text;
         state.Require(DebugSetFindFilesWindowComboText(FindFilesDebugFocusTarget::RootCombo, std::move(text)),
                       L"Failed to set root combo text for editable-combo keyboard editing test.");
         state.Require(DebugFocusFindFilesWindowTarget(FindFilesDebugFocusTarget::RootCombo),
@@ -6745,11 +6889,38 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         PumpPendingMessages();
 
         HWND target = GetFocus();
+        state.Require(target != nullptr && IsWindow(target) != FALSE, L"Focused root navigation target is invalid before entering edit mode.");
+        if (target && IsWindow(target) != FALSE)
+        {
+            SendMessageW(target, WM_KEYDOWN, VK_RETURN, 0);
+            SendMessageW(target, WM_KEYUP, VK_RETURN, 0);
+        }
+        PumpPendingMessages();
+
+        FindFilesDebugSnapshot editSnapshot{};
+        state.Require(WaitForFindSnapshot(
+                          [&](const FindFilesDebugSnapshot& value) noexcept
+        {
+            return value.usesDxUiHost && value.focusTarget == FindFilesDebugFocusTarget::RootCombo && value.rootNavigationEditMode &&
+                   value.rootNavigationText == expectedText && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
+        },
+                          SelfTest::Scale(2000ms),
+                          &editSnapshot),
+                      std::format(L"Find root navigation edit host did not open with text '{}' but was '{}'.",
+                                  expectedText,
+                                  editSnapshot.rootNavigationText));
+
+        if (! state.failure.empty())
+        {
+            return nullptr;
+        }
+
+        target = GetFocus();
         if (! target || IsWindow(target) == FALSE)
         {
             target = GetFindFilesWindowHandle();
         }
-        state.Require(target != nullptr && IsWindow(target) != FALSE, L"Focused keyboard target is invalid for editable-combo keyboard editing test.");
+        state.Require(target != nullptr && IsWindow(target) != FALSE, L"Focused root navigation edit target is invalid for keyboard editing test.");
         if (target && IsWindow(target) != FALSE)
         {
             SendMessageW(target, EM_SETSEL, static_cast<WPARAM>(caretIndex), static_cast<LPARAM>(caretIndex));
@@ -6757,7 +6928,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
             DWORD selectionEnd   = 0u;
             SendMessageW(target, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
             state.Require(selectionStart == caretIndex && selectionEnd == caretIndex,
-                          std::format(L"Root combo bridge selection should collapse to {} but was {}..{}.",
+                          std::format(L"Root navigation edit selection should collapse to {} but was {}..{}.",
                                       caretIndex,
                                       selectionStart,
                                       selectionEnd));
@@ -11366,7 +11537,19 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     },
                       SelfTest::Scale(3000ms),
                       &reopened),
-                  L"Reopened combined Find view-state should survive repeated sort cycles before restored combined copy-after-sort-cycles validation.");
+                  std::format(L"Reopened combined Find view-state should survive repeated sort cycles before restored combined copy-after-sort-cycles validation. "
+                              L"expectedWidth>={:.1f}, rows={}/{}, cols={}/{}, cells={}/{}, selected={}, orderOk={}, containsSelected={}, {}",
+                              resizedFirstVisibleWidthDip - 1.0f,
+                              reopened.visibleResultRowCount,
+                              baselineVisibleRowCount,
+                              reopened.visibleResultColumnCount,
+                              baselineVisibleColumnCount,
+                              reopened.visibleResultCellCount,
+                              baselineVisibleCellCount,
+                              reopened.selectedResultCount,
+                              matchesExpectedOrder(reopened) ? 1 : 0,
+                              containsPath(reopened, selectedPath) ? 1 : 0,
+                              DescribeFindSnapshotBrief(reopened)));
     if (! state.failure.empty())
     {
         return false;
@@ -14561,6 +14744,34 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
     const DWORD processId                = GetCurrentProcessId();
     const auto baselineTopLevelWindows   = SnapshotTopLevelWindowsForProcess(processId);
+    const auto raiseMainWindowForInput = [&]() noexcept
+    {
+        const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT);
+        RaiseSelfTestWindowForInput(rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow);
+    };
+    const auto clearSyntheticTextInputModifiers = []() noexcept
+    {
+        std::array<BYTE, 256> keyboardState{};
+        if (GetKeyboardState(keyboardState.data()) == FALSE)
+        {
+            return;
+        }
+
+        for (const BYTE key : {static_cast<BYTE>(VK_SHIFT),
+                               static_cast<BYTE>(VK_LSHIFT),
+                               static_cast<BYTE>(VK_RSHIFT),
+                               static_cast<BYTE>(VK_CONTROL),
+                               static_cast<BYTE>(VK_LCONTROL),
+                               static_cast<BYTE>(VK_RCONTROL),
+                               static_cast<BYTE>(VK_MENU),
+                               static_cast<BYTE>(VK_LMENU),
+                               static_cast<BYTE>(VK_RMENU)})
+        {
+            keyboardState[key] = 0;
+        }
+        static_cast<void>(SetKeyboardState(keyboardState.data()));
+    };
+    raiseMainWindowForInput();
     FocusFolderViewPane(FolderWindow::Pane::Left);
     HWND folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Left folder view handle unavailable for quick-search test.");
@@ -14579,7 +14790,66 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                            paneLabel(g_folderWindow.GetFocusedPane()),
                            reinterpret_cast<uintptr_t>(folderView));
     };
+    const auto ensureLeftFolderViewFocus = [&](std::wstring_view context) noexcept -> bool
+    {
+        raiseMainWindowForInput();
+        if (const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT); rootWindow && GetActiveWindow() != rootWindow)
+        {
+            SetActiveWindow(rootWindow);
+        }
 
+        g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+        if (! folderView || IsWindow(folderView) == FALSE)
+        {
+            state.Require(false, std::format(L"Left folder view handle unavailable while restoring Quick Search focus during {}.", context));
+            return false;
+        }
+
+        SetFocus(folderView);
+        PumpPendingMessages();
+        const bool focused = WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1500ms));
+        state.Require(focused, std::format(L"Left folder view did not have stable focus during {}; {}.", context, focusDiagnostics()));
+        return focused;
+    };
+    const auto sendQuickSearchChar = [&](wchar_t character) noexcept
+    {
+        clearSyntheticTextInputModifiers();
+        SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(character), 0);
+        PumpPendingMessages();
+    };
+    const auto waitForQuickSearchSnapshot = [&](const auto& predicate,
+                                                std::chrono::milliseconds timeout,
+                                                FolderView::IncrementalSearchDebugSnapshot* outSnapshot) noexcept -> bool
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        FolderView::IncrementalSearchDebugSnapshot current{};
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, current) && predicate(current))
+            {
+                if (outSnapshot)
+                {
+                    *outSnapshot = std::move(current);
+                }
+                return true;
+            }
+            std::this_thread::sleep_for(10ms);
+        }
+
+        if (g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, current))
+        {
+            const bool matched = predicate(current);
+            if (outSnapshot)
+            {
+                *outSnapshot = std::move(current);
+            }
+            return matched;
+        }
+        return false;
+    };
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not have stable focus before Quick Search activation; {}.", focusDiagnostics()));
     if (! state.failure.empty())
@@ -14591,10 +14861,14 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     PumpPendingMessages();
 
     FolderView::IncrementalSearchDebugSnapshot snapshot{};
-    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
-                  L"Quick Search snapshot should be available after command activation.");
-    state.Require(snapshot.active, L"Quick Search command should activate integrated pane search.");
-    state.Require(snapshot.query.empty(), L"Quick Search command should start with an empty query.");
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query.empty();
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search command should activate integrated pane search with an empty query; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not retain stable focus after Quick Search activation; {}.", focusDiagnostics()));
     if (! state.failure.empty())
@@ -14602,14 +14876,21 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'a'), 0);
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'l'), 0);
-    PumpPendingMessages();
+    if (! ensureLeftFolderViewFocus(L"Quick Search initial typing"))
+    {
+        return false;
+    }
+    sendQuickSearchChar(L'a');
+    sendQuickSearchChar(L'l');
 
-    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
-                  L"Quick Search snapshot should be available after typing.");
-    state.Require(snapshot.active, L"Quick Search should remain active after typing.");
-    state.Require(snapshot.query == L"al", std::format(L"Quick Search query should be 'al'; got '{}'.", snapshot.query));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"al";
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search query should be 'al'; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
     state.Require(snapshot.focusedDisplayName == L"alpha.txt",
                   std::format(L"Quick Search should select the first starts-with match; got '{}'.", snapshot.focusedDisplayName));
     state.Require(snapshot.matches.size() == 3u, std::format(L"Quick Search should highlight three containing matches; got {}.", snapshot.matches.size()));
@@ -14643,6 +14924,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
     state.Require(WaitForNoNonBaselineWindows(processId, baselineTopLevelWindows, mainWindow, SelfTest::Scale(3000ms)),
                   L"Quick Search Enter activation left a transient top-level window open before no-match reactivation.");
+    raiseMainWindowForInput();
     FocusFolderViewPane(FolderWindow::Pane::Left);
     folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
     state.Require(folderView != nullptr && IsWindow(folderView) != FALSE,
@@ -14683,8 +14965,11 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'z'), 0);
-    PumpPendingMessages();
+    if (! ensureLeftFolderViewFocus(L"Quick Search no-match typing"))
+    {
+        return false;
+    }
+    sendQuickSearchChar(L'z');
     state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
                   L"Quick Search no-match snapshot should be available.");
     state.Require(snapshot.active,
@@ -14708,32 +14993,84 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
+    if (! ensureLeftFolderViewFocus(L"Quick Search shortcut-routed Space reactivation"))
+    {
+        return false;
+    }
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
     PumpPendingMessages();
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L's'), 0);
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'p'), 0);
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'a'), 0);
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'c'), 0);
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'e'), 0);
+    if (! ensureLeftFolderViewFocus(L"Quick Search shortcut-routed Space typing"))
+    {
+        return false;
+    }
+    sendQuickSearchChar(L's');
+    sendQuickSearchChar(L'p');
+    sendQuickSearchChar(L'a');
+    sendQuickSearchChar(L'c');
+    sendQuickSearchChar(L'e');
 
-    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/selectCalculateDirectorySizeNext"),
-                  L"Shortcut-routed Space should dispatch while Quick Search is active.");
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space";
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search should be active with query 'space' before shortcut-routed Space; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not retain stable focus before shortcut-routed Space; {}.", focusDiagnostics()));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space";
+    }, SelfTest::Scale(500ms), &snapshot),
+                  std::format(L"Quick Search should remain active after stabilizing focus before shortcut-routed Space; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const bool shortcutSpaceDispatched = DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/selectCalculateDirectorySizeNext");
+    state.Require(shortcutSpaceDispatched, L"Shortcut-routed Space should dispatch while Quick Search is active.");
     PumpPendingMessages();
-    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
-                  L"Quick Search snapshot should be available after shortcut-routed Space.");
-    state.Require(snapshot.active, L"Quick Search should stay active after shortcut-routed Space.");
-    state.Require(snapshot.query == L"space ", std::format(L"Quick Search should include shortcut-routed Space in the query; got '{}'.", snapshot.query));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space ";
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search should include shortcut-routed Space in the query; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
     state.Require(snapshot.focusedDisplayName == L"space name.txt",
                   std::format(L"Quick Search should keep focus on the spaced filename; got '{}'.", snapshot.focusedDisplayName));
     state.Require(QuickSearchSnapshotHasMatch(snapshot, L"space name.txt", 0u, 6u, true),
                   L"Quick Search should expose a prefix match that includes shortcut-routed Space.");
+    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not retain stable focus after shortcut-routed Space; {}.", focusDiagnostics()));
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space ";
+    }, SelfTest::Scale(500ms), &snapshot),
+                  std::format(L"Quick Search should remain active after stabilizing focus after shortcut-routed Space; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
-    SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(L'n'), 0);
-    PumpPendingMessages();
-    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
-                  L"Quick Search snapshot should be available after typing after shortcut-routed Space.");
-    state.Require(snapshot.query == L"space n",
-                  std::format(L"Quick Search should preserve shortcut-routed Space before the next character; got '{}'.", snapshot.query));
+    sendQuickSearchChar(L'n');
+    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+        return value.active && value.query == L"space n";
+    }, SelfTest::Scale(1500ms), &snapshot),
+                  std::format(L"Quick Search should preserve shortcut-routed Space before the next character; active={}, query='{}', focused='{}'; {}.",
+                              snapshot.active ? 1 : 0,
+                              snapshot.query,
+                              snapshot.focusedDisplayName,
+                              focusDiagnostics()));
     state.Require(snapshot.focusedDisplayName == L"space name.txt",
                   std::format(L"Quick Search should keep focus on the spaced filename after the next character; got '{}'.", snapshot.focusedDisplayName));
 
@@ -14884,6 +15221,9 @@ void RunSearchCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpt
     });
     SelfTest::RunCase(options, suite, L"search_local_index_stream_stop_after_first", [](CaseState& state) noexcept {
         return TestLocalSearchIndexEnumerateStopsAfterFirstCandidate(state);
+    });
+    SelfTest::RunCase(options, suite, L"search_local_provider_reselect_after_index_stream_stays_responsive", [=](CaseState& state) noexcept {
+        return TestLocalProviderReselectAfterIndexStreamStaysResponsive(mainWindow, state);
     });
     SelfTest::RunCase(
         options, suite, L"cmd_pane_find_dialog_search_ops", [=](CaseState& state) noexcept { return TestFindDialogSearchOps(mainWindow, state); });

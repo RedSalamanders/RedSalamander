@@ -49,6 +49,7 @@ inline constexpr UINT kFileOperationCompleted = WM_APP + 0x450;
 inline constexpr UINT kFileOpsPopupSelfTestInvoke       = WM_APP + 0x451;
 inline constexpr UINT kFileOpsPopupSelfTestSnapshot     = WM_APP + 0x452;
 inline constexpr UINT kFileOpsPopupCaptionGlyphSnapshot = WM_APP + 0x453;
+inline constexpr UINT kFileOpsPopupLayoutSnapshot       = WM_APP + 0x454;
 #endif
 
 inline constexpr UINT kFunctionBarInvoke = WM_APP + 0x460;
@@ -410,8 +411,92 @@ struct ViewerSpaceTooltipDebugSnapshot
     uint32_t lastContextMenuHitNodeId = 0;
 };
 
+enum class ViewerSpacePerfRendererMode : uint8_t
+{
+    None,
+    HwndRenderTarget,
+    DeviceContext,
+};
+
+enum class ViewerSpacePerfScanState : uint8_t
+{
+    NotStarted,
+    Queued,
+    Scanning,
+    Done,
+    Error,
+    Canceled,
+};
+
+struct ViewerSpacePerfDebugSnapshot
+{
+    ViewerSpacePerfRendererMode rendererMode = ViewerSpacePerfRendererMode::None;
+    ViewerSpacePerfScanState scanState       = ViewerSpacePerfScanState::NotStarted;
+    bool hasRenderTarget                     = false;
+    size_t realDirectoryCount                = 0u;
+    size_t fileCandidateCount                = 0u;
+    size_t syntheticCount                    = 0u;
+    size_t pendingQueueCount                 = 0u;
+    uint64_t pendingQueueBytes               = 0u;
+    size_t drawItemCount                     = 0u;
+    size_t visibleTileCount                  = 0u;
+    size_t culledTileCount                   = 0u;
+    uint64_t rootTotalBytes                  = 0u;
+    uint64_t fileCandidateBytes              = 0u;
+    uint64_t syntheticBytes                  = 0u;
+    uint64_t lastTileDrawCount               = 0u;
+    uint64_t lastTextDrawCount               = 0u;
+    uint64_t staticCacheGeneration           = 0u;
+    uint64_t staticCacheHits                 = 0u;
+    uint64_t staticCacheMisses               = 0u;
+    uint64_t staticCacheRecordCount          = 0u;
+    uint64_t staticCacheBytes                = 0u;
+    uint64_t scanCacheSnapshotBytes          = 0u;
+    uint64_t lastStaticCacheRecordUs         = 0u;
+    uint64_t lastPaintUs                     = 0u;
+    uint64_t lastLayoutUs                    = 0u;
+    uint64_t lastDrainUs                     = 0u;
+    uint64_t lastWorkingSetBytes             = 0u;
+    uint64_t lastHitTestUs                   = 0u;
+    uint32_t lastHitTestCandidatesChecked    = 0u;
+    uint32_t effectiveFileCandidateBudget    = 0u;
+    uint32_t rendererDeviceCreateCount       = 0u;
+    uint32_t swapChainResizeCount            = 0u;
+    uint32_t rendererBrushCreateCount        = 0u;
+    uint32_t rendererTextFormatCreateCount   = 0u;
+    uint32_t swapChainWidthPx                = 0u;
+    uint32_t swapChainHeightPx               = 0u;
+    uint32_t rendererFailureStage            = 0u;
+    uint32_t rendererFailureHr               = 0u;
+    uint64_t layoutGeneration                = 0u;
+    uint32_t hitGridCellCount                = 0u;
+    uint32_t hitGridMaxCandidatesPerCell     = 0u;
+};
+
+struct ViewerSpaceHitTestDebugSnapshot
+{
+    uint32_t sampleCount                 = 0u;
+    uint32_t mismatchCount               = 0u;
+    uint32_t gridHitCount                = 0u;
+    uint32_t linearHitCount              = 0u;
+    uint32_t maxGridCandidatesChecked    = 0u;
+    uint32_t maxLinearCandidatesChecked  = 0u;
+    uint32_t lastMismatchGridNodeId      = 0u;
+    uint32_t lastMismatchLinearNodeId    = 0u;
+};
+
+enum class ViewerSpaceRendererFaultDebugMode : uint8_t
+{
+    D2DRecreateTarget = 1,
+    DxgiDeviceRemoved = 2,
+};
+
 inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot = WM_APP + 0x61B;
 inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay = WM_APP + 0x61C;
+inline constexpr UINT kViewerSpaceDebugGetPerfSnapshot    = WM_APP + 0x61D;
+inline constexpr UINT kViewerSpaceDebugForcePerfSample    = WM_APP + 0x61E;
+inline constexpr UINT kViewerSpaceDebugCompareHitTesting  = WM_APP + 0x61F;
+inline constexpr UINT kViewerSpaceDebugForceRendererFault = WM_APP + 0x623;
 #endif
 
 // RedSalamanderMonitor / ColorTextView

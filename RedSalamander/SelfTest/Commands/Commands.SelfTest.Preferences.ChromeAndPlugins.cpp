@@ -2542,8 +2542,23 @@ namespace
     {
         return false;
     }
+    state.Require(DebugFocusPreferencesViewersSearchField(),
+                  L"Preferences Viewers search field did not accept focus before reset interaction validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
-    const auto initialValueState = CollectVisibleDescendantValuePatternState(activePage, UIA_EditControlTypeId);
+    state.Require(DebugFocusPreferencesViewersSearchField(),
+                  L"Preferences Viewers search field did not accept focus before live search interaction validation.");
+    const std::wstring searchEditName = LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH);
+    state.Require(! searchEditName.empty(), L"Preferences Viewers search caption should resolve before live search interaction validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto initialValueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, searchEditName);
     state.Require(initialValueState.has_value(),
                   L"Preferences Viewers page should expose a visible DX edit descendant during live search interaction validation.");
     if (! initialValueState.has_value())
@@ -2561,7 +2576,7 @@ namespace
     }
 
     constexpr std::wstring_view kSearchText = L"__codex_no_match__";
-    const std::wstring editName             = initialValueState->name;
+    const std::wstring editName             = searchEditName;
     const std::wstring initialEditValue     = initialValueState->value;
     state.Require(SetVisibleDescendantValueByName(activePage, UIA_EditControlTypeId, editName, kSearchText),
                   L"Preferences Viewers page visible DX search edit did not accept live UIA ValuePattern mutation.");
@@ -2608,6 +2623,12 @@ namespace
     {
         return false;
     }
+    state.Require(DebugFocusPreferencesViewersSearchField(),
+                  L"Preferences Viewers search field did not accept focus after shell Cancel reopened the page.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences Viewers page visible DX search edit did not discard the pending search value after shell Cancel reopened the page.");
@@ -2628,6 +2649,12 @@ namespace
     state.Require(reopenedActivePage != nullptr && IsWindow(reopenedActivePage) != FALSE,
                   L"Failed to resolve the reopened Preferences Viewers page surface during live search revalidation.");
     if (! reopenedActivePage || IsWindow(reopenedActivePage) == FALSE)
+    {
+        return false;
+    }
+    state.Require(DebugFocusPreferencesViewersSearchField(),
+                  L"Preferences Viewers search field did not accept focus after shell Cancel reopen.");
+    if (! state.failure.empty())
     {
         return false;
     }
@@ -3042,7 +3069,45 @@ namespace
         return false;
     }
 
-    const std::wstring resetButtonText = LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_RESET_DEFAULTS);
+    const auto ensureAssociationsTab = [&](HWND pageHost, std::wstring_view context) noexcept
+    {
+        size_t selectedTabIndex = 0u;
+        if (DebugGetPreferencesViewersSelectedTabIndex(selectedTabIndex) && selectedTabIndex == 1u)
+        {
+            return true;
+        }
+
+        RECT associationsTabRect{};
+        state.Require(DebugGetPreferencesViewersTabClientRect(1u, associationsTabRect),
+                      std::format(L"Failed to capture the Preferences Viewers Associations tab rect during {}.", context));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        const LONG clickX = associationsTabRect.left + ((associationsTabRect.right - associationsTabRect.left) / 2);
+        const LONG clickY = associationsTabRect.top + ((associationsTabRect.bottom - associationsTabRect.top) / 2);
+        SendMouseClickToResolvedPointWindow(pageHost, MAKELPARAM(clickX, clickY));
+
+        PreferencesDebugSnapshot tabSnapshot{};
+        state.Require(waitForSnapshot(
+                          [&](const PreferencesDebugSnapshot& value) noexcept
+        {
+            selectedTabIndex = 0u;
+            return value.currentCategory == kPrefCategoryViewers && DebugGetPreferencesViewersSelectedTabIndex(selectedTabIndex) &&
+                   selectedTabIndex == 1u && value.currentPageDxHostResizeFailureCount == 0u;
+        },
+                          tabSnapshot),
+                      std::format(L"Preferences Viewers Associations tab did not settle before reset interaction during {}.", context));
+        return state.failure.empty();
+    };
+
+    if (! ensureAssociationsTab(activePage, L"initial open"))
+    {
+        return false;
+    }
+
+    const std::wstring resetButtonText = LoadStringResource(nullptr, IDS_PREFS_FILE_ACTION_BUTTON_RESET_DEFAULTS);
     state.Require(! resetButtonText.empty(), L"Preferences Viewers Reset Defaults button caption should resolve for live UIA InvokePattern validation.");
     if (! state.failure.empty())
     {
@@ -3126,6 +3191,16 @@ namespace
     state.Require(reopenedActivePage != nullptr && IsWindow(reopenedActivePage) != FALSE,
                   L"Failed to resolve the reopened Preferences Viewers page surface during reset commit validation.");
     if (! reopenedActivePage || IsWindow(reopenedActivePage) == FALSE)
+    {
+        return false;
+    }
+    state.Require(DebugFocusPreferencesViewersSearchField(),
+                  L"Preferences Viewers search field did not accept focus before reset commit validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    if (! ensureAssociationsTab(reopenedActivePage, L"cancel reopen"))
     {
         return false;
     }

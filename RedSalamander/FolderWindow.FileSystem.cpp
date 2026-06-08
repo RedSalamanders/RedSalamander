@@ -84,6 +84,21 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     return EqualsNoCase(pluginShortId, L"file");
 }
 
+std::filesystem::path NormalizeLocalNavigationPath(std::filesystem::path path)
+{
+    path = path.lexically_normal();
+    while (! path.empty() && ! path.has_filename() && path != path.root_path())
+    {
+        path = path.parent_path();
+    }
+    return path;
+}
+
+[[nodiscard]] bool IsSameLocalNavigationPath(const std::filesystem::path& left, const std::filesystem::path& right)
+{
+    return OrdinalString::EqualsNoCasePath(NormalizeLocalNavigationPath(left), NormalizeLocalNavigationPath(right));
+}
+
 [[nodiscard]] bool OpenClipboardWithRetries(HWND ownerWindow) noexcept
 {
     constexpr int kClipboardOpenRetryCount = 20;
@@ -4314,6 +4329,8 @@ void FolderWindow::ReleaseFileSystemPluginsForRefresh() noexcept
         state.folderView.SetFileSystem(emptyFileSystem);
         state.navigationView.SetFileSystem(emptyFileSystem);
         state.fileSystem.reset();
+        // Release the pane's explicit LoadLibrary pin before plugin-manager refresh unloads/reloads DLLs.
+        state.fileSystemModule.reset();
     };
 
     releasePane(_leftPane);
@@ -4324,9 +4341,8 @@ HRESULT FolderWindow::SetFileSystemPluginForPane(Pane pane, std::wstring_view pl
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
-    if (! state.pluginId.empty() && EqualsNoCase(state.pluginId, pluginId))
+    if (state.fileSystem && ! state.pluginId.empty() && EqualsNoCase(state.pluginId, pluginId))
     {
-        state.navigationView.SetFileSystem(state.fileSystem);
         state.navigationView.SetHistory(_folderHistory);
         if (state.currentPath.has_value())
         {
@@ -5016,6 +5032,19 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         {
             pluginPath = GetDefaultFileSystemRoot();
         }
+    }
+
+    if (state.fileSystem && IsFilePluginShortId(state.pluginShortId) && IsFilePluginShortId(pluginShortId) && EqualsNoCase(state.pluginId, pluginId) &&
+        state.instanceContext.empty() && instanceContext.empty() && previousPluginPath.has_value() &&
+        IsSameLocalNavigationPath(previousPluginPath.value(), pluginPath))
+    {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(std::format(L"FolderWindow::SetFolderPath skipped same local path pane={} previous='{}' requested='{}'",
+                                                  pane == Pane::Left ? L"left" : L"right",
+                                                  previousPluginPath->wstring(),
+                                                  pluginPath.wstring()));
+#endif
+        return;
     }
 
     Debug::Info(L"FolderWindow::SetFolderPath resolved input='{}' pluginId='{}' pluginShortId='{}' instanceContext='{}' pluginPath='{}'",

@@ -1259,6 +1259,9 @@ constexpr DWORD kBandwidthThrottleCancelPollMs            = 10u;
 #ifdef _DEBUG
 constexpr std::wstring_view kBandwidthThrottleWorkerModeEnvVar = L"REDSALAMANDER_FILEOPS_BW_WORKER_MODE";
 constexpr std::wstring_view kForceMoveCopyFallbackEnvVar       = L"REDSALAMANDER_FILEOPS_FORCE_MOVE_COPY_FALLBACK";
+constexpr std::wstring_view kDeleteToctouSwapPathEnvVar        = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_PATH";
+constexpr std::wstring_view kDeleteToctouSwapTargetEnvVar      = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_TARGET";
+constexpr std::wstring_view kDeleteToctouSwapFiredEnvVar       = L"REDSALAMANDER_FILEOPS_DELETE_TOCTOU_SWAP_FIRED";
 #endif
 
 constexpr uint64_t SaturatingBytesForElapsedMs(uint64_t bytesPerSecond, uint64_t elapsedMs) noexcept
@@ -1547,6 +1550,93 @@ bool ShouldForceMoveCopyFallbackForSelfTest() noexcept
     }
 
     return _wcsicmp(value, L"1") == 0 || _wcsicmp(value, L"true") == 0 || _wcsicmp(value, L"yes") == 0;
+}
+
+[[nodiscard]] std::wstring GetDebugEnvironmentString(std::wstring_view name) noexcept
+{
+    if (name.empty())
+    {
+        return {};
+    }
+
+    const DWORD required = ::GetEnvironmentVariableW(name.data(), nullptr, 0u);
+    if (required == 0)
+    {
+        return {};
+    }
+
+    std::wstring value(required, L'\0');
+    const DWORD written = ::GetEnvironmentVariableW(name.data(), value.data(), required);
+    if (written == 0 || written >= required)
+    {
+        return {};
+    }
+
+    value.resize(written);
+    return value;
+}
+
+void MaybeInjectDeleteToctouSwapForSelfTest(const std::wstring& candidateExtended) noexcept
+{
+    const std::wstring swapPath = GetDebugEnvironmentString(kDeleteToctouSwapPathEnvVar);
+    if (swapPath.empty())
+    {
+        return;
+    }
+
+    const PathInfo swapInfo = MakePathInfo(swapPath);
+    if (! OrdinalString::EqualsNoCase(candidateExtended, swapInfo.extended))
+    {
+        return;
+    }
+
+    static_cast<void>(::SetEnvironmentVariableW(kDeleteToctouSwapPathEnvVar.data(), nullptr));
+
+    const std::wstring targetPath = GetDebugEnvironmentString(kDeleteToctouSwapTargetEnvVar);
+    if (targetPath.empty())
+    {
+        return;
+    }
+
+    const PathInfo targetInfo = MakePathInfo(targetPath);
+    if (! ::RemoveDirectoryW(candidateExtended.c_str()))
+    {
+        Debug::Warning(L"FileSystem: delete TOCTOU selftest hook could not remove victim directory '{}' (error={}).",
+                       swapInfo.display,
+                       static_cast<unsigned long>(::GetLastError()));
+        return;
+    }
+
+    if (! ::CreateDirectoryW(candidateExtended.c_str(), nullptr))
+    {
+        Debug::Warning(L"FileSystem: delete TOCTOU selftest hook could not recreate victim directory '{}' (error={}).",
+                       swapInfo.display,
+                       static_cast<unsigned long>(::GetLastError()));
+        return;
+    }
+
+    ReparsePointData reparse{};
+    const std::wstring normalizedTarget = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(targetInfo.display)));
+    const HRESULT buildHr               = BuildMountPointReparseData(normalizedTarget, reparse);
+    if (FAILED(buildHr))
+    {
+        Debug::Warning(L"FileSystem: delete TOCTOU selftest hook could not build reparse data for '{}' (hr={:#x}).",
+                       targetInfo.display,
+                       static_cast<unsigned long>(buildHr));
+        return;
+    }
+
+    const HRESULT writeHr = WriteReparsePointData(candidateExtended, reparse);
+    if (FAILED(writeHr))
+    {
+        Debug::Warning(L"FileSystem: delete TOCTOU selftest hook could not write victim reparse point '{}' (hr={:#x}).",
+                       swapInfo.display,
+                       static_cast<unsigned long>(writeHr));
+        return;
+    }
+
+    Debug::Perf::EmitCounter(L"FileOps.Delete.DebugToctouSwapInjected");
+    static_cast<void>(::SetEnvironmentVariableW(kDeleteToctouSwapFiredEnvVar.data(), L"1"));
 }
 #endif
 
@@ -2385,6 +2475,157 @@ void CopyPathBasicInformationBestEffort(const std::wstring& sourcePath, const st
     return SUCCEEDED(RemovePathForOverwrite(cleanupContext, pathExtended));
 }
 
+struct DeleteHandleSnapshot final
+{
+    DeleteHandleSnapshot() = default;
+    DeleteHandleSnapshot(const DeleteHandleSnapshot&) = delete;
+    DeleteHandleSnapshot& operator=(const DeleteHandleSnapshot&) = delete;
+    DeleteHandleSnapshot(DeleteHandleSnapshot&&) = default;
+    DeleteHandleSnapshot& operator=(DeleteHandleSnapshot&&) = default;
+
+    wil::unique_handle handle;
+    DWORD attributes = 0;
+    uint64_t fileBytes = 0;
+};
+
+HRESULT OpenPathForDeleteNoFollow(const std::wstring& pathExtended, DeleteHandleSnapshot& snapshot) noexcept
+{
+    snapshot = {};
+
+    wil::unique_handle handle(::CreateFileW(pathExtended.c_str(),
+                                            DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            OPEN_EXISTING,
+                                            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                            nullptr));
+    if (! handle)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (! ::GetFileInformationByHandle(handle.get(), &info))
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    snapshot.attributes = info.dwFileAttributes;
+    if (! IsDirectory(snapshot.attributes))
+    {
+        LARGE_INTEGER size{};
+        if (::GetFileSizeEx(handle.get(), &size) && size.QuadPart > 0)
+        {
+            snapshot.fileBytes = static_cast<uint64_t>(size.QuadPart);
+        }
+    }
+    snapshot.handle = std::move(handle);
+    return S_OK;
+}
+
+HRESULT SetHandleReadonlyAttribute(DeleteHandleSnapshot& snapshot, bool readonly) noexcept
+{
+    FILE_BASIC_INFO basic{};
+    if (! ::GetFileInformationByHandleEx(snapshot.handle.get(), FileBasicInfo, &basic, sizeof(basic)))
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    if (readonly)
+    {
+        basic.FileAttributes = snapshot.attributes | FILE_ATTRIBUTE_READONLY;
+    }
+    else
+    {
+        basic.FileAttributes = snapshot.attributes & ~FILE_ATTRIBUTE_READONLY;
+        if (basic.FileAttributes == 0)
+        {
+            basic.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+        }
+    }
+
+    if (! ::SetFileInformationByHandle(snapshot.handle.get(), FileBasicInfo, &basic, sizeof(basic)))
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    return S_OK;
+}
+
+HRESULT MarkHandleForDeletion(DeleteHandleSnapshot& snapshot) noexcept
+{
+#ifdef FILE_DISPOSITION_FLAG_DELETE
+    FILE_DISPOSITION_INFO_EX dispositionEx{};
+    dispositionEx.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS;
+    if (::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfoEx, &dispositionEx, sizeof(dispositionEx)))
+    {
+        snapshot.handle.reset();
+        return S_OK;
+    }
+
+    const DWORD exError = ::GetLastError();
+    if (exError != ERROR_INVALID_PARAMETER && exError != ERROR_NOT_SUPPORTED)
+    {
+        return HRESULT_FROM_WIN32(exError);
+    }
+#endif
+
+    FILE_DISPOSITION_INFO disposition{};
+    disposition.DeleteFile = TRUE;
+    if (! ::SetFileInformationByHandle(snapshot.handle.get(), FileDispositionInfo, &disposition, sizeof(disposition)))
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    snapshot.handle.reset();
+    return S_OK;
+}
+
+HRESULT DeleteOpenedPathNoFollow(OperationContext& context, DeleteHandleSnapshot& snapshot, bool countCompletion) noexcept
+{
+    bool restoreReadonly = false;
+    auto restoreReadonlyScope = wil::scope_exit([&]() noexcept
+    {
+        if (restoreReadonly)
+        {
+            static_cast<void>(SetHandleReadonlyAttribute(snapshot, true));
+        }
+    });
+
+    if ((snapshot.attributes & FILE_ATTRIBUTE_READONLY) != 0)
+    {
+        if (! context.allowReplaceReadonly)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+
+        const HRESULT clearHr = SetHandleReadonlyAttribute(snapshot, false);
+        if (FAILED(clearHr))
+        {
+            return clearHr;
+        }
+        restoreReadonly = true;
+    }
+
+    const HRESULT deleteHr = MarkHandleForDeletion(snapshot);
+    if (FAILED(deleteHr))
+    {
+        return deleteHr;
+    }
+
+    restoreReadonly = false;
+    if (countCompletion)
+    {
+        AddCompletedItems(context, 1);
+        if (! IsDirectory(snapshot.attributes))
+        {
+            AddCompletedBytes(context, snapshot.fileBytes);
+        }
+    }
+
+    return S_OK;
+}
+
 HRESULT RemoveDirectoryRecursiveNoFollow(OperationContext& context, const std::wstring& directoryExtended) noexcept
 {
     HRESULT hr = CheckCancel(context);
@@ -2414,59 +2655,10 @@ HRESULT RemoveDirectoryRecursiveNoFollow(OperationContext& context, const std::w
         }
 
         const std::wstring child = AppendPath(directoryExtended, data.cFileName);
-        const DWORD attributes   = data.dwFileAttributes;
-
-        if (IsDirectory(attributes))
+        hr = RemovePathForOverwrite(context, child);
+        if (FAILED(hr))
         {
-            if (IsReparsePoint(attributes))
-            {
-                if (! RemoveDirectoryW(child.c_str()))
-                {
-                    return HRESULT_FROM_WIN32(GetLastError());
-                }
-            }
-            else
-            {
-                hr = RemoveDirectoryRecursiveNoFollow(context, child);
-                if (FAILED(hr))
-                {
-                    return hr;
-                }
-            }
-        }
-        else
-        {
-            bool restoreChildAttributes      = false;
-            auto restoreChildAttributesScope = wil::scope_exit([&]() noexcept
-            {
-                if (restoreChildAttributes)
-                {
-                    static_cast<void>(SetFileAttributesW(child.c_str(), attributes));
-                }
-            });
-
-            if ((attributes & FILE_ATTRIBUTE_READONLY) != 0)
-            {
-                if (! context.allowReplaceReadonly)
-                {
-                    return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-                }
-
-                const DWORD newAttributes = attributes & ~FILE_ATTRIBUTE_READONLY;
-                if (! SetFileAttributesW(child.c_str(), newAttributes))
-                {
-                    return HRESULT_FROM_WIN32(GetLastError());
-                }
-
-                restoreChildAttributes = true;
-            }
-
-            if (! DeleteFileW(child.c_str()))
-            {
-                return HRESULT_FROM_WIN32(GetLastError());
-            }
-
-            restoreChildAttributes = false;
+            return hr;
         }
 
         hr = CheckCancel(context);
@@ -2482,45 +2674,13 @@ HRESULT RemoveDirectoryRecursiveNoFollow(OperationContext& context, const std::w
         return HRESULT_FROM_WIN32(error);
     }
 
-    DWORD dirAttributes = GetFileAttributesW(directoryExtended.c_str());
-    if (dirAttributes == INVALID_FILE_ATTRIBUTES)
+    DeleteHandleSnapshot snapshot{};
+    hr = OpenPathForDeleteNoFollow(directoryExtended, snapshot);
+    if (FAILED(hr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return hr;
     }
-
-    const DWORD originalDirAttributes = dirAttributes;
-    bool restoreDirAttributes         = false;
-    auto restoreDirAttributesScope    = wil::scope_exit([&]() noexcept
-    {
-        if (restoreDirAttributes)
-        {
-            static_cast<void>(SetFileAttributesW(directoryExtended.c_str(), originalDirAttributes));
-        }
-    });
-
-    if ((dirAttributes & FILE_ATTRIBUTE_READONLY) != 0)
-    {
-        if (! context.allowReplaceReadonly)
-        {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
-
-        dirAttributes &= ~FILE_ATTRIBUTE_READONLY;
-        if (! SetFileAttributesW(directoryExtended.c_str(), dirAttributes))
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        restoreDirAttributes = true;
-    }
-
-    if (! RemoveDirectoryW(directoryExtended.c_str()))
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    restoreDirAttributes = false;
-    return S_OK;
+    return DeleteOpenedPathNoFollow(context, snapshot, false);
 }
 
 HRESULT RemovePathForOverwrite(OperationContext& context, const std::wstring& pathExtended) noexcept
@@ -2531,65 +2691,28 @@ HRESULT RemovePathForOverwrite(OperationContext& context, const std::wstring& pa
         return hr;
     }
 
-    DWORD attributes = GetFileAttributesW(pathExtended.c_str());
-    if (attributes == INVALID_FILE_ATTRIBUTES)
+    DeleteHandleSnapshot snapshot{};
+    hr = OpenPathForDeleteNoFollow(pathExtended, snapshot);
+    if (FAILED(hr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return hr;
     }
 
-    if (IsDirectory(attributes))
+    if (IsDirectory(snapshot.attributes))
     {
-        if (IsReparsePoint(attributes))
+        if (IsReparsePoint(snapshot.attributes))
         {
-            if (! RemoveDirectoryW(pathExtended.c_str()))
-            {
-                return HRESULT_FROM_WIN32(GetLastError());
-            }
-            return S_OK;
+            return DeleteOpenedPathNoFollow(context, snapshot, false);
         }
 
+        if (snapshot.handle)
+        {
+            snapshot.handle.reset();
+        }
         return RemoveDirectoryRecursiveNoFollow(context, pathExtended);
     }
 
-    if ((attributes & FILE_ATTRIBUTE_READONLY) != 0)
-    {
-        bool restoreAttributes      = false;
-        auto restoreAttributesScope = wil::scope_exit([&]() noexcept
-        {
-            if (restoreAttributes)
-            {
-                static_cast<void>(SetFileAttributesW(pathExtended.c_str(), attributes));
-            }
-        });
-
-        if (! context.allowReplaceReadonly)
-        {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
-
-        const DWORD newAttributes = attributes & ~FILE_ATTRIBUTE_READONLY;
-        if (! SetFileAttributesW(pathExtended.c_str(), newAttributes))
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        restoreAttributes = true;
-
-        if (! DeleteFileW(pathExtended.c_str()))
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        restoreAttributes = false;
-        return S_OK;
-    }
-
-    if (! DeleteFileW(pathExtended.c_str()))
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    return S_OK;
+    return DeleteOpenedPathNoFollow(context, snapshot, false);
 }
 
 DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
@@ -2969,26 +3092,58 @@ CopyReparsePointInternal(OperationContext& context, const PathInfo& source, cons
     }
 
     const DWORD destinationAttributes = GetFileAttributesW(destination.extended.c_str());
+    bool destinationDirectoryExisted  = false;
     if (destinationAttributes != INVALID_FILE_ATTRIBUTES)
     {
-        if (! context.allowOverwrite)
+        if ((destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
         {
-            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-        }
+            if (! context.allowOverwrite)
+            {
+                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            }
 
-        hr = RemovePathForOverwrite(context, destination.extended);
-        if (FAILED(hr))
+            hr = RemovePathForOverwrite(context, destination.extended);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        else if (context.allowOverwrite)
         {
-            return hr;
+            hr = RemovePathForOverwrite(context, destination.extended);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        else
+        {
+            destinationDirectoryExisted = true;
         }
     }
 
-    if (! CreateDirectoryW(destination.extended.c_str(), nullptr))
+    if (! destinationDirectoryExisted && ! CreateDirectoryW(destination.extended.c_str(), nullptr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        const DWORD createError = GetLastError();
+        if (createError == ERROR_ALREADY_EXISTS)
+        {
+            const DWORD currentAttributes = GetFileAttributesW(destination.extended.c_str());
+            if (currentAttributes != INVALID_FILE_ATTRIBUTES && (currentAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0 && ! context.allowOverwrite)
+            {
+                destinationDirectoryExisted = true;
+            }
+            else
+            {
+                return HRESULT_FROM_WIN32(createError);
+            }
+        }
+        else
+        {
+            return HRESULT_FROM_WIN32(createError);
+        }
     }
 
-    bool created = true;
+    bool created = ! destinationDirectoryExisted;
     auto cleanup = wil::scope_exit([&]
     {
         if (created)
@@ -3014,6 +3169,15 @@ CopyReparsePointInternal(OperationContext& context, const PathInfo& source, cons
         std::wstring mappedTargetPath;
         if (TryRetargetPathIntoDestination(targetPath, context.reparseRootSourcePath, context.reparseRootDestinationPath, mappedTargetPath))
         {
+            const std::wstring normalizedDestinationRoot =
+                TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(context.reparseRootDestinationPath)));
+            const std::wstring normalizedMappedTarget =
+                TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(mappedTargetPath)));
+            if (! IsPathWithinRoot(normalizedMappedTarget, normalizedDestinationRoot))
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+
             targetPath = std::move(mappedTargetPath);
             if (preserveTrailingSeparator && ! EndsWithSeparator(targetPath))
             {
@@ -3108,10 +3272,6 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
     else
     {
         if ((destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
-        {
-            return returnFailure(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));
-        }
-        if (! context.allowOverwrite)
         {
             return returnFailure(HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));
         }
@@ -3586,10 +3746,6 @@ struct RecursiveCopyWorkItem
             {
                 return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
             }
-            if (! context.allowOverwrite)
-            {
-                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-            }
         }
 
         std::wstring searchPattern = AppendPath(item.source.extended, L"*");
@@ -4049,6 +4205,9 @@ HRESULT MovePathInternal(OperationContext& context,
 
     bool caseOnlyRename         = false;
     DWORD destinationAttributes = GetFileAttributesW(destination.extended.c_str());
+    const bool destinationExistedBeforeCopy = destinationAttributes != INVALID_FILE_ATTRIBUTES;
+    const bool destinationIsDirectory       = destinationExistedBeforeCopy && (destinationAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    const bool directoryMergeDestination    = sourceIsDirectory && destinationIsDirectory;
     if (destinationAttributes != INVALID_FILE_ATTRIBUTES)
     {
         if (source.extended != destination.extended && OrdinalString::EqualsNoCase(source.extended, destination.extended))
@@ -4064,12 +4223,12 @@ HRESULT MovePathInternal(OperationContext& context,
             {
                 caseOnlyRename = true;
             }
-            else if (! context.allowOverwrite)
+            else if (! context.allowOverwrite && ! directoryMergeDestination)
             {
                 return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
             }
         }
-        else if (! context.allowOverwrite)
+        else if (! context.allowOverwrite && ! directoryMergeDestination)
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
         }
@@ -4224,12 +4383,15 @@ HRESULT MovePathInternal(OperationContext& context,
         return caseHr;
     }
 
-    if (! allowCopy || error != ERROR_NOT_SAME_DEVICE)
+    const bool sameVolumeDirectoryMergeFallback =
+        directoryMergeDestination && ! caseOnlyRename && (error == ERROR_ALREADY_EXISTS || error == ERROR_ACCESS_DENIED);
+    if (! allowCopy || (error != ERROR_NOT_SAME_DEVICE && ! sameVolumeDirectoryMergeFallback))
     {
         return HRESULT_FROM_WIN32(error);
     }
 
-    // Cross-volume move fallback: copy with reparse policy applied, then best-effort delete.
+    // Copy/delete fallback: cross-volume moves require it, and same-volume directory merges use it
+    // because MoveFileEx cannot rename a directory onto an existing directory.
     if (sourceIsDirectory && ! context.recursive)
     {
         return HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY);
@@ -4337,7 +4499,11 @@ HRESULT MovePathInternal(OperationContext& context,
     const HRESULT deleteHr = DeletePathInternal(deleteContext, source);
     if (FAILED(deleteHr))
     {
-        return TryRollbackCopiedDestination(destination.extended) ? deleteHr : HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        if (! destinationExistedBeforeCopy && TryRollbackCopiedDestination(destination.extended))
+        {
+            return deleteHr;
+        }
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     }
 
     return S_OK;
@@ -5329,84 +5495,34 @@ HRESULT DeletePathInternal(OperationContext& context, const PathInfo& path) noex
         return DeleteToRecycleBin(context, path);
     }
 
-    DWORD attributes = GetFileAttributesW(path.extended.c_str());
-    if (attributes == INVALID_FILE_ATTRIBUTES)
+    DeleteHandleSnapshot snapshot{};
+    hr = OpenPathForDeleteNoFollow(path.extended, snapshot);
+    if (FAILED(hr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return hr;
     }
 
-    if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+    if ((snapshot.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
     {
         // Never traverse directory reparse points during delete recursion (junction/symlink safety).
-        if (IsReparsePoint(attributes))
+        if (IsReparsePoint(snapshot.attributes))
         {
-            if (! RemoveDirectoryW(path.extended.c_str()))
-            {
-                return HRESULT_FROM_WIN32(GetLastError());
-            }
-            AddCompletedItems(context, 1);
-            return S_OK;
+            return DeleteOpenedPathNoFollow(context, snapshot, true);
         }
 
         if (! context.recursive)
         {
-            if (! RemoveDirectoryW(path.extended.c_str()))
-            {
-                return HRESULT_FROM_WIN32(GetLastError());
-            }
-            AddCompletedItems(context, 1);
-            return S_OK;
+            return DeleteOpenedPathNoFollow(context, snapshot, true);
         }
 
+        if (snapshot.handle)
+        {
+            snapshot.handle.reset();
+        }
         return DeleteDirectoryRecursive(context, path);
     }
 
-    uint64_t fileBytes = 0;
-    static_cast<void>(GetFileSizeBytes(path.extended, &fileBytes)); // Best-effort only.
-
-    if ((attributes & FILE_ATTRIBUTE_READONLY) != 0)
-    {
-        bool restoreAttributes      = false;
-        auto restoreAttributesScope = wil::scope_exit([&]() noexcept
-        {
-            if (restoreAttributes)
-            {
-                static_cast<void>(SetFileAttributesW(path.extended.c_str(), attributes));
-            }
-        });
-
-        if (! context.allowReplaceReadonly)
-        {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
-
-        const DWORD newAttributes = attributes & ~FILE_ATTRIBUTE_READONLY;
-        if (! SetFileAttributesW(path.extended.c_str(), newAttributes))
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        restoreAttributes = true;
-
-        if (! DeleteFileW(path.extended.c_str()))
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        restoreAttributes = false;
-        AddCompletedItems(context, 1);
-        return S_OK;
-    }
-
-    if (! DeleteFileW(path.extended.c_str()))
-    {
-        return HRESULT_FROM_WIN32(GetLastError());
-    }
-
-    AddCompletedItems(context, 1);
-    AddCompletedBytes(context, fileBytes);
-
-    return S_OK;
+    return DeleteOpenedPathNoFollow(context, snapshot, true);
 }
 
 struct DeleteFlattenFrame final
@@ -5439,6 +5555,26 @@ struct DeleteFlattenFrame final
                 return hr;
             }
 
+            DeleteHandleSnapshot frameSnapshot{};
+            hr = OpenPathForDeleteNoFollow(stack[frameIndex].directory.extended, frameSnapshot);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            if (! IsDirectory(frameSnapshot.attributes))
+            {
+                outFiles.push_back(std::move(stack[frameIndex].directory));
+                stack.erase(stack.begin() + static_cast<std::ptrdiff_t>(frameIndex));
+                continue;
+            }
+            if (IsReparsePoint(frameSnapshot.attributes))
+            {
+                outDirectoriesPostOrder.push_back(std::move(stack[frameIndex].directory));
+                stack.erase(stack.begin() + static_cast<std::ptrdiff_t>(frameIndex));
+                continue;
+            }
+            frameSnapshot.handle.reset();
+
             // NOTE: We may push child frames onto the same vector while enumerating this directory.
             // Avoid holding references into `stack` when calling `push_back` (realloc can invalidate).
             std::wstring searchPattern = AppendPath(stack[frameIndex].directory.extended, L"*");
@@ -5466,10 +5602,28 @@ struct DeleteFlattenFrame final
                 child.display  = AppendPath(stack[frameIndex].directory.display, data.cFileName);
                 child.extended = AppendPath(stack[frameIndex].directory.extended, data.cFileName);
 
-                const bool isDirectory = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+#ifdef _DEBUG
+                MaybeInjectDeleteToctouSwapForSelfTest(child.extended);
+#endif
+
+                DeleteHandleSnapshot childSnapshot{};
+                HRESULT childOpenHr = OpenPathForDeleteNoFollow(child.extended, childSnapshot);
+                if (FAILED(childOpenHr))
+                {
+                    if (HRESULT_CODE(childOpenHr) == ERROR_FILE_NOT_FOUND || HRESULT_CODE(childOpenHr) == ERROR_PATH_NOT_FOUND)
+                    {
+                        continue;
+                    }
+                    return childOpenHr;
+                }
+
+                const DWORD currentAttributes = childSnapshot.attributes;
+                childSnapshot.handle.reset();
+
+                const bool isDirectory = (currentAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
                 if (isDirectory)
                 {
-                    if (IsReparsePoint(data.dwFileAttributes))
+                    if (IsReparsePoint(currentAttributes))
                     {
                         outDirectoriesPostOrder.push_back(std::move(child));
                     }
@@ -5725,11 +5879,17 @@ HRESULT DeleteDirectoryRecursiveSequential(OperationContext& context, const Path
         return HRESULT_FROM_WIN32(error);
     }
 
-    if (! RemoveDirectoryW(path.extended.c_str()))
+    DeleteHandleSnapshot snapshot{};
+    HRESULT hr = OpenPathForDeleteNoFollow(path.extended, snapshot);
+    if (FAILED(hr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return hr;
     }
-    AddCompletedItems(context, 1);
+    hr = DeleteOpenedPathNoFollow(context, snapshot, true);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
 
     if (hadFailure)
     {

@@ -414,6 +414,17 @@ std::atomic_uint32_t g_nextItemPropertiesLoadDelayMs{0u};
     return std::wstring(fallback);
 }
 
+[[nodiscard]] std::wstring LoadItemPropertiesEmbeddedString(UINT id, std::wstring_view fallback)
+{
+    std::wstring text = LoadEmbeddedStringResource(nullptr, id);
+    if (! text.empty())
+    {
+        return text;
+    }
+
+    return std::wstring(fallback);
+}
+
 [[nodiscard]] std::wstring NormalizeItemPropertiesTitle(std::wstring_view title)
 {
     if (OrdinalString::EqualsNoCase(title, L"properties"))
@@ -486,11 +497,11 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     }
     if (OrdinalString::EqualsNoCase(title, L"imap"))
     {
-        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_IMAP, L"IMAP");
+        return LoadItemPropertiesEmbeddedString(IDS_ITEM_PROPERTIES_SECTION_IMAP, L"IMAP");
     }
     if (OrdinalString::EqualsNoCase(title, L"s3"))
     {
-        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_SECTION_S3, L"S3");
+        return LoadItemPropertiesEmbeddedString(IDS_ITEM_PROPERTIES_SECTION_S3, L"S3");
     }
     if (OrdinalString::EqualsNoCase(title, L"s3table"))
     {
@@ -626,7 +637,7 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     }
     if (OrdinalString::EqualsNoCase(key, L"uid"))
     {
-        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_UID, L"UID");
+        return LoadItemPropertiesEmbeddedString(IDS_ITEM_PROPERTIES_FIELD_UID, L"UID");
     }
     if (OrdinalString::EqualsNoCase(key, L"archiveItemIndex"))
     {
@@ -650,7 +661,7 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     }
     if (OrdinalString::EqualsNoCase(key, L"url"))
     {
-        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_URL, L"URL");
+        return LoadItemPropertiesEmbeddedString(IDS_ITEM_PROPERTIES_FIELD_URL, L"URL");
     }
     if (OrdinalString::EqualsNoCase(key, L"target"))
     {
@@ -670,11 +681,11 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     }
     if (OrdinalString::EqualsNoCase(key, L"etag"))
     {
-        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_ETAG, L"ETag");
+        return LoadItemPropertiesEmbeddedString(IDS_ITEM_PROPERTIES_FIELD_ETAG, L"ETag");
     }
     if (OrdinalString::EqualsNoCase(key, L"ctag"))
     {
-        return LoadItemPropertiesString(IDS_ITEM_PROPERTIES_FIELD_CTAG, L"CTag");
+        return LoadItemPropertiesEmbeddedString(IDS_ITEM_PROPERTIES_FIELD_CTAG, L"CTag");
     }
     if (OrdinalString::EqualsNoCase(key, L"download URL available"))
     {

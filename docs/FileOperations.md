@@ -16,17 +16,18 @@ The **File Operations** popup opens automatically when an operation starts. It i
   - **Parallel** allows multiple tasks to run at the same time.
   - Parallel mode uses shared, bounded worker pools so thread count stays under control even with multiple in-flight operations.
   - Switching to **Wait** while several tasks are active pauses all but one at the next safe checkpoint.
-- **Auto-dismiss success/canceled**: when enabled, completed tasks that **succeeded** or were **canceled** are cleared automatically (and the popup closes when nothing remains).
 - **Clear completed**: removes completed task summaries from the popup.
+- The footer also shows a quick summary of how many tasks are running, waiting, or need attention.
 
 ### Each task card
 
 Each task shows:
 
-- Operation type (**Copy**, **Move**, **Delete**) and status
+- Operation type (**Copy**, **Move**, **Delete**) and one clear status such as calculating, running, paused, waiting, needs attention, completed, partial, failed, or canceled
 - **From** / **To** (or **Deleting**) paths
 - Item/byte progress and “Remaining” time (when totals are known)
 - Current file activity (including multiple in-flight files when copying/moving)
+- Throughput graph colors in rainbow mode, weighted by each active stream's byte share so parallel copies show balanced color bands when streams progress evenly
 
 Task controls (what you can click):
 
@@ -41,8 +42,7 @@ Task controls (what you can click):
   - **Unlimited**
   - presets: `1 MiB/s`, `5 MiB/s`, `10 MiB/s`, `50 MiB/s`, `100 MiB/s`, `1 GiB/s`
   - **Custom…** accepts inputs like `3KB`, `4MB`, `1GB` (optional `/s`).
-- **Show log**: opens the diagnostics log for file operations (see Diagnostics below).
-- **Export issues**: writes a per-task issues report file and opens it.
+- **More...** *(completed tasks with diagnostics)*: opens **Show log** and **Export issues** actions.
 - **Dismiss**: removes a completed task summary from the popup.
 
 ### Informational task cards
@@ -66,13 +66,12 @@ When preflight is skipped, the popup still shows best-effort **completed files/f
 If a task hits a conflict (destination exists, read-only, access denied, sharing violation, disk full, path too long, etc.), the task shows an inline prompt with action buttons such as:
 
 - **Overwrite**
-- **Replace read-only**
 - **Retry**
 - **Skip item**
-- **Skip all similar conflicts**
 - **Cancel**
+- **More...** for rarer actions such as **Replace read-only** and **Skip all similar conflicts**
 
-Use **Apply selected action to all similar conflicts** to avoid repeating the same decision for many items.
+Use **All similar** to apply the selected non-retry decision to future conflicts of the same kind in that task.
 
 ## Copy and move between panes
 
@@ -84,7 +83,9 @@ These commands use the **focused pane** as the source and the **other pane’s c
 Notes:
 
 - If both panes point to the same effective destination folder, RedSalamander blocks the operation to prevent accidental self-copy/self-move.
-- If source/destination are different file-system contexts, RedSalamander uses a cross-filesystem bridge (read → write). Read-only destinations will reject writes.
+- If source/destination are different file-system contexts, RedSalamander uses a cross-filesystem bridge (read → write). Files can start copying as soon as their parent destination directory exists, while read-only destinations still reject writes.
+- Clipboard paste and folder-picker move use the same File Operations task workflow as `F5`/`F6`, including the popup, conflict prompts, pause/cancel, and safe default overwrite policy.
+- Providers that advertise an operation as unsupported block that command before a task starts.
 
 ## Delete vs permanent delete
 
@@ -109,6 +110,7 @@ This page owns host-wide defaults that apply to newly created tasks:
 - **Enable pre-calculation scan**: turns the preflight tree walk on or off for new copy/move tasks.
 - **Pre-calculation workers**: chooses the host worker budget (`1` to `8`) used by that preflight scan.
 - **Default speed limit**: seeds new copy/move tasks with **Unlimited**, a preset (`1 MiB/s` through `1 GiB/s`), or a **Custom** throughput value such as `128KB`, `5MB`, or `1GB`.
+- **Auto-dismiss successful tasks**: automatically clears completed tasks that succeeded or were canceled, and closes the popup when nothing remains.
 - **Cross-FS bridge buffer (KB)**: sets the per-buffer size (`512` to `16384`) used by the host bridge when copying between different file systems. Two buffers are allocated per active bridged transfer.
 
 The page also includes a reminder that plugin-owned settings stay under **Preferences -> Plugins -> File System**.
@@ -143,6 +145,7 @@ Advanced logging options (retention and verbosity) are in Preferences → **Adva
 When operations encounter errors, they can be reviewed in the issues UI:
 
 - Toggle: **View → File Operations Failed Items** (default `Ctrl+J`)
+- Partial move failures explicitly note when the source was preserved and a partial copy was left at the destination, so both locations can be reviewed before retrying or cleaning up.
 
 ![File operations issues pane](res/file-operations-issues.png)
 
@@ -166,6 +169,7 @@ Folder view supports a basic Explorer-style clipboard for **Windows paths**:
 Limitations:
 
 - The clipboard format is Windows-path based, so file cut and Paste Shortcut are available for local `file` file-system paths.
+- Clipboard paste queues a File Operations copy task; destination conflicts are handled by the same inline conflict prompt as pane copy.
 
 ## Creating files from ShellNew templates
 

@@ -1717,6 +1717,11 @@ void WindowHost::CaptureMouse(Control* control) noexcept
     }
 }
 
+Control* WindowHost::GetCapturedControl() const noexcept
+{
+    return _capturedControl;
+}
+
 void WindowHost::ReleaseMouseCapture() noexcept
 {
     _capturedControl = nullptr;

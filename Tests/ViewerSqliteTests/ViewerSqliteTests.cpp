@@ -45,6 +45,29 @@ constexpr wchar_t kViewerSqliteWindowClassName[] = L"RedSalamander.ViewerSqlite"
 
 using RedSalamanderCreateFn = HRESULT(__stdcall*)(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result);
 constexpr wchar_t kViewerSqlitePluginId[] = L"builtin/viewer-sqlite";
+constexpr char kReadOnlyFileSystemCapabilitiesJson[] = R"json(
+{
+  "version": 1,
+  "operations": {
+    "copy": false,
+    "move": false,
+    "delete": false,
+    "rename": false,
+    "properties": false,
+    "read": false,
+    "write": false
+  },
+  "concurrency": {
+    "copyMoveMax": 1,
+    "deleteMax": 1,
+    "deleteRecycleBinMax": 1
+  },
+  "crossFileSystem": {
+    "export": { "copy": [], "move": [] },
+    "import": { "copy": [], "move": [] }
+  }
+}
+)json";
 
 struct TempDatabase final
 {
@@ -859,8 +882,8 @@ public:
             return E_POINTER;
         }
 
-        *jsonUtf8 = nullptr;
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        *jsonUtf8 = kReadOnlyFileSystemCapabilitiesJson;
+        return S_OK;
     }
 
 private:

@@ -67,6 +67,7 @@ The Compare Directories window uses an embedded `FolderWindow`:
 ### Lifetime / shutdown
 
 - The Compare Directories window is an independent top-level window (not a child/owned window).
+- Closing the Compare Directories window MUST restore focus to the invoking main-window folder view when that view still exists. The surrounding main navigation shell MUST return without lingering address-bar edit, history, suggestion, or full-path popup state, and the current path, focused item, selection count, item count, and refresh count for the invoking pane MUST remain stable across open/close.
 - When the application shuts down (main window closes), the host closes any remaining unowned top-level RedSalamander windows during shutdown teardown so Direct2D resources can be released before process exit.
 
 ### Banner (Title + Actions + Progress)

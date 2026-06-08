@@ -1476,7 +1476,7 @@ void ViewerSqlite::UpdateWindowTitle() noexcept
     }
 
     const std::wstring fileName = _currentPath.empty() ? _metaName : LeafNameForPath(_currentPath);
-    const std::wstring title    = FormatStringResource(g_hInstance, IDS_VIEWERSQLITE_TITLE_FORMAT, fileName, _metaName);
+    const std::wstring title    = FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERSQLITE_TITLE_FORMAT, fileName, _metaName);
     SetWindowTextW(_hWnd.get(), title.c_str());
 }
 

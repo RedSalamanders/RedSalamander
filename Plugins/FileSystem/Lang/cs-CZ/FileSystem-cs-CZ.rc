@@ -1,0 +1,11 @@
+#pragma code_page(65001)
+#include "../../FileSystemResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEM_NAME "Systém souborů"
+    IDS_FILESYSTEM_DESCRIPTION "Implementace lokálního souborového systému Windows."
+END

@@ -682,6 +682,8 @@ void FolderView::ReleaseDistantRenderingState()
             item.metadataText.shrink_to_fit();
             item.icon.reset();
             item.thumbnail.reset();
+            item.thumbnailFallbackResolved = false;
+            item.thumbnailFallbackTargetPx = 0u;
             ++released;
         }
     }
@@ -704,6 +706,8 @@ void FolderView::ReleaseDistantRenderingState()
             item.metadataText.shrink_to_fit();
             item.icon.reset();
             item.thumbnail.reset();
+            item.thumbnailFallbackResolved = false;
+            item.thumbnailFallbackTargetPx = 0u;
             ++released;
         }
     }

@@ -51,6 +51,17 @@ struct NavigationDxTextHost
 
     ~NavigationDxTextHost() noexcept
     {
+        if (field)
+        {
+            field->SetOnTextChanged({});
+            field->SetOnSubmitted({});
+            field->SetOnPreviewKeyDown({});
+            field->SetOnBlur({});
+        }
+        host.SetOnEscape({});
+        host.SetOnTabBoundary({});
+        DeactivateForHideOrDestroy();
+
         // Destroy the child HWND while WindowHost is still fully alive. The Dx host
         // window routes WM_NCDESTROY back through GWLP_USERDATA to `host`, so letting
         // the member destructors run in declaration order would otherwise destroy the
@@ -68,6 +79,12 @@ struct NavigationDxTextHost
         }
 
         field = nullptr;
+    }
+
+    void DeactivateForHideOrDestroy() noexcept
+    {
+        host.SetFocusControl(nullptr);
+        host.ResetInteractionState();
     }
 
     [[nodiscard]] HWND GetTextInputHwnd() const noexcept

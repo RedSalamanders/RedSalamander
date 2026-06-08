@@ -2064,10 +2064,10 @@ std::wstring ViewerText::FormatFileOffset(uint64_t offset) const
 {
     if (_fileSize > 0xFFFFFFFFu)
     {
-        return FormatStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_64, offset, offset);
+        return FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_64, offset, offset);
     }
 
-    return FormatStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_32, static_cast<uint32_t>(offset), static_cast<uint64_t>(offset));
+    return FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_32, static_cast<uint32_t>(offset), static_cast<uint64_t>(offset));
 }
 
 HRESULT ViewerText::LoadHexData(HWND hwnd) noexcept
@@ -2423,17 +2423,17 @@ void ViewerText::FormatHexLine(uint64_t offset,
 
     if (_hexOffsetMode == HexOffsetMode::Decimal)
     {
-        outOffset = FormatStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_COL_DEC_FORMAT, offset);
+        outOffset = FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_COL_DEC_FORMAT, offset);
     }
     else
     {
         if (_fileSize > 0xFFFFFFFFu)
         {
-            outOffset = FormatStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_COL_FORMAT_64, offset);
+            outOffset = FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_COL_FORMAT_64, offset);
         }
         else
         {
-            outOffset = FormatStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_COL_FORMAT_32, static_cast<uint32_t>(offset));
+            outOffset = FormatEmbeddedStringResource(g_hInstance, IDS_VIEWERTEXT_OFFSET_COL_FORMAT_32, static_cast<uint32_t>(offset));
         }
     }
 

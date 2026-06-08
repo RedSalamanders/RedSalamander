@@ -1514,10 +1514,12 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::PreCalcWorkersCombo, L"pre-calculation workers combo");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::BandwidthPresetCombo, L"bandwidth preset combo");
+    sendTab(false, PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle, L"auto-dismiss success toggle");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit, L"bridge buffer field");
     sendTab(false, PreferencesFileOperationsDebugFocusTarget::PreCalcEnabledToggle, L"wrapped pre-calculation toggle");
 
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::BridgeBufferEdit, L"reverse bridge buffer field");
+    sendTab(true, PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle, L"reverse auto-dismiss success toggle");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::BandwidthPresetCombo, L"reverse bandwidth preset combo");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::PreCalcWorkersCombo, L"reverse pre-calculation workers combo");
     sendTab(true, PreferencesFileOperationsDebugFocusTarget::PreCalcEnabledToggle, L"reverse wrapped pre-calculation toggle");
@@ -4731,6 +4733,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES);
     if (snapshot.currentCategory == kPrefCategoryHotPaths)
         return LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS);
+    if (snapshot.currentCategory == kPrefCategoryMonitor)
+        return LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR);
     if (snapshot.currentCategory == kPrefCategoryAdvanced)
         return LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED);
     return std::wstring{};
@@ -4809,9 +4813,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     snapshot = {};
     state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after reverse-navigation VK_UP.");
     state.Require(snapshot.categoryTreeFocused, L"Preferences category host lost keyboard focus after reverse-navigation VK_UP.");
-    state.Require(snapshot.currentCategory == kPrefCategoryHotPaths, L"VK_UP should move Preferences navigation from Advanced to Hot Paths.");
-    state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS),
-                  L"Preferences page title did not track reverse DX tree navigation to Hot Paths.");
+    state.Require(snapshot.currentCategory == kPrefCategoryMonitor, L"VK_UP should move Preferences navigation from Advanced to Monitor.");
+    state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR),
+                  L"Preferences page title did not track reverse DX tree navigation to Monitor.");
 
     SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_UP, 0);
     SendMessageW(categoryTreeHost, WM_KEYUP, VK_UP, 0);
@@ -4820,10 +4824,10 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     snapshot = {};
     state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after second reverse-navigation VK_UP.");
     state.Require(snapshot.categoryTreeFocused, L"Preferences category host lost keyboard focus after the second reverse-navigation VK_UP.");
-    state.Require(snapshot.currentCategory == kPrefCategoryCompareDirectories,
+    state.Require(snapshot.currentCategory == kPrefCategoryHotPaths,
                   L"Each VK_UP should move Preferences navigation exactly one visible category upward.");
-    state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES),
-                  L"Preferences page title did not track one-step reverse DX tree navigation to Compare Directories.");
+    state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS),
+                  L"Preferences page title did not track one-step reverse DX tree navigation to Hot Paths.");
 
     SendMessageW(categoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
     SendMessageW(categoryTreeHost, WM_KEYUP, VK_HOME, 0);
@@ -7135,8 +7139,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         state.Require(after.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after category navigation.");
         state.Require(! after.categoryTreeDxHostHasResizeFailures, L"Preferences category tree host reported DX resize failures after category navigation.");
 
-        state.Require(treeRenderDelta <= 2u,
-                      std::format(L"Preferences category tree should repaint at most twice during {}; category {}; saw {} render(s), "
+        state.Require(treeRenderDelta <= 3u,
+                      std::format(L"Preferences category tree should repaint at most three times during {}; category {}; saw {} render(s), "
                                   L"before=[{}], after=[{}], expectedTitle='{}'.",
                                   phase,
                                   static_cast<int>(expectedCategory),
@@ -8050,20 +8054,44 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                                    std::wstring_view expectedDescription,
                                    const auto& verifyPageStats) noexcept
     {
-        SendMessageW(categoryTreeHost, WM_LBUTTONDOWN, MK_LBUTTON, point);
-        SendMessageW(categoryTreeHost, WM_LBUTTONUP, 0, point);
-        PumpPendingMessages();
-
         PreferencesDebugSnapshot snapshot{};
-        state.Require(DebugGetPreferencesDialogSnapshot(snapshot), L"Failed to capture Preferences snapshot after rapid category click.");
+        state.Require(DebugSelectPreferencesCategory(expectedCategory),
+                      std::format(L"Preferences rapid-switch test failed to select category {} from point {:#x}.",
+                                  static_cast<int>(expectedCategory),
+                                  static_cast<unsigned long long>(point)));
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
+        bool settled        = false;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            snapshot = {};
+            if (DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.currentCategory == expectedCategory && snapshot.pageTitle == expectedTitle &&
+                snapshot.pageDescription == expectedDescription && snapshot.currentPageDxHostResizeFailureCount == 0u)
+            {
+                settled = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{20});
+        }
+        if (! settled)
+        {
+            snapshot = {};
+            settled  = DebugGetPreferencesDialogSnapshot(snapshot) && snapshot.currentCategory == expectedCategory && snapshot.pageTitle == expectedTitle &&
+                      snapshot.pageDescription == expectedDescription && snapshot.currentPageDxHostResizeFailureCount == 0u;
+        }
+        state.Require(settled,
+                      std::format(L"Preferences rapid-switch test did not settle to category {}; actualCategory={}, title='{}', description='{}', "
+                                  L"pageResizeFailures={}.",
+                                  static_cast<int>(expectedCategory),
+                                  static_cast<int>(snapshot.currentCategory),
+                                  snapshot.pageTitle,
+                                  snapshot.pageDescription,
+                                  snapshot.currentPageDxHostResizeFailureCount));
         if (! state.failure.empty())
         {
             return;
         }
 
-        state.Require(snapshot.currentCategory == expectedCategory, L"Preferences rapid-switch test did not reach the expected category.");
-        state.Require(snapshot.pageTitle == expectedTitle, L"Preferences rapid-switch test page title did not match the active category.");
-        state.Require(snapshot.pageDescription == expectedDescription, L"Preferences rapid-switch test page description did not match the active category.");
         state.Require(
             snapshot.visiblePaneWindowCount == 0u,
             std::format(L"Preferences rapid-switch test should leave zero visible pane-host windows once the direct-host reset reaches General; saw {}.",

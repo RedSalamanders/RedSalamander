@@ -7,6 +7,7 @@
 #include <UIAutomation.h>
 #include <shellapi.h>
 #include <shobjidl.h>
+#include <psapi.h>
 #include <winioctl.h>
 
 #include <algorithm>

@@ -61,6 +61,9 @@ struct ConnectionCredentialPromptDebugSnapshot
     bool themeRainbow                                      = false;
     size_t secretLength                                    = 0u;
     size_t visibleChildWindowCount                         = 0u;
+    bool toggleSecretChecked                               = false;
+    bool toggleSecretPressed                               = false;
+    bool hostHasCapture                                    = false;
     ConnectionCredentialPromptDebugFocusTarget focusTarget = ConnectionCredentialPromptDebugFocusTarget::None;
     std::wstring userNameText;
     std::wstring validationText;

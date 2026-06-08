@@ -1,0 +1,12 @@
+#pragma code_page(65001)
+#include "../../FileSystemS3Resources.h"
+#include <winres.h>
+
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMS3_DESCRIPTION "Virtuální souborový systém Amazon S3."
+    IDS_FILESYSTEMS3TABLE_NAME "Tabulka S3"
+    IDS_FILESYSTEMS3TABLE_DESCRIPTION "Virtuální souborový systém Amazon S3 Tables."
+END

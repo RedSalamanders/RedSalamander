@@ -1,0 +1,13 @@
+#pragma code_page(65001)
+#include "../../FileSystemCurlResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMCURL_FTP_DESCRIPTION "Virtuálny súborový systém FTP."
+    IDS_FILESYSTEMCURL_SFTP_DESCRIPTION "Virtuálny súborový systém SFTP (SSH File Transfer Protocol)."
+    IDS_FILESYSTEMCURL_SCP_DESCRIPTION "Virtuálny súborový systém SCP (zabezpečená kópia cez SSH)."
+    IDS_FILESYSTEMCURL_IMAP_DESCRIPTION "Systém súborov virtuálnej pošty IMAP."
+END

@@ -183,6 +183,7 @@ enum class PreferencesFileOperationsDebugFocusTarget : uint8_t
     PreCalcWorkersCombo,
     BandwidthPresetCombo,
     CustomBandwidthEdit,
+    AutoDismissSuccessToggle,
     BridgeBufferEdit,
 };
 
@@ -545,7 +546,6 @@ struct PreferencesDebugSnapshot
 [[nodiscard]] bool DebugFocusPreferencesHotPathsOpenPrefsToggle() noexcept;
 [[nodiscard]] bool DebugGetPreferencesHotPathsOpenPrefsToggleChecked(bool& outChecked) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesAdvancedBypassHelloToggle() noexcept;
-[[nodiscard]] bool DebugSelectPreferencesAdvancedFilterPreset(std::wstring_view displayText) noexcept;
 [[nodiscard]] bool DebugFocusPreferencesMonitorToolbarToggle() noexcept;
 [[nodiscard]] bool DebugSelectPreferencesMonitorFilterPreset(std::wstring_view displayText) noexcept;
 void DebugSetPreferencesSettingsFileOpenCapture(bool capture) noexcept;

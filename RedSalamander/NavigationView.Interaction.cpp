@@ -211,7 +211,7 @@ void NavigationView::OnLButtonDown(POINT pt)
                                            reinterpret_cast<uintptr_t>(_hWnd.get()),
                                            pt.x,
                                            pt.y);
-        ExitEditMode(false);
+        ExitEditMode(false, L"nav-button-click");
     }
 
     // Check Section 1 (menu button) click
@@ -278,6 +278,10 @@ void NavigationView::OnLButtonDown(POINT pt)
     }
 
     _focusedRegion = FocusRegion::Path;
+    if (! _embeddedDestinationMode)
+    {
+        RequestOwnerPaneFocus();
+    }
 
     // Transform to Section 2 local coordinates
     float localX          = static_cast<float>(pt.x - _sectionPathRect.left);
@@ -438,6 +442,15 @@ void NavigationView::OnLButtonDblClk(POINT pt)
     // Enter edit mode if double-clicked on last segment or in whitespace
     if (onLastSegment || inWhitespace)
     {
+#ifdef ENABLE_TESTS
+        ++_debugDoubleClickActivateCount;
+        _debugLastDoubleClickOnLastSegment = onLastSegment;
+        _debugLastDoubleClickInWhitespace  = inWhitespace;
+        _debugLastDoubleClickPoint         = pt;
+        _debugLastDoubleClickLocalX        = clickPt.x;
+        _debugLastDoubleClickLocalY        = clickPt.y;
+#endif
+        RequestOwnerPaneFocus();
         EnterEditMode();
     }
 }
@@ -762,7 +775,7 @@ void NavigationView::OnKillFocus(HWND newFocus)
 
     if (_editMode)
     {
-        ExitEditMode(false);
+        ExitEditMode(false, L"navigation-kill-focus");
     }
 
     if (_hWnd)
@@ -779,7 +792,7 @@ bool NavigationView::OnKeyDown(WPARAM key)
     {
         if (_editMode)
         {
-            ExitEditMode(false);
+            ExitEditMode(false, L"escape-key");
         }
 
         if (_requestFolderViewFocusCallback)
@@ -793,7 +806,7 @@ bool NavigationView::OnKeyDown(WPARAM key)
     {
         if (_editMode)
         {
-            ExitEditMode(false);
+            ExitEditMode(false, L"tab-key");
         }
 
         MoveFocus(! shift);
@@ -896,7 +909,12 @@ void NavigationView::ActivateFocusedRegion()
                 PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowMenuDropdown, 1, 0);
             }
             break;
-        case FocusRegion::Path: EnterEditMode(); break;
+        case FocusRegion::Path:
+#ifdef ENABLE_TESTS
+            ++_debugKeyboardActivateCount;
+#endif
+            EnterEditMode();
+            break;
         case FocusRegion::History:
             if (_hWnd)
             {

@@ -231,7 +231,7 @@ struct FindResultMenuCommand final
     const uint32_t maskedMods = modifiers & 0x7u;
     if ((maskedMods & ShortcutManager::kModCtrl) != 0u)
     {
-        appendPart(LoadStringResource(nullptr, IDS_MOD_CTRL));
+        appendPart(LoadEmbeddedStringResource(nullptr, IDS_MOD_CTRL));
     }
     if ((maskedMods & ShortcutManager::kModAlt) != 0u)
     {
@@ -1786,6 +1786,10 @@ private:
     [[nodiscard]] bool HandleResultShortcut(UINT message, WPARAM wParam) noexcept;
     [[nodiscard]] bool HandleResultCommandId(unsigned int commandId) noexcept;
     [[nodiscard]] bool HandleResultCommand(std::wstring_view commandId) noexcept;
+    [[nodiscard]] bool FocusRootNavigation(bool editMode) noexcept;
+    [[nodiscard]] bool IsRootNavigationFocused() const noexcept;
+    [[nodiscard]] bool HandleRootNavigationTabBridge(UINT message, WPARAM wParam) noexcept;
+    [[nodiscard]] bool HandleRootMnemonic(UINT message, WPARAM wParam) noexcept;
     void UpdateKeyboardModifierState(UINT message, WPARAM wParam) noexcept;
     [[nodiscard]] uint32_t GetEffectiveKeyboardModifiers() const noexcept;
     [[nodiscard]] std::vector<size_t> CollectSelectedResultIndices() const;
@@ -2734,7 +2738,7 @@ void FindFilesWindow::BuildUi() noexcept
     _parentButton->SetMnemonic(L'P');
     _parentButton->SetOnClick([this] { OpenSelectedResult(true); });
 
-    _helpButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_FIND_ACTION_HELP));
+    _helpButton = _root->AddChild<Button>(LoadEmbeddedStringResource(nullptr, IDS_FIND_ACTION_HELP));
     _helpButton->SetTooltipText(LoadStringResource(nullptr, IDS_FIND_ACTION_HELP_TOOLTIP));
     _helpButton->SetAccessibleName(LoadStringResource(nullptr, IDS_FIND_ACTION_HELP_TOOLTIP));
     _helpButton->SetAccessibleHelpText(LoadStringResource(nullptr, IDS_FIND_RESULT_ACTIONS_HELP_TEXT));
@@ -2764,6 +2768,7 @@ void FindFilesWindow::BuildUi() noexcept
     _dxHost.SetRoot(std::move(_rootStorage));
     _dxHost.SetDefaultButton(_findButton);
     _dxHost.SetCancelButton(_cancelButton);
+    _dxHost.SetOnTabBoundary([this](bool) noexcept { return FocusRootNavigation(false); });
     _dxHost.SetOnEscape([this]() noexcept
     {
         if (_session.IsActive() || ! _hWnd || _dxHost.GetFocusControl() == nullptr)
@@ -3451,6 +3456,68 @@ bool FindFilesWindow::HandleResultShortcut(UINT message, WPARAM wParam) noexcept
     }
 
     return HandleResultCommand(commandId.value());
+}
+
+bool FindFilesWindow::FocusRootNavigation(bool editMode) noexcept
+{
+    const HWND rootNavigationHwnd = _rootNavigation.GetHwnd();
+    if (! rootNavigationHwnd || IsWindow(rootNavigationHwnd) == FALSE)
+    {
+        return false;
+    }
+
+    _dxHost.SetFocusControl(nullptr);
+    _rootNavigation.SetFocusRegion(NavigationView::FocusRegion::Path);
+    if (editMode)
+    {
+        _rootNavigation.FocusAddressBar();
+    }
+    else
+    {
+        SetFocus(rootNavigationHwnd);
+    }
+
+    return IsRootNavigationFocused();
+}
+
+bool FindFilesWindow::IsRootNavigationFocused() const noexcept
+{
+    const HWND rootNavigationHwnd = _rootNavigation.GetHwnd();
+    const HWND focused           = GetFocus();
+    return rootNavigationHwnd && focused && (focused == rootNavigationHwnd || IsChild(rootNavigationHwnd, focused) != FALSE);
+}
+
+bool FindFilesWindow::HandleRootNavigationTabBridge(UINT message, WPARAM wParam) noexcept
+{
+    if (message != WM_KEYDOWN || wParam != VK_TAB || ! IsRootNavigationFocused())
+    {
+        return false;
+    }
+
+    const bool reverse = (GetEffectiveKeyboardModifiers() & kFindShortcutShift) != 0u;
+    if (_hWnd)
+    {
+        SetFocus(_hWnd.get());
+    }
+    _dxHost.SetFocusControl(reverse ? static_cast<RedSalamander::DxUi::Control*>(_resultsList)
+                                    : static_cast<RedSalamander::DxUi::Control*>(_nameCombo));
+    return true;
+}
+
+bool FindFilesWindow::HandleRootMnemonic(UINT message, WPARAM wParam) noexcept
+{
+    if (message != WM_SYSCHAR)
+    {
+        return false;
+    }
+
+    const wchar_t mnemonic = static_cast<wchar_t>(std::towupper(static_cast<wint_t>(wParam)));
+    if (mnemonic != L'L')
+    {
+        return false;
+    }
+
+    return FocusRootNavigation(true);
 }
 
 void FindFilesWindow::UpdateOptionDependencies() noexcept
@@ -6439,12 +6506,7 @@ bool FindFilesWindow::DebugFocusTarget(FindFilesDebugFocusTarget target) noexcep
 {
     if (target == FindFilesDebugFocusTarget::RootCombo && _rootNavigation.GetHwnd())
     {
-        if (_hWnd)
-        {
-            SetFocus(_rootNavigation.GetHwnd());
-        }
-        _dxHost.SetFocusControl(nullptr);
-        return ResolveDebugFocusTarget() == target;
+        return FocusRootNavigation(false) && ResolveDebugFocusTarget() == target;
     }
 
     RedSalamander::DxUi::Control* control = nullptr;
@@ -7023,6 +7085,14 @@ LRESULT FindFilesWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam) 
     UpdateKeyboardModifierState(message, wParam);
     TraceRawWindowMessage(message, wParam, lParam, L"enter");
     if (HandleResultShortcut(message, wParam))
+    {
+        return 0;
+    }
+    if (HandleRootMnemonic(message, wParam))
+    {
+        return 0;
+    }
+    if (HandleRootNavigationTabBridge(message, wParam))
     {
         return 0;
     }

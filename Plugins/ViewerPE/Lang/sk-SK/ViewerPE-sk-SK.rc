@@ -1,0 +1,46 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_SLOVAK, SUBLANG_DEFAULT
+
+IDR_VIEWERPE_MENU MENU
+BEGIN
+    POPUP "&Súbor"
+    BEGIN
+        MENUITEM "&Exportovať ako text...\tCtrl+S", IDM_VIEWERPE_FILE_EXPORT_TEXT
+        MENUITEM "&Exportovať ako Markdown...\tCtrl+Shift+S", IDM_VIEWERPE_FILE_EXPORT_MARKDOWN
+        MENUITEM "&Obnoviť\tF5", IDM_VIEWERPE_FILE_REFRESH
+        POPUP "&Iné súbory"
+        BEGIN
+            MENUITEM "&Ďalej\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
+            MENUITEM "&Predchádzajúce\tBackspace, Ctrl+Up", IDM_VIEWERPE_OTHER_PREVIOUS
+            MENUITEM "&Po prvé\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
+            MENUITEM "&Posledný\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Koniec\tEsc", IDM_VIEWERPE_FILE_EXIT
+    END
+    POPUP "&Zobrazenie"
+    BEGIN
+        MENUITEM "&Prejsť na začiatok\tHome", IDM_VIEWERPE_VIEW_GOTO_TOP
+        MENUITEM "&Prejdite nadol\tEnd", IDM_VIEWERPE_VIEW_GOTO_BOTTOM
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERPE_NAME "PE Viewer"
+    IDS_VIEWERPE_DESCRIPTION "Portable Executable (PE) hlavička a prehliadač sekcií."
+    IDS_VIEWERPE_STATUS_LOADING "Načítava sa..."
+    IDS_VIEWERPE_ERROR_NO_FILEIO "Tento súborový systém nepodporuje čítanie súborov pre tento prehliadač."
+    IDS_VIEWERPE_ERROR_OPEN_FAILED "Súbor sa nepodarilo otvoriť."
+    IDS_VIEWERPE_ERROR_TOO_LARGE "Súbor je príliš veľký na analýzu ako súbor PE."
+    IDS_VIEWERPE_ERROR_READ_FAILED "Čítanie súboru zlyhalo."
+    IDS_VIEWERPE_ERROR_PARSE_FAILED "Nepodarilo sa analyzovať súbor PE."
+    IDS_VIEWERPE_EXPORT_DIALOG_TITLE "Exportovať správu PE"
+    IDS_VIEWERPE_EXPORT_FILTER_TEXT "Textové súbory (*.txt)"
+    IDS_VIEWERPE_EXPORT_FILTER_MARKDOWN "Súbory markdown (*.md)"
+    IDS_VIEWERPE_EXPORT_ERROR_NO_REPORT "Zatiaľ nie je k dispozícii žiadny prehľad na export."
+    IDS_VIEWERPE_EXPORT_ERROR_FAILED "Export prehľadu zlyhal."
+END

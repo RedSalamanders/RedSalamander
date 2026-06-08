@@ -154,31 +154,6 @@ constexpr UINT kDxUiNoDataStringId           = 1305u;
     return rect.right > rect.left && rect.bottom > rect.top;
 }
 
-void DrawGridBitmapIcon(WindowHost& host, ID2D1Bitmap1* bitmap, const D2D1_RECT_F& iconRectDip, float opacity) noexcept
-{
-    if (! bitmap || ! host.GetDeviceContext() || ! IsNonEmptyRect(iconRectDip))
-    {
-        return;
-    }
-
-    const D2D1_SIZE_F bitmapSize = bitmap->GetSize();
-    const float maxWidthDip      = std::max(0.0f, iconRectDip.right - iconRectDip.left);
-    const float maxHeightDip     = std::max(0.0f, iconRectDip.bottom - iconRectDip.top);
-    if (bitmapSize.width <= 0.0f || bitmapSize.height <= 0.0f || maxWidthDip <= 0.0f || maxHeightDip <= 0.0f)
-    {
-        return;
-    }
-
-    const float scale          = std::min(1.0f, std::min(maxWidthDip / bitmapSize.width, maxHeightDip / bitmapSize.height));
-    const float drawWidthDip   = bitmapSize.width * scale;
-    const float drawHeightDip  = bitmapSize.height * scale;
-    const float drawLeft       = iconRectDip.left + ((maxWidthDip - drawWidthDip) * 0.5f);
-    const float drawTop        = iconRectDip.top + ((maxHeightDip - drawHeightDip) * 0.5f);
-    const D2D1_RECT_F drawRect = D2D1::RectF(drawLeft, drawTop, drawLeft + drawWidthDip, drawTop + drawHeightDip);
-
-    host.GetDeviceContext()->DrawBitmap(bitmap, drawRect, opacity, D2D1_INTERPOLATION_MODE_LINEAR);
-}
-
 [[nodiscard]] size_t ResolveVisibleRowBoundaryOffset(float offsetDip, float rowHeightDip, size_t maxRowCount) noexcept
 {
     const float safeRowHeightDip = std::max(1.0f, rowHeightDip);
@@ -3926,24 +3901,27 @@ float Grid::NormalizeVerticalScrollOffset(float offsetDip, std::span<const GridG
 
 std::vector<Grid::VisibleBodyItem> Grid::BuildVisibleBodyItems(std::span<const GridGroupDesc> groups) const
 {
-    _cachedVisibleItems.clear();
+    std::vector<VisibleBodyItem> visibleItems;
     if (! _model || _model->GetRowCount() == 0u)
     {
-        return _cachedVisibleItems;
+        return visibleItems;
     }
 
     const D2D1_RECT_F bodyRect    = GetContentRect();
     const float viewportHeightDip = std::max(0.0f, bodyRect.bottom - bodyRect.top);
     if (viewportHeightDip <= 0.0f)
     {
-        return _cachedVisibleItems;
+        return visibleItems;
     }
 
     const float viewportTopDip    = _verticalScrollDip;
     const float viewportBottomDip = viewportTopDip + viewportHeightDip;
     const size_t rowCount         = _model->GetRowCount();
+    const float rowHeightDip      = std::max(_rowHeightDip, 1.0f);
+    const size_t visibleRowHint   = static_cast<size_t>(std::ceil(viewportHeightDip / rowHeightDip)) + 2u;
+    visibleItems.reserve(std::min(rowCount, visibleRowHint) + std::min(groups.size(), visibleRowHint));
 
-    const auto appendRows = [this, &bodyRect, viewportTopDip, viewportBottomDip, groups](size_t startRowIndex, size_t sectionRowCount)
+    const auto appendRows = [this, &bodyRect, viewportTopDip, viewportBottomDip, groups, &visibleItems](size_t startRowIndex, size_t sectionRowCount)
     {
         if (sectionRowCount == 0u)
         {
@@ -3965,10 +3943,10 @@ std::vector<Grid::VisibleBodyItem> Grid::BuildVisibleBodyItems(std::span<const G
         {
             const size_t rowIndex = startRowIndex + rowOffset;
             const float rowTopDip = bodyRect.top + sectionTopDip + (static_cast<float>(rowOffset) * _rowHeightDip) - _verticalScrollDip;
-            _cachedVisibleItems.push_back(VisibleBodyItem{.kind       = VisibleBodyItem::Kind::Row,
-                                                          .rowIndex   = rowIndex,
-                                                          .groupIndex = 0u,
-                                                          .rectDip    = D2D1::RectF(GetBounds().left, rowTopDip, bodyRect.right, rowTopDip + _rowHeightDip)});
+            visibleItems.push_back(VisibleBodyItem{.kind       = VisibleBodyItem::Kind::Row,
+                                                   .rowIndex   = rowIndex,
+                                                   .groupIndex = 0u,
+                                                   .rectDip    = D2D1::RectF(GetBounds().left, rowTopDip, bodyRect.right, rowTopDip + _rowHeightDip)});
         }
     };
 
@@ -3986,10 +3964,10 @@ std::vector<Grid::VisibleBodyItem> Grid::BuildVisibleBodyItems(std::span<const G
         if (headerBottomDip > viewportTopDip && headerTopDip < viewportBottomDip)
         {
             const float top = bodyRect.top + headerTopDip - _verticalScrollDip;
-            _cachedVisibleItems.push_back(VisibleBodyItem{.kind       = VisibleBodyItem::Kind::GroupHeader,
-                                                          .rowIndex   = group.startRowIndex,
-                                                          .groupIndex = groupIndex,
-                                                          .rectDip    = D2D1::RectF(GetBounds().left, top, bodyRect.right, top + _groupHeaderHeightDip)});
+            visibleItems.push_back(VisibleBodyItem{.kind       = VisibleBodyItem::Kind::GroupHeader,
+                                                   .rowIndex   = group.startRowIndex,
+                                                   .groupIndex = groupIndex,
+                                                   .rectDip    = D2D1::RectF(GetBounds().left, top, bodyRect.right, top + _groupHeaderHeightDip)});
         }
 
         if (! group.collapsed)
@@ -4003,7 +3981,7 @@ std::vector<Grid::VisibleBodyItem> Grid::BuildVisibleBodyItems(std::span<const G
     {
         appendRows(nextUngroupedRow, rowCount - nextUngroupedRow);
     }
-    return _cachedVisibleItems;
+    return visibleItems;
 }
 
 float Grid::GetVerticalScrollableExtent() const

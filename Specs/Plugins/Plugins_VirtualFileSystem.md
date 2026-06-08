@@ -816,15 +816,21 @@ interface __declspec(uuid("4a8f7cf2-f81c-4278-b182-7183e6bed6f3"))
 };
 ```
 
-### 4d. Capabilities (`IFileSystem::GetCapabilities`) (optional)
+### 4d. Capabilities (`IFileSystem::GetCapabilities`) (mandatory)
 
 Provides a **read-only** capabilities declaration for the filesystem plugin.
 
 The host uses this to:
 - enable/disable UI commands (rename/delete/properties, etc.)
+- decide whether same-provider copy/move/delete can create a task
 - decide whether cross-filesystem copy/move is allowed (explicit opt-in, per plugin pair)
 
 Capabilities are returned via `IFileSystem::GetCapabilities(...)` on the active filesystem instance.
+
+Normative rules:
+- Every `IFileSystem` implementation MUST return `S_OK` and a non-empty UTF-8 JSON document with `version: 1`, `operations`, `concurrency`, and `crossFileSystem`.
+- Providers MUST advertise unsupported actions with `false` operation fields or empty import/export policy lists. Returning `ERROR_NOT_SUPPORTED`, `E_NOTIMPL`, an empty document, or `nullptr` for `jsonUtf8` is a provider contract violation.
+- The host MUST treat a missing, failed, empty, or invalid capabilities response as unsupported and reject same-provider Copy/Move/Delete before task creation.
 
 **Per-instance rule:** capabilities are **per `IFileSystem` instance**, and MAY vary based on:
 - plugin mode (e.g. S3 vs S3Tables),

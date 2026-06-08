@@ -1,0 +1,35 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_CZECH, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERVLC_DESCRIPTION "Přehrávejte video soubory pomocí přehrávače médií VLC (libVLC)."
+    IDS_VIEWERVLC_WINDOW_CAPTION "Prohlížeč VLC"
+    IDS_VIEWERVLC_BUTTON_PLAY "hrát"
+    IDS_VIEWERVLC_BUTTON_PAUSE "Pauza"
+    IDS_VIEWERVLC_BUTTON_STOP "Přestaň"
+    IDS_VIEWERVLC_BUTTON_SNAPSHOT_ELLIPSIS "Snímek..."
+    IDS_VIEWERVLC_MISSING_TITLE "Je vyžadován přehrávač médií VLC."
+    IDS_VIEWERVLC_MISSING_BODY "Nainstalujte VLC media player nebo nastavte instalační složku VLC v Preferences > Plugins > VLC Viewer."
+    IDS_VIEWERVLC_MISSING_LINK "<a href=""https://www.videolan.org/vlc/"">Stáhněte si přehrávač médií VLC</a>"
+    IDS_VIEWERVLC_MISSING_LINK_LABEL "Stáhněte si VLC media player"
+    IDS_VIEWERVLC_FILEDLG_FILTER_PNG "Soubory PNG (*.png)\0*.png\0Všechny soubory (*.*)\0*.*\0"
+    IDS_VIEWERVLC_FILEDLG_TITLE_SNAPSHOT "Uložit snímek"
+    IDS_VIEWERVLC_DETAILS_CONFIGURED_PATH_INVALID_FMT "Nakonfigurovaná cesta VLC není instalační složka VLC:\r\n{0}"
+    IDS_VIEWERVLC_DETAILS_INSTALL_NOT_FOUND "Instalace VLC nebyla nalezena."
+    IDS_VIEWERVLC_DETAILS_EXPORTS_MISSING "Nepodařilo se vyřešit exporty libVLC z libvlc.dll."
+    IDS_VIEWERVLC_DETAILS_LIBVLC_NEW_FAILED "libvlc_new se nezdařilo."
+    IDS_VIEWERVLC_DETAILS_PATH_EMPTY "Cesta k souboru je prázdná."
+    IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE "Tento soubor není k dispozici jako místní cesta k souboru."
+    IDS_VIEWERVLC_DETAILS_LIBVLC_UNAVAILABLE "libVLC není k dispozici."
+    IDS_VIEWERVLC_DETAILS_UTF8_PATH_FAILED "Nepodařilo se převést cestu k souboru na UTF-8."
+    IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED "libvlc_media_new_path se nezdařilo."
+    IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED "libvlc_media_player_new_from_media se nezdařilo."
+    IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT "libvlc_media_player_play se nezdařilo (kód {0})."
+    IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Snímek se nezdařil (kód {0})."
+    IDS_VIEWERVLC_LOADING_TITLE "Spouštění VLC..."
+    IDS_VIEWERVLC_LOADING_BODY "Načítání enginu VLC. Přehrávání se spustí automaticky."
+END

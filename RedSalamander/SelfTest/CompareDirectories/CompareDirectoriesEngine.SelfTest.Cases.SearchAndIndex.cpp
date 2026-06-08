@@ -258,7 +258,7 @@ SelfTest::RunCase(options,
         }
     };
 
-    runPreferenceCase("auto", FALSE, FILESYSTEM_SEARCH_BACKEND_SCAN, false, false, false);
+    runPreferenceCase("auto", FALSE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, true, false);
     runPreferenceCase("service", TRUE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, true, false);
     runPreferenceCase("local-index", TRUE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, false, false);
     runPreferenceCase("scan", TRUE, FILESYSTEM_SEARCH_BACKEND_SCAN, false, false, false);

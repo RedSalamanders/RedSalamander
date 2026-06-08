@@ -781,13 +781,14 @@ void FolderView::QueueThumbnailLoading()
     for (size_t index = visibleStart; index < visibleEnd && newQueue.size() < kMaxThumbnailQueueItems; ++index)
     {
         const FolderItem& item = _items[index];
-        if (item.thumbnail)
+        if (item.thumbnail || (item.thumbnailFallbackResolved && item.thumbnailFallbackTargetPx == targetPx))
         {
             _thumbnailLoadStats.cacheHits.fetch_add(1u, std::memory_order_relaxed);
             continue;
         }
 
         ThumbnailLoadRequest request;
+        request.thumbnailLoadBatchId  = batchId;
         request.enumerationGeneration = enumerationGeneration;
         request.itemIndex             = index;
         request.fullPath              = GetItemFullPath(item);
@@ -826,12 +827,15 @@ bool FolderView::HasMissingVisibleThumbnails() const
         return false;
     }
 
+    const uint32_t targetPx = static_cast<uint32_t>(std::max(1, PxFromDip(_iconSizeDip)));
+
     const auto [visibleStartRaw, visibleEndRaw] = GetVisibleItemRange();
     const size_t visibleStart                   = std::min(visibleStartRaw, _items.size());
     const size_t visibleEnd                     = std::min(std::max(visibleEndRaw, visibleStart), _items.size());
     for (size_t index = visibleStart; index < visibleEnd; ++index)
     {
-        if (! _items[index].thumbnail)
+        const FolderItem& item = _items[index];
+        if (! item.thumbnail && (! item.thumbnailFallbackResolved || item.thumbnailFallbackTargetPx != targetPx))
         {
             return true;
         }
@@ -933,6 +937,12 @@ void FolderView::ProcessThumbnailLoadQueue()
             continue;
         }
 
+        const uint64_t currentBatchId = _thumbnailLoadStats.batchId.load(std::memory_order_acquire);
+        if (request.thumbnailLoadBatchId != currentBatchId)
+        {
+            continue;
+        }
+
         if (request.enumerationGeneration != _enumerationGeneration.load(std::memory_order_acquire))
         {
             _thumbnailLoadStats.staleDrops.fetch_add(1u, std::memory_order_relaxed);
@@ -949,9 +959,10 @@ void FolderView::ProcessThumbnailLoadQueue()
         }
 
         auto bitmapRequest                   = std::make_unique<ThumbnailBitmapRequest>();
-        bitmapRequest->thumbnailLoadBatchId  = batchId;
+        bitmapRequest->thumbnailLoadBatchId  = request.thumbnailLoadBatchId;
         bitmapRequest->enumerationGeneration = request.enumerationGeneration;
         bitmapRequest->itemIndex             = request.itemIndex;
+        bitmapRequest->targetPx              = request.targetPx;
         bitmapRequest->postedAt              = std::chrono::steady_clock::now();
 
         const auto extractStart = std::chrono::steady_clock::now();
@@ -1060,6 +1071,11 @@ void FolderView::ProcessThumbnailLoadQueue()
                 _thumbnailLoadQueue.push_back(std::move(request));
             }
             _enumerationCv.notify_one();
+            continue;
+        }
+
+        if (request.thumbnailLoadBatchId != _thumbnailLoadStats.batchId.load(std::memory_order_acquire))
+        {
             continue;
         }
 
@@ -1283,7 +1299,6 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
     const uint64_t batchId = _thumbnailLoadStats.batchId.load(std::memory_order_acquire);
     if (requestPtr->thumbnailLoadBatchId != batchId)
     {
-        _thumbnailLoadStats.staleDrops.fetch_add(1u, std::memory_order_relaxed);
         return;
     }
 
@@ -1302,6 +1317,13 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
 
     const auto completeAsFallback = [&]() noexcept
     {
+        if (requestPtr->itemIndex < _items.size())
+        {
+            FolderItem& item = _items[requestPtr->itemIndex];
+            item.thumbnail.reset();
+            item.thumbnailFallbackResolved = true;
+            item.thumbnailFallbackTargetPx = requestPtr->targetPx;
+        }
         _thumbnailLoadStats.completed.fetch_add(1u, std::memory_order_relaxed);
         _thumbnailLoadStats.fallback.fetch_add(1u, std::memory_order_relaxed);
         PerfEmitCounter(L"thumbnails.fallback_count", 1u);
@@ -1368,6 +1390,8 @@ void FolderView::OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest>
     }
 
     _items[requestPtr->itemIndex].thumbnail = std::move(bitmap);
+    _items[requestPtr->itemIndex].thumbnailFallbackResolved = false;
+    _items[requestPtr->itemIndex].thumbnailFallbackTargetPx = 0u;
     _thumbnailLoadStats.completed.fetch_add(1u, std::memory_order_relaxed);
     _thumbnailLoadStats.visibleApply.fetch_add(1u, std::memory_order_relaxed);
     PerfEmitCounter(L"thumbnails.ui_apply_count", 1u);
