@@ -1,13 +1,18 @@
 #include "FileSystemCurl.Internal.h"
 
+#include <bcrypt.h>
+
 #include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <thread>
 #include <unordered_map>
+
+#pragma comment(lib, "bcrypt.lib")
 
 using namespace FileSystemCurlInternal;
 
@@ -112,34 +117,7 @@ public:
 
     void Shutdown() noexcept
     {
-        {
-            std::scoped_lock lock(_initMutex);
-            if (! _initialized)
-            {
-                return;
-            }
-
-            for (std::jthread& worker : _workers)
-            {
-                worker.request_stop();
-            }
-        }
-
-        // Ensure any thread blocked in WaitJob can proceed during teardown.
-        {
-            std::scoped_lock lock(_mutex);
-            for (const JobPtr& job : _jobs)
-            {
-                if (job)
-                {
-                    finishJob(*job);
-                }
-            }
-            _jobs.clear();
-            _rrCursor = 0;
-        }
-
-        _cv.notify_all();
+        ShutdownAndJoin();
     }
 
     void ShutdownAndJoin() noexcept
@@ -159,7 +137,12 @@ public:
             }
         }
 
-        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        _cv.notify_all();
+
+        // Shutdown is called only after producers have stopped submitting jobs.
+        // Join workers first so stack-backed operation contexts cannot unwind while callbacks are still active.
+        workers.clear();
+
         {
             std::scoped_lock lock(_mutex);
             for (const JobPtr& job : _jobs)
@@ -174,8 +157,6 @@ public:
         }
 
         _cv.notify_all();
-
-        // 'workers' destructs here (joining the worker threads) outside any locks.
     }
 
 private:
@@ -829,6 +810,51 @@ private:
     return true;
 }
 
+[[nodiscard]] HRESULT GenerateRandomBytes(std::span<std::byte> bytes) noexcept
+{
+    if (bytes.empty())
+    {
+        return S_OK;
+    }
+
+    const NTSTATUS status = BCryptGenRandom(nullptr, reinterpret_cast<PUCHAR>(bytes.data()), static_cast<ULONG>(bytes.size()), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    return BCRYPT_SUCCESS(status) ? S_OK : HRESULT_FROM_NT(status);
+}
+
+void AppendHexToken(std::wstring& value, std::span<const std::byte> bytes)
+{
+    constexpr wchar_t kHex[] = L"0123456789abcdef";
+    value.reserve(value.size() + (bytes.size() * 2u));
+    for (const std::byte byte : bytes)
+    {
+        const unsigned int v = std::to_integer<unsigned int>(byte);
+        value.push_back(kHex[(v >> 4u) & 0x0Fu]);
+        value.push_back(kHex[v & 0x0Fu]);
+    }
+}
+
+[[nodiscard]] HRESULT BuildRemoteSiblingLeaf(std::wstring_view purposeTag, std::wstring& leafOut) noexcept
+{
+    leafOut.clear();
+
+    std::array<std::byte, 16> entropy{};
+    HRESULT hr = GenerateRandomBytes(entropy);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    std::wstring leaf;
+    leaf.reserve(std::wstring_view(L".redsalamander-").size() + purposeTag.size() + 1u + (entropy.size() * 2u));
+    leaf.append(L".redsalamander-");
+    leaf.append(purposeTag);
+    leaf.push_back(L'-');
+    AppendHexToken(leaf, entropy);
+
+    leafOut = std::move(leaf);
+    return S_OK;
+}
+
 [[nodiscard]] HRESULT GenerateRemoteSiblingPath(const ConnectionInfo& conn,
                                                 std::wstring_view destinationPath,
                                                 std::wstring_view purposeTag,
@@ -836,14 +862,18 @@ private:
 {
     siblingPathOut.clear();
 
-    static std::atomic<uint64_t> sequence{0};
-
     const std::wstring parent = ParentPath(destinationPath);
-    const uint64_t seed       = (GetTickCount64() << 8u) ^ sequence.fetch_add(1u, std::memory_order_acq_rel);
 
     for (unsigned int attempt = 0; attempt < 32u; ++attempt)
     {
-        const std::wstring candidate = JoinPluginPath(parent, std::format(L".redsalamander-{}-{:016X}", purposeTag, seed + attempt));
+        std::wstring leaf;
+        HRESULT hr = BuildRemoteSiblingLeaf(purposeTag, leaf);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        const std::wstring candidate = JoinPluginPath(parent, leaf);
 
         FilesInformationCurl::Entry ignored{};
         const HRESULT existsHr = GetEntryInfo(conn, candidate, ignored);
@@ -860,6 +890,74 @@ private:
 
     return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
 }
+
+#if defined(_DEBUG)
+bool DebugCheck(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) noexcept
+{
+    if (condition)
+    {
+        ++passed;
+        return true;
+    }
+
+    ++failed;
+    Debug::Error(L"FileSystemCurl debug selftest failed: {}", message);
+    return false;
+}
+
+[[nodiscard]] bool IsHexToken(std::wstring_view token) noexcept
+{
+    for (const wchar_t ch : token)
+    {
+        if (! ((ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'F') || (ch >= L'a' && ch <= L'f')))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void RunDebugRemoteSiblingLeafEntropySelfTest(unsigned int& passed, unsigned int& failed)
+{
+    constexpr std::wstring_view prefix = L".redsalamander-upload-";
+
+    std::vector<std::wstring> leaves;
+    leaves.reserve(8u);
+
+    for (unsigned int i = 0; i < 8u; ++i)
+    {
+        std::wstring leaf;
+        const HRESULT hr = BuildRemoteSiblingLeaf(L"upload", leaf);
+        DebugCheck(SUCCEEDED(hr), L"remote sibling leaf generation should succeed", passed, failed);
+        if (SUCCEEDED(hr))
+        {
+            leaves.push_back(std::move(leaf));
+        }
+    }
+
+    const std::wstring processIdText = std::to_wstring(GetCurrentProcessId());
+    for (const std::wstring& leaf : leaves)
+    {
+        DebugCheck(leaf.starts_with(prefix), L"remote sibling leaf should keep the staging prefix", passed, failed);
+        DebugCheck(leaf.find(processIdText) == std::wstring::npos, L"remote sibling leaf should not contain the process id", passed, failed);
+
+        if (leaf.starts_with(prefix) && leaf.size() >= prefix.size())
+        {
+            const std::wstring_view token(leaf.data() + prefix.size(), leaf.size() - prefix.size());
+            DebugCheck(token.size() == 32u, L"remote sibling leaf should contain a 128-bit hex entropy token", passed, failed);
+            DebugCheck(IsHexToken(token), L"remote sibling leaf entropy token should be hex only", passed, failed);
+        }
+    }
+
+    for (size_t i = 0; i < leaves.size(); ++i)
+    {
+        for (size_t j = i + 1u; j < leaves.size(); ++j)
+        {
+            DebugCheck(leaves[i] != leaves[j], L"remote sibling leaves should be unique across immediate generations", passed, failed);
+        }
+    }
+}
+#endif
 
 [[nodiscard]] HRESULT PrepareOverwriteTargetForRename(const ConnectionInfo& conn,
                                                       std::wstring_view destinationPath,
@@ -1164,6 +1262,23 @@ private:
     {
         static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
         return hr;
+    }
+
+    FilesInformationCurl::Entry stagedInfo{};
+    hr = GetEntryInfo(destinationConn, stagedRemotePath, stagedInfo);
+    if (FAILED(hr))
+    {
+        static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+        return hr;
+    }
+    // Verify the staged upload landed as a non-directory of the expected size. Some FTP listing
+    // dialects cannot report a file size (the parser leaves sizeKnown == false); for those we fall
+    // back to existence verification instead of failing every non-empty upload. This stays data-safe:
+    // CurlUploadFromFile only returns success after libcurl transmits all fileSize bytes.
+    if ((stagedInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 || (stagedInfo.sizeKnown && stagedInfo.sizeBytes != fileSize))
+    {
+        static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     }
 
     hr = PromoteStagedFileToDestination(destinationConn, stagedRemotePath, destinationRemotePath, allowOverwrite, backupPathOut);
@@ -1966,6 +2081,23 @@ struct DeleteTreeWorkItem final
     return hadFailure ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
 }
 } // namespace
+
+#if defined(_DEBUG)
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlDebugSelfTests(unsigned int* passed, unsigned int* failed)
+{
+    if (! passed || ! failed)
+    {
+        return E_POINTER;
+    }
+
+    *passed = 0;
+    *failed = 0;
+
+    RunDebugRemoteSiblingLeafEntropySelfTest(*passed, *failed);
+
+    return *failed == 0u ? S_OK : E_FAIL;
+}
+#endif
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
                                                    const wchar_t* destinationPath,

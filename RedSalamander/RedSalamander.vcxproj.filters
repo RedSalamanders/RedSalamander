@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="..\Common\FileSystemPathIdentity.h" />
     <ClInclude Include="..\Common\SearchTextHelpers.h" />
     <ClInclude Include="..\Common\SqliteIndexStore.h" />
     <ClInclude Include="AppTheme.h" />
@@ -63,9 +64,14 @@
     <ClInclude Include="ViewerPluginManager.h" />
     <ClInclude Include="FileSystemPluginManager.h" />
     <ClInclude Include="FunctionBar.h" />
-    <ClInclude Include="ManagePluginsDialog.h" />
-    <ClInclude Include="ChangeCase.h" />
-    <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
+      <ClInclude Include="ManagePluginsDialog.h" />
+      <ClInclude Include="ChangeCase.h" />
+      <ClInclude Include="FileSystemRenameBatch.h" />
+      <ClInclude Include="BatchRenameEngine.h" />
+      <ClInclude Include="BatchRenameExecutionEngine.h" />
+      <ClInclude Include="BatchRenameMenus.h" />
+      <ClInclude Include="BatchRenameWindow.h" />
+      <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
     <ClInclude Include="CommandRegistry.h" />
     <ClInclude Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
@@ -91,13 +97,19 @@
     <ClInclude Include="WindowPlacementPersistence.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\Common\FileSystemPathIdentity.cpp" />
     <ClCompile Include="..\Common\SearchTextHelpers.cpp" />
     <ClCompile Include="..\Common\SqliteIndexStore.cpp" />
     <ClCompile Include="AppTheme.cpp" />
     <ClCompile Include="D2DHdcPaint.cpp" />
-    <ClCompile Include="CrashHandler.cpp" />
-    <ClCompile Include="ChangeCase.cpp" />
-    <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
+      <ClCompile Include="CrashHandler.cpp" />
+      <ClCompile Include="ChangeCase.cpp" />
+      <ClCompile Include="FileSystemRenameBatch.cpp" />
+      <ClCompile Include="BatchRenameEngine.cpp" />
+      <ClCompile Include="BatchRenameExecutionEngine.cpp" />
+      <ClCompile Include="BatchRenameMenus.cpp" />
+      <ClCompile Include="BatchRenameWindow.cpp" />
+      <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
     <ClCompile Include="RedSalamander.cpp" />
     <ClCompile Include="FolderView.cpp" />
     <ClCompile Include="FolderView.DragDrop.cpp" />
@@ -210,6 +222,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.BatchRename.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Connections.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Dialogs.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.FileOps.cpp" />
@@ -235,5 +248,6 @@
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases14_16.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Fairstream.cpp" />
   </ItemGroup>
 </Project>

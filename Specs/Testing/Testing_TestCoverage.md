@@ -5,11 +5,11 @@
 This document provides a comprehensive inventory of every declared test case across all
 RedSalamander test suites. It serves as the authoritative reference for test coverage.
 
-Current runner-native inventory as of 2026-06-07:
+Current runner-native inventory as of 2026-06-15:
 
-- Commands: 668 listed cases.
+- Commands: 732 listed cases.
 - CompareDirectories: 149 listed cases.
-- FileOperations: 75 listed phases: 73 active ordered phases, plus setup and
+- FileOperations: 115 listed phases: 113 active ordered phases, plus setup and
   cleanup.
 - PerformanceTests2: 12 CppUnitTest `TEST_METHOD`s.
 - FileSystemCurlTests: 8 standalone helper cases.
@@ -17,7 +17,7 @@ Current runner-native inventory as of 2026-06-07:
 - MonitorTest: 3 ETW burst scenarios plus 3 fast guards
   (`--diagnostics-gate-selftest`, `--scrollbar-model-selftest`, and
   `--document-model-selftest`).
-- Tooling scripts: 81 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
+- Tooling scripts: 102 Pester-style `It` cases under `Tools/Tests`, plus 5 fast
   synthetic vcpkg merge cases.
 
 `RedSalamander.exe --selftest-list-cases` emits the authoritative in-product
@@ -28,12 +28,44 @@ equivalent to runner-listed cases.
 
 Current source-derived fallback counts:
 
-- Commands: 638 static `SelfTest::RunCase` call-site registrations.
+- Commands: 656 static `SelfTest::RunCase` call-site registrations.
 - CompareDirectories: 141 static `SelfTest::RunCase` call-site registrations.
-- FileOperations: 73 active ordered phases in `kFileOpsPhaseOrder`.
+- FileOperations: 113 active ordered phases in `kFileOpsPhaseOrder`.
 
 Recent focused coverage updates:
 
+- 2026-06-09 FolderView DPI/scale repaint guard: Debug `RedSalamander`
+  build passed with `.build/logs/msbuild-20260609_133818_682.log` (`0
+  warning(s), 0 error(s)`). `.build/x64/Debug/RedSalamander.exe
+  --commands-selftest --selftest-case=folderView_dpi_change_repaints_both_panes`
+  exited 0; archive
+  `Specs/TestRuns/7d3a1247382a/Commands/2026-06-09_134243/`. The case
+  covers dual-pane DPI propagation, swap-chain resize recovery, and the
+  required full-client repaint boundary when moving between different monitor
+  scales.
+- 2026-06-09 FolderView rendering-error overlay persistence: Debug
+  `RedSalamander` build passed with
+  `.build/logs/msbuild-20260609_133818_682.log` (`0 warning(s), 0 error(s)`).
+  `.build/x64/Debug/RedSalamander.exe --commands-selftest
+  --selftest-case=folderView_rendering_error_overlay_requires_persistence`
+  exited 0; archive
+  `Specs/TestRuns/7d3a1247382a/Commands/2026-06-09_134254/`. The case
+  covers transient rendering-failure suppression, persistent rendering-alert
+  promotion, explicit clear/reset behavior, and the
+  `folder.render.failure_suppressed` / `folder.render.failure_promoted`
+  metric pair.
+- 2026-06-09 DxUi menu popup live-DPI relayout: Debug `DxUiTests`
+  build passed with `.build/logs/msbuild-20260609_113137_699.log`
+  (`0 warning(s), 0 error(s)`). `.build/x64/Debug/DxUiTests.exe
+  --suite=Menu` exited 0 after adding
+  `TestContextMenuPopupRelayoutsOnDpiChanged`, covering an open async context
+  menu that receives `WM_DPICHANGED`, recomputes its DPI-scaled visible
+  surface/window capture geometry, keeps all visible rows inside the viewport,
+  and closes cleanly through Escape. The same pass also keeps the stationary
+  mouse keyboard-root-switch guard green after captured-popup stale moves stop
+  seeding the owner root-switch point. Perf evidence is archived at
+  `Specs/TestRuns/4cb089111a23/DxUiTests/2026-06-09_113318_menu_dpi_popup_relayout/`,
+  including `dxui.menu.dpi_relayout_us`.
 - 2026-06-08 DxUi button/menu chrome and AlertOverlay closeout: Debug
   `DxUiTests` build passed with
   `.build/logs/msbuild-20260608_172213_729.log` (`0 warning(s), 0
@@ -950,7 +982,7 @@ Recent UI-retirement evidence:
 
 ## 1. Commands Suite (`--commands-selftest`)
 
-**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (615 runner-listed cases; 585 static `SelfTest::RunCase` call sites)
+**Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` orchestrator + 12 included `.cpp` family files (733 runner-listed cases; 656 static `SelfTest::RunCase` call sites)
 
 The Commands suite is split into logical `.cpp` family files included from the main orchestrator:
 - `SelfTest\Commands\Commands.SelfTest.Settings.cpp` — Settings hot-reload, store, registry, preview/file-action guards, shortcut defaults (13+ cases)
@@ -960,7 +992,7 @@ The Commands suite is split into logical `.cpp` family files included from the m
 - `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` — Compare directories options, chrome, and progress (11 cases)
 - `SelfTest\Commands\Commands.SelfTest.Search.cpp` — Find dialog, local search index, quick search/filter (52 cases)
 - `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` — Shortcuts window (31 cases)
-- `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` — View commands, selection, sort, pane, tabs (29+ cases)
+- `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` — View commands, selection, sort, pane, tabs, FolderView rendering-alert persistence, and DPI repaint coverage (106 static registrations)
 - `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` — File operations issues pane, speed limit prompt (21 cases)
 - `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` — Navigation location, GoTo, navigation/drive menu shell stability, Command Shell Windows Terminal launch planning, Escape focus reclaim to the active FolderView, navigation-menu `Go to >` placement before drive rows, nonstandard file-system `Common Folders` submenu coverage, and directory-impact selection preservation
 - `SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp` — Shell-integrated pane commands including Change Attributes attributes/date-time/stream reports and recursive progress
@@ -1284,7 +1316,7 @@ Key coverage patterns per page:
 | `folderView_thumbnail_sort_popup_slider` | Pane bottom-right sort popup exposes the thumbnail size slider row |
 | `folderView_perf_large_folder_baseline` | Large folder performance baseline |
 | `folderView_perf_sort_toggle_stress` | 5,000-entry adversarial folder repeatedly toggles Name, Extension, Time, Size, and None sort modes, records per-sort durations, guards inactive quick search with `incrementalSearchEffectUpdates == 0`, and emits `folder.sort_toggle_us`; this is a metric recorder, not a wall-clock threshold gate |
-| `folderView_perf_scroll_render_stress` | 1,600-item normal-mode folder drives real horizontal and vertical scroll messages across Brief, Detailed, and Extra Detailed modes, recording visible work and `folder.scroll_*` metrics |
+| `folderView_perf_scroll_render_stress` | 1,600-item normal-mode folder drives real horizontal and vertical scroll messages across Brief, Detailed, and Extra Detailed modes, recording visible work and `folder.scroll_*` metrics, and asserting presence of the `dwrite.text_layout.*` creation metric family (`create_count`, `create_us`, `frame_create_count`, `frame_create_us`) and the `folder.layout.*_us` phase-decomposition family (`setup`, `estimate_metrics`, `column_resolve`, `bounds`, `update_text_layouts`) |
 | `folderView_perf_directory_change_storm` | Pane-visible local folder receives deterministic create/rename/delete/directory churn, then verifies final visible count, focus stability, and directory-change storm metrics |
 | `folderView_perf_iconcache_contention` | Dual-pane icon-heavy folders with repeated unique extensions drive IconCache lock diagnostics and archive lock wait/hold evidence before any contention optimization |
 | `file_action_resolution_v16_action_ids_are_case_insensitive` | File-action resolver matches action IDs case-insensitively, preserves action-definition casing, and collapses case-only references |
@@ -1474,7 +1506,7 @@ See `Specs/Testing/Testing_SelfTestRemoteCredentials.md`.
 
 ## 3. FileOperations Suite (`--fileops-selftest`)
 
-**Source:** `RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp` coordinator + 4 included phase files (75 runner-listed phases: 73 active phases plus setup and cleanup)
+**Source:** `RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp` coordinator + included phase files (115 runner-listed phases: 113 active phases plus setup and cleanup)
 
 Tests file operations (copy, move, delete, rename) using a tick-driven async state machine.
 Each phase represents a test case that exercises one aspect of the file operations pipeline.
@@ -1691,7 +1723,7 @@ the sink requests a synchronous read lock from the text-change callback.
 | `Tools\Tests\ResourceLocalizationContracts.Tests.ps1` | Resource placeholder positional-order and satellite placeholder-equivalence contract |
 | `Tools\Tests\RunAllTestsPlan.Tests.ps1` | Full runner test-plan enumeration and result-coverage validation |
 | `Tools\Tests\SanitizedEnvironment.Tests.ps1` | Child process environment normalization |
-| `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` | Source guards for test harness CLI/error handling, case-listing, result-emission, and duplicate-name contracts |
+| `Tools\Tests\TestHarnessSourceContracts.Tests.ps1` | Source guards for test harness CLI/error handling, case-listing, result-emission, duplicate-name contracts, CompareDirectories listed-case coverage, file-operations prefix filters, and Riptide/Floodgate source contracts |
 | `Tools\Tests\TestInventory.Tests.ps1` | Source-derived test inventory manifest, FileOperations phase-order drift guard, and doc-count lint |
 | `Tools\Tests\ViewerChromeSourceContracts.Tests.ps1` | Source/spec guards for shared viewer combo keyboard routing, Escape focus-cancel-close docs, and the single detached-console launcher contract |
 | `Tools\Tests\VcpkgInstallSafety.Tests.ps1` | vcpkg triplet leaf-name validation and staging/install child path containment |

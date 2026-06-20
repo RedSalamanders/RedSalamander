@@ -1540,8 +1540,12 @@ void DirectoryInfoCache::MaybeEvictLocked(std::vector<std::unique_ptr<FolderWatc
         return;
     }
 
-    while (_currentBytes > _maxBytes && ! _lru.empty())
+    const size_t scanLimit = _lru.size();
+    size_t scanned         = 0;
+    while (_currentBytes > _maxBytes && ! _lru.empty() && scanned < scanLimit)
     {
+        ++scanned;
+
         auto it        = std::prev(_lru.end());
         auto candidate = *it;
         if (! candidate)
@@ -1553,7 +1557,8 @@ void DirectoryInfoCache::MaybeEvictLocked(std::vector<std::unique_ptr<FolderWatc
         const bool inUse = (candidate->pinCount > 0) || (candidate->borrowCount > 0) || candidate->loading;
         if (inUse)
         {
-            // Cannot evict pinned/borrowed entries; rotate to avoid infinite loop.
+            // Cannot evict protected entries. Move on after at most one full pass so an
+            // over-budget cache with only pinned/borrowed/loading entries cannot spin.
             _lru.splice(_lru.begin(), _lru, it);
             candidate->lruIt = _lru.begin();
             continue;

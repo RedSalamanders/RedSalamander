@@ -2,10 +2,12 @@
 #ifdef ENABLE_TESTS
 #include "FolderWindow.FileOperations.SelfTest.h"
 #endif
+#include "FileSystemPathIdentity.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 
 #include <limits>
+#include <unordered_set>
 
 #pragma warning(push)
 #pragma warning(disable : 6297 28182) // yyjson warnings
@@ -27,6 +29,7 @@ struct FileSystemCapabilitiesV1
     std::vector<std::wstring> exportMove;
     std::vector<std::wstring> importCopy;
     std::vector<std::wstring> importMove;
+    std::optional<FileSystemPathIdentity> pathIdentity;
 };
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
@@ -119,7 +122,25 @@ struct FileSystemCapabilitiesV1
         return std::nullopt;
     }
 
+    // The mandatory shape requires all four sections (PlugInterfaces/FileSystem.h); a document
+    // missing any of them is a provider contract violation and must fail closed rather than be
+    // silently defaulted.
+    yyjson_val* requiredOperations      = yyjson_obj_get(root, "operations");
+    yyjson_val* requiredConcurrency     = yyjson_obj_get(root, "concurrency");
+    yyjson_val* requiredCrossFileSystem = yyjson_obj_get(root, "crossFileSystem");
+    yyjson_val* requiredPathIdentity    = yyjson_obj_get(root, "pathIdentity");
+    if (! requiredOperations || ! yyjson_is_obj(requiredOperations) || ! requiredConcurrency || ! yyjson_is_obj(requiredConcurrency) ||
+        ! requiredCrossFileSystem || ! yyjson_is_obj(requiredCrossFileSystem) || ! requiredPathIdentity || ! yyjson_is_obj(requiredPathIdentity))
+    {
+        return std::nullopt;
+    }
+
     FileSystemCapabilitiesV1 out{};
+    out.pathIdentity = TryParseFileSystemPathIdentityContract(jsonUtf8, {});
+    if (! out.pathIdentity.has_value())
+    {
+        return std::nullopt;
+    }
 
     if (yyjson_val* ops = yyjson_obj_get(root, "operations"); ops && yyjson_is_obj(ops))
     {
@@ -166,7 +187,37 @@ struct FileSystemCapabilitiesV1
     return out;
 }
 
-[[nodiscard]] std::optional<FileSystemCapabilitiesV1> TryGetCapabilities(const wil::com_ptr<IFileSystem>& fileSystem) noexcept
+[[nodiscard]] bool HasStablePathIdentity(const FileSystemCapabilitiesV1& capabilities) noexcept
+{
+    return capabilities.pathIdentity.has_value() && capabilities.pathIdentity->pathTextStableIdentity;
+}
+
+// GetCapabilities is mandatory: every provider must return S_OK and a parseable version-1 document. Any other
+// response is a provider contract violation; the host fails closed and surfaces the violation once per instance.
+void ReportCapabilitiesContractViolationOnce(const IFileSystem* fileSystem, std::wstring_view pluginId, HRESULT hr) noexcept
+{
+    static std::mutex reportedMutex;
+    static std::unordered_set<const IFileSystem*> reportedProviders;
+
+    {
+        // The only throwing operation here is the set insertion, and that only throws
+        // std::bad_alloc; per the repo exception policy allocation failure terminates
+        // (this function is noexcept), so no catch is needed.
+        const std::lock_guard lock(reportedMutex);
+        if (! reportedProviders.insert(fileSystem).second)
+        {
+            return;
+        }
+    }
+
+    Debug::Error(L"FolderWindow filesystem provider '{}' violates the mandatory GetCapabilities contract (hr=0x{:08X}); "
+                 L"capability-gated operations are disabled for this instance.",
+                 pluginId.empty() ? std::wstring_view(L"<unknown>") : pluginId,
+                 static_cast<unsigned long>(hr));
+}
+
+[[nodiscard]] std::optional<FileSystemCapabilitiesV1> TryGetCapabilities(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                                         std::wstring_view pluginId = {}) noexcept
 {
     if (! fileSystem)
     {
@@ -177,16 +228,25 @@ struct FileSystemCapabilitiesV1
     const HRESULT hr     = fileSystem->GetCapabilities(&jsonUtf8);
     if (FAILED(hr) || ! jsonUtf8 || jsonUtf8[0] == '\0')
     {
+        ReportCapabilitiesContractViolationOnce(fileSystem.get(), pluginId, hr);
         return std::nullopt;
     }
 
     const std::string_view jsonView(jsonUtf8);
-    return TryParseCapabilitiesJson(jsonView);
+    std::optional<FileSystemCapabilitiesV1> capabilities = TryParseCapabilitiesJson(jsonView);
+    if (! capabilities.has_value())
+    {
+        ReportCapabilitiesContractViolationOnce(fileSystem.get(), pluginId, hr);
+    }
+
+    return capabilities;
 }
 
-[[nodiscard]] bool CanSameFileSystemOperationFromCapabilities(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
+[[nodiscard]] bool CanSameFileSystemOperationFromCapabilities(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                              FileSystemOperation operation,
+                                                              std::wstring_view pluginId = {}) noexcept
 {
-    const std::optional<FileSystemCapabilitiesV1> capabilities = TryGetCapabilities(fileSystem);
+    const std::optional<FileSystemCapabilitiesV1> capabilities = TryGetCapabilities(fileSystem, pluginId);
     if (! capabilities.has_value())
     {
         return false;
@@ -194,9 +254,9 @@ struct FileSystemCapabilitiesV1
 
     switch (operation)
     {
-        case FILESYSTEM_COPY: return capabilities->copyOperation;
-        case FILESYSTEM_MOVE: return capabilities->moveOperation;
-        case FILESYSTEM_DELETE: return capabilities->deleteOperation;
+        case FILESYSTEM_COPY: return capabilities->copyOperation && HasStablePathIdentity(capabilities.value());
+        case FILESYSTEM_MOVE: return capabilities->moveOperation && HasStablePathIdentity(capabilities.value());
+        case FILESYSTEM_DELETE: return capabilities->deleteOperation && HasStablePathIdentity(capabilities.value());
         case FILESYSTEM_RENAME: return true;
         default: return true;
     }
@@ -236,8 +296,8 @@ struct FileSystemCapabilitiesV1
         return false;
     }
 
-    const std::optional<FileSystemCapabilitiesV1> sourceCaps = TryGetCapabilities(sourceFileSystem);
-    const std::optional<FileSystemCapabilitiesV1> destCaps   = TryGetCapabilities(destinationFileSystem);
+    const std::optional<FileSystemCapabilitiesV1> sourceCaps = TryGetCapabilities(sourceFileSystem, sourcePluginId);
+    const std::optional<FileSystemCapabilitiesV1> destCaps   = TryGetCapabilities(destinationFileSystem, destinationPluginId);
     if (! sourceCaps.has_value() || ! destCaps.has_value())
     {
         return false;
@@ -260,9 +320,9 @@ struct FileSystemCapabilitiesV1
 }
 } // namespace
 
-bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept
+bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation, std::wstring_view pluginId) noexcept
 {
-    return CanSameFileSystemOperationFromCapabilities(fileSystem, operation);
+    return CanSameFileSystemOperationFromCapabilities(fileSystem, operation, pluginId);
 }
 
 void FolderWindow::FileOperationStateDeleter::operator()(FileOperationState* state) const noexcept
@@ -410,11 +470,11 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
         }
     }
 
-    if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, request.operation))
+    const std::wstring& sourcePluginIdForGate = sourcePane == Pane::Left ? _leftPane.pluginId : _rightPane.pluginId;
+    if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, request.operation, sourcePluginIdForGate))
     {
-        const std::wstring& pluginId = sourcePane == Pane::Left ? _leftPane.pluginId : _rightPane.pluginId;
         Debug::Error(L"FolderWindow::StartFileOperationFromFolderView provider rejected same-filesystem operation plugin:{} op:{}.",
-                     pluginId,
+                     sourcePluginIdForGate,
                      static_cast<unsigned int>(request.operation));
         destinationState.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
                                                      FolderView::OverlaySeverity::Error,
@@ -544,8 +604,14 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
                                                          FileSystemOperation operation,
                                                          std::vector<std::filesystem::path> sourcePaths,
                                                          FileSystemFlags flags,
-                                                         bool requireConfirmation) noexcept
+                                                         bool requireConfirmation,
+                                                         uint64_t* taskIdOut) noexcept
 {
+    if (taskIdOut)
+    {
+        *taskIdOut = 0;
+    }
+
     if (sourcePluginId.empty())
     {
         return E_INVALIDARG;
@@ -575,7 +641,7 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
         return E_POINTER;
     }
 
-    if (! CanSameFileSystemOperation(sourceState.fileSystem, operation))
+    if (! CanSameFileSystemOperation(sourceState.fileSystem, operation, sourceState.pluginId))
     {
         Debug::Error(L"FolderWindow::StartFileOperationForResolvedPaths provider rejected operation plugin:{} op:{}.",
                      sourceState.pluginId,
@@ -598,7 +664,9 @@ HRESULT FolderWindow::StartFileOperationForResolvedPaths(std::wstring_view sourc
                                            waitForOthers,
                                            0,
                                            FileOperationState::ExecutionMode::PerItem,
-                                           requireConfirmation);
+                                           requireConfirmation,
+                                           nullptr,
+                                           taskIdOut);
 }
 
 HRESULT FolderWindow::StartFileOperationForResolvedPathsToOtherPane(std::wstring_view sourcePluginId,
@@ -606,8 +674,14 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToOtherPane(std::wstring
                                                                     FileSystemOperation operation,
                                                                     std::vector<std::filesystem::path> sourcePaths,
                                                                     FileSystemFlags flags,
-                                                                    std::optional<std::filesystem::path>* outDestinationFolder) noexcept
+                                                                    std::optional<std::filesystem::path>* outDestinationFolder,
+                                                                    uint64_t* taskIdOut) noexcept
 {
+    if (taskIdOut)
+    {
+        *taskIdOut = 0;
+    }
+
     if (outDestinationFolder)
     {
         outDestinationFolder->reset();
@@ -663,7 +737,7 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToOtherPane(std::wstring
     const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                                       NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
     wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
-    if (! destinationFileSystem && ! CanSameFileSystemOperation(src.fileSystem, operation))
+    if (! destinationFileSystem && ! CanSameFileSystemOperation(src.fileSystem, operation, src.pluginId))
     {
         Debug::Error(L"FolderWindow::StartFileOperationForResolvedPathsToOtherPane provider rejected same-filesystem operation plugin:{} op:{}.",
                      src.pluginId,
@@ -685,7 +759,8 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToOtherPane(std::wstring
                                            0,
                                            FileOperationState::ExecutionMode::PerItem,
                                            false,
-                                           std::move(destinationFileSystem));
+                                           std::move(destinationFileSystem),
+                                           taskIdOut);
 }
 
 HRESULT FolderWindow::StartFileOperationForResolvedPathsToDestination(std::wstring_view sourcePluginId,
@@ -693,8 +768,14 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToDestination(std::wstri
                                                                       FileSystemOperation operation,
                                                                       std::vector<std::filesystem::path> sourcePaths,
                                                                       std::filesystem::path destinationFolder,
-                                                                      FileSystemFlags flags) noexcept
+                                                                      FileSystemFlags flags,
+                                                                      uint64_t* taskIdOut) noexcept
 {
+    if (taskIdOut)
+    {
+        *taskIdOut = 0;
+    }
+
     if (sourcePluginId.empty() || (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE))
     {
         return E_INVALIDARG;
@@ -729,7 +810,7 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToDestination(std::wstri
         return E_POINTER;
     }
 
-    if (! CanSameFileSystemOperation(src.fileSystem, operation))
+    if (! CanSameFileSystemOperation(src.fileSystem, operation, src.pluginId))
     {
         Debug::Error(L"FolderWindow::StartFileOperationForResolvedPathsToDestination provider rejected same-filesystem operation plugin:{} op:{}.",
                      src.pluginId,
@@ -752,7 +833,9 @@ HRESULT FolderWindow::StartFileOperationForResolvedPathsToDestination(std::wstri
                                            waitForOthers,
                                            0,
                                            FileOperationState::ExecutionMode::PerItem,
-                                           false);
+                                           false,
+                                           nullptr,
+                                           taskIdOut);
 }
 
 void FolderWindow::ShutdownFileOperations() noexcept
@@ -868,7 +951,7 @@ void FolderWindow::CommandDelete(Pane pane)
         return;
     }
 
-    if (! CanSameFileSystemOperation(state.fileSystem, FILESYSTEM_DELETE))
+    if (! CanSameFileSystemOperation(state.fileSystem, FILESYSTEM_DELETE, state.pluginId))
     {
         Debug::Error(L"FolderWindow::CommandDelete provider rejected delete plugin:{}.", state.pluginId);
         state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
@@ -880,9 +963,12 @@ void FolderWindow::CommandDelete(Pane pane)
 
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN);
 
+    // Recycle deletes go through ONE bulk DeleteItems call: the plugin batches same-parent
+    // items into a single IFileOperation (up to 1000 per batch), which per-item routing would
+    // degrade to one shell operation + one STA thread per item.
     const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
     static_cast<void>(_fileOperations->StartOperation(
-        FILESYSTEM_DELETE, pane, std::nullopt, state.fileSystem, std::move(paths), {}, flags, waitForOthers, 0, FileOperationState::ExecutionMode::PerItem));
+        FILESYSTEM_DELETE, pane, std::nullopt, state.fileSystem, std::move(paths), {}, flags, waitForOthers, 0, FileOperationState::ExecutionMode::BulkItems));
 }
 
 void FolderWindow::CommandPermanentDelete(Pane pane)
@@ -902,7 +988,7 @@ void FolderWindow::CommandPermanentDelete(Pane pane)
         return;
     }
 
-    if (! CanSameFileSystemOperation(state.fileSystem, FILESYSTEM_DELETE))
+    if (! CanSameFileSystemOperation(state.fileSystem, FILESYSTEM_DELETE, state.pluginId))
     {
         Debug::Error(L"FolderWindow::CommandPermanentDelete provider rejected delete plugin:{}.", state.pluginId);
         state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation,
@@ -985,7 +1071,7 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
             ok = false;
         }
     }
-    else if (ok && ! contextsDiffer && ! CanSameFileSystemOperation(src.fileSystem, operation))
+    else if (ok && ! contextsDiffer && ! CanSameFileSystemOperation(src.fileSystem, operation, src.pluginId))
     {
         Debug::Error(L"FolderWindow::SanityCheckBothPanes provider rejected same-filesystem operation plugin:{} op:{}.",
                      src.pluginId,
@@ -1119,16 +1205,30 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
     const Pane sourcePane                     = task->GetSourcePane();
     const std::optional<Pane> destinationPane = task->GetDestinationPane();
 
-    if (_fileOperationCompletedCallback)
+    if (! _fileOperationCompletedCallbacks.empty())
     {
         FileOperationCompletedEvent e{};
+        e.taskId            = payload->taskId;
         e.operation         = task->GetOperation();
         e.sourcePane        = sourcePane;
         e.destinationPane   = destinationPane;
         e.sourcePaths       = task->_sourcePaths;
         e.destinationFolder = task->GetDestinationFolder();
         e.hr                = payload->hr;
-        _fileOperationCompletedCallback(e);
+
+        // Iterate over a copy: a callback may unsubscribe (or subscribe) while handling the event.
+        const auto subscriptions = _fileOperationCompletedCallbacks;
+        for (const FileOperationCompletedSubscription& subscription : subscriptions)
+        {
+            if (subscription.hasLifetimeGuard && subscription.lifetimeGuard.expired())
+            {
+                continue;
+            }
+            if (subscription.callback)
+            {
+                subscription.callback(e);
+            }
+        }
     }
 
     PaneState& src            = sourcePane == Pane::Left ? _leftPane : _rightPane;

@@ -1510,8 +1510,6 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 
     ClearErrorOverlay(ErrorOverlayKind::Enumeration);
 
-    ExitIncrementalSearch();
-
     const auto invalidIndex     = static_cast<size_t>(-1);
     size_t previousFocusedIndex = invalidIndex;
     std::wstring previousFocusName;
@@ -1525,6 +1523,10 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     if (_displayedFolder && _currentFolder)
     {
         isRefresh = NormalizeFocusMemoryFolderKey(_displayedFolder.value()) == NormalizeFocusMemoryFolderKey(_currentFolder.value());
+    }
+    if (! isRefresh)
+    {
+        ExitIncrementalSearch();
     }
 
     std::wstring preferredFocusPath;

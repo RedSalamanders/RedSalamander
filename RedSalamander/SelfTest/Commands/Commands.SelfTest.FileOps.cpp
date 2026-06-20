@@ -4673,8 +4673,11 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
         std::this_thread::sleep_for(20ms);
     }
     state.Require(taskSnapshot.conflict.active, L"Compact conflict prompt test did not reach an active conflict prompt.");
-    state.Require(taskSnapshot.conflict.actionCount >= 4u,
-                  std::format(L"Conflict prompt model should retain overflow actions; saw {} action(s).", taskSnapshot.conflict.actionCount));
+    // Fairstream 3A/3B: an Exists conflict offers exactly Overwrite/Skip/Cancel — SkipAll is
+    // expressed by the All-similar toggle and Retry is withheld for deterministic buckets.
+    state.Require(taskSnapshot.conflict.actionCount == 3u,
+                  std::format(L"Exists conflict should offer exactly 3 actions (Overwrite/Skip/Cancel); saw {} action(s).",
+                              taskSnapshot.conflict.actionCount));
     if (! state.failure.empty())
     {
         return false;
@@ -4705,8 +4708,8 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
     state.Require(layoutHasPrimaryAction(ConflictAction::Overwrite), L"Conflict prompt should keep Overwrite as a primary action.");
     state.Require(layoutHasPrimaryAction(ConflictAction::Skip), L"Conflict prompt should keep Skip as a primary action.");
     state.Require(layoutHasPrimaryAction(ConflictAction::Cancel), L"Conflict prompt should keep Cancel as a primary action.");
-    state.Require(layout.conflictMoreVisible, L"Conflict prompt should expose a More affordance for overflow actions.");
-    state.Require(layout.conflictOverflowActionCount > 0u, L"Conflict prompt More affordance should contain overflow actions.");
+    state.Require(! layout.conflictMoreVisible, L"Exists conflict prompt should have no More affordance once SkipAll/Retry are gone.");
+    state.Require(layout.conflictOverflowActionCount == 0u, L"Exists conflict prompt should have no overflow actions.");
     state.Require(layout.conflictApplyToAllVisible, L"Conflict prompt should keep an apply-to-all toggle visible.");
     state.Require(layout.footerVisibleButtonCount == 2u,
                   std::format(L"File-operations footer should expose exactly 2 controls; saw {}.", layout.footerVisibleButtonCount));
@@ -4726,11 +4729,17 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
         return false;
     }
 
-    FileOperationsPopupInternal::PopupSelfTestInvoke overflowInvoke{};
-    overflowInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictMore;
-    overflowInvoke.taskId = taskId.value();
-    overflowInvoke.data   = static_cast<uint32_t>(ConflictAction::SkipAll);
-    state.Require(DebugInvokeFileOperationsPopup(popup, overflowInvoke), L"Failed to invoke conflict prompt overflow action through the More affordance.");
+    // Skip-everything is expressed as All-similar + Skip (SkipAll left the prompt entirely).
+    FileOperationsPopupInternal::PopupSelfTestInvoke applyToAllToggle{};
+    applyToAllToggle.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictToggleApplyToAll;
+    applyToAllToggle.taskId = taskId.value();
+    state.Require(DebugInvokeFileOperationsPopup(popup, applyToAllToggle), L"Failed to toggle the conflict prompt's All-similar checkbox.");
+
+    FileOperationsPopupInternal::PopupSelfTestInvoke skipInvoke{};
+    skipInvoke.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskConflictAction;
+    skipInvoke.taskId = taskId.value();
+    skipInvoke.data   = static_cast<uint32_t>(ConflictAction::Skip);
+    state.Require(DebugInvokeFileOperationsPopup(popup, skipInvoke), L"Failed to invoke Skip with All-similar checked.");
 
     const auto completionDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
     bool conflictResolved         = false;
@@ -4813,9 +4822,11 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
     std::atomic<bool> menuDebugReadable{false};
     std::atomic<bool> menuRightAlignedToButton{false};
     std::atomic<bool> menuVerticallyAttachedToButton{false};
+    std::atomic<bool> menuObserverFinished{false};
     std::jthread menuObserver([&](std::stop_token stopToken) noexcept
     {
         using namespace std::chrono_literals;
+        const auto finishedScope = wil::scope_exit([&]() noexcept { menuObserverFinished.store(true, std::memory_order_release); });
 
         const auto openDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
         HWND menu               = nullptr;
@@ -4862,6 +4873,15 @@ constexpr std::wstring_view kBuiltinDummyFileSystemIdForFileOpsPrompt = L"builti
     SendMessageW(popup, WM_MOUSEMOVE, 0, moreClickLParam);
     SendMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, moreClickLParam);
     SendMessageW(popup, WM_LBUTTONUP, 0, moreClickLParam);
+    // The observer SendMessages UI-thread windows (menu debug state, owner lookups); a blind
+    // join here deadlocks it. Keep pumping until the observer finishes on its own deadlines.
+    const auto observerDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(8000ms);
+    while (! menuObserverFinished.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < observerDeadline)
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+    menuObserver.request_stop();
     menuObserver.join();
 
     state.Require(menuOpened.load(std::memory_order_acquire), L"Completed-task More button did not open a DxUI context menu.");

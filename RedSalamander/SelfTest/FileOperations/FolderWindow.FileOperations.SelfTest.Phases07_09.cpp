@@ -675,10 +675,15 @@ case SelfTestState::Step::Phase7_LargeDirectoryEnumeration:
             state.infoLocal.get(),
             R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":1,"enumerationHardMaxBufferMiB":8})json"));
 
-        // Create a lot of long-named files (but stay under MAX_PATH).
+        // Create a lot of long-named files while staying under MAX_PATH even from deep worktrees.
         constexpr int kFileCount = 4000;
-        constexpr int kPadChars  = 120;
-        const std::wstring pad(kPadChars, L'x');
+        constexpr size_t kTargetPathChars = 240;
+        constexpr size_t kMinPadChars     = 24;
+        constexpr size_t kMaxPadChars     = 120;
+        const size_t fixedPathChars       = (enumDir / L"e_0000_.txt").wstring().size();
+        const size_t availablePadChars    = fixedPathChars < kTargetPathChars ? (kTargetPathChars - fixedPathChars) : kMinPadChars;
+        const size_t padChars             = std::clamp(availablePadChars, kMinPadChars, kMaxPadChars);
+        const std::wstring pad(padChars, L'x');
         for (int i = 0; i < kFileCount; ++i)
         {
             const std::filesystem::path file = enumDir / std::format(L"e_{:04}_{}.txt", i, pad);
@@ -1439,8 +1444,27 @@ case SelfTestState::Step::Phase7_AutoConcurrencyHints:
     }
 
     constexpr unsigned int kManualCopyConcurrency = 1u;
-    constexpr unsigned int kAutoCopyConcurrency   = 4u;
-    constexpr unsigned int kAutoDeleteConcurrency = 8u;
+    // Auto mode resolves to the storage profile's preferred concurrency (the engine probes the
+    // real medium since Fairstream 5D), so the expectation must come from the same probe
+    // instead of a flat constant.
+    unsigned int kAutoCopyConcurrency   = 4u;
+    unsigned int kAutoDeleteConcurrency = 8u;
+    {
+        FileSystemStorageCharacteristics storageCharacteristics{};
+        storageCharacteristics.sizeBytes = sizeof(storageCharacteristics);
+        const std::wstring storageProbePath = state.tempRoot.wstring();
+        if (state.fsLocal && SUCCEEDED(state.fsLocal->GetStorageCharacteristics(storageProbePath.c_str(), &storageCharacteristics)))
+        {
+            if (storageCharacteristics.preferredCopyMoveConcurrency != 0u)
+            {
+                kAutoCopyConcurrency = storageCharacteristics.preferredCopyMoveConcurrency;
+            }
+            if (storageCharacteristics.preferredDeleteConcurrency != 0u)
+            {
+                kAutoDeleteConcurrency = storageCharacteristics.preferredDeleteConcurrency;
+            }
+        }
+    }
     constexpr int kCopyFileCount                  = 16;
     constexpr size_t kCopyFileBytes               = 4ull * 1024ull * 1024ull;
     constexpr int kDeleteFileCount                = 256;
@@ -5470,13 +5494,20 @@ case SelfTestState::Step::Phase9_ConflictPrompt_SkipAll:
             return true;
         }
 
-        if (! PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll))
+        // Fairstream 3A: SkipAll is no longer offered as a separate action; the "All similar"
+        // toggle plus Skip expresses the same decision with one fewer button.
+        if (PromptHasAction(prompt.value(), Task::ConflictAction::SkipAll))
         {
-            Fail(L"SkipAll action not offered for Exists conflict.");
+            Fail(L"SkipAll must not be offered; 'All similar' + Skip replaces it.");
+            return true;
+        }
+        if (! PromptHasAction(prompt.value(), Task::ConflictAction::Skip))
+        {
+            Fail(L"Skip action not offered for Exists conflict.");
             return true;
         }
 
-        task->SubmitConflictDecision(Task::ConflictAction::SkipAll, false);
+        task->SubmitConflictDecision(Task::ConflictAction::Skip, true);
         state.stepState = 2;
         return false;
     }
@@ -5495,6 +5526,12 @@ case SelfTestState::Step::Phase9_ConflictPrompt_SkipAll:
             Fail(std::format(L"Expected SkipAll copy task to return 0x{:08X}, got 0x{:08X}.",
                              static_cast<unsigned long>(expectedHr),
                              static_cast<unsigned long>(it->second.hr)));
+            return true;
+        }
+
+        if (it->second.conflictPromptCount != 1u)
+        {
+            Fail(std::format(L"Skip + All-similar expected exactly one prompt, saw {}.", it->second.conflictPromptCount));
             return true;
         }
 

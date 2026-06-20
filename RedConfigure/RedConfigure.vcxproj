@@ -132,6 +132,7 @@
     <ClCompile Include="RedConfigureApp.cpp" />
     <ClCompile Include="RedConfigureRoot.cpp" />
     <ClCompile Include="RedConfigureSession.cpp" />
+    <ClCompile Include="RedConfigureSplashScreen.cpp" />
     <ClCompile Include="RedConfigureTraceProvider.cpp" />
     <ClCompile Include="RedConfigureUiHelpers.cpp" />
     <ClCompile Include="Themes\ThemeCatalog.cpp" />
@@ -146,6 +147,7 @@
     <ClInclude Include="RedConfigureGridModels.h" />
     <ClInclude Include="RedConfigureRoot.h" />
     <ClInclude Include="RedConfigureSession.h" />
+    <ClInclude Include="RedConfigureSplashScreen.h" />
     <ClInclude Include="RedConfigureThemeExampleControl.h" />
     <ClInclude Include="RedConfigureUiHelpers.h" />
     <ClInclude Include="resource.h" />

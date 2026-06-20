@@ -506,7 +506,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetAttributes(const wchar_t* path, unsigne
         return S_OK;
     }
 
-    const DWORD attrs = GetFileAttributesW(path);
+    const std::wstring extendedPath = ToExtendedPath(path);
+    const DWORD attrs               = GetFileAttributesW(extendedPath.c_str());
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         const DWORD lastError = GetLastError();
@@ -529,7 +530,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateDirectory(const wchar_t* path) noexc
         return E_INVALIDARG;
     }
 
-    if (::CreateDirectoryW(path, nullptr) == 0)
+    const std::wstring extendedPath = ToExtendedPath(path);
+    if (::CreateDirectoryW(extendedPath.c_str(), nullptr) == 0)
     {
         const DWORD lastError = GetLastError();
         return lastError != 0 ? HRESULT_FROM_WIN32(lastError) : E_FAIL;

@@ -40,6 +40,7 @@ constexpr uint32_t kSqliteAutoCompactionFragmentationPercent = 15u;
 constexpr uint64_t kSqliteAutoCompactionMinBytes             = 64u * 1024u * 1024u;
 #ifdef ENABLE_TESTS
 constexpr wchar_t kForceNtfsTraversalSeedEnvVar[] = L"REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED";
+thread_local DWORD g_nextJournalReplayReadFailureForTests = ERROR_SUCCESS;
 #endif
 constexpr DWORD kJournalReplayReasons = USN_REASON_FILE_CREATE | USN_REASON_FILE_DELETE | USN_REASON_RENAME_OLD_NAME | USN_REASON_RENAME_NEW_NAME |
                                         USN_REASON_BASIC_INFO_CHANGE | USN_REASON_HARD_LINK_CHANGE | USN_REASON_REPARSE_POINT_CHANGE;
@@ -162,6 +163,10 @@ struct JournalState final
     uint64_t firstUsn = 0u;
     uint64_t nextUsn  = 0u;
 };
+
+#ifdef ENABLE_TESTS
+thread_local std::optional<JournalState> g_nextJournalStateForTests;
+#endif
 
 struct Entry final
 {
@@ -902,6 +907,17 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
+        const uint64_t fileBytes         = static_cast<uint64_t>(size.QuadPart);
+        uint64_t consumedSnapshotBytes   = sizeof(SnapshotHeader);
+        const uint64_t remainingBytes    = fileBytes - consumedSnapshotBytes;
+        const uint64_t maxEntriesInBytes = remainingBytes / sizeof(SnapshotEntryHeader);
+        constexpr uint64_t kMaxSizeT     = static_cast<uint64_t>((std::numeric_limits<size_t>::max)());
+        if (header.entryCount > maxEntriesInBytes || header.entryCount > kMaxSizeT)
+        {
+            stats.rebuiltSnapshotCorruption = true;
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
         outState.fileSystemKind = _fileSystemKind;
         outState.trackedRootId  = NodeId{header.rootIdLow, header.rootIdHigh};
         outState.journalId      = header.journalId;
@@ -912,6 +928,13 @@ public:
 
         for (uint64_t index = 0u; index < header.entryCount; ++index)
         {
+            if (fileBytes - consumedSnapshotBytes < sizeof(SnapshotEntryHeader))
+            {
+                stats.rebuiltSnapshotCorruption = true;
+                outState.entries.clear();
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+
             SnapshotEntryHeader entryHeader{};
             if (::ReadFile(file.get(), &entryHeader, sizeof(entryHeader), &bytesRead, nullptr) == 0 || bytesRead != sizeof(entryHeader))
             {
@@ -919,8 +942,9 @@ public:
                 outState.entries.clear();
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
+            consumedSnapshotBytes += sizeof(SnapshotEntryHeader);
 
-            if ((entryHeader.nameBytes % sizeof(wchar_t)) != 0u)
+            if ((entryHeader.nameBytes % sizeof(wchar_t)) != 0u || entryHeader.nameBytes > fileBytes - consumedSnapshotBytes)
             {
                 stats.rebuiltSnapshotCorruption = true;
                 outState.entries.clear();
@@ -938,6 +962,7 @@ public:
                     return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
             }
+            consumedSnapshotBytes += entryHeader.nameBytes;
 
             outState.entries.push_back({
                 .id             = NodeId{entryHeader.idLow, entryHeader.idHigh},
@@ -1044,6 +1069,7 @@ public:
             case SnapshotCorruptionMode::InvalidMagic: header.magic ^= 0x13579BDFu; break;
             case SnapshotCorruptionMode::JournalIdMismatch: header.journalId = header.journalId + 1u; break;
             case SnapshotCorruptionMode::NextUsnPastEnd: header.nextUsn = (std::numeric_limits<uint64_t>::max)(); break;
+            case SnapshotCorruptionMode::EntryCountTooLarge: header.entryCount = (std::numeric_limits<uint64_t>::max)(); break;
         }
 
         LARGE_INTEGER zero{};
@@ -1555,6 +1581,15 @@ HRESULT GetJournalState(std::wstring_view volumeDevicePath, JournalState& outSta
 {
     outState = {};
 
+#ifdef ENABLE_TESTS
+    if (g_nextJournalStateForTests.has_value())
+    {
+        outState = g_nextJournalStateForTests.value();
+        g_nextJournalStateForTests.reset();
+        return S_OK;
+    }
+#endif
+
     wil::unique_handle handle;
     HRESULT hr = OpenVolumeHandle(std::wstring(volumeDevicePath), handle);
     if (FAILED(hr))
@@ -1587,6 +1622,47 @@ HRESULT GetJournalState(const VolumeIndex& volume, JournalState& outState) noexc
     return GetJournalState(volume.volumeDevicePath, outState);
 }
 
+[[nodiscard]] bool IsJournalReplayInvalidationHr(const HRESULT hr) noexcept
+{
+    if (HRESULT_FACILITY(hr) != FACILITY_WIN32)
+    {
+        return false;
+    }
+
+    switch (HRESULT_CODE(hr))
+    {
+        case ERROR_JOURNAL_ENTRY_DELETED:
+        case ERROR_JOURNAL_NOT_ACTIVE:
+        case ERROR_JOURNAL_DELETE_IN_PROGRESS: return true;
+        default: return false;
+    }
+}
+
+[[nodiscard]] bool TryAssignUsnRecordName(const USN_RECORD_COMMON_HEADER* header,
+                                          const uint32_t fileNameOffset,
+                                          const uint32_t fileNameLength,
+                                          const size_t minimumNameOffset,
+                                          std::wstring& outName) noexcept
+{
+    if (header == nullptr || (fileNameLength % sizeof(wchar_t)) != 0u)
+    {
+        return false;
+    }
+
+    const uint32_t recordLength = header->RecordLength;
+    if (minimumNameOffset > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) ||
+        recordLength < static_cast<uint32_t>(minimumNameOffset) || fileNameOffset < static_cast<uint32_t>(minimumNameOffset) ||
+        fileNameOffset > recordLength || fileNameLength > recordLength - fileNameOffset)
+    {
+        return false;
+    }
+
+    const auto* recordBytes = reinterpret_cast<const std::byte*>(header);
+    const auto* nameData    = reinterpret_cast<const wchar_t*>(recordBytes + fileNameOffset);
+    outName.assign(nameData, static_cast<size_t>(fileNameLength / sizeof(wchar_t)));
+    return true;
+}
+
 [[nodiscard]] bool TryParseUsnRecord(const USN_RECORD_COMMON_HEADER* header, UsnRecordData& out) noexcept
 {
     out = {};
@@ -1597,11 +1673,20 @@ HRESULT GetJournalState(const VolumeIndex& volume, JournalState& outState) noexc
 
     if (header->MajorVersion == 2u)
     {
-        const auto* record     = reinterpret_cast<const USN_RECORD_V2*>(header);
-        const size_t nameChars = static_cast<size_t>(record->FileNameLength / sizeof(wchar_t));
-        out.id                 = NodeIdFromUint64(static_cast<uint64_t>(record->FileReferenceNumber));
-        out.parentId           = NodeIdFromUint64(static_cast<uint64_t>(record->ParentFileReferenceNumber));
-        out.name.assign(record->FileName, nameChars);
+        const size_t minimumNameOffset = static_cast<size_t>(FIELD_OFFSET(USN_RECORD_V2, FileName));
+        if (header->RecordLength < minimumNameOffset)
+        {
+            return false;
+        }
+
+        const auto* record = reinterpret_cast<const USN_RECORD_V2*>(header);
+        if (! TryAssignUsnRecordName(header, record->FileNameOffset, record->FileNameLength, minimumNameOffset, out.name))
+        {
+            return false;
+        }
+
+        out.id             = NodeIdFromUint64(static_cast<uint64_t>(record->FileReferenceNumber));
+        out.parentId       = NodeIdFromUint64(static_cast<uint64_t>(record->ParentFileReferenceNumber));
         out.fileAttributes = record->FileAttributes;
         out.reason         = record->Reason;
         return true;
@@ -1609,17 +1694,65 @@ HRESULT GetJournalState(const VolumeIndex& volume, JournalState& outState) noexc
 
     if (header->MajorVersion == 3u)
     {
-        const auto* record     = reinterpret_cast<const USN_RECORD_V3*>(header);
-        const size_t nameChars = static_cast<size_t>(record->FileNameLength / sizeof(wchar_t));
-        out.id                 = NodeIdFromFileId128(record->FileReferenceNumber);
-        out.parentId           = NodeIdFromFileId128(record->ParentFileReferenceNumber);
-        out.name.assign(record->FileName, nameChars);
+        const size_t minimumNameOffset = static_cast<size_t>(FIELD_OFFSET(USN_RECORD_V3, FileName));
+        if (header->RecordLength < minimumNameOffset)
+        {
+            return false;
+        }
+
+        const auto* record = reinterpret_cast<const USN_RECORD_V3*>(header);
+        if (! TryAssignUsnRecordName(header, record->FileNameOffset, record->FileNameLength, minimumNameOffset, out.name))
+        {
+            return false;
+        }
+
+        out.id             = NodeIdFromFileId128(record->FileReferenceNumber);
+        out.parentId       = NodeIdFromFileId128(record->ParentFileReferenceNumber);
         out.fileAttributes = record->FileAttributes;
         out.reason         = record->Reason;
         return true;
     }
 
     return false;
+}
+
+struct DirectoryInfoEntryView final
+{
+    std::wstring_view name;
+    unsigned long fileAttributes = 0u;
+    size_t nextOffset            = 0u;
+};
+
+[[nodiscard]] bool TryParseFileFullDirectoryInformationEntry(const std::byte* buffer,
+                                                             size_t bytesValid,
+                                                             size_t offset,
+                                                             DirectoryInfoEntryView& out) noexcept
+{
+    out = {};
+    constexpr size_t kFileNameOffset = offsetof(FILE_FULL_DIR_INFO, FileName);
+
+    if (buffer == nullptr || offset >= bytesValid || bytesValid - offset < kFileNameOffset)
+    {
+        return false;
+    }
+
+    const auto* info = reinterpret_cast<const FILE_FULL_DIR_INFO*>(buffer + offset);
+    if ((info->FileNameLength % sizeof(wchar_t)) != 0u)
+    {
+        return false;
+    }
+
+    const size_t remainingBytes = bytesValid - offset;
+    const size_t entryBytes     = info->NextEntryOffset != 0u ? static_cast<size_t>(info->NextEntryOffset) : remainingBytes;
+    if (entryBytes < kFileNameOffset || entryBytes > remainingBytes || static_cast<size_t>(info->FileNameLength) > entryBytes - kFileNameOffset)
+    {
+        return false;
+    }
+
+    out.name           = std::wstring_view(info->FileName, static_cast<size_t>(info->FileNameLength / sizeof(wchar_t)));
+    out.fileAttributes = info->FileAttributes;
+    out.nextOffset     = info->NextEntryOffset != 0u ? entryBytes : 0u;
+    return true;
 }
 
 [[nodiscard]] std::wstring ExtractVolumeRoot(const std::wstring& normalizedRootPath) noexcept
@@ -1844,7 +1977,10 @@ void RemoveSubtree(VolumeIndex& volume, const NodeId& id, std::unordered_set<Nod
     volume.entries.erase(id);
 }
 
-void CollectSubtreeIds(const VolumeIndex& volume, const NodeId& id, std::unordered_set<NodeId, NodeIdHash>& outIds) noexcept
+void CollectSubtreeIds(const VolumeIndex& volume,
+                       const NodeId& id,
+                       std::unordered_set<NodeId, NodeIdHash>& outIds,
+                       std::unordered_set<NodeId, NodeIdHash>& visited) noexcept
 {
     const auto it = volume.entries.find(id);
     if (it == volume.entries.end())
@@ -1852,15 +1988,22 @@ void CollectSubtreeIds(const VolumeIndex& volume, const NodeId& id, std::unorder
         return;
     }
 
-    if (! outIds.insert(id).second)
+    if (! visited.insert(id).second)
     {
         return;
     }
+    outIds.insert(id);
 
     for (const NodeId& childId : it->second.children)
     {
-        CollectSubtreeIds(volume, childId, outIds);
+        CollectSubtreeIds(volume, childId, outIds, visited);
     }
+}
+
+void CollectSubtreeIds(const VolumeIndex& volume, const NodeId& id, std::unordered_set<NodeId, NodeIdHash>& outIds) noexcept
+{
+    std::unordered_set<NodeId, NodeIdHash> visited;
+    CollectSubtreeIds(volume, id, outIds, visited);
 }
 
 void RebuildDerivedState(VolumeIndex& volume) noexcept
@@ -2204,34 +2347,27 @@ HRESULT EnumerateDirectory(std::wstring_view directoryPath, std::vector<Enumerat
         size_t offset = 0u;
         while (offset < bytesValid)
         {
-            if (bytesValid - offset < offsetof(FILE_FULL_DIR_INFO, FileName))
+            DirectoryInfoEntryView entry{};
+            if (! TryParseFileFullDirectoryInformationEntry(buffer.data(), bytesValid, offset, entry))
             {
                 return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
             }
 
-            const auto* info = reinterpret_cast<const FILE_FULL_DIR_INFO*>(buffer.data() + offset);
-            if ((info->FileNameLength % sizeof(wchar_t)) != 0u)
-            {
-                return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
-            }
-
-            const size_t nameChars = info->FileNameLength / sizeof(wchar_t);
-            const std::wstring_view name(info->FileName, nameChars);
-            if (name != L"." && name != L"..")
+            if (entry.name != L"." && entry.name != L"..")
             {
                 EnumeratedChild child{};
-                child.name           = std::wstring(name);
+                child.name           = std::wstring(entry.name);
                 child.fullPath       = AppendPath(directoryPath, child.name);
-                child.fileAttributes = info->FileAttributes;
+                child.fileAttributes = entry.fileAttributes;
                 outChildren.push_back(std::move(child));
             }
 
-            if (info->NextEntryOffset == 0u)
+            if (entry.nextOffset == 0u)
             {
                 break;
             }
 
-            offset += static_cast<size_t>(info->NextEntryOffset);
+            offset += entry.nextOffset;
         }
     }
 
@@ -2581,6 +2717,94 @@ HRESULT BuildIndex(VolumeIndex& volume, CancelCheckFn cancelCheck, void* cancelC
     return kNotSupportedHr;
 }
 
+void ApplyJournalRecordToVolume(VolumeIndex& volume,
+                                const UsnRecordData& record,
+                                JournalDelta* outDelta,
+                                std::unordered_set<NodeId, NodeIdHash>& directoriesToHydrate) noexcept
+{
+    if ((record.reason & (USN_REASON_FILE_DELETE | USN_REASON_RENAME_OLD_NAME)) != 0u)
+    {
+        RemoveSubtree(volume, record.id, outDelta != nullptr ? &outDelta->deletedIds : nullptr);
+        return;
+    }
+
+    if ((record.reason & (USN_REASON_FILE_CREATE | USN_REASON_RENAME_NEW_NAME | USN_REASON_BASIC_INFO_CHANGE | USN_REASON_HARD_LINK_CHANGE |
+                          USN_REASON_REPARSE_POINT_CHANGE)) == 0u)
+    {
+        return;
+    }
+
+    const bool wasTracked    = volume.entries.contains(record.id);
+    const bool parentTracked = volume.entries.contains(record.parentId) || record.parentId == volume.trackedRootId;
+    if (wasTracked && ! parentTracked && record.id != volume.trackedRootId)
+    {
+        RemoveSubtree(volume, record.id, outDelta != nullptr ? &outDelta->deletedIds : nullptr);
+        return;
+    }
+
+    if (! wasTracked && ! parentTracked && record.id != volume.trackedRootId)
+    {
+        return;
+    }
+
+    Entry updated{};
+    if (const auto existing = volume.entries.find(record.id); existing != volume.entries.end())
+    {
+        updated = existing->second;
+    }
+
+    updated.id             = record.id;
+    updated.parentId       = (record.id == volume.trackedRootId) ? NodeId{} : record.parentId;
+    updated.fileAttributes = record.fileAttributes;
+    if (record.id != volume.trackedRootId || ! record.name.empty())
+    {
+        updated.name = record.name;
+    }
+
+    volume.entries[record.id] = updated;
+    if (outDelta != nullptr)
+    {
+        outDelta->upsertIds.insert(record.id);
+    }
+    if (IsDirectoryAttributes(updated.fileAttributes) && ((record.reason & (USN_REASON_FILE_CREATE | USN_REASON_RENAME_NEW_NAME)) != 0u) && ! wasTracked)
+    {
+        directoriesToHydrate.insert(record.id);
+    }
+}
+
+HRESULT HydrateJournalDirectories(VolumeIndex& volume,
+                                  const std::unordered_set<NodeId, NodeIdHash>& directoriesToHydrate,
+                                  CancelCheckFn cancelCheck,
+                                  void* cancelCookie,
+                                  QueryStats& stats,
+                                  RepositoryProgressState& progress,
+                                  JournalDelta* outDelta) noexcept
+{
+    RebuildDerivedState(volume);
+    for (const NodeId& directoryId : directoriesToHydrate)
+    {
+        const auto directoryIt = volume.entries.find(directoryId);
+        if (directoryIt == volume.entries.end() || ! IsDirectoryAttributes(directoryIt->second.fileAttributes))
+        {
+            continue;
+        }
+
+        const std::wstring directoryPath = directoryIt->second.fullPath;
+        HRESULT hr = HydrateDirectorySubtree(volume, directoryId, directoryPath, cancelCheck, cancelCookie, stats, progress);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        RebuildDerivedState(volume);
+        if (outDelta != nullptr)
+        {
+            CollectSubtreeIds(volume, directoryId, outDelta->upsertIds);
+        }
+    }
+
+    return S_OK;
+}
+
 HRESULT ReplayJournal(VolumeIndex& volume,
                       const JournalState& journalState,
                       CancelCheckFn cancelCheck,
@@ -2609,7 +2833,7 @@ HRESULT ReplayJournal(VolumeIndex& volume,
     readData.BytesToWaitFor    = 0u;
     readData.UsnJournalID      = journalState.id;
 
-    std::vector<Entry> directoriesToHydrate;
+    std::unordered_set<NodeId, NodeIdHash> directoriesToHydrate;
     std::vector<std::byte> buffer(256u * 1024u);
     while (static_cast<uint64_t>(readData.StartUsn) < journalState.nextUsn)
     {
@@ -2620,6 +2844,14 @@ HRESULT ReplayJournal(VolumeIndex& volume,
         }
 
         DWORD bytesReturned = 0u;
+#ifdef ENABLE_TESTS
+        const DWORD injectedReadFailure = g_nextJournalReplayReadFailureForTests;
+        g_nextJournalReplayReadFailureForTests = ERROR_SUCCESS;
+        if (injectedReadFailure != ERROR_SUCCESS)
+        {
+            return HRESULT_FROM_WIN32(injectedReadFailure);
+        }
+#endif
         if (! ::DeviceIoControl(volumeHandle.get(),
                                 FSCTL_READ_USN_JOURNAL,
                                 &readData,
@@ -2659,73 +2891,17 @@ HRESULT ReplayJournal(VolumeIndex& volume,
                     return progressHr;
                 }
 
-                const bool wasTracked    = volume.entries.contains(record.id);
-                const bool parentTracked = volume.entries.contains(record.parentId) || record.parentId == volume.trackedRootId;
-
-                if ((record.reason & USN_REASON_FILE_DELETE) != 0u)
-                {
-                    RemoveSubtree(volume, record.id, outDelta != nullptr ? &outDelta->deletedIds : nullptr);
-                }
-                else if ((record.reason & (USN_REASON_FILE_CREATE | USN_REASON_RENAME_NEW_NAME | USN_REASON_BASIC_INFO_CHANGE | USN_REASON_HARD_LINK_CHANGE |
-                                           USN_REASON_REPARSE_POINT_CHANGE)) != 0u)
-                {
-                    if (wasTracked || parentTracked || record.id == volume.trackedRootId)
-                    {
-                        Entry updated{};
-                        if (const auto existing = volume.entries.find(record.id); existing != volume.entries.end())
-                        {
-                            updated = existing->second;
-                        }
-
-                        updated.id             = record.id;
-                        updated.parentId       = (record.id == volume.trackedRootId) ? NodeId{} : record.parentId;
-                        updated.fileAttributes = record.fileAttributes;
-                        if (record.id != volume.trackedRootId || ! record.name.empty())
-                        {
-                            updated.name = record.name;
-                        }
-
-                        volume.entries[record.id] = updated;
-                        if (outDelta != nullptr)
-                        {
-                            outDelta->upsertIds.insert(record.id);
-                        }
-                        if (IsDirectoryAttributes(updated.fileAttributes) && ((record.reason & (USN_REASON_FILE_CREATE | USN_REASON_RENAME_NEW_NAME)) != 0u) &&
-                            ! wasTracked)
-                        {
-                            directoriesToHydrate.push_back(updated);
-                        }
-                    }
-                    else if (wasTracked)
-                    {
-                        RemoveSubtree(volume, record.id, outDelta != nullptr ? &outDelta->deletedIds : nullptr);
-                    }
-                }
+                ApplyJournalRecordToVolume(volume, record, outDelta, directoriesToHydrate);
             }
 
             offset += header->RecordLength;
         }
     }
 
-    RebuildDerivedState(volume);
-    for (const Entry& directory : directoriesToHydrate)
+    hr = HydrateJournalDirectories(volume, directoriesToHydrate, cancelCheck, cancelCookie, stats, progress, outDelta);
+    if (FAILED(hr))
     {
-        const auto pathIt = volume.pathIndex.find(FoldPathKey(directory.fullPath));
-        if (pathIt == volume.pathIndex.end())
-        {
-            continue;
-        }
-
-        hr = HydrateDirectorySubtree(volume, directory.id, directory.fullPath, cancelCheck, cancelCookie, stats, progress);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
-        RebuildDerivedState(volume);
-        if (outDelta != nullptr)
-        {
-            CollectSubtreeIds(volume, directory.id, outDelta->upsertIds);
-        }
+        return hr;
     }
 
     volume.journalId           = journalState.id;
@@ -3005,39 +3181,54 @@ HRESULT EnsureReady(VolumeIndex& volume,
         hr = ReplayJournal(volume, journalState, cancelCheck, cancelCookie, stats, progress, sqliteAuthoritative ? &journalDelta : nullptr);
         if (FAILED(hr))
         {
-            return hr;
-        }
-
-        volume.persistentStoreState = SqliteIndexStore::kVolumeStateReady;
-        if (sqliteAuthoritative)
-        {
-            SqliteIndexStore::ApplyJournalDeltaRequest request{};
-            SqliteIndexStore::ApplyJournalDeltaResult applyResult{};
-            BuildSqliteApplyJournalDeltaRequest(volume, journalDelta, request);
-            const HRESULT applyHr = SqliteIndexStore::ApplyJournalDelta(GetDefaultSqliteDatabasePath(options), request, &applyResult);
-            if (FAILED(applyHr))
+            if (! IsJournalReplayInvalidationHr(hr))
             {
-                return applyHr;
+                return hr;
             }
-            if (applyResult.insertedNewVolume)
+
+            Debug::Warning(L"LocalSearchIndexCore: journal replay invalidated for root='{}'; rebuilding. hr=0x{:08X}",
+                           volume.normalizedRootPath,
+                           static_cast<unsigned long>(hr));
+            stats.rebuiltJournalRangeInvalid = true;
+            hr                               = rebuild();
+            if (FAILED(hr))
             {
-                Debug::Warning(L"LocalSearchIndexCore: authoritative SQLite replay recreated missing persisted root for '{}'; reseeding full volume.",
-                               volume.normalizedRootPath);
+                return hr;
+            }
+        }
+        else
+        {
+            volume.persistentStoreState = SqliteIndexStore::kVolumeStateReady;
+            if (sqliteAuthoritative)
+            {
+                SqliteIndexStore::ApplyJournalDeltaRequest request{};
+                SqliteIndexStore::ApplyJournalDeltaResult applyResult{};
+                BuildSqliteApplyJournalDeltaRequest(volume, journalDelta, request);
+                const HRESULT applyHr = SqliteIndexStore::ApplyJournalDelta(GetDefaultSqliteDatabasePath(options), request, &applyResult);
+                if (FAILED(applyHr))
+                {
+                    return applyHr;
+                }
+                if (applyResult.insertedNewVolume)
+                {
+                    Debug::Warning(L"LocalSearchIndexCore: authoritative SQLite replay recreated missing persisted root for '{}'; reseeding full volume.",
+                                   volume.normalizedRootPath);
+                    hr = SaveSnapshot(volume, stats);
+                    if (FAILED(hr))
+                    {
+                        return hr;
+                    }
+                }
+
+                sqliteStoreDirty = true;
+            }
+            else
+            {
                 hr = SaveSnapshot(volume, stats);
                 if (FAILED(hr))
                 {
                     return hr;
                 }
-            }
-
-            sqliteStoreDirty = true;
-        }
-        else
-        {
-            hr = SaveSnapshot(volume, stats);
-            if (FAILED(hr))
-            {
-                return hr;
             }
         }
     }
@@ -3724,6 +3915,31 @@ HRESULT EnumerateLiveFileSystem(const QueryPlan& plan,
     return S_OK;
 }
 } // namespace
+
+#ifdef ENABLE_TESTS
+bool TryParseUsnRecordForTests(const void* recordBytes, size_t recordBytesSize) noexcept
+{
+    if (recordBytes == nullptr || recordBytesSize < sizeof(USN_RECORD_COMMON_HEADER))
+    {
+        return false;
+    }
+
+    const auto* header = static_cast<const USN_RECORD_COMMON_HEADER*>(recordBytes);
+    if (header->RecordLength < sizeof(USN_RECORD_COMMON_HEADER) || header->RecordLength > recordBytesSize)
+    {
+        return false;
+    }
+
+    UsnRecordData parsed{};
+    return TryParseUsnRecord(header, parsed);
+}
+
+bool TryParseFileFullDirectoryInformationForTests(const void* entryBytes, size_t entryBytesSize) noexcept
+{
+    DirectoryInfoEntryView parsed{};
+    return TryParseFileFullDirectoryInformationEntry(static_cast<const std::byte*>(entryBytes), entryBytesSize, 0u, parsed);
+}
+#endif
 
 std::wstring_view GetPersistentStoreKindText(const PersistentStoreKind kind) noexcept
 {
@@ -4768,6 +4984,250 @@ HRESULT Repository::CorruptSnapshotForTests(std::wstring_view rootPath, Snapshot
     catch (const std::exception&)
     {
         Debug::Error(L"LocalSearchIndexCore: CorruptSnapshotForTests failed with an unexpected std::exception.");
+        return E_FAIL;
+    }
+}
+
+HRESULT Repository::ApplySyntheticJournalForTests(std::wstring_view rootPath,
+                                                  std::span<const SyntheticJournalRecordForTests> records,
+                                                  QueryStats* outStats) noexcept
+{
+    try
+    {
+        if (outStats != nullptr)
+        {
+            *outStats = {};
+        }
+
+        SupportInfo support{};
+        HRESULT hr = PopulateSupportInfo(rootPath, support);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (! support.indexable)
+        {
+            return kNotSupportedHr;
+        }
+
+        std::shared_ptr<VolumeIndex> volume;
+        hr = AcquireOrCreateVolume(support, volume);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        QueryStats stats{};
+        RepositoryProgressState progress{};
+        std::lock_guard volumeGuard(volume->mutex);
+        if (! volume->initialized)
+        {
+            return E_UNEXPECTED;
+        }
+
+        JournalDelta journalDelta{};
+        JournalDelta* delta = IsSqliteAuthoritative(_options) ? &journalDelta : nullptr;
+        std::unordered_set<NodeId, NodeIdHash> directoriesToHydrate;
+
+        for (const SyntheticJournalRecordForTests& synthetic : records)
+        {
+            if (synthetic.idPath.empty() || synthetic.reason == 0u)
+            {
+                return E_INVALIDARG;
+            }
+
+            UsnRecordData record{};
+            hr = GetPathNodeId(synthetic.idPath, record.id);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+
+            if (! synthetic.parentPath.empty())
+            {
+                hr = GetPathNodeId(synthetic.parentPath, record.parentId);
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
+            }
+
+            record.name = synthetic.name.empty() ? GetPathLeaf(synthetic.idPath) : synthetic.name;
+            record.fileAttributes = synthetic.fileAttributes;
+            if (record.fileAttributes == 0u)
+            {
+                const DWORD attributes = ::GetFileAttributesW(std::wstring(synthetic.idPath).c_str());
+                if (attributes == INVALID_FILE_ATTRIBUTES)
+                {
+                    return HRESULT_FROM_WIN32(::GetLastError());
+                }
+                record.fileAttributes = attributes;
+            }
+            record.reason = synthetic.reason;
+
+            ApplyJournalRecordToVolume(*volume, record, delta, directoriesToHydrate);
+        }
+
+        hr = HydrateJournalDirectories(*volume, directoriesToHydrate, nullptr, nullptr, stats, progress, delta);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        volume->journalId = (volume->journalId == 0u) ? 1u : volume->journalId;
+        ++volume->nextUsn;
+        volume->persistentStoreState = SqliteIndexStore::kVolumeStateReady;
+        stats.journalAvailable       = true;
+        stats.journalReplayApplied   = true;
+        PopulateStatsFromVolume(*volume, stats);
+
+        if (IsSqliteAuthoritative(_options))
+        {
+            SqliteIndexStore::ApplyJournalDeltaRequest request{};
+            SqliteIndexStore::ApplyJournalDeltaResult result{};
+            BuildSqliteApplyJournalDeltaRequest(*volume, journalDelta, request);
+            hr = SqliteIndexStore::ApplyJournalDelta(GetDefaultSqliteDatabasePath(_options), request, &result);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            InvalidateCachedPersistentStoreInfo();
+        }
+        else
+        {
+            hr = SaveSnapshot(*volume, stats);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        if (outStats != nullptr)
+        {
+            *outStats = stats;
+        }
+        return S_OK;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"LocalSearchIndexCore: ApplySyntheticJournalForTests failed with an unexpected std::exception.");
+        if (outStats != nullptr)
+        {
+            *outStats = {};
+        }
+        return E_FAIL;
+    }
+}
+
+void Repository::SetNextJournalReplayReadFailureForTests(DWORD error) noexcept
+{
+    g_nextJournalReplayReadFailureForTests = error;
+}
+
+void Repository::SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn) noexcept
+{
+    g_nextJournalStateForTests = JournalState{
+        .available = true,
+        .id        = id,
+        .firstUsn  = firstUsn,
+        .nextUsn   = nextUsn,
+    };
+}
+
+HRESULT Repository::QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept
+{
+    try
+    {
+        outCandidates.clear();
+        if (outStats != nullptr)
+        {
+            *outStats = {};
+        }
+        if (plan.rootPath.empty())
+        {
+            return E_INVALIDARG;
+        }
+
+        SupportInfo support{};
+        HRESULT hr = PopulateSupportInfo(plan.rootPath, support);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (! support.indexable)
+        {
+            return kNotSupportedHr;
+        }
+
+        std::shared_ptr<VolumeIndex> volume;
+        hr = AcquireOrCreateVolume(support, volume);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        QueryStats stats{};
+        RepositoryProgressState progress{};
+        std::lock_guard volumeGuard(volume->mutex);
+        hr = LoadSnapshot(*volume, stats);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        volume->initialized = true;
+        PopulateStatsFromVolume(*volume, stats);
+
+        QueryPlan effectivePlan = plan;
+        effectivePlan.rootPath  = support.normalizedRootPath;
+        hr = ExecuteQueryImpl(*volume,
+                              effectivePlan,
+                              nullptr,
+                              nullptr,
+                              stats,
+                              progress,
+                              [&outCandidates](Candidate&& candidate) noexcept -> HRESULT
+        {
+            try
+            {
+                outCandidates.push_back(std::move(candidate));
+                return S_OK;
+            }
+            catch (const std::bad_alloc&)
+            {
+                std::terminate();
+            }
+            catch (const std::exception&)
+            {
+                return E_FAIL;
+            }
+        });
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (outStats != nullptr)
+        {
+            *outStats = stats;
+        }
+        return S_OK;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"LocalSearchIndexCore: QueryPersistedVolumeForTests failed with an unexpected std::exception.");
+        outCandidates.clear();
+        if (outStats != nullptr)
+        {
+            *outStats = {};
+        }
         return E_FAIL;
     }
 }

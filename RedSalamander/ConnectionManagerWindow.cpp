@@ -3572,6 +3572,12 @@ LRESULT WindowImpl::WindowProc(UINT msg, WPARAM wp, LPARAM lp) noexcept
     const LRESULT dxResult = _dxHost.HandleMessage(messageHwnd, msg, wp, lp, dxHandled);
     if (dxHandled)
     {
+        if (msg == WM_NCDESTROY)
+        {
+            // DxUi::WindowHost consumes WM_NCDESTROY after detaching; the owner must still run singleton cleanup and focus restore.
+            OnNcDestroy();
+            return dxResult;
+        }
         if (msg == WM_SIZE)
         {
             Layout();
@@ -4287,7 +4293,8 @@ bool WindowImpl::DebugRouteCommandKey(WPARAM virtualKey) noexcept
     {
         bool handled = false;
         static_cast<void>(_dxHost.HandleMessage(_hwnd.get(), WM_KEYDOWN, VK_ESCAPE, 0, handled));
-        static_cast<void>(_dxHost.HandleMessage(_hwnd.get(), WM_KEYUP, VK_ESCAPE, 0, handled));
+        // Escape can invoke Cancel and synchronously destroy this WindowImpl.
+        // Do not touch member state again after routing the destructive keydown.
         return handled;
     }
     return false;

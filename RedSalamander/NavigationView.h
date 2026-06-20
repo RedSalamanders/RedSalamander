@@ -80,6 +80,7 @@ struct NavigationViewDebugSnapshot
     bool editMode                                = false;
     bool embeddedDestinationMode                 = false;
     bool historyDropdownVisible                  = false;
+    uint64_t historyDropdownOpenCount            = 0;
     bool editSuggestPopupVisible                 = false;
     bool fullPathPopupVisible                    = false;
     bool fullPathPopupEditMode                   = false;
@@ -705,6 +706,7 @@ private:
     uint64_t _debugExitEditCount            = 0;
     uint64_t _debugDoubleClickActivateCount = 0;
     uint64_t _debugKeyboardActivateCount    = 0;
+    uint64_t _debugHistoryDropdownOpenCount = 0;
     bool _debugLastDoubleClickOnLastSegment = false;
     bool _debugLastDoubleClickInWhitespace  = false;
     POINT _debugLastDoubleClickPoint        = {};

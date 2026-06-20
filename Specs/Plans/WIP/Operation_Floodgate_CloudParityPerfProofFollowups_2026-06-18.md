@@ -1,0 +1,47 @@
+# Operation Floodgate Follow-ups — Cloud Parity, Perf, and Proof Depth
+
+**Status:** WIP - follow-up queue split from Floodgate closeout
+**Date:** 2026-06-18
+**Source plan:** `Specs/Plans/WIP/Operation_Floodgate_RiptideMergeCloudDataSafetyAndCloseout_2026-06-17.md`
+
+## Release Decision
+
+This plan owns the non-blocking Floodgate follow-ups that remain after the P0/P1 safety code was implemented and broad Commands was stabilized. These items must stay visible, but they do not block moving the Riptide/Floodgate closeout plans to `Specs/Plans/Done/` once one uninterrupted `.\Tools\Run-AllTests.ps1 -Suite Full` is green and archived.
+
+The accepted closeout proof for the current Floodgate release scope is:
+
+- S3, Microsoft Drive, Curl, and bridge-MOVE data-safety code fixes are implemented.
+- Provider debug selftests, `PluginContractTests.exe`, `FileSystemCurlTests.exe`, source-contract Pester coverage, focused bridge/Quick Search runtime tests, and broad `cmd_pane_` Commands all pass.
+- Curl staged uploads now re-stat the staged remote before promote/source-delete; a true short-2xx fake-server fault injection remains valuable proof-depth work here rather than a release blocker because the source contract and Curl test executable cover the guard shape and cleanup behavior currently available in the harness.
+
+## Follow-up Checklist
+
+| State | Source slice | Work item | Required proof |
+|-------|--------------|-----------|----------------|
+| [ ] | FG-P1-3 | Add the bridge-MOVE skipped-child data-safety behavioral selftest: cross-FS MOVE of a directory where one child collides and is skipped while a sibling moves. | Runtime test asserts `ERROR_PARTIAL_COPY`, skipped child source bytes survive, moved sibling source is deleted, and prompt count is one; deliberately removing `skippedFileConflictCount == 0` must fail the test. |
+| [ ] | FG-P0-3 proof depth | Add a true Curl/WebDAV/SFTP short-2xx staged-upload fault injection. | MOVE with a fake short successful PUT preserves source, deletes staged remote, reports `ERROR_PARTIAL_COPY`, and fails on an engine without staged re-stat. |
+| [ ] | FG-P2-1 | Microsoft Drive PATCH/DELETE ambiguous transport reconciliation by id. | Fake Graph transport failure after committed PATCH/DELETE reconciles by id; no orphaned rollback remains. |
+| [ ] | FG-P2-2 | Microsoft Drive DELETE retry treats already-gone 404/itemNotFound as success. | Fake Graph retry where first DELETE committed and retry sees 404 returns `S_OK`; merge source-folder delete is NotFound-guarded. |
+| [ ] | FG-P2-4 | Broaden malformed `FileSystemOptions::sizeBytes` rejection coverage across Move/batch/provider paths. | Provider contract or focused selftests assert `E_INVALIDARG` for malformed options on every accepting path. |
+| [ ] | FG-P2-5 | S3 interactive directory transfer should stop double-probing destination objects. | Metric/selftest shows normal interactive path does about one `HeadObject` per destination object, with re-probe only after ancestor removal or Retry. |
+| [ ] | FG-P2-6 | Microsoft Drive merge should thread already-fetched child metadata into `MoveOrRenameItem`; evaluate `$batch`/pacing for large merges. | Fake Graph call-count metric shows redundant per-child destination GET removed without changing merge conflict behavior. |
+| [ ] | FG-P2-7 | Cross-volume move should avoid deep destination re-read for files produced and byte-count-proven by the current copy phase. | Before/after perf evidence on a large move shows delete-phase byte I/O reduced while resume/uncertain cases still deep-verify. |
+| [ ] | FG-P2-9 | Unify serial and concurrent bridge-MOVE conflict classification through one helper. | Serial and concurrent paths classify nested unsupported reparse and source-delete `ACCESS_DENIED` identically, including `failedDuringMoveDelete` and reparse hints. |
+
+## Added by post-closeout review - 2026-06-19 (commit `68306b9ec`)
+
+| State | Source slice | Work item | Required proof |
+|-------|--------------|-----------|----------------|
+| [~] | FG-P0-3-FALLBACK-SIZE-ZERO | Curl staged re-stat must distinguish "size unknown" from "size 0". Add a `sizeKnown` flag to `FilesInformationCurl::Entry`, set it only when the listing parsed a numeric size; on unknown, verify the staged object with a single-object size query (FTP `SIZE` / SFTP `fstat`) rather than the parent `LIST`, and on truly-unverifiable size gate the source-delete instead of failing a correct upload. **HIGH reliability** — current code breaks every non-empty copy/MOVE to FTP servers whose `LIST` format hits the fallback-names parser (fail-safe, no loss, but the operation is broken for that server class). **DONE 2026-06-20 (functionality regression):** added `bool FilesInformationCurl::Entry::sizeKnown` (`FileSystemCurl.h`), set true only when `TryParseUnixListLine`/`TryParseDosListLine` parse a numeric file size and from the authoritative IMAP RFC822.SIZE; staged re-stat (`FileSystemCurl.CopyMove.cpp:1274`) now enforces `sizeBytes == fileSize` only when `sizeKnown`, otherwise falls back to existence + non-directory verification (the successful `CurlUploadFromFile` already proves all bytes were transmitted). Strict behavior unchanged for the common Unix/DOS-listing case. Builds clean. **REMAINING (proof-depth, not a regression):** add the active single-object `SIZE`/`fstat` probe for stronger MOVE verification on unknown-size servers, and the fake-FTP sizeless-`LIST` fault-injection test below. | Fake FTP server with a sizeless `LIST`: a non-empty MOVE/COPY promotes and (for MOVE) deletes source only after verification; a genuinely short upload still fails `ERROR_PARTIAL_COPY`. |
+| [ ] | FG-A1 | Add a destination-side `GetSize` fault-injection hook (mirroring `g_fileOpsBridgeFailNextSourceGetSizeCount`) and a Fairstream step that forces the post-promote `destinationReader->GetSize` to return a wrong size / fail. | Step asserts `ERROR_PARTIAL_COPY` + source preserved; deliberately removing the post-promote re-stat block makes it RED. Closes the FG-P0-2 destination-branch coverage hole. |
+| [ ] | FG-P0-2-RESTAT-FALSEPOS | Make the post-promote destination re-stat resilient to eventual consistency: distinguish a transient "could not verify" (short retry/backoff, do not strand a duplicate) from a confirmed wrong-size (true corruption → consider deleting the partial destination before returning). | Fake eventually-consistent destination where the first by-path GET misses then succeeds: MOVE completes without spurious `ERROR_PARTIAL_COPY` and without leaving a source+destination duplicate. |
+| [ ] | FG-P0-2-PERF-RESTAT / FG-P0-3-EXTRA-LIST-ROUNDTRIP | Remove the per-file metadata round-trips on the hot path: reuse a size signal already returned by Commit/Promote (or skip the re-stat for files the copy phase byte-proved on strong-consistency destinations); replace the Curl per-file parent `LIST` with a single-object size probe. | Before/after call-count metric: ≤1 destination metadata op per moved file; no full directory `LIST` per staged file. |
+| [ ] | FG-MSDRIVE-2 | Add an MSDrive selftest where the malformed empty-name child lives under a **nested** existing-on-both-sides subfolder. | Asserts the nested source folder AND the top source folder both survive, valid siblings move, op returns `ERROR_PARTIAL_COPY`. Locks the recursion-propagation contract (currently only the top-level child is covered). |
+| [ ] | FG-P0-2-TEST-SERIAL-ONLY | Add a concurrency>1 variant of `Floodgate_CrossFsMoveGetSizeFailurePreservesSource`. | The GetSize-fail guard is proven on the parallel bridge walker, not just the serial path. |
+| [ ] | FG-P0-1-A | S3 ancestor-collision guard: surface a distinct, descriptive HRESULT (not `ERROR_ALREADY_EXISTS`) and log the offending key before returning. Keep the whole-transfer fail-closed abort — do **not** switch to per-item-continue (re-opens the self-delete loss). | Selftest updated to the new error code; log line names the object-vs-prefix key. |
+| [ ] | FG-A3 | Reconcile `Plugins_VirtualFileSystem.md`: either scope the normative sizeBytes-guard MUST to what is implemented now (MSDrive Move) and reference FG-P2-4 for the rest, or implement the guard across Delete/Rename/batch before declaring it normative. | Spec and code in lockstep; no normative MUST without an implementing guard. |
+| [ ] | FG-HARNESS-COVERAGE | Add a build-time/Pester guard asserting every non-Setup/Cleanup step in `kFileOpsPhaseOrder` is a member of exactly one `kFileOpsFamily*` array. This is the systemic fix for the FG-TEST-1 silent-skip class (a per-case string match is not enough). | Guard fails if any registered fileops case is not family-reachable; validated against a deliberately-unregistered case. |
+
+## Closeout Rule
+
+Each item that touches correctness must include deterministic selftest or fake-provider coverage and update the authoritative spec that owns the durable behavior. Each item that claims a performance improvement must follow `Specs/Testing/Testing_PerformanceValidation.md` with archived before/after evidence under `Specs/TestRuns/`.

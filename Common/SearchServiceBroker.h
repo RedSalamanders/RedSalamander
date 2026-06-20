@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -212,4 +213,8 @@ HRESULT RequestRebuild(std::wstring_view rootPath) noexcept;
 HRESULT RequestCompact() noexcept;
 
 HRESULT RunServer(const ServerOptions& options, HANDLE stopEvent, ServerRunResult* outResult) noexcept;
+
+#ifdef ENABLE_TESTS
+HRESULT DecodeQueryBatchForTests(std::span<const std::byte> payloadBytes, std::vector<LocalSearchIndexCore::Candidate>& outCandidates) noexcept;
+#endif
 } // namespace SearchServiceBroker

@@ -2746,14 +2746,8 @@ private:
             return false;
         }
     }
-    {
-        POINT clickScreenPoint{clickPoint.x, clickPoint.y};
-        if (ClientToScreen(navigationView, &clickScreenPoint) != FALSE)
-        {
-            SetCursorPos(clickScreenPoint.x, clickScreenPoint.y);
-        }
-    }
-
+    // The delivered WM_MOUSEMOVE/WM_LBUTTON* messages below carry the routing point;
+    // NavigationView routes on the delivered point, so no live cursor warp is needed.
     SendMessageW(messageTarget, WM_MOUSEMOVE, 0, targetClickPoint);
     SendMessageW(messageTarget, WM_LBUTTONDOWN, MK_LBUTTON, targetClickPoint);
     SendMessageW(messageTarget, WM_LBUTTONUP, 0, targetClickPoint);
@@ -7181,6 +7175,68 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     return MAKELPARAM(static_cast<SHORT>(pt.x), static_cast<SHORT>(pt.y));
 }
 
+[[nodiscard]] bool TryChooseDeliveredClientPointAwayFromCursor(HWND hwnd, POINT preferredClient, POINT& deliveredClient, POINT& deliveredScreen) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    RECT client{};
+    if (GetClientRect(hwnd, &client) == FALSE || client.right <= client.left || client.bottom <= client.top)
+    {
+        return false;
+    }
+
+    POINT cursor{};
+    const bool haveCursor = GetCursorPos(&cursor) != FALSE;
+    const LONG maxX       = std::max<LONG>(client.left, client.right - 1);
+    const LONG maxY       = std::max<LONG>(client.top, client.bottom - 1);
+    const auto clampClient = [&](POINT pt) noexcept
+    {
+        pt.x = std::clamp<LONG>(pt.x, client.left, maxX);
+        pt.y = std::clamp<LONG>(pt.y, client.top, maxY);
+        return pt;
+    };
+    const auto percentPoint = [&](int xPercent, int yPercent) noexcept
+    {
+        const LONG width  = std::max<LONG>(1, client.right - client.left);
+        const LONG height = std::max<LONG>(1, client.bottom - client.top);
+        return clampClient(POINT{client.left + MulDiv(static_cast<int>(width), xPercent, 100),
+                                 client.top + MulDiv(static_cast<int>(height), yPercent, 100)});
+    };
+    const auto differsFromCursor = [&](POINT screen) noexcept
+    {
+        return ! haveCursor || std::abs(screen.x - cursor.x) > 8 || std::abs(screen.y - cursor.y) > 8;
+    };
+
+    const std::array<POINT, 6> candidates{{
+        clampClient(preferredClient),
+        percentPoint(25, 25),
+        percentPoint(75, 25),
+        percentPoint(25, 75),
+        percentPoint(75, 75),
+        percentPoint(50, 50),
+    }};
+
+    for (POINT candidateClient : candidates)
+    {
+        POINT candidateScreen = candidateClient;
+        if (ClientToScreen(hwnd, &candidateScreen) == FALSE)
+        {
+            continue;
+        }
+        if (differsFromCursor(candidateScreen))
+        {
+            deliveredClient = candidateClient;
+            deliveredScreen = candidateScreen;
+            return true;
+        }
+    }
+
+    return false;
+}
+
 [[nodiscard]] bool DismissDxUiPopupOpenedBy(HWND ownerHwnd, std::atomic<bool>& sawPopup, std::atomic<bool>& popupDismissed, std::stop_token stopToken) noexcept
 {
     using namespace std::chrono_literals;
@@ -7341,6 +7397,12 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     {
         return false;
     }
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 420, 320, L"ViewerText context-menu delivered-anchor"),
+                  L"Failed to resize ViewerText before context-menu delivered-anchor test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     WndMsg::ViewerTextDebugSnapshot readySnapshot{};
     state.Require(WaitForViewerTextPointerSnapshot(
@@ -7353,22 +7415,10 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                       SelfTest::Scale(5000ms)),
                   L"ViewerText did not render text before context-menu delivered-anchor test.");
 
-    POINT originalCursor{};
-    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
-    auto restoreCursorPosition = wil::scope_exit([&]() noexcept
-    {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
-    });
-    state.Require(MoveSelfTestCursorOutsideWindow(probe.hwnd, probe.hwnd),
-                  L"Failed to move the real cursor outside ViewerText before delivered context-menu anchor test.");
-
-    RECT client{};
-    state.Require(GetClientRect(probe.hwnd, &client) != FALSE, L"Failed to get ViewerText client rect for context-menu delivered-anchor test.");
-    POINT deliveredScreen{client.left + ((client.right - client.left) / 3), client.top + ((client.bottom - client.top) / 2)};
-    state.Require(ClientToScreen(probe.hwnd, &deliveredScreen) != FALSE, L"Failed to map ViewerText delivered context point to screen.");
+    POINT deliveredClient{140, 160};
+    POINT deliveredScreen{};
+    state.Require(TryChooseDeliveredClientPointAwayFromCursor(probe.hwnd, deliveredClient, deliveredClient, deliveredScreen),
+                  L"Failed to choose a ViewerText delivered context-menu anchor away from the real cursor.");
     if (! state.failure.empty())
     {
         return false;
@@ -7439,6 +7489,12 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     {
         return false;
     }
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 420, 320, L"ViewerText hover delivered-point"),
+                  L"Failed to resize ViewerText before hover delivered-point test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     WndMsg::ViewerTextDebugSnapshot readySnapshot{};
     state.Require(WaitForViewerTextPointerSnapshot(
@@ -7453,13 +7509,19 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
     const HWND textView = FindWindowExW(probe.hwnd, nullptr, L"RedSalamander.ViewerText.TextView", nullptr);
     state.Require(textView && IsWindow(textView) != FALSE, L"ViewerText text child not found for hover delivered-point test.");
-    state.Require(MoveSelfTestCursorOutsideWindow(textView, probe.hwnd), L"Failed to move the real cursor outside ViewerText text view before hover probe.");
     if (! state.failure.empty())
     {
         return false;
     }
 
     POINT deliveredClient{18, 12};
+    POINT deliveredScreen{};
+    state.Require(TryChooseDeliveredClientPointAwayFromCursor(textView, deliveredClient, deliveredClient, deliveredScreen),
+                  L"Failed to choose a ViewerText delivered hover point away from the real cursor.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     SendMessageW(textView, WM_MOUSEMOVE, 0, MakeSelfTestPointLParam(deliveredClient));
 
     WndMsg::ViewerTextDebugSnapshot after{};
@@ -7508,6 +7570,12 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     {
         return false;
     }
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 420, 320, L"ViewerSpace context-menu delivered-anchor"),
+                  L"Failed to resize ViewerSpace before context-menu delivered-anchor test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     WndMsg::ViewerSpaceTooltipDebugSnapshot readySnapshot{};
     state.Require(WaitForViewerSpacePointerSnapshot(
@@ -7520,22 +7588,10 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                       SelfTest::Scale(5000ms)),
                   L"ViewerSpace render target was not ready before context-menu delivered-anchor test.");
 
-    POINT originalCursor{};
-    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
-    auto restoreCursorPosition = wil::scope_exit([&]() noexcept
-    {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
-    });
-    state.Require(MoveSelfTestCursorOutsideWindow(probe.hwnd, probe.hwnd),
-                  L"Failed to move the real cursor outside ViewerSpace before delivered context-menu anchor test.");
-
-    RECT client{};
-    state.Require(GetClientRect(probe.hwnd, &client) != FALSE, L"Failed to get ViewerSpace client rect for context-menu delivered-anchor test.");
-    POINT deliveredScreen{client.left + ((client.right - client.left) / 2), client.top + ((client.bottom - client.top) / 2)};
-    state.Require(ClientToScreen(probe.hwnd, &deliveredScreen) != FALSE, L"Failed to map ViewerSpace delivered context point to screen.");
+    POINT deliveredClient{210, 160};
+    POINT deliveredScreen{};
+    state.Require(TryChooseDeliveredClientPointAwayFromCursor(probe.hwnd, deliveredClient, deliveredClient, deliveredScreen),
+                  L"Failed to choose a ViewerSpace delivered context-menu anchor away from the real cursor.");
     if (! state.failure.empty())
     {
         return false;
@@ -7606,6 +7662,12 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
     {
         return false;
     }
+    state.Require(ResizeStandaloneViewerClientToDip(state, probe.hwnd, 420, 320, L"ViewerSpace hover delivered-point"),
+                  L"Failed to resize ViewerSpace before hover delivered-point test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     WndMsg::ViewerSpaceTooltipDebugSnapshot readySnapshot{};
     state.Require(WaitForViewerSpacePointerSnapshot(
@@ -7618,8 +7680,14 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
                       SelfTest::Scale(5000ms)),
                   L"ViewerSpace render target was not ready before hover delivered-point test.");
 
-    state.Require(MoveSelfTestCursorOutsideWindow(probe.hwnd, probe.hwnd), L"Failed to move the real cursor outside ViewerSpace before hover probe.");
     POINT deliveredClient{42, 84};
+    POINT deliveredScreen{};
+    state.Require(TryChooseDeliveredClientPointAwayFromCursor(probe.hwnd, deliveredClient, deliveredClient, deliveredScreen),
+                  L"Failed to choose a ViewerSpace delivered hover point away from the real cursor.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     SendMessageW(probe.hwnd, WM_MOUSEMOVE, 0, MakeSelfTestPointLParam(deliveredClient));
 
     WndMsg::ViewerSpaceTooltipDebugSnapshot after{};
@@ -8101,17 +8169,14 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
 
-    state.Require(SetCursorPos(rightScreenPoint.x, rightScreenPoint.y) != FALSE, L"Failed to position the cursor over Right before keyboard-opening Edit.");
+    DebugSetMainMenuBarHoverSuppressionCursorOverride(rightScreenPoint);
     if (! state.failure.empty())
     {
         return false;
@@ -8479,14 +8544,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
 
     std::atomic<bool> popupDriverDone{false};
@@ -8506,7 +8568,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         const auto dismissPopupOnExit =
             wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
-        static_cast<void>(SetCursorPos(firstScreenPoint.x, firstScreenPoint.y));
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(firstScreenPoint);
         PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(firstPoint.x, firstPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(firstPoint.x, firstPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(firstPoint.x, firstPoint.y));
@@ -8521,7 +8583,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         initialPopupObserved.store(true, std::memory_order_release);
         if (IsWindow(menuBarWindow) != FALSE)
         {
-            static_cast<void>(SetCursorPos(secondScreenPoint.x, secondScreenPoint.y));
+            DebugSetMainMenuBarHoverSuppressionCursorOverride(secondScreenPoint);
             hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(secondPoint.x, secondPoint.y)) != FALSE,
                                         std::memory_order_release);
         }
@@ -8667,14 +8729,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
 
     std::atomic<bool> popupDriverDone{false};
@@ -8697,7 +8756,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         BringWindowToTop(mainWindow);
         SetForegroundWindow(mainWindow);
 
-        static_cast<void>(SetCursorPos(firstScreenPoint.x, firstScreenPoint.y));
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(firstScreenPoint);
         const bool postedOpen = PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(firstClientPoint.x, firstClientPoint.y)) != FALSE;
@@ -8725,7 +8784,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
         if (IsWindow(menuBarWindow) != FALSE)
         {
-            static_cast<void>(SetCursorPos(secondLowerEdgeScreenPoint.x, secondLowerEdgeScreenPoint.y));
+            DebugSetMainMenuBarHoverSuppressionCursorOverride(secondLowerEdgeScreenPoint);
             hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(secondLowerEdgeClientPoint.x, secondLowerEdgeClientPoint.y)) != FALSE,
                                         std::memory_order_release);
         }
@@ -8877,21 +8936,19 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
 
     bool prepositionedLiveCursor = false;
     if (hoverViaMouseLeaveRefresh)
     {
         using namespace std::chrono_literals;
-        prepositionedLiveCursor = SetCursorPos(pluginsScreenPoint.x, pluginsScreenPoint.y) != FALSE;
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(pluginsScreenPoint);
+        prepositionedLiveCursor = true;
         const auto drainDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
         while (std::chrono::steady_clock::now() < drainDeadline)
         {
@@ -8928,7 +8985,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
 
         if (! hoverViaMouseLeaveRefresh)
         {
-            static_cast<void>(SetCursorPos(viewScreenPoint.x, viewScreenPoint.y));
+            DebugSetMainMenuBarHoverSuppressionCursorOverride(viewScreenPoint);
         }
         const bool postedOpen = PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(viewClientPoint.x, viewClientPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(viewClientPoint.x, viewClientPoint.y)) != FALSE &&
@@ -8975,13 +9032,55 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         }
         else
         {
-            POINT livePluginsClientPoint = livePluginsScreenPoint;
-            if (ScreenToClient(menuBarWindow, &livePluginsClientPoint) != FALSE && IsWindow(menuBarWindow) != FALSE)
+            const auto hoverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+            HWND replacementPopup    = nullptr;
+            while (! replacementPopup && std::chrono::steady_clock::now() < hoverDeadline)
             {
-                static_cast<void>(SetCursorPos(livePluginsScreenPoint.x, livePluginsScreenPoint.y));
-                hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)) != FALSE,
-                                            std::memory_order_release);
+                POINT livePluginsClientPoint = livePluginsScreenPoint;
+                if (ScreenToClient(menuBarWindow, &livePluginsClientPoint) != FALSE && IsWindow(menuBarWindow) != FALSE)
+                {
+                    DebugSetMainMenuBarHoverSuppressionCursorOverride(livePluginsScreenPoint);
+                    if (PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(livePluginsClientPoint.x, livePluginsClientPoint.y)) != FALSE)
+                    {
+                        hoverMessageDelivered.store(true, std::memory_order_release);
+                    }
+                }
+
+                replacementPopup = WaitForReplacementDxUiContextMenuWindow(initialPopup, SelfTest::Scale(100ms));
+                selectedIndexAfterHoverWait.store(DebugGetMainMenuBarSelectedIndex(), std::memory_order_release);
+                if (replacementPopup || selectedIndexAfterHoverWait.load(std::memory_order_acquire) == static_cast<int>(pluginsMapping->visualIndex))
+                {
+                    break;
+                }
+
+                std::this_thread::sleep_for(25ms);
             }
+
+            RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
+            if (RedSalamander::DxUi::DebugGetContextMenuPopupState(initialPopup, popupState))
+            {
+                rootPointerSwitchCount.store(popupState.rootPointerSwitchCount, std::memory_order_release);
+            }
+            if (! hoverMessageDelivered.load(std::memory_order_acquire))
+            {
+                PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+                initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+                return;
+            }
+            pluginsMenuSelected.store(replacementPopup != nullptr || WaitForMainMenuBarSelectedIndex(pluginsMapping->visualIndex, SelfTest::Scale(250ms)),
+                                      std::memory_order_release);
+            if (! replacementPopup)
+            {
+                PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+                initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+                return;
+            }
+
+            replacementPopupObserved.store(true, std::memory_order_release);
+            initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+            PostMessageW(replacementPopup, WM_KEYDOWN, VK_ESCAPE, 0);
+            replacementPopupClosed.store(WaitForWindowClosed(replacementPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
+            return;
         }
         if (! hoverMessageDelivered.load(std::memory_order_acquire))
         {
@@ -8990,8 +9089,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             return;
         }
 
-        const HWND replacementPopup =
-            WaitForReplacementDxUiContextMenuWindow(initialPopup, SelfTest::Scale(hoverViaMouseLeaveRefresh ? 250ms : 2000ms));
+        const HWND replacementPopup = WaitForReplacementDxUiContextMenuWindow(initialPopup, SelfTest::Scale(250ms));
         RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
         if (RedSalamander::DxUi::DebugGetContextMenuPopupState(initialPopup, popupState))
         {
@@ -9016,19 +9114,6 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
             initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
             return;
         }
-        pluginsMenuSelected.store(replacementPopup != nullptr || WaitForMainMenuBarSelectedIndex(pluginsMapping->visualIndex, SelfTest::Scale(250ms)),
-                                  std::memory_order_release);
-        if (! replacementPopup)
-        {
-            PostMessageW(initialPopup, WM_KEYDOWN, VK_ESCAPE, 0);
-            initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
-            return;
-        }
-
-        replacementPopupObserved.store(true, std::memory_order_release);
-        initialPopupClosed.store(WaitForWindowClosed(initialPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
-        PostMessageW(replacementPopup, WM_KEYDOWN, VK_ESCAPE, 0);
-        replacementPopupClosed.store(WaitForWindowClosed(replacementPopup, SelfTest::Scale(2000ms)), std::memory_order_release);
     });
 
     JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
@@ -9164,14 +9249,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
 
     std::atomic<bool> popupDriverDone{false};
@@ -9209,7 +9291,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         }
 
         initialPopupObserved.store(true, std::memory_order_release);
-        static_cast<void>(SetCursorPos(filesScreenPoint.x, filesScreenPoint.y));
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(filesScreenPoint);
         if (IsWindow(menuBarWindow) != FALSE)
         {
             hoverMessageDelivered.store(PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(filesClientPoint.x, filesClientPoint.y)) != FALSE,
@@ -9357,14 +9439,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
 
     std::atomic<bool> popupDriverDone{false};
@@ -9381,7 +9460,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         const auto dismissPopupOnExit =
             wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
-        static_cast<void>(SetCursorPos(clickScreenPoint.x, clickScreenPoint.y));
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(clickScreenPoint);
         PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
@@ -9481,7 +9560,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         const auto dismissPopupOnExit =
             wil::scope_exit([&]() noexcept { static_cast<void>(DismissVisibleOwnedDxUiContextMenus(mainWindow, SelfTest::Scale(2000ms))); });
 
-        static_cast<void>(SetCursorPos(clickScreenPoint.x, clickScreenPoint.y));
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(clickScreenPoint);
         PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickPoint.x, clickPoint.y));
         PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickPoint.x, clickPoint.y));
@@ -9610,14 +9689,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         return false;
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
 
     std::atomic<bool> popupDriverDone{false};
@@ -9645,7 +9721,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         SetForegroundWindow(mainWindow);
         SetFocus(menuBarWindow);
 
-        static_cast<void>(SetCursorPos(clickScreenPoint.x, clickScreenPoint.y));
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(clickScreenPoint);
         const bool postedOpen = PostMessageW(menuBarWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickPoint.x, clickPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(clickPoint.x, clickPoint.y)) != FALSE &&
                                 PostMessageW(menuBarWindow, WM_LBUTTONUP, 0, MAKELPARAM(clickPoint.x, clickPoint.y)) != FALSE;
@@ -10051,14 +10127,11 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         }
     }
 
-    POINT originalCursor{};
-    const bool restoreCursor         = GetCursorPos(&originalCursor) != FALSE;
-    const auto restoreCursorPosition = wil::scope_exit([&]() noexcept
+    // Self-tests inject the menu-bar stale-hover suppression cursor (below) instead of warping
+    // the real cursor; clear the injected override on exit so it never leaks between tests.
+    const auto clearHoverSuppressionOverride = wil::scope_exit([]() noexcept
     {
-        if (restoreCursor)
-        {
-            SetCursorPos(originalCursor.x, originalCursor.y);
-        }
+        DebugSetMainMenuBarHoverSuppressionCursorOverride(std::nullopt);
     });
     RECT mainClient{};
     if (GetClientRect(mainWindow, &mainClient) != FALSE)
@@ -10066,7 +10139,7 @@ void CleanupStandaloneViewerPointerProbe(StandaloneViewerPointerProbe& probe) no
         POINT neutralClient{mainClient.left + 8, mainClient.bottom - 8};
         if (ClientToScreen(mainWindow, &neutralClient) != FALSE)
         {
-            static_cast<void>(SetCursorPos(neutralClient.x, neutralClient.y));
+            DebugSetMainMenuBarHoverSuppressionCursorOverride(neutralClient);
         }
     }
 
@@ -13427,6 +13500,14 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
         return false;
     }
 
+    FolderWindow::PaneViewOptionsDebugSnapshot beforeThumbnails{};
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, beforeThumbnails),
+                  L"Failed to capture thumbnail baseline stats before valid-image shell-failure test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Thumbnails);
     FolderWindow::PaneViewOptionsDebugSnapshot settled{};
     state.Require(WaitForPaneThumbnailStats(FolderWindow::Pane::Left,
@@ -13444,9 +13525,12 @@ void AppendFolderViewColumnAuditRecordJson(std::wstring& out,
                   std::format(L"Valid shell-failed images should not fall back to file icons; fallback={}, completed={}.",
                               settled.thumbnailFallbackCount,
                               settled.thumbnailCompletedCount));
-    state.Require(settled.thumbnailWicFactoryCreateCount == 1u,
-                  std::format(L"WIC fallback should reuse one worker factory for the visible thumbnail batch; factories={} wicSuccess={} completed={}.",
-                              settled.thumbnailWicFactoryCreateCount,
+    const uint64_t factoryCreateDelta = settled.thumbnailWicFactoryCreateCount >= beforeThumbnails.thumbnailWicFactoryCreateCount
+                                            ? settled.thumbnailWicFactoryCreateCount - beforeThumbnails.thumbnailWicFactoryCreateCount
+                                            : 0u;
+    state.Require(factoryCreateDelta >= 1u && factoryCreateDelta <= settled.thumbnailCompletedCount,
+                  std::format(L"WIC fallback should keep worker factory churn bounded by completed thumbnails; factories={} wicSuccess={} completed={}.",
+                              factoryCreateDelta,
                               settled.thumbnailWicSuccessCount,
                               settled.thumbnailCompletedCount));
 
@@ -16262,15 +16346,17 @@ struct FolderViewFrameMetricPresenceRecord
                                              WndMsg::ViewerSpacePerfDebugSnapshot& outSnapshot,
                                              size_t minimumDirectories,
                                              size_t minimumFiles,
+                                             uint64_t expectedRootTotalBytes,
                                              std::chrono::milliseconds timeout) noexcept
 {
     return WaitForViewerSpacePerfSnapshot(
         hwnd,
         outSnapshot,
-        [minimumDirectories, minimumFiles](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+        [minimumDirectories, minimumFiles, expectedRootTotalBytes](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
     {
         return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.realDirectoryCount >= minimumDirectories &&
-               snapshot.fileCandidateCount >= minimumFiles && snapshot.pendingQueueBytes == 0u;
+               snapshot.fileCandidateCount >= minimumFiles && snapshot.pendingQueueBytes == 0u &&
+               snapshot.rootTotalBytes == expectedRootTotalBytes;
     },
         timeout);
 }
@@ -16312,12 +16398,17 @@ struct FolderViewFrameMetricPresenceRecord
     }
 
     WndMsg::ViewerSpacePerfDebugSnapshot serialSnapshot{};
-    state.Require(WaitForViewerSpaceSettled(serialProbe.hwnd, serialSnapshot, kExpectedDirectories, kExpectedFiles, SelfTest::Scale(20000ms)),
-                  std::format(L"ViewerSpace serial golden did not settle. state={}, dirs={}, files={}, pendingBytes={}.",
+    state.Require(WaitForViewerSpaceSettled(
+                      serialProbe.hwnd, serialSnapshot, kExpectedDirectories, kExpectedFiles, expectedTotalBytes, SelfTest::Scale(20000ms)),
+                  std::format(L"ViewerSpace serial golden did not settle. state={}, dirs={}, files={}, pendingBytes={}, expectedBytes={}, rootBytes={}, fileBytes={}, syntheticBytes={}.",
                               static_cast<unsigned int>(serialSnapshot.scanState),
                               serialSnapshot.realDirectoryCount,
                               serialSnapshot.fileCandidateCount,
-                              serialSnapshot.pendingQueueBytes));
+                              serialSnapshot.pendingQueueBytes,
+                              expectedTotalBytes,
+                              serialSnapshot.rootTotalBytes,
+                              serialSnapshot.fileCandidateBytes,
+                              serialSnapshot.syntheticBytes));
     CleanupStandaloneViewerPointerProbe(serialProbe);
     PumpPendingMessages();
     if (! state.failure.empty())
@@ -16338,12 +16429,17 @@ struct FolderViewFrameMetricPresenceRecord
     }
 
     WndMsg::ViewerSpacePerfDebugSnapshot parallelSnapshot{};
-    state.Require(WaitForViewerSpaceSettled(parallelProbe.hwnd, parallelSnapshot, kExpectedDirectories, kExpectedFiles, SelfTest::Scale(20000ms)),
-                  std::format(L"ViewerSpace parallel golden did not settle. state={}, dirs={}, files={}, pendingBytes={}.",
+    state.Require(WaitForViewerSpaceSettled(
+                      parallelProbe.hwnd, parallelSnapshot, kExpectedDirectories, kExpectedFiles, expectedTotalBytes, SelfTest::Scale(20000ms)),
+                  std::format(L"ViewerSpace parallel golden did not settle. state={}, dirs={}, files={}, pendingBytes={}, expectedBytes={}, rootBytes={}, fileBytes={}, syntheticBytes={}.",
                               static_cast<unsigned int>(parallelSnapshot.scanState),
                               parallelSnapshot.realDirectoryCount,
                               parallelSnapshot.fileCandidateCount,
-                              parallelSnapshot.pendingQueueBytes));
+                              parallelSnapshot.pendingQueueBytes,
+                              expectedTotalBytes,
+                              parallelSnapshot.rootTotalBytes,
+                              parallelSnapshot.fileCandidateBytes,
+                              parallelSnapshot.syntheticBytes));
 
     state.Require(serialSnapshot.realDirectoryCount == parallelSnapshot.realDirectoryCount,
                   std::format(L"ViewerSpace serial/parallel directory totals differ. serial={}, parallel={}.",
@@ -17254,6 +17350,15 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
         makeMetricPresence(L"folder.frame.visible_work_count"),
         makeMetricPresence(L"folder.frame.input_to_paint_us"),
         makeMetricPresence(L"folder.frame.dirty_rect_area_px"),
+        makeMetricPresence(L"dwrite.text_layout.create_count"),
+        makeMetricPresence(L"dwrite.text_layout.create_us"),
+        makeMetricPresence(L"dwrite.text_layout.frame_create_count"),
+        makeMetricPresence(L"dwrite.text_layout.frame_create_us"),
+        makeMetricPresence(L"folder.layout.setup_us"),
+        makeMetricPresence(L"folder.layout.estimate_metrics_us"),
+        makeMetricPresence(L"folder.layout.column_resolve_us"),
+        makeMetricPresence(L"folder.layout.bounds_us"),
+        makeMetricPresence(L"folder.layout.update_text_layouts_us"),
     };
 
     std::wstring json;
@@ -17791,20 +17896,67 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"hidden.txt"), L"Expected hidden.txt visible when enabled.");
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt"), L"Expected system.txt visible when enabled.");
 
+    const auto waitForExactPaneItems = [&](std::initializer_list<std::wstring_view> expectedDisplayNames,
+                                           std::chrono::milliseconds timeout) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+
+            bool allFound = true;
+            for (const std::wstring_view displayName : expectedDisplayNames)
+            {
+                if (! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, displayName))
+                {
+                    allFound = false;
+                    break;
+                }
+            }
+
+            if (allFound && g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == expectedDisplayNames.size())
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(20ms);
+        }
+
+        std::wstring expected;
+        for (const std::wstring_view displayName : expectedDisplayNames)
+        {
+            if (! expected.empty())
+            {
+                expected.append(L", ");
+            }
+            expected.append(displayName);
+        }
+        Trace(std::format(L"Hidden/system exact pane wait timed out. expected='{}' actualCount={} normal={} hidden={} system={}",
+                          expected,
+                          g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left),
+                          g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"normal.txt") ? 1 : 0,
+                          g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"hidden.txt") ? 1 : 0,
+                          g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt") ? 1 : 0));
+        return false;
+    };
+
     FocusFolderViewPane(FolderWindow::Pane::Left);
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_PANE_HIDDEN_FILES, 0), 0);
     state.Require(WaitForAtomicAtLeast(enumCount, 2u, SelfTest::Scale(std::chrono::milliseconds{3000})), L"Enumeration did not refresh after hidden toggle.");
+    state.Require(waitForExactPaneItems({L"normal.txt", L"system.txt"}, SelfTest::Scale(3000ms)), L"Pane contents did not settle after hidden toggle.");
     state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"hidden.txt"), L"Expected hidden.txt to be hidden when disabled.");
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt"),
                   L"system.txt should remain visible when only hidden is disabled.");
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_PANE_SYSTEM_FILES, 0), 0);
     state.Require(WaitForAtomicAtLeast(enumCount, 3u, SelfTest::Scale(std::chrono::milliseconds{3000})), L"Enumeration did not refresh after system toggle.");
+    state.Require(waitForExactPaneItems({L"normal.txt"}, SelfTest::Scale(3000ms)), L"Pane contents did not settle after system toggle.");
     state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt"), L"Expected system.txt to be hidden when disabled.");
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_PANE_HIDDEN_FILES, 0), 0);
     state.Require(WaitForAtomicAtLeast(enumCount, 4u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Enumeration did not refresh after re-enabling hidden.");
+    state.Require(waitForExactPaneItems({L"normal.txt", L"hidden.txt"}, SelfTest::Scale(3000ms)), L"Pane contents did not settle after re-enabling hidden.");
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"hidden.txt"), L"Expected hidden.txt visible after re-enabling hidden.");
     state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt"),
                   L"system.txt should remain hidden while system is disabled.");
@@ -17812,6 +17964,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_VIEW_PANE_SYSTEM_FILES, 0), 0);
     state.Require(WaitForAtomicAtLeast(enumCount, 5u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Enumeration did not refresh after re-enabling system.");
+    state.Require(waitForExactPaneItems({L"normal.txt", L"hidden.txt", L"system.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents did not settle after re-enabling system.");
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"system.txt"), L"Expected system.txt visible after re-enabling system.");
 
     return state.failure.empty();
@@ -18449,6 +18603,283 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestFolderViewRenderingErrorOverlayRequiresPersistence(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid for FolderView rendering-error overlay persistence test.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for FolderView rendering-error overlay persistence test.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"folderview_rendering_error_overlay_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create FolderView rendering-error overlay fixture root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    constexpr HRESULT kRenderingFailureHr = HRESULT_FROM_WIN32(ERROR_DEVICE_NOT_CONNECTED);
+    constexpr uint64_t kPersistentAgeMs   = 2500u;
+    const auto cleanup                    = wil::scope_exit([&]
+    {
+        g_folderWindow.DebugClearPaneRenderingFailureForSelfTest(FolderWindow::Pane::Left);
+        g_folderWindow.DebugHideOverlaySample(FolderWindow::Pane::Left);
+        g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    });
+
+    auto describeSnapshot = [](const FolderView::AlertOverlayDebugSnapshot& snapshot)
+    {
+        return std::format(L"visible={} kind={} severity={} hr=0x{:08X} title='{}'",
+                           snapshot.visible ? L"yes" : L"no",
+                           static_cast<unsigned>(snapshot.kind),
+                           static_cast<unsigned>(snapshot.severity),
+                           static_cast<unsigned>(snapshot.hr),
+                           snapshot.title);
+    };
+    auto captureSnapshot = [&](FolderView::AlertOverlayDebugSnapshot& snapshot, std::wstring_view context)
+    {
+        state.Require(g_folderWindow.DebugGetPaneAlertSnapshot(FolderWindow::Pane::Left, snapshot),
+                      std::format(L"Failed to capture FolderView alert snapshot after {}.", context));
+        return state.failure.empty();
+    };
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for FolderView rendering-error overlay persistence test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::atomic<uint32_t> enumRoot{0};
+    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                       [&](const std::filesystem::path& folder) noexcept
+    {
+        if (OrdinalString::EqualsNoCasePath(folder, root))
+        {
+            enumRoot.fetch_add(1u, std::memory_order_release);
+        }
+    });
+    const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Failed to set left pane path for FolderView rendering-error overlay persistence test.");
+    state.Require(WaitForAtomicAtLeast(enumRoot, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Enumeration did not complete for FolderView rendering-error overlay persistence test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.DismissPaneAlertOverlay(FolderWindow::Pane::Left);
+    g_folderWindow.DebugHideOverlaySample(FolderWindow::Pane::Left);
+    g_folderWindow.DebugClearPaneRenderingFailureForSelfTest(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+
+    FolderView::AlertOverlayDebugSnapshot snapshot{};
+    if (! captureSnapshot(snapshot, L"initial clear"))
+    {
+        return false;
+    }
+    state.Require(! snapshot.visible, std::format(L"Expected no initial FolderView alert; {}.", describeSnapshot(snapshot)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    for (int attempt = 1; attempt <= 2; ++attempt)
+    {
+        g_folderWindow.DebugReportPaneRenderingFailureForSelfTest(FolderWindow::Pane::Left, kRenderingFailureHr);
+        if (! captureSnapshot(snapshot, std::format(L"transient rendering failure attempt {}", attempt)))
+        {
+            return false;
+        }
+        state.Require(! snapshot.visible,
+                      std::format(L"Transient rendering failure attempt {} unexpectedly created a user-visible alert; {}.",
+                                  attempt,
+                                  describeSnapshot(snapshot)));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.DebugAgePaneRenderingFailureForSelfTest(FolderWindow::Pane::Left, kPersistentAgeMs);
+    g_folderWindow.DebugReportPaneRenderingFailureForSelfTest(FolderWindow::Pane::Left, kRenderingFailureHr);
+    if (! captureSnapshot(snapshot, L"persistent rendering failure"))
+    {
+        return false;
+    }
+
+    state.Require(snapshot.visible, std::format(L"Persistent rendering failure did not create an alert; {}.", describeSnapshot(snapshot)));
+    state.Require(snapshot.kind == FolderView::ErrorOverlayKind::Rendering,
+                  std::format(L"Persistent rendering failure alert used the wrong kind; {}.", describeSnapshot(snapshot)));
+    state.Require(snapshot.severity == FolderView::OverlaySeverity::Error,
+                  std::format(L"Persistent rendering failure alert used the wrong severity; {}.", describeSnapshot(snapshot)));
+    state.Require(snapshot.hr == kRenderingFailureHr, std::format(L"Persistent rendering failure alert used the wrong HRESULT; {}.", describeSnapshot(snapshot)));
+    const std::wstring renderingTitle = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_RENDERING_ERROR);
+    if (! renderingTitle.empty())
+    {
+        state.Require(snapshot.title == renderingTitle,
+                      std::format(L"Persistent rendering failure alert title mismatch; expected='{}' actual='{}'.", renderingTitle, snapshot.title));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.DebugClearPaneRenderingFailureForSelfTest(FolderWindow::Pane::Left);
+    PumpPendingMessages();
+    if (! captureSnapshot(snapshot, L"rendering failure clear"))
+    {
+        return false;
+    }
+    state.Require(! snapshot.visible, std::format(L"Rendering failure alert stayed visible after clear; {}.", describeSnapshot(snapshot)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.DebugReportPaneRenderingFailureForSelfTest(FolderWindow::Pane::Left, kRenderingFailureHr);
+    if (! captureSnapshot(snapshot, L"post-clear transient rendering failure"))
+    {
+        return false;
+    }
+    state.Require(! snapshot.visible, std::format(L"Rendering failure persistence gate did not reset after clear; {}.", describeSnapshot(snapshot)));
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFolderViewDpiChangeRepaintsBothPanes(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid for FolderView DPI repaint test.");
+        return false;
+    }
+
+    const UINT actualWindowDpi = GetDpiForWindow(mainWindow);
+    const float originalDpi    = actualWindowDpi > 0u ? static_cast<float>(actualWindowDpi) : 96.0f;
+    const float testDpi        = std::abs(originalDpi - 144.0f) > 0.5f ? 144.0f : 96.0f;
+
+    auto repaintPane = [&](FolderWindow::Pane pane) noexcept
+    {
+        const HWND folderView = g_folderWindow.GetFolderViewHwnd(pane);
+        if (folderView && IsWindow(folderView) != FALSE)
+        {
+            RedrawWindow(folderView, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+        }
+    };
+    const auto restoreDpi = wil::scope_exit([&]
+    {
+        g_folderWindow.OnDpiChanged(originalDpi);
+        repaintPane(FolderWindow::Pane::Left);
+        repaintPane(FolderWindow::Pane::Right);
+        PumpPendingMessages();
+    });
+
+    auto describeRendering = [](const FolderView::RenderingDebugSnapshot& snapshot)
+    {
+        return std::format(L"dpi={} client={}x{} target={} resizePending={} forceFull={} lastFull={} fullCount={} lastRect=({},{}-{},{} )",
+                           snapshot.dpi,
+                           snapshot.clientSizePx.cx,
+                           snapshot.clientSizePx.cy,
+                           snapshot.hasD2DTarget ? L"yes" : L"no",
+                           snapshot.swapChainResizePending ? L"yes" : L"no",
+                           snapshot.forceFullRenderOnNextPaint ? L"yes" : L"no",
+                           snapshot.lastRenderWasFullClient ? L"yes" : L"no",
+                           snapshot.fullClientRenderCount,
+                           snapshot.lastRenderInvalidRectPx.left,
+                           snapshot.lastRenderInvalidRectPx.top,
+                           snapshot.lastRenderInvalidRectPx.right,
+                           snapshot.lastRenderInvalidRectPx.bottom);
+    };
+
+    auto assertPaneReady = [&](FolderWindow::Pane pane, std::wstring_view name)
+    {
+        const HWND folderView = g_folderWindow.GetFolderViewHwnd(pane);
+        state.Require(folderView && IsWindow(folderView) != FALSE, std::format(L"{} FolderView hwnd invalid for DPI repaint test.", name));
+        state.Require(g_folderWindow.DebugWarmPaneRendering(pane), std::format(L"Failed to warm {} FolderView rendering before DPI repaint test.", name));
+        const FolderView::RenderingDebugSnapshot snapshot = g_folderWindow.DebugGetPaneRenderingSnapshot(pane);
+        state.Require(snapshot.clientSizePx.cx > 0 && snapshot.clientSizePx.cy > 0,
+                      std::format(L"{} FolderView client is empty before DPI repaint test; {}.", name, describeRendering(snapshot)));
+        state.Require(snapshot.hasD2DTarget, std::format(L"{} FolderView target missing before DPI repaint test; {}.", name, describeRendering(snapshot)));
+    };
+
+    assertPaneReady(FolderWindow::Pane::Left, L"Left");
+    assertPaneReady(FolderWindow::Pane::Right, L"Right");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const FolderView::RenderingDebugSnapshot leftBefore  = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
+    const FolderView::RenderingDebugSnapshot rightBefore = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Right);
+
+    g_folderWindow.OnDpiChanged(testDpi);
+
+    const FolderView::RenderingDebugSnapshot leftPending  = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
+    const FolderView::RenderingDebugSnapshot rightPending = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Right);
+    const bool leftScheduledOrPainted =
+        leftPending.forceFullRenderOnNextPaint || (leftPending.lastRenderWasFullClient && leftPending.fullClientRenderCount > leftBefore.fullClientRenderCount);
+    const bool rightScheduledOrPainted =
+        rightPending.forceFullRenderOnNextPaint || (rightPending.lastRenderWasFullClient && rightPending.fullClientRenderCount > rightBefore.fullClientRenderCount);
+    state.Require(std::abs(leftPending.dpi - testDpi) <= 0.5f, std::format(L"Left FolderView DPI did not update before repaint; {}.", describeRendering(leftPending)));
+    state.Require(std::abs(rightPending.dpi - testDpi) <= 0.5f,
+                  std::format(L"Right FolderView DPI did not update before repaint; {}.", describeRendering(rightPending)));
+    state.Require(leftScheduledOrPainted,
+                  std::format(L"Left FolderView neither scheduled nor completed a full repaint for DPI change; beforeFullCount={} after={}.",
+                              leftBefore.fullClientRenderCount,
+                              describeRendering(leftPending)));
+    state.Require(rightScheduledOrPainted,
+                  std::format(L"Right FolderView neither scheduled nor completed a full repaint for DPI change; beforeFullCount={} after={}.",
+                              rightBefore.fullClientRenderCount,
+                              describeRendering(rightPending)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    repaintPane(FolderWindow::Pane::Left);
+    repaintPane(FolderWindow::Pane::Right);
+    PumpPendingMessages();
+
+    auto assertPaneRepainted = [&](FolderWindow::Pane pane, std::wstring_view name, const FolderView::RenderingDebugSnapshot& before)
+    {
+        const FolderView::RenderingDebugSnapshot after = g_folderWindow.DebugGetPaneRenderingSnapshot(pane);
+        state.Require(std::abs(after.dpi - testDpi) <= 0.5f, std::format(L"{} FolderView DPI changed after repaint; {}.", name, describeRendering(after)));
+        state.Require(after.hasD2DTarget, std::format(L"{} FolderView target missing after DPI repaint; {}.", name, describeRendering(after)));
+        state.Require(! after.swapChainResizePending, std::format(L"{} FolderView still has pending swap-chain resize; {}.", name, describeRendering(after)));
+        state.Require(! after.forceFullRenderOnNextPaint,
+                      std::format(L"{} FolderView did not clear full repaint flag after present; {}.", name, describeRendering(after)));
+        state.Require(after.lastRenderWasFullClient, std::format(L"{} FolderView did not render a full client after DPI change; {}.", name, describeRendering(after)));
+        state.Require(after.fullClientRenderCount > before.fullClientRenderCount,
+                      std::format(L"{} FolderView full-client render count did not increase; before={} after={}.",
+                                  name,
+                                  before.fullClientRenderCount,
+                                  after.fullClientRenderCount));
+        state.Require(after.lastRenderInvalidRectPx.left == 0 && after.lastRenderInvalidRectPx.top == 0 &&
+                          after.lastRenderInvalidRectPx.right == after.clientSizePx.cx && after.lastRenderInvalidRectPx.bottom == after.clientSizePx.cy,
+                      std::format(L"{} FolderView last render rect was not full-client; {}.", name, describeRendering(after)));
+    };
+
+    assertPaneRepainted(FolderWindow::Pane::Left, L"Left", leftBefore);
+    assertPaneRepainted(FolderWindow::Pane::Right, L"Right", rightBefore);
+
+    return state.failure.empty();
+}
+
 } // namespace (tests)
 
 void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
@@ -18672,6 +19103,12 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
         return TestPaneStatusBarUsesOwnedWindowAndSortClickOpensMenu(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"folderView_empty_folder_state", [=](CaseState& state) noexcept { return TestEmptyFolderState(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"folderView_rendering_error_overlay_requires_persistence", [=](CaseState& state) noexcept {
+        return TestFolderViewRenderingErrorOverlayRequiresPersistence(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"folderView_dpi_change_repaints_both_panes", [=](CaseState& state) noexcept {
+        return TestFolderViewDpiChangeRepaintsBothPanes(mainWindow, state);
+    });
     SelfTest::RunCase(
         options, suite, L"folderView_column_widths_audit", [=](CaseState& state) noexcept { return TestFolderViewColumnWidthsAudit(mainWindow, state); });
     SelfTest::RunCase(

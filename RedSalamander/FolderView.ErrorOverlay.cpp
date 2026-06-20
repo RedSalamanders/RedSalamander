@@ -56,6 +56,12 @@ namespace
     }
 }
 
+[[nodiscard]] bool IsRenderingErrorContext(std::wstring_view context) noexcept
+{
+    return context.find(L"IDXGI") != std::wstring_view::npos || context.find(L"ID2D1") != std::wstring_view::npos ||
+           context.find(L"D3D") != std::wstring_view::npos;
+}
+
 [[nodiscard]] RECT MakeEmptyRect() noexcept
 {
     return RECT{};
@@ -595,12 +601,40 @@ void FolderView::ReportError(const std::wstring& context, HRESULT hr) const
     {
         details = std::format(L"0x{:08X}: {}", static_cast<unsigned long>(hr), hrText);
     }
-    Debug::Error(L"{} failed: {}", context, details);
+
+    const bool renderingErrorContext = IsRenderingErrorContext(context);
+    const uint64_t nowTickMs         = GetTickCount64();
+    RenderingFailureOverlayDecision renderingDecision{};
+    if (renderingErrorContext)
+    {
+        renderingDecision = UpdateRenderingFailureOverlayDecision(hr, nowTickMs);
+        if (! renderingDecision.showOverlay)
+        {
+            Debug::Perf::Emit(
+                L"folder.render.failure_suppressed", context, renderingDecision.elapsedMs * 1000u, renderingDecision.failureCount, 0u, hr);
+            if (renderingDecision.failureCount == 1u)
+            {
+                Debug::Warning(L"{} failed transiently; suppressing user-visible rendering overlay until persistent: {}", context, details);
+            }
+            return;
+        }
+
+        if (renderingDecision.newlyPromoted)
+        {
+            Debug::Perf::Emit(
+                L"folder.render.failure_promoted", context, renderingDecision.elapsedMs * 1000u, renderingDecision.failureCount, 0u, hr);
+            Debug::Error(L"{} failed persistently: {}", context, details);
+        }
+    }
+    else
+    {
+        Debug::Error(L"{} failed: {}", context, details);
+    }
 
     ErrorOverlayState overlay{};
     overlay.hr        = hr;
     overlay.severity  = OverlaySeverity::Error;
-    overlay.startTick = GetTickCount64();
+    overlay.startTick = renderingErrorContext && renderingDecision.firstTickMs != 0u ? renderingDecision.firstTickMs : nowTickMs;
 
     if (context == L"EnumerateFolder")
     {
@@ -724,7 +758,7 @@ void FolderView::ReportError(const std::wstring& context, HRESULT hr) const
             overlay.message = details;
         }
     }
-    else if (context.find(L"IDXGI") != std::wstring::npos || context.find(L"ID2D1") != std::wstring::npos || context.find(L"D3D") != std::wstring::npos)
+    else if (renderingErrorContext)
     {
         overlay.kind    = ErrorOverlayKind::Rendering;
         overlay.title   = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_RENDERING_ERROR);
@@ -761,8 +795,69 @@ void FolderView::ReportError(const std::wstring& context, HRESULT hr) const
     }
 }
 
+void FolderView::ResetRenderingFailureState() const noexcept
+{
+    std::lock_guard lock(_errorOverlayMutex);
+    _renderingFailureLastHr            = S_OK;
+    _renderingFailureConsecutiveCount  = 0;
+    _renderingFailureFirstTickMs       = 0;
+    _renderingFailureLastTickMs        = 0;
+    _renderingFailureOverlayPromoted   = false;
+}
+
+FolderView::RenderingFailureOverlayDecision FolderView::UpdateRenderingFailureOverlayDecision(HRESULT hr, uint64_t nowTickMs) const noexcept
+{
+    constexpr uint32_t kRenderingFailureOverlayMinFailures = 3u;
+    constexpr uint64_t kRenderingFailureOverlayMinAgeMs    = 2000u;
+    constexpr uint64_t kRenderingFailureSequenceResetMs    = 3000u;
+
+    RenderingFailureOverlayDecision decision{};
+    std::lock_guard lock(_errorOverlayMutex);
+
+    const bool sameFailure = _renderingFailureLastHr == hr && _renderingFailureFirstTickMs != 0u;
+    const bool freshFailure =
+        _renderingFailureLastTickMs == 0u || nowTickMs < _renderingFailureLastTickMs || (nowTickMs - _renderingFailureLastTickMs) <= kRenderingFailureSequenceResetMs;
+    if (! sameFailure || ! freshFailure)
+    {
+        _renderingFailureLastHr           = hr;
+        _renderingFailureConsecutiveCount = 0;
+        _renderingFailureFirstTickMs      = nowTickMs;
+        _renderingFailureOverlayPromoted  = false;
+    }
+
+    if (_renderingFailureConsecutiveCount < std::numeric_limits<uint32_t>::max())
+    {
+        ++_renderingFailureConsecutiveCount;
+    }
+    _renderingFailureLastTickMs = nowTickMs;
+
+    decision.failureCount = _renderingFailureConsecutiveCount;
+    decision.firstTickMs  = _renderingFailureFirstTickMs;
+    decision.elapsedMs    = nowTickMs >= _renderingFailureFirstTickMs ? (nowTickMs - _renderingFailureFirstTickMs) : 0u;
+
+    if (_renderingFailureOverlayPromoted)
+    {
+        decision.showOverlay = true;
+        return decision;
+    }
+
+    if (_renderingFailureConsecutiveCount >= kRenderingFailureOverlayMinFailures && decision.elapsedMs >= kRenderingFailureOverlayMinAgeMs)
+    {
+        _renderingFailureOverlayPromoted = true;
+        decision.showOverlay             = true;
+        decision.newlyPromoted           = true;
+    }
+
+    return decision;
+}
+
 void FolderView::ClearErrorOverlay(ErrorOverlayKind kind) const
 {
+    if (kind == ErrorOverlayKind::Rendering)
+    {
+        ResetRenderingFailureState();
+    }
+
     bool cleared = false;
     {
         std::lock_guard lock(_errorOverlayMutex);
@@ -853,13 +948,20 @@ void FolderView::ShowAlertOverlay(
 void FolderView::DismissAlertOverlay()
 {
     bool cleared = false;
+    std::optional<ErrorOverlayKind> clearedKind;
     {
         std::lock_guard lock(_errorOverlayMutex);
         if (_errorOverlay)
         {
+            clearedKind = _errorOverlay->kind;
             _errorOverlay.reset();
             cleared = true;
         }
+    }
+
+    if (clearedKind == ErrorOverlayKind::Rendering)
+    {
+        ResetRenderingFailureState();
     }
 
     if (cleared)
@@ -923,6 +1025,28 @@ bool FolderView::DebugGetAlertOverlaySnapshot(AlertOverlayDebugSnapshot& out) co
     out.closable    = _errorOverlay->closable;
     out.blocksInput = _errorOverlay->blocksInput;
     return true;
+}
+
+void FolderView::DebugReportRenderingFailureForSelfTest(HRESULT hr) const
+{
+    ReportError(L"IDXGISwapChain::Present", hr);
+}
+
+void FolderView::DebugAgeRenderingFailureForSelfTest(uint64_t ageMs) const noexcept
+{
+    const uint64_t nowTickMs = GetTickCount64();
+    std::lock_guard lock(_errorOverlayMutex);
+    if (_renderingFailureFirstTickMs == 0u)
+    {
+        return;
+    }
+
+    _renderingFailureFirstTickMs = nowTickMs > ageMs ? (nowTickMs - ageMs) : 0u;
+}
+
+void FolderView::DebugClearRenderingFailureForSelfTest() const
+{
+    ClearErrorOverlay(ErrorOverlayKind::Rendering);
 }
 #endif
 

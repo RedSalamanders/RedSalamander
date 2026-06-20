@@ -16,6 +16,9 @@ inline constexpr uint64_t kDefaultContentBytesPerFile = 64ull * 1024ull * 1024ul
 inline constexpr uint32_t kDefaultSnippetCharacters   = 160u;
 inline constexpr size_t kDefaultReadChunkBytes        = 256u * 1024u;
 inline constexpr size_t kDefaultLiteralChunkChars     = 32u * 1024u;
+inline constexpr size_t kMaxRegexContentCharacters    = 5u * 1024u * 1024u;
+inline constexpr size_t kMaxRegexPatternLength         = 1000u;
+inline constexpr size_t kMaxRegexGroupDepth            = 20u;
 
 enum class DecodedTextEncoding : uint32_t
 {
@@ -53,6 +56,7 @@ struct TextSearchResult
     uint32_t matchLength = 0;
     std::wstring previewText;
     bool binarySkipped           = false;
+    bool overflowSkipped         = false;
     DecodedTextEncoding encoding = DecodedTextEncoding::None;
     bool usedFallbackCodePage    = false;
 };
@@ -67,6 +71,8 @@ using CancelCheck = HRESULT(STDMETHODCALLTYPE*)(void* cookie) noexcept;
 
 [[nodiscard]] bool FindLiteralWithChunkOverlap(
     std::wstring_view haystack, std::wstring_view needle, bool caseSensitive, size_t chunkCharacters, size_t& outPosition) noexcept;
+
+[[nodiscard]] bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReason) noexcept;
 
 [[nodiscard]] bool MatchDecodedText(
     const DecodedTextResult& decoded, const TextSearchPattern& pattern, uint32_t maxSnippetCharacters, bool wantSnippets, TextSearchResult& result) noexcept;

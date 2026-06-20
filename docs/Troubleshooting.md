@@ -26,6 +26,39 @@ For safe manual edits and concrete JSON examples, see: [Settings File & Advanced
 2. Rename or delete all `RedSalamander*.settings.json` files in `%LocalAppData%\\RedSalamander\\Settings\\`.
 3. Start RedSalamander again.
 
+## Startup command-line switches
+
+`RedSalamander.exe` accepts a few options at launch:
+
+| Switch | Effect |
+|--------|--------|
+| `-h`, `--help`, `/?` | Show the help text and exit. |
+| `--etw` | Enable Info/Perf/Debug ETW diagnostics in Release builds (Debug and ASan Debug builds enable them by default). |
+| `--perf` | Write perf metrics to the default JSONL path (Debug and ASan Debug builds enable this by default). |
+| `--perf=PATH` | Write perf metrics to a custom JSONL path. |
+| `--crash-test` | Trigger the crash-handler test (deliberately crashes to exercise the crash pipeline). |
+
+The default perf JSONL path is `%LocalAppData%\\RedSalamander\\Perf\\RedSalamander_<timestamp>.jsonl`. For the full diagnostics model, the ETW event schema, and the `--perf` sink, see [Diagnostics: ETW, Debug Logging & Perf](dev/Diagnostics.md).
+
+## Crash quarantine (auto-disable a suspect plugin)
+
+If RedSalamander crashes, it leaves a crash marker (and a minidump/report) under `%LocalAppData%\\RedSalamander\\Crashes\\`. On the next launch, if a marker is present, RedSalamander checks which file-system plugin(s) were active at the time of the crash and offers to disable them:
+
+- A **Crash recovery** prompt asks whether to disable the suspect plugin(s) to avoid repeated crashes.
+- Choosing **Yes** adds the plugin id(s) to the disabled list in your settings (and clears the current file-system plugin if it was one of them). Choosing **No** leaves your settings unchanged.
+
+The marker is cleared on a clean shutdown, so the prompt only appears after an actual crash. To re-enable a plugin you disabled this way, remove it from the disabled plugins list in Preferences → Plugins (or edit the settings file — see [Settings File & Advanced Configuration](SettingsFile.md)).
+
+## Capturing diagnostics for a bug report
+
+RedSalamander writes no log files; diagnostics are emitted as ETW (Event Tracing for Windows) events and consumed in real time by `RedSalamanderMonitor.exe`. To capture errors and warnings while reproducing a problem:
+
+1. Start `RedSalamanderMonitor.exe` and let it begin its ETW session.
+2. Reproduce the issue in RedSalamander.
+3. Copy the relevant `[Error]` / `[Warning]` lines from the Monitor to attach to your report.
+
+In Release builds only **Error** and **Warning** events are emitted by default; Info/Perf/Debug events require launching with `--etw` (see the switch table above). If the Monitor cannot start a session (`ERROR_ACCESS_DENIED`), run `.\\init-etw-trace.ps1` once and sign out/in. See [Monitor](Monitor.md) for the full walkthrough and [Diagnostics: ETW, Debug Logging & Perf](dev/Diagnostics.md) for details.
+
 ## ViewerWeb (HTML/PDF/Markdown/JSON) does not open
 
 - Ensure **WebView2 Runtime** is installed.

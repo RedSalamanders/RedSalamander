@@ -90,6 +90,76 @@ unsigned int GetFileOpsBridgeProducerDelayForSelfTest() noexcept
 {
     return GetBridgeProducerDelayMsForSelfTest();
 }
+
+void SetFileOpsBridgeFailNextFileCopiesForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeFailNextFileCopyAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeFailNextFileCopyCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeFailNextFileCopyAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeFailNextFileCopyAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(unsigned long count) noexcept
+{
+    g_fileOpsBridgeFailNextSourceGetSizeAttempts.store(0u, std::memory_order_release);
+    g_fileOpsBridgeFailNextSourceGetSizeCount.store(count, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsBridgeFailNextSourceGetSizeAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsBridgeFailNextSourceGetSizeAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsPreCalcThreadStartFailureForSelfTest(bool enabled) noexcept
+{
+    g_fileOpsPreCalcThreadStartFailure.store(enabled, std::memory_order_release);
+}
+
+unsigned long TakeFileOpsPreCalcThreadStartAttemptsForSelfTest() noexcept
+{
+    return g_fileOpsPreCalcThreadStartAttempts.exchange(0u, std::memory_order_acq_rel);
+}
+
+void SetFileOpsAutoConcurrencyOverrideForSelfTest(bool enabled, unsigned int preferredConcurrency, uint32_t storageKind) noexcept
+{
+    if (! enabled)
+    {
+        g_fileOpsAutoConcurrencyOverrideEnabled.store(false, std::memory_order_release);
+        return;
+    }
+
+    g_fileOpsAutoConcurrencyOverridePreferred.store(std::max(1u, preferredConcurrency), std::memory_order_release);
+    g_fileOpsAutoConcurrencyOverrideStorageKind.store(storageKind, std::memory_order_release);
+    g_fileOpsAutoConcurrencyOverrideEnabled.store(true, std::memory_order_release);
+}
+
+void SetFileOpsPostFinishedCompletionPauseForSelfTest(bool enabled) noexcept
+{
+    if (enabled)
+    {
+        g_fileOpsPostFinishedCompletionPauseEntered.store(false, std::memory_order_release);
+        g_fileOpsPostFinishedCompletionPauseRelease.store(false, std::memory_order_release);
+        g_fileOpsPostFinishedCompletionPauseEnabled.store(true, std::memory_order_release);
+        return;
+    }
+
+    g_fileOpsPostFinishedCompletionPauseEnabled.store(false, std::memory_order_release);
+    g_fileOpsPostFinishedCompletionPauseRelease.store(true, std::memory_order_release);
+}
+
+bool HasFileOpsPostFinishedCompletionPauseEnteredForSelfTest() noexcept
+{
+    return g_fileOpsPostFinishedCompletionPauseEntered.load(std::memory_order_acquire);
+}
+
+void ReleaseFileOpsPostFinishedCompletionPauseForSelfTest() noexcept
+{
+    g_fileOpsPostFinishedCompletionPauseEnabled.store(false, std::memory_order_release);
+    g_fileOpsPostFinishedCompletionPauseRelease.store(true, std::memory_order_release);
+}
 #endif
 
 bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_token stopToken) noexcept
@@ -198,6 +268,13 @@ void FolderWindow::FileOperationState::LeaveOperation() noexcept
 
 void FolderWindow::FileOperationState::PostCompleted(Task& task) noexcept
 {
+    // Live snapshots read this flag so a just-finished task renders its final status instead of
+    // briefly flashing "Running" until the completed-summary row replaces the live row.
+    task._taskFinished.store(true, std::memory_order_release);
+#ifdef ENABLE_TESTS
+    MaybePauseAfterTaskFinishedBeforeSummaryForSelfTest();
+#endif
+
     const CompletedTaskSummary summary = RecordCompletedTask(task);
 
     HWND owner = _owner.GetHwnd();

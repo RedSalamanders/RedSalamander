@@ -687,6 +687,245 @@ struct SymbolicLinkReparseDataBufferForProperties final
     return std::wstring(normalized.substr(0, shareEnd + 1));
 }
 
+#ifdef _DEBUG
+struct StorageProbeDebugHooks
+{
+    void* context = nullptr;
+    BOOL (*getVolumePathName)(void* context, const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept = nullptr;
+    BOOL (*getVolumeNameForVolumeMountPoint)(void* context, const wchar_t* volumeMountPoint, wchar_t* volumeName, DWORD bufferLength) noexcept = nullptr;
+    DWORD (*queryDosDevice)(void* context, const wchar_t* deviceName, wchar_t* targetPath, DWORD bufferLength) noexcept = nullptr;
+    wil::unique_hfile (*openVolume)(void* context, const wchar_t* volumePath) noexcept = nullptr;
+    BOOL (*deviceIoControl)(void* context,
+                            HANDLE device,
+                            DWORD ioControlCode,
+                            LPVOID inBuffer,
+                            DWORD inBufferBytes,
+                            LPVOID outBuffer,
+                            DWORD outBufferBytes,
+                            LPDWORD bytesReturned,
+                            LPOVERLAPPED overlapped) noexcept = nullptr;
+};
+
+std::atomic<StorageProbeDebugHooks*> g_storageProbeDebugHooks{nullptr};
+
+class StorageProbeDebugScope final
+{
+public:
+    explicit StorageProbeDebugScope(StorageProbeDebugHooks& hooks) noexcept
+        : _previous(g_storageProbeDebugHooks.exchange(&hooks, std::memory_order_acq_rel))
+    {
+    }
+
+    StorageProbeDebugScope(const StorageProbeDebugScope&)            = delete;
+    StorageProbeDebugScope(StorageProbeDebugScope&&)                 = delete;
+    StorageProbeDebugScope& operator=(const StorageProbeDebugScope&) = delete;
+    StorageProbeDebugScope& operator=(StorageProbeDebugScope&&)      = delete;
+
+    ~StorageProbeDebugScope() noexcept
+    {
+        g_storageProbeDebugHooks.store(_previous, std::memory_order_release);
+    }
+
+private:
+    StorageProbeDebugHooks* _previous = nullptr;
+};
+#endif
+
+void TrimAfterFirstNull(std::wstring& text) noexcept
+{
+    const size_t terminator = text.find(L'\0');
+    if (terminator != std::wstring::npos)
+    {
+        text.resize(terminator);
+    }
+}
+
+[[nodiscard]] BOOL GetVolumePathNameForStorageProbe(const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept
+{
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr && hooks->getVolumePathName != nullptr)
+    {
+        return hooks->getVolumePathName(hooks->context, fileName, volumePathName, bufferLength);
+    }
+#endif
+
+    return GetVolumePathNameW(fileName, volumePathName, bufferLength);
+}
+
+[[nodiscard]] BOOL GetVolumeNameForVolumeMountPointForStorageProbe(const wchar_t* volumeMountPoint, wchar_t* volumeName, DWORD bufferLength) noexcept
+{
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr && hooks->getVolumeNameForVolumeMountPoint != nullptr)
+    {
+        return hooks->getVolumeNameForVolumeMountPoint(hooks->context, volumeMountPoint, volumeName, bufferLength);
+    }
+#endif
+
+    return GetVolumeNameForVolumeMountPointW(volumeMountPoint, volumeName, bufferLength);
+}
+
+[[nodiscard]] DWORD QueryDosDeviceForStorageProbe(const wchar_t* deviceName, wchar_t* targetPath, DWORD bufferLength) noexcept
+{
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr && hooks->queryDosDevice != nullptr)
+    {
+        return hooks->queryDosDevice(hooks->context, deviceName, targetPath, bufferLength);
+    }
+#endif
+
+    return QueryDosDeviceW(deviceName, targetPath, bufferLength);
+}
+
+[[nodiscard]] wil::unique_hfile OpenStorageProbeVolume(const wchar_t* volumePath) noexcept
+{
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr && hooks->openVolume != nullptr)
+    {
+        return hooks->openVolume(hooks->context, volumePath);
+    }
+#endif
+
+    return wil::unique_hfile(CreateFileW(volumePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
+}
+
+[[nodiscard]] BOOL DeviceIoControlForStorageProbe(HANDLE device,
+                                                  DWORD ioControlCode,
+                                                  LPVOID inBuffer,
+                                                  DWORD inBufferBytes,
+                                                  LPVOID outBuffer,
+                                                  DWORD outBufferBytes,
+                                                  LPDWORD bytesReturned,
+                                                  LPOVERLAPPED overlapped) noexcept
+{
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr && hooks->deviceIoControl != nullptr)
+    {
+        return hooks->deviceIoControl(
+            hooks->context, device, ioControlCode, inBuffer, inBufferBytes, outBuffer, outBufferBytes, bytesReturned, overlapped);
+    }
+#endif
+
+    return DeviceIoControl(device, ioControlCode, inBuffer, inBufferBytes, outBuffer, outBufferBytes, bytesReturned, overlapped);
+}
+
+[[nodiscard]] std::wstring ResolveLocalVolumeRootPath(std::wstring_view path) noexcept
+{
+    if (path.empty() || IsUncPath(path))
+    {
+        return {};
+    }
+
+    std::wstring input(path);
+    std::wstring volumeRoot(32768u, L'\0');
+    if (! GetVolumePathNameForStorageProbe(input.c_str(), volumeRoot.data(), static_cast<DWORD>(volumeRoot.size())))
+    {
+        return {};
+    }
+
+    TrimAfterFirstNull(volumeRoot);
+    return volumeRoot;
+}
+
+[[nodiscard]] std::wstring BuildDriveLetterDevicePath(std::wstring_view driveRoot) noexcept
+{
+    if (driveRoot.size() < 2 || driveRoot[1] != L':')
+    {
+        return {};
+    }
+
+    std::wstring volumePath = L"\\\\.\\";
+    volumePath.append(driveRoot, 0, 2);
+    return volumePath;
+}
+
+[[nodiscard]] std::wstring BuildOpenableVolumeGuidDevicePath(std::wstring_view volumeName) noexcept
+{
+    std::wstring volumePath(volumeName);
+    while (! volumePath.empty() && (volumePath.back() == L'\\' || volumePath.back() == L'/'))
+    {
+        volumePath.pop_back();
+    }
+    return volumePath;
+}
+
+[[nodiscard]] std::wstring ResolveVolumeGuidDevicePath(std::wstring_view volumeRoot) noexcept
+{
+    if (volumeRoot.empty())
+    {
+        return {};
+    }
+
+    std::wstring volumeRootText(volumeRoot);
+    std::wstring volumeName(32768u, L'\0');
+    if (! GetVolumeNameForVolumeMountPointForStorageProbe(volumeRootText.c_str(), volumeName.data(), static_cast<DWORD>(volumeName.size())))
+    {
+        return {};
+    }
+
+    TrimAfterFirstNull(volumeName);
+    return BuildOpenableVolumeGuidDevicePath(volumeName);
+}
+
+[[nodiscard]] std::wstring ResolveSubstTargetPath(std::wstring_view volumeRoot) noexcept
+{
+    const std::wstring_view normalized = StripExtendedPrefix(volumeRoot);
+    if (normalized.size() < 2 || normalized[1] != L':')
+    {
+        return {};
+    }
+
+    const std::wstring deviceName(normalized.substr(0, 2));
+    std::wstring targetPath(32768u, L'\0');
+    if (QueryDosDeviceForStorageProbe(deviceName.c_str(), targetPath.data(), static_cast<DWORD>(targetPath.size())) == 0u)
+    {
+        return {};
+    }
+
+    TrimAfterFirstNull(targetPath);
+    constexpr std::wstring_view kNtDosPrefix = L"\\??\\";
+    if (targetPath.rfind(kNtDosPrefix, 0) != 0)
+    {
+        return {};
+    }
+
+    const std::wstring_view targetTail(targetPath.data() + kNtDosPrefix.size(), targetPath.size() - kNtDosPrefix.size());
+    if (OrdinalString::StartsWithNoCase(targetTail, L"UNC\\"))
+    {
+        return std::wstring(L"\\\\") + std::wstring(targetTail.substr(4));
+    }
+
+    if (targetTail.size() >= 3 && targetTail[1] == L':' && (targetTail[2] == L'\\' || targetTail[2] == L'/'))
+    {
+        return std::wstring(targetTail);
+    }
+
+    return {};
+}
+
+[[nodiscard]] std::wstring ResolveStorageProbeDevicePath(std::wstring_view volumeRoot, std::wstring_view fallbackDriveRoot) noexcept
+{
+    if (std::wstring volumePath = ResolveVolumeGuidDevicePath(volumeRoot); ! volumePath.empty())
+    {
+        return volumePath;
+    }
+
+    if (std::wstring substTarget = ResolveSubstTargetPath(volumeRoot); ! substTarget.empty())
+    {
+        const std::wstring substVolumeRoot = ResolveLocalVolumeRootPath(substTarget);
+        if (std::wstring volumePath = ResolveVolumeGuidDevicePath(substVolumeRoot); ! volumePath.empty())
+        {
+            return volumePath;
+        }
+    }
+
+    return BuildDriveLetterDevicePath(fallbackDriveRoot);
+}
+
 [[nodiscard]] unsigned long ClampPreferredBridgeBufferBytes(uint32_t preferredBytes) noexcept
 {
     constexpr uint64_t kMinBytes = 512ull * 1024ull;
@@ -707,18 +946,551 @@ void FillTransferHintsLocal(FileSystemTransferHints& hints, bool highLatency) no
     }
 }
 
-void FillStorageCharacteristicsLocal(FileSystemStorageCharacteristics& characteristics, bool highLatency) noexcept
+// Probes the physical medium behind a resolved volume root (seek penalty + bus type). Requires no admin
+// rights: a zero-access volume handle is enough for IOCTL_STORAGE_QUERY_PROPERTY. Outputs stay
+// "unknown" when the volume cannot be opened (virtual/plugin namespaces, unresolved aliases).
+void ProbeLocalStorageMedium(const std::wstring& volumeRoot,
+                             const std::wstring& fallbackDriveRoot,
+                             bool& seekPenalty,
+                             bool& seekPenaltyKnown,
+                             STORAGE_BUS_TYPE& busType,
+                             bool& busTypeKnown) noexcept
 {
-    characteristics.storageKind                  = highLatency ? FILESYSTEM_STORAGE_NETWORK_SHARE : FILESYSTEM_STORAGE_UNKNOWN;
-    characteristics.flags                        = FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO;
-    characteristics.queueDepthHint               = highLatency ? 8u : 4u;
-    characteristics.preferredCopyMoveConcurrency = highLatency ? 8u : 4u;
-    characteristics.preferredDeleteConcurrency   = 8u;
-    if (highLatency)
+    seekPenalty      = false;
+    seekPenaltyKnown = false;
+    busType          = BusTypeUnknown;
+    busTypeKnown     = false;
+
+    const std::wstring volumePath = ResolveStorageProbeDevicePath(volumeRoot, fallbackDriveRoot);
+    if (volumePath.empty())
     {
-        characteristics.flags |= FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY | FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+        return;
+    }
+    wil::unique_hfile volume = OpenStorageProbeVolume(volumePath.c_str());
+    if (! volume)
+    {
+        return;
+    }
+
+    {
+        STORAGE_PROPERTY_QUERY query{};
+        query.PropertyId = StorageDeviceSeekPenaltyProperty;
+        query.QueryType  = PropertyStandardQuery;
+        DEVICE_SEEK_PENALTY_DESCRIPTOR descriptor{};
+        DWORD bytesReturned = 0;
+        if (DeviceIoControlForStorageProbe(
+                volume.get(), IOCTL_STORAGE_QUERY_PROPERTY, &query, sizeof(query), &descriptor, sizeof(descriptor), &bytesReturned, nullptr) &&
+            bytesReturned >= sizeof(descriptor))
+        {
+            seekPenalty      = descriptor.IncursSeekPenalty != FALSE;
+            seekPenaltyKnown = true;
+        }
+    }
+
+    {
+        STORAGE_PROPERTY_QUERY query{};
+        query.PropertyId = StorageDeviceProperty;
+        query.QueryType  = PropertyStandardQuery;
+        STORAGE_DEVICE_DESCRIPTOR descriptor{};
+        DWORD bytesReturned = 0;
+        if (DeviceIoControlForStorageProbe(
+                volume.get(), IOCTL_STORAGE_QUERY_PROPERTY, &query, sizeof(query), &descriptor, sizeof(descriptor), &bytesReturned, nullptr) &&
+            bytesReturned >= FIELD_OFFSET(STORAGE_DEVICE_DESCRIPTOR, RawDeviceProperties))
+        {
+            busType      = static_cast<STORAGE_BUS_TYPE>(descriptor.BusType);
+            busTypeKnown = true;
+        }
     }
 }
+
+void FillStorageCharacteristicsLocal(FileSystemStorageCharacteristics& characteristics,
+                                     const std::wstring& volumeRoot,
+                                     const std::wstring& fallbackDriveRoot,
+                                     UINT driveType,
+                                     bool highLatency) noexcept
+{
+    if (highLatency)
+    {
+        characteristics.storageKind                  = FILESYSTEM_STORAGE_NETWORK_SHARE;
+        characteristics.flags                        = FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO | FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY |
+                                                       FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+        characteristics.queueDepthHint               = 8u;
+        characteristics.preferredCopyMoveConcurrency = 8u;
+        characteristics.preferredDeleteConcurrency   = 8u;
+        return;
+    }
+
+    bool seekPenalty          = false;
+    bool seekPenaltyKnown     = false;
+    STORAGE_BUS_TYPE busType  = BusTypeUnknown;
+    bool busTypeKnown         = false;
+    ProbeLocalStorageMedium(volumeRoot, fallbackDriveRoot, seekPenalty, seekPenaltyKnown, busType, busTypeKnown);
+
+    if (seekPenaltyKnown && seekPenalty)
+    {
+        // Rotational media: parallel fan-out causes seek-thrash; sequential wins.
+        characteristics.storageKind                  = FILESYSTEM_STORAGE_HDD;
+        characteristics.flags                        = FILESYSTEM_STORAGE_FLAG_ROTATIONAL | FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO;
+        characteristics.queueDepthHint               = 2u;
+        characteristics.preferredCopyMoveConcurrency = 1u;
+        characteristics.preferredDeleteConcurrency   = 2u;
+    }
+    else if (busTypeKnown && busType == BusTypeNvme)
+    {
+        characteristics.storageKind                  = FILESYSTEM_STORAGE_NVME;
+        characteristics.flags                        = FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+        characteristics.queueDepthHint               = 8u;
+        characteristics.preferredCopyMoveConcurrency = 8u;
+        characteristics.preferredDeleteConcurrency   = 8u;
+    }
+    else if (seekPenaltyKnown)
+    {
+        characteristics.storageKind                  = FILESYSTEM_STORAGE_SSD;
+        characteristics.flags                        = FILESYSTEM_STORAGE_FLAG_NONE;
+        characteristics.queueDepthHint               = 4u;
+        characteristics.preferredCopyMoveConcurrency = 4u;
+        characteristics.preferredDeleteConcurrency   = 8u;
+    }
+    else
+    {
+        // Probe unavailable: keep the historical conservative defaults.
+        characteristics.storageKind                  = FILESYSTEM_STORAGE_UNKNOWN;
+        characteristics.flags                        = FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO;
+        characteristics.queueDepthHint               = 4u;
+        characteristics.preferredCopyMoveConcurrency = 4u;
+        characteristics.preferredDeleteConcurrency   = 8u;
+    }
+
+    if (driveType == DRIVE_REMOVABLE)
+    {
+        // Removable media (USB sticks, card readers) thrash under fan-out regardless of medium.
+        characteristics.queueDepthHint               = std::min(characteristics.queueDepthHint, 2u);
+        characteristics.preferredCopyMoveConcurrency = std::min(characteristics.preferredCopyMoveConcurrency, seekPenalty ? 1u : 2u);
+        characteristics.preferredDeleteConcurrency   = std::min(characteristics.preferredDeleteConcurrency, 2u);
+        characteristics.flags |= FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO;
+    }
+
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        const std::wstring& emittedRoot = ! volumeRoot.empty() ? volumeRoot : fallbackDriveRoot;
+        Debug::Perf::Emit(L"FileOps.Storage.ProbedKind",
+                          emittedRoot,
+                          characteristics.storageKind,
+                          characteristics.preferredCopyMoveConcurrency,
+                          (seekPenaltyKnown ? 1u : 0u) | (busTypeKnown ? 2u : 0u),
+                          S_OK);
+    }
+}
+
+#ifdef _DEBUG
+bool DebugCheck(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) noexcept
+{
+    if (condition)
+    {
+        ++passed;
+        return true;
+    }
+
+    ++failed;
+    Debug::Error(L"FileSystem debug selftest failed: {}", message);
+    return false;
+}
+
+struct DebugMountedVolumeStorageProbeState
+{
+    std::wstring volumeRoot = L"R:\\MountedVolume\\";
+    std::wstring volumeName = L"\\\\?\\Volume{11111111-2222-3333-4444-555555555555}\\";
+    std::wstring openedVolumePath;
+    std::wstring lastVolumePathInput;
+    std::wstring lastVolumeNameInput;
+    unsigned int volumePathCalls = 0;
+    unsigned int volumeNameCalls = 0;
+};
+
+bool DebugCopyStringToBuffer(std::wstring_view text, wchar_t* buffer, DWORD bufferLength) noexcept
+{
+    if (buffer == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return false;
+    }
+
+    const size_t requiredLength = text.size() + 1u;
+    if (bufferLength < requiredLength)
+    {
+        SetLastError(ERROR_MORE_DATA);
+        return false;
+    }
+
+    std::copy_n(text.data(), text.size(), buffer);
+    buffer[text.size()] = L'\0';
+    return true;
+}
+
+BOOL DebugMountedVolumeGetVolumePathName(void* context, const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept
+{
+    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
+    if (state == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    ++state->volumePathCalls;
+    state->lastVolumePathInput = fileName != nullptr ? fileName : L"";
+    return DebugCopyStringToBuffer(state->volumeRoot, volumePathName, bufferLength) ? TRUE : FALSE;
+}
+
+BOOL DebugMountedVolumeGetVolumeNameForVolumeMountPoint(void* context, const wchar_t* volumeMountPoint, wchar_t* volumeName, DWORD bufferLength) noexcept
+{
+    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
+    if (state == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    ++state->volumeNameCalls;
+    state->lastVolumeNameInput = volumeMountPoint != nullptr ? volumeMountPoint : L"";
+    return DebugCopyStringToBuffer(state->volumeName, volumeName, bufferLength) ? TRUE : FALSE;
+}
+
+DWORD DebugMountedVolumeQueryDosDevice(void*, const wchar_t*, wchar_t*, DWORD) noexcept
+{
+    SetLastError(ERROR_FILE_NOT_FOUND);
+    return 0u;
+}
+
+wil::unique_hfile DebugMountedVolumeOpenVolume(void* context, const wchar_t* volumePath) noexcept
+{
+    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
+    if (state != nullptr)
+    {
+        state->openedVolumePath = volumePath != nullptr ? volumePath : L"";
+    }
+    return {};
+}
+
+void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    DebugMountedVolumeStorageProbeState state;
+    StorageProbeDebugHooks hooks{
+        .context                            = &state,
+        .getVolumePathName                  = DebugMountedVolumeGetVolumePathName,
+        .getVolumeNameForVolumeMountPoint   = DebugMountedVolumeGetVolumeNameForVolumeMountPoint,
+        .queryDosDevice                     = DebugMountedVolumeQueryDosDevice,
+        .openVolume                         = DebugMountedVolumeOpenVolume,
+    };
+    StorageProbeDebugScope scope(hooks);
+
+    FileSystemStorageCharacteristics characteristics{};
+    characteristics.sizeBytes = sizeof(FileSystemStorageCharacteristics);
+    auto* fileSystem = new (std::nothrow) FileSystem();
+    if (! DebugCheck(fileSystem != nullptr, L"mounted-volume storage probe selftest should allocate a FileSystem instance", passed, failed))
+    {
+        return;
+    }
+
+    const HRESULT hr = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Folder\\file.bin", &characteristics);
+    fileSystem->Release();
+
+    DebugCheck(hr == S_OK, L"mounted-volume storage probe should keep GetStorageCharacteristics non-failing", passed, failed);
+    DebugCheck(state.volumePathCalls > 0u, L"mounted-volume storage probe should resolve the real volume root", passed, failed);
+    DebugCheck(state.volumeNameCalls > 0u, L"mounted-volume storage probe should resolve a volume GUID path", passed, failed);
+    DebugCheck(state.lastVolumeNameInput == state.volumeRoot, L"mounted-volume storage probe should resolve the returned mount root", passed, failed);
+
+    std::wstring expectedOpenPath = state.volumeName;
+    while (! expectedOpenPath.empty() && (expectedOpenPath.back() == L'\\' || expectedOpenPath.back() == L'/'))
+    {
+        expectedOpenPath.pop_back();
+    }
+    DebugCheck(state.openedVolumePath == expectedOpenPath, L"mounted-volume storage probe should open the resolved volume GUID device", passed, failed);
+    DebugCheck(state.openedVolumePath != L"\\\\.\\R:", L"mounted-volume storage probe must not open the lexical drive letter", passed, failed);
+}
+
+struct DebugSubstStorageProbeState
+{
+    std::wstring substRoot = L"R:\\";
+    std::wstring substTargetPath = L"C:\\RealBacker\\SubstRoot";
+    std::wstring backingVolumeRoot = L"C:\\";
+    std::wstring volumeName = L"\\\\?\\Volume{66666666-7777-8888-9999-AAAAAAAAAAAA}\\";
+    std::wstring openedVolumePath;
+    std::wstring lastVolumeNameInput;
+    std::wstring lastQueryDosDeviceInput;
+    unsigned int volumePathCalls = 0;
+    unsigned int volumeNameCalls = 0;
+    unsigned int queryDosDeviceCalls = 0;
+};
+
+BOOL DebugSubstGetVolumePathName(void* context, const wchar_t* fileName, wchar_t* volumePathName, DWORD bufferLength) noexcept
+{
+    auto* state = static_cast<DebugSubstStorageProbeState*>(context);
+    if (state == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    ++state->volumePathCalls;
+    const std::wstring_view requestedPath = fileName != nullptr ? std::wstring_view(fileName) : std::wstring_view{};
+    if (requestedPath == L"R:\\SubstAlias\\file.bin")
+    {
+        return DebugCopyStringToBuffer(state->substRoot, volumePathName, bufferLength) ? TRUE : FALSE;
+    }
+    if (requestedPath == state->substTargetPath)
+    {
+        return DebugCopyStringToBuffer(state->backingVolumeRoot, volumePathName, bufferLength) ? TRUE : FALSE;
+    }
+
+    SetLastError(ERROR_PATH_NOT_FOUND);
+    return FALSE;
+}
+
+BOOL DebugSubstGetVolumeNameForVolumeMountPoint(void* context, const wchar_t* volumeMountPoint, wchar_t* volumeName, DWORD bufferLength) noexcept
+{
+    auto* state = static_cast<DebugSubstStorageProbeState*>(context);
+    if (state == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    ++state->volumeNameCalls;
+    state->lastVolumeNameInput = volumeMountPoint != nullptr ? volumeMountPoint : L"";
+    if (state->lastVolumeNameInput == state->substRoot)
+    {
+        SetLastError(ERROR_FILE_NOT_FOUND);
+        return FALSE;
+    }
+    if (state->lastVolumeNameInput == state->backingVolumeRoot)
+    {
+        return DebugCopyStringToBuffer(state->volumeName, volumeName, bufferLength) ? TRUE : FALSE;
+    }
+
+    SetLastError(ERROR_PATH_NOT_FOUND);
+    return FALSE;
+}
+
+DWORD DebugSubstQueryDosDevice(void* context, const wchar_t* deviceName, wchar_t* targetPath, DWORD bufferLength) noexcept
+{
+    auto* state = static_cast<DebugSubstStorageProbeState*>(context);
+    if (state == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return 0u;
+    }
+
+    ++state->queryDosDeviceCalls;
+    state->lastQueryDosDeviceInput = deviceName != nullptr ? deviceName : L"";
+    if (state->lastQueryDosDeviceInput != L"R:")
+    {
+        SetLastError(ERROR_FILE_NOT_FOUND);
+        return 0u;
+    }
+
+    const std::wstring target = L"\\??\\" + state->substTargetPath;
+    if (! DebugCopyStringToBuffer(target, targetPath, bufferLength))
+    {
+        return 0u;
+    }
+    return static_cast<DWORD>(target.size() + 1u);
+}
+
+wil::unique_hfile DebugSubstOpenVolume(void* context, const wchar_t* volumePath) noexcept
+{
+    auto* state = static_cast<DebugSubstStorageProbeState*>(context);
+    if (state != nullptr)
+    {
+        state->openedVolumePath = volumePath != nullptr ? volumePath : L"";
+    }
+    return {};
+}
+
+void RunDebugSubstStorageProbeSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    DebugSubstStorageProbeState state;
+    StorageProbeDebugHooks hooks{
+        .context                            = &state,
+        .getVolumePathName                  = DebugSubstGetVolumePathName,
+        .getVolumeNameForVolumeMountPoint   = DebugSubstGetVolumeNameForVolumeMountPoint,
+        .queryDosDevice                     = DebugSubstQueryDosDevice,
+        .openVolume                         = DebugSubstOpenVolume,
+    };
+    StorageProbeDebugScope scope(hooks);
+
+    FileSystemStorageCharacteristics characteristics{};
+    characteristics.sizeBytes = sizeof(FileSystemStorageCharacteristics);
+    auto* fileSystem = new (std::nothrow) FileSystem();
+    if (! DebugCheck(fileSystem != nullptr, L"SUBST storage probe selftest should allocate a FileSystem instance", passed, failed))
+    {
+        return;
+    }
+
+    const HRESULT hr = fileSystem->GetStorageCharacteristics(L"R:\\SubstAlias\\file.bin", &characteristics);
+    fileSystem->Release();
+
+    DebugCheck(hr == S_OK, L"SUBST storage probe should keep GetStorageCharacteristics non-failing", passed, failed);
+    DebugCheck(state.queryDosDeviceCalls > 0u, L"SUBST storage probe should query the drive alias target", passed, failed);
+    DebugCheck(state.lastQueryDosDeviceInput == L"R:", L"SUBST storage probe should query the lexical drive device name", passed, failed);
+    DebugCheck(state.lastVolumeNameInput == state.backingVolumeRoot, L"SUBST storage probe should resolve the backing target volume root", passed, failed);
+
+    std::wstring expectedOpenPath = state.volumeName;
+    while (! expectedOpenPath.empty() && (expectedOpenPath.back() == L'\\' || expectedOpenPath.back() == L'/'))
+    {
+        expectedOpenPath.pop_back();
+    }
+    DebugCheck(state.openedVolumePath == expectedOpenPath, L"SUBST storage probe should open the backing volume GUID device", passed, failed);
+    DebugCheck(state.openedVolumePath != L"\\\\.\\R:", L"SUBST storage probe must not open the lexical alias drive", passed, failed);
+}
+
+struct DebugNvmeFallbackStorageProbeState
+{
+    std::wstring volumeRoot = L"C:\\";
+    std::wstring volumeName = L"\\\\?\\Volume{BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF}\\";
+    unsigned int deviceIoControlCalls = 0;
+    unsigned int seekPenaltyCalls = 0;
+    unsigned int devicePropertyCalls = 0;
+};
+
+BOOL DebugNvmeFallbackGetVolumePathName(void* context, const wchar_t*, wchar_t* volumePathName, DWORD bufferLength) noexcept
+{
+    auto* state = static_cast<DebugNvmeFallbackStorageProbeState*>(context);
+    if (state == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    return DebugCopyStringToBuffer(state->volumeRoot, volumePathName, bufferLength) ? TRUE : FALSE;
+}
+
+BOOL DebugNvmeFallbackGetVolumeNameForVolumeMountPoint(void* context, const wchar_t*, wchar_t* volumeName, DWORD bufferLength) noexcept
+{
+    auto* state = static_cast<DebugNvmeFallbackStorageProbeState*>(context);
+    if (state == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    return DebugCopyStringToBuffer(state->volumeName, volumeName, bufferLength) ? TRUE : FALSE;
+}
+
+DWORD DebugNvmeFallbackQueryDosDevice(void*, const wchar_t*, wchar_t*, DWORD) noexcept
+{
+    SetLastError(ERROR_FILE_NOT_FOUND);
+    return 0u;
+}
+
+wil::unique_hfile DebugNvmeFallbackOpenVolume(void*, const wchar_t*) noexcept
+{
+    return wil::unique_hfile(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+}
+
+BOOL DebugNvmeFallbackDeviceIoControl(void* context,
+                                      HANDLE,
+                                      DWORD ioControlCode,
+                                      LPVOID inBuffer,
+                                      DWORD,
+                                      LPVOID outBuffer,
+                                      DWORD outBufferBytes,
+                                      LPDWORD bytesReturned,
+                                      LPOVERLAPPED) noexcept
+{
+    auto* state = static_cast<DebugNvmeFallbackStorageProbeState*>(context);
+    if (state == nullptr || ioControlCode != IOCTL_STORAGE_QUERY_PROPERTY || inBuffer == nullptr || outBuffer == nullptr || bytesReturned == nullptr)
+    {
+        SetLastError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+
+    ++state->deviceIoControlCalls;
+    const auto* query = static_cast<const STORAGE_PROPERTY_QUERY*>(inBuffer);
+    if (query->PropertyId == StorageDeviceSeekPenaltyProperty)
+    {
+        ++state->seekPenaltyCalls;
+        *bytesReturned = 0;
+        SetLastError(ERROR_INVALID_FUNCTION);
+        return FALSE;
+    }
+
+    if (query->PropertyId == StorageDeviceProperty)
+    {
+        ++state->devicePropertyCalls;
+        if (outBufferBytes < sizeof(STORAGE_DEVICE_DESCRIPTOR))
+        {
+            SetLastError(ERROR_MORE_DATA);
+            return FALSE;
+        }
+
+        auto* descriptor = static_cast<STORAGE_DEVICE_DESCRIPTOR*>(outBuffer);
+        *descriptor      = {};
+        descriptor->Version = sizeof(STORAGE_DEVICE_DESCRIPTOR);
+        descriptor->Size    = sizeof(STORAGE_DEVICE_DESCRIPTOR);
+        descriptor->BusType = BusTypeNvme;
+        *bytesReturned      = sizeof(STORAGE_DEVICE_DESCRIPTOR);
+        return TRUE;
+    }
+
+    SetLastError(ERROR_INVALID_FUNCTION);
+    return FALSE;
+}
+
+void RunDebugNvmeFallbackStorageProbeSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    DebugNvmeFallbackStorageProbeState state;
+    StorageProbeDebugHooks hooks{
+        .context                            = &state,
+        .getVolumePathName                  = DebugNvmeFallbackGetVolumePathName,
+        .getVolumeNameForVolumeMountPoint   = DebugNvmeFallbackGetVolumeNameForVolumeMountPoint,
+        .queryDosDevice                     = DebugNvmeFallbackQueryDosDevice,
+        .openVolume                         = DebugNvmeFallbackOpenVolume,
+        .deviceIoControl                    = DebugNvmeFallbackDeviceIoControl,
+    };
+    StorageProbeDebugScope scope(hooks);
+
+    FileSystemStorageCharacteristics characteristics{};
+    characteristics.sizeBytes = sizeof(FileSystemStorageCharacteristics);
+    auto* fileSystem = new (std::nothrow) FileSystem();
+    if (! DebugCheck(fileSystem != nullptr, L"NVMe fallback storage probe selftest should allocate a FileSystem instance", passed, failed))
+    {
+        return;
+    }
+
+    const HRESULT hr = fileSystem->GetStorageCharacteristics(L"C:\\NvmeFallback\\file.bin", &characteristics);
+    fileSystem->Release();
+
+    DebugCheck(hr == S_OK, L"NVMe fallback storage probe should keep GetStorageCharacteristics non-failing", passed, failed);
+    DebugCheck(state.seekPenaltyCalls == 1u, L"NVMe fallback storage probe should attempt seek-penalty classification", passed, failed);
+    DebugCheck(state.devicePropertyCalls == 1u, L"NVMe fallback storage probe should query bus type after seek-penalty failure", passed, failed);
+    DebugCheck(characteristics.storageKind == FILESYSTEM_STORAGE_NVME,
+               L"NVMe fallback storage probe should classify NVMe from bus type when seek-penalty is unavailable",
+               passed,
+               failed);
+    DebugCheck(characteristics.preferredCopyMoveConcurrency == 8u,
+               L"NVMe fallback storage probe should keep the deep-queue copy/move budget",
+               passed,
+               failed);
+}
+
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemDebugSelfTests(unsigned int* passed, unsigned int* failed)
+{
+    if (passed == nullptr || failed == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    *passed = 0;
+    *failed = 0;
+
+    RunDebugMountedVolumeStorageProbeSelfTest(*passed, *failed);
+    RunDebugSubstStorageProbeSelfTest(*passed, *failed);
+    RunDebugNvmeFallbackStorageProbeSelfTest(*passed, *failed);
+    FileSystemInternal::RunDebugSharedFileOpsSchedulerShutdownSelfTest(*passed, *failed);
+
+    return *failed == 0u ? S_OK : E_FAIL;
+}
+#endif
 
 [[nodiscard]] std::string BuildConfigurationJson(FileSystemConcurrencyMode concurrencyMode,
                                                  unsigned int copyMoveMaxConcurrency,
@@ -1131,8 +1903,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileReader(const wchar_t* path, IFil
         return E_INVALIDARG;
     }
 
-    wil::unique_handle file(
-        CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    const std::wstring filePath = FileSystemInternal::ToExtendedPath(path);
+    wil::unique_handle file(CreateFileW(
+        filePath.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         const DWORD lastError = GetLastError();
@@ -1181,7 +1954,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
 
     auto tryCreate = [&](DWORD* outLastError) -> wil::unique_handle
     {
-        wil::unique_handle file(CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, nullptr, creationDisposition, FILE_ATTRIBUTE_NORMAL, nullptr));
+        const std::wstring filePath = FileSystemInternal::ToExtendedPath(path);
+        wil::unique_handle file(CreateFileW(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, creationDisposition, FILE_ATTRIBUTE_NORMAL, nullptr));
         if (file)
         {
             if (outLastError)
@@ -1203,10 +1977,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
     wil::unique_handle file = tryCreate(&lastError);
     if (! file && allowReplaceReadOnly && (lastError == ERROR_ACCESS_DENIED || lastError == ERROR_SHARING_VIOLATION))
     {
-        const DWORD attributes = GetFileAttributesW(path);
+        const std::wstring filePath = FileSystemInternal::ToExtendedPath(path);
+        const DWORD attributes = GetFileAttributesW(filePath.c_str());
         if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_READONLY) != 0)
         {
-            static_cast<void>(SetFileAttributesW(path, attributes & ~FILE_ATTRIBUTE_READONLY));
+            static_cast<void>(SetFileAttributesW(filePath.c_str(), attributes & ~FILE_ATTRIBUTE_READONLY));
             file = tryCreate(&lastError);
         }
     }
@@ -1216,7 +1991,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         return HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
     }
 
-    auto* impl = new (std::nothrow) Win32FileWriter(std::move(file), std::wstring(path));
+    auto* impl = new (std::nothrow) Win32FileWriter(std::move(file), FileSystemInternal::ToExtendedPath(path));
     if (! impl)
     {
         return E_OUTOFMEMORY;
@@ -1248,8 +2023,14 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetFileBasicInformation(const wchar_t* pat
         return E_INVALIDARG;
     }
 
-    wil::unique_handle file(CreateFileW(
-        path, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+    const std::wstring filePath = FileSystemInternal::ToExtendedPath(path);
+    wil::unique_handle file(CreateFileW(filePath.c_str(),
+                                        FILE_READ_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr));
     if (! file)
     {
         const DWORD lastError = GetLastError();
@@ -1287,8 +2068,14 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetFileBasicInformation(const wchar_t* pat
         return E_INVALIDARG;
     }
 
-    wil::unique_handle file(CreateFileW(
-        path, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+    const std::wstring filePath = FileSystemInternal::ToExtendedPath(path);
+    wil::unique_handle file(CreateFileW(filePath.c_str(),
+                                        FILE_WRITE_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr));
     if (! file)
     {
         const DWORD lastError = GetLastError();
@@ -1347,8 +2134,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetTransferHints(const wchar_t* path,
     hints->preferredBufferBytes      = 0;
     hints->preferredProgressPeriodMs = 0;
 
-    const std::wstring driveRoot = ExtractDriveRoot(path);
-    const UINT driveType         = ! driveRoot.empty() ? GetDriveTypeW(driveRoot.c_str()) : DRIVE_UNKNOWN;
+    const std::wstring driveRoot  = ExtractDriveRoot(path);
+    const std::wstring volumeRoot = ResolveLocalVolumeRootPath(path);
+    const std::wstring& driveTypeRoot = ! volumeRoot.empty() ? volumeRoot : driveRoot;
+    const UINT driveType              = ! driveTypeRoot.empty() ? GetDriveTypeW(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
     FillTransferHintsLocal(*hints, driveType == DRIVE_REMOTE || IsUncPath(path));
     hints->preferredBufferBytes = ClampPreferredBridgeBufferBytes(hints->preferredBufferBytes);
     return S_OK;
@@ -1371,9 +2160,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
     characteristics->preferredCopyMoveConcurrency = 0;
     characteristics->preferredDeleteConcurrency   = 0;
 
-    const std::wstring driveRoot = ExtractDriveRoot(path);
-    const UINT driveType         = ! driveRoot.empty() ? GetDriveTypeW(driveRoot.c_str()) : DRIVE_UNKNOWN;
-    FillStorageCharacteristicsLocal(*characteristics, driveType == DRIVE_REMOTE || IsUncPath(path));
+    const std::wstring driveRoot  = ExtractDriveRoot(path);
+    const std::wstring volumeRoot = ResolveLocalVolumeRootPath(path);
+    const std::wstring& driveTypeRoot = ! volumeRoot.empty() ? volumeRoot : driveRoot;
+    const UINT driveType              = ! driveTypeRoot.empty() ? GetDriveTypeW(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
+    FillStorageCharacteristicsLocal(*characteristics, volumeRoot, driveRoot, driveType, driveType == DRIVE_REMOTE || IsUncPath(path));
     return S_OK;
 }
 
@@ -1798,7 +2589,7 @@ void FileSystem::UpdateCapabilitiesJson() noexcept
 {
     // NOTE: Caller must hold _stateMutex.
     _capabilitiesJson = std::format(
-        R"json({{"version":1,"operations":{{"copy":true,"move":true,"delete":true,"rename":true,"properties":true,"read":true,"write":true}},"search":{{"version":1,"name":true,"content":true,"indexed":true,"serviceBacked":true,"supportsRegex":true,"supportsSnippets":true,"preferredBackend":"service"}},"concurrency":{{"copyMoveMax":{},"deleteMax":{},"deleteRecycleBinMax":{}}},"crossFileSystem":{{"export":{{"copy":["*"],"move":["*"]}},"import":{{"copy":["*"],"move":["*"]}}}}}})json",
+        R"json({{"version":1,"operations":{{"copy":true,"move":true,"delete":true,"rename":true,"properties":true,"read":true,"write":true}},"search":{{"version":1,"name":true,"content":true,"indexed":true,"serviceBacked":true,"supportsRegex":true,"supportsSnippets":true,"preferredBackend":"service"}},"concurrency":{{"copyMoveMax":{},"deleteMax":{},"deleteRecycleBinMax":{}}},"crossFileSystem":{{"export":{{"copy":["*"],"move":["*"]}},"import":{{"copy":["*"],"move":["*"]}}}},"pathIdentity":{{"version":1,"pathTextStableIdentity":true,"componentComparison":"ordinalIgnoreCase","normalization":"none","preferredSeparator":"\\","acceptedSeparators":["\\","/"],"casePreserving":true,"caseOnlyRename":"supported"}}}})json",
         std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency),
         std::clamp(_deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency),
         std::clamp(_deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency));

@@ -43,6 +43,12 @@ bool DebugCancelFolderViewRenamePrompt() noexcept
     const HWND hwnd = GetFolderViewRenamePromptHandle();
     return hwnd && SendMessageW(hwnd, WndMsg::kFolderViewRenamePromptDebug, static_cast<WPARAM>(FolderViewRenamePromptDebugCommand::Cancel), 0) != FALSE;
 }
+
+bool DebugInvokeFolderViewRenamePromptBatch() noexcept
+{
+    const HWND hwnd = GetFolderViewRenamePromptHandle();
+    return hwnd && SendMessageW(hwnd, WndMsg::kFolderViewRenamePromptDebug, static_cast<WPARAM>(FolderViewRenamePromptDebugCommand::BatchRename), 0) != FALSE;
+}
 #endif
 
 void FolderView::SetPaneFocused(bool focused) noexcept
@@ -211,10 +217,9 @@ void FolderView::Destroy()
 
 void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folderPath)
 {
-    ExitIncrementalSearch();
-
     if (! folderPath)
     {
+        ExitIncrementalSearch();
         DismissAlertOverlay();
         _hiddenNames.store(std::shared_ptr<const HiddenNamesFilter>{}, std::memory_order_release);
         _pendingExternalCommandAfterEnumeration.reset();
@@ -232,6 +237,7 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
     const bool folderChanged = ! _currentFolder.has_value() || ! OrdinalString::EqualsNoCasePath(_currentFolder.value(), folderPath.value());
     if (folderChanged)
     {
+        ExitIncrementalSearch();
         DismissAlertOverlay();
 
         const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
@@ -280,6 +286,20 @@ void FolderView::ForceRefresh()
     }
 
     EnumerateFolder();
+}
+
+bool FolderView::IsCurrentFolderEnumerated() const noexcept
+{
+    // `_displayedFolder` is assigned from `_currentFolder` only after a successful enumeration, so a
+    // byte-wise match means the shown contents belong to the current folder (including its casing).
+    if (! _currentFolder || ! _displayedFolder || _currentFolder->native() != _displayedFolder->native())
+    {
+        return false;
+    }
+
+    // A failed refresh of the displayed folder keeps `_displayedFolder` but raises an enumeration overlay.
+    std::lock_guard lock(_errorOverlayMutex);
+    return ! _errorOverlay || _errorOverlay->kind != ErrorOverlayKind::Enumeration;
 }
 
 void FolderView::SetEmptyStateMessage(std::wstring message)
@@ -459,13 +479,27 @@ void FolderView::OnDpiChanged(float newDpi)
 {
     if (newDpi <= 0.0f)
         return;
-    _dpi                   = newDpi;
+
+    const bool dpiChanged = std::abs(_dpi - newDpi) > 0.5f;
+    _dpi                  = newDpi;
+#ifdef ENABLE_TESTS
+    ++_debugDpiChangeCount;
+#endif
     _itemMetricsCached     = false;
     _estimatedMetricsValid = false; // Recompute estimated metrics from font at new DPI
     if (_d2dContext)
     {
         _d2dContext->SetDpi(_dpi, _dpi);
     }
+
+    _forceFullRenderOnNextPaint = true;
+    if (dpiChanged && _clientSize.cx > 0 && _clientSize.cy > 0)
+    {
+        _swapChainResizePending = true;
+        _pendingSwapChainWidth  = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cx));
+        _pendingSwapChainHeight = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cy));
+    }
+
     // Update icon cache DPI (note: existing cached icons won't be updated)
     IconCache::GetInstance().SetDpi(_dpi);
     LayoutItems();
@@ -632,7 +666,7 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_KEYDOWN: OnMeasuredKeyDownMessage(wParam, lParam); return 0;
         case WM_CHAR: OnCharMessage(static_cast<wchar_t>(wParam)); return 0;
         case WM_SETFOCUS: return OnSetFocusMessage();
-        case WM_KILLFOCUS: return OnKillFocusMessage();
+        case WM_KILLFOCUS: return OnKillFocusMessage(reinterpret_cast<HWND>(wParam));
         case WM_SYSKEYDOWN:
             if (OnMeasuredSysKeyDownMessage(wParam, lParam))
             {
@@ -823,6 +857,7 @@ void FolderView::OnSize(UINT width, UINT height)
     _swapChainResizePending = true;
     _pendingSwapChainWidth  = static_cast<UINT>(std::max(1L, _clientSize.cx));
     _pendingSwapChainHeight = static_cast<UINT>(std::max(1L, _clientSize.cy));
+    _forceFullRenderOnNextPaint = true;
 
     LayoutItems();
     UpdateScrollMetrics();
@@ -860,6 +895,13 @@ void FolderView::OnPaint()
     }
 
     RECT rcPaint = ps.rcPaint;
+    if (_forceFullRenderOnNextPaint)
+    {
+        rcPaint.left   = 0;
+        rcPaint.top    = 0;
+        rcPaint.right  = _clientSize.cx;
+        rcPaint.bottom = _clientSize.cy;
+    }
 
     if (! _d2dContext || (! _swapChain && ! _swapChainLegacy) || ! _d2dTarget)
     {
@@ -934,6 +976,7 @@ bool FolderView::DebugWarmRenderingForSelfTest() noexcept
     _swapChainResizePending = true;
     _pendingSwapChainWidth  = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cx));
     _pendingSwapChainHeight = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cy));
+    _forceFullRenderOnNextPaint = true;
 
     OnDeferredInit();
     const bool ready = _d2dContext && (_swapChain || _swapChainLegacy) && _d2dTarget;
@@ -977,6 +1020,21 @@ bool FolderView::DebugWarmRenderingForSelfTest() noexcept
 
     Debug::Perf::Emit(L"folder.selftest.render_warmup_us", L"", Debug::Perf::ElapsedUs(startedAt), drainedMessages, _items.size(), S_OK);
     return true;
+}
+
+FolderView::RenderingDebugSnapshot FolderView::DebugGetRenderingSnapshot() const noexcept
+{
+    return RenderingDebugSnapshot{
+        .dpi                       = _dpi,
+        .clientSizePx              = _clientSize,
+        .hasD2DTarget              = _d2dTarget != nullptr,
+        .swapChainResizePending    = _swapChainResizePending,
+        .forceFullRenderOnNextPaint = _forceFullRenderOnNextPaint,
+        .lastRenderWasFullClient   = _debugLastRenderWasFullClient,
+        .dpiChangeCount            = _debugDpiChangeCount,
+        .fullClientRenderCount     = _debugFullClientRenderCount,
+        .lastRenderInvalidRectPx   = _debugLastRenderInvalidRectPx,
+    };
 }
 #endif
 

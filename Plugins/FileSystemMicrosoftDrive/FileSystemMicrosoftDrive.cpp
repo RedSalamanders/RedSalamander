@@ -13,9 +13,11 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <format>
+#include <functional>
 #include <limits>
 #include <optional>
 #include <span>
@@ -649,23 +651,7 @@ struct AuthPageMessageVariant
     return response;
 }
 
-void SecureClear(std::string& text) noexcept
-{
-    if (! text.empty())
-    {
-        SecureZeroMemory(text.data(), text.size());
-        text.clear();
-    }
-}
-
-void SecureClear(std::wstring& text) noexcept
-{
-    if (! text.empty())
-    {
-        SecureZeroMemory(text.data(), text.size() * sizeof(wchar_t));
-        text.clear();
-    }
-}
+using SecureWipe::SecureClear;
 
 [[nodiscard]] std::wstring NormalizePluginPath(std::wstring_view rawPath) noexcept
 {
@@ -736,6 +722,26 @@ void SecureClear(std::wstring& text) noexcept
     }
 
     return path;
+}
+
+[[nodiscard]] bool IsSameOrDescendantPath(std::wstring_view ancestorPath, std::wstring_view candidatePath) noexcept
+{
+    if (OrdinalString::EqualsNoCase(ancestorPath, candidatePath))
+    {
+        return true;
+    }
+
+    if (ancestorPath == L"/")
+    {
+        return ! candidatePath.empty() && candidatePath != L"/";
+    }
+
+    if (candidatePath.size() <= ancestorPath.size() || candidatePath[ancestorPath.size()] != L'/')
+    {
+        return false;
+    }
+
+    return OrdinalString::EqualsNoCase(std::wstring(candidatePath.substr(0, ancestorPath.size())), std::wstring(ancestorPath));
 }
 
 [[nodiscard]] std::vector<std::wstring_view> SplitPathSegments(std::wstring_view path) noexcept
@@ -1420,6 +1426,136 @@ void SecureClear(std::wstring& text) noexcept
     return true;
 }
 
+[[nodiscard]] bool IsRetryableGraphThrottleStatus(DWORD statusCode) noexcept
+{
+    return statusCode == 429u || statusCode == 503u || statusCode == 504u;
+}
+
+[[nodiscard]] uint64_t ComputeGraphRetryDelayMs(std::wstring_view retryAfter, int attempt) noexcept
+{
+    uint64_t delayMs = kDefaultThrottleDelayMs;
+    if (! ParseRetryAfterMs(retryAfter, delayMs))
+    {
+        delayMs = kDefaultThrottleDelayMs * static_cast<uint64_t>(attempt + 1);
+    }
+    return delayMs;
+}
+
+[[nodiscard]] bool ShouldRetryGraphHttpResponse(bool allowRetry, DWORD statusCode, int attempt) noexcept
+{
+    return allowRetry && IsRetryableGraphThrottleStatus(statusCode) && attempt < 3;
+}
+
+#if defined(_DEBUG)
+std::atomic_bool g_debugMicrosoftDriveBypassAccessTokenForSelfTest{false};
+std::atomic_bool g_debugMicrosoftDriveSuppressRetrySleepForSelfTest{false};
+
+using DebugHttpRequestHook = HRESULT (*)(void* cookie,
+                                         std::wstring_view method,
+                                         std::wstring_view url,
+                                         std::string_view bodyUtf8,
+                                         bool allowRetry,
+                                         HttpResponse& responseOut) noexcept;
+
+std::mutex g_debugMicrosoftDriveHttpHookMutex;
+DebugHttpRequestHook g_debugMicrosoftDriveHttpHook = nullptr;
+void* g_debugMicrosoftDriveHttpHookCookie          = nullptr;
+
+class DebugHttpRequestHookScope final
+{
+public:
+    DebugHttpRequestHookScope(DebugHttpRequestHook hook, void* cookie) noexcept
+    {
+        std::lock_guard lock(g_debugMicrosoftDriveHttpHookMutex);
+        _previousHook                       = g_debugMicrosoftDriveHttpHook;
+        _previousCookie                     = g_debugMicrosoftDriveHttpHookCookie;
+        g_debugMicrosoftDriveHttpHook       = hook;
+        g_debugMicrosoftDriveHttpHookCookie = cookie;
+    }
+
+    ~DebugHttpRequestHookScope()
+    {
+        std::lock_guard lock(g_debugMicrosoftDriveHttpHookMutex);
+        g_debugMicrosoftDriveHttpHook       = _previousHook;
+        g_debugMicrosoftDriveHttpHookCookie = _previousCookie;
+    }
+
+    DebugHttpRequestHookScope(const DebugHttpRequestHookScope&)            = delete;
+    DebugHttpRequestHookScope& operator=(const DebugHttpRequestHookScope&) = delete;
+    DebugHttpRequestHookScope(DebugHttpRequestHookScope&&)                 = delete;
+    DebugHttpRequestHookScope& operator=(DebugHttpRequestHookScope&&)      = delete;
+
+private:
+    DebugHttpRequestHook _previousHook = nullptr;
+    void* _previousCookie              = nullptr;
+};
+
+class DebugFlagScope final
+{
+public:
+    DebugFlagScope(std::atomic_bool& flag, bool value) noexcept : _flag(flag), _previous(flag.exchange(value)) {}
+
+    ~DebugFlagScope()
+    {
+        _flag.store(_previous);
+    }
+
+    DebugFlagScope(const DebugFlagScope&)            = delete;
+    DebugFlagScope& operator=(const DebugFlagScope&) = delete;
+    DebugFlagScope(DebugFlagScope&&)                 = delete;
+    DebugFlagScope& operator=(DebugFlagScope&&)      = delete;
+
+private:
+    std::atomic_bool& _flag;
+    bool _previous = false;
+};
+
+[[nodiscard]] bool TryHandleDebugHttpRequest(std::wstring_view method,
+                                             std::wstring_view url,
+                                             const std::byte* bodyBytes,
+                                             size_t bodySizeBytes,
+                                             bool allowRetry,
+                                             HttpResponse& responseOut,
+                                             HRESULT& hrOut) noexcept
+{
+    DebugHttpRequestHook hook = nullptr;
+    void* cookie             = nullptr;
+    {
+        std::lock_guard lock(g_debugMicrosoftDriveHttpHookMutex);
+        hook   = g_debugMicrosoftDriveHttpHook;
+        cookie = g_debugMicrosoftDriveHttpHookCookie;
+    }
+
+    if (! hook)
+    {
+        return false;
+    }
+
+    const std::string_view bodyUtf8 =
+        bodyBytes && bodySizeBytes != 0u ? std::string_view(reinterpret_cast<const char*>(bodyBytes), bodySizeBytes) : std::string_view{};
+    hrOut = hook(cookie, method, url, bodyUtf8, allowRetry, responseOut);
+    return true;
+}
+#endif
+
+void SleepBeforeGraphRetry(uint64_t delayMs) noexcept
+{
+#if defined(_DEBUG)
+    if (g_debugMicrosoftDriveSuppressRetrySleepForSelfTest.load())
+    {
+        return;
+    }
+#endif
+    std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+}
+
+void LogAndSleepBeforeGraphRetry(std::wstring_view method, std::wstring_view url, DWORD statusCode, std::wstring_view retryAfter, int attempt) noexcept
+{
+    const uint64_t delayMs = ComputeGraphRetryDelayMs(retryAfter, attempt);
+    Debug::Info(L"Microsoft Drive: retrying request after throttle. method='{}' url='{}' status={} delayMs={}", method, url, statusCode, delayMs);
+    SleepBeforeGraphRetry(delayMs);
+}
+
 [[nodiscard]] HRESULT EnsureWinsockStarted(WSADATA& dataOut) noexcept
 {
     const int rc = WSAStartup(MAKEWORD(2, 2), &dataOut);
@@ -1784,6 +1920,25 @@ void SecureClear(std::wstring& text) noexcept
 
     for (int attempt = 0; attempt < 4; ++attempt)
     {
+#if defined(_DEBUG)
+        {
+            HRESULT debugHr = S_OK;
+            if (TryHandleDebugHttpRequest(method, url, bodyBytes, bodySizeBytes, allowRetry, responseOut, debugHr))
+            {
+                if (FAILED(debugHr))
+                {
+                    return debugHr;
+                }
+                if (ShouldRetryGraphHttpResponse(allowRetry, responseOut.statusCode, attempt))
+                {
+                    LogAndSleepBeforeGraphRetry(method, url, responseOut.statusCode, responseOut.retryAfter, attempt);
+                    continue;
+                }
+                return S_OK;
+            }
+        }
+#endif
+
         URL_COMPONENTS components{};
         std::wstring host;
         std::wstring pathAndQuery;
@@ -1965,16 +2120,9 @@ void SecureClear(std::wstring& text) noexcept
             responseOut.body.resize(start + read);
         }
 
-        if (allowRetry && (statusCode == 429u || statusCode == 503u || statusCode == 504u) && attempt < 3)
+        if (ShouldRetryGraphHttpResponse(allowRetry, statusCode, attempt))
         {
-            uint64_t delayMs = kDefaultThrottleDelayMs;
-            if (! ParseRetryAfterMs(responseOut.retryAfter, delayMs))
-            {
-                delayMs = kDefaultThrottleDelayMs * static_cast<uint64_t>(attempt + 1);
-            }
-
-            Debug::Info(L"Microsoft Drive: retrying request after throttle. method='{}' url='{}' status={} delayMs={}", method, url, statusCode, delayMs);
-            std::this_thread::sleep_for(std::chrono::milliseconds(delayMs));
+            LogAndSleepBeforeGraphRetry(method, url, statusCode, responseOut.retryAfter, attempt);
             continue;
         }
 
@@ -2782,10 +2930,15 @@ void SecureClear(std::wstring& text) noexcept
 
 [[nodiscard]] HRESULT ParseChildren(std::string_view bodyUtf8,
                                     std::vector<FilesInformationMicrosoftDrive::Entry>& entriesOut,
-                                    std::wstring& nextLinkOut) noexcept
+                                    std::wstring& nextLinkOut,
+                                    bool* incompleteDueToInvalidChildNameOut = nullptr) noexcept
 {
     entriesOut.clear();
     nextLinkOut.clear();
+    if (incompleteDueToInvalidChildNameOut)
+    {
+        *incompleteDueToInvalidChildNameOut = false;
+    }
 
     yyjson_doc* doc = yyjson_read(bodyUtf8.data(), bodyUtf8.size(), YYJSON_READ_ALLOW_BOM);
     if (! doc)
@@ -2814,11 +2967,26 @@ void SecureClear(std::wstring& text) noexcept
     {
         if (! item || ! yyjson_is_obj(item))
         {
+            // A malformed (non-object) array element means we cannot account for this child. Mark the
+            // enumeration incomplete so a recursive merge-move never treats the source as fully drained
+            // and deletes it -- same data-safety contract as the empty-name case below.
+            if (incompleteDueToInvalidChildNameOut)
+            {
+                *incompleteDueToInvalidChildNameOut = true;
+            }
             continue;
         }
 
         FilesInformationMicrosoftDrive::Entry entry{};
         entry.name           = TryGetJsonString(item, "name").value_or(L"");
+        if (entry.name.empty())
+        {
+            if (incompleteDueToInvalidChildNameOut)
+            {
+                *incompleteDueToInvalidChildNameOut = true;
+            }
+            continue;
+        }
         entry.sizeBytes      = TryGetJsonUInt(item, "size").value_or(0);
         entry.creationTime   = ParseIso8601FileTime(TryGetJsonString(item, "createdDateTime").value_or(L""));
         entry.lastWriteTime  = ParseIso8601FileTime(TryGetJsonString(item, "lastModifiedDateTime").value_or(L""));
@@ -3402,9 +3570,14 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 [[nodiscard]] HRESULT ListDirectory(FileSystemMicrosoftDrive& fs,
                                     const DriveContext& context,
                                     std::wstring_view drivePath,
-                                    std::vector<FilesInformationMicrosoftDrive::Entry>& entriesOut) noexcept
+                                    std::vector<FilesInformationMicrosoftDrive::Entry>& entriesOut,
+                                    bool* incompleteDueToInvalidChildNameOut = nullptr) noexcept
 {
     entriesOut.clear();
+    if (incompleteDueToInvalidChildNameOut)
+    {
+        *incompleteDueToInvalidChildNameOut = false;
+    }
 
     const FileSystemMicrosoftDrive::Settings settings = fs.SnapshotSettings();
     std::wstring nextUrl                              = BuildGraphChildrenUrl(context, drivePath, settings.pageSize);
@@ -3430,10 +3603,15 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 
         std::vector<FilesInformationMicrosoftDrive::Entry> pageEntries;
         std::wstring nextLink;
-        const HRESULT parseHr = ParseChildren(response.body, pageEntries, nextLink);
+        bool pageIncompleteDueToInvalidChildName = false;
+        const HRESULT parseHr = ParseChildren(response.body, pageEntries, nextLink, &pageIncompleteDueToInvalidChildName);
         if (FAILED(parseHr))
         {
             return parseHr;
+        }
+        if (pageIncompleteDueToInvalidChildName && incompleteDueToInvalidChildNameOut)
+        {
+            *incompleteDueToInvalidChildNameOut = true;
         }
 
         entriesOut.insert(entriesOut.end(), std::make_move_iterator(pageEntries.begin()), std::make_move_iterator(pageEntries.end()));
@@ -3456,6 +3634,8 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 
     return parentOut.isFolder ? S_OK : HRESULT_FROM_WIN32(ERROR_DIRECTORY);
 }
+
+[[nodiscard]] bool IsNotFoundStatus(HRESULT hr) noexcept;
 
 [[nodiscard]] HRESULT CreateDirectoryItem(FileSystemMicrosoftDrive& fs, const DriveContext& context, std::wstring_view drivePath) noexcept
 {
@@ -3481,27 +3661,52 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
         return hr;
     }
 
-    HttpResponse response{};
-    hr = SendGraphJsonRequest(fs, context, L"POST", BuildGraphCreateDirectoryUrl(context, parent.id), bodyUtf8, {}, false, response);
-    if (FAILED(hr))
+    const std::wstring createUrl = BuildGraphCreateDirectoryUrl(context, parent.id);
+    for (int attempt = 0; attempt < 4; ++attempt)
     {
-        return hr;
+        HttpResponse response{};
+        hr = SendGraphJsonRequest(fs, context, L"POST", createUrl, bodyUtf8, {}, false, response);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (response.statusCode == 409u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+        if (response.statusCode >= 200u && response.statusCode < 300u)
+        {
+            return S_OK;
+        }
+
+        if (ShouldRetryGraphHttpResponse(true, response.statusCode, attempt))
+        {
+            ItemMetadata created{};
+            const HRESULT probeHr = GetItemMetadata(fs, context, drivePath, false, created);
+            if (SUCCEEDED(probeHr))
+            {
+                return created.isFolder ? S_OK : HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            }
+            if (! IsNotFoundStatus(probeHr))
+            {
+                return probeHr;
+            }
+
+            LogAndSleepBeforeGraphRetry(L"POST", createUrl, response.statusCode, response.retryAfter, attempt);
+            continue;
+        }
+
+        return HresultFromGraphError(response.statusCode, response.body);
     }
 
-    if (response.statusCode == 409u)
-    {
-        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-    }
-
-    return (response.statusCode >= 200u && response.statusCode < 300u) ? S_OK : HresultFromGraphError(response.statusCode, response.body);
+    return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
 }
-
-[[nodiscard]] bool IsNotFoundStatus(HRESULT hr) noexcept;
 
 [[nodiscard]] HRESULT DeleteItemById(FileSystemMicrosoftDrive& fs, const DriveContext& context, std::wstring_view itemId) noexcept
 {
     HttpResponse response{};
-    HRESULT hr = SendGraphJsonRequest(fs, context, L"DELETE", BuildGraphItemByIdUrl(context, itemId), {}, {}, false, response);
+    HRESULT hr = SendGraphJsonRequest(fs, context, L"DELETE", BuildGraphItemByIdUrl(context, itemId), {}, {}, true, response);
     if (FAILED(hr))
     {
         return hr;
@@ -3537,7 +3742,7 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     }
 
     HttpResponse response{};
-    hr = SendGraphJsonRequest(fs, context, L"PATCH", BuildGraphItemByIdUrl(context, itemId), bodyUtf8, {}, false, response);
+    hr = SendGraphJsonRequest(fs, context, L"PATCH", BuildGraphItemByIdUrl(context, itemId), bodyUtf8, {}, true, response);
     if (FAILED(hr))
     {
         return hr;
@@ -3615,12 +3820,289 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
 }
 
+// Per-child conflict callback: (sourceDisplayPath, destinationDisplayPath, status, action out).
+using MoveIssueReporter = std::function<HRESULT(const wchar_t*, const wchar_t*, HRESULT, FileSystemIssueAction&)>;
+using CancelProbe = std::function<HRESULT()>;
+
+inline constexpr unsigned int kMicrosoftDriveMergeMaxDepth = 64u;
+
 [[nodiscard]] HRESULT MoveOrRenameItem(FileSystemMicrosoftDrive& fs,
                                        const DriveContext& sourceContext,
                                        const DriveContext& destinationContext,
                                        std::wstring_view sourcePath,
                                        std::wstring_view destinationPath,
-                                       FileSystemFlags flags) noexcept
+                                       FileSystemFlags flags,
+                                       const MoveIssueReporter& reportIssue = {},
+                                       bool allowDirectoryMerge             = true,
+                                       const CancelProbe& checkCancel       = {}) noexcept;
+
+[[nodiscard]] bool IsMergeChildPartialFailure(HRESULT hr) noexcept
+{
+    return hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+}
+
+// Moves every child of sourceFolderPath into the existing destinationFolderPath (server-side
+// moves), recursing where both sides have a folder of the same name. Collisions are resolved
+// per child via reportIssue; skipped children keep the source folder alive and the move ends
+// as a partial ("source preserved").
+[[nodiscard]] HRESULT MergeMoveFolderIntoExisting(FileSystemMicrosoftDrive& fs,
+                                                  const DriveContext& sourceContext,
+                                                  const DriveContext& destinationContext,
+                                                  const std::wstring& sourceFolderPath,
+                                                  const std::wstring& destinationFolderPath,
+                                                  FileSystemFlags flags,
+                                                  const MoveIssueReporter& reportIssue,
+                                                  const CancelProbe& checkCancel,
+                                                  bool& anySkipped,
+                                                  bool& subtreeFullyMovedOut,
+                                                  unsigned int depth = 0) noexcept
+{
+    subtreeFullyMovedOut = false;
+
+    if (depth >= kMicrosoftDriveMergeMaxDepth)
+    {
+        return HRESULT_FROM_WIN32(ERROR_STACK_OVERFLOW);
+    }
+
+    if (checkCancel)
+    {
+        const HRESULT cancelHr = checkCancel();
+        if (FAILED(cancelHr))
+        {
+            return cancelHr;
+        }
+    }
+
+    std::vector<FilesInformationMicrosoftDrive::Entry> children;
+    bool sourceEnumerationIncomplete = false;
+    HRESULT hr = ListDirectory(fs, sourceContext, sourceFolderPath, children, &sourceEnumerationIncomplete);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    const bool allowOverwriteFlag = (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
+    bool allChildrenMoved         = ! sourceEnumerationIncomplete;
+    if (sourceEnumerationIncomplete)
+    {
+        anySkipped = true;
+    }
+
+    for (const auto& child : children)
+    {
+        if (checkCancel)
+        {
+            hr = checkCancel();
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        const std::wstring childSource      = JoinPath(sourceFolderPath, child.name);
+        const std::wstring childDestination = JoinPath(destinationFolderPath, child.name);
+        const bool childIsFolder            = (child.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+        ItemMetadata existingChild{};
+        const HRESULT probeHr = GetItemMetadata(fs, destinationContext, childDestination, false, existingChild);
+        if (FAILED(probeHr))
+        {
+            if (! IsNotFoundStatus(probeHr))
+            {
+                return probeHr;
+            }
+
+            hr = MoveOrRenameItem(
+                fs, sourceContext, destinationContext, childSource, childDestination, static_cast<FileSystemFlags>(flags & ~FILESYSTEM_FLAG_ALLOW_OVERWRITE));
+            if (FAILED(hr))
+            {
+                if (IsMergeChildPartialFailure(hr))
+                {
+                    anySkipped       = true;
+                    allChildrenMoved = false;
+                    continue;
+                }
+                return hr;
+            }
+            continue;
+        }
+
+        if (childIsFolder && existingChild.isFolder)
+        {
+            bool childSubtreeFullyMoved = false;
+            hr                          = MergeMoveFolderIntoExisting(
+                fs,
+                sourceContext,
+                destinationContext,
+                childSource,
+                childDestination,
+                flags,
+                reportIssue,
+                checkCancel,
+                anySkipped,
+                childSubtreeFullyMoved,
+                depth + 1u);
+            if (FAILED(hr))
+            {
+                if (IsMergeChildPartialFailure(hr))
+                {
+                    anySkipped       = true;
+                    allChildrenMoved = false;
+                    continue;
+                }
+                return hr;
+            }
+            if (! childSubtreeFullyMoved)
+            {
+                allChildrenMoved = false;
+            }
+            continue;
+        }
+
+        const bool typeMismatch = childIsFolder != existingChild.isFolder;
+        bool overwriteChild     = allowOverwriteFlag && ! typeMismatch;
+        bool childSkipped       = false;
+        if (! overwriteChild)
+        {
+            if (! reportIssue)
+            {
+                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            }
+            else
+            {
+                while (! childSkipped && ! overwriteChild)
+                {
+                    FileSystemIssueAction action = FileSystemIssueAction::Cancel;
+                    hr = reportIssue(childSource.c_str(), childDestination.c_str(), HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS), action);
+                    if (FAILED(hr))
+                    {
+                        return hr;
+                    }
+
+                    switch (action)
+                    {
+                        case FileSystemIssueAction::Overwrite:
+                        case FileSystemIssueAction::ReplaceReadOnly:
+                            if (typeMismatch)
+                            {
+                                // Graph drives cannot replace across item kinds; unresolvable here.
+                                childSkipped = true;
+                                break;
+                            }
+                            overwriteChild = true;
+                            break;
+                        case FileSystemIssueAction::Retry:
+                        {
+                            ItemMetadata reprobe{};
+                            const HRESULT retryHr = GetItemMetadata(fs, destinationContext, childDestination, false, reprobe);
+                            if (SUCCEEDED(retryHr))
+                            {
+                                continue;
+                            }
+                            if (! IsNotFoundStatus(retryHr))
+                            {
+                                return retryHr;
+                            }
+                            overwriteChild = true; // conflict resolved externally; plain move below
+                            break;
+                        }
+                        case FileSystemIssueAction::Skip: childSkipped = true; break;
+                        case FileSystemIssueAction::PermanentDelete:
+                        case FileSystemIssueAction::Cancel:
+                        case FileSystemIssueAction::None:
+                        default: return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                    }
+                }
+            }
+        }
+
+        if (childSkipped)
+        {
+            anySkipped       = true;
+            allChildrenMoved = false;
+            continue;
+        }
+
+        hr = MoveOrRenameItem(fs,
+                              sourceContext,
+                              destinationContext,
+                              childSource,
+                              childDestination,
+                              static_cast<FileSystemFlags>(flags | FILESYSTEM_FLAG_ALLOW_OVERWRITE));
+        if (FAILED(hr))
+        {
+            if (IsMergeChildPartialFailure(hr))
+            {
+                anySkipped       = true;
+                allChildrenMoved = false;
+                continue;
+            }
+            return hr;
+        }
+    }
+
+    if (! allChildrenMoved)
+    {
+        return S_OK;
+    }
+
+    if (checkCancel)
+    {
+        hr = checkCancel();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    // Re-confirm the source folder actually drained before issuing the RECURSIVE id-delete below.
+    // `allChildrenMoved` is derived from the single up-front enumeration snapshot, but Graph child
+    // enumeration is eventually consistent and the folder can be mutated concurrently by another
+    // client. A fresh, COMPLETE, EMPTY re-list guarantees DeleteItemById cannot sweep away a child
+    // that was omitted from the original snapshot or added after it. If anything remains (or the
+    // re-list itself is incomplete), leave the source in place and report the merge as partial rather
+    // than risk destroying the only copy of an unmoved file.
+    std::vector<FilesInformationMicrosoftDrive::Entry> remainingChildren;
+    bool reListIncomplete = false;
+    hr                    = ListDirectory(fs, sourceContext, sourceFolderPath, remainingChildren, &reListIncomplete);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (reListIncomplete || ! remainingChildren.empty())
+    {
+        anySkipped = true;
+        return S_OK; // do NOT delete a source folder we cannot prove is empty
+    }
+
+    ItemMetadata sourceFolder{};
+    hr = GetItemMetadata(fs, sourceContext, sourceFolderPath, false, sourceFolder);
+    if (SUCCEEDED(hr))
+    {
+        hr = DeleteItemById(fs, sourceContext, sourceFolder.id);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    else if (! IsNotFoundStatus(hr))
+    {
+        return hr;
+    }
+
+    subtreeFullyMovedOut = true;
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT MoveOrRenameItem(FileSystemMicrosoftDrive& fs,
+                                       const DriveContext& sourceContext,
+                                       const DriveContext& destinationContext,
+                                       std::wstring_view sourcePath,
+                                       std::wstring_view destinationPath,
+                                       FileSystemFlags flags,
+                                       const MoveIssueReporter& reportIssue,
+                                       bool allowDirectoryMerge,
+                                       const CancelProbe& checkCancel) noexcept
 {
     if (! OrdinalString::EqualsNoCase(sourceContext.connectionName, destinationContext.connectionName) ||
         ! OrdinalString::EqualsNoCase(sourceContext.driveId, destinationContext.driveId))
@@ -3630,9 +4112,9 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
 
     const std::wstring normalizedSource      = TrimTrailingSlashPreserveRoot(NormalizePluginPath(sourcePath));
     const std::wstring normalizedDestination = TrimTrailingSlashPreserveRoot(NormalizePluginPath(destinationPath));
-    if (OrdinalString::EqualsNoCase(normalizedSource, normalizedDestination))
+    if (IsSameOrDescendantPath(normalizedSource, normalizedDestination))
     {
-        return S_OK;
+        return HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
     }
 
     ItemMetadata sourceItem{};
@@ -3675,6 +4157,30 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
             return S_OK;
         }
 
+        if (allowDirectoryMerge && sourceItem.isFolder && existingDestination.isFolder)
+        {
+            // Directory-onto-directory MERGES (normative rule): folder existence is never an
+            // overwrite conflict; only per-child collisions prompt.
+            bool anySkipped        = false;
+            bool subtreeFullyMoved = false;
+            hr                     = MergeMoveFolderIntoExisting(
+                fs,
+                sourceContext,
+                destinationContext,
+                normalizedSource,
+                normalizedDestination,
+                flags,
+                reportIssue,
+                checkCancel,
+                anySkipped,
+                subtreeFullyMoved);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            return anySkipped ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
+        }
+
         if ((flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0)
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
@@ -3695,10 +4201,28 @@ void AddJsonScalarFields(yyjson_mut_doc* doc, yyjson_mut_val* fields, yyjson_val
     hr = EnsureParentMetadata(fs, destinationContext, destinationParentPath, destinationParent);
     if (FAILED(hr))
     {
+        if (! backupItemId.empty())
+        {
+            const HRESULT restoreHr = MoveItemById(fs, destinationContext, backupItemId, destinationName, {}, false);
+            return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+        }
         return hr;
     }
 
     const bool includeParent = ! OrdinalString::EqualsNoCase(destinationParent.id, sourceParent.id);
+    if (checkCancel)
+    {
+        hr = checkCancel();
+        if (FAILED(hr))
+        {
+            if (! backupItemId.empty())
+            {
+                const HRESULT restoreHr = MoveItemById(fs, destinationContext, backupItemId, destinationName, {}, false);
+                return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+            }
+            return hr;
+        }
+    }
     hr                       = MoveItemById(fs, sourceContext, sourceItem.id, destinationName, destinationParent.id, includeParent);
     if (FAILED(hr))
     {
@@ -4659,6 +5183,126 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::CopyItem([[maybe_unused]] co
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 }
 
+namespace
+{
+// Shared core for MoveItem/MoveItems: drive contexts, caller-namespace conflict reporting and
+// the merge-capable MoveOrRenameItem call. Item-result reporting stays with the caller so batch
+// moves don't double-report per item.
+HRESULT MoveSingleItemWithConflicts(FileSystemMicrosoftDrive& fs,
+                                    const wchar_t* sourcePath,
+                                    const wchar_t* destinationPath,
+                                    FileSystemFlags flags,
+                                    const FileSystemOptions* options,
+                                    IFileSystemCallback* callback,
+                                    void* cookie) noexcept
+{
+    if (! sourcePath || ! destinationPath || sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    DriveContext sourceContext{};
+    HRESULT hr = BuildDriveContext(fs, sourcePath, sourceContext);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    DriveContext destinationContext{};
+    hr = BuildDriveContext(fs, destinationPath, destinationContext);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+    optionsState.sizeBytes             = sizeof(FileSystemOptions);
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+
+    const std::wstring sourceDriveRoot      = TrimTrailingSlashPreserveRoot(NormalizePluginPath(sourceContext.drivePath));
+    const std::wstring destinationDriveRoot = TrimTrailingSlashPreserveRoot(NormalizePluginPath(destinationContext.drivePath));
+
+    // Conflict prompts must name paths in the caller's namespace; merge children arrive in
+    // drive-path form, so the suffix beyond the drive root is grafted onto the original path.
+    const auto mapChildToOriginal =
+        [](const std::wstring& originalRoot, const std::wstring& driveRoot, std::wstring_view childDrivePath) noexcept -> std::wstring
+    {
+        std::wstring display = originalRoot;
+        if (childDrivePath.size() > driveRoot.size())
+        {
+            const std::wstring childPrefix(childDrivePath.substr(0, driveRoot.size()));
+            if (OrdinalString::EqualsNoCase(childPrefix, driveRoot))
+            {
+                std::wstring_view suffix = childDrivePath.substr(driveRoot.size());
+                while (! suffix.empty() && (suffix.front() == L'/' || suffix.front() == L'\\'))
+                {
+                    suffix.remove_prefix(1);
+                }
+                if (! suffix.empty())
+                {
+                    if (! display.empty() && display.back() != L'/' && display.back() != L'\\')
+                    {
+                        display.push_back(L'/');
+                    }
+                    display.append(suffix);
+                }
+            }
+        }
+        return display;
+    };
+
+    const std::wstring originalSource(sourcePath);
+    const std::wstring originalDestination(destinationPath);
+
+    const auto reportIssue =
+        [&](const wchar_t* conflictSource, const wchar_t* conflictDestination, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
+    {
+        action = FileSystemIssueAction::Cancel;
+        if (! callback)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        const std::wstring mappedSource      = mapChildToOriginal(originalSource, sourceDriveRoot, conflictSource ? conflictSource : L"");
+        const std::wstring mappedDestination = mapChildToOriginal(originalDestination, destinationDriveRoot, conflictDestination ? conflictDestination : L"");
+        const HRESULT issueHr =
+            callback->FileSystemIssue(FILESYSTEM_MOVE, mappedSource.c_str(), mappedDestination.c_str(), status, &action, callbackOptions, cookie);
+        return issueHr == E_ABORT ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : issueHr;
+    };
+
+    const CancelProbe checkCancel = callback
+                                      ? CancelProbe([callback, cookie]() noexcept -> HRESULT
+        {
+            bool cancelled = false;
+            const HRESULT cancelHr = CheckShouldCancel(callback, cookie, cancelled);
+            if (FAILED(cancelHr))
+            {
+                return cancelHr;
+            }
+            return cancelled ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+        })
+                                      : CancelProbe{};
+
+    return MoveOrRenameItem(fs,
+                            sourceContext,
+                            destinationContext,
+                            sourceContext.drivePath,
+                            destinationContext.drivePath,
+                            flags,
+                            callback ? MoveIssueReporter(reportIssue) : MoveIssueReporter{},
+                            true,
+                            checkCancel);
+}
+} // namespace
+
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItem(const wchar_t* sourcePath,
                                                              const wchar_t* destinationPath,
                                                              FileSystemFlags flags,
@@ -4666,26 +5310,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItem(const wchar_t* sour
                                                              IFileSystemCallback* callback,
                                                              void* cookie) noexcept
 {
-    if (! sourcePath || ! destinationPath || sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-
-    DriveContext sourceContext{};
-    HRESULT hr = BuildDriveContext(*this, sourcePath, sourceContext);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    DriveContext destinationContext{};
-    hr = BuildDriveContext(*this, destinationPath, destinationContext);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    hr                       = MoveOrRenameItem(*this, sourceContext, destinationContext, sourceContext.drivePath, destinationContext.drivePath, flags);
+    const HRESULT hr         = MoveSingleItemWithConflicts(*this, sourcePath, destinationPath, flags, options, callback, cookie);
     const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_MOVE, 1, 1, 0, sourcePath, destinationPath, hr, options, cookie);
     return FAILED(callbackHr) ? callbackHr : hr;
 }
@@ -4762,7 +5387,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItem(const wchar_t* so
         return hr;
     }
 
-    hr                       = MoveOrRenameItem(*this, sourceContext, destinationContext, sourceContext.drivePath, destinationContext.drivePath, flags);
+    // Rename never merges: renaming onto an existing folder stays an explicit conflict.
+    hr = MoveOrRenameItem(
+        *this, sourceContext, destinationContext, sourceContext.drivePath, destinationContext.drivePath, flags, MoveIssueReporter{}, false);
     const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_RENAME, 1, 1, 0, sourcePath, destinationPath, hr, options, cookie);
     return FAILED(callbackHr) ? callbackHr : hr;
 }
@@ -4909,7 +5536,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItems(const wchar_t* con
         if (SUCCEEDED(hr))
         {
             const std::wstring destinationPath = JoinPath(destinationRoot, leafName);
-            hr                                 = MoveItem(sourcePaths[i], destinationPath.c_str(), flags, options, nullptr, nullptr);
+            // Pass the real callback so directory merges can prompt per child; the batch-level
+            // ReportItemResult below stays the single item-result reporter.
+            hr = MoveSingleItemWithConflicts(*this, sourcePaths[i], destinationPath.c_str(), flags, options, callback, cookie);
             const HRESULT callbackHr =
                 ReportItemResult(callback, FILESYSTEM_MOVE, count, i + 1u, i, sourcePaths[i], destinationPath.c_str(), hr, options, cookie);
             if (FAILED(callbackHr))
@@ -5772,6 +6401,14 @@ HRESULT FileSystemMicrosoftDrive::AcquireAccessTokenForConnection(std::wstring_v
 {
     accessTokenOut.clear();
 
+#if defined(_DEBUG)
+    if (g_debugMicrosoftDriveBypassAccessTokenForSelfTest.load())
+    {
+        accessTokenOut = "microsoft-drive-selftest-token";
+        return S_OK;
+    }
+#endif
+
     const Settings settings = SnapshotSettings();
     if (settings.clientId.empty())
     {
@@ -5970,3 +6607,909 @@ void FileSystemMicrosoftDrive::StoreCachedDrive(std::wstring_view connectionName
     cached.volumeLabel.assign(volumeLabel);
     cached.webUrl.assign(webUrl);
 }
+
+#if defined(_DEBUG)
+namespace
+{
+struct DebugDriveItem
+{
+    std::wstring id;
+    std::wstring name;
+    std::wstring parentId;
+    bool isFolder = false;
+};
+
+struct DebugDriveRequest
+{
+    std::wstring method;
+    std::wstring url;
+    bool allowRetry   = false;
+    DWORD statusCode  = 0;
+};
+
+[[nodiscard]] std::string JsonQuote(std::wstring_view value) noexcept
+{
+    std::string utf8 = Utf8FromUtf16(value);
+    std::string quoted;
+    quoted.reserve(utf8.size() + 2u);
+    quoted.push_back('"');
+    for (const char ch : utf8)
+    {
+        switch (ch)
+        {
+            case '\\': quoted.append("\\\\"); break;
+            case '"': quoted.append("\\\""); break;
+            case '\b': quoted.append("\\b"); break;
+            case '\f': quoted.append("\\f"); break;
+            case '\n': quoted.append("\\n"); break;
+            case '\r': quoted.append("\\r"); break;
+            case '\t': quoted.append("\\t"); break;
+            default: quoted.push_back(ch); break;
+        }
+    }
+    quoted.push_back('"');
+    return quoted;
+}
+
+[[nodiscard]] std::wstring EnsureLeadingSlash(std::wstring path) noexcept
+{
+    if (path.empty() || path.front() != L'/')
+    {
+        path.insert(path.begin(), L'/');
+    }
+    return NormalizePluginPath(path);
+}
+
+[[nodiscard]] std::wstring ExtractRootPathFromDebugUrl(std::wstring_view url) noexcept
+{
+    const size_t root = url.find(L"/root");
+    if (root == std::wstring_view::npos)
+    {
+        return {};
+    }
+
+    const size_t afterRoot = root + std::wstring_view(L"/root").size();
+    if (afterRoot >= url.size() || url[afterRoot] == L'?' || url.substr(afterRoot).starts_with(L"/children"))
+    {
+        return L"/";
+    }
+
+    constexpr std::wstring_view kPathPrefix = L":/";
+    if (! url.substr(afterRoot).starts_with(kPathPrefix))
+    {
+        return {};
+    }
+
+    const size_t pathStart = afterRoot + kPathPrefix.size();
+    const size_t pathEnd   = url.find(L':', pathStart);
+    if (pathEnd == std::wstring_view::npos || pathEnd < pathStart)
+    {
+        return {};
+    }
+
+    return EnsureLeadingSlash(std::wstring(url.substr(pathStart, pathEnd - pathStart)));
+}
+
+[[nodiscard]] std::wstring ExtractItemIdFromDebugUrl(std::wstring_view url) noexcept
+{
+    constexpr std::wstring_view kItems = L"/items/";
+    const size_t itemStart             = url.find(kItems);
+    if (itemStart == std::wstring_view::npos)
+    {
+        return {};
+    }
+
+    const size_t idStart = itemStart + kItems.size();
+    size_t idEnd         = url.find(L'/', idStart);
+    if (idEnd == std::wstring_view::npos)
+    {
+        idEnd = url.find(L'?', idStart);
+    }
+    if (idEnd == std::wstring_view::npos)
+    {
+        idEnd = url.size();
+    }
+    return std::wstring(url.substr(idStart, idEnd - idStart));
+}
+
+[[nodiscard]] bool TryReadDebugMoveBody(std::string_view bodyUtf8, std::wstring& nameOut, std::wstring& parentIdOut) noexcept
+{
+    nameOut.clear();
+    parentIdOut.clear();
+
+    yyjson_doc* doc = yyjson_read(bodyUtf8.data(), bodyUtf8.size(), YYJSON_READ_ALLOW_BOM);
+    if (! doc)
+    {
+        return false;
+    }
+    auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+
+    yyjson_val* root = yyjson_doc_get_root(doc);
+    if (! root || ! yyjson_is_obj(root))
+    {
+        return false;
+    }
+
+    nameOut = TryGetJsonString(root, "name").value_or(L"");
+    if (yyjson_val* parent = yyjson_obj_get(root, "parentReference"); parent && yyjson_is_obj(parent))
+    {
+        parentIdOut = TryGetJsonString(parent, "id").value_or(L"");
+    }
+    return ! nameOut.empty();
+}
+
+class DebugGraphDrive final
+{
+public:
+    DebugGraphDrive()
+    {
+        _items.push_back(DebugDriveItem{.id = L"root", .name = L"", .parentId = L"", .isFolder = true});
+    }
+
+    DebugGraphDrive(const DebugGraphDrive&)            = delete;
+    DebugGraphDrive& operator=(const DebugGraphDrive&) = delete;
+    DebugGraphDrive(DebugGraphDrive&&)                 = delete;
+    DebugGraphDrive& operator=(DebugGraphDrive&&)      = delete;
+
+    DebugDriveItem* AddFolder(std::wstring_view path)
+    {
+        return AddItem(path, true);
+    }
+
+    DebugDriveItem* AddFile(std::wstring_view path)
+    {
+        return AddItem(path, false);
+    }
+
+    DebugDriveItem* AddRawChild(std::wstring_view parentPath, std::wstring_view name, bool isFolder)
+    {
+        DebugDriveItem* parent = FindByPath(parentPath);
+        if (! parent || ! parent->isFolder)
+        {
+            return nullptr;
+        }
+
+        _items.push_back(DebugDriveItem{.id = std::format(L"id-{}", _nextId++), .name = std::wstring(name), .parentId = parent->id, .isFolder = isFolder});
+        return &_items.back();
+    }
+
+    [[nodiscard]] bool Exists(std::wstring_view path, bool isFolder) noexcept
+    {
+        const DebugDriveItem* item = FindByPath(path);
+        return item && item->isFolder == isFolder;
+    }
+
+    [[nodiscard]] std::wstring ItemId(std::wstring_view path) noexcept
+    {
+        const DebugDriveItem* item = FindByPath(path);
+        return item ? item->id : std::wstring{};
+    }
+
+    [[nodiscard]] unsigned int CountRequests(std::wstring_view method) const noexcept
+    {
+        unsigned int count = 0;
+        for (const DebugDriveRequest& request : requests)
+        {
+            if (OrdinalString::EqualsNoCase(request.method, method))
+            {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    [[nodiscard]] bool AllRequestsAllowedRetry(std::wstring_view method) const noexcept
+    {
+        bool saw = false;
+        for (const DebugDriveRequest& request : requests)
+        {
+            if (OrdinalString::EqualsNoCase(request.method, method))
+            {
+                saw = true;
+                if (! request.allowRetry)
+                {
+                    return false;
+                }
+            }
+        }
+        return saw;
+    }
+
+    [[nodiscard]] bool AllRequestsDisallowedRetry(std::wstring_view method) const noexcept
+    {
+        bool saw = false;
+        for (const DebugDriveRequest& request : requests)
+        {
+            if (OrdinalString::EqualsNoCase(request.method, method))
+            {
+                saw = true;
+                if (request.allowRetry)
+                {
+                    return false;
+                }
+            }
+        }
+        return saw;
+    }
+
+    [[nodiscard]] HRESULT Handle(std::wstring_view method,
+                                 std::wstring_view url,
+                                 std::string_view bodyUtf8,
+                                 bool allowRetry,
+                                 HttpResponse& responseOut) noexcept
+    {
+        responseOut = {};
+        if (OrdinalString::EqualsNoCase(method, L"GET"))
+        {
+            if (url.find(L"/children") != std::wstring_view::npos)
+            {
+                HandleChildren(url, responseOut);
+            }
+            else
+            {
+                HandleMetadata(url, responseOut);
+            }
+        }
+        else if (OrdinalString::EqualsNoCase(method, L"PATCH"))
+        {
+            HandlePatch(url, bodyUtf8, responseOut);
+        }
+        else if (OrdinalString::EqualsNoCase(method, L"DELETE"))
+        {
+            HandleDelete(url, responseOut);
+        }
+        else if (OrdinalString::EqualsNoCase(method, L"POST"))
+        {
+            HandlePost(url, bodyUtf8, responseOut);
+        }
+        else
+        {
+            responseOut.statusCode = 400u;
+            responseOut.body       = R"json({"error":{"code":"badRequest"}})json";
+        }
+
+        requests.push_back(DebugDriveRequest{.method = std::wstring(method), .url = std::wstring(url), .allowRetry = allowRetry, .statusCode = responseOut.statusCode});
+        return S_OK;
+    }
+
+    int patchThrottleRemaining       = 0;
+    int deleteThrottleRemaining      = 0;
+    int postAmbiguousCreateRemaining = 0;
+    std::vector<DebugDriveRequest> requests;
+
+private:
+    DebugDriveItem* AddItem(std::wstring_view rawPath, bool isFolder)
+    {
+        const std::wstring path = TrimTrailingSlashPreserveRoot(NormalizePluginPath(rawPath));
+        if (path == L"/" || path.empty())
+        {
+            return FindById(L"root");
+        }
+
+        const size_t slash = path.find_last_of(L'/');
+        const std::wstring parentPath = slash == 0u ? L"/" : path.substr(0, slash);
+        const std::wstring name       = path.substr(slash + 1u);
+        DebugDriveItem* parent        = AddItem(parentPath, true);
+        if (! parent)
+        {
+            return nullptr;
+        }
+
+        if (DebugDriveItem* existing = FindChild(parent->id, name))
+        {
+            existing->isFolder = isFolder;
+            return existing;
+        }
+
+        _items.push_back(DebugDriveItem{.id = std::format(L"id-{}", _nextId++), .name = name, .parentId = parent->id, .isFolder = isFolder});
+        return &_items.back();
+    }
+
+    [[nodiscard]] DebugDriveItem* FindById(std::wstring_view id) noexcept
+    {
+        for (DebugDriveItem& item : _items)
+        {
+            if (OrdinalString::EqualsNoCase(item.id, id))
+            {
+                return &item;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] const DebugDriveItem* FindById(std::wstring_view id) const noexcept
+    {
+        for (const DebugDriveItem& item : _items)
+        {
+            if (OrdinalString::EqualsNoCase(item.id, id))
+            {
+                return &item;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] DebugDriveItem* FindChild(std::wstring_view parentId, std::wstring_view name) noexcept
+    {
+        for (DebugDriveItem& item : _items)
+        {
+            if (OrdinalString::EqualsNoCase(item.parentId, parentId) && OrdinalString::EqualsNoCase(item.name, name))
+            {
+                return &item;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] const DebugDriveItem* FindChild(std::wstring_view parentId, std::wstring_view name) const noexcept
+    {
+        for (const DebugDriveItem& item : _items)
+        {
+            if (OrdinalString::EqualsNoCase(item.parentId, parentId) && OrdinalString::EqualsNoCase(item.name, name))
+            {
+                return &item;
+            }
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] DebugDriveItem* FindByPath(std::wstring_view rawPath) noexcept
+    {
+        const std::wstring path = TrimTrailingSlashPreserveRoot(NormalizePluginPath(rawPath));
+        if (path == L"/" || path.empty())
+        {
+            return FindById(L"root");
+        }
+
+        DebugDriveItem* current = FindById(L"root");
+        size_t start            = 1u;
+        while (current && start < path.size())
+        {
+            const size_t slash        = path.find(L'/', start);
+            const size_t segmentEnd   = slash == std::wstring::npos ? path.size() : slash;
+            const std::wstring name   = path.substr(start, segmentEnd - start);
+            current                   = FindChild(current->id, name);
+            start                     = slash == std::wstring::npos ? path.size() : slash + 1u;
+        }
+        return current;
+    }
+
+    [[nodiscard]] const DebugDriveItem* FindByPath(std::wstring_view rawPath) const noexcept
+    {
+        const std::wstring path = TrimTrailingSlashPreserveRoot(NormalizePluginPath(rawPath));
+        if (path == L"/" || path.empty())
+        {
+            return FindById(L"root");
+        }
+
+        const DebugDriveItem* current = FindById(L"root");
+        size_t start                  = 1u;
+        while (current && start < path.size())
+        {
+            const size_t slash        = path.find(L'/', start);
+            const size_t segmentEnd   = slash == std::wstring::npos ? path.size() : slash;
+            const std::wstring name   = path.substr(start, segmentEnd - start);
+            current                   = FindChild(current->id, name);
+            start                     = slash == std::wstring::npos ? path.size() : slash + 1u;
+        }
+        return current;
+    }
+
+    [[nodiscard]] std::string ItemJson(const DebugDriveItem& item) const noexcept
+    {
+        return std::format(R"json({{"id":{},"name":{},"size":0,{}}})json",
+                           JsonQuote(item.id),
+                           JsonQuote(item.name),
+                           item.isFolder ? R"json("folder":{})json" : R"json("file":{})json");
+    }
+
+    [[nodiscard]] std::string ChildrenJson(std::wstring_view parentId) const noexcept
+    {
+        std::string json = R"json({"value":[)json";
+        bool first       = true;
+        for (const DebugDriveItem& item : _items)
+        {
+            if (! OrdinalString::EqualsNoCase(item.parentId, parentId))
+            {
+                continue;
+            }
+            if (! first)
+            {
+                json.push_back(',');
+            }
+            first = false;
+            json.append(ItemJson(item));
+        }
+        json.append("]}");
+        return json;
+    }
+
+    void SetNotFound(HttpResponse& responseOut) const noexcept
+    {
+        responseOut.statusCode = 404u;
+        responseOut.body       = R"json({"error":{"code":"itemNotFound"}})json";
+    }
+
+    void HandleMetadata(std::wstring_view url, HttpResponse& responseOut) const noexcept
+    {
+        const std::wstring path = ExtractRootPathFromDebugUrl(url);
+        const DebugDriveItem* item = FindByPath(path);
+        if (! item)
+        {
+            SetNotFound(responseOut);
+            return;
+        }
+        responseOut.statusCode = 200u;
+        responseOut.body       = ItemJson(*item);
+    }
+
+    void HandleChildren(std::wstring_view url, HttpResponse& responseOut) const noexcept
+    {
+        const std::wstring path = ExtractRootPathFromDebugUrl(url);
+        const DebugDriveItem* item = FindByPath(path);
+        if (! item)
+        {
+            SetNotFound(responseOut);
+            return;
+        }
+        if (! item->isFolder)
+        {
+            responseOut.statusCode = 400u;
+            responseOut.body       = R"json({"error":{"code":"notAFolder"}})json";
+            return;
+        }
+        responseOut.statusCode = 200u;
+        responseOut.body       = ChildrenJson(item->id);
+    }
+
+    void HandlePatch(std::wstring_view url, std::string_view bodyUtf8, HttpResponse& responseOut) noexcept
+    {
+        if (patchThrottleRemaining > 0)
+        {
+            --patchThrottleRemaining;
+            responseOut.statusCode = 429u;
+            responseOut.retryAfter = L"0";
+            responseOut.body       = R"json({"error":{"code":"tooManyRequests"}})json";
+            return;
+        }
+
+        DebugDriveItem* item = FindById(ExtractItemIdFromDebugUrl(url));
+        if (! item)
+        {
+            SetNotFound(responseOut);
+            return;
+        }
+
+        std::wstring name;
+        std::wstring parentId;
+        if (! TryReadDebugMoveBody(bodyUtf8, name, parentId))
+        {
+            responseOut.statusCode = 400u;
+            responseOut.body       = R"json({"error":{"code":"badRequest"}})json";
+            return;
+        }
+
+        if (! parentId.empty())
+        {
+            DebugDriveItem* parent = FindById(parentId);
+            if (! parent || ! parent->isFolder)
+            {
+                SetNotFound(responseOut);
+                return;
+            }
+            item->parentId = parentId;
+        }
+        item->name = name;
+
+        responseOut.statusCode = 200u;
+        responseOut.body       = ItemJson(*item);
+    }
+
+    void HandleDelete(std::wstring_view url, HttpResponse& responseOut) noexcept
+    {
+        if (deleteThrottleRemaining > 0)
+        {
+            --deleteThrottleRemaining;
+            responseOut.statusCode = 429u;
+            responseOut.retryAfter = L"0";
+            responseOut.body       = R"json({"error":{"code":"tooManyRequests"}})json";
+            return;
+        }
+
+        const std::wstring id = ExtractItemIdFromDebugUrl(url);
+        const auto it = std::find_if(_items.begin(), _items.end(), [&](const DebugDriveItem& item) noexcept { return OrdinalString::EqualsNoCase(item.id, id); });
+        if (it == _items.end())
+        {
+            SetNotFound(responseOut);
+            return;
+        }
+
+        _items.erase(it);
+        responseOut.statusCode = 204u;
+    }
+
+    void HandlePost(std::wstring_view url, std::string_view bodyUtf8, HttpResponse& responseOut) noexcept
+    {
+        const std::wstring parentId = ExtractItemIdFromDebugUrl(url);
+        DebugDriveItem* parent      = FindById(parentId);
+        if (! parent || ! parent->isFolder)
+        {
+            SetNotFound(responseOut);
+            return;
+        }
+
+        std::wstring name;
+        std::wstring ignoredParentId;
+        if (! TryReadDebugMoveBody(bodyUtf8, name, ignoredParentId))
+        {
+            responseOut.statusCode = 400u;
+            responseOut.body       = R"json({"error":{"code":"badRequest"}})json";
+            return;
+        }
+
+        if (FindChild(parent->id, name))
+        {
+            responseOut.statusCode = 409u;
+            responseOut.body       = R"json({"error":{"code":"nameAlreadyExists"}})json";
+            return;
+        }
+
+        _items.push_back(DebugDriveItem{.id = std::format(L"id-{}", _nextId++), .name = name, .parentId = parent->id, .isFolder = true});
+        DebugDriveItem& created = _items.back();
+
+        if (postAmbiguousCreateRemaining > 0)
+        {
+            --postAmbiguousCreateRemaining;
+            responseOut.statusCode = 503u;
+            responseOut.retryAfter = L"0";
+            responseOut.body       = R"json({"error":{"code":"serviceUnavailable"}})json";
+            return;
+        }
+
+        responseOut.statusCode = 201u;
+        responseOut.body       = ItemJson(created);
+    }
+
+    std::vector<DebugDriveItem> _items;
+    unsigned int _nextId = 1;
+};
+
+[[nodiscard]] HRESULT DebugGraphHook(void* cookie,
+                                     std::wstring_view method,
+                                     std::wstring_view url,
+                                     std::string_view bodyUtf8,
+                                     bool allowRetry,
+                                     HttpResponse& responseOut) noexcept
+{
+    if (! cookie)
+    {
+        return E_POINTER;
+    }
+    return static_cast<DebugGraphDrive*>(cookie)->Handle(method, url, bodyUtf8, allowRetry, responseOut);
+}
+
+[[nodiscard]] DriveContext MakeDebugDriveContext() noexcept
+{
+    DriveContext context{};
+    context.connectionName       = L"microsoft-drive-selftest";
+    context.profile.name         = context.connectionName;
+    context.profile.pluginId     = L"builtin/file-system-onedrive-personal";
+    context.profile.authMode     = L"oauth2Pkce";
+    context.authority            = L"consumers";
+    context.scopeText            = L"offline_access Files.ReadWrite User.Read openid profile";
+    context.driveId              = L"drive-selftest";
+    context.driveDisplayName     = L"Microsoft Drive SelfTest";
+    context.driveVolumeLabel     = L"Microsoft Drive SelfTest";
+    context.persistRefreshToken  = false;
+    return context;
+}
+
+bool DebugCheck(bool condition, const wchar_t* message, unsigned int& passed, unsigned int& failed) noexcept
+{
+    if (condition)
+    {
+        ++passed;
+        return true;
+    }
+
+    ++failed;
+    Debug::Error(L"Microsoft Drive debug selftest failed: {}", message);
+    return false;
+}
+
+[[nodiscard]] wil::com_ptr<FileSystemMicrosoftDrive> MakeDebugFileSystem() noexcept
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs;
+    auto* raw = new (std::nothrow) FileSystemMicrosoftDrive(FileSystemMicrosoftDriveMode::OneDrivePersonal, nullptr);
+    if (raw)
+    {
+        fs.attach(raw);
+    }
+    return fs;
+}
+
+void RunDebugPatchRetryMergeSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFolder(L"/src/Foo");
+    graph.AddFile(L"/src/Foo/child.txt");
+    graph.AddFolder(L"/dst/Foo");
+    graph.patchThrottleRemaining = 1;
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = MoveOrRenameItem(*fs, context, context, L"/src/Foo", L"/dst/Foo", FILESYSTEM_FLAG_RECURSIVE);
+    DebugCheck(hr == S_OK, L"throttled child PATCH merge should complete", passed, failed);
+    DebugCheck(graph.CountRequests(L"PATCH") == 2u, L"throttled child PATCH should be attempted twice", passed, failed);
+    DebugCheck(graph.AllRequestsAllowedRetry(L"PATCH"), L"PATCH Graph mutations should enable retry handling", passed, failed);
+    DebugCheck(graph.Exists(L"/dst/Foo/child.txt", false), L"retried child move should land in destination", passed, failed);
+    DebugCheck(! graph.Exists(L"/src/Foo/child.txt", false), L"retried child move should leave no source child behind", passed, failed);
+    DebugCheck(! graph.Exists(L"/src/Foo", true), L"fully moved source folder should be deleted", passed, failed);
+}
+
+void RunDebugDeleteRetrySelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFile(L"/delete-me.txt");
+    graph.deleteThrottleRemaining = 1;
+
+    const std::wstring itemId = graph.ItemId(L"/delete-me.txt");
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = DeleteItemById(*fs, context, itemId);
+    DebugCheck(hr == S_OK, L"throttled DELETE should complete", passed, failed);
+    DebugCheck(graph.CountRequests(L"DELETE") == 2u, L"throttled DELETE should be attempted twice", passed, failed);
+    DebugCheck(graph.AllRequestsAllowedRetry(L"DELETE"), L"DELETE Graph mutations should enable retry handling", passed, failed);
+    DebugCheck(! graph.Exists(L"/delete-me.txt", false), L"retried delete should remove the item", passed, failed);
+}
+
+void RunDebugPostCreateReconcileSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFolder(L"/parent");
+    graph.postAmbiguousCreateRemaining = 1;
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = CreateDirectoryItem(*fs, context, L"/parent/new-folder");
+    DebugCheck(hr == S_OK, L"ambiguous POST create should reconcile committed directory", passed, failed);
+    DebugCheck(graph.CountRequests(L"POST") == 1u, L"ambiguous committed POST create should not be blindly replayed", passed, failed);
+    DebugCheck(graph.AllRequestsDisallowedRetry(L"POST"), L"POST create should use explicit reconciliation instead of blind transport retry", passed, failed);
+    DebugCheck(graph.Exists(L"/parent/new-folder", true), L"ambiguous POST create should leave created folder visible", passed, failed);
+}
+
+void RunDebugTypeMismatchPartialMergeSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFolder(L"/src/Foo");
+    graph.AddFolder(L"/src/Foo/conflict");
+    graph.AddFile(L"/src/Foo/ok.txt");
+    graph.AddFolder(L"/dst/Foo");
+    graph.AddFile(L"/dst/Foo/conflict");
+
+    unsigned int prompts = 0;
+    const MoveIssueReporter reporter =
+        [&](const wchar_t*, const wchar_t*, HRESULT status, FileSystemIssueAction& action) noexcept -> HRESULT
+    {
+        ++prompts;
+        if (status != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS))
+        {
+            return E_FAIL;
+        }
+        action = FileSystemIssueAction::Overwrite;
+        return S_OK;
+    };
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = MoveOrRenameItem(*fs, context, context, L"/src/Foo", L"/dst/Foo", FILESYSTEM_FLAG_RECURSIVE, reporter);
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), L"type-mismatch overwrite should finish as partial copy", passed, failed);
+    DebugCheck(prompts == 1u, L"type-mismatch merge should prompt exactly once", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo", true), L"partial merge should preserve source folder", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo/conflict", true), L"unresolvable type-mismatch source child should remain", passed, failed);
+    DebugCheck(! graph.Exists(L"/src/Foo/ok.txt", false), L"non-conflicting sibling should still move", passed, failed);
+    DebugCheck(graph.Exists(L"/dst/Foo/ok.txt", false), L"non-conflicting sibling should land in destination", passed, failed);
+    DebugCheck(graph.Exists(L"/dst/Foo/conflict", false), L"type-mismatch destination child should remain unchanged", passed, failed);
+}
+
+void RunDebugDescendantMoveGuardSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance for descendant guard", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFolder(L"/src/Foo");
+    graph.AddFolder(L"/src/Foo/Sub");
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = MoveOrRenameItem(*fs, context, context, L"/src/Foo", L"/src/Foo/Sub", FILESYSTEM_FLAG_RECURSIVE);
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER), L"moving a folder into its own descendant should be rejected", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo", true), L"descendant-guard failure should preserve source folder", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo/Sub", true), L"descendant-guard failure should preserve descendant folder", passed, failed);
+}
+
+void RunDebugParseChildrenSkipsEmptyNameSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    std::vector<FilesInformationMicrosoftDrive::Entry> entries;
+    std::wstring nextLink;
+    bool incompleteDueToInvalidChildName = false;
+    constexpr std::string_view body =
+        R"json({"value":[{"id":"bad","name":"","folder":{}},{"id":"ok","name":"ok.txt","size":3,"file":{}}]})json";
+
+    const HRESULT hr = ParseChildren(body, entries, nextLink, &incompleteDueToInvalidChildName);
+    DebugCheck(hr == S_OK, L"ParseChildren should accept a page containing an empty-name child", passed, failed);
+    DebugCheck(incompleteDueToInvalidChildName, L"ParseChildren should mark pages containing empty-name children as incomplete", passed, failed);
+    DebugCheck(entries.size() == 1u, L"ParseChildren should skip empty-name children", passed, failed);
+    if (entries.size() == 1u)
+    {
+        DebugCheck(entries[0].name == L"ok.txt", L"ParseChildren should preserve valid siblings after an empty-name child", passed, failed);
+    }
+}
+
+void RunDebugEmptyNameChildBlocksSourceDeleteSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance for empty-name child source-delete guard", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFolder(L"/src/Foo");
+    graph.AddFile(L"/src/Foo/ok.txt");
+    graph.AddFolder(L"/dst/Foo");
+    DebugCheck(graph.AddRawChild(L"/src/Foo", L"", false) != nullptr, L"debug graph should add malformed empty-name source child", passed, failed);
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = MoveOrRenameItem(*fs, context, context, L"/src/Foo", L"/dst/Foo", FILESYSTEM_FLAG_RECURSIVE);
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY), L"empty-name child merge should finish as partial copy", passed, failed);
+    DebugCheck(graph.Exists(L"/src/Foo", true), L"empty-name child merge should preserve source folder", passed, failed);
+    DebugCheck(! graph.Exists(L"/src/Foo/ok.txt", false), L"empty-name child merge should still move valid siblings", passed, failed);
+    DebugCheck(graph.Exists(L"/dst/Foo/ok.txt", false), L"empty-name child merge should land valid siblings in destination", passed, failed);
+}
+
+void RunDebugMoveRejectsInvalidOptionsSizeSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance for invalid Move options guard", passed, failed))
+    {
+        return;
+    }
+
+    FileSystemOptions badOptions{};
+    badOptions.sizeBytes = sizeof(FileSystemOptions) - 1u;
+    const HRESULT hr = MoveSingleItemWithConflicts(*fs, L"/src.txt", L"/dst.txt", FILESYSTEM_FLAG_NONE, &badOptions, nullptr, nullptr);
+    DebugCheck(hr == E_INVALIDARG, L"Microsoft Drive Move should reject invalid FileSystemOptions::sizeBytes before reading options", passed, failed);
+}
+
+void RunDebugMergeRecursionDepthCapSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance for recursion cap", passed, failed))
+    {
+        return;
+    }
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+
+    std::wstring sourcePath = L"/src/Foo";
+    std::wstring destPath   = L"/dst/Foo";
+    graph.AddFolder(sourcePath);
+    graph.AddFolder(destPath);
+    for (unsigned int depth = 0; depth < 70u; ++depth)
+    {
+        const std::wstring leaf = std::format(L"d{}", depth);
+        sourcePath              = JoinPath(sourcePath, leaf);
+        destPath                = JoinPath(destPath, leaf);
+        graph.AddFolder(sourcePath);
+        graph.AddFolder(destPath);
+    }
+    graph.AddFile(JoinPath(sourcePath, L"leaf.txt"));
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = MoveOrRenameItem(*fs, context, context, L"/src/Foo", L"/dst/Foo", FILESYSTEM_FLAG_RECURSIVE);
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_STACK_OVERFLOW), L"deep Microsoft Drive merge recursion should trip the provider depth cap", passed, failed);
+    DebugCheck(graph.Exists(JoinPath(sourcePath, L"leaf.txt"), false), L"recursion-cap failure should preserve the deep source leaf", passed, failed);
+}
+
+void RunDebugOverwriteCancelRestoresDestinationSelfTest(unsigned int& passed, unsigned int& failed)
+{
+    wil::com_ptr<FileSystemMicrosoftDrive> fs = MakeDebugFileSystem();
+    if (! DebugCheck(static_cast<bool>(fs), L"debug selftest should allocate Microsoft Drive instance for overwrite rollback", passed, failed))
+    {
+        return;
+    }
+
+    const DriveContext context = MakeDebugDriveContext();
+    DebugGraphDrive graph;
+    graph.AddFile(L"/src.txt");
+    graph.AddFile(L"/dst.txt");
+
+    DebugHttpRequestHookScope hook(DebugGraphHook, &graph);
+    DebugFlagScope tokenBypass(g_debugMicrosoftDriveBypassAccessTokenForSelfTest, true);
+    DebugFlagScope noRetrySleep(g_debugMicrosoftDriveSuppressRetrySleepForSelfTest, true);
+
+    const HRESULT hr = MoveOrRenameItem(*fs,
+                                        context,
+                                        context,
+                                        L"/src.txt",
+                                        L"/dst.txt",
+                                        FILESYSTEM_FLAG_ALLOW_OVERWRITE,
+                                        MoveIssueReporter{},
+                                        true,
+                                        []() noexcept { return HRESULT_FROM_WIN32(ERROR_CANCELLED); });
+
+    DebugCheck(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED), L"overwrite move cancellation should propagate ERROR_CANCELLED", passed, failed);
+    DebugCheck(graph.Exists(L"/src.txt", false), L"cancelled overwrite move should preserve the source", passed, failed);
+    DebugCheck(graph.Exists(L"/dst.txt", false), L"cancelled overwrite move should restore the original destination", passed, failed);
+}
+} // namespace
+
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderMicrosoftDriveDebugSelfTests(unsigned int* passed, unsigned int* failed)
+{
+    if (! passed || ! failed)
+    {
+        return E_POINTER;
+    }
+
+    *passed = 0;
+    *failed = 0;
+
+    RunDebugPatchRetryMergeSelfTest(*passed, *failed);
+    RunDebugDeleteRetrySelfTest(*passed, *failed);
+    RunDebugPostCreateReconcileSelfTest(*passed, *failed);
+    RunDebugTypeMismatchPartialMergeSelfTest(*passed, *failed);
+    RunDebugDescendantMoveGuardSelfTest(*passed, *failed);
+    RunDebugParseChildrenSkipsEmptyNameSelfTest(*passed, *failed);
+    RunDebugEmptyNameChildBlocksSourceDeleteSelfTest(*passed, *failed);
+    RunDebugMoveRejectsInvalidOptionsSizeSelfTest(*passed, *failed);
+    RunDebugMergeRecursionDepthCapSelfTest(*passed, *failed);
+    RunDebugOverwriteCancelRestoresDestinationSelfTest(*passed, *failed);
+
+    return *failed == 0u ? S_OK : E_FAIL;
+}
+#endif

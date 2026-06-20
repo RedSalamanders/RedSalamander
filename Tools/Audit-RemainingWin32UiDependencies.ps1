@@ -108,7 +108,7 @@ $allowedResidualDependencies = @(
     @{
         Category      = 'Native visible control creation'
         Path          = 'Plugins\ViewerVLC\ViewerVLC.cpp'
-        LinePattern   = 'SS_BLACKRECT'
+        LinePattern   = 'WS_CHILD \| WS_VISIBLE \| SS_BLACKRECT, 0, 0, 24, 24'
         Visibility    = 'test-only synthetic child'
         Owner         = 'ViewerVLC wheel-forwarding self-tests'
         Reason        = 'ENABLE_TESTS creates a tiny synthetic Static child only to exercise VLC child-window wheel forwarding; it is not production app chrome.'

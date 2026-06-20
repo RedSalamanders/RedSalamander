@@ -231,6 +231,7 @@ The root JSON object may contain (depending on the application):
 - `monitor` (object): RedSalamanderMonitor UI state (menu toggles, filter state); persisted by the `RedSalamanderMonitor` app id
 - `shortcuts` (object): shortcut key bindings
 - `extensions` (object, optional): extension-based behaviors (e.g., open archives as virtual file systems)
+- `connections` (object, optional): global Connection Manager settings and saved `ConnectionProfile` entries (non-secret fields only)
 - `fileActions` (object, optional): viewer/editor actions and command associations for View, Alternate View, Edit, Alternate Edit, View With, Edit With, and Edit New
 - `userMenu` (object, optional): settings-driven external commands for `Commands -> User Menu`, `F9`, and `cmd/pane/userMenu/<itemId>`
 - `makeFileList` (object, optional): last selected options for `Commands -> Make File List`
@@ -664,6 +665,19 @@ These keys are the global defaults edited by `Preferences -> File Operations`. P
 - `fileOperations.crossFsBridgeBufferSizeKB`: default per-buffer size for host-driven cross-filesystem bridge copies (integer, `512..16384`, default: `4096`). Two buffers are allocated per active bridged file transfer.
 - `fileOperations.defaultBandwidthLimitBytesPerSecond`: default speed limit applied to newly created copy/move tasks when the caller did not already specify one (integer, `>= 0`, default: `0`; `0` means unlimited).
 
+### Diagnostics retention
+
+These keys control the host-owned File Operations diagnostics log and exported issue reports. `maxDiagnosticsLogFiles`, `diagnosticsInfoEnabled`, and `diagnosticsDebugEnabled` surface in `Preferences -> Advanced` (section "File Operations"); the remaining five are advanced JSON-only knobs that are not exposed in Preferences.
+
+- `fileOperations.maxDiagnosticsLogFiles`: maximum number of per-day file-operation diagnostics log files kept on disk (integer, `1..365`, default: `14`).
+- `fileOperations.diagnosticsInfoEnabled`: whether info-level entries are written to the per-day diagnostics log (bool, default: `false`; Debug builds default to `true`, Release builds default to `false`).
+- `fileOperations.diagnosticsDebugEnabled`: whether debug-level entries are written to the per-day diagnostics log (bool, default: `false`; Debug builds default to `true`, Release builds default to `false`).
+- `fileOperations.maxIssueReportFiles`: maximum number of exported file-operation issue reports kept on disk (integer, `>= 1`, default: `60`; advanced JSON-only setting).
+- `fileOperations.maxDiagnosticsInMemory`: maximum number of diagnostics entries retained in memory (integer, `>= 1`, default: `256`; advanced JSON-only setting).
+- `fileOperations.maxDiagnosticsPerFlush`: pending diagnostics batch threshold before a periodic flush (integer, `>= 1`, default: `64`; advanced JSON-only setting).
+- `fileOperations.diagnosticsFlushIntervalMs`: periodic diagnostics flush interval in milliseconds (integer, `>= 1`, default: `5000`; advanced JSON-only setting).
+- `fileOperations.diagnosticsCleanupIntervalMs`: interval between diagnostics log cleanup passes in milliseconds (integer, `>= 1`, default: `900000`; advanced JSON-only setting).
+
 ### UI ownership
 
 - `Preferences -> File Operations` edits only the host-owned `fileOperations.*` defaults above.
@@ -745,6 +759,39 @@ Behavior:
 - History lists are deduplicated and capped at 10 items per field.
 - The host persists the last-used options when the Find window closes or starts a new search.
 - Window placement for the Find dialog is stored separately under `windows.FindFilesWindow`.
+
+## Batch Rename Dialog State
+
+Batch Rename settings live under:
+- `batchRename`
+
+Keys map to `Common::Settings::BatchRenameSettings`:
+- `lastRoot` (string): last Batch Rename root path shown by the window
+- `recentMasks` (array, max 10): most-recent-first mask history for folder-scope target collection
+- `recentNameTemplates` (array, max 10): most-recent-first new-name template history
+- `recentSearchPatterns` (array, max 10): most-recent-first search pattern history
+- `recentReplacePatterns` (array, max 10): most-recent-first replacement pattern history
+- `includeSubdirectories` (bool, default: `false`)
+- `includeFiles` (bool, default: `true`)
+- `includeFolders` (bool, default: `false`)
+- `regexEnabled` (bool, default: `false`)
+- `caseSensitive` (bool, default: `true`)
+- `wholeWords` (bool, default: `false`)
+- `replaceOnce` (bool, default: `false`)
+- `excludeExtension` (bool, default: `false`)
+- `flattenSeparator` (string, default: `" - "`): separator used by flattened relative-folder macros
+- `fileNameCaseStyle` (`"none" | "lower" | "upper" | "mixed"`, default: `"none"`)
+- `extensionCaseStyle` (`"none" | "lower" | "upper" | "mixed"`, default: `"none"`)
+- `previewSortColumnId` (string, optional): stable preview-grid column ID used for persisted sort
+- `previewSortDescending` (bool, default: `false`)
+- `previewGridLayout` (array, optional): preview-grid column layout entries, keyed by stable column ID, display index, and width in DIPs
+
+Behavior:
+- History lists are deduplicated case-insensitively, stripped of hidden/control characters, and capped at 10 items per field.
+- The Batch Rename window restores persisted rule defaults before visible controls are created.
+- On close, the Batch Rename window persists the current root path, mask/rule histories, scope flags, option flags, case transforms, preview sort, and preview grid layout.
+- Manual-mode multiline names are transient and MUST NOT be persisted or folded into template/search/replace history.
+- Window placement for the Batch Rename window is stored separately under `windows.BatchRenameWindow`.
 
 ### Restore behavior
 
@@ -864,13 +911,31 @@ These settings persist the state of checkable menu items and filter state.
 - `alwaysOnTop`: `false`
 - `showIds`: `true`
 - `autoScroll`: `true`
-- `mask`: `31` (all 5 types)
+- `mask`: `63` (all 6 visible message types; bits 0-5 = Text, Error, Warning, Info, Perf, Debug)
 - `preset`: `"custom"`
+
+The `63` default and the `0..63` range come from `Specs/SettingsStore.schema.json` (`$defs.monitorFilterSettings.mask`, default `63`, `maximum: 63`). The runtime default is emitted by RedSalamanderMonitor as `Debug::InfoParam::Type::All` (`= 0x3F` = 63; see `Common/Helpers.h`), used in `RedSalamanderMonitor/Configuration.h` (`filterMask = 0x3F`), `RedSalamanderMonitor/Configuration.cpp`, and `RedSalamanderMonitor/Document.h`.
 
 ## JSON Schema
 
 - Canonical schema file: `Specs/SettingsStore.schema.json`
 - Writer output must conform to this schema.
+
+### `x-ui-*` vendor extensions (Preferences metadata)
+
+`Specs/SettingsStore.schema.json` carries optional vendor-extension keys (the `x-ui-*` prefix is reserved by JSON Schema for non-validating annotations) that describe how each setting is surfaced in the Preferences dialog. They are advisory metadata only: they do not affect validation or the stored value shape, and unknown consumers ignore them.
+
+`RedSalamander/SettingsSchemaParser.cpp` walks both the top-level `properties` tree and the `$defs` section and turns annotated nodes into Preferences fields:
+
+- `x-ui-pane` (string): the Preferences page the setting belongs to (examples: `"General"`, `"Advanced"`, `"Plugins"`, `"Themes"`, `"Panes"`, `"Viewers"`, `"Editors"`, `"Compare Directories"`, `"Keyboard"`, `"UserMenu"`). A node is only treated as a Preferences field when it carries `x-ui-pane`; nodes without it are skipped (though their nested `properties` are still walked).
+- `x-ui-section` (string, optional): a sub-heading within the pane used to group related fields (examples: `"Display"`, `"DxUI"`, `"Startup"`, `"Cache"`, `"File Operations"`). Defaults to no section header when omitted.
+- `x-ui-order` (integer, optional): display order within the pane/section, ascending. Defaults to `0` when omitted.
+- `x-ui-control` (string, optional): the control to render. Known values include `"toggle"` (boolean switch) and `"custom"` (the field is rendered by bespoke page code rather than the generic schema-driven builder). For nested `properties` the default is `"edit"` (a text/number edit box); for top-level `$defs` entries the default is `"custom"`. Fields marked `x-ui-control: "custom"` are excluded from the generic per-pane field builder (`GetNonCustomFieldsForPane`) because their page owns the rendering.
+- `x-ui-hidden` (bool, optional): keep the field in the JSON shape but do not render it in an editor. This annotation is consumed by the plugin-configuration editors (`RedSalamander/ManagePluginsDialog.cpp`, `RedSalamander/Preferences.Plugin.Configuration.cpp`) for aggregated plugin schemas; it is not interpreted by `SettingsSchemaParser.cpp`.
+
+Examples in the canonical schema: `mainMenuSettings.menuBarVisible` uses `x-ui-pane: "General"`, `x-ui-section: "Display"`, `x-ui-order: 10`, `x-ui-control: "toggle"`; `fileOperationsSettings.maxDiagnosticsLogFiles` uses `x-ui-pane: "Advanced"`, `x-ui-section: "File Operations"`; and section-owning objects such as `themeSettings`, `pluginsSettings`, and `foldersSettings` carry `x-ui-pane` + `x-ui-control: "custom"` so a dedicated Preferences page renders them.
+
+When adding or moving a setting that should appear in Preferences, set the appropriate `x-ui-*` annotations in `Specs/SettingsStore.schema.json` so the parser routes it to the correct page; omit `x-ui-pane` for settings that are intentionally JSON-only (for example the advanced `fileOperations` diagnostics knobs above).
 
 ## Example Settings Files
 

@@ -10,8 +10,6 @@ RedSalamander is a Windows dual-pane file manager with:
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/RedSalamanders/RedSalamander/total?style=plastic)
 
-
-
 ![RedSalamander main window](docs/res/main-window.png)
 
 [Complete User Documentation](docs/UserGuide.md)
@@ -140,11 +138,17 @@ The build now copies the required `clang_rt.asan_dynamic-*.dll` next to each ASa
 The solution contains the following projects:
 
 - **Applications**: `RedSalamander`, `RedSalamanderMonitor`, `RedSalamanderSearchService`
+- **Standalone tools**: `RedConfigure`, `RedLauncher`
 - **Installer**: `RedSalamanderInstaller` (MSIX packaging)
 - **Shared library**: `Common`
-- **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemGoogleDrive`, `FileSystemMicrosoftDrive`, `FileSystemDummy`
-- **Viewer plugins**: `ViewerText`, `ViewerSqlite`, `ViewerSpace`, `ViewerImgRaw`, `ViewerVLC`, `ViewerPE`, `ViewerWeb`
+- **Plugins** (all under `Plugins\`):
+  - **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemGoogleDrive`, `FileSystemMicrosoftDrive`, `FileSystemDummy`
+  - **Viewer plugins**: `ViewerText`, `ViewerSqlite`, `ViewerSpace`, `ViewerImgRaw`, `ViewerVLC`, `ViewerPE`, `ViewerWeb`
+- **Tests**: 8 standalone test projects (e.g. `DxUiTests`, `PerformanceTests2`)
+- **Tools**: PowerShell tooling (+ Pester tests in `Tools\Tests`)
 - **PoC projects**: `ls1`, `ls2`, `ls3`, `ls4`, `FlipSequentialDiscard`, `MonitorTest`
+
+The solution also contains per-language localization satellite projects, so Solution Explorer shows far more than the core projects listed above.
 
 ### Output
 
@@ -194,6 +198,25 @@ Every declared self-test case must report `passed`, `failed`, or `skipped`. Cond
 Note: the Commands self-test is UI-driven and may take longer to run.
 
 Note: `RedSalamander.exe` is a GUI app, so PowerShell may return to the prompt immediately after launching it. Use `Start-Process -Wait` if you need to wait for completion and capture the exit code.
+
+### Run all tests with one command
+
+`Tools\Run-AllTests.ps1` is the canonical local test runner. It builds (unless `-SkipBuild`), runs the selected suite(s), prints a color pass/fail/skip summary, writes `run-all-tests-results.json`, and exits with code `0` when everything is green.
+
+```powershell
+# Everything CI runs (and a bit more) — builds the whole solution with tests enabled:
+.\Tools\Run-AllTests.ps1 -Suite Full
+
+# Just the three in-process selftest suites (default), reusing an existing Debug build:
+.\Tools\Run-AllTests.ps1 -SkipBuild
+
+# One suite, one case, on a slow machine:
+.\Tools\Run-AllTests.ps1 -Suite Commands -SkipBuild -CaseFilter cmd_pane_batchRename_ -TimeoutMultiplier 2.0
+```
+
+`-Suite Full` builds the full solution (test projects included) and additionally runs the standalone test executables (DxUiTests, FileSystemCurlTests, ViewerPETests, ViewerSqliteTests, MonitorTest, LocalizationTests, RedConfigureTests, RedSalamanderMonitorEtwLatency), PerformanceTests2 (CppUnitTest DLL via vstest), the `Tools\Tests` Pester suite, and the vcpkg-merge synthetic test. Results land under `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\`.
+
+The runner defaults to Debug configuration; self-tests only run in Debug builds.
 
 ### Self-test artifacts and results
 

@@ -116,6 +116,16 @@ constexpr char kCapabilitiesJson[] = R"json(
   "crossFileSystem": {
     "export": { "copy": [], "move": [] },
     "import": { "copy": [], "move": [] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": false,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "notApplicable"
   }
 }
 )json";

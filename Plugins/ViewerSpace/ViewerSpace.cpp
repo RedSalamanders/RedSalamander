@@ -7118,7 +7118,10 @@ void ViewerSpace::DrainUpdates() noexcept
                 Node* root = TryGetRealNode(_rootNodeId);
                 if (root != nullptr && root->scanState != ScanState::Done)
                 {
-                    root->totalBytes = update.bytes;
+                    // Progress updates can lag directory-completion updates in parallel scans.
+                    // Keep the root total monotonic so a stale progress packet cannot downgrade
+                    // the final authoritative size just before the root reaches Done.
+                    root->totalBytes = std::max(root->totalBytes, update.bytes);
                 }
 
                 headerTextDirty = true;

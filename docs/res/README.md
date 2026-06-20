@@ -24,34 +24,40 @@ and a temporary sanitized settings file that was restored after capture. They
 must not show user-profile paths, real folder history, remotes, emails, tokens,
 bucket names, or connection credentials.
 
+The 2026-06-18 pass added running-app captures from the **Release** build (which
+omits the `[dbg]` menus), browsing the generated `.build/docs-screenshot-demo`
+content, captured window-only via GDI `CopyFromScreen` of each window's rectangle
+(so no other on-screen window is ever included):
+
+- All Preferences pages: `preferences-general/panes/viewers/editors/user-menu/mouse/keyboard/themes/file-operations/compare-directories/hot-paths/monitor/advanced.png`, plus `preferences-plugin-child.png` (the 7-Zip plugin page). `preferences-hot-paths.png`, `preferences-editors.png`, and `preferences-user-menu.png` were re-captured with example content configured (hot-path slots, a Notepad editor action, an "Open in Notepad" user-menu entry).
+- `find-files.png`: the Find Files and Directories window (captured in the **Dark** theme for visual variety vs. the Light Preferences pages).
+- `shortcuts-window.png`: the Display Shortcuts window.
+- `change-attributes.png`, `change-case.png`: the Change Attributes and Change Case dialogs.
+
+> **Dropped as empty/default states** (sparse capture profile) — re-capture with real content before re-adding: `opened-files.png` (open a couple of files in viewers first) and `pane-filter.png` (apply an actual filter). (`preferences-hot-paths.png`, `preferences-editors.png`, and `preferences-user-menu.png` have been re-captured with example content configured and re-added.)
+>
+> **Re-capture should also vary the theme.** The new 2026-06-18 captures are all Light theme. The next pass should spread surfaces across Light, Dark, Rainbow, and High Contrast App for visual diversity (this relaxes the older "Light for neutral workflow" guideline below).
+- `quick-search.png`: Quick Search active (prefix match highlighted, `search:` status), and `command-line.png`: the command-line input with the current directory inserted.
+
+## Orphaned screenshots
+
+These PNGs exist on disk but are not referenced by any `docs/*.md` page (verified 2026-06-18). Either wire them into the relevant page or delete them; they are tracked here so they are not mistaken for covered captures:
+
+- `file-operations-popup-2.png` and `file-operations-popup-3.png`: secondary File Operations popup states. Wire into [FileOperations.md](../FileOperations.md) (for example, the conflict prompt or parallel-mode states) or remove.
+- `preferences-plugins-2.png`: a second Preferences -> Plugins capture. Wire into [Preferences.md](../Preferences.md) / [Plugins.md](../Plugins.md) or remove.
+
+(`plugins.png` is **not** orphaned: it is referenced by Plugins.md, UserGuide.md, and Preferences.md.)
+
 ## Missing screenshot backlog
 
-The docs are now organized so missing images are tracked explicitly instead of being implied by prose. Capture these next when a running build is available:
+The docs are now organized so missing images are tracked explicitly instead of being implied by prose. The 2026-06-18 pass captured all Preferences pages, `find-files.png`, and `shortcuts-window.png` (see **Latest capture pass** above). The items still to capture are dialogs, viewer modes, and selection/pane states. Each needs an **idle app** (no background self-test stealing focus). Capture these when a running build is available:
 
 - `selection-mask.png`: Select / Unselect by mask dialog from the **Edit** menu.
-- `pane-filter.png`: pane filter dialog and the resulting Filter Bar summary.
-- `quick-search.png`: Quick Search active in a folder pane with highlighted matches.
 - `folder-view-sort-menu.png`: pane sort/status popup, including sort direction and thumbnail-size slider.
 - `folder-view-hidden-system.png`: hidden/system file visibility, using generated non-sensitive fixtures.
-- `command-line.png`: pane command-line input after **Bring Current Directory/Filename to Command Line**.
-- `shortcuts-window.png`: **Help -> Display Shortcuts**.
-- `preferences-general.png`: Preferences -> General with display, language, compact mode, animation, and backdrop options visible.
-- `preferences-panes.png`: Preferences -> Panes with left/right display, sort, thumbnail size, hidden/system visibility, and history settings.
-- `preferences-editors.png`: Preferences -> Editors actions/associations.
-- `preferences-user-menu.png`: Preferences -> User Menu entry editor.
-- `preferences-mouse.png`: Preferences -> Mouse placeholder page.
-- `preferences-file-operations.png`: Preferences -> File Operations with pre-calculation, speed limit, and bridge buffer settings.
-- `preferences-compare-directories.png`: Preferences -> Compare Directories default options.
-- `preferences-hot-paths.png`: Preferences -> Hot Paths slot editor.
-- `preferences-advanced.png`: Preferences -> Advanced diagnostics, monitor, connections, and cache settings.
-- `preferences-plugin-child.png`: one plugin-specific child page under Preferences -> Plugins.
-- `find-files.png`: Find Files and Directories window with options and live or completed results.
 - `compare-options.png`: Compare Directories options panel.
 - `view-width.png`: **Files -> View Width...** dialog.
-- `change-attributes.png`: **Files -> Change Attributes...** dialog.
-- `change-case.png`: **Files -> Change Case...** dialog.
 - `make-file-list.png`: Make File List options dialog.
-- `opened-files.png`: List of Opened Files dialog.
 - `shared-directories.png`: Shared Directories dialog.
 - `shell-new.png`: **Files -> New** with generated/safe ShellNew templates.
 - `user-menu.png`: configured **Commands -> User Menu** with generated safe entries.

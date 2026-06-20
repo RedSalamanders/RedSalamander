@@ -125,6 +125,28 @@ namespace SettingsSave
         }
     }
 
+    if (result.batchRename.has_value())
+    {
+        const Common::Settings::BatchRenameSettings defaults{};
+        const auto& batchRename  = result.batchRename.value();
+        const bool hasNonDefault = ! batchRename.lastRoot.empty() || ! batchRename.recentMasks.empty() ||
+                                   ! batchRename.recentNameTemplates.empty() || ! batchRename.recentSearchPatterns.empty() ||
+                                   ! batchRename.recentReplacePatterns.empty() ||
+                                   batchRename.includeSubdirectories != defaults.includeSubdirectories ||
+                                   batchRename.includeFiles != defaults.includeFiles || batchRename.includeFolders != defaults.includeFolders ||
+                                   batchRename.regexEnabled != defaults.regexEnabled || batchRename.caseSensitive != defaults.caseSensitive ||
+                                   batchRename.wholeWords != defaults.wholeWords || batchRename.replaceOnce != defaults.replaceOnce ||
+                                   batchRename.excludeExtension != defaults.excludeExtension ||
+                                   batchRename.flattenSeparator != defaults.flattenSeparator ||
+                                   batchRename.fileNameCaseStyle != defaults.fileNameCaseStyle ||
+                                   batchRename.extensionCaseStyle != defaults.extensionCaseStyle || ! batchRename.previewSortColumnId.empty() ||
+                                   batchRename.previewSortDescending != defaults.previewSortDescending || ! batchRename.previewGridLayout.empty();
+        if (! hasNonDefault)
+        {
+            result.batchRename.reset();
+        }
+    }
+
     if (result.makeFileList.has_value())
     {
         const Common::Settings::MakeFileListSettings defaults{};

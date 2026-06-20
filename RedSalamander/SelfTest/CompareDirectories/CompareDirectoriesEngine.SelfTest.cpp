@@ -5,6 +5,8 @@
 #include "Framework.h"
 
 #include "ConnectionProfileUtils.h"
+#include "FindFilesWindow.h"
+#include "FolderViewIncrementalSearch.h"
 #include "LocalSearchIndexCore.h"
 #include "SearchFallbackEngine.h"
 #include "SearchServiceBroker.h"
@@ -15,12 +17,14 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <clocale>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <iterator>
 #include <limits>
 #include <mutex>
@@ -31,6 +35,8 @@
 #include <string_view>
 #include <thread>
 #include <vector>
+
+#include <winioctl.h>
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -82,22 +88,34 @@ constexpr std::wstring_view kSelfTestDefaultConnS3               = L"FileOpsSelf
 constexpr std::wstring_view kSelfTestDefaultConnOneDrivePersonal = L"FileOpsSelfTest OneDrive Personal";
 constexpr std::wstring_view kSelfTestDefaultConnOneDriveBusiness = L"FileOpsSelfTest OneDrive Business";
 constexpr std::wstring_view kSelfTestDefaultConnSharePoint       = L"FileOpsSelfTest SharePoint";
-constexpr uint32_t kWarmIndexedFirstBatchBudgetMs                = 100u;
+constexpr uint32_t kWarmIndexedFirstBatchTargetMs                = 100u;
+constexpr uint32_t kWarmIndexedFirstBatchBudgetMs                = 250u;
 
 constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_qi_and_capabilities",
     L"local_search_callback_contract",
     L"local_search_backend_preferences_roundtrip",
     L"local_search_scan_wide_tree_parallel_walk_name_only",
+    L"local_search_scan_deferred_path_materialization",
     L"local_search_name_wildcard_recursive",
     L"local_search_name_windows_filesystem_case_parity",
     L"local_search_content_literal",
     L"local_search_name_and_content_and_semantics",
     L"local_search_invalid_query_rejected",
     L"local_index_core_snapshot_reload",
+    L"local_index_core_query_honors_cancel_check",
     L"local_index_core_refs_probe_and_query_if_available",
     L"local_index_core_journal_replay_rename_delete_create",
+    L"local_index_core_journal_replay_directory_moves_snapshot",
+    L"local_index_core_journal_replay_invalidated_rebuilds",
     L"local_index_core_snapshot_corruption_rebuild",
+    L"local_index_core_usn_record_bounds_reject_corruption",
+    L"search_service_broker_query_batch_rejects_oversized_count",
+    L"search_service_broker_buffered_query_caps_unbounded_stream",
+    L"search_source_allocation_and_folding_guard",
+    L"search_low_hardening_smoke",
+    L"search_service_broker_stalled_query_honors_cancel",
+    L"search_service_broker_streaming_query_honors_cancel",
     L"sqlite_index_store_bootstrap_creates_schema",
     L"sqlite_index_store_manual_compaction_reclaims_space",
     L"sqlite_index_store_automatic_checkpoint_truncates_wal",
@@ -107,15 +125,21 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_index_core_sqlite_option_keeps_snapshot_runtime_store",
     L"local_index_core_sqlite_cold_start_bypasses_snapshot_runtime_store",
     L"local_index_core_sqlite_authoritative_replays_without_snapshot_runtime_store",
+    L"local_index_core_sqlite_authoritative_replays_directory_moves",
     L"local_index_core_sqlite_authoritative_reseeds_after_store_loss_during_replay",
     L"local_index_core_sqlite_cold_start_stale_root_refreshes_before_query",
     L"local_index_core_sqlite_direct_query_freshness_policy",
     L"local_index_core_sqlite_cutover_blocked_by_pending_legacy_import",
     L"local_index_core_sqlite_sidecar_imports_legacy_snapshot",
     L"local_index_core_sqlite_prefilter_classifies_name_patterns",
+    L"sqlite_index_store_read_queries_stay_readonly_under_writer_lock",
+    L"sqlite_index_store_prefix_prefilter_uses_range_and_literal_metacharacters",
     L"local_search_native_matches_host_fallback",
     L"local_search_native_unicode_long_path_matches_host_fallback",
     L"local_search_scan_follow_symlink_loop_guard",
+    L"local_search_fallback_follow_symlink_loop_guard",
+    L"local_search_fallback_single_pass_large_directory",
+    L"local_search_fallback_malformed_entry_skips_with_warning",
     L"search_service_help_lists_cli_options",
     L"search_service_compact_cli_runs_manual_sqlite_maintenance",
     L"search_service_compact_request_roundtrip",
@@ -150,7 +174,11 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_service_disconnect_falls_back_local_index",
     L"search_service_multi_client_and_rebuild_control",
     L"search_text_helpers_decoding_and_binary",
+    L"search_invariant_case_folding_consistency",
     L"search_text_helpers_chunk_overlap_literal_and_regex",
+    L"host_fallback_regex_rejected_single_completion",
+    L"host_fallback_regex_oversized_content_reports_overflow",
+    L"host_fallback_regex_cancel_before_after_name_candidate",
     L"host_fallback_search_local_plugin_path_root",
     L"host_fallback_search_content_degraded_without_io",
     L"host_fallback_search_access_denied_warning",
@@ -1249,6 +1277,86 @@ struct ObservedFileMetadata final
     return true;
 }
 
+[[nodiscard]] bool OpenSqliteWalSeedConnection(const std::filesystem::path& databasePath, sqlite3*& outConnection, std::wstring& outError) noexcept
+{
+    outConnection = nullptr;
+    outError.clear();
+
+    sqlite3* rawDb               = nullptr;
+    const std::u8string utf8Path = databasePath.u8string();
+    const int openResult =
+        sqlite3_open_v2(reinterpret_cast<const char*>(utf8Path.c_str()), &rawDb, SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX, nullptr);
+    if (openResult != SQLITE_OK)
+    {
+        const auto* message = (rawDb != nullptr) ? static_cast<const wchar_t*>(sqlite3_errmsg16(rawDb)) : nullptr;
+        outError            = std::format(
+            L"sqlite3_open_v2 failed for '{}': code={} message='{}'", databasePath.wstring(), openResult, (message != nullptr) ? message : L"<unknown>");
+        if (rawDb != nullptr)
+        {
+            static_cast<void>(sqlite3_close(rawDb));
+        }
+        return false;
+    }
+
+    bool keepOpen       = false;
+    const auto closeRaw = wil::scope_exit([&]() noexcept
+    {
+        if (! keepOpen && rawDb != nullptr)
+        {
+            static_cast<void>(sqlite3_close(rawDb));
+        }
+    });
+
+    char* errorText = nullptr;
+    constexpr std::string_view kWalSeedSql =
+        "PRAGMA journal_mode=WAL;"
+        "PRAGMA wal_autocheckpoint=0;"
+        "BEGIN IMMEDIATE;"
+        "INSERT INTO meta(key, value) VALUES('selftest_wal_seed', '1') "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value;"
+        "COMMIT;";
+    const int sqliteResult = sqlite3_exec(rawDb, kWalSeedSql.data(), nullptr, nullptr, &errorText);
+    const auto freeError   = wil::scope_exit([&]() noexcept
+    {
+        if (errorText != nullptr)
+        {
+            sqlite3_free(errorText);
+        }
+    });
+
+    if (sqliteResult != SQLITE_OK)
+    {
+        static_cast<void>(sqlite3_exec(rawDb, "ROLLBACK;", nullptr, nullptr, nullptr));
+        std::wstring message;
+        if (errorText != nullptr)
+        {
+            const int required = ::MultiByteToWideChar(CP_UTF8, 0, errorText, -1, nullptr, 0);
+            if (required > 0)
+            {
+                std::wstring buffer(static_cast<size_t>(required), L'\0');
+                static_cast<void>(::MultiByteToWideChar(CP_UTF8, 0, errorText, -1, buffer.data(), required));
+                if (! buffer.empty() && buffer.back() == L'\0')
+                {
+                    buffer.pop_back();
+                }
+                message = std::move(buffer);
+            }
+        }
+        if (message.empty())
+        {
+            const auto* fallback = static_cast<const wchar_t*>(sqlite3_errmsg16(rawDb));
+            message              = (fallback != nullptr) ? std::wstring(fallback) : std::wstring(L"<unknown>");
+        }
+
+        outError = std::format(L"sqlite3_exec WAL seed failed for '{}': code={} message='{}'", databasePath.wstring(), sqliteResult, message);
+        return false;
+    }
+
+    keepOpen      = true;
+    outConnection = rawDb;
+    return true;
+}
+
 [[nodiscard]] wil::com_ptr<IFileSystem> GetSelfTestFileSystem(std::wstring_view pluginId) noexcept
 {
     wil::com_ptr<IFileSystem> fileSystem = SelfTest::GetFileSystem(pluginId);
@@ -1706,13 +1814,21 @@ private:
     return wrapped;
 }
 
+struct RawDirectoryEntrySpec final
+{
+    std::wstring name;
+    unsigned long fileAttributes = FILE_ATTRIBUTE_ARCHIVE;
+    bool malformedFileNameSize   = false;
+};
+
 struct ReadDirectoryTestBehavior
 {
     std::filesystem::path targetPath;
-    DWORD delayMs           = 0;
-    bool returnMalformed    = false;
-    unsigned long fakeCount = 1;
-    HRESULT forcedHr        = S_OK;
+    std::vector<RawDirectoryEntrySpec> rawEntries;
+    DWORD delayMs                         = 0;
+    bool returnMalformed                  = false;
+    unsigned long fakeCount               = 1;
+    HRESULT forcedHr                      = S_OK;
 };
 
 [[nodiscard]] std::wstring NormalizePathForNoCaseCompare(std::filesystem::path value) noexcept
@@ -1896,6 +2012,61 @@ private:
     return buffer;
 }
 
+[[nodiscard]] size_t AlignRawFileInfoEntrySize(size_t value) noexcept
+{
+    constexpr size_t kAlignment = alignof(void*);
+    const size_t remainder      = value % kAlignment;
+    return remainder == 0u ? value : value + (kAlignment - remainder);
+}
+
+[[nodiscard]] std::vector<unsigned char> BuildRawDirectoryBuffer(std::span<const RawDirectoryEntrySpec> entries) noexcept
+{
+    std::vector<size_t> offsets;
+    offsets.reserve(entries.size());
+
+    size_t totalSize = 0u;
+    for (const RawDirectoryEntrySpec& entry : entries)
+    {
+        offsets.push_back(totalSize);
+        const size_t nameBytes = entry.name.size() * sizeof(wchar_t);
+        totalSize += AlignRawFileInfoEntrySize(offsetof(FileInfo, FileName) + nameBytes);
+    }
+
+    std::vector<unsigned char> buffer(totalSize);
+    if (buffer.empty())
+    {
+        return buffer;
+    }
+
+    for (size_t index = 0u; index < entries.size(); ++index)
+    {
+        const RawDirectoryEntrySpec& source = entries[index];
+        const size_t offset                 = offsets[index];
+        const size_t nextOffset             = (index + 1u < offsets.size()) ? (offsets[index + 1u] - offset) : 0u;
+        const size_t nameBytes              = source.name.size() * sizeof(wchar_t);
+
+        auto* entry            = reinterpret_cast<FileInfo*>(buffer.data() + offset);
+        entry->NextEntryOffset = static_cast<unsigned long>(nextOffset);
+        entry->FileIndex       = static_cast<unsigned long>(index + 1u);
+        entry->CreationTime    = 0;
+        entry->LastAccessTime  = 0;
+        entry->LastWriteTime   = 0;
+        entry->ChangeTime      = 0;
+        entry->EndOfFile       = 1;
+        entry->AllocationSize  = 1;
+        entry->FileAttributes  = source.fileAttributes;
+        entry->FileNameSize    = static_cast<unsigned long>(nameBytes + (source.malformedFileNameSize ? 1u : 0u));
+        entry->EaSize          = 0;
+
+        if (nameBytes != 0u)
+        {
+            std::memcpy(entry->FileName, source.name.data(), nameBytes);
+        }
+    }
+
+    return buffer;
+}
+
 class ReadDirectoryBehaviorFileSystem final : public IFileSystem
 {
 public:
@@ -1978,6 +2149,19 @@ public:
         if (FAILED(_behavior.forcedHr))
         {
             return _behavior.forcedHr;
+        }
+
+        if (! _behavior.rawEntries.empty())
+        {
+            auto* info = new (std::nothrow) RawFilesInformation(BuildRawDirectoryBuffer(_behavior.rawEntries),
+                                                                static_cast<unsigned long>(_behavior.rawEntries.size()));
+            if (! info)
+            {
+                return E_OUTOFMEMORY;
+            }
+
+            *ppFilesInformation = info;
+            return S_OK;
         }
 
         if (! _behavior.returnMalformed)
@@ -3952,6 +4136,49 @@ private:
     return names;
 }
 
+[[nodiscard]] HRESULT CollectSqliteEnumerateNames(const std::filesystem::path& databasePath,
+                                                  const SqliteIndexStore::QueryRequest& request,
+                                                  std::vector<std::wstring>& outNames,
+                                                  SqliteIndexStore::QueryRuntimeStats* outStats) noexcept
+{
+    outNames.clear();
+    HRESULT hr = SqliteIndexStore::EnumerateVolume(databasePath.wstring(),
+                                                   request,
+                                                   nullptr,
+                                                   nullptr,
+                                                   [](LocalSearchIndexCore::Candidate* candidate, void* cookie) noexcept -> HRESULT
+    {
+        if (candidate == nullptr || cookie == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        try
+        {
+            static_cast<std::vector<std::wstring>*>(cookie)->push_back(candidate->displayName);
+            return S_OK;
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::exception&)
+        {
+            return E_FAIL;
+        }
+    },
+                                                   &outNames,
+                                                   outStats);
+    if (FAILED(hr))
+    {
+        outNames.clear();
+        return hr;
+    }
+
+    std::sort(outNames.begin(), outNames.end());
+    return S_OK;
+}
+
 [[nodiscard]] std::vector<std::filesystem::path> CollectDirectoryFilesByExtension(const std::filesystem::path& directory, std::wstring_view extension) noexcept
 {
     std::vector<std::filesystem::path> files;
@@ -3999,7 +4226,9 @@ private:
                                           std::wstring_view namePattern,
                                           FileSystemSearchNameMode nameMode,
                                           LocalSearchIndexCore::QueryStats& outStats,
-                                          std::vector<LocalSearchIndexCore::Candidate>& outCandidates) noexcept
+                                          std::vector<LocalSearchIndexCore::Candidate>& outCandidates,
+                                          LocalSearchIndexCore::CancelCheckFn cancelCheck = nullptr,
+                                          void* cancelCookie                             = nullptr) noexcept
 {
     LocalSearchIndexCore::QueryPlan plan{};
     plan.rootPath           = std::wstring(rootPath);
@@ -4011,7 +4240,7 @@ private:
     plan.includeDirectories = false;
     plan.maxResults         = 0u;
 
-    return repository.Query(plan, nullptr, nullptr, outCandidates, &outStats);
+    return repository.Query(plan, cancelCheck, cancelCookie, outCandidates, &outStats);
 }
 
 [[nodiscard]] HRESULT RunIndexedNameQuery(LocalSearchIndexCore::Repository& repository,

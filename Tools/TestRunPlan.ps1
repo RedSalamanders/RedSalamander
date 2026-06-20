@@ -402,8 +402,14 @@ function Get-RSTestRunPlan {
             -JsonName $selfTest.JsonName
     }
 
+    # CI-parity note (for reference — do not edit the logic above to chase CI):
+    # -Suite Full is a SUPERSET of what .github/workflows/ci.yml's selftest job runs.
+    #   Full adds:  FileSystemCurlTests, RedConfigureTests, RedSalamanderMonitorEtwLatency (CI runs none of these; plan 011 owns adding them to CI).
+    #   Known divergences vs CI:
+    #     - ViewerPETests: CI also invokes two explicit named cases on top of the bare exe run; Full only runs the bare exe.
+    #     - Pester: Full runs all Tools\Tests in pwsh with no tag filter; CI excludes -Tag RequiresBuildToolchain under Windows PowerShell 5.1.
     if ($Suite -eq 'Full') {
-        foreach ($exeName in @('DxUiTests', 'FileSystemCurlTests', 'ViewerPETests', 'ViewerSqliteTests', 'MonitorTest', 'LocalizationTests', 'RedConfigureTests')) {
+        foreach ($exeName in @('DxUiTests', 'FileSystemCurlTests', 'ViewerPETests', 'ViewerSqliteTests', 'MonitorTest', 'LocalizationTests', 'RedConfigureTests', 'PluginContractTests')) {
             $plan += New-RSTestRunPlanEntry `
                 -Name $exeName `
                 -Kind 'Executable' `

@@ -212,6 +212,7 @@ public:
     ConnectionCredentialPromptWindow& operator=(const ConnectionCredentialPromptWindow&) = delete;
     ConnectionCredentialPromptWindow(ConnectionCredentialPromptWindow&&)                 = delete;
     ConnectionCredentialPromptWindow& operator=(ConnectionCredentialPromptWindow&&)      = delete;
+    ~ConnectionCredentialPromptWindow() noexcept;
 
     [[nodiscard]] HRESULT ShowModal(std::wstring& userNameOut, std::wstring& secretOut) noexcept;
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
@@ -316,10 +317,15 @@ ConnectionCredentialPromptWindow::ConnectionCredentialPromptWindow(HWND ownerWin
 {
 }
 
+ConnectionCredentialPromptWindow::~ConnectionCredentialPromptWindow() noexcept
+{
+    SecureWipe::SecureClear(_acceptedSecret);
+}
+
 HRESULT ConnectionCredentialPromptWindow::ShowModal(std::wstring& userNameOut, std::wstring& secretOut) noexcept
 {
     userNameOut.clear();
-    secretOut.clear();
+    SecureWipe::SecureClear(secretOut);
 
     const HRESULT classHr = EnsurePromptWindowClass();
     if (FAILED(classHr))
@@ -406,6 +412,7 @@ HRESULT ConnectionCredentialPromptWindow::ShowModal(std::wstring& userNameOut, s
     {
         userNameOut = _acceptedUserName;
         secretOut   = _acceptedSecret;
+        SecureWipe::SecureClear(_acceptedSecret);
     }
 
     return _result;
@@ -613,7 +620,8 @@ void ConnectionCredentialPromptWindow::Confirm() noexcept
         }
     }
 
-    const std::wstring secret = _secretField ? std::wstring(_secretField->GetText()) : std::wstring{};
+    std::wstring secret = _secretField ? std::wstring(_secretField->GetText()) : std::wstring{};
+    auto clearSecret    = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(secret); });
     if (! _allowEmptySecret && secret.empty())
     {
         ShowValidation(IDS_CONNECTIONS_ERR_PROMPT_PASSWORD_REQUIRED);
@@ -622,9 +630,10 @@ void ConnectionCredentialPromptWindow::Confirm() noexcept
     }
 
     _acceptedUserName = std::move(userName);
-    _acceptedSecret   = secret;
-    _result           = S_OK;
-    _closing          = true;
+    SecureWipe::SecureClear(_acceptedSecret);
+    _acceptedSecret = secret;
+    _result         = S_OK;
+    _closing        = true;
     CloseDeferred();
 }
 
@@ -636,7 +645,7 @@ void ConnectionCredentialPromptWindow::Cancel() noexcept
     }
 
     _acceptedUserName.clear();
-    _acceptedSecret.clear();
+    SecureWipe::SecureClear(_acceptedSecret);
     _result  = S_FALSE;
     _closing = true;
     CloseDeferred();
@@ -901,14 +910,14 @@ HRESULT PromptForConnectionSecret(HWND ownerWindow,
                                   std::wstring& secretOut) noexcept
 {
     std::wstring userName;
-    secretOut.clear();
+    SecureWipe::SecureClear(secretOut);
 
     ConnectionCredentialPromptWindow window(
         ownerWindow, theme, std::wstring(caption), std::wstring(message), std::wstring(secretLabel), false, allowEmptySecret, {});
     const HRESULT hr = window.ShowModal(userName, secretOut);
     if (hr != S_OK)
     {
-        secretOut.clear();
+        SecureWipe::SecureClear(secretOut);
         return hr;
     }
 
@@ -924,7 +933,7 @@ HRESULT PromptForConnectionUserAndPassword(HWND ownerWindow,
                                            std::wstring& passwordOut) noexcept
 {
     userNameOut.clear();
-    passwordOut.clear();
+    SecureWipe::SecureClear(passwordOut);
 
     ConnectionCredentialPromptWindow window(ownerWindow,
                                             theme,
@@ -938,7 +947,7 @@ HRESULT PromptForConnectionUserAndPassword(HWND ownerWindow,
     if (hr != S_OK)
     {
         userNameOut.clear();
-        passwordOut.clear();
+        SecureWipe::SecureClear(passwordOut);
         return hr;
     }
 

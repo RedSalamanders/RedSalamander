@@ -132,7 +132,9 @@ When applicable, instrument:
 - bytes processed or rewritten,
 - lock hold time,
 - pre-calc / sort / refresh stage timings,
-- bounded visible-work counters for large lists or grids.
+- bounded visible-work counters for large lists or grids,
+- DirectWrite/glyph text-layout creation counts and timing (the `dwrite.text_layout.*` family in FolderView; see `Specs/UI/UI_FolderView.md`). 2026-06-19 same-machine evidence found FolderView text-layout creation non-material (about 1.2–1.4% of `render.layout_items_us`), so this family is reusable measurement infrastructure and not, by itself, a justification to add a text-layout cache without fresh evidence.
+- Per-phase decomposition of a hot pass into named sub-stage timings (e.g. the `folder.layout.*_us` family decomposes `render.layout_items_us` in FolderView; see `Specs/UI/UI_FolderView.md`). 2026-06-19 this decomposition exposed that an apparent FolderView layout "bottleneck" (~82.6% in `UpdateItemTextLayouts`) was ~96% a *measurement artifact* — the JSONL sink opening/closing the file per metric row — not real work; the sink was fixed to keep the handle open (`Common/Common/PerfJsonl.cpp`). A worked example of why you decompose before optimizing: the dominant cost was outside the suspected mechanism.
 
 ### Anti-patterns
 
@@ -142,6 +144,7 @@ Avoid relying only on:
 - one-off manual stopwatch measurements,
 - broad “total duration” metrics when the decision requires stage attribution.
 - repeated hot-path rows that only report pointer coordinates and sub-millisecond callback duration, such as per-hit-test/per-pointer-move traces, when the user-visible scenario needs input-to-visible latency, queue counts, scroll-apply cost, or paint cost instead.
+- high-frequency per-item or per-creation emits that distort the very pass that hosts them. The JSONL sink keeps its file handle open (fixed 2026-06-19, `Common/Common/PerfJsonl.cpp`, so a row is a single `WriteFile` rather than an open/close), but each row still has a cost and grows the file, so coalesce hot-path telemetry into per-pass/per-frame aggregates (cf. the FolderView `dwrite.text_layout.frame_create_*` pattern).
 
 ## Test and Archive Requirements
 

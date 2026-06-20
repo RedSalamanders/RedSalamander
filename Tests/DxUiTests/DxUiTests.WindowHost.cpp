@@ -671,56 +671,6 @@ void TestWindowHostMouseMoveUpdatesHoverTarget()
                            nullptr);
 }
 
-[[nodiscard]] bool WindowHostTestPointHitsWindowOrDescendant(HWND hwnd, POINT screenPoint) noexcept
-{
-    const HWND hitWindow = WindowFromPoint(screenPoint);
-    return hitWindow == hwnd || IsChild(hwnd, hitWindow) != FALSE || GetAncestor(hitWindow, GA_ROOT) == hwnd;
-}
-
-[[nodiscard]] POINT PositionWindowHostForLiveCursorHitTest(
-    AttachedHostWindow& window, LONG widthPx, LONG heightPx, POINT clientPoint, const char* context)
-{
-    MONITORINFO monitorInfo{};
-    monitorInfo.cbSize = sizeof(monitorInfo);
-    Require(GetMonitorInfoW(MonitorFromWindow(window.Hwnd(), MONITOR_DEFAULTTOPRIMARY), &monitorInfo) != FALSE, context);
-    const RECT work = monitorInfo.rcWork;
-
-    const LONG rightX  = (work.right - work.left > widthPx + 32) ? work.right - widthPx - 16 : work.left;
-    const LONG bottomY = (work.bottom - work.top > heightPx + 32) ? work.bottom - heightPx - 16 : work.top;
-    const LONG centerX = work.left + ((work.right - work.left) - widthPx) / 2;
-    const LONG centerY = work.top + ((work.bottom - work.top) - heightPx) / 2;
-
-    const std::array<POINT, 5> candidates{
-        POINT{work.left + 16, work.top + 16},
-        POINT{rightX, work.top + 16},
-        POINT{work.left + 16, bottomY},
-        POINT{rightX, bottomY},
-        POINT{centerX, centerY},
-    };
-
-    for (const POINT& candidate : candidates)
-    {
-        SetWindowPos(window.Hwnd(), HWND_TOPMOST, candidate.x, candidate.y, widthPx, heightPx, SWP_SHOWWINDOW | SWP_NOACTIVATE);
-        UpdateWindow(window.Hwnd());
-
-        POINT screenPoint = clientPoint;
-        if (ClientToScreen(window.Hwnd(), &screenPoint) == FALSE || SetCursorPos(screenPoint.x, screenPoint.y) == FALSE)
-        {
-            continue;
-        }
-
-        SetWindowPos(window.Hwnd(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
-        UpdateWindow(window.Hwnd());
-        if (WindowHostTestPointHitsWindowOrDescendant(window.Hwnd(), screenPoint))
-        {
-            return screenPoint;
-        }
-    }
-
-    Require(false, context);
-    return POINT{};
-}
-
 void TestWindowHostMouseLeaveOverForeignPopupClearsHover()
 {
     using namespace RedSalamander::DxUi;
@@ -748,9 +698,11 @@ void TestWindowHostMouseLeaveOverForeignPopupClearsHover()
     Require(popup != nullptr, "window host mouse-leave popup creates a foreign popup over the host");
     SetWindowPos(popup.get(), HWND_TOPMOST, popupPoint.x - 8, popupPoint.y - 8, 48, 48, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     UpdateWindow(popup.get());
-    Require(WindowFromPoint(popupPoint) == popup.get(), "window host mouse-leave popup is the window under the cursor point");
-    Require(SetCursorPos(popupPoint.x, popupPoint.y) != FALSE, "window host mouse-leave popup positions the live cursor over the popup");
 
+    // The foreign popup is created over the host purely to document the scenario; the
+    // production WM_MOUSELEAVE handler clears hover unconditionally (it reads neither the
+    // live cursor nor WindowFromPoint), so the delivered WM_MOUSELEAVE alone exercises the
+    // contract without warping the interactive user's cursor.
     static_cast<void>(SendMessageW(window.Hwnd(), WM_MOUSELEAVE, 0, 0));
 
     Require(controlState.hoverLeaveCount == 1u, "window host mouse leave over a foreign popup clears owner hover instead of rearming tracking");
@@ -771,12 +723,8 @@ void TestWindowHostMouseLeaveWithForeignCaptureClearsHover()
 
     constexpr LONG kHoverX = 32;
     constexpr LONG kHoverY = 32;
-    const POINT cursorPoint =
-        PositionWindowHostForLiveCursorHitTest(window, 320, 220, POINT{kHoverX, kHoverY}, "window host foreign-capture cursor can hit owner");
     static_cast<void>(SendMessageW(window.Hwnd(), WM_MOUSEMOVE, 0, MAKELPARAM(kHoverX, kHoverY)));
     Require(controlState.hoverEnterCount == 1u, "window host foreign-capture test starts with a hovered control");
-
-    Require(WindowHostTestPointHitsWindowOrDescendant(window.Hwnd(), cursorPoint), "window host foreign-capture test cursor remains over the owner");
 
     POINT popupPoint{260, 170};
     Require(ClientToScreen(window.Hwnd(), &popupPoint) != FALSE, "window host foreign-capture popup point converts to screen coordinates");
@@ -784,7 +732,6 @@ void TestWindowHostMouseLeaveWithForeignCaptureClearsHover()
     Require(popup != nullptr, "window host foreign-capture test creates a foreign popup");
     SetWindowPos(popup.get(), HWND_TOPMOST, popupPoint.x - 8, popupPoint.y - 8, 48, 48, SWP_SHOWWINDOW | SWP_NOACTIVATE);
     UpdateWindow(popup.get());
-    Require(WindowHostTestPointHitsWindowOrDescendant(window.Hwnd(), cursorPoint), "window host foreign-capture popup does not cover the owner cursor point");
 
     SetCapture(popup.get());
     const auto releaseCapture = wil::scope_exit([&]() noexcept

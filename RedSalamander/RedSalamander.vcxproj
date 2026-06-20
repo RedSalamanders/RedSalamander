@@ -228,6 +228,7 @@
     <ClInclude Include="CrashHandler.h" />
     <ClInclude Include="D2DHdcPaint.h" />
     <ClInclude Include="DirectoryInfoCache.h" />
+    <ClInclude Include="FileSystemRenameBatch.h" />
     <ClInclude Include="FileSystemPluginManager.h" />
     <ClInclude Include="FluentIcons.h" />
     <ClInclude Include="FunctionBar.h" />
@@ -262,9 +263,13 @@
     <ClInclude Include="IconCache.h" />
     <ClInclude Include="Ui\\AlertOverlay.h" />
     <ClInclude Include="Ui\\AlertOverlayWindow.h" />
-    <ClInclude Include="Ui\\AnimationDispatcher.h" />
-    <ClInclude Include="ChangeCase.h" />
-    <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
+      <ClInclude Include="Ui\\AnimationDispatcher.h" />
+      <ClInclude Include="ChangeCase.h" />
+      <ClInclude Include="BatchRenameEngine.h" />
+      <ClInclude Include="BatchRenameExecutionEngine.h" />
+      <ClInclude Include="BatchRenameMenus.h" />
+      <ClInclude Include="BatchRenameWindow.h" />
+      <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
     <ClInclude Include="CommandRegistry.h" />
     <ClInclude Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
@@ -314,12 +319,14 @@
     <ClInclude Include="AppDataPaths.h" />
     <ClInclude Include="CrashQuarantine.h" />
     <ClInclude Include="ConnectionProfileUtils.h" />
+    <ClInclude Include="..\Common\FileSystemPathIdentity.h" />
     <ClInclude Include="..\Common\LocalSearchIndexCore.h" />
     <ClInclude Include="..\Common\SearchServiceBroker.h" />
     <ClInclude Include="..\Common\SqliteIndexStore.h" />
     <ClInclude Include="..\Common\SearchTextHelpers.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\Common\FileSystemPathIdentity.cpp" />
     <ClCompile Include="..\Common\LocalSearchIndexCore.cpp" />
     <ClCompile Include="..\Common\SearchServiceBroker.cpp" />
     <ClCompile Include="..\Common\SqliteIndexStore.cpp" />
@@ -328,9 +335,14 @@
     <ClCompile Include="AppTheme.cpp" />
     <ClCompile Include="CrashQuarantine.cpp" />
     <ClCompile Include="CrashHandler.cpp" />
-    <ClCompile Include="D2DHdcPaint.cpp" />
-    <ClCompile Include="ChangeCase.cpp" />
-    <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
+      <ClCompile Include="D2DHdcPaint.cpp" />
+      <ClCompile Include="ChangeCase.cpp" />
+      <ClCompile Include="FileSystemRenameBatch.cpp" />
+      <ClCompile Include="BatchRenameEngine.cpp" />
+      <ClCompile Include="BatchRenameExecutionEngine.cpp" />
+      <ClCompile Include="BatchRenameMenus.cpp" />
+      <ClCompile Include="BatchRenameWindow.cpp" />
+      <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
     <ClCompile Include="ConnectionProfileUtils.cpp" />
     <ClCompile Include="DirectoryInfoCache.cpp" />
     <ClCompile Include="FileSystemPluginManager.cpp" />
@@ -431,6 +443,7 @@
     <None Include="FolderWindow.FileOperations.State.Diagnostics.Part.cpp" />
     <None Include="FolderWindow.FileOperations.State.Queue.Part.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.BatchRename.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Connections.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Dialogs.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.FileOps.cpp" />
@@ -456,6 +469,7 @@
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases14_16.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Fairstream.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RedSalamander.rc" />

@@ -26,28 +26,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Output: `.build\<Platform>\<Configuration>\` (e.g. `.build\x64\Debug\`, `.build\ARM64\Release\`)
 
+Run the full local test suite with `.\Tools\Run-AllTests.ps1 -Suite Full` (or `-SkipBuild` to reuse an existing Debug build). See README "Self-tests" for details.
+
 ## Architecture
 
-### Solution Structure (18 projects)
+### Solution Structure (~21 core projects + localization satellites)
 
 ```text
-RedSalamander/          # Main file manager application
-RedSalamanderMonitor/   # Monitoring/debug tool with ColorTextView
-Common/                 # Shared library (utilities, settings, plugin interfaces)
-  └── PlugInterfaces/   # COM-style plugin interfaces (IFileSystem, IViewer, etc.)
-
-FileSystem/             # Standard Win32 file system plugin
-FileSystem7z/           # 7-Zip archive plugin
-FileSystemDummy/        # Test/stub plugin
-
-ViewerText/             # Text/hex viewer plugin
-ViewerSpace/            # Disk space visualization
-ViewerImgRaw/           # Raw image viewer (libraw)
-ViewerVLC/              # Video player (VLC backend)
-ViewerPE/               # PE executable viewer
-
-PoC/                    # Proof-of-concept projects
+RedSalamander/             # Main file manager application (incl. SelfTest\ suites)
+RedSalamanderMonitor/      # ETW monitoring/debug tool with ColorTextView
+RedSalamanderSearchService/# Background search/index Windows service (named pipe + SQLite)
+RedConfigure/              # Standalone configuration tool
+RedLauncher/               # Launcher app
+Common/                    # Shared library (utilities, settings, DxUi framework)
+  └── PlugInterfaces/      # COM-style plugin interfaces (IFileSystem, IViewer, ...)
+Plugins/                   # All plugin DLLs
+  ├── FileSystem, FileSystem7z, FileSystemCurl, FileSystemS3,
+  │   FileSystemGoogleDrive, FileSystemMicrosoftDrive, FileSystemDummy
+  └── ViewerText, ViewerSqlite, ViewerSpace, ViewerImgRaw,
+      ViewerVLC, ViewerPE, ViewerWeb
+Tests/                     # 8 standalone test projects (DxUiTests, PerformanceTests2, ...)
+Tools/                     # PowerShell tooling (+ Pester tests in Tools/Tests)
+Installer/                 # MSIX + MSI packaging
+PoC/                       # Proof-of-concept projects
 ```
+
+The solution additionally contains ~90 per-language localization satellite resource projects, so Solution Explorer shows far more than the core list.
 
 ### Project Dependencies
 

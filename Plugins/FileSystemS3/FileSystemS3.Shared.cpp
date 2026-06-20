@@ -436,10 +436,15 @@ namespace
     const auto accessKeyWide = TryGetJsonString(root, "userName");
     if (accessKeyWide.has_value() && ! accessKeyWide->empty())
     {
-        const std::string key = Utf8FromUtf16(*accessKeyWide);
+        std::string key = Utf8FromUtf16(*accessKeyWide);
+        auto clearKey   = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(key); });
         if (key.empty())
         {
             return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+        }
+        if (out.accessKeyId.has_value())
+        {
+            SecureWipe::SecureClear(out.accessKeyId.value());
         }
         out.accessKeyId = key;
     }
@@ -496,15 +501,31 @@ namespace
         }
 
         secret.reset(rawSecret);
+        auto clearSecretWide = wil::scope_exit([&]() noexcept
+        {
+            if (secret)
+            {
+                const int length = lstrlenW(secret.get());
+                if (length > 0)
+                {
+                    SecureZeroMemory(secret.get(), static_cast<size_t>(length) * sizeof(wchar_t));
+                }
+            }
+        });
         if (! secret.get() || secret.get()[0] == L'\0')
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
         }
 
-        const std::string secretUtf8 = Utf8FromUtf16(secret.get());
+        std::string secretUtf8 = Utf8FromUtf16(secret.get());
+        auto clearSecretUtf8   = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(secretUtf8); });
         if (secretUtf8.empty())
         {
             return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+        }
+        if (out.secretAccessKey.has_value())
+        {
+            SecureWipe::SecureClear(out.secretAccessKey.value());
         }
         out.secretAccessKey = secretUtf8;
     }

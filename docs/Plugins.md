@@ -23,6 +23,10 @@ From there you can:
 - Configure a plugin (when it exposes a configuration schema)
 - Run **Test** / **Test All** to validate plugin availability
 
+### Crash quarantine
+
+If RedSalamander crashes while a file-system plugin is active, the next launch can offer to disable the suspect plugin so the crash does not repeat. RedSalamander records which file-system plugin(s) were active for the last browse, copy, or compare operation, and a crash leaves a marker behind. On the following start a **Crash recovery** prompt names the plugin(s) and asks whether to disable them; choosing Yes adds them to the disabled list (the same list you see in the plugin manager UI). You can re-enable a quarantined plugin at any time from **Plugins → Plugin Manager…**. The prompt only appears once per crash and is skipped after a clean shutdown.
+
 ## Built-in file system plugins
 
 File systems are selected by a **short prefix** in the address bar:
@@ -68,6 +72,19 @@ File-system plugins share the same pane commands unless a plugin is read-only or
 | `Alt+Enter` | Properties through the active file-system plugin. |
 | `Ctrl+L` / `Alt+D` | Type a plugin path or saved connection alias. |
 | `Alt+F1` / `Alt+F2` | Open the left/right plugin drive menu. |
+
+## Copying between different file systems
+
+When you copy or move between two panes that use **different** file-system plugins — for example dragging a file from an `s3:` pane onto a `sftp:` pane, or copying from inside a `7z:` archive to `file:` — neither plugin can do the transfer on its own. The host runs a built-in **cross-file-system bridge** that streams the bytes out of the source plugin and into the destination plugin, staging each file through a temporary file and then renaming it into place once the whole file has been written.
+
+Some cross-file-system copies are intentionally blocked:
+
+- **Read-only or write-disabled providers.** A copy needs the source to support reading and the destination to support writing; a move additionally needs the source to support delete (so the original can be removed after a verified transfer). Read-only providers such as S3 Table (`s3table:`), the current Google Drive milestone (`gdrive:`), or a mounted archive cannot be a copy/move destination, so those commands are disabled or rejected.
+- **Capability allow-lists.** Each plugin declares which other plugins it will exchange data with, in both directions. A transfer is only allowed when the source plugin lists the destination as an allowed export target **and** the destination plugin lists the source as an allowed import source. If either side does not opt in, the copy/move is blocked even when both providers can otherwise read and write.
+
+If a cross-file-system transfer is interrupted — cancelled, an error, or the destination running out of space — the file is left at the source and the partially written temporary staging file is cleaned up on a best-effort basis. In rare cases (for example a crash before cleanup runs) a leftover staging file may remain next to the destination; it has a long random name ending in a `.rs_tmp_…` suffix and is safe to delete.
+
+For the developer-level details of the bridge, capability gating, and the temp-then-rename commit, see [Plugin Host Model & Cross-FS Bridge](dev/PluginHostModel.md) and the capability contract in `Specs/Plugins/Plugins_VirtualFileSystem.md`.
 
 ## File-system plugin details
 
@@ -287,6 +304,8 @@ Built-in/available viewers include:
 - `builtin/viewer-sqlite` — SQLite table/query viewer
 - `builtin/viewer-vlc` — media playback using VLC (requires VLC installation)
 - `builtin/viewer-web` / `builtin/viewer-json` / `builtin/viewer-markdown` — WebView2-based viewers (requires WebView2 runtime)
+
+For the WebView2 runtime requirement and how the WebView2-based viewers are packaged, see [Viewers](Viewers.md).
 
 The screenshots in the viewer sections are real plugin windows opened on generated sample files. They are not Preferences screenshots and do not use personal data.
 

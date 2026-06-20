@@ -4384,10 +4384,9 @@ INT_PTR OnPluginConfigDialogDebug(HWND dlg, PluginConfigDialogState* state, WPAR
                                                    reinterpret_cast<uintptr_t>(focused)));
 #endif
             }
-
-#ifdef ENABLE_TESTS
-            state->lastDebugFocusedHost = focusedHost.host;
-#endif
+            // The mover records the destination host after a successful focus handoff.
+            // Keeping the previous destination lets debug Tab routing recover when
+            // Win32 focus is transiently null after SendMessage returns.
             const bool advanced = MovePluginConfigDialogTabFocusFromHost(focusedHost.host, lp != 0);
 #ifdef ENABLE_TESTS
             TracePluginConfigDebug(std::format(L"plugin-config advance command: focusedHost={:#x} reverse={} advanced={}",

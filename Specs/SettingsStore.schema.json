@@ -47,7 +47,8 @@
     "compareDirectories": { "$ref": "#/$defs/compareDirectoriesSettings" },
     "hotPaths": { "$ref": "#/$defs/hotPathsSettings" },
     "selectionMasks": { "$ref": "#/$defs/selectionMasksSettings" },
-    "search": { "$ref": "#/$defs/searchSettings" }
+    "search": { "$ref": "#/$defs/searchSettings" },
+    "batchRename": { "$ref": "#/$defs/batchRenameSettings" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -116,6 +117,12 @@
       "enum": ["disabled", "literal", "regex"],
       "title": "Content Mode",
       "description": "How file content should be matched."
+    },
+    "batchRenameCaseStyle": {
+      "type": "string",
+      "enum": ["none", "lower", "upper", "mixed"],
+      "title": "Batch Rename Case Style",
+      "description": "Case transformation applied by Batch Rename."
     },
     "gridColumnLayoutEntry": {
       "type": "object",
@@ -209,6 +216,79 @@
           "default": [],
           "title": "Results Grid Layout",
           "description": "Persisted Find results-grid column order and widths.",
+          "items": { "$ref": "#/$defs/gridColumnLayoutEntry" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "batchRenameSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Batch Rename",
+      "description": "Persisted Batch Rename options, histories, and preview-grid state. Manual multiline names are intentionally not persisted.",
+      "properties": {
+        "lastRoot": { "type": "string", "default": "", "title": "Last Root" },
+        "recentMasks": {
+          "type": "array",
+          "default": [],
+          "title": "Recent Masks",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 10
+        },
+        "recentNameTemplates": {
+          "type": "array",
+          "default": [],
+          "title": "Recent Name Templates",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 10
+        },
+        "recentSearchPatterns": {
+          "type": "array",
+          "default": [],
+          "title": "Recent Search Patterns",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 10
+        },
+        "recentReplacePatterns": {
+          "type": "array",
+          "default": [],
+          "title": "Recent Replace Patterns",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 10
+        },
+        "includeSubdirectories": { "type": "boolean", "default": false, "title": "Include Subdirectories" },
+        "includeFiles": { "type": "boolean", "default": true, "title": "Include Files" },
+        "includeFolders": { "type": "boolean", "default": false, "title": "Include Folders" },
+        "regexEnabled": { "type": "boolean", "default": false, "title": "Regular Expression" },
+        "caseSensitive": { "type": "boolean", "default": true, "title": "Case Sensitive" },
+        "wholeWords": { "type": "boolean", "default": false, "title": "Whole Words" },
+        "replaceOnce": { "type": "boolean", "default": false, "title": "Replace Once" },
+        "excludeExtension": { "type": "boolean", "default": false, "title": "Exclude Extension" },
+        "flattenSeparator": {
+          "type": "string",
+          "default": " - ",
+          "title": "Flatten Separator",
+          "description": "Separator used when folder/path macros are flattened into leaf-name text."
+        },
+        "fileNameCaseStyle": { "$ref": "#/$defs/batchRenameCaseStyle", "title": "File Name Case Style" },
+        "extensionCaseStyle": { "$ref": "#/$defs/batchRenameCaseStyle", "title": "Extension Case Style" },
+        "previewSortColumnId": {
+          "type": "string",
+          "default": "",
+          "title": "Preview Sort Column",
+          "description": "Stable logical column id used for persisted Batch Rename preview sorting."
+        },
+        "previewSortDescending": {
+          "type": "boolean",
+          "default": false,
+          "title": "Preview Sort Descending",
+          "description": "Whether the persisted Batch Rename preview sort is descending."
+        },
+        "previewGridLayout": {
+          "type": "array",
+          "default": [],
+          "title": "Preview Grid Layout",
+          "description": "Persisted Batch Rename preview-grid column order and widths.",
           "items": { "$ref": "#/$defs/gridColumnLayoutEntry" }
         }
       },
@@ -1411,6 +1491,12 @@
           "default": false,
           "title": "Skip Windows Hello verification",
           "description": "When true, Windows Hello verification is skipped even if a connection profile requires it. Intended for automation."
+        },
+        "allowInsecureTlsInAutomation": {
+          "type": "boolean",
+          "default": false,
+          "title": "Allow insecure TLS in automation",
+          "description": "When true, TLS certificate validation may be relaxed for connection profiles during automated runs. Intended for automation only; leave disabled for normal interactive use."
         },
         "windowsHelloReauthTimeoutMinute": {
           "type": "integer",

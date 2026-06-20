@@ -30,6 +30,34 @@ Hot Paths are 10 bookmark slots for quick folder navigation:
 - Each slot can optionally have a **Label** (display name). If the label is empty, the path is shown.
 - You can choose whether a slot appears in the **drive/menu dropdown** via **Preferences → Hot Paths → Show in Change Drive menu**.
 
+## Breadcrumb interactions
+
+The path is shown as a breadcrumb: each folder in the current path is a clickable segment, with a chevron separator (`›`) between segments. The whole bar reacts to the mouse so you can move around without typing a path.
+
+### Clicking a segment
+
+- Click any ancestor segment (for example `Users` or `Documents` in `C:\Users\Documents\Projects`) to navigate straight to that folder.
+- Clicking the **last** segment (the folder you are already in) does not re-navigate. It just moves keyboard focus back to the file list, so a click on the current crumb never triggers a redundant refresh.
+- The clickable area covers the whole segment, and hovering highlights it with a subtle rounded background.
+
+### Separator / sibling dropdown
+
+- The chevron separator between two folders is itself clickable. Clicking it opens a dropdown of the **sibling folders** at that level — the other folders inside the same parent.
+- For example, clicking the `›` after `Documents` lists the siblings of `Documents` (such as `Pictures` and `Downloads`). The folder you are currently in is marked with an accent bar; hover and keyboard selection move independently of that marker.
+- Pick an entry to navigate into that sibling. The dropdown only commits on click or `Enter`; clicking outside or pressing `Esc` cancels without navigating.
+
+### Overflow ellipsis and the full-path popup
+
+When the path is too long to fit, the breadcrumb collapses from the middle outward and inserts a clickable `...` segment, keeping the first and current folders visible as long as possible.
+
+- Click the `...` segment (or a chevron next to it) to open a **full-path popup** that shows the complete breadcrumb.
+- The popup uses the same interaction model as the bar: click a segment to navigate (this closes the popup), or click a separator to open that segment's sibling dropdown.
+- If the full path is wider than the screen, the popup wraps onto multiple lines; if it is also too tall, it clamps to the screen and scrolls with the mouse wheel.
+- The popup can switch to edit mode to type or paste a path — double-click empty space inside it, or press `F4`, `Ctrl+L`, or `Alt+D`. Pressing `Enter` navigates if the path is valid and changed; an unchanged path just leaves edit mode.
+- Click outside the popup, press `Esc`, or move focus elsewhere to close it.
+
+To edit the path directly in the bar instead, double-click empty space in the path area (or use `Ctrl+L` / `Alt+D`) to enter address-bar edit mode with the current path selected.
+
 ## Paths you can type
 
 The address bar accepts multiple forms. RedSalamander chooses the correct file system plugin based on prefixes.

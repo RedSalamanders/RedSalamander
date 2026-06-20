@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #pragma warning(push)
@@ -34,6 +35,9 @@ void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept;
 
 #ifdef ENABLE_TESTS
 [[nodiscard]] size_t DebugGetFindFilesWindowCount() noexcept;
+[[nodiscard]] std::wstring DebugMakeFindFilesResultKeyForTests(std::wstring_view pluginId,
+                                                               std::wstring_view instanceContext,
+                                                               std::wstring_view fullPath) noexcept;
 
 enum class FindFilesDebugOperation : uint8_t
 {
@@ -126,6 +130,7 @@ struct FindFilesDebugSnapshot
     int destinationNavigationHoveredSeparatorIndex = -1;
     size_t destinationNavigationHistoryCount = 0u;
     bool destinationNavigationHistoryDropdownVisible = false;
+    uint64_t destinationNavigationHistoryDropdownOpenCount = 0u;
     RECT destinationNavigationHistoryRect = {};
     bool rootPopupOpen               = false;
     bool nameModePopupOpen           = false;
@@ -222,6 +227,7 @@ struct FindFilesDebugGridHit
 [[nodiscard]] bool DebugStartFindFilesWindowSearch(FindFilesDebugOperation operation) noexcept;
 
 [[nodiscard]] bool DebugCancelFindFilesWindowSearch() noexcept;
+[[nodiscard]] bool DebugPostFindFilesWindowStaleSearchPayloads(std::wstring fullPath) noexcept;
 
 [[nodiscard]] bool DebugGetFindFilesWindowSnapshot(FindFilesDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugHitTestFindFilesWindowResultsGrid(float xDip, float yDip, FindFilesDebugGridHit& out) noexcept;
@@ -246,4 +252,7 @@ struct FindFilesDebugGridHit
 
 [[nodiscard]] bool DebugScrollFindFilesWindowResultsByWheelDetents(int detents) noexcept;
 [[nodiscard]] bool DebugFindFilesIsNextQueuedMessage(HWND targetHwnd, UINT targetMessage) noexcept;
+void DebugConfigureFindFilesWindowSearchRunBlocker(bool enabled) noexcept;
+void DebugReleaseFindFilesWindowSearchRunBlocker() noexcept;
+[[nodiscard]] bool DebugWaitForFindFilesWindowSearchRunBlocked(uint32_t timeoutMs) noexcept;
 #endif

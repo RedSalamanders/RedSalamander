@@ -3467,6 +3467,7 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
             const ImapMessageSummary& meta = found->second;
 
             entry.sizeBytes     = meta.sizeBytes;
+            entry.sizeKnown     = true;
             entry.creationTime  = meta.sentTime;
             entry.changeTime    = meta.recvTime;
             entry.lastWriteTime = meta.recvTime;
@@ -3510,6 +3511,7 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     entry.attributes    = FILE_ATTRIBUTE_NORMAL;
     entry.fileIndex     = (uid <= static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)())) ? static_cast<unsigned long>(uid) : 0u;
     entry.sizeBytes     = meta.sizeBytes;
+    entry.sizeKnown     = true;
     entry.creationTime  = meta.sentTime;
     entry.changeTime    = meta.recvTime;
     entry.lastWriteTime = meta.recvTime;

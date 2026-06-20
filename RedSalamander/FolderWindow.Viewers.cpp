@@ -32,6 +32,8 @@ bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
     return OrdinalString::EqualsNoCase(a, b);
 }
 
+// Hard-coded embedded preview-pane allowlist. A new embedded-capable viewer must be added here to appear
+// in the preview pane (see Specs/Plugins/Plugins_ViewerPlugins.md "Embedded preview allowlist is hard-coded").
 [[nodiscard]] bool SupportsEmbeddedPreviewViewer(std::wstring_view pluginId) noexcept
 {
     return EqualsNoCase(pluginId, kFallbackPreviewViewerId) || EqualsNoCase(pluginId, L"builtin/viewer-space") ||

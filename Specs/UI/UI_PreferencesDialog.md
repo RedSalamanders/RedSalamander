@@ -114,7 +114,8 @@ Per-page rules:
 - Rapid category-switch validation MUST assert the active page's current contract: `Editors` is a file-actions page and legitimately exposes editable ValuePattern descendants, while `Mouse` is a note-style page and MUST NOT expose stale edit/combo/value/toggle descendants from previously active pages.
 - `Plugins` root page MUST expose plugin enablement, custom-path management, and navigation into schema-driven child pages.
 - The plugin child page MUST embed the schema-driven configuration editor and MAY still offer the dedicated advanced configuration dialog entry point.
-- The File Operations page edits host-owned global defaults only: pre-calculation enable/workers, default copy/move speed limit, and cross-file-system bridge buffer size.
+- The File Operations page edits host-owned global defaults only: pre-calculation enable/workers, default copy/move speed limit, cross-file-system bridge buffer size, and the `Auto-dismiss Success` toggle.
+- The File Operations page MUST expose an `Auto-dismiss Success` toggle that edits `workingSettings.fileOperations.autoDismissSuccess` (bool, default `false`). When enabled, completed successful or canceled file-operation tasks auto-dismiss from the File Operations progress popup instead of staying as result cards. Toggling it MUST mark Preferences dirty, and the dirty-close `No` path MUST discard the unapplied change.
 - The File Operations page MUST NOT duplicate plugin-owned concurrency, recycle-bin batching, or search-walker controls; it instead shows a note that those settings live under `Preferences -> Plugins -> File System`.
 - The Compare Directories page edits the same persisted defaults described in `Specs/Core/Core_CompareDirectories.md`.
 - The Hot Paths page edits the persisted hot-path definitions and their menu-visibility flag.

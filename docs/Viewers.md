@@ -39,6 +39,10 @@ Configure this in **Preferences -> Viewers**:
 - **Actions** define internal viewer-plugin actions and external viewer programs.
 - The page can test a sample file path and show the resolved action plus the rule that chose it.
 
+### Packaging note: Web, JSON, and Markdown ship together
+
+The Web, JSON, and Markdown viewers are not three separate plugin files. They are all provided by a single optional `ViewerWeb.dll`, which exposes the `builtin/viewer-web`, `builtin/viewer-json`, and `builtin/viewer-markdown` plugins together and requires the Microsoft Edge WebView2 Runtime. Optional plugins live in the `Plugins\` folder next to `RedSalamander.exe`. Because the three viewers share one file, disabling, locating, or removing `ViewerWeb.dll` affects all three at once, and each one falls back to the Text viewer when `ViewerWeb` is unavailable. See [Plugins](Plugins.md) for the plugin folder and Plugin Manager UI.
+
 ## Viewer menu map
 
 Standalone viewers use normal menus in addition to shortcuts and tool controls. This is the quickest way to discover viewer behavior without memorizing every shortcut.

@@ -154,3 +154,70 @@ See `Specs/UI/UI_CommandMenuKeyboard.md` for the behavioral definition of focuse
 ### Plugins Manager Dialog
 
 - **Buttons**: dialog push buttons should be **theme-aware** (custom-drawn) so they match Light/Dark palettes (skip custom drawing in high contrast).
+
+## AppTheme Color-Override Keys
+
+Themes may supply per-token color overrides that are layered onto the resolved `AppTheme` by `ApplyAppThemeOverrides` (`RedSalamander/Preferences.Themes.cpp`). Each override value is a packed ARGB `uint32_t`; the alpha byte is honored for tokens that accept transparency (Direct2D `ColorF` targets) and ignored for opaque `COLORREF` targets.
+
+- **Exact-key match only**: lookup (`FindColorOverride`) compares keys with an exact, case-sensitive string match. Keys are queried individually, so any override key that is not one of the recognized names below is **never read and silently dropped** (no warning is logged).
+- **Derived defaults**: if `folderView.itemBackgroundSelectedInactive` is omitted but `folderView.itemBackgroundSelected` is provided, the inactive selection background is derived from the selected color (scaled alpha). If `folderView.textSelectedInactive` is omitted (and not high contrast), the inactive selection text color is derived for contrast against the resolved inactive selection background.
+- **`fileOps.*` ordering**: the `fileOperations` graph/scrollbar tokens are first seeded from `navigationView`/`menu` colors, then any explicit `fileOps.*` override is applied on top.
+
+The keys recognized by `ApplyAppThemeOverrides` are:
+
+| Key | Target | Type |
+|-----|--------|------|
+| `app.accent` | `theme.accent` | ColorF (alpha honored) |
+| `window.background` | `theme.windowBackground` | COLORREF (opaque) |
+| `menu.background` | `theme.menu.background` | COLORREF (opaque) |
+| `menu.text` | `theme.menu.text` | COLORREF (opaque) |
+| `menu.disabledText` | `theme.menu.disabledText` | COLORREF (opaque) |
+| `menu.selectionBg` | `theme.menu.selectionBg` | COLORREF (opaque) |
+| `menu.selectionText` | `theme.menu.selectionText` | COLORREF (opaque) |
+| `menu.separator` | `theme.menu.separator` | COLORREF (opaque) |
+| `menu.border` | `theme.menu.border` | COLORREF (opaque) |
+| `navigation.background` | `theme.navigationView.background` (also seeds `gdiBackground` / `gdiBorder`) | ColorF (alpha honored) |
+| `navigation.backgroundHover` | `theme.navigationView.backgroundHover` | ColorF (alpha honored) |
+| `navigation.backgroundPressed` | `theme.navigationView.backgroundPressed` | ColorF (alpha honored) |
+| `navigation.text` | `theme.navigationView.text` | ColorF (alpha honored) |
+| `navigation.separator` | `theme.navigationView.separator` (also sets `gdiBorderPen`) | ColorF (alpha honored) |
+| `navigation.accent` | `theme.navigationView.accent` | ColorF (alpha honored) |
+| `navigation.progressOk` | `theme.navigationView.progressOk` | ColorF (alpha honored) |
+| `navigation.progressWarn` | `theme.navigationView.progressWarn` | ColorF (alpha honored) |
+| `navigation.progressBackground` | `theme.navigationView.progressBackground` | ColorF (alpha honored) |
+| `folderView.background` | `theme.folderView.backgroundColor` | ColorF (alpha honored) |
+| `folderView.itemBackgroundNormal` | `theme.folderView.itemBackgroundNormal` | ColorF (alpha honored) |
+| `folderView.itemBackgroundHovered` | `theme.folderView.itemBackgroundHovered` | ColorF (alpha honored) |
+| `folderView.itemBackgroundSelected` | `theme.folderView.itemBackgroundSelected` | ColorF (alpha honored) |
+| `folderView.itemBackgroundSelectedInactive` | `theme.folderView.itemBackgroundSelectedInactive` | ColorF (alpha honored) |
+| `folderView.itemBackgroundFocused` | `theme.folderView.itemBackgroundFocused` | ColorF (alpha honored) |
+| `folderView.textNormal` | `theme.folderView.textNormal` | ColorF (alpha honored) |
+| `folderView.textSelected` | `theme.folderView.textSelected` | ColorF (alpha honored) |
+| `folderView.textSelectedInactive` | `theme.folderView.textSelectedInactive` | ColorF (alpha honored) |
+| `folderView.textDisabled` | `theme.folderView.textDisabled` | ColorF (alpha honored) |
+| `folderView.focusBorder` | `theme.folderView.focusBorder` | ColorF (alpha honored) |
+| `folderView.gridLines` | `theme.folderView.gridLines` | ColorF (alpha honored) |
+| `folderView.errorBackground` | `theme.folderView.errorBackground` | ColorF (alpha honored) |
+| `folderView.errorText` | `theme.folderView.errorText` | ColorF (alpha honored) |
+| `folderView.warningBackground` | `theme.folderView.warningBackground` | ColorF (alpha honored) |
+| `folderView.warningText` | `theme.folderView.warningText` | ColorF (alpha honored) |
+| `folderView.infoBackground` | `theme.folderView.infoBackground` | ColorF (alpha honored) |
+| `folderView.infoText` | `theme.folderView.infoText` | ColorF (alpha honored) |
+| `fileOps.progressBackground` | `theme.fileOperations.progressBackground` | ColorF (alpha honored) |
+| `fileOps.progressTotal` | `theme.fileOperations.progressTotal` | ColorF (alpha honored) |
+| `fileOps.progressItem` | `theme.fileOperations.progressItem` | ColorF (alpha honored) |
+| `fileOps.graphBackground` | `theme.fileOperations.graphBackground` | ColorF (alpha honored) |
+| `fileOps.graphGrid` | `theme.fileOperations.graphGrid` | ColorF (alpha honored) |
+| `fileOps.graphLimit` | `theme.fileOperations.graphLimit` | ColorF (alpha honored) |
+| `fileOps.graphLine` | `theme.fileOperations.graphLine` | ColorF (alpha honored) |
+| `fileOps.scrollbarTrack` | `theme.fileOperations.scrollbarTrack` | ColorF (alpha honored) |
+| `fileOps.scrollbarThumb` | `theme.fileOperations.scrollbarThumb` | ColorF (alpha honored) |
+| `viewer.diff.addedBackground` | `theme.viewerDiff.addedBackground` | ColorF (alpha honored) |
+| `viewer.diff.removedBackground` | `theme.viewerDiff.removedBackground` | ColorF (alpha honored) |
+| `viewer.diff.contextBackground` | `theme.viewerDiff.contextBackground` | ColorF (alpha honored) |
+| `viewer.diff.headerBackground` | `theme.viewerDiff.headerBackground` | ColorF (alpha honored) |
+| `viewer.diff.bannerBackground` | `theme.viewerDiff.bannerBackground` | ColorF (alpha honored) |
+| `viewer.diff.placeholderBackground` | `theme.viewerDiff.placeholderBackground` | ColorF (alpha honored) |
+| `viewer.diff.divider` | `theme.viewerDiff.divider` | ColorF (alpha honored) |
+
+> Note: `monitor.textView.*` keys are recognized by a separate path (`ResolveMonitorThemeForDisplay`), not by `ApplyAppThemeOverrides`, and are out of scope for this table.

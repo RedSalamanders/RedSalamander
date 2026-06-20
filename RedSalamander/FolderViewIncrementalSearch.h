@@ -13,25 +13,13 @@
 #include <optional>
 #include <string_view>
 
+#include "Helpers.h"
+
 namespace FolderViewIncrementalSearch
 {
 [[nodiscard]] inline bool EqualsNoCase(std::wstring_view left, std::wstring_view right) noexcept
 {
-    if (left.size() != right.size())
-    {
-        return false;
-    }
-    if (left.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return false;
-    }
-    if (left.empty())
-    {
-        return true;
-    }
-
-    const int result = CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE);
-    return result == CSTR_EQUAL;
+    return OrdinalString::EqualsFoldedInvariant(left, right);
 }
 
 [[nodiscard]] inline bool StartsWithNoCase(std::wstring_view text, std::wstring_view prefix) noexcept
@@ -41,7 +29,7 @@ namespace FolderViewIncrementalSearch
         return false;
     }
 
-    return EqualsNoCase(text.substr(0u, prefix.size()), prefix);
+    return OrdinalString::StartsWithFoldedInvariant(text, prefix);
 }
 
 [[nodiscard]] inline std::optional<UINT32> FindContainsOffsetNoCase(std::wstring_view text, std::wstring_view query) noexcept
@@ -50,30 +38,18 @@ namespace FolderViewIncrementalSearch
     {
         return std::nullopt;
     }
-    if (query.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    size_t startPosition = std::wstring_view::npos;
+    if (! OrdinalString::FindContainsFoldedInvariant(text, query, startPosition))
     {
         return std::nullopt;
     }
 
-    const size_t querySize         = query.size();
-    const size_t lastStartPosition = text.size() - querySize;
-    for (size_t startPosition = 0u; startPosition <= lastStartPosition; ++startPosition)
+    if (startPosition > static_cast<size_t>((std::numeric_limits<UINT32>::max)()))
     {
-        const std::wstring_view window(text.data() + startPosition, querySize);
-        if (! EqualsNoCase(window, query))
-        {
-            continue;
-        }
-
-        if (startPosition > static_cast<size_t>((std::numeric_limits<UINT32>::max)()))
-        {
-            return std::nullopt;
-        }
-
-        return static_cast<UINT32>(startPosition);
+        return std::nullopt;
     }
 
-    return std::nullopt;
+    return static_cast<UINT32>(startPosition);
 }
 
 template <typename DisplayNameAt>

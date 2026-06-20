@@ -8,6 +8,7 @@
 - The initial root comes from the focused pane when focus is inside a pane; otherwise it comes from the active pane.
 - A non-empty pane root takes precedence over the persisted `search.lastRoot` setting when a new Find window is created.
 - The `Look in:` row is an embedded shared `NavigationView` address bar, not a visible edit/combo field. It must expose the same breadcrumb/full-path editing, autosuggest, validation behavior, and history dropdown as the FolderView/Pane navigation bar, while syncing its path to the Find search root and recent-root history.
+- Other modeless pane tools that need a root header, including Batch Rename, may reuse this shared `NavigationView` header pattern by reference; tool-specific launch, scope, and preview behavior belongs in the tool's own spec rather than being duplicated here.
 - The hidden root combo/history bridge, if present for compatibility, is non-visual plumbing only. It must not be visible or counted as a fallback control on the live Find UI path.
 
 ## Split-Button Menu

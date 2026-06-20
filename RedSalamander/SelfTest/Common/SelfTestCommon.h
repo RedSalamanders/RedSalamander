@@ -55,8 +55,8 @@ struct SelfTestOptions
     bool writeJsonSummary = true;
     // Enumerate declared cases without executing their bodies.
     bool listCasesOnly = false;
-    // When set, run the exact matching case name (case-insensitive), or every case with that
-    // case-insensitive prefix when the filter ends in '_'.
+    // When set, run the exact matching case name (case-insensitive), every case with that
+    // case-insensitive prefix when the filter ends in '_', or an exact comma-separated case list.
     std::wstring caseFilter;
 };
 
@@ -124,6 +124,19 @@ struct CaseState
         return true;
     }
 
+    const auto trim = [](std::wstring_view value) noexcept
+    {
+        while (! value.empty() && std::iswspace(static_cast<wint_t>(value.front())) != 0)
+        {
+            value.remove_prefix(1u);
+        }
+        while (! value.empty() && std::iswspace(static_cast<wint_t>(value.back())) != 0)
+        {
+            value.remove_suffix(1u);
+        }
+        return value;
+    };
+
     const auto equalNoCase = [](std::wstring_view lhs, std::wstring_view rhs) noexcept
     {
         if (lhs.size() != rhs.size())
@@ -141,6 +154,27 @@ struct CaseState
 
         return true;
     };
+
+    if (filter.find(L',') != std::wstring_view::npos)
+    {
+        size_t start = 0u;
+        while (start <= filter.size())
+        {
+            const size_t comma = filter.find(L',', start);
+            const std::wstring_view part =
+                trim(filter.substr(start, comma == std::wstring_view::npos ? std::wstring_view::npos : comma - start));
+            if (! part.empty() && equalNoCase(part, name))
+            {
+                return true;
+            }
+            if (comma == std::wstring_view::npos)
+            {
+                break;
+            }
+            start = comma + 1u;
+        }
+        return false;
+    }
 
     if (equalNoCase(filter, name))
     {

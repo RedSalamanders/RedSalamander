@@ -43,7 +43,11 @@ When the behavior is window-facing, the preferred metric family is `compare.ui.*
 
 ## Implementation Files
 
-- `RedSalamander/CompareDirectoriesWindow.h/.cpp` (window, banner, options panel, sync logic, progress UI)
+- `RedSalamander/CompareDirectoriesWindow.h` + `.Internal.h` (window declarations + internal helpers shared across the window translation units)
+- `RedSalamander/CompareDirectoriesWindow.cpp` (window, banner, sync logic)
+- `RedSalamander/CompareDirectoriesWindow.Options.cpp` (in-window options panel)
+- `RedSalamander/CompareDirectoriesWindow.Progress.cpp` (progress UI and ETA)
+- `RedSalamander/CompareDirectoriesWindow.Menu.cpp` (themed menu rendering)
 - `RedSalamander/CompareDirectoriesEngine.h/.cpp` (compare session/engine + compare-scoped filesystem wrappers)
 - `Common/SettingsStore.h` + `Common/Common/SettingsStore.cpp` (persisted settings: `compareDirectories`)
 - `Common/WindowMessages.h` (custom message IDs; no `WM_APP`/`WM_USER` definitions outside this file)
@@ -628,7 +632,11 @@ The Compare Directories Options panel reads/writes the same settings; Preference
 
 ## Testing
 
-- Engine self-tests: `RedSalamander/CompareDirectoriesEngine.SelfTest.cpp` via `--compare-selftest` (or `--selftest`).
+- Engine self-tests live under `RedSalamander/SelfTest/CompareDirectories/` and run via `--compare-selftest` (or `--selftest`):
+  - `CompareDirectoriesEngine.SelfTest.cpp` + `CompareDirectoriesEngine.SelfTest.h` (harness/registration)
+  - `CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp` (core difference cases)
+  - `CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp` (search/index cases)
+  - `CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp` (runtime and remote/plugin filesystem cases)
 - Manual UI checks:
   - Shortcuts (function keys, selection, copy/move/delete) behave like the main window.
   - Compare scope behavior: OK/Rescan establishes roots; navigation outside roots cancels compare mode (with a prompt if scan/content compare is active) until the next OK/Rescan.

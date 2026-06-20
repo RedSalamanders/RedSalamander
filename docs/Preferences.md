@@ -65,8 +65,9 @@ Settings are split into **Left pane** and **Right pane** columns so each side ca
 - **Sort by** and **Direction**: None, Name, Extension, Time, Size, Attributes; Ascending or Descending.
 - **Status bar**: show or hide the pane status strip.
 - **History size**: maximum remembered folders for that pane's history dropdown.
-- **Thumbnail size**: Small, Medium, Large, or Extra Large when the pane is in thumbnail mode.
 - **Display hidden files and folders** and **Display system files and folders** set the default visibility policy.
+
+The Panes page itself has no thumbnail-size control. When a pane is in **Thumbnails** display mode, choose the thumbnail size (Small, Medium, Large, or Extra Large) from the pane's sort/thumbnail context menu; the chosen size is stored per pane (`thumbnailSizeDip`, one of `48`, `64`, `96`, or `128` device-independent pixels, default `64`).
 
 ### Viewers and Editors
 
@@ -117,8 +118,9 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 - **Enable pre-calculation scan** controls whether new copy/move tasks scan the tree first for totals and ETA.
 - **Pre-calculation workers** chooses `1` to `8` background workers for that scan.
-- **Default speed limit** seeds new copy/move tasks with Unlimited or a preset from `1 MiB/s` through `1 GiB/s`.
+- **Default speed limit** seeds new copy/move tasks with one of the presets Unlimited, `1`, `5`, `10`, `50`, `100`, or `500 MiB/s`, or **Custom**. There is no GiB/s preset; reach GiB-per-second rates through **Custom**.
 - **Custom limit** accepts values like `128KB`, `5MB`, or `1GB`.
+- **Auto-dismiss successful tasks** controls whether completed file-operation tasks that succeed or are canceled close automatically from the progress popup instead of remaining listed.
 - **Cross-FS bridge buffer (KB)** controls the per-buffer size used when copying between different file-system plugins. Two buffers are allocated per active transfer.
 
 ### Compare Directories
@@ -208,15 +210,37 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 - **Advanced** exposes file-operations diagnostics, cache-related settings, and a link to the current main JSON settings file.
 - Some rarely used settings still remain JSON-only; see [Settings File & Advanced Configuration](SettingsFile.md).
 
-## Screenshots (key pages)
+## Screenshots (by page)
+
+Captured from the running Release build against generated, non-sensitive demo content.
+
+### General
+
+![Preferences → General](res/preferences-general.png)
+
+### Panes
+
+![Preferences → Panes](res/preferences-panes.png)
 
 ### Viewers
 
 ![Preferences → Viewers](res/preferences-viewers.png)
 
+### Editors
+
+![Preferences → Editors](res/preferences-editors.png)
+
+### User Menu
+
+![Preferences → User Menu](res/preferences-user-menu.png)
+
 ### Keyboard
 
 ![Preferences → Keyboard](res/preferences-keyboard.png)
+
+### Mouse
+
+![Preferences → Mouse](res/preferences-mouse.png)
 
 ### Themes
 
@@ -226,6 +250,26 @@ The page is present as a placeholder. Mouse behavior is currently the built-in f
 
 ![Preferences → Plugins](res/preferences-plugins.png)
 
-## Screenshot backlog
+Each plugin that exposes settings appears as a child node with its own page (for example, 7-Zip):
 
-The main overview, Viewers, Keyboard, Themes, and Plugins pages already have screenshots. The remaining Preferences pages that should be captured next are tracked in [docs/res/README.md](res/README.md): General, Panes, Editors, User Menu, Mouse placeholder, File Operations, Compare Directories, Hot Paths, Advanced, and at least one plugin-specific child page.
+![Preferences → Plugins → 7-Zip](res/preferences-plugin-child.png)
+
+### File Operations
+
+![Preferences → File Operations](res/preferences-file-operations.png)
+
+### Compare Directories
+
+![Preferences → Compare Directories](res/preferences-compare-directories.png)
+
+### Hot Paths
+
+![Preferences → Hot Paths](res/preferences-hot-paths.png)
+
+### Monitor
+
+![Preferences → Monitor](res/preferences-monitor.png)
+
+### Advanced
+
+![Preferences → Advanced](res/preferences-advanced.png)

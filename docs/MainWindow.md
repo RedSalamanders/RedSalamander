@@ -45,6 +45,7 @@ Common interactions:
 - `Alt+Enter`: properties
 - `Shift+F10` or the **Apps/Menu** key: open the item context menu
 - `Ctrl+F12`: filter the current folder (pane filter dialog)
+- Type-to-search: pressing printable keys jumps focus to the first item whose name starts with what you have typed and highlights the matching prefix. `Backspace` edits the typed text (and clearing it exits the search), `Up`/`Down` step between matches, and `Esc` exits the search.
 - Mouse: multi-select, drag & drop
 
 Display and sort (defaults):
@@ -53,6 +54,7 @@ Display and sort (defaults):
 - `Alt+3`: Detailed mode
 - `Alt+4`: Extra Detailed mode
 - `Alt+5`: Thumbnails mode
+- `Alt+6`: Preview Pane mode
 - `Ctrl+F2`: Sort = None
 - `Ctrl+F3..F6`: Sort by Name/Ext/Time/Size
 
@@ -124,7 +126,7 @@ Default unmodified function keys:
 | Key | Command | Behavior |
 | --- | --- | --- |
 | `F1` | Display Shortcuts | Opens the shortcut/help window for the current command set. |
-| `F2` | Rename | Renames the focused item. |
+| `F2` | Rename | Renames the focused item, or opens Batch Rename when multiple items are selected. |
 | `F3` | View | Opens the primary viewer association for the focused file. |
 | `F4` | Edit | Opens the editor association for the focused file. |
 | `F5` | Copy | Copies the selection to the other pane. |
@@ -162,9 +164,18 @@ The **Left** and **Right** menus target a named pane, even when the other pane h
 The **Files** menu operates on the focused pane selection or focused item.
 
 - Opening: Open/Execute, View, View Width, Alternate View, View With, Edit, Alternate Edit, Edit With, and Edit New File.
-- File operations: Copy, Move/Rename, Delete, Move to Recycle Bin, Permanent Delete, Pack, Unpack, and New Folder.
+- File operations: Copy, Move/Rename, Rename, Batch Rename, Delete, Move to Recycle Bin, Permanent Delete, Pack, Unpack, and New Folder.
 - Inspection: Properties, Context Menu, Context Menu for the current directory, Security, Change Attributes, and Change Case.
 - Creation: **New** lists Windows ShellNew templates for local folders when templates are available.
+
+Notes on the less obvious opening entries:
+
+- **View Width** adjusts the width of the view rather than opening a file.
+- **Alternate View** and **Alternate Edit** open the focused file with the configured *alternate* viewer/editor instead of the primary one.
+- **View With** and **Edit With** let you pick a viewer or editor for the focused file at the moment of opening, rather than using the default association.
+- **Edit New File** creates a new empty file and opens it in the editor.
+
+Batch Rename is covered in detail in [Batch Rename](BatchRename.md).
 
 ### Edit menu
 
@@ -175,6 +186,11 @@ The **Edit** menu covers clipboard and selection workflows.
 - Selection: Select, Unselect, Invert Selection, Select All, Unselect All, Restore Selection, Select Next, and Select + Calculate Directory Size + Next.
 - Advanced selection: Save Selection, Load Selection, Select/Unselect Same Extensions, Select/Unselect Same Names, Hide Selected Names, Hide Unselected Names, Show Hidden Names, and jump to previous/next selected name.
 
+Notes on the selection entries:
+
+- **Select + Calculate Directory Size + Next** selects the focused item, calculates the occupied size of selected directories, and advances to the next item, so you can sweep down a list while accumulating folder sizes.
+- **Save Selection** records the current selection so you can return to it later, while **Restore Selection** and **Load Selection** are the same command and reapply that saved selection (the same pair reached by `Ctrl+Shift+F5` / `Ctrl+Shift+F6`).
+
 ### Commands menu
 
 The **Commands** menu contains multi-step tools and integration commands.
@@ -184,11 +200,19 @@ The **Commands** menu contains multi-step tools and integration commands.
 - Shell and external integration: Connect/Disconnect Network Drive, Connections Manager, Command Shell, Bring Current Directory/Filename to Command Line, Pane Menu, Reread Associations, User Menu, and Open File Explorer for the current folder or known folders.
 - Link handling: Go to Shortcut or Link Target follows local `.lnk`, local `file:` `.url`, junction, mount point, and directory symlink targets where pane navigation can represent the target.
 
+**Pane Menu** here opens the application's pane/main menu from the keyboard, the same action bound to `F10` in the function bar.
+
 ### Plugins, View, and Help menus
 
 - **Plugins** opens Plugin Manager and lists plugin-provided dynamic commands.
 - **View** switches theme, fullscreen, menu/function bars, File Operations Failed Items, pane focus, and Preferences.
 - **Help** opens the shortcut display, external documentation, and About dialog.
+
+A few **View** and **Help** entries are easy to overlook:
+
+- **View → Toggle Fullscreen** hides the title bar and frame so the panes fill the whole monitor; run it again, or press `Esc` while fullscreen is active, to restore the normal window. It has no default keyboard shortcut, but you can assign one (see [Keyboard Shortcuts](KeyboardShortcuts.md)).
+- **View → Window Menu** opens the standard Windows system menu for the application window (Restore, Move, Size, Minimize, Maximize, Close). It targets the window itself, unlike **Pane Menu** (`F10`), which opens the application's pane/main menu.
+- **Help → External Help** opens the online RedSalamander documentation in your default browser.
 
 ### Context menus
 
@@ -203,3 +227,25 @@ The folder-view context menu mirrors the most common item commands: Open, Open W
 - **Commands → Command Shell**: opens a shell in the current location when possible
 - **Commands → Bring Current Directory/Filename to Command Line**: opens the pane command-line input and inserts quoted local paths for execution
 - **Commands → Open File Explorer → Current Folder** (`Shift+F3`)
+
+## Dialog and command screenshots
+
+Captured from the running Release build against generated, non-sensitive demo content.
+
+### Change Attributes (`Ctrl+F8`)
+
+![Change Attributes dialog](res/change-attributes.png)
+
+### Change Case (`Ctrl+F7`)
+
+![Change Case dialog](res/change-case.png)
+
+### Quick Search (`Shift+Space`)
+
+Type a prefix to highlight and jump to matching names; the match query and `search:` status appear at the lower right.
+
+![Quick Search active in a pane](res/quick-search.png)
+
+### Command line (`Ctrl+Space` / `Ctrl+Enter`)
+
+![Command-line input with the current directory inserted](res/command-line.png)

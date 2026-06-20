@@ -3,6 +3,7 @@
 #ifdef ENABLE_TESTS
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -48,5 +49,10 @@ void DebugReloadShortcutsFromSettings() noexcept;
 
 // Debug-only hook for menu-bar self-tests: hit-tests a screen point against the retained DxUI menu bar.
 [[nodiscard]] bool DebugHitTestMainMenuBarScreenPoint(HWND mainWindow, POINT screenPoint, size_t& outIndex) noexcept;
+
+// Debug-only hook for menu-bar self-tests: overrides the live cursor point that stale-hover
+// suppression arms from, so tests can drive the suppression with synthetic delivered messages
+// instead of warping the real cursor. Pass std::nullopt to clear the override.
+void DebugSetMainMenuBarHoverSuppressionCursorOverride(const std::optional<POINT>& screenPoint) noexcept;
 
 #endif // ENABLE_TESTS

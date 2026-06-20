@@ -64,6 +64,7 @@
 #include "ThemedInputFrames.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 #ifndef GET_X_LPARAM
@@ -454,30 +455,6 @@ std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t last
     return owner;
 }
 
-void CenterWindowOnOwner(HWND window, HWND owner) noexcept
-{
-    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
-    {
-        return;
-    }
-
-    RECT ownerRect{};
-    RECT windowRect{};
-    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
-    {
-        return;
-    }
-
-    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
-    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
-    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-[[nodiscard]] int ScaleForDpi(const UINT dpi, const int dip) noexcept
-{
-    return MulDiv(dip, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
-}
-
 [[nodiscard]] std::wstring TrimRenameText(std::wstring text) noexcept
 {
     text.erase(text.begin(), std::find_if(text.begin(), text.end(), [](wchar_t ch) { return ! iswspace(ch); }));
@@ -494,8 +471,22 @@ enum class FolderViewRenamePromptDebugCommand : uintptr_t
     SetText,
     Confirm,
     Cancel,
+    BatchRename,
 };
 #endif
+
+enum class RenamePromptAction
+{
+    Cancel,
+    Rename,
+    BatchRename,
+};
+
+struct RenamePromptResult
+{
+    RenamePromptAction action = RenamePromptAction::Cancel;
+    std::wstring text;
+};
 
 class FolderViewRenamePromptWindow final
 {
@@ -532,48 +523,43 @@ public:
         }
     }
 
-    [[nodiscard]] std::optional<std::wstring> ShowModal() noexcept
+    [[nodiscard]] RenamePromptResult ShowModal() noexcept
     {
         const HRESULT classHr = EnsureWindowClass();
         if (FAILED(classHr))
         {
-            return std::nullopt;
+            return {};
         }
 
-        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
-        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
-        const int clientWidthPx  = ScaleForDpi(dpi, 420);
-        const int clientHeightPx = ScaleForDpi(dpi, 164);
-
-        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
-        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
-        {
-            return std::nullopt;
-        }
+        const DWORD style   = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle = WS_EX_DLGMODALFRAME;
+        // Create directly at the owner-centered position so the window starts on the owner's
+        // monitor with the owner's DPI; creating at CW_USEDEFAULT and centering afterwards
+        // rescales the already-owner-scaled size under per-monitor DPI awareness.
+        const Common::WindowSizing::OwnerCenteredWindowRect creationRect =
+            Common::WindowSizing::ComputeOwnerCenteredWindowRect(_ownerWindow, style, exStyle, 420, 164);
 
         const HWND hwnd = CreateWindowExW(exStyle,
                                           kFolderViewRenamePromptClassName,
                                           _captionText.c_str(),
                                           style,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          bounds.right - bounds.left,
-                                          bounds.bottom - bounds.top,
+                                          creationRect.x,
+                                          creationRect.y,
+                                          creationRect.width,
+                                          creationRect.height,
                                           _ownerWindow,
                                           nullptr,
                                           GetModuleHandleW(nullptr),
                                           this);
         if (! hwnd)
         {
-            return std::nullopt;
+            return {};
         }
         if (! _hWnd)
         {
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
@@ -585,7 +571,7 @@ public:
             const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
             if (getMessageResult == -1)
             {
-                return std::nullopt;
+                return {};
             }
             if (getMessageResult == 0)
             {
@@ -597,7 +583,7 @@ public:
             DispatchMessageW(&msg);
         }
 
-        return _acceptedText;
+        return _result;
     }
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
@@ -762,6 +748,9 @@ private:
         _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
         _cancelButton->SetOnClick([this] { Cancel(); });
 
+        _batchButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_FOLDERVIEW_RENAME_BATCH_ELLIPSIS));
+        _batchButton->SetOnClick([this] { BatchRename(); });
+
         _dxHost.SetRoot(std::move(_rootStorage));
     }
 
@@ -840,6 +829,10 @@ private:
         {
             _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
         }
+        if (_batchButton)
+        {
+            _batchButton->SetBounds(D2D1::RectF(left, buttonsTop, left + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        }
     }
 
     void Confirm() noexcept
@@ -856,8 +849,9 @@ private:
             return;
         }
 
-        _acceptedText = std::move(text);
-        _done         = true;
+        _result.action = RenamePromptAction::Rename;
+        _result.text   = std::move(text);
+        _done          = true;
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
             _hWnd.reset();
@@ -866,7 +860,18 @@ private:
 
     void Cancel() noexcept
     {
-        _acceptedText.reset();
+        _result = {};
+        _done = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            _hWnd.reset();
+        }
+    }
+
+    void BatchRename() noexcept
+    {
+        _result.action = RenamePromptAction::BatchRename;
+        _result.text.clear();
         _done = true;
         if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
         {
@@ -930,6 +935,7 @@ private:
                         snapshot->hasSelectionPaintRect = paintState.hasSelectionPaintRect;
                     }
                 }
+                snapshot->batchButtonVisible = _batchButton != nullptr;
                 return TRUE;
             }
             case FolderViewRenamePromptDebugCommand::SetText:
@@ -946,6 +952,7 @@ private:
             }
             case FolderViewRenamePromptDebugCommand::Confirm: Confirm(); return TRUE;
             case FolderViewRenamePromptDebugCommand::Cancel: Cancel(); return TRUE;
+            case FolderViewRenamePromptDebugCommand::BatchRename: BatchRename(); return TRUE;
         }
 
         return FALSE;
@@ -967,11 +974,12 @@ private:
     RedSalamander::DxUi::TextField* _field     = nullptr;
     RedSalamander::DxUi::Button* _okButton     = nullptr;
     RedSalamander::DxUi::Button* _cancelButton = nullptr;
+    RedSalamander::DxUi::Button* _batchButton  = nullptr;
     bool _done                                 = false;
-    std::optional<std::wstring> _acceptedText;
+    RenamePromptResult _result{};
 };
 
-std::optional<std::wstring> PromptForRename(HWND owner, const std::wstring& currentName, bool isDirectory, const AppTheme& theme)
+RenamePromptResult PromptForRename(HWND owner, const std::wstring& currentName, bool isDirectory, const AppTheme& theme)
 {
     FolderViewRenamePromptWindow prompt(owner, currentName, isDirectory, theme);
     return prompt.ShowModal();

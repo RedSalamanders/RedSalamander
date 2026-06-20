@@ -164,6 +164,9 @@ struct TaskSnapshot
     bool preCalcInProgress              = false;
     bool preCalcSkipped                 = false;
     bool preCalcCompleted               = false;
+    // 5F early admission: latched true once a transfer progress callback fired while pre-calc was
+    // still running (bytes moved before the recursive scan finished).
+    bool earlyAdmissionTransferObserved = false;
     uint64_t preCalcTotalBytes          = 0;
     unsigned long preCalcFileCount      = 0;
     unsigned long preCalcDirectoryCount = 0;
@@ -223,6 +226,16 @@ struct PopupLayoutDebugSnapshot
     uint32_t globalNeedAttentionCount       = 0u;
     bool globalSummaryVisible               = false;
     std::wstring globalSummaryText;
+
+    // Graph hue fairness (Fairstream 4D): aggregated over the task's live rate-history buckets.
+    uint32_t graphMultiHueBucketCount  = 0u;
+    uint32_t graphSingleHueBucketCount = 0u;
+    uint32_t graphDistinctHueCount     = 0u;
+    double graphMinHueShare            = 0.0; // per-hue share of summed multi-hue bucket weight
+    double graphMaxHueShare            = 0.0;
+    uint32_t graphDebugAccumulateCalls = 0u;
+    uint32_t graphDebugLastPending     = 0u;
+    uint32_t graphDebugMaxStreams      = 0u;
 };
 
 struct GraphHueWeightDebugSnapshot
@@ -285,6 +298,10 @@ struct RateHistory
         std::wstring sourcePath;
         uint64_t completedBytes  = 0;
         ULONGLONG lastUpdateTick = 0;
+        // Golden-angle palette hue assigned when the stream first appears; stable for the
+        // stream's lifetime and well-separated from its concurrent neighbors (a raw path-hash
+        // hue gives no minimum separation, so equal streams often looked identical).
+        float assignedHue = -1.0f;
     };
 
     std::array<float, kMaxSamples> samples{};
@@ -309,6 +326,13 @@ struct RateHistory
     size_t pendingHueWeightCount = 0;
     std::array<StreamProgress, TaskSnapshot::kMaxInFlightFiles> streamProgress{};
     size_t streamProgressCount = 0;
+    // Monotonic counter driving the golden-angle hue palette for newly observed streams.
+    uint32_t hueAssignmentCounter = 0;
+
+    // Diagnostics for the fairness selftest (cheap counters, always maintained).
+    uint32_t debugAccumulateCalls   = 0;
+    uint32_t debugLastPendingCount  = 0;
+    uint32_t debugMaxStreamsSeen    = 0;
 
     double smoothedBytesPerSec  = 0.0;
     double smoothedItemsPerSec  = 0.0;
@@ -374,6 +398,7 @@ private:
                             std::wstring_view overlayText,
                             bool showAnimation,
                             bool rainbowMode,
+                            bool perStreamBands,
                             ULONGLONG tick) noexcept;
     void Render(HWND hwnd) noexcept;
     void UpdateLastPopupRect(HWND hwnd) noexcept;
@@ -528,6 +553,7 @@ struct FileOperationsSpeedLimitPromptDebugSnapshot
 [[nodiscard]] bool DebugGetFileOperationsPopupCaptionGlyphSnapshot(HWND popup, FileOperationsPopupInternal::CaptionGlyphDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugGetFileOperationsPopupLayoutSnapshot(HWND popup, FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugBuildFileOperationsGraphFairColorWeightSnapshot(FileOperationsPopupInternal::GraphHueWeightDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugBuildFileOperationsGraphFairnessHistorySnapshot(FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept;
 [[nodiscard]] float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept;
 [[nodiscard]] double DebugSmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept;
 [[nodiscard]] double DebugDecayRateForCallbackSilence(double smoothedRate, ULONGLONG silenceMs) noexcept;

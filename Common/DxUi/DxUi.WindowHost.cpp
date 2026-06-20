@@ -1386,7 +1386,8 @@ std::wstring_view WindowHost::DebugGetPendingTooltipText() const noexcept
 
 bool WindowHost::DebugAdvanceTooltipDelayForTest() noexcept
 {
-    const bool changed = _tooltipLayer.Tick(*this, GetTickCount64() + ResolveTooltipShowDelayMs() + 1u);
+    const uint64_t nowTickMs = _lastAnimationTickMs != 0u ? _lastAnimationTickMs : GetTickCount64();
+    const bool changed       = _tooltipLayer.Tick(*this, nowTickMs + ResolveTooltipShowDelayMs() + 1u);
     if (changed)
     {
         Invalidate();

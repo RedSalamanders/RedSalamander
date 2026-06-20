@@ -19,6 +19,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "Helpers.h"
 #include "SettingsStore.h"
 
 namespace RedSalamander::Connections
@@ -70,6 +71,7 @@ HRESULT SaveGenericCredential(std::wstring_view targetName, std::wstring_view us
         userNameCopy.assign(userName);
     }
     secretCopy.assign(secret);
+    auto clearSecretCopy = wil::scope_exit([&]() noexcept { SecureWipe::SecureClear(secretCopy); });
 
     CREDENTIALW cred{};
     cred.Type       = CRED_TYPE_GENERIC;
@@ -99,7 +101,7 @@ HRESULT SaveGenericCredential(std::wstring_view targetName, std::wstring_view us
 HRESULT LoadGenericCredential(std::wstring_view targetName, std::wstring& userNameOut, std::wstring& secretOut) noexcept
 {
     userNameOut.clear();
-    secretOut.clear();
+    SecureWipe::SecureClear(secretOut);
 
     if (targetName.empty())
     {
@@ -117,6 +119,16 @@ HRESULT LoadGenericCredential(std::wstring_view targetName, std::wstring& userNa
     }
 
     wil::unique_any<PCREDENTIALW, decltype(&::CredFree), ::CredFree> cred(raw);
+
+    // The credential blob holds the plaintext secret; scrub it before CredFree releases the buffer so the
+    // cleartext does not linger in the credential-manager heap block after this function returns. Declared
+    // after cred so it runs first on scope exit (wipe, then free).
+    auto wipeBlob = wil::scope_exit([&cred]() noexcept {
+        if (cred && cred.get()->CredentialBlob != nullptr && cred.get()->CredentialBlobSize != 0)
+        {
+            SecureZeroMemory(cred.get()->CredentialBlob, cred.get()->CredentialBlobSize);
+        }
+    });
 
     if (cred.get()->UserName)
     {
@@ -299,7 +311,7 @@ bool HasQuickConnectSecret(SecretKind kind) noexcept
 
 HRESULT LoadQuickConnectSecret(SecretKind kind, std::wstring& secretOut) noexcept
 {
-    secretOut.clear();
+    SecureWipe::SecureClear(secretOut);
     std::scoped_lock lock(g_quickConnectMutex);
 
     switch (kind)
@@ -342,15 +354,15 @@ void SetQuickConnectSecret(SecretKind kind, std::wstring_view secret) noexcept
         {
             case SecretKind::Password:
                 g_quickConnectHasPassword = false;
-                g_quickConnectPassword.clear();
+                SecureWipe::SecureClear(g_quickConnectPassword);
                 return;
             case SecretKind::SshKeyPassphrase:
                 g_quickConnectHasPassphrase = false;
-                g_quickConnectPassphrase.clear();
+                SecureWipe::SecureClear(g_quickConnectPassphrase);
                 return;
             case SecretKind::RefreshToken:
                 g_quickConnectHasRefreshToken = false;
-                g_quickConnectRefreshToken.clear();
+                SecureWipe::SecureClear(g_quickConnectRefreshToken);
                 return;
         }
         return;
@@ -359,14 +371,17 @@ void SetQuickConnectSecret(SecretKind kind, std::wstring_view secret) noexcept
     switch (kind)
     {
         case SecretKind::Password:
+            SecureWipe::SecureClear(g_quickConnectPassword);
             g_quickConnectPassword.assign(secret);
             g_quickConnectHasPassword = true;
             return;
         case SecretKind::SshKeyPassphrase:
+            SecureWipe::SecureClear(g_quickConnectPassphrase);
             g_quickConnectPassphrase.assign(secret);
             g_quickConnectHasPassphrase = true;
             return;
         case SecretKind::RefreshToken:
+            SecureWipe::SecureClear(g_quickConnectRefreshToken);
             g_quickConnectRefreshToken.assign(secret);
             g_quickConnectHasRefreshToken = true;
             return;

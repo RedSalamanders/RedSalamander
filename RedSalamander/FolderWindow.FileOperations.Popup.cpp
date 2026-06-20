@@ -240,7 +240,9 @@ float ComputeFileOperationsTaskCompleteFractionForDisplay(const FileOperationsPo
 
 void NormalizeCompletedTaskSnapshotForDisplay(FileOperationsPopupInternal::TaskSnapshot& task) noexcept
 {
-    if (! task.finished || FAILED(task.resultHr))
+    // Succeeded-with-warnings tasks keep their REAL counters: forcing "N of N"/100% would hide
+    // that children were skipped. Only a clean success rounds the display up.
+    if (! task.finished || FAILED(task.resultHr) || task.warningCount > 0 || task.errorCount > 0)
     {
         return;
     }
@@ -505,7 +507,11 @@ struct GlobalFileOperationsStatusSummary
     {
         return TaskStatusKind::Paused;
     }
-    if (task.preCalcInProgress)
+    // 5F early admission: pre-calc now runs concurrently with the transfer. The blocking
+    // "Calculating" status is only truthful before the transfer has actually started; once
+    // ExecuteOperation is underway (operationStartTick set) show the live transfer status, whose
+    // ETA already reads "estimating" until pre-calc totals settle.
+    if (task.preCalcInProgress && task.operationStartTick == 0)
     {
         return TaskStatusKind::Calculating;
     }
@@ -589,12 +595,12 @@ struct GlobalFileOperationsStatusSummary
     {
         if (task.totalItems > 0)
         {
-            return FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS, std::wstring(operationText), task.completedItems, task.totalItems);
+            return FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS, std::wstring(operationText), task.completedItems, task.totalItems);
         }
-        return FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, std::wstring(operationText), task.completedItems);
+        return FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, std::wstring(operationText), task.completedItems);
     }
 
-    return FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, std::wstring(operationText), StatusTextForTask(task, status, nowTick));
+    return FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, std::wstring(operationText), StatusTextForTask(task, status, nowTick));
 }
 
 [[nodiscard]] std::wstring GraphOverlayTextForStatus(const FileOperationsPopupInternal::TaskSnapshot& task,
@@ -1509,8 +1515,8 @@ void AddHueWeight(std::array<FileOperationsPopupInternal::RateHistory::HueWeight
     if (weightCount < weights.size())
     {
         weights[weightCount] = {.hue = hue, .weight = weight};
+        ++weightCount;
     }
-    ++weightCount;
 }
 
 void AddPendingHueWeight(FileOperationsPopupInternal::RateHistory& history, float hue, double weight) noexcept
@@ -1556,12 +1562,24 @@ void SyncRateStreamBaselines(FileOperationsPopupInternal::RateHistory& history, 
     }
 }
 
+// Golden-angle sequence keeps concurrent stream hues well separated and deterministic.
+[[nodiscard]] float AssignStreamHue(FileOperationsPopupInternal::RateHistory& history) noexcept
+{
+    constexpr float kGoldenAngleDegrees = 137.5083f;
+    const float hue                     = std::fmod(static_cast<float>(history.hueAssignmentCounter) * kGoldenAngleDegrees, 360.0f);
+    ++history.hueAssignmentCounter;
+    return hue;
+}
+
 void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& history,
                                 const FileOperationsPopupInternal::RateSnapshot& task,
                                 uint64_t aggregateDeltaBytes,
                                 float fallbackHue) noexcept
 {
     using StreamProgress = FileOperationsPopupInternal::RateHistory::StreamProgress;
+
+    ++history.debugAccumulateCalls;
+    history.debugMaxStreamsSeen = std::max(history.debugMaxStreamsSeen, static_cast<uint32_t>(task.inFlightFileCount));
 
     std::array<StreamProgress, FileOperationsPopupInternal::TaskSnapshot::kMaxInFlightFiles> previous{};
     const size_t previousCount = std::min(history.streamProgressCount, history.streamProgress.size());
@@ -1572,7 +1590,11 @@ void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& histor
 
     history.streamProgressCount = 0u;
 
-    double streamWeightTotal = 0.0;
+    // Weights are the active streams' CUMULATIVE byte shares, sampled every tick. Per-tick byte
+    // deltas would under-represent streams whose copy callbacks arrive less often than the
+    // display bucket (CopyFileEx reports per ~1MB chunk, so a throttled stream can be silent for
+    // whole seconds); cumulative shares stay correct regardless of callback cadence and keep
+    // equal streams at visually equal bands at every instant.
     for (size_t i = 0; i < task.inFlightFileCount && i < task.inFlightFiles.size(); ++i)
     {
         const auto& stream = task.inFlightFiles[i];
@@ -1586,21 +1608,12 @@ void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& histor
             }
         }
 
-        uint64_t deltaBytes = 0;
-        if (! baseline || baseline->sourcePath != stream.sourcePath || stream.completedBytes < baseline->completedBytes)
-        {
-            deltaBytes = stream.completedBytes;
-        }
-        else
-        {
-            deltaBytes = stream.completedBytes - baseline->completedBytes;
-        }
+        const bool sameItem   = baseline && baseline->sourcePath == stream.sourcePath;
+        const float streamHue = sameItem && baseline->assignedHue >= 0.0f ? baseline->assignedHue : AssignStreamHue(history);
 
-        if (deltaBytes > 0)
+        if (stream.completedBytes > 0)
         {
-            const float hue = RateSampleHue(stream.sourcePath);
-            AddPendingHueWeight(history, hue, static_cast<double>(deltaBytes));
-            streamWeightTotal += static_cast<double>(deltaBytes);
+            AddPendingHueWeight(history, streamHue, static_cast<double>(stream.completedBytes));
         }
 
         if (history.streamProgressCount < history.streamProgress.size())
@@ -1611,13 +1624,30 @@ void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& histor
             entry.sourcePath       = stream.sourcePath;
             entry.completedBytes   = stream.completedBytes;
             entry.lastUpdateTick   = stream.lastUpdateTick;
+            entry.assignedHue      = streamHue;
         }
     }
 
-    if (streamWeightTotal <= 0.0 && aggregateDeltaBytes > 0)
+    // When throttling delays the first byte-progress callback, concurrent streams are still real
+    // live graph bands. Preserve their distinct hues instead of collapsing the bucket to the
+    // aggregate fallback color.
+    if (history.pendingHueWeightCount == 0u && history.streamProgressCount > 1u)
+    {
+        for (size_t i = 0; i < history.streamProgressCount && i < history.streamProgress.size(); ++i)
+        {
+            AddPendingHueWeight(history, history.streamProgress[i].assignedHue, 1.0);
+        }
+    }
+
+    // No stream data at all (e.g. providers that never report streams): fall back to the
+    // aggregate so the graph still gets a color. AppendRateSample carries the previous bucket's
+    // distribution when even that is absent.
+    if (history.pendingHueWeightCount == 0u && aggregateDeltaBytes > 0)
     {
         AddPendingHueWeight(history, fallbackHue, static_cast<double>(aggregateDeltaBytes));
     }
+
+    history.debugLastPendingCount = static_cast<uint32_t>(history.pendingHueWeightCount);
 }
 
 [[nodiscard]] double ClampFiniteNonNegative(double value) noexcept
@@ -1688,12 +1718,26 @@ void AppendRateSample(FileOperationsPopupInternal::RateHistory& history, double 
     }
     else
     {
-        history.hueWeightCounts[slot] = hue >= 0.0f ? 1u : 0u;
-        if (hue >= 0.0f)
+        // No fresh per-stream weights for this bucket (timer jitter, multi-bucket flush): carry
+        // the previous bucket's distribution forward instead of recoloring the column with a
+        // single hue — the latest callback must never repaint a whole sample by itself.
+        const size_t previousSlot =
+            (slot + FileOperationsPopupInternal::RateHistory::kMaxSamples - 1u) % FileOperationsPopupInternal::RateHistory::kMaxSamples;
+        if (history.count > 0u && history.hueWeightCounts[previousSlot] > 0u)
         {
-            history.hueWeights[slot][0] = {.hue = hue, .weight = 1.0};
+            history.hueWeightCounts[slot] = history.hueWeightCounts[previousSlot];
+            history.hueWeights[slot]      = history.hueWeights[previousSlot];
+            history.hues[slot]            = history.hues[previousSlot];
         }
-        history.hues[slot] = hue;
+        else
+        {
+            history.hueWeightCounts[slot] = hue >= 0.0f ? 1u : 0u;
+            if (hue >= 0.0f)
+            {
+                history.hueWeights[slot][0] = {.hue = hue, .weight = 1.0};
+            }
+            history.hues[slot] = hue;
+        }
     }
 
     history.writeIndex = (history.writeIndex + 1u) % FileOperationsPopupInternal::RateHistory::kMaxSamples;
@@ -1775,6 +1819,102 @@ using FileOperationsPopupInternal::PopupHitTest;
 using FileOperationsPopupInternal::RateHistory;
 using FileOperationsPopupInternal::RateSnapshot;
 using FileOperationsPopupInternal::TaskSnapshot;
+
+#ifdef ENABLE_TESTS
+void PopulateGraphHueDebugSummary(const RateHistory& history, FileOperationsPopupInternal::PopupLayoutDebugSnapshot& result) noexcept
+{
+    result.graphMultiHueBucketCount = 0u;
+    result.graphSingleHueBucketCount = 0u;
+    result.graphDistinctHueCount = 0u;
+    result.graphMinHueShare = 0.0;
+    result.graphMaxHueShare = 0.0;
+    result.graphDebugAccumulateCalls = history.debugAccumulateCalls;
+    result.graphDebugLastPending = history.debugLastPendingCount;
+    result.graphDebugMaxStreams = history.debugMaxStreamsSeen;
+
+    std::array<float, 32> distinctHues{};
+    std::array<double, 32> hueTotals{};
+    size_t distinctCount = 0;
+    double totalWeight = 0.0;
+
+    for (size_t i = 0; i < history.count; ++i)
+    {
+        const size_t index = (history.writeIndex + RateHistory::kMaxSamples - history.count + i) % RateHistory::kMaxSamples;
+        const size_t weightCount = std::min<size_t>(history.hueWeightCounts[index], history.hueWeights[index].size());
+        if (weightCount == 0u)
+        {
+            continue;
+        }
+
+        if (weightCount >= 2u)
+        {
+            ++result.graphMultiHueBucketCount;
+        }
+        else
+        {
+            ++result.graphSingleHueBucketCount;
+        }
+    }
+
+    // Distinct hues and per-hue shares come from a recent window of multi-hue buckets.
+    // The warm-up where streams have not all reported yet must not dilute steady-state fairness.
+    constexpr size_t kFairnessWindowBuckets = 30u;
+    size_t windowBuckets = 0u;
+    for (size_t back = 0; back < history.count && windowBuckets < kFairnessWindowBuckets; ++back)
+    {
+        const size_t index = (history.writeIndex + RateHistory::kMaxSamples - 1u - back) % RateHistory::kMaxSamples;
+        const size_t weightCount = std::min<size_t>(history.hueWeightCounts[index], history.hueWeights[index].size());
+        if (weightCount < 2u)
+        {
+            continue;
+        }
+        ++windowBuckets;
+
+        for (size_t band = 0; band < weightCount; ++band)
+        {
+            const auto& weight = history.hueWeights[index][band];
+            if (weight.hue < 0.0f || weight.weight <= 0.0)
+            {
+                continue;
+            }
+
+            size_t hueSlot = distinctCount;
+            for (size_t k = 0; k < distinctCount; ++k)
+            {
+                if (distinctHues[k] == weight.hue)
+                {
+                    hueSlot = k;
+                    break;
+                }
+            }
+            if (hueSlot == distinctCount && distinctCount < distinctHues.size())
+            {
+                distinctHues[distinctCount++] = weight.hue;
+            }
+            if (hueSlot < hueTotals.size())
+            {
+                hueTotals[hueSlot] += weight.weight;
+                totalWeight += weight.weight;
+            }
+        }
+    }
+
+    result.graphDistinctHueCount = static_cast<uint32_t>(distinctCount);
+    if (distinctCount > 0 && totalWeight > 0.0)
+    {
+        double minShare = 1.0;
+        double maxShare = 0.0;
+        for (size_t k = 0; k < distinctCount; ++k)
+        {
+            const double share = hueTotals[k] / totalWeight;
+            minShare = std::min(minShare, share);
+            maxShare = std::max(maxShare, share);
+        }
+        result.graphMinHueShare = minShare;
+        result.graphMaxHueShare = maxShare;
+    }
+}
+#endif
 
 void FileOperationsPopupInternal::FileOperationsPopupState::ApplyScrollBarTheme(HWND hwnd) const noexcept
 {
@@ -2455,19 +2595,19 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         }
 
         {
-            std::scoped_lock lock(task->_conflictMutex);
-            snap.conflict.active            = task->_conflictPrompt.active;
-            snap.conflict.bucket            = static_cast<uint8_t>(task->_conflictPrompt.bucket);
-            snap.conflict.status            = task->_conflictPrompt.status;
-            snap.conflict.sourcePath        = task->_conflictPrompt.sourcePath;
-            snap.conflict.destinationPath   = task->_conflictPrompt.destinationPath;
-            snap.conflict.applyToAllChecked = task->_conflictPrompt.applyToAllChecked;
-            snap.conflict.retryFailed       = task->_conflictPrompt.retryFailed;
+            std::scoped_lock lock(task->_conflictArbiter.mutex);
+            snap.conflict.active            = task->_conflictArbiter.prompt.active;
+            snap.conflict.bucket            = static_cast<uint8_t>(task->_conflictArbiter.prompt.bucket);
+            snap.conflict.status            = task->_conflictArbiter.prompt.status;
+            snap.conflict.sourcePath        = task->_conflictArbiter.prompt.sourcePath;
+            snap.conflict.destinationPath   = task->_conflictArbiter.prompt.destinationPath;
+            snap.conflict.applyToAllChecked = task->_conflictArbiter.prompt.applyToAllChecked;
+            snap.conflict.retryFailed       = task->_conflictArbiter.prompt.retryFailed;
 
-            snap.conflict.actionCount = std::min(task->_conflictPrompt.actionCount, snap.conflict.actions.size());
+            snap.conflict.actionCount = std::min(task->_conflictArbiter.prompt.actionCount, snap.conflict.actions.size());
             for (size_t i = 0; i < snap.conflict.actionCount; ++i)
             {
-                snap.conflict.actions[i] = static_cast<uint8_t>(task->_conflictPrompt.actions[i]);
+                snap.conflict.actions[i] = static_cast<uint8_t>(task->_conflictArbiter.prompt.actions[i]);
             }
         }
 
@@ -2481,6 +2621,15 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.destinationPane    = task->GetDestinationPane();
         snap.operationStartTick = task->_operationStartTick.load(std::memory_order_acquire);
 
+        // A task whose thread already completed renders its final status immediately instead of
+        // flashing "Running" until the completed-summary row replaces this live row.
+        if (task->_taskFinished.load(std::memory_order_acquire))
+        {
+            snap.finished = true;
+            snap.resultHr = task->_resultHr.load(std::memory_order_acquire);
+            fileOps->CollectTaskDiagnosticSnapshot(snap.taskId, snap.warningCount, snap.errorCount, snap.lastDiagnosticMessage);
+        }
+
         snap.desiredSpeedLimitBytesPerSecond       = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         snap.effectiveSpeedLimitBytesPerSecond     = task->_effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         snap.autoConcurrencyUsed                   = task->_autoConcurrencyUsed.load(std::memory_order_acquire);
@@ -2490,10 +2639,11 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.effectiveConcurrencyBudget            = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
 
         // Pre-calculation state
-        snap.preCalcInProgress     = task->_preCalcInProgress.load(std::memory_order_acquire);
-        snap.preCalcSkipped        = task->_preCalcSkipped.load(std::memory_order_acquire);
-        snap.preCalcCompleted      = task->_preCalcCompleted.load(std::memory_order_acquire);
-        snap.preCalcTotalBytes     = task->_preCalcTotalBytes.load(std::memory_order_acquire);
+        snap.preCalcInProgress              = task->_preCalcInProgress.load(std::memory_order_acquire);
+        snap.preCalcSkipped                 = task->_preCalcSkipped.load(std::memory_order_acquire);
+        snap.preCalcCompleted               = task->_preCalcCompleted.load(std::memory_order_acquire);
+        snap.earlyAdmissionTransferObserved = task->_transferStartedBeforePreCalcComplete.load(std::memory_order_acquire);
+        snap.preCalcTotalBytes              = task->_preCalcTotalBytes.load(std::memory_order_acquire);
         snap.preCalcFileCount      = task->_preCalcFileCount.load(std::memory_order_acquire);
         snap.preCalcDirectoryCount = task->_preCalcDirectoryCount.load(std::memory_order_acquire);
 
@@ -2774,7 +2924,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
                 const uint64_t deltaBytes = task.completedBytes - history.lastBytes;
                 if (deltaBytes > 0 && dtSec > 0.0)
                 {
-                    AccumulateStreamHueWeights(history, task, deltaBytes, hue);
                     const double instBytesPerSec = static_cast<double>(deltaBytes) / dtSec;
                     history.smoothedBytesPerSec  = SmoothRateForDisplay(history.smoothedBytesPerSec, instBytesPerSec, elapsedMs);
                     history.displayedBytesPerSec = history.smoothedBytesPerSec;
@@ -2821,6 +2970,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
 
         if (! task.finished)
         {
+            // Per-stream hue attribution samples the in-flight cumulative shares every tick,
+            // independent of how often the published aggregate or the plugin callbacks advance.
+            if (! itemRate)
+            {
+                AccumulateStreamHueWeights(history, task, 0u, hue);
+            }
+
             if (history.lastDisplaySampleTick == 0 || history.lastDisplaySampleTick > nowTick)
             {
                 history.lastDisplaySampleTick = nowTick;
@@ -2832,7 +2988,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
                 {
                     maxDisplayGapMs            = std::max<uint64_t>(maxDisplayGapMs, displayElapsedMs);
                     const double displaySample = itemRate ? history.displayedItemsPerSec : history.displayedBytesPerSec;
-                    if (displaySample > 0.0 || history.count > 0)
+                    if (displaySample > 0.0 || history.count > 0 || history.pendingHueWeightCount > 0u)
                     {
                         AppendResampledRateSamples(history, displayElapsedMs, displaySample, hue);
                     }
@@ -3146,6 +3302,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
                                                                                std::wstring_view overlayText,
                                                                                bool showAnimation,
                                                                                bool rainbowMode,
+                                                                               bool perStreamBands,
                                                                                ULONGLONG tick) noexcept
 {
     if (! _target)
@@ -3165,9 +3322,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
         _target->FillRectangle(rect, _graphBgBrush.get());
     }
 
-    const AppTheme* theme  = folderWindow ? &folderWindow->GetTheme() : nullptr;
-    const float rainbowSat = 0.85f;
-    const float rainbowVal = (theme && theme->dark) ? 0.80f : 0.90f;
+    const AppTheme* theme = folderWindow ? &folderWindow->GetTheme() : nullptr;
+    // Full saturation belongs to the opt-in Rainbow theme; in normal themes the per-stream
+    // bands use a muted, theme-harmonized palette so parallel streams stay distinguishable
+    // without turning the default UI into a rainbow.
+    const float bandSat = rainbowMode ? 0.85f : 0.42f;
+    const float bandVal = rainbowMode ? ((theme && theme->dark) ? 0.80f : 0.90f) : ((theme && theme->dark) ? 0.68f : 0.80f);
 
     auto sampleColorFromHue = [&](float hue, float alpha) noexcept -> D2D1_COLOR_F
     {
@@ -3177,7 +3337,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
             c.a            = alpha;
             return c;
         }
-        return ColorFromHSV(hue, rainbowSat, rainbowVal, alpha);
+        return ColorFromHSV(hue, bandSat, bandVal, alpha);
     };
 
     // Helper to compute rainbow color based on tick
@@ -3321,12 +3481,42 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
             points[i]     = D2D1::Point2F(x, y);
         }
 
+        // In normal themes the bands engage only once the history actually carries multiple
+        // streams; single-stream copies keep the classic single-color fill.
+        bool historyHasMultiStreamSamples = false;
+        for (size_t i = 0; i < count && ! historyHasMultiStreamSamples; ++i)
+        {
+            historyHasMultiStreamSamples = sampleHueWeightCounts[i] >= 2u;
+        }
+
         if (_graphFillBrush && _d2dFactory)
         {
-            if (rainbowMode && _graphDynamicBrush && count >= 2)
+            if ((rainbowMode || (perStreamBands && historyHasMultiStreamSamples)) && _graphDynamicBrush && count >= 2)
             {
-                // Rainbow: draw per-segment trapezoids split into proportional per-stream hue bands.
+                // Per-stream proportional hue bands per segment trapezoid. Quads are grouped by
+                // hue first so each hue fills ONE geometry per frame instead of one geometry per
+                // band per segment (the graph redraws every 100ms).
                 const float fillAlpha = _graphFillBaseColor.a;
+
+                struct HueQuads
+                {
+                    float hue = -1.0f;
+                    std::vector<std::array<D2D1_POINT_2F, 4>> quads;
+                };
+                std::vector<HueQuads> hueQuads;
+                const auto quadsForHue = [&](float hue) noexcept -> std::vector<std::array<D2D1_POINT_2F, 4>>&
+                {
+                    for (auto& entry : hueQuads)
+                    {
+                        if (entry.hue == hue)
+                        {
+                            return entry.quads;
+                        }
+                    }
+                    hueQuads.push_back(HueQuads{.hue = hue});
+                    return hueQuads.back().quads;
+                };
+
                 for (size_t i = 1; i < count; ++i)
                 {
                     const auto& weights = sampleHueWeights[i];
@@ -3344,7 +3534,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
                     const float rightFilledH = std::max(0.0f, rect.bottom - points[i].y);
                     double lowerShare = 0.0;
 
-                    const auto drawBand = [&](float hue, double upperShare) noexcept
+                    const auto addBand = [&](float hue, double upperShare) noexcept
                     {
                         const float lower = Clamp01(static_cast<float>(lowerShare));
                         const float upper = Clamp01(static_cast<float>(upperShare));
@@ -3354,33 +3544,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
                             return;
                         }
 
-                        const D2D1_COLOR_F segmentFill = sampleColorFromHue(hue, fillAlpha);
-                        _graphDynamicBrush->SetColor(segmentFill);
-
-                        wil::com_ptr<ID2D1PathGeometry> trapezoid;
-                        const HRESULT hrGeo = _d2dFactory->CreatePathGeometry(trapezoid.put());
-                        if (SUCCEEDED(hrGeo) && trapezoid)
-                        {
-                            wil::com_ptr<ID2D1GeometrySink> sink;
-                            const HRESULT hrSink = trapezoid->Open(sink.put());
-                            if (SUCCEEDED(hrSink) && sink)
-                            {
-                                const D2D1_POINT_2F leftLower  = D2D1::Point2F(points[i - 1u].x, rect.bottom - leftFilledH * lower);
-                                const D2D1_POINT_2F rightLower = D2D1::Point2F(points[i].x, rect.bottom - rightFilledH * lower);
-                                const D2D1_POINT_2F rightUpper = D2D1::Point2F(points[i].x, rect.bottom - rightFilledH * upper);
-                                const D2D1_POINT_2F leftUpper  = D2D1::Point2F(points[i - 1u].x, rect.bottom - leftFilledH * upper);
-
-                                sink->SetFillMode(D2D1_FILL_MODE_WINDING);
-                                sink->BeginFigure(leftLower, D2D1_FIGURE_BEGIN_FILLED);
-                                sink->AddLine(rightLower);
-                                sink->AddLine(rightUpper);
-                                sink->AddLine(leftUpper);
-                                sink->EndFigure(D2D1_FIGURE_END_CLOSED);
-                                sink->Close();
-                                _target->FillGeometry(trapezoid.get(), _graphDynamicBrush.get());
-                            }
-                        }
-
+                        quadsForHue(hue).push_back({D2D1::Point2F(points[i - 1u].x, rect.bottom - leftFilledH * lower),
+                                                    D2D1::Point2F(points[i].x, rect.bottom - rightFilledH * lower),
+                                                    D2D1::Point2F(points[i].x, rect.bottom - rightFilledH * upper),
+                                                    D2D1::Point2F(points[i - 1u].x, rect.bottom - leftFilledH * upper)});
                         lowerShare = upperShare;
                     };
 
@@ -3394,13 +3561,47 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
                             }
 
                             const double upperShare = lowerShare + (weights[band].weight / totalWeight);
-                            drawBand(weights[band].hue, upperShare);
+                            addBand(weights[band].hue, upperShare);
                         }
                     }
                     else
                     {
-                        drawBand(sampleHues[i], 1.0);
+                        addBand(sampleHues[i], 1.0);
                     }
+                }
+
+                for (const auto& entry : hueQuads)
+                {
+                    if (entry.quads.empty())
+                    {
+                        continue;
+                    }
+
+                    wil::com_ptr<ID2D1PathGeometry> geometry;
+                    if (FAILED(_d2dFactory->CreatePathGeometry(geometry.put())) || ! geometry)
+                    {
+                        continue;
+                    }
+
+                    wil::com_ptr<ID2D1GeometrySink> sink;
+                    if (FAILED(geometry->Open(sink.put())) || ! sink)
+                    {
+                        continue;
+                    }
+
+                    sink->SetFillMode(D2D1_FILL_MODE_WINDING);
+                    for (const auto& quad : entry.quads)
+                    {
+                        sink->BeginFigure(quad[0], D2D1_FIGURE_BEGIN_FILLED);
+                        sink->AddLine(quad[1]);
+                        sink->AddLine(quad[2]);
+                        sink->AddLine(quad[3]);
+                        sink->EndFigure(D2D1_FIGURE_END_CLOSED);
+                    }
+                    sink->Close();
+
+                    _graphDynamicBrush->SetColor(sampleColorFromHue(entry.hue, fillAlpha));
+                    _target->FillGeometry(geometry.get(), _graphDynamicBrush.get());
                 }
             }
             else
@@ -5010,7 +5211,27 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     const float maxW        = std::max(0.0f, rc.right - rc.left);
                     const float maxDetailsY = rc.bottom;
 
-                    std::wstring message = LoadStringResource(nullptr, conflictBucketToMessageId(task.conflict.bucket));
+                    std::wstring message;
+                    if (task.conflict.bucket == static_cast<uint8_t>(FolderWindow::FileOperationState::Task::ConflictBucket::Exists))
+                    {
+                        // Name the colliding item: merged-folder child conflicts are otherwise
+                        // indistinguishable from a folder-level collision.
+                        const std::wstring& conflictPath =
+                            ! task.conflict.destinationPath.empty() ? task.conflict.destinationPath : task.conflict.sourcePath;
+                        std::wstring_view leaf = conflictPath;
+                        if (const size_t separator = leaf.find_last_of(L"\\/"); separator != std::wstring_view::npos)
+                        {
+                            leaf.remove_prefix(separator + 1);
+                        }
+                        if (! leaf.empty())
+                        {
+                            message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_CONFLICT_EXISTS_NAMED, std::wstring(leaf));
+                        }
+                    }
+                    if (message.empty())
+                    {
+                        message = LoadStringResource(nullptr, conflictBucketToMessageId(task.conflict.bucket));
+                    }
                     if (task.conflict.retryFailed)
                     {
                         const std::wstring retryFailed = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_RETRY_FAILED);
@@ -5093,7 +5314,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             bool showAnimation = false;
                             const std::wstring overlayText = GraphOverlayTextForStatus(task, taskStatus, showAnimation);
                             const bool rainbowMode = folderWindow && folderWindow->GetTheme().menu.rainbowMode;
-                            DrawBandwidthGraph(graphRc, graphHistory, limit, overlayText, showAnimation, rainbowMode, nowTick);
+                            DrawBandwidthGraph(graphRc, graphHistory, limit, overlayText, showAnimation, rainbowMode, true, nowTick);
                         }
                     }
                 }
@@ -5117,7 +5338,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             bool showAnimation = false;
                             const std::wstring overlayText = GraphOverlayTextForStatus(task, taskStatus, showAnimation);
                             const bool rainbowMode = folderWindow && folderWindow->GetTheme().menu.rainbowMode;
-                            DrawBandwidthGraph(graphRc, graphHistory, 0, overlayText, showAnimation, rainbowMode, nowTick);
+                            DrawBandwidthGraph(graphRc, graphHistory, 0, overlayText, showAnimation, rainbowMode, true, nowTick);
                         }
                     }
                 }
@@ -5351,6 +5572,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                         cancelW                       = std::min(cancelW, sideW);
                                         limitW                        = std::max(0.0f, available - skipW - cancelW);
                                     }
+
+                                    // Speed limit is an auxiliary control; it must never out-weigh
+                                    // the primary actions by absorbing the rest of the row.
+                                    limitW = std::min(limitW, minLimitW);
                                 }
 
                                 float xBtn = textX;
@@ -5400,17 +5625,21 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         else if (showCopyMoveControls && ! speedLimitText.empty())
                         {
-                            const float available = std::max(0.0f, rowW - btnGapX * 2.0f);
+                            // A queued task has nothing to pause yet; Cancel and the speed limit
+                            // (which applies once it starts) are the only meaningful controls.
+                            const bool showPause  = task.started;
+                            const float available = std::max(0.0f, rowW - btnGapX * (showPause ? 2.0f : 1.0f));
                             const float minEach   = DipsToPixels(68.0f, _dpi);
+                            const float buttonCount = showPause ? 3.0f : 2.0f;
 
-                            float pauseW  = DipsToPixels(84.0f, _dpi);
+                            float pauseW  = showPause ? DipsToPixels(84.0f, _dpi) : 0.0f;
                             float cancelW = DipsToPixels(84.0f, _dpi);
                             float limitW  = std::max(0.0f, available - pauseW - cancelW);
 
-                            if (available < minEach * 3.0f)
+                            if (available < minEach * buttonCount)
                             {
-                                const float eachW = available / 3.0f;
-                                pauseW            = eachW;
+                                const float eachW = available / buttonCount;
+                                pauseW            = showPause ? eachW : 0.0f;
                                 cancelW           = eachW;
                                 limitW            = eachW;
                             }
@@ -5421,22 +5650,29 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 {
                                     const float minSideW          = DipsToPixels(72.0f, _dpi);
                                     const float remainingForSides = std::max(0.0f, available - minLimitW);
-                                    const float sideW             = std::max(minSideW, remainingForSides / 2.0f);
-                                    pauseW                        = std::min(pauseW, sideW);
+                                    const float sideW             = std::max(minSideW, remainingForSides / (showPause ? 2.0f : 1.0f));
+                                    pauseW                        = showPause ? std::min(pauseW, sideW) : 0.0f;
                                     cancelW                       = std::min(cancelW, sideW);
                                     limitW                        = std::max(0.0f, available - pauseW - cancelW);
                                 }
+
+                                // Speed limit is an auxiliary control; it must never out-weigh
+                                // the primary actions by absorbing the rest of the row.
+                                limitW = std::min(limitW, minLimitW);
                             }
 
                             float xBtn = textX;
 
-                            PopupButton pauseBtn{};
-                            pauseBtn.bounds     = D2D1::RectF(xBtn, rowTop, xBtn + pauseW, rowBottom);
-                            pauseBtn.hit.kind   = PopupHitTest::Kind::TaskPause;
-                            pauseBtn.hit.taskId = task.taskId;
-                            _buttons.push_back(pauseBtn);
-                            DrawButton(pauseBtn, _buttonSmallFormat.get(), pauseText);
-                            xBtn += pauseW + btnGapX;
+                            if (showPause)
+                            {
+                                PopupButton pauseBtn{};
+                                pauseBtn.bounds     = D2D1::RectF(xBtn, rowTop, xBtn + pauseW, rowBottom);
+                                pauseBtn.hit.kind   = PopupHitTest::Kind::TaskPause;
+                                pauseBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(pauseBtn);
+                                DrawButton(pauseBtn, _buttonSmallFormat.get(), pauseText);
+                                xBtn += pauseW + btnGapX;
+                            }
 
                             PopupButton limitBtn{};
                             limitBtn.bounds     = D2D1::RectF(xBtn, rowTop, xBtn + limitW, rowBottom);
@@ -5455,22 +5691,35 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         else
                         {
-                            const float pauseW  = std::max(0.0f, (rowW - btnGapX) * 0.5f);
-                            const float cancelW = std::max(0.0f, rowW - btnGapX - pauseW);
+                            const bool showPause = task.started;
+                            if (showPause)
+                            {
+                                const float pauseW  = std::max(0.0f, (rowW - btnGapX) * 0.5f);
+                                const float cancelW = std::max(0.0f, rowW - btnGapX - pauseW);
 
-                            PopupButton pauseBtn{};
-                            pauseBtn.bounds     = D2D1::RectF(textX, rowTop, textX + pauseW, rowBottom);
-                            pauseBtn.hit.kind   = PopupHitTest::Kind::TaskPause;
-                            pauseBtn.hit.taskId = task.taskId;
-                            _buttons.push_back(pauseBtn);
-                            DrawButton(pauseBtn, _buttonSmallFormat.get(), pauseText);
+                                PopupButton pauseBtn{};
+                                pauseBtn.bounds     = D2D1::RectF(textX, rowTop, textX + pauseW, rowBottom);
+                                pauseBtn.hit.kind   = PopupHitTest::Kind::TaskPause;
+                                pauseBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(pauseBtn);
+                                DrawButton(pauseBtn, _buttonSmallFormat.get(), pauseText);
 
-                            PopupButton cancelBtn{};
-                            cancelBtn.bounds     = D2D1::RectF(textX + pauseW + btnGapX, rowTop, textX + pauseW + btnGapX + cancelW, rowBottom);
-                            cancelBtn.hit.kind   = PopupHitTest::Kind::TaskCancel;
-                            cancelBtn.hit.taskId = task.taskId;
-                            _buttons.push_back(cancelBtn);
-                            DrawButton(cancelBtn, _buttonSmallFormat.get(), cancelText);
+                                PopupButton cancelBtn{};
+                                cancelBtn.bounds     = D2D1::RectF(textX + pauseW + btnGapX, rowTop, textX + pauseW + btnGapX + cancelW, rowBottom);
+                                cancelBtn.hit.kind   = PopupHitTest::Kind::TaskCancel;
+                                cancelBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(cancelBtn);
+                                DrawButton(cancelBtn, _buttonSmallFormat.get(), cancelText);
+                            }
+                            else
+                            {
+                                PopupButton cancelBtn{};
+                                cancelBtn.bounds     = D2D1::RectF(textX, rowTop, textX + rowW, rowBottom);
+                                cancelBtn.hit.kind   = PopupHitTest::Kind::TaskCancel;
+                                cancelBtn.hit.taskId = task.taskId;
+                                _buttons.push_back(cancelBtn);
+                                DrawButton(cancelBtn, _buttonSmallFormat.get(), cancelText);
+                            }
                         }
                     }
                 }
@@ -5743,10 +5992,20 @@ PopupHitTest FileOperationsPopupInternal::FileOperationsPopupState::HitTest(floa
 {
     for (auto it = _buttons.rbegin(); it != _buttons.rend(); ++it)
     {
-        if (PointInRectF(it->bounds, x, y))
+        if (! PointInRectF(it->bounds, x, y))
         {
-            return it->hit;
+            continue;
         }
+
+        // Task-card buttons live inside the scrolled list viewport; a card scrolled under the
+        // footer must never steal clicks from the footer controls.
+        const bool isFooterButton = it->hit.kind == PopupHitTest::Kind::FooterCancelAll || it->hit.kind == PopupHitTest::Kind::FooterQueueMode;
+        if (! isFooterButton && ! PointInRectF(_listViewportRect, x, y))
+        {
+            continue;
+        }
+
+        return it->hit;
     }
     return {};
 }
@@ -6354,25 +6613,25 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitConflictOverfl
     TaskSnapshot::ConflictPromptSnapshot conflict{};
     bool applyToAll = false;
     {
-        std::scoped_lock lock(task->_conflictMutex);
-        if (! task->_conflictPrompt.active)
+        std::scoped_lock lock(task->_conflictArbiter.mutex);
+        if (! task->_conflictArbiter.prompt.active)
         {
             return false;
         }
 
         conflict.active            = true;
-        conflict.bucket            = static_cast<uint8_t>(task->_conflictPrompt.bucket);
-        conflict.status            = task->_conflictPrompt.status;
-        conflict.sourcePath        = task->_conflictPrompt.sourcePath;
-        conflict.destinationPath   = task->_conflictPrompt.destinationPath;
-        conflict.actionCount       = std::min(task->_conflictPrompt.actionCount, conflict.actions.size());
-        conflict.applyToAllChecked = task->_conflictPrompt.applyToAllChecked;
-        conflict.retryFailed       = task->_conflictPrompt.retryFailed;
+        conflict.bucket            = static_cast<uint8_t>(task->_conflictArbiter.prompt.bucket);
+        conflict.status            = task->_conflictArbiter.prompt.status;
+        conflict.sourcePath        = task->_conflictArbiter.prompt.sourcePath;
+        conflict.destinationPath   = task->_conflictArbiter.prompt.destinationPath;
+        conflict.actionCount       = std::min(task->_conflictArbiter.prompt.actionCount, conflict.actions.size());
+        conflict.applyToAllChecked = task->_conflictArbiter.prompt.applyToAllChecked;
+        conflict.retryFailed       = task->_conflictArbiter.prompt.retryFailed;
         for (size_t i = 0; i < conflict.actionCount; ++i)
         {
-            conflict.actions[i] = RawConflictAction(task->_conflictPrompt.actions[i]);
+            conflict.actions[i] = RawConflictAction(task->_conflictArbiter.prompt.actions[i]);
         }
-        applyToAll = task->_conflictPrompt.applyToAllChecked;
+        applyToAll = task->_conflictArbiter.prompt.applyToAllChecked;
     }
 
     const ConflictAction requestedAction = static_cast<ConflictAction>(rawAction);
@@ -6407,23 +6666,23 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflow
 
     TaskSnapshot::ConflictPromptSnapshot conflict{};
     {
-        std::scoped_lock lock(task->_conflictMutex);
-        if (! task->_conflictPrompt.active)
+        std::scoped_lock lock(task->_conflictArbiter.mutex);
+        if (! task->_conflictArbiter.prompt.active)
         {
             return;
         }
 
         conflict.active            = true;
-        conflict.bucket            = static_cast<uint8_t>(task->_conflictPrompt.bucket);
-        conflict.status            = task->_conflictPrompt.status;
-        conflict.sourcePath        = task->_conflictPrompt.sourcePath;
-        conflict.destinationPath   = task->_conflictPrompt.destinationPath;
-        conflict.actionCount       = std::min(task->_conflictPrompt.actionCount, conflict.actions.size());
-        conflict.applyToAllChecked = task->_conflictPrompt.applyToAllChecked;
-        conflict.retryFailed       = task->_conflictPrompt.retryFailed;
+        conflict.bucket            = static_cast<uint8_t>(task->_conflictArbiter.prompt.bucket);
+        conflict.status            = task->_conflictArbiter.prompt.status;
+        conflict.sourcePath        = task->_conflictArbiter.prompt.sourcePath;
+        conflict.destinationPath   = task->_conflictArbiter.prompt.destinationPath;
+        conflict.actionCount       = std::min(task->_conflictArbiter.prompt.actionCount, conflict.actions.size());
+        conflict.applyToAllChecked = task->_conflictArbiter.prompt.applyToAllChecked;
+        conflict.retryFailed       = task->_conflictArbiter.prompt.retryFailed;
         for (size_t i = 0; i < conflict.actionCount; ++i)
         {
-            conflict.actions[i] = RawConflictAction(task->_conflictPrompt.actions[i]);
+            conflict.actions[i] = RawConflictAction(task->_conflictArbiter.prompt.actions[i]);
         }
     }
 
@@ -6968,8 +7227,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
             {
                 bool applyToAll = false;
                 {
-                    std::scoped_lock lock(task->_conflictMutex);
-                    applyToAll = task->_conflictPrompt.applyToAllChecked;
+                    std::scoped_lock lock(task->_conflictArbiter.mutex);
+                    applyToAll = task->_conflictArbiter.prompt.applyToAllChecked;
                 }
 
                 const auto action = static_cast<FolderWindow::FileOperationState::Task::ConflictAction>(hit.data);
@@ -7011,6 +7270,14 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
     if (payload->kind == PopupHitTest::Kind::TaskCompletedMore && payload->data != 0u)
     {
         return SubmitCompletedOverflowAction(hwnd, payload->taskId, payload->data, false) ? 1 : 0;
+    }
+
+    if (payload->kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll || payload->kind == PopupHitTest::Kind::TaskConflictAction)
+    {
+        // OnActivatedHit returns 0 for these kinds even on success; self-test callers need a
+        // dispatched-successfully signal.
+        static_cast<void>(OnActivatedHit(hwnd, PopupHitTest{payload->kind, payload->taskId, payload->data}));
+        return 1;
     }
 
     return OnActivatedHit(hwnd, PopupHitTest{payload->kind, payload->taskId, payload->data});
@@ -7107,6 +7374,13 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
         for (size_t i = 0; i < conflictLayout.overflowCount && i < conflictLayout.overflow.size() && i < result.conflictOverflowActions.size(); ++i)
         {
             result.conflictOverflowActions[i] = RawConflictAction(conflictLayout.overflow[i]);
+        }
+
+        // Aggregate the live graph hue distribution so the fairness selftest can assert on the
+        // REAL pipeline (samples, eviction, multi-bucket flushes) instead of synthetic weights.
+        if (const auto rateIt = _rates.find(result.taskId); rateIt != _rates.end())
+        {
+            PopulateGraphHueDebugSummary(rateIt->second, result);
         }
     }
 
@@ -7687,6 +7961,41 @@ bool DebugBuildFileOperationsGraphFairColorWeightSnapshot(FileOperationsPopupInt
     return true;
 }
 
+bool DebugBuildFileOperationsGraphFairnessHistorySnapshot(FileOperationsPopupInternal::PopupLayoutDebugSnapshot& out) noexcept
+{
+    out = {};
+
+    RateHistory history{};
+    for (uint64_t bucket = 1; bucket <= 12; ++bucket)
+    {
+        RateSnapshot task{};
+        task.taskId = 1;
+        task.started = true;
+        task.inFlightFileCount = 4u;
+        task.completedBytes = bucket * 400u;
+        task.lastProgressCallbackTick = bucket * kRateSampleBucketMs;
+        task.progressStateChangeTick = task.lastProgressCallbackTick;
+        for (size_t i = 0; i < task.inFlightFileCount; ++i)
+        {
+            auto& stream = task.inFlightFiles[i];
+            stream.cookieKey = reinterpret_cast<const void*>(static_cast<uintptr_t>(i + 1u));
+            stream.progressStreamId = static_cast<uint64_t>(i + 1u);
+            stream.sourcePath = std::format(L"synthetic-stream-{}.bin", i + 1u);
+            stream.totalBytes = 4096u;
+            stream.completedBytes = bucket * 100u;
+            stream.lastUpdateTick = task.lastProgressCallbackTick;
+        }
+
+        AccumulateStreamHueWeights(history, task, 400u, -1.0f);
+        AppendResampledRateSamples(history, kRateSampleBucketMs, 400.0, -1.0f);
+    }
+
+    out.taskId = 1;
+    out.found = true;
+    PopulateGraphHueDebugSummary(history, out);
+    return out.graphMultiHueBucketCount >= 10u && out.graphDistinctHueCount == 4u && out.graphMinHueShare >= 0.20 && out.graphMaxHueShare <= 0.30;
+}
+
 float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
 {
     return ComputeFileOperationsTaskCompleteFractionForDisplay(task);
@@ -7764,3 +8073,4 @@ bool DebugCancelFileOperationsSpeedLimitPrompt() noexcept
                hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::Cancel), 0) != FALSE;
 }
 #endif
+

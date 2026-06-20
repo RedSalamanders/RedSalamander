@@ -52,6 +52,10 @@ struct ForceWilTemplateInstantiations
 // are expected and should not surface as C4625/C4626 noise in this selftest TU.
 #pragma warning(disable : 4625 4626)
 #include "AppTheme.h"
+#include "BatchRenameEngine.h"
+#include "BatchRenameExecutionEngine.h"
+#include "BatchRenameMenus.h"
+#include "BatchRenameWindow.h"
 #include "ChangeCase.h"
 #include "CommandDispatch.Debug.h"
 #include "CommandRegistry.h"
@@ -454,6 +458,7 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 // the other command selftest families.
 
 #include "Commands.SelfTest.Settings.cpp"
+#include "Commands.SelfTest.BatchRename.cpp"
 #include "Commands.SelfTest.CompareOptions.cpp"
 #include "Commands.SelfTest.Connections.cpp"
 #include "Commands.SelfTest.Dialogs.cpp"
@@ -503,6 +508,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     const auto releaseUiaCache    = wil::scope_exit([] { ReleaseThreadUiAutomationForSelfTest(); });
 
     RunSettingsCommandsSelfTestCases(mainWindow, options, suite);
+    RunBatchRenameCommandsSelfTestCases(mainWindow, options, suite);
     RunPluginConfigCommandsSelfTestCases(mainWindow, options, suite);
     RunConnectionsCommandsSelfTestCases(mainWindow, options, suite);
     RunPreferencesCommandsSelfTestCases(mainWindow, options, suite);

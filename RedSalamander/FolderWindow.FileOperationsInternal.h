@@ -142,6 +142,25 @@ struct FolderWindow::FileOperationState
             bool retryFailed       = false;
         };
 
+        struct ConflictArbiter
+        {
+            ConflictArbiter()                                  = default;
+            ConflictArbiter(const ConflictArbiter&)            = delete;
+            ConflictArbiter(ConflictArbiter&&)                 = delete;
+            ConflictArbiter& operator=(const ConflictArbiter&) = delete;
+            ConflictArbiter& operator=(ConflictArbiter&&)      = delete;
+            ~ConflictArbiter()                                 = default;
+
+            std::mutex mutex;
+            std::condition_variable cv;
+            std::array<std::optional<ConflictAction>, static_cast<size_t>(ConflictBucket::Count)> decisionCache{};
+            ConflictPromptState prompt{};
+            DWORD ownerThreadId = 0;
+            std::optional<ConflictAction> decisionAction;
+            bool decisionApplyToAll = false;
+            wil::unique_event_nothrow decisionEvent;
+        };
+
         struct InFlightFileProgress
         {
             const void* cookieKey     = nullptr;
@@ -187,6 +206,12 @@ struct FolderWindow::FileOperationState
 
         struct PerfStats
         {
+            PerfStats()                            = default;
+            PerfStats(const PerfStats&)            = delete;
+            PerfStats(PerfStats&&)                 = delete;
+            PerfStats& operator=(const PerfStats&) = delete;
+            PerfStats& operator=(PerfStats&&)      = delete;
+
             uint64_t queueWaitUs                         = 0;
             uint64_t schedulerWaitUs                     = 0;
             uint64_t schedulerWaitForWorkUs              = 0;
@@ -202,10 +227,10 @@ struct FolderWindow::FileOperationState
             uint64_t bridgeFileAdmissionCount            = 0;
             uint64_t bridgeFileStartedBeforeProducerDone = 0;
             uint64_t bridgeAdmissionMaxQueueDepth        = 0;
-            uint64_t preCalcUs                           = 0;
-            uint64_t preCalcCallbackCount                = 0;
-            uint64_t preCalcCallbackUs                   = 0;
-            uint64_t preCalcLockWaitUs                   = 0;
+            std::atomic<uint64_t> preCalcUs{0};
+            std::atomic<uint64_t> preCalcCallbackCount{0};
+            std::atomic<uint64_t> preCalcCallbackUs{0};
+            std::atomic<uint64_t> preCalcLockWaitUs{0};
             uint64_t progressCallbackUs                  = 0;
             uint64_t progressFirstCallbackDelayMs        = 0;
             uint64_t progressLockWaitUs                  = 0;
@@ -322,6 +347,8 @@ struct FolderWindow::FileOperationState
         void MarkRateSamplingStateChanged() noexcept;
 
         HRESULT ExecuteOperation() noexcept;
+        HRESULT TryStartPreCalculationThread(std::jthread& preCalcThread) noexcept;
+        void InitializeFileSystemOptions(FileSystemOptions& options) const noexcept;
         void LogDiagnostic(DiagnosticSeverity severity,
                            HRESULT status,
                            std::wstring_view category,
@@ -412,16 +439,10 @@ struct FolderWindow::FileOperationState
         std::atomic<uint64_t> _appliedSpeedLimitBytesPerSecond{0};
         std::atomic<uint64_t> _effectiveSpeedLimitBytesPerSecond{0};
         std::atomic<HRESULT> _resultHr{S_OK};
+        std::atomic<bool> _taskFinished{false};
         std::atomic<bool> _observedSkipAction{false};
 
-        std::mutex _conflictMutex;
-        std::condition_variable _conflictCv;
-        std::array<std::optional<ConflictAction>, static_cast<size_t>(ConflictBucket::Count)> _conflictDecisionCache{};
-        ConflictPromptState _conflictPrompt{};
-        DWORD _conflictOwnerThreadId = 0;
-        std::optional<ConflictAction> _conflictDecisionAction;
-        bool _conflictDecisionApplyToAll = false;
-        wil::unique_event_nothrow _conflictDecisionEvent;
+        ConflictArbiter _conflictArbiter;
 
         // Pre-calculation state
         std::atomic<bool> _preCalcInProgress{false};
@@ -432,6 +453,11 @@ struct FolderWindow::FileOperationState
         std::atomic<unsigned long> _preCalcFileCount{0};
         std::atomic<unsigned long> _preCalcDirectoryCount{0};
         std::vector<uint64_t> _preCalcSourceBytes;
+        // 5F early admission: latched true the first time a transfer progress callback fires while
+        // pre-calc has not yet completed (i.e. bytes moved before the recursive scan finished).
+        // Impossible in the old serial pre-calc-then-execute model; the deterministic proof that
+        // the transfer overlapped pre-calc.
+        std::atomic<bool> _transferStartedBeforePreCalcComplete{false};
 
         std::stop_token _stopToken{};
         std::mutex _pauseMutex;
@@ -512,7 +538,8 @@ struct FolderWindow::FileOperationState
                            uint64_t initialSpeedLimitBytesPerSecond        = 0,
                            ExecutionMode executionMode                     = ExecutionMode::BulkItems,
                            bool requireConfirmation                        = false,
-                           wil::com_ptr<IFileSystem> destinationFileSystem = nullptr);
+                           wil::com_ptr<IFileSystem> destinationFileSystem = nullptr,
+                           uint64_t* taskIdOut                             = nullptr);
 
     void ApplyTheme(const AppTheme& theme);
     void Shutdown() noexcept;
@@ -527,6 +554,10 @@ struct FolderWindow::FileOperationState
     void CollectInformationalTasks(std::vector<FolderWindow::InformationalTaskUpdate>& outTasks) noexcept;
     void CollectCompletedTasks(std::vector<CompletedTaskSummary>& outTasks) noexcept;
     void CollectDiagnostics(std::vector<TaskDiagnosticEntry>& outEntries) noexcept;
+    void CollectTaskDiagnosticSnapshot(uint64_t taskId,
+                                       unsigned long& warningCount,
+                                       unsigned long& errorCount,
+                                       std::wstring& lastDiagnosticMessage) noexcept;
     void DismissCompletedTask(uint64_t taskId) noexcept;
     uint64_t CreateOrUpdateInformationalTask(const FolderWindow::InformationalTaskUpdate& update) noexcept;
     void DismissInformationalTask(uint64_t taskId) noexcept;
@@ -619,7 +650,10 @@ private:
     std::atomic<bool> _queueNewTasks{true};
 };
 
-[[nodiscard]] bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation) noexcept;
+// pluginId is diagnostic-only: it identifies the provider in the one-time capabilities-contract-violation error.
+[[nodiscard]] bool CanSameFileSystemOperation(const wil::com_ptr<IFileSystem>& fileSystem,
+                                              FileSystemOperation operation,
+                                              std::wstring_view pluginId = {}) noexcept;
 [[nodiscard]] bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long warningCount, unsigned long errorCount) noexcept;
 
 #ifdef ENABLE_TESTS
@@ -634,4 +668,16 @@ void SetFileOpsBridgePipelineModeForSelfTest(FileOpsBridgePipelineMode mode) noe
 FileOpsBridgePipelineMode GetFileOpsBridgePipelineModeForSelfTest() noexcept;
 void SetFileOpsBridgeProducerDelayForSelfTest(unsigned int delayMs) noexcept;
 unsigned int GetFileOpsBridgeProducerDelayForSelfTest() noexcept;
+void SetFileOpsBridgeFailNextFileCopiesForSelfTest(unsigned long count) noexcept;
+unsigned long TakeFileOpsBridgeFailNextFileCopyAttemptsForSelfTest() noexcept;
+void SetFileOpsBridgeFailNextSourceGetSizeForSelfTest(unsigned long count) noexcept;
+unsigned long TakeFileOpsBridgeFailNextSourceGetSizeAttemptsForSelfTest() noexcept;
+void SetFileOpsPreCalcThreadStartFailureForSelfTest(bool enabled) noexcept;
+unsigned long TakeFileOpsPreCalcThreadStartAttemptsForSelfTest() noexcept;
+void SetFileOpsAutoConcurrencyOverrideForSelfTest(bool enabled, unsigned int preferredConcurrency, uint32_t storageKind) noexcept;
+void SetFileOpsPostFinishedCompletionPauseForSelfTest(bool enabled) noexcept;
+bool HasFileOpsPostFinishedCompletionPauseEnteredForSelfTest() noexcept;
+void ReleaseFileOpsPostFinishedCompletionPauseForSelfTest() noexcept;
+bool RunFileOpsPerItemSchedulerShutdownQuietPointSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;
+bool RunFileOpsBridgeDirectoryBufferValidationSelfTestForSelfTest() noexcept;
 #endif

@@ -1,6 +1,9 @@
 #include "SearchTextHelpers.h"
 
+#include "Helpers.h"
+
 #include <algorithm>
+#include <array>
 #include <limits>
 
 namespace SearchTextHelpers
@@ -9,17 +12,300 @@ namespace
 {
 constexpr HRESULT kFileTooLargeHr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
 
-// Maximum decoded text length for regex matching to bound worst-case execution time.
-constexpr size_t kMaxRegexContentCharacters = 5u * 1024u * 1024u;
-
 [[nodiscard]] std::wstring FoldWideText(std::wstring_view text) noexcept
 {
-    std::wstring result(text);
-    if (! result.empty())
+    return OrdinalString::FoldCaseInvariant(text);
+}
+
+struct RegexQuantifier final
+{
+    bool isQuantifier = false;
+    bool unbounded    = false;
+    bool zeroMinimum  = false;
+    size_t end        = 0u;
+};
+
+struct RegexGroupState final
+{
+    size_t contentStart                  = 0u;
+    bool containsUnboundedRepetition     = false;
+    bool containsZeroMinimumRepetition   = false;
+    bool hasOverlappingTopLevelAlternate = false;
+};
+
+[[nodiscard]] bool IsRegexMetaCharacter(const wchar_t ch) noexcept
+{
+    switch (ch)
     {
-        static_cast<void>(::CharLowerBuffW(result.data(), static_cast<DWORD>(result.size())));
+        case L'.':
+        case L'^':
+        case L'$':
+        case L'(':
+        case L')':
+        case L'[':
+        case L']':
+        case L'{':
+        case L'}':
+        case L'*':
+        case L'+':
+        case L'?':
+        case L'|': return true;
+        default: return false;
     }
+}
+
+[[nodiscard]] RegexQuantifier ParseRegexQuantifier(std::wstring_view pattern, size_t index) noexcept
+{
+    RegexQuantifier result{};
+    if (index >= pattern.size())
+    {
+        return result;
+    }
+
+    const wchar_t ch = pattern[index];
+    if (ch == L'*')
+    {
+        result.isQuantifier = true;
+        result.unbounded    = true;
+        result.zeroMinimum  = true;
+        result.end          = index;
+        return result;
+    }
+
+    if (ch == L'+')
+    {
+        result.isQuantifier = true;
+        result.unbounded    = true;
+        result.end          = index;
+        return result;
+    }
+
+    if (ch == L'?')
+    {
+        result.isQuantifier = true;
+        result.zeroMinimum  = true;
+        result.end          = index;
+        return result;
+    }
+
+    if (ch != L'{')
+    {
+        return result;
+    }
+
+    size_t cursor = index + 1u;
+    size_t minimum = 0u;
+    bool hasMinimum = false;
+    while (cursor < pattern.size() && pattern[cursor] >= L'0' && pattern[cursor] <= L'9')
+    {
+        hasMinimum = true;
+        minimum    = minimum * 10u + static_cast<size_t>(pattern[cursor] - L'0');
+        ++cursor;
+    }
+
+    if (! hasMinimum || cursor >= pattern.size())
+    {
+        return result;
+    }
+
+    if (pattern[cursor] == L'}')
+    {
+        result.isQuantifier = true;
+        result.zeroMinimum  = minimum == 0u;
+        result.end          = cursor;
+        return result;
+    }
+
+    if (pattern[cursor] != L',')
+    {
+        return result;
+    }
+
+    ++cursor;
+    if (cursor < pattern.size() && pattern[cursor] == L'}')
+    {
+        result.isQuantifier = true;
+        result.unbounded    = true;
+        result.zeroMinimum  = minimum == 0u;
+        result.end          = cursor;
+        return result;
+    }
+
+    bool hasMaximum = false;
+    while (cursor < pattern.size() && pattern[cursor] >= L'0' && pattern[cursor] <= L'9')
+    {
+        hasMaximum = true;
+        ++cursor;
+    }
+
+    if (! hasMaximum || cursor >= pattern.size() || pattern[cursor] != L'}')
+    {
+        return result;
+    }
+
+    result.isQuantifier = true;
+    result.zeroMinimum  = minimum == 0u;
+    result.end          = cursor;
     return result;
+}
+
+[[nodiscard]] std::wstring ExtractLeadingLiteralPrefix(std::wstring_view text) noexcept
+{
+    std::wstring prefix;
+    bool escaped = false;
+    bool inClass = false;
+
+    for (const wchar_t ch : text)
+    {
+        if (escaped)
+        {
+            prefix.push_back(ch);
+            escaped = false;
+            continue;
+        }
+
+        if (ch == L'\\')
+        {
+            escaped = true;
+            continue;
+        }
+
+        if (inClass)
+        {
+            if (ch == L']')
+            {
+                inClass = false;
+            }
+            break;
+        }
+
+        if (ch == L'[')
+        {
+            inClass = true;
+            break;
+        }
+
+        if (IsRegexMetaCharacter(ch))
+        {
+            break;
+        }
+
+        prefix.push_back(ch);
+    }
+
+    return prefix;
+}
+
+void AppendTopLevelAlternativePrefix(std::vector<std::wstring>& prefixes, std::wstring_view pattern, size_t start, size_t end)
+{
+    if (start <= end && start < pattern.size())
+    {
+        prefixes.push_back(ExtractLeadingLiteralPrefix(pattern.substr(start, end - start)));
+    }
+    else
+    {
+        prefixes.emplace_back();
+    }
+}
+
+[[nodiscard]] bool HasOverlappingTopLevelAlternatives(std::wstring_view pattern, size_t start, size_t end) noexcept
+{
+    if (start >= end || end > pattern.size())
+    {
+        return false;
+    }
+
+    std::vector<std::wstring> prefixes;
+    size_t alternativeStart = start;
+    size_t depth            = 0u;
+    bool escaped            = false;
+    bool inClass            = false;
+    bool sawAlternative     = false;
+
+    for (size_t i = start; i < end; ++i)
+    {
+        const wchar_t ch = pattern[i];
+        if (escaped)
+        {
+            escaped = false;
+            continue;
+        }
+
+        if (ch == L'\\')
+        {
+            escaped = true;
+            continue;
+        }
+
+        if (inClass)
+        {
+            if (ch == L']')
+            {
+                inClass = false;
+            }
+            continue;
+        }
+
+        if (ch == L'[')
+        {
+            inClass = true;
+            continue;
+        }
+
+        if (ch == L'(')
+        {
+            ++depth;
+            continue;
+        }
+
+        if (ch == L')')
+        {
+            if (depth > 0u)
+            {
+                --depth;
+            }
+            continue;
+        }
+
+        if (ch == L'|' && depth == 0u)
+        {
+            sawAlternative = true;
+            AppendTopLevelAlternativePrefix(prefixes, pattern, alternativeStart, i);
+            alternativeStart = i + 1u;
+        }
+    }
+
+    if (! sawAlternative)
+    {
+        return false;
+    }
+
+    AppendTopLevelAlternativePrefix(prefixes, pattern, alternativeStart, end);
+
+    for (size_t left = 0u; left < prefixes.size(); ++left)
+    {
+        if (prefixes[left].empty())
+        {
+            return true;
+        }
+
+        for (size_t right = left + 1u; right < prefixes.size(); ++right)
+        {
+            if (prefixes[right].empty())
+            {
+                return true;
+            }
+
+            const std::wstring& shorter = prefixes[left].size() <= prefixes[right].size() ? prefixes[left] : prefixes[right];
+            const std::wstring& longer  = prefixes[left].size() <= prefixes[right].size() ? prefixes[right] : prefixes[left];
+            if (longer.rfind(shorter, 0u) == 0u)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 [[nodiscard]] std::wstring DecodeMultiByte(UINT codePage, DWORD flags, const char* bytes, size_t size) noexcept
@@ -224,6 +510,36 @@ bool TryDecodeSearchableText(std::span<const std::byte> bytes, UINT fallbackCode
     return false;
 }
 
+[[nodiscard]] bool IsHighSurrogate(wchar_t ch) noexcept
+{
+    return ch >= static_cast<wchar_t>(0xD800) && ch <= static_cast<wchar_t>(0xDBFF);
+}
+
+[[nodiscard]] bool IsLowSurrogate(wchar_t ch) noexcept
+{
+    return ch >= static_cast<wchar_t>(0xDC00) && ch <= static_cast<wchar_t>(0xDFFF);
+}
+
+[[nodiscard]] size_t ExpandStartToCodePointBoundary(std::wstring_view text, size_t start) noexcept
+{
+    if (start > 0u && start < text.size() && IsLowSurrogate(text[start]) && IsHighSurrogate(text[start - 1u]))
+    {
+        return start - 1u;
+    }
+
+    return start;
+}
+
+[[nodiscard]] size_t ExpandEndToCodePointBoundary(std::wstring_view text, size_t end) noexcept
+{
+    if (end > 0u && end < text.size() && IsHighSurrogate(text[end - 1u]) && IsLowSurrogate(text[end]))
+    {
+        return end + 1u;
+    }
+
+    return end;
+}
+
 std::wstring BuildSnippet(std::wstring_view text, size_t matchPosition, size_t matchLength, uint32_t maxSnippetCharacters) noexcept
 {
     const size_t maxChars = (std::max)(static_cast<size_t>(maxSnippetCharacters), static_cast<size_t>(matchLength == 0u ? 1u : matchLength));
@@ -239,6 +555,9 @@ std::wstring BuildSnippet(std::wstring_view text, size_t matchPosition, size_t m
     {
         start = end - maxChars;
     }
+
+    start = ExpandStartToCodePointBoundary(text, start);
+    end   = ExpandEndToCodePointBoundary(text, end);
 
     std::wstring snippet;
     if (start > 0u)
@@ -311,6 +630,147 @@ bool FindLiteralWithChunkOverlap(std::wstring_view haystack, std::wstring_view n
     return false;
 }
 
+bool ValidateRegexPatternSafety(std::wstring_view pattern, std::wstring& outReason) noexcept
+{
+    outReason.clear();
+    if (pattern.size() > kMaxRegexPatternLength)
+    {
+        outReason = L"Regex pattern exceeds maximum length.";
+        return false;
+    }
+
+    std::array<RegexGroupState, kMaxRegexGroupDepth + 1u> groups{};
+    size_t depth = 0u;
+    bool inCharClass = false;
+    bool lastWasEscape = false;
+    bool prevWasOpenParen = false;
+    bool lastWasGroupClose = false;
+    RegexGroupState lastClosedGroup{};
+
+    for (size_t i = 0u; i < pattern.size(); ++i)
+    {
+        const wchar_t ch = pattern[i];
+
+        if (lastWasEscape)
+        {
+            lastWasEscape    = false;
+            lastWasGroupClose = false;
+            prevWasOpenParen = false;
+            continue;
+        }
+
+        if (ch == L'\\')
+        {
+            lastWasEscape    = true;
+            lastWasGroupClose = false;
+            prevWasOpenParen = false;
+            continue;
+        }
+
+        if (inCharClass)
+        {
+            if (ch == L']')
+            {
+                inCharClass = false;
+            }
+            continue;
+        }
+
+        if (ch == L'[')
+        {
+            inCharClass      = true;
+            lastWasGroupClose = false;
+            prevWasOpenParen = false;
+            continue;
+        }
+
+        if (ch == L'(')
+        {
+            ++depth;
+            if (depth > kMaxRegexGroupDepth)
+            {
+                outReason = L"Regex group nesting too deep.";
+                return false;
+            }
+
+            size_t contentStart = i + 1u;
+            if (contentStart + 1u < pattern.size() && pattern[contentStart] == L'?' &&
+                (pattern[contentStart + 1u] == L':' || pattern[contentStart + 1u] == L'=' || pattern[contentStart + 1u] == L'!'))
+            {
+                contentStart += 2u;
+            }
+
+            groups[depth] = RegexGroupState{.contentStart = contentStart};
+            lastWasGroupClose = false;
+            prevWasOpenParen = true;
+            continue;
+        }
+
+        if (ch == L')')
+        {
+            prevWasOpenParen = false;
+            if (depth == 0u)
+            {
+                lastWasGroupClose = false;
+                continue;
+            }
+
+            groups[depth].hasOverlappingTopLevelAlternate =
+                groups[depth].hasOverlappingTopLevelAlternate || HasOverlappingTopLevelAlternatives(pattern, groups[depth].contentStart, i);
+            lastClosedGroup = groups[depth];
+            --depth;
+
+            groups[depth].containsUnboundedRepetition =
+                groups[depth].containsUnboundedRepetition || lastClosedGroup.containsUnboundedRepetition;
+            groups[depth].containsZeroMinimumRepetition =
+                groups[depth].containsZeroMinimumRepetition || lastClosedGroup.containsZeroMinimumRepetition;
+            groups[depth].hasOverlappingTopLevelAlternate =
+                groups[depth].hasOverlappingTopLevelAlternate || lastClosedGroup.hasOverlappingTopLevelAlternate;
+
+            lastWasGroupClose = true;
+            continue;
+        }
+
+        // ? immediately after ( is group syntax (?:, (?=, etc.), not a quantifier.
+        if (ch == L'?' && prevWasOpenParen)
+        {
+            prevWasOpenParen = false;
+            continue;
+        }
+
+        const RegexQuantifier quantifier = ParseRegexQuantifier(pattern, i);
+        if (quantifier.isQuantifier)
+        {
+            if (quantifier.unbounded && lastWasGroupClose &&
+                (lastClosedGroup.containsUnboundedRepetition || lastClosedGroup.containsZeroMinimumRepetition ||
+                 lastClosedGroup.hasOverlappingTopLevelAlternate))
+            {
+                outReason = L"Nested or ambiguous repetition in regex pattern (potential ReDoS).";
+                return false;
+            }
+
+            if (quantifier.unbounded)
+            {
+                groups[depth].containsUnboundedRepetition = true;
+            }
+            if (quantifier.zeroMinimum)
+            {
+                groups[depth].containsZeroMinimumRepetition = true;
+            }
+
+            lastWasGroupClose = false;
+            prevWasOpenParen = false;
+            i = quantifier.end;
+            continue;
+        }
+
+        lastWasGroupClose = false;
+        prevWasOpenParen = false;
+    }
+
+    return true;
+}
+
 bool MatchDecodedText(
     const DecodedTextResult& decoded, const TextSearchPattern& pattern, uint32_t maxSnippetCharacters, bool wantSnippets, TextSearchResult& result) noexcept
 {
@@ -340,6 +800,7 @@ bool MatchDecodedText(
 
             if (decoded.text.size() > kMaxRegexContentCharacters)
             {
+                result.overflowSkipped = true;
                 return false;
             }
 
@@ -478,7 +939,26 @@ HRESULT SearchFileReaderText(IFileReader* reader,
         return S_OK;
     }
 
+    if (pattern.mode == FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX && cancelCheck != nullptr)
+    {
+        hr = cancelCheck(cancelCookie);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
     static_cast<void>(MatchDecodedText(decoded, pattern, maxSnippetCharacters, wantSnippets, result));
+
+    if (pattern.mode == FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX && cancelCheck != nullptr)
+    {
+        hr = cancelCheck(cancelCookie);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
     return S_OK;
 }
 } // namespace SearchTextHelpers

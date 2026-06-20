@@ -71,6 +71,10 @@ struct FileSystemOptions
     // Callbacks receive an in/out FileSystemOptions* so the host can tweak it on progress updates (e.g. changing the limit mid-flight).
     // Plugins MAY also write back an effective applied limit (e.g. internal clamping or combining with a plugin-specific cap).
     uint64_t bandwidthLimitBytesPerSecond;
+
+    // 0 = plugin default. Non-zero clamps copy/move fan-out for the whole call, including recursive
+    // work a plugin schedules internally under one top-level host item.
+    uint32_t copyMoveMaxConcurrency;
 };
 
 enum FileSystemTransferEndpoint : uint32_t
@@ -412,6 +416,22 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
     // On success, ppFilesInformation receives a valid instance of IFilesInformation.
     virtual HRESULT STDMETHODCALLTYPE ReadDirectoryInfo(const wchar_t* path, IFilesInformation** ppFilesInformation) noexcept = 0;
 
+    // Directory-merge contract for Copy/Move (normative; see Specs/FileSystem/FileSystem_FileOperations.md,
+    // "Conflict Handling / Defaults"):
+    //  - A source directory whose destination already exists as a directory MUST be merged by
+    //    recursing into the existing destination directory. Directory-vs-directory existence is
+    //    NOT an overwrite conflict and MUST NOT fail the item with ERROR_ALREADY_EXISTS.
+    //  - ERROR_ALREADY_EXISTS is reserved for file-vs-existing-file and file/directory type
+    //    mismatches. Recursive implementations SHOULD raise such collisions per child through
+    //    IFileSystemCallback::FileSystemIssue (most-specific failing path) and continue per the
+    //    returned action, finishing with HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) when children
+    //    were skipped — never abort a whole directory transfer on the first collision.
+    //  - Move MUST apply the same merge rule, falling back to per-child move or copy+delete when
+    //    the platform cannot rename a directory onto an existing directory. Skipped children keep
+    //    their source ("source preserved") and the item ends as ERROR_PARTIAL_COPY.
+    //  - Overwrite / ReplaceReadOnly granted from a child conflict are ONE-SHOT: they apply only to
+    //    the child that was answered and MUST NOT leak to sibling or descendant children. Only the
+    //    explicit "Apply to all similar" toggle broadens a grant across many children.
     virtual HRESULT STDMETHODCALLTYPE CopyItem(const wchar_t* sourcePath,
                                                const wchar_t* destinationPath,
                                                FileSystemFlags flags,
@@ -474,9 +494,11 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
     // - Returned pointers are owned by the plugin and remain valid until the next call to GetCapabilities or object release.
     // - JSON strings are UTF-8, NUL-terminated.
     // - Implementations MUST return S_OK and a non-empty JSON document with "version": 1, "operations",
-    //   "concurrency", and "crossFileSystem".
+    //   "concurrency", "crossFileSystem", and "pathIdentity".
     // - Unsupported operations MUST be advertised with false operation fields or empty policy lists; returning
-    //   ERROR_NOT_SUPPORTED or a null pointer violates the provider contract.
+    //   ERROR_NOT_SUPPORTED, E_NOTIMPL, a null pointer, or an empty/unparseable document violates the provider
+    //   contract. Hosts treat any such response as a contract violation: capability-gated operations are
+    //   disabled (fail-closed) and the violation is logged once per provider instance.
     // - Host-recognized shape:
     //   {
     //     "version": 1,
@@ -486,7 +508,8 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
     //       "deleteMax": 8,
     //       "deleteRecycleBinMax": 2
     //     },
-    //     "crossFileSystem": { ... }
+    //     "crossFileSystem": { ... },
+    //     "pathIdentity": { ... }
     //   }
     virtual HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept = 0;
 
@@ -603,7 +626,11 @@ interface __declspec(novtable) IFileSystemDirectorySizeCallback
 // Optional directory operations interface.
 // Notes:
 // - The host obtains this interface via QueryInterface on the active IFileSystem instance.
-// - Implementations should return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) when the target already exists.
+// - CreateDirectory returns HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS) when the target path is
+//   already occupied. Callers that merge (cross-filesystem bridge) MUST distinguish the two
+//   cases behind that code themselves: an existing DIRECTORY is a valid merge target (treat as
+//   success), while an existing FILE is a genuine type-mismatch conflict — probe the path's
+//   attributes before deciding.
 interface __declspec(uuid("4a8f7cf2-f81c-4278-b182-7183e6bed6f3")) __declspec(novtable) IFileSystemDirectoryOperations : public IUnknown
 {
     virtual HRESULT STDMETHODCALLTYPE CreateDirectory(const wchar_t* path) noexcept = 0;

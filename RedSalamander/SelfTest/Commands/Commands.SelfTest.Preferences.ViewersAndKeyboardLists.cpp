@@ -532,6 +532,10 @@ enum : size_t
             state.Require(false, std::format(L"Preferences Plugins DxUi list did not repaint after long-run scroll chunk {}.", chunk));
             return false;
         }
+        if (scrolledDown && snapshot.pluginsMainListVerticalScrollDip <= previousScrollDip + 0.5f)
+        {
+            break;
+        }
 
         previousRenderCount = snapshot.pluginsMainListRenderCount;
         previousScrollDip   = snapshot.pluginsMainListVerticalScrollDip;
@@ -745,6 +749,10 @@ enum : size_t
             state.Require(false, std::format(L"Preferences Plugins custom-paths DxUi list did not repaint after long-run scroll chunk {}.", chunk));
             return false;
         }
+        if (scrolledDown && snapshot.pluginsCustomPathsListVerticalScrollDip <= previousScrollDip + 0.5f)
+        {
+            break;
+        }
 
         previousRenderCount = snapshot.pluginsCustomPathsListRenderCount;
         previousScrollDip   = snapshot.pluginsCustomPathsListVerticalScrollDip;
@@ -948,6 +956,10 @@ enum : size_t
             }
             state.Require(false, std::format(L"Preferences Keyboard DxUi list did not repaint after long-run scroll chunk {}.", chunk));
             return false;
+        }
+        if (scrolledDown && snapshot.keyboardListVerticalScrollDip <= previousScrollDip + 0.5f)
+        {
+            break;
         }
 
         previousRenderCount = snapshot.keyboardListRenderCount;
@@ -1168,6 +1180,10 @@ enum : size_t
             }
             state.Require(false, std::format(L"Preferences Viewers DxUi list did not repaint after long-run scroll chunk {}.", chunk));
             return false;
+        }
+        if (scrolledDown && snapshot.viewersListVerticalScrollDip <= previousScrollDip + 0.5f)
+        {
+            break;
         }
 
         previousRenderCount = snapshot.viewersListRenderCount;
@@ -1529,6 +1545,10 @@ enum : size_t
             }
             state.Require(false, std::format(L"Preferences Themes DxUi list did not repaint after long-run scroll chunk {}.", chunk));
             return false;
+        }
+        if (scrolledDown && snapshot.themesListVerticalScrollDip <= previousScrollDip + 0.5f)
+        {
+            break;
         }
 
         previousRenderCount = snapshot.themesListRenderCount;
@@ -7968,8 +7988,11 @@ enum : size_t
         return false;
     }
 
-    state.Require(SetFocus(categoryTreeHost) == categoryTreeHost,
-                  L"Failed to focus the Preferences category host for Keyboard reordered-resized/search validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)),
+                  std::format(L"Failed to focus the Preferences category host for Keyboard reordered-resized/search validation; "
+                              L"nativeFocus=0x{:X}, categoryHost=0x{:X}.",
+                              reinterpret_cast<uintptr_t>(GetFocus()),
+                              reinterpret_cast<uintptr_t>(categoryTreeHost)));
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryKeyboard),
                   L"Failed to select the Preferences Keyboard category for reordered-resized/search validation.");
     PumpPendingMessages();

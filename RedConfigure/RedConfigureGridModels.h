@@ -27,6 +27,41 @@ using RedSalamander::DxUi::GridRowStyle;
 using RedSalamander::DxUi::GridRowTone;
 using RedSalamander::DxUi::IDxGridModel;
 
+[[nodiscard]] inline uint64_t StableLocalizationReviewRowId(std::wstring_view ownerName, std::wstring_view id) noexcept
+{
+    uint64_t hash = 14695981039346656037ull;
+    const auto mix = [&hash](wchar_t ch) noexcept
+    {
+        hash ^= static_cast<uint64_t>(ch);
+        hash *= 1099511628211ull;
+    };
+
+    for (const wchar_t ch : ownerName)
+    {
+        mix(ch);
+    }
+    mix(L'\0');
+    for (const wchar_t ch : id)
+    {
+        mix(ch);
+    }
+
+    return hash == 0u ? 1u : hash;
+}
+
+[[nodiscard]] inline const RedConfigure::LocalizationTargetCell* FindLocalizationReviewTargetCell(const RedConfigure::LocalizationReviewRow& row,
+                                                                                                  std::wstring_view cultureName) noexcept
+{
+    for (const RedConfigure::LocalizationTargetCell& cell : row.targets)
+    {
+        if (cell.cultureName == cultureName)
+        {
+            return &cell;
+        }
+    }
+    return nullptr;
+}
+
 class InventoryGridModel final : public IDxGridModel
 {
 public:
@@ -250,6 +285,266 @@ private:
     const RedConfigure::RedConfigureSession& _session;
     std::vector<GridColumnDesc> _columns;
     std::vector<size_t> _viewRows;
+};
+
+class LocalizationReviewGridModel final : public IDxGridModel
+{
+public:
+    LocalizationReviewGridModel(HINSTANCE instance, const RedConfigure::RedConfigureSession& session) : _instance(instance), _session(session)
+    {
+    }
+
+    LocalizationReviewGridModel(const LocalizationReviewGridModel&)            = delete;
+    LocalizationReviewGridModel& operator=(const LocalizationReviewGridModel&) = delete;
+    LocalizationReviewGridModel(LocalizationReviewGridModel&&)                 = delete;
+    LocalizationReviewGridModel& operator=(LocalizationReviewGridModel&&)      = delete;
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _viewRows.size();
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return 4u + _visibleCultures.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        if (columnIndex == 0u)
+        {
+            return GridColumnDesc{.id          = L"owner",
+                                  .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_OWNER),
+                                  .widthDip    = 150.0f,
+                                  .minWidthDip = 90.0f,
+                                  .kind        = GridColumnKind::Text,
+                                  .sortable    = true,
+                                  .multiline   = false};
+        }
+        if (columnIndex == 1u)
+        {
+            return GridColumnDesc{.id          = L"id",
+                                  .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_ID),
+                                  .widthDip    = 170.0f,
+                                  .minWidthDip = 100.0f,
+                                  .kind        = GridColumnKind::Text,
+                                  .sortable    = true,
+                                  .multiline   = false};
+        }
+        if (columnIndex == 2u)
+        {
+            return GridColumnDesc{.id          = L"english",
+                                  .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_SOURCE),
+                                  .widthDip    = 420.0f,
+                                  .minWidthDip = 220.0f,
+                                  .kind        = GridColumnKind::Text,
+                                  .sortable    = true,
+                                  .multiline   = true};
+        }
+
+        const size_t statusColumn = GetColumnCount() - 1u;
+        if (columnIndex == statusColumn)
+        {
+            return GridColumnDesc{.id          = L"status",
+                                  .title       = LoadAppString(_instance, IDS_REDCONFIGURE_COL_STATUS),
+                                  .widthDip    = 150.0f,
+                                  .minWidthDip = 110.0f,
+                                  .kind        = GridColumnKind::Text,
+                                  .sortable    = true,
+                                  .multiline   = true};
+        }
+
+        const size_t cultureIndex = columnIndex - 3u;
+        if (cultureIndex < _visibleCultures.size())
+        {
+            return GridColumnDesc{.id          = L"target:" + _visibleCultures[cultureIndex],
+                                  .title       = _visibleCultures[cultureIndex],
+                                  .widthDip    = 380.0f,
+                                  .minWidthDip = 220.0f,
+                                  .kind        = GridColumnKind::Text,
+                                  .sortable    = true,
+                                  .multiline   = true};
+        }
+
+        return {};
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        outCell                                = {};
+        const auto rows                        = _session.GetLocalizationReviewRows();
+        const std::optional<size_t> sessionRow = ResolveSessionRow(rowIndex);
+        if (! sessionRow || sessionRow.value() >= rows.size())
+        {
+            return;
+        }
+
+        const RedConfigure::LocalizationReviewRow& row = rows[sessionRow.value()];
+        if (columnIndex == 0u)
+        {
+            outCell.text = row.ownerName;
+        }
+        else if (columnIndex == 1u)
+        {
+            outCell.text = row.id;
+        }
+        else if (columnIndex == 2u)
+        {
+            outCell.text = row.sourceText;
+        }
+        else if (columnIndex + 1u == GetColumnCount())
+        {
+            outCell.text = ReviewStatusText(row);
+        }
+        else
+        {
+            const std::optional<std::wstring> cultureName = ResolveTargetCulture(columnIndex);
+            if (cultureName)
+            {
+                if (const RedConfigure::LocalizationTargetCell* cell = FindLocalizationReviewTargetCell(row, cultureName.value()))
+                {
+                    outCell.text = cell->targetText;
+                }
+                else
+                {
+                    outCell.text = row.sourceText;
+                }
+            }
+        }
+
+        outCell.tooltipText = outCell.text;
+        outCell.multiline   = true;
+    }
+
+    [[nodiscard]] GridRowStyle GetRowStyle(size_t rowIndex) const override
+    {
+        const auto rows                        = _session.GetLocalizationReviewRows();
+        const std::optional<size_t> sessionRow = ResolveSessionRow(rowIndex);
+        if (! sessionRow || sessionRow.value() >= rows.size())
+        {
+            return {};
+        }
+
+        const RedConfigure::LocalizationReviewRow& row = rows[sessionRow.value()];
+        if (HasVisibleProblem(row))
+        {
+            return GridRowStyle{.tone = GridRowTone::Warning};
+        }
+        if (HasVisibleMissingTranslation(row))
+        {
+            return GridRowStyle{.tone = GridRowTone::Info};
+        }
+        return {};
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept override
+    {
+        const auto rows                        = _session.GetLocalizationReviewRows();
+        const std::optional<size_t> sessionRow = ResolveSessionRow(rowIndex);
+        if (! sessionRow || sessionRow.value() >= rows.size())
+        {
+            return 0u;
+        }
+
+        const RedConfigure::LocalizationReviewRow& row = rows[sessionRow.value()];
+        return StableLocalizationReviewRowId(row.ownerName, row.id);
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        if (rowId == 0u)
+        {
+            return std::nullopt;
+        }
+
+        for (size_t rowIndex = 0u; rowIndex < _viewRows.size(); ++rowIndex)
+        {
+            if (GetStableRowId(rowIndex) == rowId)
+            {
+                return rowIndex;
+            }
+        }
+        return std::nullopt;
+    }
+
+    void SetViewRows(std::vector<size_t> viewRows)
+    {
+        _viewRows = std::move(viewRows);
+    }
+
+    void SetVisibleCultures(std::vector<std::wstring> visibleCultures)
+    {
+        _visibleCultures = std::move(visibleCultures);
+    }
+
+    [[nodiscard]] std::optional<size_t> ResolveSessionRow(size_t viewRow) const noexcept
+    {
+        return viewRow < _viewRows.size() ? std::optional<size_t>(_viewRows[viewRow]) : std::nullopt;
+    }
+
+    [[nodiscard]] std::optional<std::wstring> ResolveTargetCulture(size_t columnIndex) const
+    {
+        if (columnIndex < 3u)
+        {
+            return std::nullopt;
+        }
+
+        const size_t cultureIndex = columnIndex - 3u;
+        return cultureIndex < _visibleCultures.size() ? std::optional<std::wstring>(_visibleCultures[cultureIndex]) : std::nullopt;
+    }
+
+private:
+    [[nodiscard]] static bool CellIsMissingTranslation(const RedConfigure::LocalizationTargetCell* cell) noexcept
+    {
+        return ! cell || (! cell->hasExistingTranslation && ! cell->dirty);
+    }
+
+    [[nodiscard]] bool HasVisibleProblem(const RedConfigure::LocalizationReviewRow& row) const noexcept
+    {
+        for (const std::wstring& culture : _visibleCultures)
+        {
+            const RedConfigure::LocalizationTargetCell* const cell = FindLocalizationReviewTargetCell(row, culture);
+            if (cell && cell->validation.status != RedConfigure::Localization::PlaceholderStatus::Ok)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] bool HasVisibleMissingTranslation(const RedConfigure::LocalizationReviewRow& row) const noexcept
+    {
+        for (const std::wstring& culture : _visibleCultures)
+        {
+            if (CellIsMissingTranslation(FindLocalizationReviewTargetCell(row, culture)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [[nodiscard]] std::wstring ReviewStatusText(const RedConfigure::LocalizationReviewRow& row) const
+    {
+        for (const std::wstring& culture : _visibleCultures)
+        {
+            const RedConfigure::LocalizationTargetCell* const cell = FindLocalizationReviewTargetCell(row, culture);
+            if (cell && cell->validation.status != RedConfigure::Localization::PlaceholderStatus::Ok)
+            {
+                return PlaceholderStatusText(_instance, cell->validation.status);
+            }
+        }
+        if (HasVisibleMissingTranslation(row))
+        {
+            return LoadAppString(_instance, IDS_REDCONFIGURE_STATUS_MISSING_TRANSLATION);
+        }
+        return {};
+    }
+
+    HINSTANCE _instance = nullptr;
+    const RedConfigure::RedConfigureSession& _session;
+    std::vector<size_t> _viewRows;
+    std::vector<std::wstring> _visibleCultures;
 };
 
 class ThemeColorGridModel final : public IDxGridModel

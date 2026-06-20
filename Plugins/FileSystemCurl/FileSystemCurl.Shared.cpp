@@ -879,14 +879,17 @@ namespace FileSystemCurlInternal
     }
 
     uint64_t sizeBytes = 0;
+    bool sizeParsed    = false;
     {
-        const auto sv = sizeTok.value();
-        std::from_chars(sv.data(), sv.data() + sv.size(), sizeBytes);
+        const auto sv        = sizeTok.value();
+        const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), sizeBytes);
+        sizeParsed           = (ec == std::errc{} && ptr == sv.data() + sv.size());
     }
 
     out                  = {};
     out.attributes       = (type == 'd') ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
     out.sizeBytes        = sizeBytes;
+    out.sizeKnown        = (type != 'd') && sizeParsed; // size column is meaningful only for regular files
     out.name             = Utf16FromUtf8(namePart);
     __int64 modifiedTime = 0;
     if (TryParseUnixListTimestamp(monthTok.value(), dayTok.value(), timeOrYearTok.value(), modifiedTime))
@@ -967,6 +970,7 @@ namespace FileSystemCurlInternal
         }
         out.attributes = FILE_ATTRIBUTE_NORMAL;
         out.sizeBytes  = parsed;
+        out.sizeKnown  = true;
     }
 
     out.name             = Utf16FromUtf8(namePart);
@@ -4330,6 +4334,16 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8)
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": [], "move": [] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "notApplicable"
   }
 }
 )json";
@@ -4356,6 +4370,16 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8)
   "crossFileSystem": {{
     "export": {{ "copy": ["*"], "move": ["*"] }},
     "import": {{ "copy": ["*"], "move": ["*"] }}
+  }},
+  "pathIdentity": {{
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "supported"
   }}
 }})json",
             copyMoveMax,

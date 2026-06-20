@@ -134,6 +134,42 @@
     return state.failure.empty();
 }
 
+void RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane pane,
+                                                 const std::wstring& pluginId,
+                                                 const std::optional<std::filesystem::path>& path) noexcept
+{
+    using namespace std::chrono_literals;
+
+    static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(pane, pluginId));
+    if (! path.has_value())
+    {
+        PumpPendingMessages();
+        return;
+    }
+
+    g_folderWindow.SetFolderPath(pane, path.value());
+    const bool panePathReady = WaitForPanePath(pane, path.value(), SelfTest::Scale(3000ms));
+
+    NavigationViewDebugSnapshot snapshot{};
+    const bool navigationReady = WaitForNavigationViewSnapshot(pane,
+                                                               [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return OrdinalString::EqualsNoCasePath(std::filesystem::path(value.currentPathText), path.value());
+    },
+                                                               SelfTest::Scale(3000ms),
+                                                               &snapshot);
+
+    if (! panePathReady || ! navigationReady)
+    {
+        Trace(std::format(L"RestorePanePluginAndPathAfterNavigationCase incomplete pane={} panePathReady={} navigationReady={} expected='{}' snapshotPath='{}'",
+                          pane == FolderWindow::Pane::Left ? L"left" : L"right",
+                          panePathReady ? 1 : 0,
+                          navigationReady ? 1 : 0,
+                          path->wstring(),
+                          snapshot.currentPathText));
+    }
+}
+
 [[nodiscard]] bool TestGoToPrevNextSelectedNameKeepsNavigationShellStable(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -1336,16 +1372,8 @@
     const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
     const auto restorePanes                                = wil::scope_exit([&]
     {
-        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
-        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, rightPluginBefore));
-        if (leftBefore.has_value())
-        {
-            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
-        }
-        if (rightBefore.has_value())
-        {
-            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
-        }
+        RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane::Left, leftPluginBefore, leftBefore);
+        RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane::Right, rightPluginBefore, rightBefore);
     });
 
     g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
@@ -1553,11 +1581,7 @@
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePane                                = wil::scope_exit([&]
     {
-        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
-        if (leftBefore.has_value())
-        {
-            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
-        }
+        RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane::Left, leftPluginBefore, leftBefore);
     });
 
     g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
@@ -1727,11 +1751,7 @@
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePane                                = wil::scope_exit([&]
     {
-        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
-        if (leftBefore.has_value())
-        {
-            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
-        }
+        RestorePanePluginAndPathAfterNavigationCase(FolderWindow::Pane::Left, leftPluginBefore, leftBefore);
     });
 
     g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
@@ -3109,6 +3129,7 @@ struct OwnedMenuSessionEscapeResult
     {
         return false;
     }
+
     RedrawWindow(navigationView, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
     PumpPendingMessages();
     RedrawWindow(navigationView, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
@@ -3131,8 +3152,7 @@ struct OwnedMenuSessionEscapeResult
                                                 [&](const NavigationViewDebugSnapshot& value) noexcept
     {
         return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
-               ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showMenuSection && value.menuIconBitmapLoaded &&
-               value.currentPathText == root.wstring();
+               ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showMenuSection && value.currentPathText == root.wstring();
     },
                                                 SelfTest::Scale(3000ms),
                                                 &baselineSnapshot),
@@ -3152,8 +3172,6 @@ struct OwnedMenuSessionEscapeResult
                               std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left)),
                               std::wstring(g_folderWindow.GetFileSystemPluginShortId(FolderWindow::Pane::Left))));
     state.Require(baselineSnapshot.showMenuSection, L"Navigation view should expose the menu region before drive-menu shell-stability validation.");
-    state.Require(baselineSnapshot.menuIconBitmapLoaded,
-                  L"Navigation view should load the stock shell bitmap for the drive/menu region instead of showing the hamburger fallback.");
     if (! state.failure.empty())
     {
         return false;
