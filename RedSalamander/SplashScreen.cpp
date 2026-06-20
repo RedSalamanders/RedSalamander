@@ -59,7 +59,6 @@ std::atomic<bool> g_threadStarted{false};
 wil::unique_event_nothrow g_closeEvent;
 std::atomic<HWND> g_hwnd{nullptr};
 std::atomic<HWND> g_owner{nullptr};
-std::jthread g_workerThread;
 
 #ifdef ENABLE_TESTS
 std::atomic<unsigned long> g_debugStage{0};
@@ -69,6 +68,10 @@ std::atomic<long> g_debugComHr{0};
 
 std::mutex g_textMutex;
 std::wstring g_statusText;
+
+// g_workerThread must be declared last: it is destroyed first at process teardown, so
+// ~jthread joins the worker before the globals above (mutex, status text, close event) die.
+std::jthread g_workerThread;
 
 constexpr int kSplashLogoDesignDip         = 162;
 constexpr int kSplashContentOffsetDip      = 14;
@@ -640,7 +643,8 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
     const auto resetState = wil::scope_exit([]() noexcept
     {
         g_hwnd.store(nullptr, std::memory_order_release);
-        g_closeEvent.reset();
+        // g_closeEvent is owned by the main thread (BeginDelayedOpen/CloseIfExist); resetting it
+        // here would race a concurrent SetEvent from RequestCloseIfExist.
         g_threadStarted.store(false, std::memory_order_release);
     });
 
@@ -746,6 +750,17 @@ void ThreadMain(std::stop_token stopToken, std::chrono::milliseconds delay, HINS
     g_debugStage.store(11, std::memory_order_release);
 #endif
     g_hwnd.store(hwnd.get(), std::memory_order_release);
+    // Re-check after publishing the handle: a close requested between the abort check
+    // above and the store would otherwise be lost (the closer only posts WM_CLOSE when it
+    // sees a published hwnd) and GetMessageW below would block forever.
+    if (Detail::ShouldAbortPendingOpen(stopToken, g_closeEvent.get()))
+    {
+#ifdef ENABLE_TESTS
+        g_debugStage.store(12, std::memory_order_release);
+#endif
+        hwnd.reset();
+        return;
+    }
 
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0)
@@ -780,6 +795,13 @@ void BeginDelayedOpen(std::chrono::milliseconds delay, HINSTANCE instance) noexc
         g_debugStage.store(21, std::memory_order_release);
 #endif
         return;
+    }
+
+    // A previous worker may have finished (clearing g_threadStarted) without being joined;
+    // join it before replacing the close event it might still reference.
+    if (g_workerThread.joinable())
+    {
+        g_workerThread.join();
     }
 
     g_closeEvent.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
@@ -853,6 +875,9 @@ void CloseIfExist() noexcept
     if (g_workerThread.joinable() && g_workerThread.get_id() != std::this_thread::get_id())
     {
         g_workerThread.join();
+        // The main thread owns the close-event lifetime; release it only after the worker
+        // (including its stop callback) can no longer reference the handle.
+        g_closeEvent.reset();
     }
 }
 

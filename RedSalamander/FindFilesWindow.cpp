@@ -9,7 +9,6 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
-#include <cwctype>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -105,6 +104,7 @@ constexpr size_t kResultsDrainMaxMessages             = 8u;
 constexpr size_t kResultsDrainMaxRecords              = 256u;
 constexpr size_t kInteractiveResultsRefreshRecords    = 256u;
 constexpr uint64_t kInteractiveResultsRefreshMaxAgeMs = 100u;
+constexpr uint64_t kPendingResultRemovalMaxAgeMs      = 24ull * 60ull * 60ull * 1000ull;
 constexpr uint32_t kFindShortcutCtrl                  = 0x1u;
 constexpr uint32_t kFindShortcutShift                 = 0x2u;
 constexpr uint32_t kFindShortcutAlt                   = 0x4u;
@@ -278,6 +278,7 @@ enum class FindFilesWindowDebugCommand : WPARAM
     ResizeVisibleResultColumn,
     ApplyResultsLayoutFromSettings,
     SelectResults,
+    PostStaleSearchPayloads,
 };
 
 struct FindFilesWindowDebugConfigurePayload final
@@ -342,6 +343,30 @@ struct FindFilesWindowDebugSelectResultsPayload final
     std::vector<std::wstring> fullPaths;
     bool result = false;
 };
+
+struct FindFilesWindowDebugPostStaleSearchPayloadsPayload final
+{
+    std::wstring fullPath;
+    bool result = false;
+};
+
+std::atomic<bool> g_debugSearchRunBlockEnabled{false};
+std::atomic<bool> g_debugSearchRunBlocked{false};
+std::atomic<bool> g_debugSearchRunRelease{false};
+
+void DebugMaybeBlockFindFilesWindowSearchRun() noexcept
+{
+    if (! g_debugSearchRunBlockEnabled.load(std::memory_order_acquire))
+    {
+        return;
+    }
+
+    g_debugSearchRunBlocked.store(true, std::memory_order_release);
+    while (g_debugSearchRunBlockEnabled.load(std::memory_order_acquire) && ! g_debugSearchRunRelease.load(std::memory_order_acquire))
+    {
+        ::Sleep(10);
+    }
+}
 #endif
 constexpr std::wstring_view kBuiltinLocalFileSystemId = L"builtin/file-system";
 constexpr std::wstring_view kStatusSpinnerFrames[]    = {L"|", L"/", L"-", L"\\"};
@@ -600,6 +625,7 @@ struct FindResultRecord
 struct FindSearchResultsPayload
 {
     std::vector<FindResultRecord> results;
+    uint64_t epoch = 0u;
     SteadyClock::time_point enqueuedAt{};
 };
 
@@ -618,6 +644,7 @@ struct SearchServiceStatusSnapshot
 
 struct FindSearchProgressPayload
 {
+    uint64_t epoch                  = 0u;
     FileSystemSearchPhase phase     = FILESYSTEM_SEARCH_PHASE_INITIALIZING;
     FileSystemSearchBackend backend = FILESYSTEM_SEARCH_BACKEND_UNKNOWN;
     uint32_t warningFlags           = FILESYSTEM_SEARCH_WARNING_NONE;
@@ -633,6 +660,7 @@ struct FindSearchProgressPayload
 
 struct FindSearchCompletePayload
 {
+    uint64_t epoch                  = 0u;
     HRESULT hr                      = S_OK;
     FileSystemSearchBackend backend = FILESYSTEM_SEARCH_BACKEND_UNKNOWN;
     uint32_t warningFlags           = FILESYSTEM_SEARCH_WARNING_NONE;
@@ -1299,10 +1327,7 @@ private:
 
 [[nodiscard]] std::wstring ToLowerCopy(std::wstring_view value) noexcept
 {
-    std::wstring result(value);
-    std::transform(
-        result.begin(), result.end(), result.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch))); });
-    return result;
+    return OrdinalString::FoldCaseInvariant(value);
 }
 
 [[nodiscard]] std::wstring MakeResultKey(std::wstring_view pluginId, std::wstring_view instanceContext, std::wstring_view fullPath) noexcept
@@ -1674,7 +1699,7 @@ public:
 
     ~SearchSessionController() noexcept;
 
-    [[nodiscard]] bool Start(FindFilesWindow& owner, SearchRequest request) noexcept;
+    [[nodiscard]] bool Start(FindFilesWindow& owner, SearchRequest request, uint64_t epoch) noexcept;
     void Cancel() noexcept;
     void Shutdown() noexcept;
     void NotifyUiSettled() noexcept;
@@ -1685,7 +1710,8 @@ public:
 #endif
 
 private:
-    void Run(SearchRequest request) noexcept;
+    void JoinCompletedWorker() noexcept;
+    void Run(SearchRequest request, uint64_t epoch) noexcept;
     void MarkIdle() noexcept;
 
     std::jthread _worker;
@@ -1706,6 +1732,17 @@ public:
     using IDxGridDelegate::OnGridSelectionChanged;
 
     FindFilesWindow(HWND owner, Common::Settings::Settings& settings, AppTheme theme, FindFilesPaneContext context) noexcept;
+
+    ~FindFilesWindow() noexcept override
+    {
+        // Lets Create() observe a self-delete performed by the window
+        // procedure while CreateWindowExW was still on the stack.
+        if (_destructionObserver)
+        {
+            *_destructionObserver = true;
+        }
+    }
+
     FindFilesWindow(const FindFilesWindow&)            = delete;
     FindFilesWindow& operator=(const FindFilesWindow&) = delete;
 
@@ -1746,6 +1783,7 @@ public:
     [[nodiscard]] bool DebugGetSelectedOpenDisposition(bool parentOnly, FindFilesDebugOpenDisposition& out) const noexcept;
     [[nodiscard]] bool DebugScrollResultsByWheelDetents(int detents) noexcept;
     [[nodiscard]] bool DebugWaitForIdle(uint32_t timeoutMs) noexcept;
+    [[nodiscard]] bool DebugPostStaleSearchPayloads(std::wstring fullPath) noexcept;
 #endif
 
     LRESULT WindowProc(UINT message, WPARAM wParam, LPARAM lParam) noexcept;
@@ -1754,7 +1792,7 @@ public:
 private:
     void TraceRawWindowMessage(UINT message, WPARAM wParam, LPARAM lParam, std::wstring_view phase, bool dxHandled = false) const noexcept;
     [[nodiscard]] bool OnCreate(HWND hwnd) noexcept;
-    void OnClose() noexcept;
+    [[nodiscard]] bool OnClose() noexcept;
     LRESULT OnNcDestroy() noexcept;
     void BuildUi() noexcept;
     [[nodiscard]] bool CreateRootNavigation(HWND parent) noexcept;
@@ -1821,6 +1859,7 @@ private:
     void OnSearchResults(std::unique_ptr<FindSearchResultsPayload> payload) noexcept;
     void OnSearchProgress(std::unique_ptr<FindSearchProgressPayload> payload) noexcept;
     void OnSearchComplete(std::unique_ptr<FindSearchCompletePayload> payload) noexcept;
+    void CompleteDeferredCloseIfReady() noexcept;
     void ApplyDeferredSetOperation(SearchOperation operation) noexcept;
     void ClearResults() noexcept;
     void RebuildResultsList() noexcept;
@@ -1892,8 +1931,9 @@ private:
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
     FindFilesPaneContext _context;
-    size_t _dispatchDepth = 0u;
-    bool _deletePending   = false;
+    size_t _dispatchDepth      = 0u;
+    bool _deletePending        = false;
+    bool* _destructionObserver = nullptr;
 
     wil::unique_hwnd _hWnd;
     WindowHost _dxHost;
@@ -1950,6 +1990,7 @@ private:
     HRESULT _lastStatusHint               = S_OK;
     bool _cancelRequestedUi               = false;
     bool _closeRequested                  = false;
+    uint64_t _activeSearchEpoch           = 0u;
     uint64_t _searchStartedTickMs         = 0u;
     uint64_t _lastProgressTickMs          = 0u;
     uint64_t _lastBackendStatusTickMs     = 0u;
@@ -1957,6 +1998,24 @@ private:
     std::wstring _status;
     std::wstring _destinationStatus;
     std::optional<std::filesystem::path> _explicitDestinationFolder;
+
+    // 7A: result rows disappear when their move/delete task SUCCEEDS, not when it merely
+    // starts — a failed or partial task must leave the rows visible and truthful.
+    struct PendingResultRemoval final
+    {
+        uint64_t taskId = 0;
+        FileSystemOperation operation = FILESYSTEM_COPY;
+        uint64_t createdTickMs = 0;
+        std::vector<std::filesystem::path> sourcePaths;
+        std::unordered_set<std::wstring> resultKeys;
+    };
+    std::vector<PendingResultRemoval> _pendingResultRemovals;
+    uint64_t _fileOperationCompletedCallbackToken = 0;
+    std::shared_ptr<void> _fileOperationCompletedCallbackLifetime = std::make_shared<int>(0);
+
+    void EnsureFileOperationCompletedSubscription() noexcept;
+    void ReapExpiredPendingResultRemovals(uint64_t nowTickMs) noexcept;
+    void OnFolderWindowFileOperationCompleted(const FolderWindow::FileOperationCompletedEvent& e) noexcept;
     std::wstring _lastCurrentPath;
     std::wstring _lastSearchRootPath;
     std::wstring _lastSubmittedRootPath;
@@ -2022,10 +2081,11 @@ std::vector<HWND> g_findFilesWindows;
 
 struct SearchCallbacks final : IFileSystemSearchCallback
 {
-    explicit SearchCallbacks(HWND hwnd, const SearchRequest& request, std::atomic<bool>& cancelRequested) noexcept
+    explicit SearchCallbacks(HWND hwnd, const SearchRequest& request, std::atomic<bool>& cancelRequested, uint64_t epoch) noexcept
         : _hwnd(hwnd),
           _request(request),
-          _cancelRequested(cancelRequested)
+          _cancelRequested(cancelRequested),
+          _epoch(epoch)
     {
         _hostExtensions.sizeBytes             = sizeof(_hostExtensions);
         _hostExtensions.version               = FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1;
@@ -2144,6 +2204,7 @@ struct SearchCallbacks final : IFileSystemSearchCallback
         EmitPerfCount(L"find.results.batch_size", batchSize);
         Debug::Perf::Emit(L"find.results.batch_age_us", L"", batchAgeUs, batchSize, 0u, S_OK);
         payload->results    = std::move(_batch);
+        payload->epoch      = _epoch;
         payload->enqueuedAt = now;
         _batch.clear();
         _batchFirstQueuedAt = {};
@@ -2242,6 +2303,7 @@ struct SearchCallbacks final : IFileSystemSearchCallback
         }
 
         payload->phase              = progress->phase;
+        payload->epoch              = _epoch;
         payload->backend            = progress->backend;
         payload->warningFlags       = progress->warningFlags;
         payload->statusHint         = progress->statusHint;
@@ -2277,6 +2339,7 @@ struct SearchCallbacks final : IFileSystemSearchCallback
     HWND _hwnd = nullptr;
     const SearchRequest& _request;
     std::atomic<bool>& _cancelRequested;
+    uint64_t _epoch = 0u;
     FileSystemSearchHostExtensions _hostExtensions{};
     std::vector<FindResultRecord> _batch;
     SteadyClock::time_point _batchFirstQueuedAt{};
@@ -2289,8 +2352,10 @@ SearchSessionController::~SearchSessionController() noexcept
     Shutdown();
 }
 
-bool SearchSessionController::Start(FindFilesWindow& owner, SearchRequest request) noexcept
+bool SearchSessionController::Start(FindFilesWindow& owner, SearchRequest request, uint64_t epoch) noexcept
 {
+    JoinCompletedWorker();
+
     bool expected = false;
     if (! _active.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
     {
@@ -2303,7 +2368,7 @@ bool SearchSessionController::Start(FindFilesWindow& owner, SearchRequest reques
     _owner     = &owner;
     try
     {
-        _worker = std::jthread([this, request = std::move(request)]() mutable noexcept { Run(std::move(request)); });
+        _worker = std::jthread([this, request = std::move(request), epoch]() mutable noexcept { Run(std::move(request), epoch); });
         EmitPerfCount(L"find.session.start_count");
     }
     catch (const std::system_error&)
@@ -2316,6 +2381,14 @@ bool SearchSessionController::Start(FindFilesWindow& owner, SearchRequest reques
         return false;
     }
     return true;
+}
+
+void SearchSessionController::JoinCompletedWorker() noexcept
+{
+    if (_worker.joinable() && ! _active.load(std::memory_order_acquire))
+    {
+        _worker.join();
+    }
 }
 
 void SearchSessionController::Cancel() noexcept
@@ -2361,12 +2434,13 @@ bool SearchSessionController::IsUiSettled() const noexcept
 }
 #endif
 
-void SearchSessionController::Run(SearchRequest request) noexcept
+void SearchSessionController::Run(SearchRequest request, uint64_t epoch) noexcept
 {
     const Debug::Perf::Scope runPerf(L"find.session.run_total_ms");
     auto initialPayload = std::unique_ptr<FindSearchProgressPayload>(new (std::nothrow) FindSearchProgressPayload{});
     if (initialPayload)
     {
+        initialPayload->epoch      = epoch;
         initialPayload->phase      = FILESYSTEM_SEARCH_PHASE_INITIALIZING;
         initialPayload->backend    = FILESYSTEM_SEARCH_BACKEND_UNKNOWN;
         initialPayload->statusHint = S_OK;
@@ -2374,7 +2448,10 @@ void SearchSessionController::Run(SearchRequest request) noexcept
         static_cast<void>(PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchProgress, 0, std::move(initialPayload)));
     }
 
-    SearchCallbacks callbacks(_ownerHwnd, request, _cancelRequested);
+    SearchCallbacks callbacks(_ownerHwnd, request, _cancelRequested, epoch);
+#ifdef ENABLE_TESTS
+    DebugMaybeBlockFindFilesWindowSearchRun();
+#endif
 
     FileSystemSearchQuery query{};
     query.sizeBytes                     = sizeof(query);
@@ -2446,26 +2523,30 @@ void SearchSessionController::Run(SearchRequest request) noexcept
     }
     static_cast<void>(callbacks.FlushResults());
 
-    bool completionQueued = false;
-    auto complete         = std::unique_ptr<FindSearchCompletePayload>(new (std::nothrow) FindSearchCompletePayload{});
+    auto complete = std::unique_ptr<FindSearchCompletePayload>(new (std::nothrow) FindSearchCompletePayload{});
     if (complete)
     {
         complete->hr                 = hr;
+        complete->epoch              = epoch;
         complete->backend            = callbacks._latestProgress.backend;
         complete->warningFlags       = callbacks._latestProgress.warningFlags;
         complete->scannedDirectories = callbacks._latestProgress.scannedDirectories;
         complete->scannedFiles       = callbacks._latestProgress.scannedFiles;
         complete->candidateFiles     = callbacks._latestProgress.candidateFiles;
         complete->matchedEntries     = callbacks._latestProgress.matchedEntries;
-        completionQueued             = PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, 0, std::move(complete));
     }
 
+    MarkIdle();
+
+    bool completionQueued = false;
+    if (complete)
+    {
+        completionQueued = PostMessagePayload(_ownerHwnd, WndMsg::kFindSearchComplete, 0, std::move(complete));
+    }
     if (! completionQueued)
     {
         NotifyUiSettled();
     }
-
-    MarkIdle();
 }
 
 void SearchSessionController::MarkIdle() noexcept
@@ -2487,6 +2568,9 @@ FindFilesWindow::FindFilesWindow(HWND owner, Common::Settings::Settings& setting
 
 bool FindFilesWindow::Create() noexcept
 {
+    // Create() owns failure cleanup: on any failure path the instance is
+    // deleted exactly once, either here or by the window procedure tearing
+    // down a half-created window. Callers must not delete after Create().
     HINSTANCE instance = GetModuleHandleW(nullptr);
 
     WNDCLASSEXW wc{};
@@ -2499,10 +2583,13 @@ bool FindFilesWindow::Create() noexcept
     wc.lpszClassName = kFindFilesWindowClassName;
     if (RegisterClassExW(&wc) == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
     {
+        delete this;
         return false;
     }
 
     const std::wstring title = LoadStringResource(nullptr, IDS_FIND_TITLE);
+    bool destroyedDuringCreate = false;
+    _destructionObserver       = &destroyedDuringCreate;
     const HWND created       = CreateWindowExW(0,
                                                kFindFilesWindowClassName,
                                                title.c_str(),
@@ -2515,8 +2602,16 @@ bool FindFilesWindow::Create() noexcept
                                                nullptr,
                                                instance,
                                                this);
+    if (destroyedDuringCreate)
+    {
+        // WM_CREATE failed: CreateWindowExW destroyed the half-created window
+        // and the window procedure already deleted this instance.
+        return false;
+    }
+    _destructionObserver = nullptr;
     if (! created)
     {
+        delete this;
         return false;
     }
 
@@ -3299,19 +3394,22 @@ bool FindFilesWindow::CopyOrMoveSelectedResultsToOtherPane(FileSystemOperation o
         return false;
     }
 
+    std::vector<std::filesystem::path> sourcePathsForCompletion = context->paths;
+
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
     std::optional<std::filesystem::path> destinationFolder;
     HRESULT hr = S_OK;
+    uint64_t taskId = 0;
     if (_explicitDestinationFolder.has_value() && ! _explicitDestinationFolder->empty())
     {
         destinationFolder = _explicitDestinationFolder.value();
         hr = g_folderWindow.StartFileOperationForResolvedPathsToDestination(
-            context->pluginId, context->instanceContext, operation, std::move(context->paths), destinationFolder.value(), flags);
+            context->pluginId, context->instanceContext, operation, std::move(context->paths), destinationFolder.value(), flags, &taskId);
     }
     else
     {
         hr = g_folderWindow.StartFileOperationForResolvedPathsToOtherPane(
-            context->pluginId, context->instanceContext, operation, std::move(context->paths), flags, &destinationFolder);
+            context->pluginId, context->instanceContext, operation, std::move(context->paths), flags, &destinationFolder, &taskId);
     }
     if (FAILED(hr))
     {
@@ -3319,10 +3417,17 @@ bool FindFilesWindow::CopyOrMoveSelectedResultsToOtherPane(FileSystemOperation o
                        isMove ? L"move" : L"copy",
                        static_cast<unsigned long>(hr));
     }
-    else if (hr == S_OK && isMove)
+    else if (hr == S_OK && isMove && taskId != 0)
     {
-        RemoveKeysFromResults(context->resultKeys);
-        RefreshResultsView(true);
+        // Rows disappear when the move SUCCEEDS, not when it merely starts.
+        EnsureFileOperationCompletedSubscription();
+        const uint64_t nowTickMs = GetTickCount64();
+        ReapExpiredPendingResultRemovals(nowTickMs);
+        _pendingResultRemovals.push_back(PendingResultRemoval{.taskId = taskId,
+                                                              .operation = operation,
+                                                              .createdTickMs = nowTickMs,
+                                                              .sourcePaths = std::move(sourcePathsForCompletion),
+                                                              .resultKeys = std::move(context->resultKeys)});
     }
     if (hr == S_OK && destinationFolder.has_value())
     {
@@ -3342,24 +3447,78 @@ bool FindFilesWindow::DeleteSelectedResults(bool permanent) noexcept
         return false;
     }
 
+    std::vector<std::filesystem::path> sourcePathsForCompletion = context->paths;
+
     const FileSystemFlags flags =
         permanent ? static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE)
                   : static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+    uint64_t taskId = 0;
     const HRESULT hr = g_folderWindow.StartFileOperationForResolvedPaths(
-        context->pluginId, context->instanceContext, FILESYSTEM_DELETE, std::move(context->paths), flags, permanent);
+        context->pluginId, context->instanceContext, FILESYSTEM_DELETE, std::move(context->paths), flags, permanent, &taskId);
     if (FAILED(hr))
     {
         Debug::Warning(L"FindFiles: result delete command failed (permanent={} hr={:#010x}).",
                        permanent,
                        static_cast<unsigned long>(hr));
     }
-    else if (hr == S_OK)
+    else if (hr == S_OK && taskId != 0)
     {
-        RemoveKeysFromResults(context->resultKeys);
-        RefreshResultsView(true);
+        // Rows disappear when the delete SUCCEEDS, not when it merely starts.
+        EnsureFileOperationCompletedSubscription();
+        const uint64_t nowTickMs = GetTickCount64();
+        ReapExpiredPendingResultRemovals(nowTickMs);
+        _pendingResultRemovals.push_back(PendingResultRemoval{.taskId = taskId,
+                                                              .operation = FILESYSTEM_DELETE,
+                                                              .createdTickMs = nowTickMs,
+                                                              .sourcePaths = std::move(sourcePathsForCompletion),
+                                                              .resultKeys = std::move(context->resultKeys)});
     }
 
     return true;
+}
+
+void FindFilesWindow::EnsureFileOperationCompletedSubscription() noexcept
+{
+    if (_fileOperationCompletedCallbackToken != 0)
+    {
+        return;
+    }
+    _fileOperationCompletedCallbackToken = g_folderWindow.AddFileOperationCompletedCallback(
+        [this](const FolderWindow::FileOperationCompletedEvent& e) noexcept
+    { OnFolderWindowFileOperationCompleted(e); },
+        _fileOperationCompletedCallbackLifetime);
+}
+
+void FindFilesWindow::ReapExpiredPendingResultRemovals(uint64_t nowTickMs) noexcept
+{
+    std::erase_if(_pendingResultRemovals,
+                  [nowTickMs](const PendingResultRemoval& pending) noexcept
+    {
+        return pending.createdTickMs != 0 && nowTickMs >= pending.createdTickMs &&
+               (nowTickMs - pending.createdTickMs) > kPendingResultRemovalMaxAgeMs;
+    });
+}
+
+void FindFilesWindow::OnFolderWindowFileOperationCompleted(const FolderWindow::FileOperationCompletedEvent& e) noexcept
+{
+    ReapExpiredPendingResultRemovals(GetTickCount64());
+    for (auto it = _pendingResultRemovals.begin(); it != _pendingResultRemovals.end(); ++it)
+    {
+        if (it->taskId != e.taskId)
+        {
+            continue;
+        }
+
+        // Failed, cancelled or partial tasks keep their rows: the source items still exist and
+        // the list must stay truthful.
+        if (SUCCEEDED(e.hr))
+        {
+            RemoveKeysFromResults(it->resultKeys);
+            RefreshResultsView(true);
+        }
+        _pendingResultRemovals.erase(it);
+        return;
+    }
 }
 
 std::optional<std::wstring> FindFilesWindow::ResolveResultShortcutCommand(UINT message, WPARAM wParam) const noexcept
@@ -4330,11 +4489,11 @@ std::optional<SearchRequest> FindFilesWindow::BuildSearchRequest(const SearchTex
     return request;
 }
 
-void FindFilesWindow::OnClose() noexcept
+bool FindFilesWindow::OnClose() noexcept
 {
     if (_closeRequested)
     {
-        return;
+        return ! _session.IsActive();
     }
 
     _closeRequested = true;
@@ -4343,11 +4502,30 @@ void FindFilesWindow::OnClose() noexcept
         static_cast<void>(::KillTimer(_hWnd.get(), kStatusRefreshTimerId));
     }
     PersistUiState(false);
+    _cancelRequestedUi = true;
+    _session.Cancel();
+    if (_session.IsActive())
+    {
+        if (_hWnd)
+        {
+            static_cast<void>(::EnableWindow(_hWnd.get(), FALSE));
+            static_cast<void>(::ShowWindow(_hWnd.get(), SW_HIDE));
+        }
+        EmitPerfCount(L"find.ui.close_deferred_count");
+        return false;
+    }
+
     _session.Shutdown();
+    return true;
 }
 
 LRESULT FindFilesWindow::OnNcDestroy() noexcept
 {
+    _fileOperationCompletedCallbackLifetime.reset();
+    if (_fileOperationCompletedCallbackToken != 0)
+    {
+        g_folderWindow.RemoveFileOperationCompletedCallback(std::exchange(_fileOperationCompletedCallbackToken, 0ull));
+    }
     if (_hWnd)
     {
         static_cast<void>(::KillTimer(_hWnd.get(), kStatusRefreshTimerId));
@@ -5473,9 +5651,10 @@ bool FindFilesWindow::BeginSearch(SearchOperation operation, const SearchTextOve
 
     PersistUiState(true);
     PopulateHistoryCombos();
+    const uint64_t searchEpoch = ++_activeSearchEpoch;
     OnSearchStarted(operation, request.value());
 
-    if (! _session.Start(*this, std::move(request.value())))
+    if (! _session.Start(*this, std::move(request.value()), searchEpoch))
     {
         TraceFindContextMenuDiagnostics(L"find.begin-search-blocked", L"reason=session-start operation={}", TraceSearchOperationName(operation));
         _lastStatusHint = E_FAIL;
@@ -5498,6 +5677,10 @@ bool FindFilesWindow::BeginSearch(SearchOperation operation, const SearchTextOve
 void FindFilesWindow::OnSearchResults(std::unique_ptr<FindSearchResultsPayload> payload) noexcept
 {
     if (! payload)
+    {
+        return;
+    }
+    if (payload->epoch != _activeSearchEpoch)
     {
         return;
     }
@@ -5543,6 +5726,10 @@ void FindFilesWindow::OnSearchResults(std::unique_ptr<FindSearchResultsPayload> 
 
         auto newerPayload = TakeMessagePayload<FindSearchResultsPayload>(queuedMessage.lParam);
         if (! newerPayload)
+        {
+            continue;
+        }
+        if (newerPayload->epoch != _activeSearchEpoch)
         {
             continue;
         }
@@ -5680,6 +5867,10 @@ void FindFilesWindow::OnSearchProgress(std::unique_ptr<FindSearchProgressPayload
     {
         return;
     }
+    if (payload->epoch != _activeSearchEpoch)
+    {
+        return;
+    }
 
     const auto handlerStartedAt = SteadyClock::now();
     const Debug::Perf::Scope progressPerf(L"find.ui.progress_handler_ms");
@@ -5715,6 +5906,10 @@ void FindFilesWindow::OnSearchProgress(std::unique_ptr<FindSearchProgressPayload
 
         auto newerPayload = TakeMessagePayload<FindSearchProgressPayload>(queuedMessage.lParam);
         if (! newerPayload)
+        {
+            continue;
+        }
+        if (newerPayload->epoch != _activeSearchEpoch)
         {
             continue;
         }
@@ -5793,12 +5988,17 @@ void FindFilesWindow::ApplyDeferredSetOperation(SearchOperation operation) noexc
         default: break;
     }
 
+    _deferredKeys.clear();
     RebuildResultsList();
 }
 
 void FindFilesWindow::OnSearchComplete(std::unique_ptr<FindSearchCompletePayload> payload) noexcept
 {
     if (! payload)
+    {
+        return;
+    }
+    if (payload->epoch != _activeSearchEpoch)
     {
         return;
     }
@@ -5814,15 +6014,17 @@ void FindFilesWindow::OnSearchComplete(std::unique_ptr<FindSearchCompletePayload
     _lastScannedFiles       = payload->scannedFiles;
     _lastCandidateFiles     = payload->candidateFiles;
     _lastMatchedEntries     = payload->matchedEntries;
-    _lastStatusHint         = payload->hr;
+    const bool uiCancelRequested = _cancelRequestedUi;
+    const HRESULT effectiveHr    = uiCancelRequested && SUCCEEDED(payload->hr) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : payload->hr;
+    _lastStatusHint              = effectiveHr;
     _cancelRequestedUi      = false;
 
-    if (FAILED(payload->hr) && payload->hr != HRESULT_FROM_WIN32(ERROR_CANCELLED))
+    if (FAILED(effectiveHr) && effectiveHr != HRESULT_FROM_WIN32(ERROR_CANCELLED))
     {
         Debug::Warning(
             L"FindFiles: search completed with failure backend={} hr=0x{:08X} scannedDirs={} scannedFiles={} candidates={} matches={} warnings=0x{:08X}",
             static_cast<uint32_t>(_lastBackend),
-            static_cast<unsigned long>(payload->hr),
+            static_cast<unsigned long>(effectiveHr),
             _lastScannedDirectories,
             _lastScannedFiles,
             _lastCandidateFiles,
@@ -5832,7 +6034,14 @@ void FindFilesWindow::OnSearchComplete(std::unique_ptr<FindSearchCompletePayload
 
     if (_activeOperation == SearchOperation::Intersect || _activeOperation == SearchOperation::Subtract)
     {
-        ApplyDeferredSetOperation(_activeOperation);
+        if (effectiveHr == S_OK && ! uiCancelRequested)
+        {
+            ApplyDeferredSetOperation(_activeOperation);
+        }
+        else
+        {
+            _deferredKeys.clear();
+        }
     }
 
     ApplyPendingResultsRefresh();
@@ -5844,6 +6053,18 @@ void FindFilesWindow::OnSearchComplete(std::unique_ptr<FindSearchCompletePayload
     UpdateStatusRefreshTimer();
     RefreshStatusText();
     UpdateActionButtons();
+    CompleteDeferredCloseIfReady();
+}
+
+void FindFilesWindow::CompleteDeferredCloseIfReady() noexcept
+{
+    if (! _closeRequested || ! _hWnd || _session.IsActive())
+    {
+        return;
+    }
+
+    EmitPerfCount(L"find.ui.close_deferred_complete_count");
+    _hWnd.reset();
 }
 
 #ifdef ENABLE_TESTS
@@ -6079,6 +6300,71 @@ bool FindFilesWindow::DebugCancelSearch() noexcept
     return true;
 }
 
+bool FindFilesWindow::DebugPostStaleSearchPayloads(std::wstring fullPath) noexcept
+{
+    if (! _hWnd)
+    {
+        return false;
+    }
+
+    const uint64_t staleEpoch = _activeSearchEpoch == 0u ? 1u : _activeSearchEpoch - 1u;
+    if (staleEpoch == _activeSearchEpoch)
+    {
+        return false;
+    }
+
+    const std::filesystem::path path(fullPath);
+    const std::wstring displayName = path.filename().native();
+    const std::wstring displayPath = path.parent_path().native();
+
+    auto results = std::unique_ptr<FindSearchResultsPayload>(new (std::nothrow) FindSearchResultsPayload{});
+    auto progress = std::unique_ptr<FindSearchProgressPayload>(new (std::nothrow) FindSearchProgressPayload{});
+    auto complete = std::unique_ptr<FindSearchCompletePayload>(new (std::nothrow) FindSearchCompletePayload{});
+    if (! results || ! progress || ! complete)
+    {
+        return false;
+    }
+
+    FindResultRecord staleRecord{};
+    staleRecord.key           = MakeResultKey(kBuiltinLocalFileSystemId, L"", fullPath);
+    staleRecord.pluginId      = std::wstring(kBuiltinLocalFileSystemId);
+    staleRecord.pluginShortId = L"file";
+    staleRecord.fullPath      = std::move(fullPath);
+    staleRecord.relativePath  = displayName;
+    staleRecord.displayPath   = displayPath;
+    staleRecord.displayName   = displayName;
+    staleRecord.fileAttributes = FILE_ATTRIBUTE_ARCHIVE;
+    staleRecord.matchedBy     = FILESYSTEM_SEARCH_MATCH_SOURCE_NAME;
+    results->results.push_back(std::move(staleRecord));
+    results->epoch      = staleEpoch;
+    results->enqueuedAt = SteadyClock::now();
+
+    progress->epoch              = staleEpoch;
+    progress->phase              = FILESYSTEM_SEARCH_PHASE_CONTENT_SCAN;
+    progress->backend            = FILESYSTEM_SEARCH_BACKEND_SCAN;
+    progress->warningFlags       = FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+    progress->statusHint         = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    progress->scannedDirectories = 9001u;
+    progress->scannedFiles       = 9002u;
+    progress->candidateFiles     = 9003u;
+    progress->matchedEntries     = 9004u;
+    progress->currentPath        = displayPath;
+    progress->enqueuedAt         = SteadyClock::now();
+
+    complete->epoch              = staleEpoch;
+    complete->hr                 = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    complete->backend            = FILESYSTEM_SEARCH_BACKEND_SCAN;
+    complete->warningFlags       = FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+    complete->scannedDirectories = 9001u;
+    complete->scannedFiles       = 9002u;
+    complete->candidateFiles     = 9003u;
+    complete->matchedEntries     = 9004u;
+
+    return PostMessagePayload(_hWnd.get(), WndMsg::kFindSearchResults, 0, std::move(results)) &&
+           PostMessagePayload(_hWnd.get(), WndMsg::kFindSearchProgress, 0, std::move(progress)) &&
+           PostMessagePayload(_hWnd.get(), WndMsg::kFindSearchComplete, 0, std::move(complete));
+}
+
 FindFilesDebugFocusTarget FindFilesWindow::ResolveDebugFocusTarget() const noexcept
 {
     const RedSalamander::DxUi::Control* const focused = _dxHost.GetFocusControl();
@@ -6294,6 +6580,7 @@ bool FindFilesWindow::DebugGetSnapshot(FindFilesDebugSnapshot& out) noexcept
             out.destinationNavigationHoveredSeparatorIndex  = destinationSnapshot.hoveredSeparatorIndex;
             out.destinationNavigationHistoryCount           = destinationSnapshot.historyCount;
             out.destinationNavigationHistoryDropdownVisible = destinationSnapshot.historyDropdownVisible;
+            out.destinationNavigationHistoryDropdownOpenCount = destinationSnapshot.historyDropdownOpenCount;
             if (destinationSnapshot.historyRegionRect.right > destinationSnapshot.historyRegionRect.left &&
                 destinationSnapshot.historyRegionRect.bottom > destinationSnapshot.historyRegionRect.top)
             {
@@ -7147,14 +7434,27 @@ LRESULT FindFilesWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam) 
                              suggested->bottom - suggested->top,
                              SWP_NOZORDER | SWP_NOACTIVATE);
             }
+            // The hosted NavigationViews are native children that re-render fonts/icons from their
+            // own DPI state; forward the change explicitly like FolderWindow does for its panes
+            // (the system's WM_DPICHANGED_AFTERPARENT does not reliably refresh them).
+            if (_rootNavigation.GetHwnd())
+            {
+                _rootNavigation.OnDpiChanged(static_cast<float>(HIWORD(wParam)));
+            }
+            if (_destinationNavigation.GetHwnd())
+            {
+                _destinationNavigation.OnDpiChanged(static_cast<float>(HIWORD(wParam)));
+            }
             ApplyTheme();
             Layout();
             return 0;
         }
         case WM_NCACTIVATE: ApplyTitleBarTheme(_hWnd.get(), _theme, wParam != FALSE); return DefWindowProcW(_hWnd.get(), message, wParam, lParam);
         case WM_CLOSE:
-            OnClose();
-            _hWnd.reset();
+            if (OnClose())
+            {
+                _hWnd.reset();
+            }
             return 0;
         case WndMsg::kFindSearchResults: OnSearchResults(TakeMessagePayload<FindSearchResultsPayload>(lParam)); return 0;
         case WndMsg::kFindSearchProgress: OnSearchProgress(TakeMessagePayload<FindSearchProgressPayload>(lParam)); return 0;
@@ -7248,6 +7548,13 @@ LRESULT FindFilesWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam) 
                         return payload->result ? TRUE : FALSE;
                     }
                     return FALSE;
+                case FindFilesWindowDebugCommand::PostStaleSearchPayloads:
+                    if (auto* payload = reinterpret_cast<FindFilesWindowDebugPostStaleSearchPayloadsPayload*>(lParam))
+                    {
+                        payload->result = DebugPostStaleSearchPayloads(std::move(payload->fullPath));
+                        return payload->result ? TRUE : FALSE;
+                    }
+                    return FALSE;
             }
             return FALSE;
 #endif
@@ -7304,19 +7611,16 @@ LRESULT CALLBACK FindFilesWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam
 
 bool ShowFindFilesWindow(HWND owner, Common::Settings::Settings& settings, const AppTheme& theme, FindFilesPaneContext context) noexcept
 {
-    auto window = std::unique_ptr<FindFilesWindow>(new (std::nothrow) FindFilesWindow(owner, settings, theme, std::move(context)));
+    auto* window = new (std::nothrow) FindFilesWindow(owner, settings, theme, std::move(context));
     if (! window)
     {
         return false;
     }
 
-    if (! window->Create())
-    {
-        return false;
-    }
-
-    static_cast<void>(window.release());
-    return true;
+    // Create() owns failure cleanup: when WM_CREATE fails, the window
+    // procedure already deleted the instance while CreateWindowExW was
+    // unwinding, so a caller-side delete here would be a double delete.
+    return window->Create();
 }
 
 void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept
@@ -7358,6 +7662,11 @@ size_t DebugGetFindFilesWindowCount() noexcept
         }
     }
     return count;
+}
+
+std::wstring DebugMakeFindFilesResultKeyForTests(std::wstring_view pluginId, std::wstring_view instanceContext, std::wstring_view fullPath) noexcept
+{
+    return MakeResultKey(pluginId, instanceContext, fullPath);
 }
 
 bool DebugConfigureFindFilesWindow(std::wstring rootPath,
@@ -7449,6 +7758,24 @@ bool DebugStartFindFilesWindowSearch(FindFilesDebugOperation operation) noexcept
 bool DebugCancelFindFilesWindowSearch() noexcept
 {
     return g_findFilesWindow ? g_findFilesWindow->DebugCancelSearch() : false;
+}
+
+bool DebugPostFindFilesWindowStaleSearchPayloads(std::wstring fullPath) noexcept
+{
+    const HWND findWindow = GetFindFilesWindowHandle();
+    if (! g_findFilesWindow || ! findWindow || IsWindow(findWindow) == FALSE)
+    {
+        return false;
+    }
+
+    FindFilesWindowDebugPostStaleSearchPayloadsPayload payload{
+        .fullPath = std::move(fullPath),
+    };
+    return SendMessageW(findWindow,
+                        kFindFilesWindowDebugMessage,
+                        static_cast<WPARAM>(FindFilesWindowDebugCommand::PostStaleSearchPayloads),
+                        reinterpret_cast<LPARAM>(&payload)) != FALSE &&
+           payload.result;
 }
 
 bool DebugGetFindFilesWindowSnapshot(FindFilesDebugSnapshot& out) noexcept
@@ -7590,5 +7917,41 @@ bool DebugWaitForFindFilesWindowIdle(uint32_t timeoutMs) noexcept
 bool DebugFindFilesIsNextQueuedMessage(HWND targetHwnd, UINT targetMessage) noexcept
 {
     return IsNextThreadQueueMessage(targetHwnd, targetMessage);
+}
+
+void DebugConfigureFindFilesWindowSearchRunBlocker(bool enabled) noexcept
+{
+    g_debugSearchRunBlocked.store(false, std::memory_order_release);
+    g_debugSearchRunRelease.store(! enabled, std::memory_order_release);
+    g_debugSearchRunBlockEnabled.store(enabled, std::memory_order_release);
+}
+
+void DebugReleaseFindFilesWindowSearchRunBlocker() noexcept
+{
+    g_debugSearchRunRelease.store(true, std::memory_order_release);
+}
+
+bool DebugWaitForFindFilesWindowSearchRunBlocked(uint32_t timeoutMs) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        if (g_debugSearchRunBlocked.load(std::memory_order_acquire))
+        {
+            return true;
+        }
+
+        MSG msg{};
+        while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE) != 0)
+        {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+
+    return g_debugSearchRunBlocked.load(std::memory_order_acquire);
 }
 #endif

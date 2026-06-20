@@ -211,6 +211,123 @@ void TestColorSwatchStoresConfiguredArgbAndEmptyState()
     Require(! swatch.GetSwatchValue().has_value(), "color swatch clears back to the empty state");
 }
 
+[[nodiscard]] bool ComboItemsContainValue(const RedSalamander::DxUi::ComboBox& combo, std::wstring_view value) noexcept
+{
+    for (const RedSalamander::DxUi::ComboBox::Item& item : combo.GetItems())
+    {
+        if (item.value == value)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void TestTagPickerWrapsBadgesInsideInputFrame()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root        = std::make_unique<Panel>();
+    auto* rootPanel  = root.get();
+    auto* tagPicker  = root->AddChild<TagPicker>();
+    const float width = 220.0f;
+    tagPicker->SetOptions(L"All owners", {L"RedSalamander", L"RedSalamanderMonitor", L"FlipSequentialDiscard", L"ViewerText"});
+    tagPicker->SetSelectedValues({L"RedSalamander", L"RedSalamanderMonitor", L"FlipSequentialDiscard"});
+    host.SetRoot(std::move(root));
+    rootPanel->SetBounds(D2D1::RectF(0.0f, 0.0f, width, 160.0f));
+
+    const float preferredHeight = tagPicker->GetPreferredHeightDip(width);
+    Require(preferredHeight > 32.0f, "tag picker grows taller than one row when selected badges wrap");
+    tagPicker->SetBounds(D2D1::RectF(0.0f, 0.0f, width, preferredHeight));
+
+    const D2D1_RECT_F pickerBounds = tagPicker->GetBounds();
+    const auto rectInside = [](const D2D1_RECT_F& inner, const D2D1_RECT_F& outer) noexcept
+    {
+        return inner.left >= outer.left && inner.top >= outer.top && inner.right <= outer.right && inner.bottom <= outer.bottom;
+    };
+
+    Require(tagPicker->DebugGetLaidOutDisplayTagCount() == 3u, "tag picker lays out every visible selected badge");
+    for (size_t index = 0u; index < tagPicker->DebugGetLaidOutDisplayTagCount(); ++index)
+    {
+        const D2D1_RECT_F tagRect = tagPicker->DebugGetDisplayTagRect(index);
+        RequireRectHasArea(tagRect, "tag picker badge rect has area");
+        Require(rectInside(tagRect, pickerBounds), "tag picker badge rect remains inside the input frame");
+    }
+
+    const D2D1_RECT_F inputRect = tagPicker->DebugGetInputRect();
+    RequireRectHasArea(inputRect, "tag picker embedded input rect has area");
+    Require(rectInside(inputRect, pickerBounds), "tag picker embedded input remains inside the input frame");
+    Require(inputRect.top > tagPicker->DebugGetDisplayTagRect(0u).top, "tag picker wraps the embedded input to a later row when badges need width");
+}
+
+void TestTagPickerSuggestionsTrackSelectedBadges()
+{
+    using namespace RedSalamander::DxUi;
+
+    TagPicker picker;
+    picker.SetOptions(L"All owners", {L"Alpha", L"Beta", L"Gamma"});
+    ComboBox* combo = picker.DebugGetEmbeddedCombo();
+    Require(combo != nullptr, "tag picker exposes embedded combo for tests");
+
+    Require(ComboItemsContainValue(*combo, L"All owners"), "tag picker initially offers the all option");
+    Require(ComboItemsContainValue(*combo, L"Alpha"), "tag picker initially offers concrete options");
+
+    picker.SetSelectedValues({L"Alpha"});
+    Require(! ComboItemsContainValue(*combo, L"All owners"), "tag picker hides all option when a concrete badge is selected");
+    Require(! ComboItemsContainValue(*combo, L"Alpha"), "tag picker removes selected badge from suggestions");
+    Require(ComboItemsContainValue(*combo, L"Beta"), "tag picker keeps unselected badges in suggestions");
+
+    Require(picker.RemoveDisplayTag(0u), "tag picker removes the selected badge");
+    Require(ComboItemsContainValue(*combo, L"All owners"), "tag picker restores all option after the last badge is removed");
+    Require(ComboItemsContainValue(*combo, L"Alpha"), "tag picker restores removed badge to suggestions");
+
+    Require(picker.SelectOption(L"All owners"), "tag picker selects all option");
+    Require(picker.GetDisplayTagCount() == 1u && picker.GetDisplayTagText(0u) == L"All owners", "tag picker collapses all selected values to all badge");
+    Require(! ComboItemsContainValue(*combo, L"All owners"), "tag picker hides all option while all badge is active");
+    Require(ComboItemsContainValue(*combo, L"Beta"), "tag picker keeps concrete suggestions available to replace all");
+
+    Require(picker.SelectOption(L"Beta"), "tag picker selects a concrete option while all is active");
+    const std::span<const std::wstring> selectedValues = picker.GetSelectedValues();
+    Require(selectedValues.size() == 1u && selectedValues[0] == L"Beta", "tag picker replaces all badge with the picked concrete badge");
+    Require(picker.GetDisplayTagCount() == 1u && picker.GetDisplayTagText(0u) == L"Beta", "tag picker display shows only the picked concrete badge");
+    Require(! ComboItemsContainValue(*combo, L"Beta"), "tag picker removes newly selected concrete badge from suggestions");
+    Require(ComboItemsContainValue(*combo, L"Alpha"), "tag picker keeps other concrete badges in suggestions");
+}
+
+void TestTagPickerKeyboardNavigationCommitsFilteredSuggestionOnEnter()
+{
+    using namespace RedSalamander::DxUi;
+
+    WindowHost host;
+    auto root     = std::make_unique<Panel>();
+    auto* panel   = root.get();
+    auto* picker  = root->AddChild<TagPicker>();
+    picker->SetOptions(L"All languages", {L"Beta", L"Binary", L"Bravo", L"Gamma"});
+    picker->SetBounds(D2D1::RectF(0.0f, 0.0f, 260.0f, 40.0f));
+    ComboBox* combo = picker->DebugGetEmbeddedCombo();
+    Require(combo != nullptr, "tag picker exposes embedded combo for keyboard tests");
+
+    host.SetRoot(std::move(root));
+    panel->SetBounds(D2D1::RectF(0.0f, 0.0f, 300.0f, 80.0f));
+    host.SetFocusControl(combo);
+    picker->SetInputText(L"B");
+
+    Require(combo->OnKeyDown(host, VK_DOWN, 0), "tag picker down arrow opens filtered suggestions");
+    Require(combo->DebugIsPopupOpen(), "tag picker keeps filtered suggestions open after first down arrow");
+    Require(picker->GetSelectedValues().empty(), "tag picker does not add a badge when opening suggestions");
+
+    Require(combo->OnKeyDown(host, VK_DOWN, 0), "tag picker down arrow changes highlighted filtered suggestion");
+    Require(picker->GetSelectedValues().empty(), "tag picker arrow navigation does not add a badge");
+
+    Require(combo->OnKeyDown(host, VK_RETURN, 0), "tag picker enter commits highlighted filtered suggestion");
+    Require(! combo->DebugIsPopupOpen(), "tag picker closes suggestions after enter commits");
+    const std::span<const std::wstring> selectedValues = picker->GetSelectedValues();
+    Require(selectedValues.size() == 1u && selectedValues[0] == L"Binary", "tag picker enter adds the highlighted filtered badge");
+    Require(! ComboItemsContainValue(*combo, L"Binary"), "tag picker removes the keyboard-committed badge from suggestions");
+    Require(ComboItemsContainValue(*combo, L"Beta"), "tag picker keeps other matching badges in suggestions");
+}
+
 void TestToggleRightClickInvokesContextMenuWithoutChangingState()
 {
     using namespace RedSalamander::DxUi;
@@ -562,6 +679,9 @@ void RunControlTests()
     TestToggleMouseActivationOnlyFiresToggledCallbackWithUpdatedState();
     TestToggleMouseActivationCanReplaceRootSafely();
     TestColorSwatchStoresConfiguredArgbAndEmptyState();
+    TestTagPickerWrapsBadgesInsideInputFrame();
+    TestTagPickerSuggestionsTrackSelectedBadges();
+    TestTagPickerKeyboardNavigationCommitsFilteredSuggestionOnEnter();
     TestToggleRightClickInvokesContextMenuWithoutChangingState();
     TestCheckboxRightClickInvokesContextMenuWithoutChangingState();
     TestMnemonicTextIndexUsesExplicitAmpersandMnemonic();

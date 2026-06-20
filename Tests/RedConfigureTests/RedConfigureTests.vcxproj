@@ -89,7 +89,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <RSTestAdditionalIncludeDirectories>$(SolutionDir)RedConfigure;$(SolutionDir)Common</RSTestAdditionalIncludeDirectories>
+    <RSTestAdditionalIncludeDirectories>$(SolutionDir)RedConfigure;$(SolutionDir)Common;$(SolutionDir)Common\DxUi</RSTestAdditionalIncludeDirectories>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -108,6 +108,7 @@
     <ClCompile Include="..\..\RedConfigure\RedConfigureApp.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureSession.cpp" />
     <ClCompile Include="..\..\RedConfigure\RedConfigureTraceProvider.cpp" />
+    <ClCompile Include="..\..\RedConfigure\RedConfigureUiHelpers.cpp" />
     <ClCompile Include="..\..\RedConfigure\Themes\ThemeCatalog.cpp" />
     <ClCompile Include="..\..\RedConfigure\Themes\ThemePreviewModel.cpp" />
     <ClCompile Include="..\..\RedConfigure\Workspace\WorkspaceDiscovery.cpp" />
@@ -116,6 +117,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\Common\DxUi\DxUi.vcxproj">
+      <Project>{E0D8E4A1-7AA7-4377-9E4C-A53794E43A1F}</Project>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

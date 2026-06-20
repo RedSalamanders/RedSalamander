@@ -43,6 +43,10 @@ RedSalamander opens as a **dual-pane** window:
 
 Tip: use **Help → Display Shortcuts…** (or `F1`) to see the complete current bindings.
 
+![Display Shortcuts window](res/shortcuts-window.png)
+
+See [Keyboard Shortcuts](KeyboardShortcuts.md) for the full reference.
+
 ## Preferences
 
 Open **View → Preferences…** to configure:

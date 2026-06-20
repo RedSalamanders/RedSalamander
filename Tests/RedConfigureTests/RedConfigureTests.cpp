@@ -2,7 +2,9 @@
 #include "Localization/RcParser.h"
 #include "Localization/RcWriter.h"
 #include "RedConfigureApp.h"
+#include "RedConfigureGridModels.h"
 #include "RedConfigureSession.h"
+#include "RedConfigureSplashScreen.h"
 #include "SettingsStore.h"
 #include "ThemeDefinitionIo.h"
 #include "Themes/ThemeCatalog.h"
@@ -10,12 +12,24 @@
 #include "Workspace/WorkspaceDiscovery.h"
 
 #include <array>
+#include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
+#include <span>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
+
+#pragma warning(push)
+// WIL headers: deleted copy/move and unused inline helpers
+#pragma warning(disable : 4625 4626 5026 5027 4514 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -46,6 +60,28 @@ namespace
     }
 
     output.write(text.data(), static_cast<std::streamsize>(text.size()));
+    return output.good();
+}
+
+[[nodiscard]] bool WriteTestBinaryFile(const std::filesystem::path& path, std::span<const uint8_t> bytes)
+{
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec)
+    {
+        return false;
+    }
+
+    std::ofstream output(path, std::ios::binary);
+    if (! output)
+    {
+        return false;
+    }
+
+    if (! bytes.empty())
+    {
+        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
     return output.good();
 }
 
@@ -177,6 +213,25 @@ namespace
          ok;
     ok = Require(WriteTestTextFile(tempRoot / L".build" / L"x64" / L"Debug" / L"Themes" / L"Ignored.theme.json5", "{}\n"),
                  L"Failed to write ignored build theme fixture.") &&
+         ok;
+    ok = Require(WriteTestTextFile(tempRoot / L"vcpkg_installed" / L"x64-windows" / L"IgnoredDependency.vcxproj",
+                                   R"xml(<Project><ItemGroup><ResourceCompile Include="IgnoredDependency.rc" /></ItemGroup></Project>)xml"),
+                 L"Failed to write ignored dependency project fixture.") &&
+         ok;
+    ok = Require(WriteTestTextFile(tempRoot / L"x64" / L"Debug" / L"IgnoredOutput.vcxproj",
+                                   R"xml(<Project><ItemGroup><ResourceCompile Include="IgnoredOutput.rc" /></ItemGroup></Project>)xml"),
+                 L"Failed to write ignored x64 output project fixture.") &&
+         ok;
+    ok = Require(WriteTestTextFile(tempRoot / L".git" / L"objects" / L"IgnoredGit.vcxproj",
+                                   R"xml(<Project><ItemGroup><ResourceCompile Include="IgnoredGit.rc" /></ItemGroup></Project>)xml"),
+                 L"Failed to write ignored git project fixture.") &&
+         ok;
+    ok = Require(WriteTestTextFile(tempRoot / L".vs" / L"IgnoredVs.vcxproj",
+                                   R"xml(<Project><ItemGroup><ResourceCompile Include="IgnoredVs.rc" /></ItemGroup></Project>)xml"),
+                 L"Failed to write ignored Visual Studio cache project fixture.") &&
+         ok;
+    ok = Require(WriteTestTextFile(tempRoot / L"Specs" / L"TestRuns" / L"IgnoredRun" / L"IgnoredRun.theme.json5", "{}\n"),
+                 L"Failed to write ignored test-run theme fixture.") &&
          ok;
 
     RedConfigure::Workspace::WorkspaceScanResult result;
@@ -588,6 +643,685 @@ END
     view                  = RedConfigure::BuildTranslationView(rows, options);
     ok                    = Require(view == std::vector<size_t>{2u, 1u, 0u}, L"Translation view target sort should reverse when descending.") && ok;
 
+    return ok;
+}
+
+[[nodiscard]] bool ContainsCulture(std::span<const std::wstring> cultures, std::wstring_view culture) noexcept
+{
+    for (const std::wstring& candidate : cultures)
+    {
+        if (candidate == culture)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] const RedConfigure::LocalizationReviewRow* FindReviewRow(std::span<const RedConfigure::LocalizationReviewRow> rows,
+                                                                        std::wstring_view ownerName,
+                                                                        std::wstring_view id) noexcept
+{
+    for (const RedConfigure::LocalizationReviewRow& row : rows)
+    {
+        if (row.ownerName == ownerName && row.id == id)
+        {
+            return &row;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] const RedConfigure::LocalizationTargetCell* FindReviewTargetCell(const RedConfigure::LocalizationReviewRow& row,
+                                                                               std::wstring_view cultureName) noexcept
+{
+    for (const RedConfigure::LocalizationTargetCell& cell : row.targets)
+    {
+        if (cell.cultureName == cultureName)
+        {
+            return &cell;
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] bool WriteLocalizationReviewWorkspaceFixture(const std::filesystem::path& tempRoot)
+{
+    bool ok = true;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <ResourceCompile Include="App.rc" />
+  </ItemGroup>
+</Project>)xml"),
+                      L"Failed to write app localization review project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Hello {0}"
+    IDS_APP_ONLY "Only app"
+END
+)rc"),
+                      L"Failed to write app localization review source fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Bonjour {0}"
+END
+)rc"),
+                      L"Failed to write app fr-FR localization review fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"cs-CZ" / L"App-cs-CZ.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Ahoj {0}"
+END
+)rc"),
+                      L"Failed to write app cs-CZ localization review fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Plugin" / L"Plugin.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <ResourceCompile Include="Plugin.rc" />
+  </ItemGroup>
+</Project>)xml"),
+                      L"Failed to write plugin localization review project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Plugin" / L"Plugin.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Plugin hello {0}"
+    IDS_PLUGIN_ONLY "Only plugin"
+END
+)rc"),
+                      L"Failed to write plugin localization review source fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Plugin" / L"Lang" / L"fr-FR" / L"Plugin-fr-FR.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Plugin bonjour"
+    IDS_PLUGIN_ONLY "Plugin seulement"
+END
+)rc"),
+                      L"Failed to write plugin fr-FR localization review fixture.") &&
+              ok;
+    return ok;
+}
+
+[[nodiscard]] bool TestRedConfigureSessionBuildsAllOwnerAllCultureLocalizationReview()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewTest";
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for localization review tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = true;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <ResourceCompile Include="App.rc" />
+  </ItemGroup>
+</Project>)xml"),
+                      L"Failed to write app localization review project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Hello {0}"
+    IDS_APP_ONLY "Only app"
+END
+)rc"),
+                      L"Failed to write app localization review source fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Bonjour {0}"
+END
+)rc"),
+                      L"Failed to write app fr-FR localization review fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"cs-CZ" / L"App-cs-CZ.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Ahoj {0}"
+END
+)rc"),
+                      L"Failed to write app cs-CZ localization review fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Plugin" / L"Plugin.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <ResourceCompile Include="Plugin.rc" />
+  </ItemGroup>
+</Project>)xml"),
+                      L"Failed to write plugin localization review project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Plugin" / L"Plugin.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Plugin hello {0}"
+    IDS_PLUGIN_ONLY "Only plugin"
+END
+)rc"),
+                      L"Failed to write plugin localization review source fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Plugin" / L"Lang" / L"fr-FR" / L"Plugin-fr-FR.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_PLUGIN_ONLY "Plugin seulement"
+END
+)rc"),
+                      L"Failed to write plugin fr-FR localization review fixture.") &&
+              ok;
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the localization review fixture.") && ok;
+
+    const auto reviewRows     = session.GetLocalizationReviewRows();
+    const auto reviewCultures = session.GetLocalizationReviewCultures();
+    ok                       = Require(reviewRows.size() == 4u, L"Review rows should include all source string IDs from all owners.") && ok;
+    ok                       = Require(ContainsCulture(reviewCultures, L"fr-FR"), L"Review cultures should include fr-FR.") && ok;
+    ok                       = Require(ContainsCulture(reviewCultures, L"cs-CZ"), L"Review cultures should include cs-CZ.") && ok;
+    if (reviewRows.size() == 4u)
+    {
+        ok = Require(reviewRows[0u].ownerName == L"App" && reviewRows[0u].id == L"IDS_HELLO" &&
+                         reviewRows[1u].ownerName == L"App" && reviewRows[1u].id == L"IDS_APP_ONLY" &&
+                         reviewRows[2u].ownerName == L"Plugin" && reviewRows[2u].id == L"IDS_HELLO" &&
+                         reviewRows[3u].ownerName == L"Plugin" && reviewRows[3u].id == L"IDS_PLUGIN_ONLY",
+                     L"Parallel localization review loading should preserve deterministic owner/source row order.") &&
+             ok;
+    }
+
+    const auto* appOnly = FindReviewRow(reviewRows, L"App", L"IDS_APP_ONLY");
+    ok                  = Require(appOnly != nullptr, L"Review rows should include app-only string IDs.") && ok;
+    if (appOnly)
+    {
+        ok = Require(appOnly->sourceText == L"Only app", L"Review rows should preserve English source text.") && ok;
+    }
+
+    const auto* appHello = FindReviewRow(reviewRows, L"App", L"IDS_HELLO");
+    ok                   = Require(appHello != nullptr, L"Review rows should include app shared string IDs.") && ok;
+    if (appHello)
+    {
+        const auto* frCell = FindReviewTargetCell(*appHello, L"fr-FR");
+        const auto* csCell = FindReviewTargetCell(*appHello, L"cs-CZ");
+        ok                 = Require(frCell != nullptr && frCell->targetText == L"Bonjour {0}",
+                                     L"Review rows should merge existing fr-FR target text.") &&
+             ok;
+        ok = Require(csCell != nullptr && csCell->targetText == L"Ahoj {0}", L"Review rows should merge existing cs-CZ target text.") && ok;
+    }
+
+    const auto* pluginOnly = FindReviewRow(reviewRows, L"Plugin", L"IDS_PLUGIN_ONLY");
+    ok                     = Require(pluginOnly != nullptr, L"Review rows should include plugin-only string IDs.") && ok;
+    if (pluginOnly)
+    {
+        const auto* frCell = FindReviewTargetCell(*pluginOnly, L"fr-FR");
+        const auto* csCell = FindReviewTargetCell(*pluginOnly, L"cs-CZ");
+        ok                 = Require(frCell != nullptr && frCell->targetText == L"Plugin seulement",
+                                     L"Review rows should merge plugin fr-FR target text.") &&
+             ok;
+        ok = Require(csCell != nullptr && csCell->targetText == L"Only plugin" && ! csCell->hasExistingTranslation,
+                     L"Missing target cultures should display English source text without marking an existing translation.") &&
+             ok;
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestLocalizationReviewViewFiltersSearchesAndSorts()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewViewTest";
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for localization review view tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = WriteLocalizationReviewWorkspaceFixture(tempRoot);
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the localization review view fixture.") && ok;
+
+    RedConfigure::LocalizationReviewViewOptions options;
+    options.visibleOwnerNames   = {L"Plugin"};
+    options.visibleCultureNames = {L"fr-FR", L"cs-CZ"};
+    std::vector<size_t> view    = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+    ok = Require(view.size() == 2u, L"Review view owner filtering should keep only checked owners.") && ok;
+    for (const size_t rowIndex : view)
+    {
+        ok = Require(session.GetLocalizationReviewRows()[rowIndex].ownerName == L"Plugin", L"Review view should not include unchecked owners.") && ok;
+    }
+
+    options.visibleOwnerNames = {L"App", L"Plugin"};
+    options.searchText        = L"Ahoj";
+    view                      = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+    ok                        = Require(view.size() == 1u && session.GetLocalizationReviewRows()[view.front()].ownerName == L"App",
+                                        L"Review view search should match visible target-language text.") &&
+         ok;
+
+    options.visibleCultureNames = {L"fr-FR"};
+    view                        = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+    ok                          = Require(view.empty(), L"Review view search should ignore hidden target-language text.") && ok;
+
+    options.searchText   = {};
+    options.statusFilter = RedConfigure::LocalizationStatusFilter::Problems;
+    view                 = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+    ok                   = Require(view.size() == 2u && session.GetLocalizationReviewRows()[view.front()].id == L"IDS_APP_ONLY" &&
+                       session.GetLocalizationReviewRows()[view.front()].ownerName == L"App" &&
+                       session.GetLocalizationReviewRows()[view.back()].id == L"IDS_HELLO" &&
+                       session.GetLocalizationReviewRows()[view.back()].ownerName == L"Plugin",
+                       L"Review view problem filtering should include placeholder problems and missing visible translations.") &&
+         ok;
+
+    options.statusFilter   = RedConfigure::LocalizationStatusFilter::All;
+    options.sortColumn     = RedConfigure::LocalizationViewColumn::Target;
+    options.sortCultureName = L"fr-FR";
+    options.sortDirection  = RedConfigure::LocalizationSortDirection::Descending;
+    view                   = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+    ok = Require(view.size() == 4u && session.GetLocalizationReviewRows()[view.front()].ownerName == L"Plugin",
+                 L"Review view target-culture sorting should use the requested visible culture.") &&
+         ok;
+
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool ContainsExportPreview(std::span<const RedConfigure::LocalizationExportPreview> previews,
+                                          std::wstring_view ownerName,
+                                          std::wstring_view cultureName,
+                                          std::wstring_view expectedText) noexcept
+{
+    for (const RedConfigure::LocalizationExportPreview& preview : previews)
+    {
+        if (preview.ownerName == ownerName && preview.cultureName == cultureName && preview.text.find(expectedText) != std::wstring::npos)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool TestLocalizationReviewEditingAndExportPreviews()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewEditExportTest";
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for localization review edit/export tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = WriteLocalizationReviewWorkspaceFixture(tempRoot);
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the localization review edit/export fixture.") && ok;
+
+    const auto* appHello = FindReviewRow(session.GetLocalizationReviewRows(), L"App", L"IDS_HELLO");
+    ok                   = Require(appHello != nullptr, L"Edit/export fixture should expose App IDS_HELLO.") && ok;
+    if (appHello)
+    {
+        const size_t rowIndex = static_cast<size_t>(appHello - session.GetLocalizationReviewRows().data());
+        ok                    = Require(session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno {0}"),
+                                        L"Review target edits should accept valid placeholder-equivalent text.") &&
+             ok;
+        ok = Require(! session.UpdateLocalizationReviewTarget(rowIndex, L"cs-CZ", L"Ahoj upraveno"),
+                     L"Review target edits should reject placeholder mismatches.") &&
+             ok;
+
+        const auto* updatedRow  = FindReviewRow(session.GetLocalizationReviewRows(), L"App", L"IDS_HELLO");
+        const auto* updatedCell = updatedRow ? FindReviewTargetCell(*updatedRow, L"cs-CZ") : nullptr;
+        ok = Require(updatedCell != nullptr && updatedCell->targetText == L"Ahoj upraveno {0}" && updatedCell->dirty,
+                     L"Rejected review target edits should keep the last valid target text and dirty state.") &&
+             ok;
+    }
+
+    std::vector<RedConfigure::LocalizationExportPreview> previews;
+    ok = Require(SUCCEEDED(session.BuildLocalizationReviewExportPreviews(previews)), L"Review export previews should build.") && ok;
+    ok = Require(previews.size() == 1u, L"Review export previews should include only changed owner/culture satellite files.") && ok;
+    ok = Require(ContainsExportPreview(previews, L"App", L"cs-CZ", L"Ahoj upraveno {0}"),
+                 L"Review export previews should contain edited App cs-CZ target text.") &&
+         ok;
+    ok = Require(! ContainsExportPreview(previews, L"Plugin", L"fr-FR", L"Plugin seulement"),
+                 L"Review export previews should not include unchanged Plugin fr-FR target text.") &&
+         ok;
+
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestLocalizationReviewSkipsBadResourceFilesAndKeepsWorkspaceOpen()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewBadRcTest";
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for bad localization resource tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = true;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <ResourceCompile Include="App.rc" />
+  </ItemGroup>
+</Project>)xml"),
+                      L"Failed to write healthy app project fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"App.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Hello {0}"
+END
+)rc"),
+                      L"Failed to write healthy app rc fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"App" / L"Lang" / L"fr-FR" / L"App-fr-FR.rc",
+                                        R"rc(#include "resource.h"
+STRINGTABLE
+BEGIN
+    IDS_HELLO "Bonjour {0}"
+END
+)rc"),
+                      L"Failed to write healthy app target rc fixture.") &&
+              ok;
+    ok      = Require(WriteTestTextFile(tempRoot / L"Broken" / L"Broken.vcxproj",
+                                        R"xml(<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <ResourceCompile Include="Broken.rc" />
+  </ItemGroup>
+</Project>)xml"),
+                      L"Failed to write broken project fixture.") &&
+              ok;
+    constexpr std::array<uint8_t, 3u> invalidUtf16Le{{0xFFu, 0xFEu, 0x41u}};
+    ok = Require(WriteTestBinaryFile(tempRoot / L"Broken" / L"Broken.rc", invalidUtf16Le), L"Failed to write invalid UTF-16 resource fixture.") && ok;
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should keep loading when one resource file is unreadable.") && ok;
+    ok = Require(! session.GetWorkspace().errors.empty(), L"Session should report unreadable resource files in workspace errors.") && ok;
+    bool mentionedBrokenPath = false;
+    for (const std::wstring& error : session.GetWorkspace().errors)
+    {
+        mentionedBrokenPath = mentionedBrokenPath || error.find(L"Broken.rc") != std::wstring::npos;
+    }
+    ok = Require(mentionedBrokenPath, L"Workspace errors should identify the bad resource path.") && ok;
+
+    ok = Require(FindReviewRow(session.GetLocalizationReviewRows(), L"App", L"IDS_HELLO") != nullptr,
+                 L"Review rows from healthy owners should still load when another owner is bad.") &&
+         ok;
+    ok = Require(! session.GetInventoryEntries().empty(), L"Active-owner inventory should still populate from the healthy owner.") && ok;
+
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestLocalizationReviewGridModelShowsOwnersEnglishAndVisibleCultures()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewGridModelTest";
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for localization review grid model tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = WriteLocalizationReviewWorkspaceFixture(tempRoot);
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the localization review grid model fixture.") && ok;
+
+    RedConfigure::LocalizationReviewViewOptions options;
+    options.visibleOwnerNames   = {L"App", L"Plugin"};
+    options.visibleCultureNames = {L"fr-FR", L"cs-CZ"};
+    const std::vector<size_t> viewRows = RedConfigure::BuildLocalizationReviewView(session.GetLocalizationReviewRows(), options);
+
+    RedConfigure::Ui::LocalizationReviewGridModel model(nullptr, session);
+    model.SetViewRows(viewRows);
+    model.SetVisibleCultures(options.visibleCultureNames);
+
+    ok      = Require(model.GetRowCount() == viewRows.size(), L"Review grid model should expose projected rows.") && ok;
+    ok      = Require(model.GetColumnCount() == 6u, L"Review grid model should expose owner, ID, English, visible cultures, and status columns.") && ok;
+    ok      = Require(model.GetColumn(0u).id == L"owner", L"Review grid model first column should be owner.") && ok;
+    ok      = Require(model.GetColumn(2u).id == L"english", L"Review grid model should expose English as a read-only source column.") && ok;
+    ok      = Require(model.GetColumn(2u).multiline, L"Review grid model English column should allow wrapped two-line rows.") && ok;
+    ok      = Require(model.GetColumn(3u).id == L"target:fr-FR", L"Review grid model should expose the first visible culture column.") && ok;
+    ok      = Require(model.GetColumn(3u).multiline, L"Review grid model target columns should allow wrapped two-line rows.") && ok;
+    ok      = Require(model.GetColumn(4u).id == L"target:cs-CZ", L"Review grid model should expose the second visible culture column.") && ok;
+
+    RedSalamander::DxUi::GridCellData cell;
+    model.GetCellData(0u, 0u, cell);
+    ok = Require(cell.text == L"App", L"Review grid model owner cell should show owner name.") && ok;
+    model.GetCellData(0u, 2u, cell);
+    ok = Require(cell.text == L"Hello {0}", L"Review grid model English cell should show source text.") && ok;
+    model.GetCellData(0u, 3u, cell);
+    ok = Require(cell.text == L"Bonjour {0}", L"Review grid model target culture cell should show target text.") && ok;
+    ok = Require(cell.multiline, L"Review grid model target cells should render as multiline content.") && ok;
+    model.GetCellData(0u, 5u, cell);
+    ok = Require(cell.text.empty(), L"Review grid model should leave clean status cells blank instead of showing OK.") && ok;
+
+    bool foundWarningRow = false;
+    for (size_t rowIndex = 0u; rowIndex < model.GetRowCount(); ++rowIndex)
+    {
+        foundWarningRow = foundWarningRow || model.GetRowStyle(rowIndex).tone == RedSalamander::DxUi::GridRowTone::Warning;
+    }
+    ok = Require(foundWarningRow, L"Review grid model should mark rows with visible target problems as warnings.") && ok;
+    ok = Require(model.GetStableRowId(0u) != 1u && model.GetStableRowId(0u) == model.GetStableRowId(0u),
+                 L"Review grid model stable row IDs should be deterministic owner/ID hashes, not view offsets.") &&
+         ok;
+    ok = Require(model.FindRowByStableId(model.GetStableRowId(1u)).value_or(0u) == 1u,
+                 L"Review grid model should resolve stable row IDs within the projected rows.") &&
+         ok;
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestLocalizationReviewSurfacesMissingTranslations()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewMissingTest";
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for missing-translation review tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = WriteLocalizationReviewWorkspaceFixture(tempRoot);
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the missing-translation review fixture.") && ok;
+
+    const auto rows = session.GetLocalizationReviewRows();
+    const auto rowMatches = [&rows](size_t rowIndex, std::wstring_view ownerName, std::wstring_view id) noexcept
+    { return rowIndex < rows.size() && rows[rowIndex].ownerName == ownerName && rows[rowIndex].id == id; };
+
+    RedConfigure::LocalizationReviewViewOptions options;
+    options.visibleOwnerNames   = {L"App", L"Plugin"};
+    options.visibleCultureNames = {L"fr-FR", L"cs-CZ"};
+    options.statusFilter        = RedConfigure::LocalizationStatusFilter::Problems;
+    const std::vector<size_t> problemView = RedConfigure::BuildLocalizationReviewView(rows, options);
+
+    bool problemsIncludeMissingRow = false;
+    for (const size_t rowIndex : problemView)
+    {
+        problemsIncludeMissingRow = problemsIncludeMissingRow || rowMatches(rowIndex, L"App", L"IDS_APP_ONLY");
+    }
+    ok = Require(problemsIncludeMissingRow, L"Problems filter should include rows whose visible cultures have no existing translation.") && ok;
+
+    options.statusFilter             = RedConfigure::LocalizationStatusFilter::Ok;
+    const std::vector<size_t> okView = RedConfigure::BuildLocalizationReviewView(rows, options);
+    for (const size_t rowIndex : okView)
+    {
+        ok = Require(! rowMatches(rowIndex, L"App", L"IDS_APP_ONLY"), L"OK filter should exclude rows with missing translations.") && ok;
+    }
+
+    options.statusFilter              = RedConfigure::LocalizationStatusFilter::All;
+    const std::vector<size_t> allView = RedConfigure::BuildLocalizationReviewView(rows, options);
+
+    RedConfigure::Ui::LocalizationReviewGridModel model(nullptr, session);
+    model.SetViewRows(allView);
+    model.SetVisibleCultures(options.visibleCultureNames);
+
+    std::optional<size_t> missingViewRow;
+    std::optional<size_t> warningViewRow;
+    std::optional<size_t> cleanViewRow;
+    for (size_t viewRow = 0u; viewRow < allView.size(); ++viewRow)
+    {
+        if (rowMatches(allView[viewRow], L"App", L"IDS_APP_ONLY"))
+        {
+            missingViewRow = viewRow;
+        }
+        else if (rowMatches(allView[viewRow], L"Plugin", L"IDS_HELLO"))
+        {
+            warningViewRow = viewRow;
+        }
+        else if (rowMatches(allView[viewRow], L"App", L"IDS_HELLO"))
+        {
+            cleanViewRow = viewRow;
+        }
+    }
+
+    ok = Require(missingViewRow.has_value() && model.GetRowStyle(missingViewRow.value()).tone == RedSalamander::DxUi::GridRowTone::Info,
+                 L"Missing-translation rows should render the distinct Missing row tone.") &&
+         ok;
+    ok = Require(warningViewRow.has_value() && model.GetRowStyle(warningViewRow.value()).tone == RedSalamander::DxUi::GridRowTone::Warning,
+                 L"Placeholder problems should keep warning-tone precedence over the Missing tone.") &&
+         ok;
+    ok = Require(cleanViewRow.has_value() && model.GetRowStyle(cleanViewRow.value()).tone == RedSalamander::DxUi::GridRowTone::None,
+                 L"Fully translated rows should keep the default row tone.") &&
+         ok;
+
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestLocalizationReviewCanCreateAndExportNewCulture()
+{
+    std::error_code ec;
+    const std::filesystem::path tempRoot = std::filesystem::temp_directory_path(ec) / L"RedConfigureLocalizationReviewNewCultureTest";
+    if (ec)
+    {
+        return Require(false, L"Could not resolve a temporary directory for localization review new-culture tests.");
+    }
+
+    std::filesystem::remove_all(tempRoot, ec);
+    bool ok = WriteLocalizationReviewWorkspaceFixture(tempRoot);
+
+    RedConfigure::RedConfigureSession session;
+    ok = Require(SUCCEEDED(session.LoadWorkspace(tempRoot, L"fr-FR")), L"Session should load the localization review new-culture fixture.") && ok;
+    ok = Require(session.EnsureLocalizationReviewCulture(L"de-DE"), L"Session should create an in-memory target culture for review.") && ok;
+    ok = Require(ContainsCulture(session.GetLocalizationReviewCultures(), L"de-DE"), L"New target culture should be listed with review cultures.") && ok;
+
+    const auto* appHello = FindReviewRow(session.GetLocalizationReviewRows(), L"App", L"IDS_HELLO");
+    ok                   = Require(appHello != nullptr, L"New-culture fixture should expose App IDS_HELLO.") && ok;
+    if (appHello)
+    {
+        const size_t rowIndex = static_cast<size_t>(appHello - session.GetLocalizationReviewRows().data());
+        ok                    = Require(session.UpdateLocalizationReviewTarget(rowIndex, L"de-DE", L"Hallo {0}"),
+                                        L"Review target edit should accept a newly created culture.") &&
+             ok;
+    }
+
+    std::vector<RedConfigure::LocalizationExportPreview> previews;
+    ok = Require(SUCCEEDED(session.BuildLocalizationReviewExportPreviews(previews)), L"Review export previews should include new target cultures.") && ok;
+    ok = Require(previews.size() == 1u, L"New-culture preview should include only owner/culture files with edits.") && ok;
+    ok = Require(ContainsExportPreview(previews, L"App", L"de-DE", L"Hallo {0}"), L"New target culture preview should contain edited text.") && ok;
+
+    const std::filesystem::path outputRoot = tempRoot / L"ReviewOut";
+    ok = Require(SUCCEEDED(session.ExportLocalizationReview(outputRoot)), L"Session should write review satellite rc files.") && ok;
+    ok = Require(std::filesystem::exists(outputRoot / L"App-de-DE.rc", ec), L"Review export should write the new App de-DE rc file.") && ok;
+    ok = Require(! std::filesystem::exists(outputRoot / L"Plugin-de-DE.rc", ec), L"Review export should not write unchanged owner/culture files.") && ok;
+
+    std::filesystem::remove_all(tempRoot, ec);
+    return ok;
+}
+
+[[nodiscard]] bool TestLocalizationReviewProjectionPerformanceMetric()
+{
+    constexpr size_t ownerCount    = 8u;
+    constexpr size_t stringsPerOwner = 600u;
+    const std::vector<std::wstring> cultures{L"fr-FR", L"cs-CZ", L"ja-JP", L"sk-SK"};
+
+    std::vector<RedConfigure::LocalizationReviewRow> rows;
+    rows.reserve(ownerCount * stringsPerOwner);
+    RedConfigure::LocalizationReviewViewOptions options;
+    options.visibleOwnerNames.reserve(ownerCount);
+    options.visibleCultureNames = cultures;
+
+    for (size_t ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex)
+    {
+        const std::wstring ownerName = L"PerfOwner" + std::to_wstring(ownerIndex);
+        options.visibleOwnerNames.push_back(ownerName);
+        for (size_t stringIndex = 0u; stringIndex < stringsPerOwner; ++stringIndex)
+        {
+            RedConfigure::LocalizationReviewRow row;
+            row.ownerName  = ownerName;
+            row.id         = L"IDS_PERF_" + std::to_wstring(ownerIndex) + L"_" + std::to_wstring(stringIndex);
+            row.sourceText = L"Source " + std::to_wstring(ownerIndex) + L" " + std::to_wstring(stringIndex) + L" {0}";
+            row.targets.reserve(cultures.size());
+            for (const std::wstring& culture : cultures)
+            {
+                RedConfigure::LocalizationTargetCell cell;
+                cell.cultureName            = culture;
+                cell.targetText             = culture + L" target " + std::to_wstring(ownerIndex) + L" " + std::to_wstring(stringIndex) + L" {0}";
+                cell.validation             = RedConfigure::Localization::ValidatePlaceholders(row.sourceText, cell.targetText);
+                cell.hasExistingTranslation = true;
+                row.targets.push_back(std::move(cell));
+            }
+            rows.push_back(std::move(row));
+        }
+    }
+
+    const auto started        = std::chrono::steady_clock::now();
+    const std::vector<size_t> view = RedConfigure::BuildLocalizationReviewView(rows, options);
+    const auto finished       = std::chrono::steady_clock::now();
+    const auto elapsedMicros  = std::chrono::duration_cast<std::chrono::microseconds>(finished - started).count();
+
+    std::wcout << L"redconfigure.localization.review.all_owners_all_languages rows=" << rows.size() << L" visibleRows=" << view.size()
+               << L" cultures=" << cultures.size() << L" elapsedMicros=" << elapsedMicros << L'\n';
+
+    return Require(view.size() == rows.size(), L"Localization review perf projection should keep every checked owner/language row visible.");
+}
+
+[[nodiscard]] bool TestSplashScreenCloseGuardSuppressesPendingOpen()
+{
+    bool ok = true;
+
+    wil::unique_handle closeEvent(::CreateEventW(nullptr, TRUE, TRUE, nullptr));
+    ok = Require(closeEvent.get() != nullptr, L"Failed to create close event for RedConfigure splash guard test.") && ok;
+    ok = Require(RedConfigure::SplashScreen::Detail::ShouldAbortPendingOpen(std::stop_token{}, closeEvent.get()),
+                 L"Signaled close event should suppress RedConfigure splash open before the worker creates a window.") &&
+         ok;
+
+    std::stop_source stopSource;
+    stopSource.request_stop();
+    ok = Require(RedConfigure::SplashScreen::Detail::ShouldAbortPendingOpen(stopSource.get_token(), nullptr),
+                 L"Requested stop token should suppress RedConfigure splash open before the worker creates a window.") &&
+         ok;
     return ok;
 }
 
@@ -1036,6 +1770,42 @@ int wmain()
         return 1;
     }
     if (! TestTranslationViewSearchFilterAndSort())
+    {
+        return 1;
+    }
+    if (! TestRedConfigureSessionBuildsAllOwnerAllCultureLocalizationReview())
+    {
+        return 1;
+    }
+    if (! TestLocalizationReviewViewFiltersSearchesAndSorts())
+    {
+        return 1;
+    }
+    if (! TestLocalizationReviewEditingAndExportPreviews())
+    {
+        return 1;
+    }
+    if (! TestLocalizationReviewSkipsBadResourceFilesAndKeepsWorkspaceOpen())
+    {
+        return 1;
+    }
+    if (! TestLocalizationReviewGridModelShowsOwnersEnglishAndVisibleCultures())
+    {
+        return 1;
+    }
+    if (! TestLocalizationReviewSurfacesMissingTranslations())
+    {
+        return 1;
+    }
+    if (! TestLocalizationReviewCanCreateAndExportNewCulture())
+    {
+        return 1;
+    }
+    if (! TestLocalizationReviewProjectionPerformanceMetric())
+    {
+        return 1;
+    }
+    if (! TestSplashScreenCloseGuardSuppressesPendingOpen())
     {
         return 1;
     }

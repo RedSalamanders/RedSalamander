@@ -727,7 +727,7 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
     _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Right, {});
     _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Left, {});
     _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Right, {});
-    _folderWindow.SetFileOperationCompletedCallback({});
+    _folderWindow.RemoveFileOperationCompletedCallback(std::exchange(_fileOperationCompletedCallbackToken, 0ull));
 
     DetachOptionsDxButtonHosts();
     DetachOptionsDxStaticHosts();
@@ -1668,7 +1668,8 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
                                                      DWORD fileAttributes) noexcept -> std::wstring
     { return BuildMetadataTextForCompareItem(ComparePane::Right, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
 
-    _folderWindow.SetFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) { OnFolderWindowFileOperationCompleted(e); });
+    _fileOperationCompletedCallbackToken =
+        _folderWindow.AddFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) { OnFolderWindowFileOperationCompleted(e); });
 
     _optionsDlg.reset(RedSalamander::Win32Callback::CreateDialogParamResourceNoThrow(
         GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_COMPARE_DIRECTORIES_OPTIONS), hwnd, OptionsDlgProc, reinterpret_cast<LPARAM>(this)));

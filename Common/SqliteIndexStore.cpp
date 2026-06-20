@@ -128,6 +128,31 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
     return {reinterpret_cast<const char*>(utf8.data()), utf8.size()};
 }
 
+[[nodiscard]] std::wstring Utf8ToWide(std::string_view text)
+{
+    if (text.empty())
+    {
+        return {};
+    }
+
+    const int required = ::MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    if (required <= 0)
+    {
+        return {};
+    }
+
+    std::wstring wide;
+    wide.resize(static_cast<size_t>(required));
+    const int written = ::MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), required);
+    if (written <= 0)
+    {
+        return {};
+    }
+
+    wide.resize(static_cast<size_t>(written));
+    return wide;
+}
+
 [[nodiscard]] std::wstring FoldText(std::wstring_view text) noexcept
 {
     return OrdinalString::FoldCaseInvariant(text);
@@ -137,6 +162,23 @@ constexpr wchar_t kEnumerateFailAfterEmittedRowsEnvVar[] = L"REDSALAMANDER_TEST_
 {
     const std::wstring extension = std::filesystem::path(name).extension().wstring();
     return FoldText(extension);
+}
+
+[[nodiscard]] std::wstring BuildPrefixUpperBound(std::wstring_view prefix)
+{
+    std::wstring upper(prefix);
+    for (size_t index = upper.size(); index > 0u; --index)
+    {
+        wchar_t& ch = upper[index - 1u];
+        if (ch != static_cast<wchar_t>(0xFFFFu))
+        {
+            ++ch;
+            upper.resize(index);
+            return upper;
+        }
+    }
+
+    return {};
 }
 
 [[nodiscard]] std::wstring GetSqliteErrorMessage(sqlite3* db)
@@ -636,7 +678,8 @@ struct NamePrefilter final
 
             if (request.namePattern.size() > 1u && request.namePattern.back() == L'*')
             {
-                const std::wstring_view prefix = request.namePattern.substr(0u, request.namePattern.size() - 1u);
+                const std::wstring_view pattern(request.namePattern);
+                const std::wstring_view prefix = pattern.substr(0u, pattern.size() - 1u);
                 if (! prefix.empty() && prefix.find_first_of(L"*?") == std::wstring_view::npos)
                 {
                     outPrefilter.kind  = NamePrefilterKind::PrefixFolded;
@@ -812,12 +855,7 @@ struct NamePrefilter final
     return S_OK;
 }
 
-[[nodiscard]] HRESULT PrepareEnumerateStatement(sqlite3* db,
-                                                sqlite3_int64 volumeId,
-                                                const RootEntryRow& rootEntry,
-                                                const QueryRequest& request,
-                                                const NamePrefilter& prefilter,
-                                                unique_statement& outStatement)
+[[nodiscard]] std::string BuildEnumerateStatementSql(const RootEntryRow& rootEntry, const QueryRequest& request, const NamePrefilter& prefilter)
 {
     std::string sql =
         "SELECT full_path, name, attributes, size_bytes, write_time_100ns, creation_time_100ns, last_access_time_100ns, change_time_100ns, allocation_size "
@@ -851,13 +889,31 @@ struct NamePrefilter final
     switch (prefilter.kind)
     {
         case NamePrefilterKind::ExactFolded: sql += std::format(" AND name_folded = ?{}", parameterIndex++); break;
-        case NamePrefilterKind::PrefixFolded: sql += std::format(" AND name_folded LIKE ?{}", parameterIndex++); break;
+        case NamePrefilterKind::PrefixFolded:
+        {
+            sql += std::format(" AND name_folded >= ?{}", parameterIndex++);
+            if (! BuildPrefixUpperBound(prefilter.value).empty())
+            {
+                sql += std::format(" AND name_folded < ?{}", parameterIndex++);
+            }
+            break;
+        }
         case NamePrefilterKind::ExtensionFolded: sql += std::format(" AND extension_folded = ?{}", parameterIndex++); break;
         case NamePrefilterKind::None: break;
     }
 
     sql += " ORDER BY full_path_folded;";
+    return sql;
+}
 
+[[nodiscard]] HRESULT PrepareEnumerateStatement(sqlite3* db,
+                                                sqlite3_int64 volumeId,
+                                                const RootEntryRow& rootEntry,
+                                                const QueryRequest& request,
+                                                const NamePrefilter& prefilter,
+                                                unique_statement& outStatement)
+{
+    const std::string sql = BuildEnumerateStatementSql(rootEntry, request, prefilter);
     HRESULT hr = PrepareStatement(db, sql, outStatement);
     if (FAILED(hr))
     {
@@ -905,12 +961,22 @@ struct NamePrefilter final
         }
         case NamePrefilterKind::PrefixFolded:
         {
-            const std::wstring prefixPattern = prefilter.value + L"%";
-            hr                               = BindWideText(outStatement.get(), bindIndex++, prefixPattern);
+            hr = BindWideText(outStatement.get(), bindIndex++, prefilter.value);
             if (FAILED(hr))
             {
-                Debug::Error(L"SqliteIndexStore: failed to bind prefix prefilter for '{}'.", request.rootPath);
+                Debug::Error(L"SqliteIndexStore: failed to bind prefix lower bound for '{}'.", request.rootPath);
                 return hr;
+            }
+
+            const std::wstring upperBound = BuildPrefixUpperBound(prefilter.value);
+            if (! upperBound.empty())
+            {
+                hr = BindWideText(outStatement.get(), bindIndex++, upperBound);
+                if (FAILED(hr))
+                {
+                    Debug::Error(L"SqliteIndexStore: failed to bind prefix upper bound for '{}'.", request.rootPath);
+                    return hr;
+                }
             }
             break;
         }
@@ -943,13 +1009,6 @@ struct NamePrefilter final
     if (autoVacuum != kSqliteAutoVacuumIncremental)
     {
         hr = ExecuteSql(db, "PRAGMA auto_vacuum=INCREMENTAL;", L"PRAGMA auto_vacuum=INCREMENTAL");
-        if (FAILED(hr))
-        {
-            return hr;
-        }
-
-        // SQLite persists auto-vacuum mode changes only after VACUUM rewrites the database.
-        hr = ExecuteSql(db, "VACUUM;", L"VACUUM");
         if (FAILED(hr))
         {
             return hr;
@@ -1076,6 +1135,30 @@ struct NamePrefilter final
         return hr;
     }
 
+    if (! markExistingVolumesLegacy && hasCreationTimeColumn && hasLastAccessTimeColumn && hasChangeTimeColumn && hasAllocationSizeColumn)
+    {
+        bool hasMetaTable = false;
+        hr                = SchemaObjectExists(db, "table", "meta", hasMetaTable);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (hasMetaTable)
+        {
+            int metaSchemaVersion = 0;
+            hr                    = ReadSingleInt(db, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'schema_version';", metaSchemaVersion);
+            if (SUCCEEDED(hr) && metaSchemaVersion == static_cast<int>(kSchemaVersion))
+            {
+                return S_OK;
+            }
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+    }
+
     hr = ExecuteSql(db, "BEGIN IMMEDIATE;", L"BEGIN IMMEDIATE");
     if (FAILED(hr))
     {
@@ -1196,6 +1279,131 @@ struct NamePrefilter final
         case 2u: return EnsureSchemaVersion2(db, false);
         default: return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
     }
+}
+
+[[nodiscard]] HRESULT EnsureReadableSchema(sqlite3* db)
+{
+    int userVersion = 0;
+    HRESULT hr      = ReadSingleInt(db, "PRAGMA user_version;", userVersion);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (static_cast<uint32_t>(std::max(userVersion, 0)) != kSchemaVersion)
+    {
+        Debug::Warning(L"SqliteIndexStore: read-only schema check rejected user_version {} (expected {}).", userVersion, kSchemaVersion);
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+
+    bool hasMetaTable            = false;
+    bool hasVolumesTable         = false;
+    bool hasEntriesTable         = false;
+    bool hasNameIndex            = false;
+    bool hasExtensionIndex       = false;
+    bool hasPathIndex            = false;
+    bool hasParentIndex          = false;
+    bool hasCreationTimeColumn   = false;
+    bool hasLastAccessTimeColumn = false;
+    bool hasChangeTimeColumn     = false;
+    bool hasAllocationSizeColumn = false;
+
+    hr = SchemaObjectExists(db, "table", "meta", hasMetaTable);
+    if (SUCCEEDED(hr))
+    {
+        hr = SchemaObjectExists(db, "table", "volumes", hasVolumesTable);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = SchemaObjectExists(db, "table", "entries", hasEntriesTable);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = SchemaObjectExists(db, "index", "idx_entries_name_folded", hasNameIndex);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = SchemaObjectExists(db, "index", "idx_entries_extension_folded", hasExtensionIndex);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = SchemaObjectExists(db, "index", "idx_entries_full_path_folded", hasPathIndex);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = SchemaObjectExists(db, "index", "idx_entries_parent", hasParentIndex);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = TableColumnExists(db, "entries", "creation_time_100ns", hasCreationTimeColumn);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = TableColumnExists(db, "entries", "last_access_time_100ns", hasLastAccessTimeColumn);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = TableColumnExists(db, "entries", "change_time_100ns", hasChangeTimeColumn);
+    }
+    if (SUCCEEDED(hr))
+    {
+        hr = TableColumnExists(db, "entries", "allocation_size", hasAllocationSizeColumn);
+    }
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    int metaSchemaVersion = 0;
+    if (hasMetaTable)
+    {
+        hr = ReadSingleInt(db, "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'schema_version';", metaSchemaVersion);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    const bool schemaReady = hasMetaTable && hasVolumesTable && hasEntriesTable && hasNameIndex && hasExtensionIndex && hasPathIndex && hasParentIndex &&
+                             hasCreationTimeColumn && hasLastAccessTimeColumn && hasChangeTimeColumn && hasAllocationSizeColumn &&
+                             metaSchemaVersion == static_cast<int>(kSchemaVersion);
+    if (! schemaReady)
+    {
+        Debug::Warning(L"SqliteIndexStore: read-only schema check rejected an incomplete v{} store.", kSchemaVersion);
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT OpenReadOnlyReadyConnection(std::wstring_view databasePath, unique_connection& outConnection)
+{
+    outConnection.reset();
+
+    const std::wstring normalizedPath = NormalizeDatabasePath(databasePath);
+    if (normalizedPath.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::error_code existsEc;
+    const bool exists = std::filesystem::exists(std::filesystem::path(normalizedPath), existsEc);
+    if (existsEc)
+    {
+        return HRESULT_FROM_WIN32(static_cast<unsigned long>(existsEc.value()));
+    }
+    if (! exists)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+
+    HRESULT hr = OpenConnection(normalizedPath, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, outConnection);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    return EnsureReadableSchema(outConnection.get());
 }
 
 [[nodiscard]] HRESULT PopulateStoreInfo(sqlite3* db, std::wstring_view normalizedPath, StoreInfo& outInfo)
@@ -1936,15 +2144,8 @@ HRESULT InspectVolume(std::wstring_view databasePath, std::wstring_view rootPath
             return E_INVALIDARG;
         }
 
-        const HRESULT bootstrapHr = EnsureBootstrap(databasePath, nullptr);
-        if (FAILED(bootstrapHr))
-        {
-            return bootstrapHr;
-        }
-
-        const std::wstring normalizedPath = NormalizeDatabasePath(databasePath);
         unique_connection db;
-        HRESULT hr = OpenConnection(normalizedPath, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, db);
+        HRESULT hr = OpenReadOnlyReadyConnection(databasePath, db);
         if (FAILED(hr))
         {
             return hr;
@@ -1986,15 +2187,8 @@ HRESULT LoadVolume(std::wstring_view databasePath, std::wstring_view rootPath, R
             return E_INVALIDARG;
         }
 
-        const HRESULT bootstrapHr = EnsureBootstrap(databasePath, nullptr);
-        if (FAILED(bootstrapHr))
-        {
-            return bootstrapHr;
-        }
-
-        const std::wstring normalizedPath = NormalizeDatabasePath(databasePath);
         unique_connection db;
-        HRESULT hr = OpenConnection(normalizedPath, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, db);
+        HRESULT hr = OpenReadOnlyReadyConnection(databasePath, db);
         if (FAILED(hr))
         {
             return hr;
@@ -2101,15 +2295,6 @@ HRESULT ReplaceVolume(std::wstring_view databasePath, const ReplaceVolumeRequest
         if (FAILED(hr))
         {
             return hr;
-        }
-
-        if (! result.insertedNewVolume)
-        {
-            hr = UpdateVolume(db.get(), volumeId, request);
-            if (FAILED(hr))
-            {
-                return hr;
-            }
         }
 
         hr = ExecuteSql(db.get(), "COMMIT;", L"COMMIT");
@@ -2661,15 +2846,8 @@ HRESULT EnumerateVolume(std::wstring_view databasePath,
             return S_OK;
         }
 
-        const HRESULT bootstrapHr = EnsureBootstrap(databasePath, nullptr);
-        if (FAILED(bootstrapHr))
-        {
-            return bootstrapHr;
-        }
-
-        const std::wstring normalizedPath = NormalizeDatabasePath(databasePath);
         unique_connection db;
-        HRESULT hr = OpenConnection(normalizedPath, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, db);
+        HRESULT hr = OpenReadOnlyReadyConnection(databasePath, db);
         if (FAILED(hr))
         {
             return hr;
@@ -2809,4 +2987,115 @@ HRESULT EnumerateVolume(std::wstring_view databasePath,
         return E_FAIL;
     }
 }
+
+#ifdef ENABLE_TESTS
+HRESULT ExplainEnumerateVolumeForTests(std::wstring_view databasePath, const QueryRequest& request, QueryPlanInspectionForTests& outPlan) noexcept
+{
+    try
+    {
+        outPlan = {};
+        if (request.rootPath.empty())
+        {
+            return E_INVALIDARG;
+        }
+
+        unique_connection db;
+        HRESULT hr = OpenReadOnlyReadyConnection(databasePath, db);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        VolumeRow volumeRow{};
+        hr = ReadVolumeRow(db.get(), request.rootPath, volumeRow);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        RootEntryRow rootEntry{};
+        hr = ReadRootEntry(db.get(), volumeRow.volumeId, request.rootPath, rootEntry);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        NamePrefilter prefilter{};
+        static_cast<void>(TryBuildNamePrefilter(request, prefilter));
+        if (prefilter.kind == NamePrefilterKind::PrefixFolded)
+        {
+            outPlan.prefixLowerBound = prefilter.value;
+            outPlan.prefixUpperBound = BuildPrefixUpperBound(prefilter.value);
+        }
+        outPlan.sql = BuildEnumerateStatementSql(rootEntry, request, prefilter);
+
+        unique_statement boundStatement;
+        hr = PrepareEnumerateStatement(db.get(), volumeRow.volumeId, rootEntry, request, prefilter, boundStatement);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        char* expandedSql = sqlite3_expanded_sql(boundStatement.get());
+        const auto freeExpandedSql = wil::scope_exit([&]() noexcept
+        {
+            if (expandedSql != nullptr)
+            {
+                sqlite3_free(expandedSql);
+            }
+        });
+        if (expandedSql != nullptr)
+        {
+            const std::string_view expandedSqlText(expandedSql);
+            outPlan.expandedSql = Utf8ToWide(expandedSqlText);
+        }
+
+        unique_statement statement;
+        const std::string explainSql = "EXPLAIN QUERY PLAN " + outPlan.sql;
+        hr                           = PrepareStatement(db.get(), explainSql, statement);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        while (true)
+        {
+            const int sqliteResult = sqlite3_step(statement.get());
+            if (sqliteResult == SQLITE_DONE)
+            {
+                return S_OK;
+            }
+            if (sqliteResult != SQLITE_ROW)
+            {
+                Debug::Error(L"SqliteIndexStore: EXPLAIN QUERY PLAN failed for '{}'. code={} message='{}'",
+                             request.rootPath,
+                             sqliteResult,
+                             GetSqliteErrorMessage(db.get()));
+                return E_FAIL;
+            }
+
+            if (! outPlan.detail.empty())
+            {
+                outPlan.detail.push_back(L'\n');
+            }
+
+            const auto* detail = reinterpret_cast<const char*>(sqlite3_column_text(statement.get(), 3));
+            if (detail != nullptr)
+            {
+                const std::string_view detailText(detail);
+                outPlan.detail.append(Utf8ToWide(detailText));
+            }
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"SqliteIndexStore::ExplainEnumerateVolumeForTests: std::exception");
+        return E_FAIL;
+    }
+}
+#endif
 } // namespace SqliteIndexStore

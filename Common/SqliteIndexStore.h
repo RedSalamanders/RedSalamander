@@ -133,6 +133,17 @@ struct QueryRuntimeStats final
     bool usedNamePrefilter                              = false;
 };
 
+#ifdef ENABLE_TESTS
+struct QueryPlanInspectionForTests final
+{
+    std::string sql;
+    std::wstring expandedSql;
+    std::wstring detail;
+    std::wstring prefixLowerBound;
+    std::wstring prefixUpperBound;
+};
+#endif
+
 struct ManualMaintenanceResult final
 {
     StoreInfo before{};
@@ -169,4 +180,9 @@ struct AutomaticMaintenanceResult final
                                       LocalSearchIndexCore::CandidateCallbackFn candidateCallback,
                                       void* candidateCookie,
                                       QueryRuntimeStats* outStats) noexcept;
+#ifdef ENABLE_TESTS
+[[nodiscard]] HRESULT ExplainEnumerateVolumeForTests(std::wstring_view databasePath,
+                                                     const QueryRequest& request,
+                                                     QueryPlanInspectionForTests& outPlan) noexcept;
+#endif
 } // namespace SqliteIndexStore

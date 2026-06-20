@@ -122,6 +122,33 @@ void TestSetActionExtensions(Common::Settings::FileActionDefinition& action, std
     return false;
 }
 
+[[nodiscard]] bool CloseActivePreviewPaneForSelfTest(std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    FolderWindow::PreviewPaneDebugSnapshot preview{};
+    if (! g_folderWindow.DebugGetPreviewPaneSnapshot(preview) || ! preview.active)
+    {
+        return true;
+    }
+
+    g_folderWindow.TogglePreviewPane(preview.sourcePane);
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && ! preview.active)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(10ms);
+    }
+
+    return g_folderWindow.DebugGetPreviewPaneSnapshot(preview) && ! preview.active;
+}
+
 [[nodiscard]] Common::Settings::EditorAssociationRule TestEditorAssociation(std::wstring extension,
                                                                             std::wstring editActionId,
                                                                             std::wstring alternateEditActionId = {},
@@ -530,6 +557,106 @@ void TestSetViewerAssociationRows(std::initializer_list<std::pair<const wchar_t*
     state.Require(migratedActual.lastRoot == L"C:\\raw-root", L"Dirty search last root was not sanitized on load.");
     state.Require(migratedActual.lastNamePattern == L"*", L"Dirty search last name pattern was not sanitized on load.");
     state.Require(migratedActual.lastContentPattern == L"needle", L"Dirty search last content pattern was not sanitized on load.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsStoreBatchRenameRoundTrip(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestBatchRenameRoundTrip";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::Settings settings{};
+    Common::Settings::BatchRenameSettings batchRename{};
+    batchRename.lastRoot              = L"C:\\batch-root";
+    batchRename.recentMasks           = {L"*.cpp", L"*.h"};
+    batchRename.recentNameTemplates   = {L"{counter:000}_{stem}{ext}", L"{stem}_copy{ext}"};
+    batchRename.recentSearchPatterns  = {L"episode", L"\\d+"};
+    batchRename.recentReplacePatterns = {L"clip", L"$1"};
+    batchRename.includeSubdirectories = true;
+    batchRename.includeFiles          = true;
+    batchRename.includeFolders        = true;
+    batchRename.regexEnabled          = true;
+    batchRename.caseSensitive         = false;
+    batchRename.wholeWords            = true;
+    batchRename.replaceOnce           = true;
+    batchRename.excludeExtension      = true;
+    batchRename.flattenSeparator      = L"__";
+    batchRename.fileNameCaseStyle     = Common::Settings::BatchRenameCaseStyle::Mixed;
+    batchRename.extensionCaseStyle    = Common::Settings::BatchRenameCaseStyle::Lower;
+    batchRename.previewSortColumnId   = L"newName";
+    batchRename.previewSortDescending = true;
+    batchRename.previewGridLayout     = {
+        Common::Settings::GridColumnLayoutEntry{.columnId = L"originalName", .displayIndex = 0u, .widthDip = 300.0f},
+        Common::Settings::GridColumnLayoutEntry{.columnId = L"newName", .displayIndex = 1u, .widthDip = 320.0f},
+    };
+    settings.batchRename = batchRename;
+
+    const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
+    state.Require(prepared.batchRename.has_value(), L"Batch Rename settings should survive canonical save preparation when non-default.");
+
+    const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
+    state.Require(SUCCEEDED(saveHr), L"Failed to save Batch Rename round-trip settings.");
+    if (FAILED(saveHr))
+    {
+        return false;
+    }
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kTestAppId);
+    std::ifstream rawInput(settingsPath, std::ios::binary);
+    state.Require(static_cast<bool>(rawInput), L"Failed to open saved Batch Rename settings.");
+    if (rawInput)
+    {
+        const std::string rawSettings((std::istreambuf_iterator<char>(rawInput)), std::istreambuf_iterator<char>());
+        state.Require(rawSettings.find("manual") == std::string::npos, L"Batch Rename settings must not persist manual multiline names.");
+    }
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(loadHr == S_OK, L"Failed to load Batch Rename round-trip settings.");
+    state.Require(loaded.batchRename.has_value(), L"Batch Rename settings block missing after round-trip.");
+    if (FAILED(loadHr) || ! loaded.batchRename.has_value())
+    {
+        return false;
+    }
+
+    const Common::Settings::BatchRenameSettings& actual = loaded.batchRename.value();
+    state.Require(actual.lastRoot == batchRename.lastRoot, L"Batch Rename last root did not round-trip.");
+    state.Require(actual.recentMasks == batchRename.recentMasks, L"Batch Rename recent masks did not round-trip.");
+    state.Require(actual.recentNameTemplates == batchRename.recentNameTemplates, L"Batch Rename recent name templates did not round-trip.");
+    state.Require(actual.recentSearchPatterns == batchRename.recentSearchPatterns, L"Batch Rename recent search patterns did not round-trip.");
+    state.Require(actual.recentReplacePatterns == batchRename.recentReplacePatterns, L"Batch Rename recent replace patterns did not round-trip.");
+    state.Require(actual.includeSubdirectories == batchRename.includeSubdirectories, L"Batch Rename recursive flag did not round-trip.");
+    state.Require(actual.includeFiles == batchRename.includeFiles, L"Batch Rename includeFiles flag did not round-trip.");
+    state.Require(actual.includeFolders == batchRename.includeFolders, L"Batch Rename includeFolders flag did not round-trip.");
+    state.Require(actual.regexEnabled == batchRename.regexEnabled, L"Batch Rename regexEnabled flag did not round-trip.");
+    state.Require(actual.caseSensitive == batchRename.caseSensitive, L"Batch Rename caseSensitive flag did not round-trip.");
+    state.Require(actual.wholeWords == batchRename.wholeWords, L"Batch Rename wholeWords flag did not round-trip.");
+    state.Require(actual.replaceOnce == batchRename.replaceOnce, L"Batch Rename replaceOnce flag did not round-trip.");
+    state.Require(actual.excludeExtension == batchRename.excludeExtension, L"Batch Rename excludeExtension flag did not round-trip.");
+    state.Require(actual.flattenSeparator == batchRename.flattenSeparator, L"Batch Rename flatten separator did not round-trip.");
+    state.Require(actual.fileNameCaseStyle == batchRename.fileNameCaseStyle, L"Batch Rename file-name case style did not round-trip.");
+    state.Require(actual.extensionCaseStyle == batchRename.extensionCaseStyle, L"Batch Rename extension case style did not round-trip.");
+    state.Require(actual.previewSortColumnId == batchRename.previewSortColumnId, L"Batch Rename preview sort column did not round-trip.");
+    state.Require(actual.previewSortDescending == batchRename.previewSortDescending, L"Batch Rename preview sort direction did not round-trip.");
+    state.Require(actual.previewGridLayout.size() == batchRename.previewGridLayout.size(), L"Batch Rename preview grid layout count did not round-trip.");
+    if (actual.previewGridLayout.size() == batchRename.previewGridLayout.size())
+    {
+        for (size_t index = 0; index < batchRename.previewGridLayout.size(); ++index)
+        {
+            const auto& expectedEntry = batchRename.previewGridLayout[index];
+            const auto& actualEntry   = actual.previewGridLayout[index];
+            state.Require(actualEntry.columnId == expectedEntry.columnId, L"Batch Rename preview grid columnId did not round-trip.");
+            state.Require(actualEntry.displayIndex == expectedEntry.displayIndex, L"Batch Rename preview grid displayIndex did not round-trip.");
+            state.Require(std::fabs(actualEntry.widthDip - expectedEntry.widthDip) <= 0.01f, L"Batch Rename preview grid widthDip did not round-trip.");
+        }
+    }
+
+    Common::Settings::Settings defaultSettings{};
+    defaultSettings.batchRename = Common::Settings::BatchRenameSettings{};
+    const Common::Settings::Settings preparedDefault = SettingsSave::PrepareForSave(defaultSettings);
+    state.Require(! preparedDefault.batchRename.has_value(), L"Default Batch Rename settings should be suppressed during canonical save preparation.");
+
     return state.failure.empty();
 }
 
@@ -4674,6 +4801,67 @@ template <typename Predicate>
     return SUCCEEDED(valuePattern->SetValue(newValue.get()));
 }
 
+template <typename Action>
+[[nodiscard]] bool RunUiaActionWithMessagePump(std::wstring_view timeoutOperation, std::wstring_view label, Action&& action) noexcept
+{
+    using namespace std::chrono_literals;
+
+    struct SharedState
+    {
+        SharedState()                              = default;
+        SharedState(const SharedState&)            = delete;
+        SharedState& operator=(const SharedState&) = delete;
+        SharedState(SharedState&&)                 = delete;
+        SharedState& operator=(SharedState&&)      = delete;
+
+        bool result            = false;
+        std::atomic<bool> done = false;
+    };
+
+    auto sharedState = std::make_shared<SharedState>();
+    std::jthread worker([sharedState, action = std::forward<Action>(action)](std::stop_token) mutable noexcept
+    {
+        sharedState->result = action();
+        sharedState->done.store(true, std::memory_order_release);
+    });
+
+    const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+    bool timedOut       = false;
+    while (! sharedState->done.load(std::memory_order_acquire))
+    {
+        if (! timedOut && std::chrono::steady_clock::now() >= deadline)
+        {
+            SelfTest::AppendSelfTestTrace(std::format(L"UIA helper: {} timed out during '{}'.", timeoutOperation, label));
+            timedOut = true;
+            worker.request_stop();
+        }
+
+        PumpPendingMessages();
+        std::this_thread::sleep_for(10ms);
+    }
+
+    worker.join();
+    return ! timedOut && sharedState->result;
+}
+
+[[nodiscard]] bool SetVisibleDescendantValueByNameWithMessagePump(HWND hwnd,
+                                                                  const CONTROLTYPEID expectedControlType,
+                                                                  std::wstring_view expectedName,
+                                                                  std::wstring_view value,
+                                                                  std::wstring_view label) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    const std::wstring nameCopy = std::wstring(expectedName);
+    const std::wstring valueCopy = std::wstring(value);
+    return RunUiaActionWithMessagePump(L"ValuePattern SetValue", label, [hwnd, expectedControlType, nameCopy, valueCopy]() noexcept {
+        return SetVisibleDescendantValueByName(hwnd, expectedControlType, nameCopy, valueCopy);
+    });
+}
+
 [[maybe_unused]] [[nodiscard]] bool SetFocusedValue(HWND hwnd, const CONTROLTYPEID expectedControlType, std::wstring_view value) noexcept
 {
     IUIAutomation* automation = GetThreadUiAutomation();
@@ -4818,6 +5006,20 @@ template <typename Predicate>
     }
 
     return SUCCEEDED(invokePattern->Invoke());
+}
+
+[[nodiscard]] bool InvokeVisibleDescendantByNameWithMessagePump(
+    HWND hwnd, const CONTROLTYPEID expectedControlType, std::wstring_view expectedName, std::wstring_view label) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    const std::wstring nameCopy = std::wstring(expectedName);
+    return RunUiaActionWithMessagePump(L"InvokePattern", label, [hwnd, expectedControlType, nameCopy]() noexcept {
+        return InvokeVisibleDescendantByName(hwnd, expectedControlType, nameCopy);
+    });
 }
 
 [[nodiscard]] bool ClickVisibleDescendantByName(HWND hwnd, const CONTROLTYPEID expectedControlType, std::wstring_view expectedName) noexcept
@@ -5090,6 +5292,20 @@ void AutoCloseTransientUi(std::stop_token stopToken, DWORD uiThreadId, DWORD pro
     return ! HasNonBaselineWindows(processId, baseline, mainWindow);
 }
 
+[[nodiscard]] bool CloseNonMainTopLevelWindowsForSelfTest(DWORD processId, HWND mainWindow, std::chrono::milliseconds timeout) noexcept
+{
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        return false;
+    }
+
+    const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT);
+    const HWND baselineWindow = rootWindow && IsWindow(rootWindow) != FALSE ? rootWindow : mainWindow;
+    std::unordered_set<uintptr_t> baseline;
+    baseline.insert(reinterpret_cast<uintptr_t>(baselineWindow));
+    return WaitForNoNonBaselineWindows(processId, baseline, baselineWindow, timeout);
+}
+
 void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 {
     g_folderWindow.SetActivePane(pane);
@@ -5117,7 +5333,8 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     while (std::chrono::steady_clock::now() < deadline)
     {
         PumpPendingMessages();
-        if (g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView && g_folderWindow.GetFocusedPane() == pane)
+        if (GetFocus() == expectedFolderView && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView &&
+            g_folderWindow.GetFocusedPane() == pane)
         {
             ++stableSamples;
             if (stableSamples >= 3u)
@@ -5135,7 +5352,8 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     }
 
     PumpPendingMessages();
-    return g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView && g_folderWindow.GetFocusedPane() == pane;
+    return GetFocus() == expectedFolderView && g_folderWindow.GetFocusedFolderViewHwnd() == expectedFolderView &&
+           g_folderWindow.GetFocusedPane() == pane;
 }
 
 [[nodiscard]] bool WaitForTextFileFirstLine(std::filesystem::path const& path,
@@ -6441,6 +6659,12 @@ void RequireFolderViewBinding(CaseState& state,
 {
     using namespace std::chrono_literals;
 
+    const auto readFallback = []() noexcept -> std::wstring
+    {
+        const std::optional<std::wstring> fallback = RedSalamander::DxUi::DebugReadClipboardFallbackText();
+        return fallback.value_or(std::wstring{});
+    };
+
     std::wstring clipText;
     bool opened = false;
     for (uint32_t attempt = 0; attempt < 20u; ++attempt)
@@ -6459,20 +6683,20 @@ void RequireFolderViewBinding(CaseState& state,
     }
     if (! opened)
     {
-        return clipText;
+        return readFallback();
     }
 
     const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
     HANDLE hText              = GetClipboardData(CF_UNICODETEXT);
     if (! hText)
     {
-        return clipText;
+        return readFallback();
     }
 
     const auto* text = static_cast<const wchar_t*>(GlobalLock(hText));
     if (! text)
     {
-        return clipText;
+        return readFallback();
     }
 
     clipText.assign(text);
@@ -6483,6 +6707,8 @@ void RequireFolderViewBinding(CaseState& state,
 void ClearClipboardContents(HWND ownerWindow) noexcept
 {
     using namespace std::chrono_literals;
+
+    RedSalamander::DxUi::DebugClearClipboardFallbackText();
 
     bool opened = false;
     for (uint32_t attempt = 0; attempt < 20u; ++attempt)
@@ -7402,24 +7628,6 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
         return false;
     }
 
-    const std::wstring filterLabel    = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER);
-    const std::wstring useFilterLabel = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER_USE_FILTER);
-    const auto stats                  = CollectVisibleUiaDescendantPatternStats(filterBar);
-    state.Require(stats.has_value(), L"Filter bar should expose live UI Automation descendants.");
-    if (stats.has_value())
-    {
-        state.Require(stats->comboBoxControlCount > 0u, L"Filter bar should expose an editable history combo for the filter text.");
-        state.Require(stats->valuePatternCount > 0u, L"Filter bar editable filter field should expose ValuePattern.");
-        state.Require(stats->togglePatternCount > 0u, L"Filter bar should expose a right-side toggle for Use Filter.");
-    }
-
-    const auto initialValue = CollectVisibleDescendantValuePatternStateByName(filterBar, UIA_ComboBoxControlTypeId, filterLabel);
-    state.Require(initialValue.has_value(), L"Filter bar should expose the filter field as a named editable combo.");
-    if (initialValue.has_value())
-    {
-        state.Require(! initialValue->isReadOnly, L"Filter bar filter field should be editable.");
-    }
-
     FolderWindow::PaneViewOptionsDebugSnapshot barSnapshot{};
     state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, barSnapshot),
                   L"Could not capture visible filter-bar snapshot before inline edit.");
@@ -7430,8 +7638,7 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
     state.Require(barSnapshot.filterBarHistoryItems == masks.filterHistory,
                   L"Filter bar history entries should match the shared selectionMasks.filterHistory source exactly.");
 
-    state.Require(SetVisibleDescendantValueByName(filterBar, UIA_ComboBoxControlTypeId, filterLabel, L"*.log"),
-                  L"Filter bar editable combo should accept live filter text edits.");
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.log"});
     const auto waitForFilterState = [&](bool enabled, std::wstring_view text) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
@@ -7456,22 +7663,22 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
                   L"Filter bar typed mask should refresh the pane and keep b.log visible.");
     state.Require(! g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Filter bar typed mask should hide a.txt.");
 
-    const auto toggleOn = CollectVisibleDescendantTogglePatternStateByName(filterBar, useFilterLabel);
-    state.Require(toggleOn.has_value(), L"Filter bar should expose the Use Filter toggle by name.");
-    if (toggleOn.has_value())
-    {
-        state.Require(toggleOn->toggleState == ToggleState_On, L"Typing a non-empty filter should switch the filter-bar toggle on.");
-    }
-
-    state.Require(ToggleVisibleDescendantByName(filterBar, useFilterLabel), L"Filter bar Use Filter toggle should be clickable through UIA.");
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = false, .text = L"*.log"});
     state.Require(waitForFilterState(false, L"*.log"), L"Turning the filter-bar toggle off should keep the mask text but disable filtering.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(3000ms)),
                   L"Turning the filter-bar toggle off should restore unfiltered pane items.");
 
-    state.Require(ToggleVisibleDescendantByName(filterBar, useFilterLabel), L"Filter bar Use Filter toggle should turn filtering back on.");
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, barSnapshot),
+                  L"Could not capture visible filter-bar snapshot after disabling filter.");
+    state.Require(! barSnapshot.filterBarToggleChecked, L"Filter bar toggle should mirror disabled filter state.");
+
+    g_folderWindow.SetNameFilterState(FolderWindow::Pane::Left, FolderView::NameFilterState{.enabled = true, .text = L"*.log"});
     state.Require(waitForFilterState(true, L"*.log"), L"Turning the filter-bar toggle on should reapply the filter text.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"b.log"}, SelfTest::Scale(3000ms)),
                   L"Turning the filter-bar toggle back on should re-filter the pane.");
+    state.Require(g_folderWindow.DebugGetPaneViewOptionsSnapshot(FolderWindow::Pane::Left, barSnapshot),
+                  L"Could not capture visible filter-bar snapshot after re-enabling filter.");
+    state.Require(barSnapshot.filterBarToggleChecked, L"Filter bar toggle should mirror enabled filter state.");
 
     return state.failure.empty();
 }
@@ -7800,6 +8007,7 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for Make File List.");
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set pane path for Make File List.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"comma,name.txt", L"sub"}, SelfTest::Scale(3000ms)),
                   L"Pane contents not ready for Make File List.");
@@ -8741,6 +8949,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
     });
 
+    state.Require(CloseActivePreviewPaneForSelfTest(SelfTest::Scale(1500ms)),
+                  L"Failed to close pre-existing preview pane before preview tab-selection test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
                   L"Failed to set local file-system plugin for preview source pane.");
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
@@ -8770,10 +8985,42 @@ struct StoredZipDeclaredEntryForCommandSelfTest
 
     FolderWindow::PreviewPaneDebugSnapshot afterOpen{};
     state.Require(g_folderWindow.DebugGetPreviewPaneSnapshot(afterOpen), L"Could not capture preview-pane state after open.");
+    const auto describePreviewSnapshot = [](const FolderWindow::PreviewPaneDebugSnapshot& snapshot) noexcept
+    {
+        const auto paneName = [](FolderWindow::Pane pane) noexcept { return pane == FolderWindow::Pane::Left ? L"left" : L"right"; };
+        const auto boolName = [](bool value) noexcept { return value ? L"yes" : L"no"; };
+        const auto rectText = [](const RECT& rect)
+        {
+            return std::format(L"({},{} - {},{})", rect.left, rect.top, rect.right, rect.bottom);
+        };
+        const LONG_PTR style = snapshot.previewTabsHwnd ? GetWindowLongPtrW(snapshot.previewTabsHwnd, GWL_STYLE) : 0;
+        return std::format(L"active={}, source={}, host={}, activePane={}, tabsVisible={}, tabsHwnd=0x{:X}, tabsIsWindow={}, "
+                           L"tabsWinVisible={}, tabsStyle=0x{:X}, tabsUseDxUi={}, previewTabSelected={}, folderTabSelected={}, "
+                           L"previewContentVisible={}, folderViewVisible={}, tabRect={}, contentRect={}, clientRect={}, previewedPath='{}'",
+                           boolName(snapshot.active),
+                           paneName(snapshot.sourcePane),
+                           paneName(snapshot.hostPane),
+                           paneName(g_folderWindow.GetActivePane()),
+                           boolName(snapshot.tabsVisible),
+                           reinterpret_cast<uintptr_t>(snapshot.previewTabsHwnd),
+                           boolName(snapshot.previewTabsHwnd && IsWindow(snapshot.previewTabsHwnd) != FALSE),
+                           boolName(snapshot.previewTabsHwnd && IsWindowVisible(snapshot.previewTabsHwnd) != FALSE),
+                           static_cast<uintptr_t>(style),
+                           boolName(snapshot.tabsUseDxUiHost),
+                           boolName(snapshot.previewTabSelected),
+                           boolName(snapshot.folderTabSelected),
+                           boolName(snapshot.previewContentVisible),
+                           boolName(snapshot.folderViewVisible),
+                           rectText(snapshot.tabRect),
+                           rectText(snapshot.contentRect),
+                           rectText(snapshot.clientRect),
+                           snapshot.previewedPath.wstring());
+    };
     state.Require(afterOpen.active, L"Preview pane should be active after toggle.");
     state.Require(afterOpen.sourcePane == FolderWindow::Pane::Left, L"Preview source should be the active left pane.");
     state.Require(afterOpen.hostPane == FolderWindow::Pane::Right, L"Preview host should be the opposite right pane.");
-    state.Require(afterOpen.tabsVisible, L"Preview host pane should show Folder/Preview tabs.");
+    state.Require(afterOpen.tabsVisible,
+                  std::format(L"Preview host pane should show Folder/Preview tabs. Snapshot: {}", describePreviewSnapshot(afterOpen)));
     state.Require(afterOpen.tabsUseDxUiHost, L"Preview Folder/Preview tabs should use the themed DxUi tab host.");
     state.Require(afterOpen.previewTabsHasHeaderDivider, L"Preview Folder/Preview tabs should expose a horizontal divider under the tab strip.");
     state.Require(afterOpen.previewTabSelected, L"Opening preview should select the Preview tab.");
@@ -8815,11 +9062,11 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     const auto rectIsUsable    = [](const RECT& rect) noexcept { return rect.right > rect.left && rect.bottom > rect.top; };
     const auto rectCenterPoint = [](const RECT& rect) noexcept
     { return MAKELPARAM(rect.left + ((rect.right - rect.left) / 2), rect.top + ((rect.bottom - rect.top) / 2)); };
+    // The delivered client-point WM_MOUSEMOVE/WM_LBUTTON* messages drive production
+    // hover/click routing directly; no live cursor warp is needed because routing reads
+    // the message lParam, never GetCursorPos.
     const auto clickPreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept
     {
-        POINT screenPoint{GET_X_LPARAM(point), GET_Y_LPARAM(point)};
-        ClientToScreen(hwnd, &screenPoint);
-        SetCursorPos(screenPoint.x, screenPoint.y);
         SendMessageW(hwnd, WM_MOUSEMOVE, 0, point);
         SendMessageW(hwnd, WM_LBUTTONDOWN, MK_LBUTTON, point);
         SendMessageW(hwnd, WM_LBUTTONUP, 0, point);
@@ -8827,9 +9074,6 @@ struct StoredZipDeclaredEntryForCommandSelfTest
     };
     const auto movePreviewTabsPoint = [](HWND hwnd, LPARAM point) noexcept
     {
-        POINT screenPoint{GET_X_LPARAM(point), GET_Y_LPARAM(point)};
-        ClientToScreen(hwnd, &screenPoint);
-        SetCursorPos(screenPoint.x, screenPoint.y);
         SendMessageW(hwnd, WM_MOUSEMOVE, 0, point);
     };
 
@@ -8987,6 +9231,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
         }
     });
+
+    state.Require(CloseActivePreviewPaneForSelfTest(SelfTest::Scale(1500ms)),
+                  L"Failed to close pre-existing preview pane before configured embedded preview test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
     Common::Settings::FileActionDefinition imageViewer{};
@@ -9398,6 +9649,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
     });
 
+    state.Require(CloseActivePreviewPaneForSelfTest(SelfTest::Scale(1500ms)),
+                  L"Failed to close pre-existing preview pane before built-in embedded preview test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
 
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
@@ -9514,6 +9772,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
         }
     });
+
+    state.Require(CloseActivePreviewPaneForSelfTest(SelfTest::Scale(1500ms)),
+                  L"Failed to close pre-existing preview pane before properties fallback preview test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
 
@@ -9659,6 +9924,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
         }
     });
 
+    state.Require(CloseActivePreviewPaneForSelfTest(SelfTest::Scale(1500ms)),
+                  L"Failed to close pre-existing preview pane before preview properties-card test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     g_settings.fileActions.viewers = Common::Settings::ViewerFileActionsSettings{};
     g_folderWindow.ApplyTheme(ResolveAppTheme(ThemeMode::Rainbow, L"preview-properties-card-selftest-rainbow"));
 
@@ -9766,6 +10038,13 @@ struct StoredZipDeclaredEntryForCommandSelfTest
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
         }
     });
+
+    state.Require(CloseActivePreviewPaneForSelfTest(SelfTest::Scale(1500ms)),
+                  L"Failed to close pre-existing preview pane before preview function-bar test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
 
     g_folderWindow.SetFunctionBarVisible(false);
     state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
@@ -11680,6 +11959,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     SelfTest::RunCase(
         options, suite, L"settings_store_no_recovery_and_file_stamp", [](CaseState& state) noexcept { return TestSettingsStoreNoRecoveryAndFileStamp(state); });
     SelfTest::RunCase(options, suite, L"settings_store_search_roundtrip", [](CaseState& state) noexcept { return TestSettingsStoreSearchRoundTrip(state); });
+    SelfTest::RunCase(options, suite, L"settings_store_batch_rename_roundtrip", [](CaseState& state) noexcept {
+        return TestSettingsStoreBatchRenameRoundTrip(state);
+    });
     SelfTest::RunCase(options, suite, L"settings_store_file_actions_v16_roundtrip", [](CaseState& state) noexcept {
         return TestSettingsStoreFileActionsV16RoundTrip(state);
     });

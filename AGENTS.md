@@ -131,6 +131,8 @@ Use `build.ps1` for command-line builds. See [cpp-build skill](.github/skills/cp
 .\build.ps1 -ProjectName RedSalamander   # Build specific project
 ```
 
+To verify a change is green, use `.\Tools\Run-AllTests.ps1 -Suite Full` (builds + full suite) or `.\Tools\Run-AllTests.ps1 -SkipBuild` (in-process selftests only against an existing build). See README "Self-tests" for details.
+
 ## Dependencies
 
 - **WIL**: Windows Implementation Library (RAII wrappers)

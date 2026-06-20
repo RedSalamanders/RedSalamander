@@ -4,6 +4,7 @@
 #include <memory>
 #include <mutex>
 #include <regex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -233,6 +234,7 @@ enum class SnapshotCorruptionMode : uint32_t
     InvalidMagic,
     JournalIdMismatch,
     NextUsnPastEnd,
+    EntryCountTooLarge,
 };
 
 struct DirectSqliteFreshnessProbe final
@@ -248,6 +250,17 @@ struct DirectSqliteFreshnessProbe final
 };
 
 [[nodiscard]] bool ShouldAllowDirectSqliteQueryForTests(const DirectSqliteFreshnessProbe& probe) noexcept;
+[[nodiscard]] bool TryParseUsnRecordForTests(const void* recordBytes, size_t recordBytesSize) noexcept;
+[[nodiscard]] bool TryParseFileFullDirectoryInformationForTests(const void* entryBytes, size_t entryBytesSize) noexcept;
+
+struct SyntheticJournalRecordForTests final
+{
+    std::wstring idPath;
+    std::wstring parentPath;
+    std::wstring name;
+    unsigned long fileAttributes = 0u;
+    uint32_t reason              = 0u;
+};
 #endif
 
 class Repository final
@@ -298,6 +311,12 @@ public:
 #ifdef ENABLE_TESTS
     HRESULT DropCachedVolumeForTests(std::wstring_view rootPath) noexcept;
     HRESULT CorruptSnapshotForTests(std::wstring_view rootPath, SnapshotCorruptionMode mode) noexcept;
+    HRESULT ApplySyntheticJournalForTests(std::wstring_view rootPath,
+                                          std::span<const SyntheticJournalRecordForTests> records,
+                                          QueryStats* outStats) noexcept;
+    HRESULT QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept;
+    void SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn) noexcept;
+    void SetNextJournalReplayReadFailureForTests(DWORD error) noexcept;
 #endif
 
 private:

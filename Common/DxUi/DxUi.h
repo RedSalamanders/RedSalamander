@@ -830,7 +830,9 @@ struct ButtonChromeResolvedStyle
     float focusStrokeDip  = 2.0f;
     float textOffsetXDip  = 0.0f;
     float textOffsetYDip  = 0.0f;
-    ButtonChromeFocusRing focusRing = ButtonChromeFocusRing::Standard;
+    // Default aligned with ButtonChromeCustomStyle; ResolveButtonChromeResolvedStyle
+    // always assigns this explicitly (Standard for the theme-resolved path).
+    ButtonChromeFocusRing focusRing = ButtonChromeFocusRing::Single;
 };
 
 struct ButtonChromeDrawSpec
@@ -2167,6 +2169,8 @@ public:
 
     void SetVariant(ComboBoxVariant variant) noexcept;
     [[nodiscard]] ComboBoxVariant GetVariant() const noexcept;
+    void SetChromeVisible(bool visible) noexcept;
+    [[nodiscard]] bool IsChromeVisible() const noexcept;
     // Override the default kComboBoxMaxVisibleItems cap for this instance.
     // Pass 0 to restore the default.
     void SetMaxVisibleItems(size_t maxItems) noexcept;
@@ -2190,6 +2194,7 @@ public:
     void SetOnSelectionChanged(std::function<void(size_t)> onSelectionChanged);
     void SetOnSubmitted(std::function<void()> onSubmitted);
     void SetOnPopupRequested(std::function<bool()> onPopupRequested);
+    [[nodiscard]] bool IsPopupOpen() const noexcept;
     [[nodiscard]] bool DebugIsPopupOpen() const noexcept;
     [[nodiscard]] std::optional<size_t> DebugGetHoveredPopupIndex() const noexcept;
     [[nodiscard]] D2D1_RECT_F DebugGetPopupBounds() const noexcept;
@@ -2316,6 +2321,7 @@ private:
     bool _dragPopupScrollbar    = false;
     bool _dragSelecting         = false;
     bool _popupUsesBackdropBlur = false;
+    bool _chromeVisible         = true;
     SingleLineSelectionClickSequence _selectionClickSequence;
     float _popupScrollbarDragOffsetDip             = 0.0f;
     ComboBoxVariant _variant                       = ComboBoxVariant::Modern;
@@ -2324,6 +2330,73 @@ private:
     bool _open                                     = false;
     size_t _maxVisibleItemsOverride                = 0u;
     static constexpr size_t kMaxEditHistoryEntries = 64u;
+};
+
+class TagPicker : public Panel
+{
+public:
+    TagPicker();
+
+    void SetOptions(std::wstring allLabel, std::vector<std::wstring> options);
+    [[nodiscard]] std::span<const std::wstring> GetOptions() const noexcept;
+    void SetSelectedValues(std::vector<std::wstring> values);
+    [[nodiscard]] std::span<const std::wstring> GetSelectedValues() const noexcept;
+    void SetInputText(std::wstring text);
+    [[nodiscard]] std::wstring_view GetInputText() const noexcept;
+    [[nodiscard]] bool SelectOption(std::wstring_view value);
+    [[nodiscard]] bool CommitInput();
+    [[nodiscard]] bool RemoveDisplayTag(size_t displayTagIndex);
+    [[nodiscard]] size_t GetDisplayTagCount() const noexcept;
+    [[nodiscard]] std::wstring_view GetDisplayTagText(size_t displayTagIndex) const noexcept;
+    [[nodiscard]] float GetPreferredHeightDip(float widthDip) const noexcept;
+    void SetOnSelectionChanged(std::function<void(std::span<const std::wstring>)> onSelectionChanged);
+
+    void Paint(WindowHost& host) const override;
+    bool OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
+
+#if defined(ENABLE_TESTS)
+    [[nodiscard]] size_t DebugGetLaidOutDisplayTagCount() const noexcept;
+    [[nodiscard]] D2D1_RECT_F DebugGetDisplayTagRect(size_t displayTagIndex) const noexcept;
+    [[nodiscard]] D2D1_RECT_F DebugGetInputRect() const noexcept;
+    [[nodiscard]] ComboBox* DebugGetEmbeddedCombo() noexcept;
+    [[nodiscard]] const ComboBox* DebugGetEmbeddedCombo() const noexcept;
+#endif
+
+protected:
+    void OnBoundsChanged() noexcept override;
+    [[nodiscard]] Control* HitTest(D2D1_POINT_2F point) override;
+    [[nodiscard]] const Control* HitTest(D2D1_POINT_2F point) const override;
+
+private:
+    struct DisplayTag
+    {
+        std::wstring text;
+        std::wstring value;
+        bool all = false;
+    };
+
+    void RefreshComboItems();
+    void RebuildDisplayTags();
+    void LayoutParts() noexcept;
+    [[nodiscard]] float ComputePreferredHeightDip(float widthDip, const WindowHost* host) const noexcept;
+    [[nodiscard]] float MeasureDisplayTagWidthDip(const DisplayTag& tag, float rowHeightDip, const WindowHost* host) const noexcept;
+    void NotifySelectionChanged();
+    [[nodiscard]] bool ContainsOption(std::wstring_view value) const noexcept;
+    [[nodiscard]] bool ContainsSelectedValue(std::wstring_view value) const noexcept;
+    [[nodiscard]] bool IsAllSelectionActive() const noexcept;
+    [[nodiscard]] std::optional<size_t> FindOptionIndex(std::wstring_view value) const noexcept;
+    [[nodiscard]] std::optional<size_t> FindBestInputMatch(std::wstring_view input) const noexcept;
+    void PruneSelectedValues();
+
+    ComboBox* _combo = nullptr;
+    std::wstring _allLabel;
+    std::vector<std::wstring> _options;
+    std::vector<std::wstring> _selectedValues;
+    std::vector<DisplayTag> _displayTags;
+    std::vector<D2D1_RECT_F> _tagRects;
+    std::vector<D2D1_RECT_F> _tagRemoveRects;
+    std::function<void(std::span<const std::wstring>)> _onSelectionChanged;
+    bool _syncingCombo = false;
 };
 
 class StatusStrip final : public Control

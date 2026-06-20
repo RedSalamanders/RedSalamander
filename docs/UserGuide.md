@@ -19,7 +19,7 @@ Core capabilities:
 - Search files and directories with native, indexed, and fallback search backends.
 - Compare two directory trees and synchronize differences.
 - Open files with viewer plugins for text, hex, images, RAW files, SQLite databases, PE files, web content, media, and folder space usage.
-- Store reusable remote/cloud profiles in Connection Manager.
+- Store reusable remote/cloud profiles in the Connections Manager.
 - Customize themes, keyboard shortcuts, viewers, plugins, file operations, hot paths, and advanced settings.
 - Watch application diagnostics with RedSalamanderMonitor.
 
@@ -47,6 +47,8 @@ The function bar at the bottom shows the main keyboard actions:
 - `F10` Menu
 - `F11` Connect
 - `F12` Disconnect
+
+The function bar also updates as you hold `Ctrl`, `Alt`, or `Shift` to show the alternate command for each key. For the complete default-binding reference, including the modifier rows, see [Keyboard Shortcuts](KeyboardShortcuts.md).
 
 ## Main Window
 
@@ -95,7 +97,7 @@ Use the drive/menu dropdown to reach:
 
 - Known folders such as Desktop, Documents, Downloads, Pictures, Music, Videos, and OneDrive.
 - WSL distributions when available.
-- Saved Connection Manager profiles.
+- Saved Connections Manager profiles.
 - Local drive roots with current capacity information.
 - Disk actions such as **Disk Properties** and **Disk Cleanup** when the active item is a local drive and Windows exposes those actions.
 
@@ -144,7 +146,7 @@ When a workflow is not visible in the first screen, check these command surfaces
 - The **View** menu for theme, fullscreen, File Operations Failed Items, menu/function bar toggles, and Preferences.
 - `F1` / **Help -> Display Shortcuts** for the shortcut list that matches the current command set.
 
-See [Main Window & Panes](MainWindow.md) for the full menu-by-menu map.
+See [Main Window & Panes](MainWindow.md) for the full menu-by-menu map, and [Keyboard Shortcuts](KeyboardShortcuts.md) for the consolidated default-binding reference.
 
 ## Navigation
 
@@ -192,7 +194,7 @@ s3table:/
 7z:C:\Downloads\archive.zip|/
 ```
 
-Connection Manager aliases:
+Connections Manager aliases:
 
 ```text
 nav:MySftpServer
@@ -202,7 +204,7 @@ s3://@conn/MyAwsS3/logs/
 sharepoint:/@conn:TeamSite/Shared Documents/
 ```
 
-If you type `nav:`, `nav://`, or `@conn:` without a name, RedSalamander opens Connection Manager.
+If you type `nav:`, `nav://`, or `@conn:` without a name, RedSalamander opens the Connections Manager.
 
 ## File Management
 
@@ -228,10 +230,11 @@ Properties can be opened with **Files -> Properties** or `Alt+Enter`. The dialog
 
 ### Creating and Renaming
 
-- **Rename** (`F2`): rename the focused item.
+- **Rename** (`F2`): rename the focused item. If more than one item is selected, RedSalamander opens Batch Rename instead. The rename prompt also offers **Batch...**: for a folder it opens Batch Rename rooted at that folder, for a file it opens Batch Rename with that file in the preview.
+- **Batch Rename**: preview selected files before bulk renaming them. The Rules area combines a new-name template, search/replace options, and independent file-name/extension case changes, or you can switch to Manual mode and type one target name per row. The preview grid validates every proposed name before any rename can run. The window is modeless, so you can keep working in the panes while it is open. For the full set of macros, search/replace options, case styles, validation rules, and reporting, see [Batch Rename](BatchRename.md).
 - **New Folder / MakeDir** (`F7`): create a directory in the focused pane.
 - **New -> Shell templates**: lists Windows ShellNew templates for local folders. Choosing one prompts for a name, creates the file, refreshes the pane, and focuses the new item when it is visible.
-- **Change Case**: change name casing for selected items.
+- **Change Case** (`Ctrl+F7`): change name casing for selected items (lower, upper, mixed) without opening the full preview window. See [Batch Rename](BatchRename.md#change-case) for the available case styles.
 - **Change Attributes**: uses mixed tri-state boxes for multi-selection so unchanged attributes stay untouched.
 
 ### Copy, Move, and Delete
@@ -268,11 +271,10 @@ The **Edit** menu provides selection commands for batch work:
 - Select / unselect by mask.
 - Select all and unselect all.
 - Invert selection.
-- Restore previous selection.
+- Restore the previous selection. The **Edit -> Advanced -> Load Selection...** command restores the same saved selection (both **Restore Selection** and **Load Selection...** invoke the same restore action), and **Edit -> Advanced -> Save Selection** captures the current selection so it can be restored later.
 - Select next matching item.
 - Select same extension.
 - Calculate directory size and continue to next item.
-- Save and load advanced selections.
 - Hide selected or unselected names.
 
 ### Path, Shell, and Clipboard Helpers
@@ -345,9 +347,9 @@ More detail: [Compare Directories](CompareDirectories.md)
 
 ## Connections
 
-Connection Manager stores reusable profiles for remote, cloud, and object-storage file systems.
+The Connections Manager (opened from **Commands -> Connections Manager...**) stores reusable profiles for remote, cloud, and object-storage file systems.
 
-![Connection Manager with sanitized example profiles](res/connections-manager.png)
+![Connections Manager with sanitized example profiles](res/connections-manager.png)
 
 Open it from:
 
@@ -355,7 +357,7 @@ Open it from:
 - `nav:`, `nav://`, or `@conn:` in the address bar.
 - A protocol prefix with no target, such as `sftp:`, `gdrive:`, `s3:`, or `s3table:`.
 
-Connection Manager supports:
+The Connections Manager supports:
 
 - FTP, SFTP, SCP, and IMAP profiles.
 - Google Drive, OneDrive Personal, OneDrive Business, and SharePoint profiles.
@@ -429,8 +431,8 @@ Plugins provide virtual file systems and file viewers. Open **Plugins -> Plugin 
 |--------|--------|----------|---------------------------|
 | `file:` | Windows File System | Local drives, known folders, UNC paths, WSL shortcuts | Browse, open, copy, move, rename, delete, recycle-bin delete, properties, clipboard paths, drag-and-drop where Windows supports it. |
 | `7z:` | 7-Zip Archive File System | Archive browsing | Open supported archives as virtual folders, browse archive contents, and read/copy out items where the archive backend supports it. |
-| `ftp:` | FTP | Remote FTP servers | Browse, read, upload, overwrite, delete, and use Connection Manager profiles; server capability may limit operations. |
-| `sftp:` | SFTP | SSH file transfer | Browse, read, write, delete, and use SSH credentials or keys through settings or Connection Manager. |
+| `ftp:` | FTP | Remote FTP servers | Browse, read, upload, overwrite, delete, and use Connections Manager profiles; server capability may limit operations. |
+| `sftp:` | SFTP | SSH file transfer | Browse, read, write, delete, and use SSH credentials or keys through settings or the Connections Manager. |
 | `scp:` | SCP | SSH copy access | Browse and transfer through the shared curl-based plugin; directory operations depend on server SFTP support. |
 | `imap:` | IMAP | Mailbox browsing | Browse mailboxes and messages exposed as `.eml` files; deleting an `.eml` deletes the message when allowed. |
 | `gdrive:` | Google Drive | Google Drive metadata browsing | Browse folders and inspect drive metadata; the current user-facing milestone is read-only metadata and requires an existing OAuth refresh token. |
@@ -443,7 +445,7 @@ Plugins provide virtual file systems and file viewers. Open **Plugins -> Plugin 
 
 ### File-System Plugin Notes
 
-- Connection Manager is preferred for credentials because it stores secrets through Windows facilities.
+- The Connections Manager is preferred for credentials because it stores secrets through Windows facilities.
 - Plugin defaults in Preferences can be useful for local testing but may store non-secret and some plugin-specific values in the settings file.
 - Cross-file-system copy/move uses the host bridge: the source plugin reads, the destination plugin writes.
 - Read-only plugins reject writes and destructive operations.
@@ -557,10 +559,10 @@ RedSalamander stores durable user choices in its settings file, including:
 - File operation defaults.
 - Compare Directory defaults.
 - Search recent values.
-- Connection Manager non-secret profile fields.
+- Connections Manager non-secret profile fields.
 - Plugin configuration.
 
-Secrets are not meant to be stored in the settings JSON by Connection Manager. Saved connection secrets are stored with Windows Credential Manager, optionally protected by Windows Hello.
+Secrets are not meant to be stored in the settings JSON by the Connections Manager. Saved connection secrets are stored with Windows Credential Manager, optionally protected by Windows Hello.
 
 More detail: [Settings File & Advanced Configuration](SettingsFile.md)
 
@@ -568,7 +570,7 @@ More detail: [Settings File & Advanced Configuration](SettingsFile.md)
 
 Use these first checks:
 
-- If a remote connection fails, open Connection Manager and verify host, protocol, authentication, and saved secret state.
+- If a remote connection fails, open the Connections Manager and verify host, protocol, authentication, and saved secret state.
 - If a cloud sign-in fails, verify the plugin client ID and whether first-time OAuth is supported for that plugin.
 - If media playback fails, configure the VLC installation path in the VLC viewer plugin settings.
 - If copy/move behaves unexpectedly, open the File Operations popup and check conflicts, issues, and exported diagnostics.

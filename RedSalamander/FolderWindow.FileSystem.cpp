@@ -94,9 +94,11 @@ std::filesystem::path NormalizeLocalNavigationPath(std::filesystem::path path)
     return path;
 }
 
-[[nodiscard]] bool IsSameLocalNavigationPath(const std::filesystem::path& left, const std::filesystem::path& right)
+[[nodiscard]] bool IsSameLocalNavigationPathText(const std::filesystem::path& left, const std::filesystem::path& right)
 {
-    return OrdinalString::EqualsNoCasePath(NormalizeLocalNavigationPath(left), NormalizeLocalNavigationPath(right));
+    // Byte-wise comparison on purpose: a case-only navigation ('C:\foo' -> 'C:\FOO') must re-run the
+    // navigation pipeline so the displayed casing refreshes.
+    return NormalizeLocalNavigationPath(left).native() == NormalizeLocalNavigationPath(right).native();
 }
 
 [[nodiscard]] bool OpenClipboardWithRetries(HWND ownerWindow) noexcept
@@ -5034,9 +5036,12 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         }
     }
 
+    // Skip the navigation pipeline only when the pane already shows the identical local path AND the
+    // last enumeration of that folder succeeded. A failed navigation (access denied, offline share,
+    // ejected media) leaves `_currentFolder` pointing at the failed path, so retrying it must re-enumerate.
     if (state.fileSystem && IsFilePluginShortId(state.pluginShortId) && IsFilePluginShortId(pluginShortId) && EqualsNoCase(state.pluginId, pluginId) &&
         state.instanceContext.empty() && instanceContext.empty() && previousPluginPath.has_value() &&
-        IsSameLocalNavigationPath(previousPluginPath.value(), pluginPath))
+        IsSameLocalNavigationPathText(previousPluginPath.value(), pluginPath) && state.folderView.IsCurrentFolderEnumerated())
     {
 #ifdef ENABLE_TESTS
         SelfTest::AppendSelfTestTrace(std::format(L"FolderWindow::SetFolderPath skipped same local path pane={} previous='{}' requested='{}'",
@@ -5280,6 +5285,12 @@ std::optional<std::filesystem::path> FolderWindow::GetFocusedItemPath(Pane pane)
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.GetFocusedPath();
+}
+
+std::vector<std::filesystem::path> FolderWindow::GetSelectedOrFocusedPaths(Pane pane) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.GetSelectedOrFocusedPaths();
 }
 
 std::vector<std::filesystem::path> FolderWindow::GetFolderHistory() const

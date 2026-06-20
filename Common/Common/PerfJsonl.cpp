@@ -4,6 +4,7 @@
 
 #include "Helpers.h"
 
+#include <atomic>
 #include <cwchar>
 
 namespace Debug::detail
@@ -13,6 +14,13 @@ namespace Debug::detail
 
 static std::mutex g_perfJsonlMutex;
 static std::mutex g_perfJsonlWriteMutex;
+// Cached append handle (guarded by g_perfJsonlWriteMutex) so the sink does not open+close the file on
+// every row -- the previous per-row CreateFileW/CloseHandle was ~50-150us each and dominated any
+// high-frequency metric. Reopened lazily when the path changes or the handle is not yet open; the OS
+// closes it on process exit. In-process readers (the selftest presence scan) still see writes because
+// WriteFile publishes to the shared OS file cache (no FlushFileBuffers needed for read visibility).
+static wil::unique_hfile g_perfJsonlFile;
+static std::filesystem::path g_perfJsonlOpenPath;
 static std::filesystem::path g_perfJsonlPath;
 static std::wstring g_perfJsonlScenario;
 static std::wstring g_perfJsonlBuild;
@@ -20,6 +28,12 @@ static std::wstring g_perfJsonlBranch;
 static std::wstring g_perfJsonlCommit;
 static std::wstring g_perfJsonlMachineHash;
 static std::wstring g_perfJsonlRunId;
+// The JSONL sink is configured exactly once from the environment (tests set it before launch). Resolving
+// it once and caching the result in an atomic makes the overwhelmingly common no-sink production path a
+// single relaxed load -- no global mutex, no GetEnvironmentVariableW syscall, and no string copies per
+// metric emit (this sink is hit from the UI layout/render path and icon worker threads).
+static bool g_perfJsonlEnvResolved = false;     // guarded by g_perfJsonlMutex; env queried at most once
+static std::atomic<int> g_perfJsonlSinkState{0}; // 0 = unresolved, 1 = active sink, 2 = no sink (free fast-path)
 
 // ---- environment variable constants ----
 
@@ -150,10 +164,11 @@ std::wstring CurrentUtcIsoTimestamp() noexcept
 // Caller must hold g_perfJsonlMutex.
 void TryInitializeJsonlOutputFromEnvironmentLocked() noexcept
 {
-    if (! g_perfJsonlPath.empty())
+    if (g_perfJsonlEnvResolved)
     {
         return;
     }
+    g_perfJsonlEnvResolved = true;
 
     const std::wstring path = GetEnvironmentVariableValue(kPerfJsonlPathEnv);
     if (path.empty())
@@ -176,6 +191,12 @@ void TryInitializeJsonlOutputFromEnvironmentLocked() noexcept
 
 COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept
 {
+    // Fast path: once resolved with no sink configured, every emit is a single atomic load and return.
+    if (g_perfJsonlSinkState.load(std::memory_order_acquire) == 2)
+    {
+        return;
+    }
+
     std::filesystem::path outputPath;
     std::wstring scenario;
     std::wstring build;
@@ -186,7 +207,12 @@ COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detai
     {
         std::scoped_lock lock(g_perfJsonlMutex);
         TryInitializeJsonlOutputFromEnvironmentLocked();
-        outputPath  = g_perfJsonlPath;
+        outputPath = g_perfJsonlPath;
+        g_perfJsonlSinkState.store(outputPath.empty() ? 2 : 1, std::memory_order_release);
+        if (outputPath.empty())
+        {
+            return;
+        }
         scenario    = g_perfJsonlScenario;
         build       = g_perfJsonlBuild;
         branch      = g_perfJsonlBranch;
@@ -195,21 +221,34 @@ COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detai
         runId       = g_perfJsonlRunId;
     }
 
-    if (outputPath.empty())
-    {
-        return;
-    }
-
     // Best-effort perf sink. Bad allocation should remain fatal; other runtime failures should not
     // interfere with normal execution or the ETW path.
     try
     {
         std::scoped_lock writeLock(g_perfJsonlWriteMutex);
 
-        if (outputPath.has_parent_path())
+        // Reopen the cached append handle only when the path changes (or it is not yet open), so the
+        // common case is a single WriteFile with no per-row open/close syscalls.
+        if (! g_perfJsonlFile || g_perfJsonlOpenPath != outputPath)
         {
-            std::error_code ec;
-            std::filesystem::create_directories(outputPath.parent_path(), ec);
+            g_perfJsonlFile.reset();
+            g_perfJsonlOpenPath.clear();
+            if (outputPath.has_parent_path())
+            {
+                std::error_code ec;
+                std::filesystem::create_directories(outputPath.parent_path(), ec);
+            }
+            g_perfJsonlFile.reset(
+                CreateFileW(outputPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+            if (g_perfJsonlFile)
+            {
+                g_perfJsonlOpenPath = outputPath;
+            }
+        }
+
+        if (! g_perfJsonlFile)
+        {
+            return;
         }
 
         std::string line;
@@ -246,15 +285,8 @@ COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detai
 
         line.append("}\n");
 
-        wil::unique_handle file(
-            CreateFileW(outputPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-        if (! file)
-        {
-            return;
-        }
-
         DWORD written = 0;
-        static_cast<void>(WriteFile(file.get(), line.data(), static_cast<DWORD>(line.size()), &written, nullptr));
+        static_cast<void>(WriteFile(g_perfJsonlFile.get(), line.data(), static_cast<DWORD>(line.size()), &written, nullptr));
     }
     catch (const std::bad_alloc&)
     {
@@ -296,6 +328,18 @@ COMMON_API void ConfigureJsonlOutput(const std::filesystem::path& path,
         detail::g_perfJsonlCommit      = std::wstring(commit);
         detail::g_perfJsonlMachineHash = std::wstring(machineHash);
         detail::g_perfJsonlRunId       = std::wstring(runId);
+        // Runtime (re)configuration overrides whatever the cached sink-state latch resolved at startup. Without
+        // this the WritePerfJsonl fast-path could stay stuck at "no sink" (2) -- latched by an earlier emit while
+        // no path was configured -- and silently drop every metric even after a path is set (e.g. tests that
+        // configure the JSONL sink mid-process via this entry point).
+        detail::g_perfJsonlSinkState.store(detail::g_perfJsonlPath.empty() ? 2 : 1, std::memory_order_release);
+        // Drop any cached append handle so the next emit reopens against the newly configured path/inode
+        // even when the path string is unchanged (e.g. a test truncates+reconfigures the same file).
+        {
+            std::scoped_lock writeLock(detail::g_perfJsonlWriteMutex);
+            detail::g_perfJsonlFile.reset();
+            detail::g_perfJsonlOpenPath.clear();
+        }
         SetEnvironmentVariableW(detail::kPerfJsonlPathEnv, detail::g_perfJsonlPath.empty() ? nullptr : detail::g_perfJsonlPath.c_str());
         SetEnvironmentVariableW(detail::kPerfJsonlScenarioEnv, detail::g_perfJsonlScenario.empty() ? nullptr : detail::g_perfJsonlScenario.c_str());
         SetEnvironmentVariableW(detail::kPerfJsonlBuildEnv, detail::g_perfJsonlBuild.empty() ? nullptr : detail::g_perfJsonlBuild.c_str());
@@ -323,6 +367,17 @@ COMMON_API void ClearJsonlOutput() noexcept
     detail::g_perfJsonlCommit.clear();
     detail::g_perfJsonlMachineHash.clear();
     detail::g_perfJsonlRunId.clear();
+    // No sink remains configured; latch the fast-path so subsequent emits return cheaply. A later
+    // ConfigureJsonlOutput re-enables the sink by storing 1 again.
+    detail::g_perfJsonlSinkState.store(2, std::memory_order_release);
+    // Drop the cached append handle so a later reconfigure to the SAME path reopens against the current
+    // file instead of appending to a stale (possibly deleted/recreated) inode, and so the open handle does
+    // not keep the file locked across the clear.
+    {
+        std::scoped_lock writeLock(detail::g_perfJsonlWriteMutex);
+        detail::g_perfJsonlFile.reset();
+        detail::g_perfJsonlOpenPath.clear();
+    }
     SetEnvironmentVariableW(detail::kPerfJsonlPathEnv, nullptr);
     SetEnvironmentVariableW(detail::kPerfJsonlScenarioEnv, nullptr);
     SetEnvironmentVariableW(detail::kPerfJsonlBuildEnv, nullptr);

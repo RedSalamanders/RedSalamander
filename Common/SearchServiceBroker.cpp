@@ -29,6 +29,13 @@ namespace
 constexpr uint32_t kMessageMagic        = 0x53535252u; // "RRSS"
 constexpr uint32_t kMaxFrameBytes       = 16u * 1024u * 1024u;
 constexpr DWORD kClientConnectTimeoutMs = 150u;
+constexpr HRESULT kProtocolErrorHr      = HRESULT_FROM_WIN32(RPC_S_PROTOCOL_ERROR);
+constexpr DWORD kClientIoPollMs                  = 50u;
+constexpr DWORD kClientFrameTimeoutMs            = 30'000u;
+constexpr DWORD kClientControlOperationTimeoutMs = 30'000u;
+constexpr DWORD kClientQueryOperationTimeoutMs   = 10u * 60u * 1'000u;
+constexpr size_t kMaxClientBufferedCandidates    = 65'536u;
+constexpr uint64_t kMaxClientBufferedCandidateBytes = 64ull * 1024ull * 1024ull;
 // A foreground/self-hosted service can spend longer than one pipe rebind quantum
 // between requests while it refreshes sqlite store state after disconnecting.
 constexpr DWORD kMissingPipeRetryWindowMs       = 250u;
@@ -39,6 +46,14 @@ struct StartupWarmupCancelContext final
 {
     HANDLE stopEvent = nullptr;
     std::stop_token stopToken{};
+};
+
+struct ClientIoContext final
+{
+    LocalSearchIndexCore::CancelCheckFn cancelCheck = nullptr;
+    void* cancelCookie                              = nullptr;
+    ULONGLONG operationDeadline                     = 0u;
+    DWORD frameTimeoutMs                            = kClientFrameTimeoutMs;
 };
 
 enum class MessageType : uint32_t
@@ -585,6 +600,94 @@ template <typename T> [[nodiscard]] bool ReadPod(std::span<const std::byte>& rem
     return true;
 }
 
+HRESULT DecodeQueryBatchPayload(std::span<const std::byte> payloadBytes, std::vector<LocalSearchIndexCore::Candidate>& outCandidates) noexcept
+{
+    outCandidates.clear();
+
+    CandidateBatchHeader batchHeader{};
+    std::span<const std::byte> remaining = payloadBytes;
+    if (! ReadPod(remaining, batchHeader) || batchHeader.reserved != 0u)
+    {
+        return kProtocolErrorHr;
+    }
+
+    const size_t maxEntriesInPayload = remaining.size_bytes() / sizeof(CandidateEntryHeader);
+    if (static_cast<size_t>(batchHeader.count) > maxEntriesInPayload)
+    {
+        return kProtocolErrorHr;
+    }
+
+    std::vector<LocalSearchIndexCore::Candidate> batchCandidates;
+    batchCandidates.reserve(batchHeader.count);
+    for (uint32_t index = 0u; index < batchHeader.count; ++index)
+    {
+        CandidateEntryHeader entryHeader{};
+        LocalSearchIndexCore::Candidate candidate{};
+        if (! ReadPod(remaining, entryHeader) || ! ReadUtf16(remaining, entryHeader.fullPathBytes, candidate.fullPath) ||
+            ! ReadUtf16(remaining, entryHeader.displayNameBytes, candidate.displayName))
+        {
+            return kProtocolErrorHr;
+        }
+
+        candidate.fileAttributes      = entryHeader.fileAttributes;
+        candidate.metadataFlags       = entryHeader.metadataFlags;
+        candidate.creationTime100ns   = entryHeader.creationTime100ns;
+        candidate.lastAccessTime100ns = entryHeader.lastAccessTime100ns;
+        candidate.endOfFile           = entryHeader.endOfFile;
+        candidate.lastWriteTime100ns  = entryHeader.lastWriteTime100ns;
+        candidate.changeTime100ns     = entryHeader.changeTime100ns;
+        candidate.allocationSize      = entryHeader.allocationSize;
+        batchCandidates.push_back(std::move(candidate));
+    }
+
+    outCandidates = std::move(batchCandidates);
+    return S_OK;
+}
+
+[[nodiscard]] size_t ResolveClientBufferedCandidateLimit(const uint64_t requestMaxResults) noexcept
+{
+    if (requestMaxResults == 0u)
+    {
+        return kMaxClientBufferedCandidates;
+    }
+
+    const uint64_t capped = (std::min)(requestMaxResults, static_cast<uint64_t>(kMaxClientBufferedCandidates));
+    return static_cast<size_t>(capped);
+}
+
+[[nodiscard]] uint64_t EstimateClientBufferedCandidateBytes(const LocalSearchIndexCore::Candidate& candidate) noexcept
+{
+    return static_cast<uint64_t>(sizeof(LocalSearchIndexCore::Candidate)) +
+           (static_cast<uint64_t>(candidate.fullPath.size()) * sizeof(wchar_t)) +
+           (static_cast<uint64_t>(candidate.displayName.size()) * sizeof(wchar_t));
+}
+
+[[nodiscard]] bool CanAppendClientBufferedCandidates(const size_t currentCount,
+                                                     const uint64_t currentBytes,
+                                                     std::span<const LocalSearchIndexCore::Candidate> batch,
+                                                     const size_t maxCount,
+                                                     uint64_t& outBatchBytes) noexcept
+{
+    outBatchBytes = 0u;
+    if (batch.size() > maxCount || currentCount > (maxCount - batch.size()))
+    {
+        return false;
+    }
+
+    for (const auto& candidate : batch)
+    {
+        const uint64_t candidateBytes = EstimateClientBufferedCandidateBytes(candidate);
+        if (candidateBytes > kMaxClientBufferedCandidateBytes || outBatchBytes > (kMaxClientBufferedCandidateBytes - candidateBytes))
+        {
+            return false;
+        }
+
+        outBatchBytes += candidateBytes;
+    }
+
+    return currentBytes <= kMaxClientBufferedCandidateBytes && outBatchBytes <= (kMaxClientBufferedCandidateBytes - currentBytes);
+}
+
 [[nodiscard]] LocalSearchIndexCore::StoreState ResolveFallbackStoreState(const LocalSearchIndexCore::FallbackReason reason) noexcept
 {
     switch (reason)
@@ -767,7 +870,7 @@ HRESULT ReceiveFrame(HANDLE handle, FrameHeader& outHeader, std::vector<std::byt
 
     if (outHeader.magic != kMessageMagic)
     {
-        return RPC_S_PROTOCOL_ERROR;
+        return kProtocolErrorHr;
     }
 
     if (outHeader.payloadBytes > kMaxFrameBytes)
@@ -781,6 +884,214 @@ HRESULT ReceiveFrame(HANDLE handle, FrameHeader& outHeader, std::vector<std::byt
         hr = ReadExact(handle, outPayload.data(), outHeader.payloadBytes);
     }
     return hr;
+}
+
+[[nodiscard]] ULONGLONG MakeDeadline(DWORD timeoutMs) noexcept
+{
+    return timeoutMs == INFINITE ? (std::numeric_limits<ULONGLONG>::max)() : ::GetTickCount64() + timeoutMs;
+}
+
+[[nodiscard]] bool IsDeadlineExpired(ULONGLONG deadline, ULONGLONG now) noexcept
+{
+    return deadline != (std::numeric_limits<ULONGLONG>::max)() && now >= deadline;
+}
+
+[[nodiscard]] DWORD RemainingToDeadlineMs(ULONGLONG deadline, ULONGLONG now) noexcept
+{
+    if (deadline == (std::numeric_limits<ULONGLONG>::max)())
+    {
+        return INFINITE;
+    }
+    if (now >= deadline)
+    {
+        return 0u;
+    }
+
+    const ULONGLONG remaining = deadline - now;
+    return remaining > (std::numeric_limits<DWORD>::max)() ? (std::numeric_limits<DWORD>::max)() : static_cast<DWORD>(remaining);
+}
+
+[[nodiscard]] HRESULT CheckClientIoCancelled(const ClientIoContext* context) noexcept
+{
+    if (context == nullptr || context->cancelCheck == nullptr)
+    {
+        return S_OK;
+    }
+
+    return context->cancelCheck(context->cancelCookie);
+}
+
+HRESULT CancelClientIoAndReturn(HANDLE handle, OVERLAPPED& overlapped, HRESULT hr) noexcept
+{
+    static_cast<void>(::CancelIoEx(handle, &overlapped));
+    DWORD ignoredBytes = 0u;
+    static_cast<void>(::GetOverlappedResult(handle, &overlapped, &ignoredBytes, TRUE));
+    return hr;
+}
+
+HRESULT WaitForClientIo(HANDLE handle, OVERLAPPED& overlapped, ClientIoContext* context, DWORD& outBytesTransferred) noexcept
+{
+    outBytesTransferred         = 0u;
+    const ULONGLONG frameStart  = ::GetTickCount64();
+    const ULONGLONG frameDeadline =
+        context != nullptr ? frameStart + context->frameTimeoutMs : frameStart + kClientFrameTimeoutMs;
+
+    for (;;)
+    {
+        HRESULT cancelHr = CheckClientIoCancelled(context);
+        if (FAILED(cancelHr))
+        {
+            return CancelClientIoAndReturn(handle, overlapped, cancelHr);
+        }
+
+        const ULONGLONG now = ::GetTickCount64();
+        if (IsDeadlineExpired(frameDeadline, now) || (context != nullptr && IsDeadlineExpired(context->operationDeadline, now)))
+        {
+            return CancelClientIoAndReturn(handle, overlapped, HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT));
+        }
+
+        DWORD waitMs = kClientIoPollMs;
+        waitMs       = (std::min)(waitMs, RemainingToDeadlineMs(frameDeadline, now));
+        if (context != nullptr)
+        {
+            waitMs = (std::min)(waitMs, RemainingToDeadlineMs(context->operationDeadline, now));
+        }
+        if (waitMs == 0u)
+        {
+            return CancelClientIoAndReturn(handle, overlapped, HRESULT_FROM_WIN32(ERROR_SEM_TIMEOUT));
+        }
+
+        const DWORD waitResult = ::WaitForSingleObject(overlapped.hEvent, waitMs);
+        if (waitResult == WAIT_TIMEOUT)
+        {
+            continue;
+        }
+        if (waitResult == WAIT_FAILED)
+        {
+            return CancelClientIoAndReturn(handle, overlapped, HRESULT_FROM_WIN32(::GetLastError()));
+        }
+        if (waitResult != WAIT_OBJECT_0)
+        {
+            return CancelClientIoAndReturn(handle, overlapped, E_FAIL);
+        }
+
+        if (::GetOverlappedResult(handle, &overlapped, &outBytesTransferred, FALSE) == 0)
+        {
+            return HRESULT_FROM_WIN32(::GetLastError());
+        }
+        return S_OK;
+    }
+}
+
+HRESULT ClientIoExact(HANDLE handle, void* buffer, uint32_t byteCount, bool write, ClientIoContext* context) noexcept
+{
+    auto* bytes       = static_cast<std::byte*>(buffer);
+    uint32_t total    = 0u;
+    wil::unique_event_nothrow ioEvent;
+    ioEvent.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (! ioEvent)
+    {
+        const DWORD lastError = ::GetLastError();
+        return lastError != 0u ? HRESULT_FROM_WIN32(lastError) : E_OUTOFMEMORY;
+    }
+
+    while (total < byteCount)
+    {
+        HRESULT cancelHr = CheckClientIoCancelled(context);
+        if (FAILED(cancelHr))
+        {
+            return cancelHr;
+        }
+
+        static_cast<void>(::ResetEvent(ioEvent.get()));
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = ioEvent.get();
+
+        DWORD transferred = 0u;
+        const DWORD remaining = byteCount - total;
+        const BOOL started =
+            write ? ::WriteFile(handle, bytes + total, remaining, &transferred, &overlapped)
+                  : ::ReadFile(handle, bytes + total, remaining, &transferred, &overlapped);
+        if (started == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error != ERROR_IO_PENDING)
+            {
+                return HRESULT_FROM_WIN32(error);
+            }
+
+            HRESULT hr = WaitForClientIo(handle, overlapped, context, transferred);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        if (transferred == 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+        }
+
+        total += transferred;
+    }
+
+    return S_OK;
+}
+
+HRESULT ClientReadExact(HANDLE handle, void* buffer, uint32_t byteCount, ClientIoContext* context) noexcept
+{
+    return ClientIoExact(handle, buffer, byteCount, false, context);
+}
+
+HRESULT ClientWriteExact(HANDLE handle, const void* buffer, uint32_t byteCount, ClientIoContext* context) noexcept
+{
+    return ClientIoExact(handle, const_cast<void*>(buffer), byteCount, true, context);
+}
+
+HRESULT ClientSendFrame(HANDLE handle, MessageType messageType, uint32_t protocolVersion, const std::vector<std::byte>& payload, ClientIoContext* context) noexcept
+{
+    if (payload.size() > kMaxFrameBytes)
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
+    }
+
+    FrameHeader header{};
+    header.protocolVersion = protocolVersion;
+    header.messageType     = static_cast<uint32_t>(messageType);
+    header.payloadBytes    = static_cast<uint32_t>(payload.size());
+
+    HRESULT hr = ClientWriteExact(handle, &header, static_cast<uint32_t>(sizeof(header)), context);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    return payload.empty() ? S_OK : ClientWriteExact(handle, payload.data(), static_cast<uint32_t>(payload.size()), context);
+}
+
+HRESULT ClientReceiveFrame(HANDLE handle, FrameHeader& outHeader, std::vector<std::byte>& outPayload, ClientIoContext* context) noexcept
+{
+    outHeader = {};
+    outPayload.clear();
+
+    HRESULT hr = ClientReadExact(handle, &outHeader, static_cast<uint32_t>(sizeof(outHeader)), context);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (outHeader.magic != kMessageMagic)
+    {
+        return kProtocolErrorHr;
+    }
+
+    if (outHeader.payloadBytes > kMaxFrameBytes)
+    {
+        return HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
+    }
+
+    outPayload.resize(outHeader.payloadBytes);
+    return outHeader.payloadBytes == 0u ? S_OK : ClientReadExact(handle, outPayload.data(), outHeader.payloadBytes, context);
 }
 
 [[nodiscard]] std::wstring BuildPipeName(std::wstring_view configuredName) noexcept
@@ -1045,7 +1356,8 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe) noexcept
             }
         }
 
-        outPipe.reset(::CreateFileW(pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        outPipe.reset(::CreateFileW(
+            pipeName.c_str(), GENERIC_READ | GENERIC_WRITE, 0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED, nullptr));
         if (outPipe)
         {
             return S_OK;
@@ -1691,13 +2003,13 @@ HRESULT HandleRebuildRequest(SessionContext& session, std::span<const std::byte>
     RebuildRequestPayload payload{};
     if (! ReadPod(payloadBytes, payload))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, RPC_S_PROTOCOL_ERROR, L"Invalid rebuild request.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid rebuild request.");
     }
 
     std::wstring rootPath;
     if (! ReadUtf16(payloadBytes, payload.rootPathBytes, rootPath))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, RPC_S_PROTOCOL_ERROR, L"Invalid rebuild path.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid rebuild path.");
     }
 
     const ServerEventDetails details{
@@ -1787,14 +2099,14 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
     QueryRequestPayload payload{};
     if (! ReadPod(payloadBytes, payload))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, RPC_S_PROTOCOL_ERROR, L"Invalid query request.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid query request.");
     }
 
     std::wstring rootPath;
     std::wstring namePattern;
     if (! ReadUtf16(payloadBytes, payload.rootPathBytes, rootPath) || ! ReadUtf16(payloadBytes, payload.namePatternBytes, namePattern))
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, RPC_S_PROTOCOL_ERROR, L"Invalid query strings.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Invalid query strings.");
     }
 
     LocalSearchIndexCore::QueryPlan plan{};
@@ -1947,7 +2259,7 @@ HRESULT HandleClient(SessionContext& session) noexcept
 
     if (header.protocolVersion != session.options.protocolVersion)
     {
-        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, RPC_S_PROTOCOL_ERROR, L"Protocol version mismatch.");
+        return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Protocol version mismatch.");
     }
 
     std::span<const std::byte> payloadBytes(payload.data(), payload.size());
@@ -1963,7 +2275,7 @@ HRESULT HandleClient(SessionContext& session) noexcept
         case MessageType::QueryComplete:
         case MessageType::Ack:
         case MessageType::Error:
-        default: return SendProtocolError(session.pipe.get(), session.options.protocolVersion, RPC_S_PROTOCOL_ERROR, L"Unsupported request.");
+        default: return SendProtocolError(session.pipe.get(), session.options.protocolVersion, kProtocolErrorHr, L"Unsupported request.");
     }
 }
 
@@ -2071,6 +2383,13 @@ HRESULT WaitForClientConnection(HANDLE pipe, HANDLE stopEvent, DWORD timeoutMs) 
 }
 } // namespace
 
+#ifdef ENABLE_TESTS
+HRESULT DecodeQueryBatchForTests(std::span<const std::byte> payloadBytes, std::vector<LocalSearchIndexCore::Candidate>& outCandidates) noexcept
+{
+    return DecodeQueryBatchPayload(payloadBytes, outCandidates);
+}
+#endif
+
 std::wstring GetDefaultPipeName() noexcept
 {
     return BuildPipeName({});
@@ -2116,9 +2435,12 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
             return logFailure(hr);
         }
 
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
+
         std::vector<std::byte> emptyPayload;
         stage = L"send status request";
-        hr    = SendFrame(pipe.get(), MessageType::StatusRequest, kProtocolVersion, emptyPayload);
+        hr    = ClientSendFrame(pipe.get(), MessageType::StatusRequest, kProtocolVersion, emptyPayload, &ioContext);
         if (FAILED(hr))
         {
             return logFailure(hr);
@@ -2127,7 +2449,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
         FrameHeader header{};
         std::vector<std::byte> payload;
         stage = L"receive status response";
-        hr    = ReceiveFrame(pipe.get(), header, payload);
+        hr    = ClientReceiveFrame(pipe.get(), header, payload, &ioContext);
         if (FAILED(hr))
         {
             return logFailure(hr);
@@ -2135,19 +2457,19 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
 
         if (header.protocolVersion != kProtocolVersion)
         {
-            return logFailure(RPC_S_PROTOCOL_ERROR);
+            return logFailure(kProtocolErrorHr);
         }
 
         std::span<const std::byte> remaining(payload.data(), payload.size());
         if (static_cast<MessageType>(header.messageType) == MessageType::Error)
         {
             ErrorPayload error{};
-            return ReadPod(remaining, error) ? logFailure(static_cast<HRESULT>(error.result)) : logFailure(RPC_S_PROTOCOL_ERROR);
+            return ReadPod(remaining, error) ? logFailure(static_cast<HRESULT>(error.result)) : logFailure(kProtocolErrorHr);
         }
 
         if (static_cast<MessageType>(header.messageType) != MessageType::StatusResponse)
         {
-            return logFailure(RPC_S_PROTOCOL_ERROR);
+            return logFailure(kProtocolErrorHr);
         }
 
         StatusResponsePayload statusPayload{};
@@ -2155,7 +2477,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
             ! ReadUtf16(remaining, statusPayload.storageRootBytes, outStatus.storageRootDirectory))
         {
             outStatus = {};
-            return logFailure(RPC_S_PROTOCOL_ERROR);
+            return logFailure(kProtocolErrorHr);
         }
 
         outStatus.protocolVersion = header.protocolVersion;
@@ -2167,7 +2489,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
                 ! ReadUtf16(remaining, extended.writeAheadLogPathBytes, outStatus.writeAheadLogPath))
             {
                 outStatus = {};
-                return logFailure(RPC_S_PROTOCOL_ERROR);
+                return logFailure(kProtocolErrorHr);
             }
 
             outStatus.persistentStoreKind                = static_cast<LocalSearchIndexCore::PersistentStoreKind>(extended.persistentStoreKind);
@@ -2191,7 +2513,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
                     ! ReadUtf16(remaining, maintenance.lastCompactionUtcBytes, outStatus.lastCompactionUtc))
                 {
                     outStatus = {};
-                    return logFailure(RPC_S_PROTOCOL_ERROR);
+                    return logFailure(kProtocolErrorHr);
                 }
 
                 outStatus.persistentStorePageCount         = maintenance.pageCount;
@@ -2207,7 +2529,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
                 if (! ReadPod(remaining, discovery) || ! ReadUtf16(remaining, discovery.discoveredRootsBytes, discoveredRootsText))
                 {
                     outStatus = {};
-                    return logFailure(RPC_S_PROTOCOL_ERROR);
+                    return logFailure(kProtocolErrorHr);
                 }
 
                 outStatus.discoveredRootCount = discovery.discoveredRootCount;
@@ -2237,7 +2559,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
                 if (! ReadPod(remaining, warmup) || ! ReadUtf16(remaining, warmup.currentRootBytes, outStatus.startupWarmupCurrentRoot))
                 {
                     outStatus = {};
-                    return logFailure(RPC_S_PROTOCOL_ERROR);
+                    return logFailure(kProtocolErrorHr);
                 }
 
                 outStatus.startupWarmupEnabled        = (warmup.flags & STATUS_RESPONSE_STARTUP_WARMUP_FLAG_ENABLED) != 0u;
@@ -2254,7 +2576,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
                 if (! ReadPod(remaining, warmupFailure) || ! ReadUtf16(remaining, warmupFailure.lastFailureRootBytes, outStatus.startupWarmupLastFailureRoot))
                 {
                     outStatus = {};
-                    return logFailure(RPC_S_PROTOCOL_ERROR);
+                    return logFailure(kProtocolErrorHr);
                 }
 
                 outStatus.startupWarmupHasFailure =
@@ -2268,7 +2590,7 @@ HRESULT GetStatus(ServiceStatus& outStatus) noexcept
                 if (! ReadPod(remaining, runtime) || ! ReadUtf16(remaining, runtime.activeRootBytes, outStatus.activeRoot))
                 {
                     outStatus = {};
-                    return logFailure(RPC_S_PROTOCOL_ERROR);
+                    return logFailure(kProtocolErrorHr);
                 }
 
                 outStatus.storeState         = static_cast<LocalSearchIndexCore::StoreState>(runtime.storeState);
@@ -2374,6 +2696,11 @@ HRESULT Query(const QueryRequest& request,
                     request.maxResults);
 #endif
 
+        ClientIoContext ioContext{};
+        ioContext.cancelCheck       = cancelCheck;
+        ioContext.cancelCookie      = cancelCookie;
+        ioContext.operationDeadline = MakeDeadline(kClientQueryOperationTimeoutMs);
+
         QueryRequestPayload payload{};
         payload.nameMode         = static_cast<uint32_t>(request.nameMode);
         payload.flags            = static_cast<uint32_t>(request.flags);
@@ -2388,7 +2715,7 @@ HRESULT Query(const QueryRequest& request,
         AppendUtf16(requestBuffer, request.namePattern);
 
         stage = L"send query request";
-        hr    = SendFrame(pipe.get(), MessageType::QueryRequest, kProtocolVersion, requestBuffer);
+        hr    = ClientSendFrame(pipe.get(), MessageType::QueryRequest, kProtocolVersion, requestBuffer, &ioContext);
         if (FAILED(hr))
         {
             return logFailure(hr);
@@ -2403,6 +2730,8 @@ HRESULT Query(const QueryRequest& request,
         bool loggedFirstResponse = false;
 #endif
         uint64_t consumedCandidates = 0u;
+        uint64_t bufferedCandidateBytes = 0u;
+        const size_t bufferedCandidateLimit = ResolveClientBufferedCandidateLimit(request.maxResults);
         for (;;)
         {
             if (cancelCheck != nullptr)
@@ -2418,7 +2747,7 @@ HRESULT Query(const QueryRequest& request,
             FrameHeader header{};
             std::vector<std::byte> payloadBytes;
             stage = L"receive query response";
-            hr    = ReceiveFrame(pipe.get(), header, payloadBytes);
+            hr    = ClientReceiveFrame(pipe.get(), header, payloadBytes, &ioContext);
             if (FAILED(hr))
             {
                 return logFailure(hr);
@@ -2426,7 +2755,7 @@ HRESULT Query(const QueryRequest& request,
 
             if (header.protocolVersion != kProtocolVersion)
             {
-                return logFailure(RPC_S_PROTOCOL_ERROR);
+                return logFailure(kProtocolErrorHr);
             }
 
             std::span<const std::byte> remaining(payloadBytes.data(), payloadBytes.size());
@@ -2438,7 +2767,7 @@ HRESULT Query(const QueryRequest& request,
                     QueryProgress progress{};
                     if (! ReadPod(remaining, progressPayload) || ! ReadUtf16(remaining, progressPayload.currentPathBytes, progress.currentPath))
                     {
-                        return logFailure(RPC_S_PROTOCOL_ERROR);
+                        return logFailure(kProtocolErrorHr);
                     }
 
                     progress.phase              = static_cast<FileSystemSearchPhase>(progressPayload.phase);
@@ -2453,7 +2782,7 @@ HRESULT Query(const QueryRequest& request,
                         ProgressRuntimePayload runtime{};
                         if (! ReadPod(remaining, runtime) || ! ReadUtf16(remaining, runtime.activeRootBytes, progress.activeRoot))
                         {
-                            return logFailure(RPC_S_PROTOCOL_ERROR);
+                            return logFailure(kProtocolErrorHr);
                         }
 
                         progress.storeState         = static_cast<LocalSearchIndexCore::StoreState>(runtime.storeState);
@@ -2495,33 +2824,11 @@ HRESULT Query(const QueryRequest& request,
 
                 case MessageType::QueryBatch:
                 {
-                    CandidateBatchHeader batchHeader{};
-                    if (! ReadPod(remaining, batchHeader))
-                    {
-                        return logFailure(RPC_S_PROTOCOL_ERROR);
-                    }
-
                     std::vector<LocalSearchIndexCore::Candidate> batchCandidates;
-                    batchCandidates.reserve(batchHeader.count);
-                    for (uint32_t index = 0u; index < batchHeader.count; ++index)
+                    hr = DecodeQueryBatchPayload(remaining, batchCandidates);
+                    if (FAILED(hr))
                     {
-                        CandidateEntryHeader entryHeader{};
-                        LocalSearchIndexCore::Candidate candidate{};
-                        if (! ReadPod(remaining, entryHeader) || ! ReadUtf16(remaining, entryHeader.fullPathBytes, candidate.fullPath) ||
-                            ! ReadUtf16(remaining, entryHeader.displayNameBytes, candidate.displayName))
-                        {
-                            return logFailure(RPC_S_PROTOCOL_ERROR);
-                        }
-
-                        candidate.fileAttributes      = entryHeader.fileAttributes;
-                        candidate.metadataFlags       = entryHeader.metadataFlags;
-                        candidate.creationTime100ns   = entryHeader.creationTime100ns;
-                        candidate.lastAccessTime100ns = entryHeader.lastAccessTime100ns;
-                        candidate.endOfFile           = entryHeader.endOfFile;
-                        candidate.lastWriteTime100ns  = entryHeader.lastWriteTime100ns;
-                        candidate.changeTime100ns     = entryHeader.changeTime100ns;
-                        candidate.allocationSize      = entryHeader.allocationSize;
-                        batchCandidates.push_back(std::move(candidate));
+                        return logFailure(hr);
                     }
 
                     if (candidateBatchCallback != nullptr && ! batchCandidates.empty())
@@ -2568,9 +2875,22 @@ HRESULT Query(const QueryRequest& request,
                     }
                     else
                     {
+                        uint64_t batchBufferedBytes = 0u;
+                        if (! CanAppendClientBufferedCandidates(outCandidates.size(),
+                                                               bufferedCandidateBytes,
+                                                               std::span<const LocalSearchIndexCore::Candidate>(batchCandidates.data(), batchCandidates.size()),
+                                                               bufferedCandidateLimit,
+                                                               batchBufferedBytes))
+                        {
+                            outCandidates.clear();
+                            stage = L"candidate accumulation limit";
+                            return logFailure(HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW));
+                        }
+
                         consumedCandidates += static_cast<uint64_t>(batchCandidates.size());
                         outCandidates.insert(
                             outCandidates.end(), std::make_move_iterator(batchCandidates.begin()), std::make_move_iterator(batchCandidates.end()));
+                        bufferedCandidateBytes += batchBufferedBytes;
                     }
                     break;
                 }
@@ -2580,7 +2900,7 @@ HRESULT Query(const QueryRequest& request,
                     QueryCompletePayload complete{};
                     if (! ReadPod(remaining, complete))
                     {
-                        return logFailure(RPC_S_PROTOCOL_ERROR);
+                        return logFailure(kProtocolErrorHr);
                     }
 
                     if (outStats != nullptr)
@@ -2605,7 +2925,7 @@ HRESULT Query(const QueryRequest& request,
                             QueryCompleteRuntimePayload runtime{};
                             if (! ReadPod(remaining, runtime))
                             {
-                                return logFailure(RPC_S_PROTOCOL_ERROR);
+                                return logFailure(kProtocolErrorHr);
                             }
 
                             outStats->queryExecutionMode   = static_cast<LocalSearchIndexCore::QueryExecutionMode>(runtime.queryExecutionMode);
@@ -2635,7 +2955,7 @@ HRESULT Query(const QueryRequest& request,
                 case MessageType::Error:
                 {
                     ErrorPayload error{};
-                    return ReadPod(remaining, error) ? logFailure(static_cast<HRESULT>(error.result)) : logFailure(RPC_S_PROTOCOL_ERROR);
+                    return ReadPod(remaining, error) ? logFailure(static_cast<HRESULT>(error.result)) : logFailure(kProtocolErrorHr);
                 }
 
                 case MessageType::StatusRequest:
@@ -2644,7 +2964,7 @@ HRESULT Query(const QueryRequest& request,
                 case MessageType::RebuildRequest:
                 case MessageType::CompactRequest:
                 case MessageType::Ack:
-                default: return logFailure(RPC_S_PROTOCOL_ERROR);
+                default: return logFailure(kProtocolErrorHr);
             }
         }
     }
@@ -2675,6 +2995,9 @@ HRESULT RequestRebuild(std::wstring_view rootPath) noexcept
             return hr;
         }
 
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
+
         RebuildRequestPayload payload{};
         payload.rootPathBytes = static_cast<uint32_t>(rootPath.size() * sizeof(wchar_t));
 
@@ -2683,7 +3006,7 @@ HRESULT RequestRebuild(std::wstring_view rootPath) noexcept
         AppendBytes(buffer, &payload, sizeof(payload));
         AppendUtf16(buffer, rootPath);
 
-        hr = SendFrame(pipe.get(), MessageType::RebuildRequest, kProtocolVersion, buffer);
+        hr = ClientSendFrame(pipe.get(), MessageType::RebuildRequest, kProtocolVersion, buffer, &ioContext);
         if (FAILED(hr))
         {
             return hr;
@@ -2691,7 +3014,7 @@ HRESULT RequestRebuild(std::wstring_view rootPath) noexcept
 
         FrameHeader header{};
         std::vector<std::byte> payloadBytes;
-        hr = ReceiveFrame(pipe.get(), header, payloadBytes);
+        hr = ClientReceiveFrame(pipe.get(), header, payloadBytes, &ioContext);
         if (FAILED(hr))
         {
             return hr;
@@ -2699,23 +3022,23 @@ HRESULT RequestRebuild(std::wstring_view rootPath) noexcept
 
         if (header.protocolVersion != kProtocolVersion)
         {
-            return RPC_S_PROTOCOL_ERROR;
+            return kProtocolErrorHr;
         }
 
         std::span<const std::byte> remaining(payloadBytes.data(), payloadBytes.size());
         if (static_cast<MessageType>(header.messageType) == MessageType::Ack)
         {
             AckPayload ack{};
-            return ReadPod(remaining, ack) ? static_cast<HRESULT>(ack.result) : RPC_S_PROTOCOL_ERROR;
+            return ReadPod(remaining, ack) ? static_cast<HRESULT>(ack.result) : kProtocolErrorHr;
         }
 
         if (static_cast<MessageType>(header.messageType) == MessageType::Error)
         {
             ErrorPayload error{};
-            return ReadPod(remaining, error) ? static_cast<HRESULT>(error.result) : RPC_S_PROTOCOL_ERROR;
+            return ReadPod(remaining, error) ? static_cast<HRESULT>(error.result) : kProtocolErrorHr;
         }
 
-        return RPC_S_PROTOCOL_ERROR;
+        return kProtocolErrorHr;
     }
     catch (const std::bad_alloc&)
     {
@@ -2739,7 +3062,10 @@ HRESULT RequestCompact() noexcept
             return hr;
         }
 
-        hr = SendFrame(pipe.get(), MessageType::CompactRequest, kProtocolVersion, {});
+        ClientIoContext ioContext{};
+        ioContext.operationDeadline = MakeDeadline(kClientControlOperationTimeoutMs);
+
+        hr = ClientSendFrame(pipe.get(), MessageType::CompactRequest, kProtocolVersion, {}, &ioContext);
         if (FAILED(hr))
         {
             return hr;
@@ -2747,7 +3073,7 @@ HRESULT RequestCompact() noexcept
 
         FrameHeader header{};
         std::vector<std::byte> payloadBytes;
-        hr = ReceiveFrame(pipe.get(), header, payloadBytes);
+        hr = ClientReceiveFrame(pipe.get(), header, payloadBytes, &ioContext);
         if (FAILED(hr))
         {
             return hr;
@@ -2755,23 +3081,23 @@ HRESULT RequestCompact() noexcept
 
         if (header.protocolVersion != kProtocolVersion)
         {
-            return RPC_S_PROTOCOL_ERROR;
+            return kProtocolErrorHr;
         }
 
         std::span<const std::byte> remaining(payloadBytes.data(), payloadBytes.size());
         if (static_cast<MessageType>(header.messageType) == MessageType::Ack)
         {
             AckPayload ack{};
-            return ReadPod(remaining, ack) ? static_cast<HRESULT>(ack.result) : RPC_S_PROTOCOL_ERROR;
+            return ReadPod(remaining, ack) ? static_cast<HRESULT>(ack.result) : kProtocolErrorHr;
         }
 
         if (static_cast<MessageType>(header.messageType) == MessageType::Error)
         {
             ErrorPayload error{};
-            return ReadPod(remaining, error) ? static_cast<HRESULT>(error.result) : RPC_S_PROTOCOL_ERROR;
+            return ReadPod(remaining, error) ? static_cast<HRESULT>(error.result) : kProtocolErrorHr;
         }
 
-        return RPC_S_PROTOCOL_ERROR;
+        return kProtocolErrorHr;
     }
     catch (const std::bad_alloc&)
     {

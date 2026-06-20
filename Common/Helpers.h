@@ -213,6 +213,49 @@ inline bool LessNoCase(std::wstring_view a, std::wstring_view b) noexcept
 
     return folded;
 }
+
+[[nodiscard]] inline bool EqualsFoldedInvariant(std::wstring_view left, std::wstring_view right) noexcept
+{
+    return FoldCaseInvariant(left) == FoldCaseInvariant(right);
+}
+
+[[nodiscard]] inline bool StartsWithFoldedInvariant(std::wstring_view text, std::wstring_view prefix) noexcept
+{
+    if (prefix.empty())
+    {
+        return true;
+    }
+
+    if (text.size() < prefix.size())
+    {
+        return false;
+    }
+
+    return EqualsFoldedInvariant(text.substr(0u, prefix.size()), prefix);
+}
+
+[[nodiscard]] inline bool FindContainsFoldedInvariant(std::wstring_view text, std::wstring_view query, size_t& outOffset) noexcept
+{
+    outOffset = std::wstring_view::npos;
+    if (query.empty() || text.size() < query.size())
+    {
+        return false;
+    }
+
+    const std::wstring foldedQuery = FoldCaseInvariant(query);
+    const size_t querySize         = query.size();
+    const size_t lastStartPosition = text.size() - querySize;
+    for (size_t startPosition = 0u; startPosition <= lastStartPosition; ++startPosition)
+    {
+        if (FoldCaseInvariant(text.substr(startPosition, querySize)) == foldedQuery)
+        {
+            outOffset = startPosition;
+            return true;
+        }
+    }
+
+    return false;
+}
 } // namespace OrdinalString
 
 namespace StringUtils
@@ -417,6 +460,29 @@ inline void RedactSensitiveQueryParams(std::wstring& text) noexcept
 }
 } // namespace Redaction
 
+namespace SecureWipe
+{
+// Best-effort wipe; reallocation may leave copies.
+inline void SecureClear(std::string& text) noexcept
+{
+    if (! text.empty())
+    {
+        SecureZeroMemory(text.data(), text.size());
+        text.clear();
+    }
+}
+
+// Best-effort wipe; reallocation may leave copies.
+inline void SecureClear(std::wstring& text) noexcept
+{
+    if (! text.empty())
+    {
+        SecureZeroMemory(text.data(), text.size() * sizeof(wchar_t));
+        text.clear();
+    }
+}
+} // namespace SecureWipe
+
 namespace Win32Text
 {
 [[nodiscard]] inline std::wstring GetWindowTextString(HWND hwnd) noexcept
@@ -450,8 +516,7 @@ namespace Win32Text
 } // namespace Win32Text
 
 // Loads directly from the embedded module, bypassing localization satellites.
-template <typename string_type>
-int LoadEmbeddedStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type& result) WI_NOEXCEPT
+template <typename string_type> int LoadEmbeddedStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type& result) WI_NOEXCEPT
 {
     const HINSTANCE instance = hInstance ? hInstance : GetModuleHandleW(nullptr);
     if (! instance)

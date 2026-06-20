@@ -30,6 +30,31 @@ struct TranslationEntry
     Localization::PlaceholderValidationResult validation;
 };
 
+struct LocalizationTargetCell
+{
+    std::wstring cultureName;
+    std::wstring targetText;
+    Localization::PlaceholderValidationResult validation;
+    bool hasExistingTranslation = false;
+    bool dirty                  = false;
+};
+
+struct LocalizationReviewRow
+{
+    std::wstring ownerName;
+    std::wstring id;
+    std::wstring sourceText;
+    std::vector<LocalizationTargetCell> targets;
+};
+
+struct LocalizationExportPreview
+{
+    std::wstring ownerName;
+    std::wstring cultureName;
+    std::filesystem::path path;
+    std::wstring text;
+};
+
 struct InventoryEntry
 {
     Localization::RcLocalizableKind kind = Localization::RcLocalizableKind::StringTable;
@@ -42,6 +67,7 @@ struct InventoryEntry
 
 enum class LocalizationViewColumn : uint8_t
 {
+    Owner,
     Id,
     Source,
     Target,
@@ -71,7 +97,20 @@ struct LocalizationViewOptions
     LocalizationSortDirection sortDirection = LocalizationSortDirection::None;
 };
 
+struct LocalizationReviewViewOptions
+{
+    std::wstring searchText;
+    std::wstring idFilterText;
+    std::vector<std::wstring> visibleOwnerNames;
+    std::vector<std::wstring> visibleCultureNames;
+    LocalizationStatusFilter statusFilter   = LocalizationStatusFilter::All;
+    LocalizationViewColumn sortColumn       = LocalizationViewColumn::Id;
+    std::wstring sortCultureName;
+    LocalizationSortDirection sortDirection = LocalizationSortDirection::None;
+};
+
 [[nodiscard]] std::vector<size_t> BuildTranslationView(std::span<const TranslationEntry> translations, const LocalizationViewOptions& options);
+[[nodiscard]] std::vector<size_t> BuildLocalizationReviewView(std::span<const LocalizationReviewRow> rows, const LocalizationReviewViewOptions& options);
 
 class RedConfigureSession final
 {
@@ -83,6 +122,8 @@ public:
     [[nodiscard]] const Themes::ThemePreviewModel& GetThemePreviewModel() const noexcept;
     [[nodiscard]] Themes::ThemePreviewModel& GetThemePreviewModel() noexcept;
     [[nodiscard]] std::span<const TranslationEntry> GetTranslations() const noexcept;
+    [[nodiscard]] std::span<const LocalizationReviewRow> GetLocalizationReviewRows() const noexcept;
+    [[nodiscard]] std::span<const std::wstring> GetLocalizationReviewCultures() const noexcept;
     [[nodiscard]] std::span<const InventoryEntry> GetInventoryEntries() const noexcept;
     [[nodiscard]] std::wstring_view GetCultureName() const noexcept;
     [[nodiscard]] std::wstring_view GetActiveResourceOwnerName() const noexcept;
@@ -92,22 +133,29 @@ public:
     [[nodiscard]] HRESULT SetActiveResourceOwner(size_t ownerIndex);
     [[nodiscard]] bool SetActiveTheme(size_t themeIndex);
     [[nodiscard]] bool UpdateTranslation(size_t rowIndex, std::wstring_view targetText);
+    [[nodiscard]] bool EnsureLocalizationReviewCulture(std::wstring_view cultureName);
+    [[nodiscard]] bool UpdateLocalizationReviewTarget(size_t rowIndex, std::wstring_view cultureName, std::wstring_view targetText);
     [[nodiscard]] bool UpdateThemeColor(std::wstring_view colorKey, std::wstring_view colorText);
 
     [[nodiscard]] std::filesystem::path GetDefaultLocalizationExportPath() const;
     [[nodiscard]] std::filesystem::path GetDefaultThemeExportPath() const;
     [[nodiscard]] HRESULT BuildLocalizationExportText(std::wstring& outText) const;
+    [[nodiscard]] HRESULT BuildLocalizationReviewExportPreviews(std::vector<LocalizationExportPreview>& outPreviews) const;
     [[nodiscard]] HRESULT BuildThemeExportText(std::string& outJson) const;
     [[nodiscard]] HRESULT ExportLocalization(const std::filesystem::path& path) const;
+    [[nodiscard]] HRESULT ExportLocalizationReview(const std::filesystem::path& outputRoot, size_t* exportedFileCount = nullptr) const;
     [[nodiscard]] HRESULT ExportTheme(const std::filesystem::path& path) const;
 
 private:
+    [[nodiscard]] HRESULT LoadLocalizationReview();
     [[nodiscard]] HRESULT LoadLocalizationForActiveOwner();
 
     Workspace::WorkspaceScanResult _workspace;
     Themes::ThemeCatalog _themeCatalog;
     Themes::ThemePreviewModel _themePreview;
     std::vector<TranslationEntry> _translations;
+    std::vector<LocalizationReviewRow> _localizationReviewRows;
+    std::vector<std::wstring> _localizationReviewCultures;
     std::vector<InventoryEntry> _inventoryEntries;
     std::wstring _cultureName = L"en-US";
     std::wstring _activeResourceOwnerName;

@@ -4,18 +4,18 @@
 
 RedSalamander has multiple test surfaces covering UI automation, plugin
 integration, file operations, DirectX rendering, performance baselines, tooling
-scripts, and ETW diagnostics. Counts below are current as of 2026-05-18.
+scripts, and ETW diagnostics. Counts below are current as of 2026-06-15.
 
 | Category | Suites | Tests | Framework |
 |----------|--------|-------|-----------|
-| Self-Tests (in-process) | 3 | 633 Commands listed cases, 149 Compare listed cases, 75 FileOps listed phases | Custom harnesses |
+| Self-Tests (in-process) | 3 | 732 Commands listed cases, 149 Compare listed cases, 114 FileOps listed phases | Custom harnesses |
 | DxUi Component Tests | 1 | 630 | Standalone harness |
 | Performance Tests | 1 | 12 | CppUnitTest DLL |
 | Viewer Plugin Tests | 2 | 17 | Standalone harness |
 | File-System Plugin Tests | 1 | 8 | Standalone harness |
 | Monitor/ETW Tests | 1 | 3 burst scenarios + 3 fast guards | Standalone harness |
 | RedConfigure Tests | 1 | 22 | Standalone harness |
-| Tooling Script Tests | 1 folder + vcpkg scripts | 81 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
+| Tooling Script Tests | 1 folder + vcpkg scripts | 102 Pester-style/tool cases + 5 fast synthetic vcpkg merge cases | Pester / PowerShell |
 
 Related specifications:
 - `Specs/Testing/Testing_SelfTests.md` — result contract
@@ -40,12 +40,12 @@ Related specifications:
 
 ---
 
-## 1. Commands Self-Test Suite — 633 runner-listed cases
+## 1. Commands Self-Test Suite — 732 runner-listed cases
 
 **Flag:** `--commands-selftest`
 **Source:** `RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp` + 12 `.cpp` family files
 **Inventory:** `RedSalamander.exe --selftest-list-cases --commands-selftest`
-lists 633 cases. The source fallback scan reports 610 static
+lists 733 cases. The source fallback scan reports 656 static
 `SelfTest::RunCase` call sites because some helper call sites generate multiple
 declared cases.
 
@@ -61,7 +61,7 @@ and command dispatch inside the live application window.
 | CompareOptions | `SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp` | 11 | Compare directories options, progress |
 | Search | `SelfTest\Commands\Commands.SelfTest.Search.cpp` | 61 | Find dialog, local search index, quick search/filter |
 | Shortcuts | `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` | 1 | Shortcuts window grouped runner |
-| ViewCommands | `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` | 79 | View commands, selection, sort, pane, tabs |
+| ViewCommands | `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` | 106 | View commands, selection, sort, pane, tabs, FolderView rendering-alert persistence, DPI repaint |
 | FileOps | `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` | 21 | File operations issues pane, speed limit |
 | Navigation | `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` | 47 | Navigation location, GoTo |
 | Dialogs | `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` | 60 | About, fatal error, splash, change case, rename, filter, mask |
@@ -92,12 +92,12 @@ Tests the compare-directories engine including local/remote search, indexing, an
 | Search text helpers | 2 | Text matching, decoding |
 | Misc (concurrency, caching, UI) | ~32 | Crash quarantine, setCompareEnabled, uiVersion, etc. |
 
-## 3. File Operations Self-Test Suite — 75 runner-listed phases
+## 3. File Operations Self-Test Suite — 113 runner-listed phases
 
 **Flag:** `--fileops-selftest`
 **Source:** `RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp` + 4 included phase files
 **Inventory:** `RedSalamander.exe --selftest-list-cases --fileops-selftest`
-lists 75 phases: setup, 73 active ordered phases, and cleanup.
+lists 113 phases: setup, 111 active ordered phases, and cleanup.
 
 Async tick-driven state machine testing file copy/move/delete operations end-to-end.
 Organised into 12 families spanning phases 5–16.
@@ -219,14 +219,16 @@ Fast targeted guards include `--diagnostics-gate-selftest`, `--scrollbar-model-s
 | `MSBuildInvocation.Tests.ps1` | 8 | MSBuild invocation planning and diagnostic parsing |
 | `ProcessStreaming.Tests.ps1` | 2 | Process output streaming and logging |
 | `RedSalamanderPluginDeployment.Tests.ps1` | 1 | Targeted RedSalamander build repopulates sibling binaries/plugins and plugin language resources; tagged `RequiresBuildToolchain`, bounded, and logged |
-| `ResourceLocalizationContracts.Tests.ps1` | 1 | Resource placeholder positional-order and satellite placeholder-equivalence contract |
+| `ResourceLocalizationContracts.Tests.ps1` | 4 | Resource placeholder positional-order, satellite placeholder-equivalence, and language-neutral embedded-only string contracts |
 | `RunAllTestsPlan.Tests.ps1` | 8 | Full runner test-plan enumeration, aggregate artifact, and result-coverage validation |
 | `SanitizedEnvironment.Tests.ps1` | 2 | Child process environment normalization |
-| `TestHarnessSourceContracts.Tests.ps1` | 14 | Source guards for test harness CLI/error handling, case-listing, result-emission, duplicate-name contracts, CompareDirectories listed-case coverage, async file-operations self-test prompts, and FileOperations prefix filters |
+| `TestHarnessSourceContracts.Tests.ps1` | 30 | Source guards for test harness CLI/error handling, case-listing, result-emission, duplicate-name contracts, CompareDirectories listed-case coverage, async file-operations self-test prompts, FileOperations prefix filters, and Riptide/Floodgate source contracts |
 | `TestInventory.Tests.ps1` | 5 | Source-derived test inventory manifest, FileOperations phase-order drift guard, and doc-count lint |
 | `VcpkgInstallSafety.Tests.ps1` | 5 | vcpkg path/triplet safety |
+| `VerifyNoProductionGetCursorPos.Tests.ps1` | 1 | Production sources avoid `GetCursorPos` outside annotated diagnostics |
 | `Versioning.Tests.ps1` | 4 | Local build-number reuse/allocation |
-| `WingetValidation.Tests.ps1` | 11 | Winget validation warning suppression, failure propagation, portable manifest metadata, and VC runtime ZIP helper coverage |
+| `ViewerChromeSourceContracts.Tests.ps1` | 4 | Viewer chrome keyboard routing, launcher subsystem, and Escape contract guards |
+| `WingetValidation.Tests.ps1` | 16 | Winget validation warning suppression, failure propagation, portable manifest metadata, and VC runtime ZIP helper coverage |
 
 Fast vcpkg merge coverage:
 

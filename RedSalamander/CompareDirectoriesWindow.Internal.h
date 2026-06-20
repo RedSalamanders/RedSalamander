@@ -225,6 +225,7 @@ private:
                                                                int64_t lastWriteTime,
                                                                DWORD fileAttributes) noexcept;
     void OnFolderWindowFileOperationCompleted(const FolderWindow::FileOperationCompletedEvent& e) noexcept;
+    uint64_t _fileOperationCompletedCallbackToken = 0;
     LRESULT OnScanProgress(LPARAM lp) noexcept;
     LRESULT OnContentProgress(LPARAM lp) noexcept;
     void UpdateProgressControls() noexcept;

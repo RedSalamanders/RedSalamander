@@ -589,6 +589,7 @@ void FolderView::EnsureSwapChain()
             return;
         }
         _d2dContext->SetTarget(_d2dTarget.get());
+        _forceFullRenderOnNextPaint = true;
     }
 }
 
@@ -645,11 +646,11 @@ bool FolderView::TryResizeSwapChain(UINT width, UINT height)
 
     if (FAILED(hr))
     {
-        Debug::Error(L"TryResizeSwapChain failed: 0x{:08X}", hr);
         ReportError(L"IDXGISwapChain::ResizeBuffers", hr);
         return false;
     }
 
+    _forceFullRenderOnNextPaint = true;
     return true;
 }
 
@@ -980,6 +981,8 @@ void FolderView::Render(const RECT& invalidRect)
     uint64_t itemsDrawn               = 0;
     uint64_t layoutCreates            = 0;
     uint64_t dirtyAreaPx              = 0;
+    _frameTextLayoutCreateUs          = 0; // Reset per-frame DirectWrite item text-layout instrumentation (render-path scope).
+    _frameTextLayoutCreateCount       = 0;
     const auto beginToEndStart        = std::chrono::steady_clock::now();
     const auto emitFolderFrameMetrics = wil::scope_exit([&]
     {
@@ -990,6 +993,11 @@ void FolderView::Render(const RECT& invalidRect)
         }
         PerfEmitCounter(L"folder.frame.visible_work_count", itemsDrawn);
         PerfEmitCounter(L"folder.frame.dirty_rect_area_px", dirtyAreaPx);
+        if (_frameTextLayoutCreateCount > 0)
+        {
+            PerfEmitDuration(L"dwrite.text_layout.frame_create_us", _frameTextLayoutCreateUs, _frameTextLayoutCreateCount, 0, folderFrameHr);
+        }
+        PerfEmitCounter(L"dwrite.text_layout.frame_create_count", _frameTextLayoutCreateCount);
     });
 
     RECT paintRect = invalidRect;
@@ -1005,6 +1013,14 @@ void FolderView::Render(const RECT& invalidRect)
     paintRect.top    = std::max<LONG>(0, paintRect.top);
     paintRect.right  = std::min<LONG>(_clientSize.cx, paintRect.right);
     paintRect.bottom = std::min<LONG>(_clientSize.cy, paintRect.bottom);
+#ifdef ENABLE_TESTS
+    _debugLastRenderInvalidRectPx = paintRect;
+    _debugLastRenderWasFullClient = paintRect.left == 0 && paintRect.top == 0 && paintRect.right == _clientSize.cx && paintRect.bottom == _clientSize.cy;
+    if (_debugLastRenderWasFullClient)
+    {
+        ++_debugFullClientRenderCount;
+    }
+#endif
     dirtyAreaPx =
         static_cast<uint64_t>(std::max<LONG>(0, paintRect.right - paintRect.left)) * static_cast<uint64_t>(std::max<LONG>(0, paintRect.bottom - paintRect.top));
 
@@ -1900,6 +1916,7 @@ void FolderView::Render(const RECT& invalidRect)
             EnsureSwapChain();
             return;
         }
+        _forceFullRenderOnNextPaint = false;
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
         EmitPendingInputToPaintMetricAfterPresent();
     }
@@ -1923,6 +1940,7 @@ void FolderView::Render(const RECT& invalidRect)
             EnsureSwapChain();
             return;
         }
+        _forceFullRenderOnNextPaint = false;
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
         EmitPendingInputToPaintMetricAfterPresent();
     }

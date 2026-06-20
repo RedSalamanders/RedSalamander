@@ -68,6 +68,19 @@ namespace fs = std::filesystem;
     return false;
 }
 
+[[nodiscard]] bool IsSpecsTestRunsPath(const fs::path& path) noexcept
+{
+    const fs::path parent = path.parent_path();
+    return EqualsIgnoreCase(path.filename().native(), L"TestRuns") && ! parent.empty() && EqualsIgnoreCase(parent.filename().native(), L"Specs");
+}
+
+[[nodiscard]] bool ShouldSkipWorkspaceDirectory(const fs::path& path) noexcept
+{
+    const std::wstring name = path.filename().native();
+    return EqualsIgnoreCase(name, L".build") || EqualsIgnoreCase(name, L".git") || EqualsIgnoreCase(name, L".vs") ||
+           EqualsIgnoreCase(name, L"vcpkg_installed") || EqualsIgnoreCase(name, L"x64") || IsSpecsTestRunsPath(path);
+}
+
 [[nodiscard]] bool IsVcxprojPath(const fs::path& path) noexcept
 {
     return EqualsIgnoreCase(path.extension().native(), L".vcxproj");
@@ -258,14 +271,14 @@ void DiscoverThemeFiles(const fs::path& root, std::vector<RedConfigure::Workspac
         const fs::path path              = entry.path();
         if (entry.is_directory(ec))
         {
-            if (HasPathSegment(path, L".build"))
+            if (ShouldSkipWorkspaceDirectory(path))
             {
                 it.disable_recursion_pending();
             }
             continue;
         }
 
-        if (entry.is_regular_file(ec) && ! HasPathSegment(path, L".build") && IsThemeJson5Path(path))
+        if (entry.is_regular_file(ec) && IsThemeJson5Path(path))
         {
             outThemeFiles.push_back(RedConfigure::Workspace::ThemeFile{.path = path.lexically_normal()});
         }
@@ -287,14 +300,14 @@ void DiscoverResourceOwners(const fs::path& root, std::vector<RedConfigure::Work
         const fs::path path              = entry.path();
         if (entry.is_directory(ec))
         {
-            if (HasPathSegment(path, L".build"))
+            if (ShouldSkipWorkspaceDirectory(path))
             {
                 it.disable_recursion_pending();
             }
             continue;
         }
 
-        if (! entry.is_regular_file(ec) || HasPathSegment(path, L".build") || ! IsVcxprojPath(path))
+        if (! entry.is_regular_file(ec) || ! IsVcxprojPath(path))
         {
             continue;
         }

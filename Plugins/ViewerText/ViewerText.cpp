@@ -270,30 +270,6 @@ void UnhookFileComboHostWindow(HWND hwnd) noexcept;
     return GetAncestor(ownerWindow, GA_ROOT);
 }
 
-void CenterWindowOnOwner(HWND window, HWND owner) noexcept
-{
-    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
-    {
-        return;
-    }
-
-    RECT ownerRect{};
-    RECT windowRect{};
-    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
-    {
-        return;
-    }
-
-    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
-    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
-    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-[[nodiscard]] int ScaleForDpi(const UINT dpi, const int dip) noexcept
-{
-    return MulDiv(dip, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
-}
-
 class ViewerTextPromptWindow final
 {
 public:
@@ -323,17 +299,13 @@ public:
             return classHr;
         }
 
-        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
-        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
-        const int clientWidthPx  = ScaleForDpi(dpi, 420);
-        const int clientHeightPx = ScaleForDpi(dpi, 164);
-
-        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
-        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
+        const DWORD style   = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle = WS_EX_DLGMODALFRAME;
+        // Create directly at the owner-centered position so the window starts on the owner's
+        // monitor with the owner's DPI; creating at CW_USEDEFAULT and centering afterwards
+        // rescales the already-owner-scaled size under per-monitor DPI awareness.
+        const Common::WindowSizing::OwnerCenteredWindowRect creationRect =
+            Common::WindowSizing::ComputeOwnerCenteredWindowRect(_ownerWindow, style, exStyle, 420, 164);
 
         const bool restoreOwnerEnabled = _ownerWindow && IsWindow(_ownerWindow) != FALSE && IsWindowEnabled(_ownerWindow) != FALSE;
         if (restoreOwnerEnabled)
@@ -353,10 +325,10 @@ public:
                                           kViewerTextPromptWindowClassName,
                                           _caption.c_str(),
                                           style,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          bounds.right - bounds.left,
-                                          bounds.bottom - bounds.top,
+                                          creationRect.x,
+                                          creationRect.y,
+                                          creationRect.width,
+                                          creationRect.height,
                                           _ownerWindow,
                                           nullptr,
                                           g_hInstance,
@@ -370,7 +342,6 @@ public:
             _hWnd.reset(hwnd);
         }
 
-        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
         SetForegroundWindow(_hWnd.get());

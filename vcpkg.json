@@ -55,10 +55,6 @@
       "version>=": "6.1.9"
     },
     {
-      "name": "sqlite3",
-      "version>=": "3.50.4"
-    },
-    {
       "name": "aws-sdk-cpp",
       "version>=": "1.11.820",
       "features": [

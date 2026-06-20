@@ -2606,9 +2606,11 @@ struct FatalErrorReadableSurfaceProbe final
         return false;
     }
 
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
     const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
     const auto restorePath                                = wil::scope_exit([&]
     {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
         if (leftBefore.has_value())
         {
             g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
@@ -3252,6 +3254,9 @@ struct FatalErrorReadableSurfaceProbe final
     };
     const auto cleanupPrompt = wil::scope_exit([&]() noexcept { closePrompt(); });
 
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for change-case prompt churn test.");
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for change-case prompt churn test.");
     state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {currentName}, SelfTest::Scale(3000ms)),
@@ -3318,8 +3323,12 @@ struct FatalErrorReadableSurfaceProbe final
         }
         state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {currentName}, SelfTest::Scale(3000ms)),
                       std::format(L"Pane contents not settled before change-case cycle {}.", cycle));
+        g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
         g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
             FolderWindow::Pane::Left, [&](std::wstring_view name) noexcept { return name == currentName; }, true);
+        state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 1u,
+                      std::format(L"Change-case churn expected one selected item before cycle {}.", cycle));
         state.Require(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == currentName,
                       std::format(L"Change-case churn expected focus on '{}' before cycle {}.", currentName, cycle));
         if (! state.failure.empty())
@@ -3347,6 +3356,8 @@ struct FatalErrorReadableSurfaceProbe final
         } cycleResult{};
 
         closePrompt();
+        g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
         RunChangeCasePromptModalCycle(mainWindow,
                                       [&](const HWND prompt) noexcept
         {

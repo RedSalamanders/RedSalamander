@@ -6,6 +6,8 @@ Open it with:
 - **Commands → Find Files and Directories…**
 - `Alt+F7`
 
+![Find Files and Directories window](res/find-files.png)
+
 ## Scope
 
 The dialog starts from the focused pane:
@@ -69,6 +71,17 @@ RedSalamander chooses the backend for the current pane:
 - when native search is unavailable, the host falls back to a direct scan when possible
 
 The status line shows the active backend and any degradation warning, such as content search not being available for the current plugin.
+
+While an indexed or service-backed search is active, RedSalamander adds a second backend-status line that reports the search database and synchronization state. It shows the store readiness and sync phase (for example `db Ready / Watching`), the number of roots that have finished synchronizing, the active root being indexed, and the query execution mode (such as direct database or live-scan fallback) with a reason when it has fallen back. Until that information arrives, the line reads `db status pending`, or `db status unavailable` if the service could not be reached. This line lets you see whether a result set came from the up-to-date index or from a slower live scan because the database was not yet ready or current.
+
+### Debug and Release run separate search services
+
+The search service has independent identities per build, so a Debug build of RedSalamander and a Release build use different services that do not share index state:
+
+- the Debug service registers as `RedSalamanderSearchService.Debug` and stores its index under `%ProgramData%\RedSalamander\SearchIndex.Debug`,
+- the Release service registers as `RedSalamanderSearchService` and stores its index under `%ProgramData%\RedSalamander\SearchIndex`.
+
+These roots are kept isolated on disk, so starting one build never touches the other build's database. If you run both builds, expect each to warm up and maintain its own index independently — a root that is already indexed in one build will still appear unsynchronized the first time you search it in the other.
 
 ## Saved state
 

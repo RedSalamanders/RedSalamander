@@ -79,6 +79,7 @@ struct FolderViewRenamePromptDebugSnapshot
     D2D1_RECT_F selectionPaintRect{};
     float horizontalScrollDip  = 0.0f;
     bool hasSelectionPaintRect = false;
+    bool batchButtonVisible    = false;
 };
 
 [[nodiscard]] HWND GetFolderViewRenamePromptHandle() noexcept;
@@ -86,6 +87,7 @@ struct FolderViewRenamePromptDebugSnapshot
 [[nodiscard]] bool DebugSetFolderViewRenamePromptText(std::wstring_view text) noexcept;
 [[nodiscard]] bool DebugConfirmFolderViewRenamePrompt() noexcept;
 [[nodiscard]] bool DebugCancelFolderViewRenamePrompt() noexcept;
+[[nodiscard]] bool DebugInvokeFolderViewRenamePromptBatch() noexcept;
 [[nodiscard]] D2D1_INTERPOLATION_MODE DebugResolveFolderViewIconBitmapInterpolation(D2D1_SIZE_U sourcePixelSize, float destinationSizeDip, float dpi) noexcept;
 #endif
 
@@ -108,6 +110,10 @@ public:
     {
         return _currentFolder;
     }
+
+    // Returns true when the most recent enumeration of the current folder completed successfully:
+    // the displayed contents match `GetFolderPath()` and no enumeration error overlay is active.
+    [[nodiscard]] bool IsCurrentFolderEnumerated() const noexcept;
 
     // Updates the "remembered focus" entry for a specific folder so that the next time that
     // folder is enumerated, the requested item becomes the focused/active item (and is scrolled into view).
@@ -206,6 +212,16 @@ public:
     void SetPropertiesRequestCallback(PropertiesRequestCallback callback)
     {
         _propertiesRequestCallback = std::move(callback);
+    }
+
+    // `targetPath` selects the Batch Rename scope: an empty path batch-renames the pane's current
+    // selection; a non-empty directory path (`isDirectoryRoot` true) batch-renames that directory's
+    // contents; a non-empty file path (`isDirectoryRoot` false) seeds Batch Rename with exactly that
+    // item, independent of the live selection.
+    using BatchRenameRequestCallback = std::function<void(std::filesystem::path targetPath, bool isDirectoryRoot)>;
+    void SetBatchRenameRequestCallback(BatchRenameRequestCallback callback)
+    {
+        _batchRenameRequestCallback = std::move(callback);
     }
 #ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugHasFileOperationRequestCallback() const noexcept
@@ -386,6 +402,19 @@ public:
         bool blocksInput = true;
     };
 
+    struct RenderingDebugSnapshot
+    {
+        float dpi                         = 96.0f;
+        SIZE clientSizePx                 = {};
+        bool hasD2DTarget                 = false;
+        bool swapChainResizePending       = false;
+        bool forceFullRenderOnNextPaint   = false;
+        bool lastRenderWasFullClient      = false;
+        uint64_t dpiChangeCount           = 0;
+        uint64_t fullClientRenderCount    = 0;
+        RECT lastRenderInvalidRectPx      = {};
+    };
+
     struct ThumbnailDebugSnapshot
     {
         bool visible                        = false;
@@ -420,6 +449,10 @@ public:
     };
 
     [[nodiscard]] bool DebugGetAlertOverlaySnapshot(AlertOverlayDebugSnapshot& out) const noexcept;
+    [[nodiscard]] RenderingDebugSnapshot DebugGetRenderingSnapshot() const noexcept;
+    void DebugReportRenderingFailureForSelfTest(HRESULT hr) const;
+    void DebugAgeRenderingFailureForSelfTest(uint64_t ageMs) const noexcept;
+    void DebugClearRenderingFailureForSelfTest() const;
     [[nodiscard]] ThumbnailDebugSnapshot DebugGetThumbnailSnapshot() const noexcept;
     void DebugSetThumbnailProviderMode(DebugThumbnailProviderMode mode) noexcept;
 #endif
@@ -924,6 +957,7 @@ private:
     bool _swapChainResizePending = false;
     UINT _pendingSwapChainWidth  = 0;
     UINT _pendingSwapChainHeight = 0;
+    bool _forceFullRenderOnNextPaint = false;
     bool _deferredInitPosted     = false;
 
     // Rendering resources
@@ -956,6 +990,10 @@ private:
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
     wil::com_ptr<IDWriteTextFormat> _labelFormat;
     wil::com_ptr<IDWriteTextFormat> _detailsFormat;
+    // Metric-only DirectWrite text-layout instrumentation (no cache yet). Reset at render-frame
+    // begin and emitted at frame end as dwrite.text_layout.frame_create_*; UI-thread only.
+    uint64_t _frameTextLayoutCreateUs    = 0;
+    uint64_t _frameTextLayoutCreateCount = 0;
     wil::com_ptr<IDWriteTextFormat> _filterWatermarkFormat;
     wil::com_ptr<IDWriteTextLayout> _filterWatermarkLayout;
     SIZE _filterWatermarkLayoutClientSizePx = {};
@@ -1011,6 +1049,11 @@ private:
     mutable UINT _overlayTimerIntervalMs                     = 0;
     mutable uint64_t _operationInfoOverlayAutoDismissDueTick = 0;
     mutable std::optional<RECT> _lastOverlayInvalidationRectPx;
+    mutable HRESULT _renderingFailureLastHr            = S_OK;
+    mutable uint32_t _renderingFailureConsecutiveCount = 0;
+    mutable uint64_t _renderingFailureFirstTickMs      = 0;
+    mutable uint64_t _renderingFailureLastTickMs       = 0;
+    mutable bool _renderingFailureOverlayPromoted      = false;
 
     struct PendingBusyOverlay
     {
@@ -1153,6 +1196,7 @@ private:
     ViewFileRequestCallback _viewFileRequestCallback;
     FileOperationRequestCallback _fileOperationRequestCallback;
     PropertiesRequestCallback _propertiesRequestCallback;
+    BatchRenameRequestCallback _batchRenameRequestCallback;
     NavigationRequestCallback _navigationRequestCallback;
     SelectionChangedCallback _selectionChangedCallback;
     FocusedItemChangedCallback _focusedItemChangedCallback;
@@ -1188,7 +1232,7 @@ private:
     bool OnSysKeyDownMessage(WPARAM key, LPARAM keyInfo);
     bool OnMeasuredSysKeyDownMessage(WPARAM key, LPARAM keyInfo);
     LRESULT OnSetFocusMessage() noexcept;
-    LRESULT OnKillFocusMessage() noexcept;
+    LRESULT OnKillFocusMessage(HWND newFocus) noexcept;
     void OnContextMenuMessage(HWND hwnd, LPARAM lParam);
     void OnHScrollMessage(UINT scrollRequest);
     void OnMeasuredHScrollMessage(UINT scrollRequest);
@@ -1206,6 +1250,16 @@ private:
     void RecreateThemeBrushes();
     void DrawErrorOverlay();
     void ClearErrorOverlay(ErrorOverlayKind kind) const;
+    void ResetRenderingFailureState() const noexcept;
+    struct RenderingFailureOverlayDecision
+    {
+        bool showOverlay      = false;
+        bool newlyPromoted    = false;
+        uint32_t failureCount = 0;
+        uint64_t elapsedMs    = 0;
+        uint64_t firstTickMs  = 0;
+    };
+    [[nodiscard]] RenderingFailureOverlayDecision UpdateRenderingFailureOverlayDecision(HRESULT hr, uint64_t nowTickMs) const noexcept;
     void OnTimerMessage(UINT_PTR timerId);
     void StartOverlayTimer(UINT intervalMs) const;
     void StopOverlayTimer() const;
@@ -1277,6 +1331,22 @@ private:
     void BeginDragDrop();
     void UpdateItemTextLayouts();
     void EnsureItemTextLayout(FolderItem& item, float labelWidth);
+    enum class ItemTextLayoutKind : uint64_t
+    {
+        Label    = 0,
+        Details  = 1,
+        Metadata = 2,
+    };
+    // Single instrumented seam for all per-item IDWriteTextLayout creation (label/details/metadata).
+    // Drop-in wrapper around IDWriteFactory::CreateTextLayout. Metric-only: counts and times
+    // creation; also the future cache hook. UI-thread only.
+    [[nodiscard]] HRESULT CreateInstrumentedItemTextLayout(ItemTextLayoutKind kind,
+                                                           const wchar_t* text,
+                                                           UINT32 length,
+                                                           IDWriteTextFormat* format,
+                                                           float maxWidth,
+                                                           float maxHeight,
+                                                           IDWriteTextLayout** layout) noexcept;
     [[nodiscard]] float GetItemTextLayoutWidth(const FolderItem& item) const noexcept;
     [[nodiscard]] std::wstring_view GetVisualDisplayName(const FolderItem& item) const noexcept;
     std::pair<size_t, size_t> GetVisibleItemRange() const;
@@ -1349,6 +1419,10 @@ private:
     uint64_t _debugProcessIconQueueCallCount          = 0;
     uint64_t _debugBatchIconUpdateCallCount           = 0;
     uint64_t _debugIncrementalSearchEffectUpdateCount = 0;
+    uint64_t _debugDpiChangeCount                      = 0;
+    uint64_t _debugFullClientRenderCount               = 0;
+    RECT _debugLastRenderInvalidRectPx                 = {};
+    bool _debugLastRenderWasFullClient                 = false;
 #endif
 
     struct PendingExternalCommand final

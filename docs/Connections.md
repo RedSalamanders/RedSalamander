@@ -55,11 +55,18 @@ Connection Manager exposes a `<Quick Connect>` entry that is **not persisted**. 
 
 During the current app run, that temporary profile can also be reopened by name with `@conn:@quick`.
 
+Unlike a saved profile, Quick Connect keeps any secret you enter **in memory only** for the current app run — it is never written to Windows Credential Manager and is discarded when you close the app. Use a saved profile when you want secrets stored durably (and optionally gated by Windows Hello).
+
 ## Security notes
 
 - Saving a secret stores it via Windows Credential Manager.
 - When **Require Windows Hello** is enabled, Windows Hello verification is performed before secrets are released.
 - Some file-system plugins still have “defaults” in Preferences; those values may be stored as plain text. Prefer Connection Manager when possible.
+
+Two global settings under `connections` in the settings file tune Windows Hello behavior across all profiles:
+
+- `bypassWindowsHello` (default `false`): when `true`, Windows Hello verification is skipped even when a profile requires it. This is intended for automation; leave it disabled for normal interactive use.
+- `windowsHelloReauthTimeoutMinute` (default `10`): how long a recent successful authentication (Windows Hello verification or a manually entered password/passphrase) is reused for the same connection before you are asked again. Set it to `0` to always prompt on every secret access.
 
 ## External settings changes
 

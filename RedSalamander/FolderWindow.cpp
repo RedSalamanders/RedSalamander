@@ -6,6 +6,7 @@
 #endif
 #include <winsock2.h>
 
+#include "BatchRenameWindow.h"
 #include "DxUiThemePalette.h"
 #include "FolderWindowInternal.h"
 #include "HostServices.h"
@@ -1012,9 +1013,24 @@ void FolderWindow::ClearPaneSelectionByDisplayNamePredicate(Pane pane, const std
     state.folderView.ClearSelectionByDisplayNamePredicate(shouldUnselect);
 }
 
-void FolderWindow::SetFileOperationCompletedCallback(FileOperationCompletedCallback callback)
+uint64_t FolderWindow::AddFileOperationCompletedCallback(FileOperationCompletedCallback callback, std::weak_ptr<void> lifetimeGuard)
 {
-    _fileOperationCompletedCallback = std::move(callback);
+    const uint64_t token = _nextFileOperationCompletedCallbackToken++;
+    const std::weak_ptr<void> emptyLifetimeGuard;
+    const bool hasLifetimeGuard =
+        ! lifetimeGuard.expired() || lifetimeGuard.owner_before(emptyLifetimeGuard) || emptyLifetimeGuard.owner_before(lifetimeGuard);
+    _fileOperationCompletedCallbacks.push_back(
+        FileOperationCompletedSubscription{.token = token,
+                                           .callback = std::move(callback),
+                                           .lifetimeGuard = std::move(lifetimeGuard),
+                                           .hasLifetimeGuard = hasLifetimeGuard});
+    return token;
+}
+
+void FolderWindow::RemoveFileOperationCompletedCallback(uint64_t token) noexcept
+{
+    std::erase_if(_fileOperationCompletedCallbacks,
+                  [token](const FileOperationCompletedSubscription& subscription) noexcept { return subscription.token == token; });
 }
 
 ATOM FolderWindow::RegisterWndClass(HINSTANCE instance)
@@ -1872,6 +1888,26 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             { return StartFileOperationFromFolderView(pane, std::move(request)); });
             state.folderView.SetPropertiesRequestCallback([this, pane](std::filesystem::path path) noexcept -> HRESULT
             { return ShowItemPropertiesFromFolderView(pane, std::move(path)); });
+            state.folderView.SetBatchRenameRequestCallback([this, pane](std::filesystem::path targetPath, bool isDirectoryRoot)
+            {
+                if (targetPath.empty())
+                {
+                    // Empty target path = batch-rename the pane's current selection (FolderView VK_F2).
+                    CommandBatchRename(pane);
+                    return;
+                }
+
+                if (isDirectoryRoot)
+                {
+                    CommandBatchRename(pane, std::move(targetPath));
+                    return;
+                }
+
+                // File from the rename prompt: seed exactly that item, independent of the live selection.
+                std::vector<std::filesystem::path> initialPaths;
+                initialPaths.push_back(std::move(targetPath));
+                CommandBatchRename(pane, std::nullopt, std::move(initialPaths));
+            });
             state.folderView.SetNavigationRequestCallback([this, pane](FolderView::NavigationRequest request)
             {
                 PaneState& s = pane == Pane::Left ? _leftPane : _rightPane;
@@ -2086,6 +2122,30 @@ bool FolderWindow::DebugGetPaneAlertSnapshot(Pane pane, FolderView::AlertOverlay
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugGetAlertOverlaySnapshot(out);
 }
+
+FolderView::RenderingDebugSnapshot FolderWindow::DebugGetPaneRenderingSnapshot(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetRenderingSnapshot();
+}
+
+void FolderWindow::DebugReportPaneRenderingFailureForSelfTest(Pane pane, HRESULT hr) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugReportRenderingFailureForSelfTest(hr);
+}
+
+void FolderWindow::DebugAgePaneRenderingFailureForSelfTest(Pane pane, uint64_t ageMs) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugAgeRenderingFailureForSelfTest(ageMs);
+}
+
+void FolderWindow::DebugClearPaneRenderingFailureForSelfTest(Pane pane) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.DebugClearRenderingFailureForSelfTest();
+}
 #endif
 
 void FolderWindow::ShowPaneAlertOverlay(Pane pane,
@@ -2227,7 +2287,236 @@ void FolderWindow::CommandRename(Pane pane)
 {
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.folderView.GetSelectedPaths().size() > 1u)
+    {
+        CommandBatchRename(pane);
+        return;
+    }
+
     state.folderView.CommandRename();
+}
+
+void FolderWindow::RefreshPanesAfterBatchRename(const std::wstring_view sourcePluginId,
+                                                const std::wstring_view sourceInstanceContext,
+                                                const std::span<const std::filesystem::path> sourcePaths,
+                                                const std::span<const std::filesystem::path> targetPaths) noexcept
+{
+    const auto pathTouchesFolder = [](const std::filesystem::path& folder, const std::filesystem::path& path) noexcept
+    {
+        if (path.empty())
+        {
+            return false;
+        }
+
+        if (OrdinalString::EqualsNoCasePath(folder, path))
+        {
+            return true;
+        }
+
+        const std::filesystem::path parent = path.parent_path();
+        return ! parent.empty() && OrdinalString::EqualsNoCasePath(folder, parent);
+    };
+
+    const auto spanTouchesFolder = [&](const std::filesystem::path& folder, const std::span<const std::filesystem::path> paths) noexcept
+    {
+        return std::ranges::any_of(paths, [&](const std::filesystem::path& path) noexcept
+        { return pathTouchesFolder(folder, path); });
+    };
+
+    // When `source` is a path-segment-aware case-insensitive ancestor of `folder` (strictly: `folder`
+    // lives somewhere below the renamed directory), returns the corresponding folder under `target`.
+    const auto retargetDescendantFolder =
+        [](const std::filesystem::path& folder, const std::filesystem::path& source, const std::filesystem::path& target) noexcept
+        -> std::optional<std::filesystem::path>
+    {
+        if (folder.empty() || source.empty() || target.empty())
+        {
+            return std::nullopt;
+        }
+
+        const std::filesystem::path normalizedSource = source.lexically_normal();
+        const std::filesystem::path normalizedFolder = folder.lexically_normal();
+
+        auto folderIt        = normalizedFolder.begin();
+        const auto folderEnd = normalizedFolder.end();
+        for (auto sourceIt = normalizedSource.begin(); sourceIt != normalizedSource.end(); ++sourceIt)
+        {
+            if (sourceIt->empty())
+            {
+                continue; // trailing-separator artifact of path iteration
+            }
+
+            while (folderIt != folderEnd && folderIt->empty())
+            {
+                ++folderIt;
+            }
+
+            if (folderIt == folderEnd || ! OrdinalString::EqualsNoCase(sourceIt->native(), folderIt->native()))
+            {
+                return std::nullopt;
+            }
+
+            ++folderIt;
+        }
+
+        std::filesystem::path retargeted = target;
+        bool hasRemainder                = false;
+        for (; folderIt != folderEnd; ++folderIt)
+        {
+            if (folderIt->empty())
+            {
+                continue;
+            }
+
+            retargeted /= *folderIt;
+            hasRemainder = true;
+        }
+
+        return hasRemainder ? std::optional<std::filesystem::path>(std::move(retargeted)) : std::nullopt;
+    };
+
+    const auto findDescendantRetarget = [&](const std::filesystem::path& folder) noexcept -> std::optional<std::filesystem::path>
+    {
+        // Apply the rename pairs sequentially (they arrive in execution order, deepest first) so a
+        // folder below both a renamed child and a renamed parent ends up under both new names.
+        std::filesystem::path current = folder;
+        bool rewritten                = false;
+        const size_t renameCount      = std::min(sourcePaths.size(), targetPaths.size());
+        for (size_t index = 0u; index < renameCount; ++index)
+        {
+            std::optional<std::filesystem::path> retargeted = retargetDescendantFolder(current, sourcePaths[index], targetPaths[index]);
+            if (retargeted.has_value())
+            {
+                current   = std::move(retargeted).value();
+                rewritten = true;
+            }
+        }
+
+        return rewritten ? std::optional<std::filesystem::path>(std::move(current)) : std::nullopt;
+    };
+
+    const auto refreshIfAffected = [&](const Pane pane) noexcept
+    {
+        PaneState& paneState = pane == Pane::Left ? _leftPane : _rightPane;
+        if (! paneState.fileSystem || ! OrdinalString::EqualsNoCase(paneState.pluginId, sourcePluginId) ||
+            ! OrdinalString::EqualsNoCase(paneState.instanceContext, sourceInstanceContext))
+        {
+            return;
+        }
+
+        const auto folder = paneState.folderView.GetFolderPath();
+        if (! folder.has_value())
+        {
+            return;
+        }
+
+        if (spanTouchesFolder(folder.value(), sourcePaths) || spanTouchesFolder(folder.value(), targetPaths))
+        {
+            paneState.folderView.ForceRefresh();
+            return;
+        }
+
+        // A pane showing a folder inside a renamed directory would be left on a dead path; follow the
+        // rename instead. Limited to plain local file-system panes, where the rewritten path can be
+        // validated and renavigated directly.
+        if (! paneState.instanceContext.empty() || ! NavigationLocation::IsFilePluginShortId(paneState.pluginShortId))
+        {
+            return;
+        }
+
+        const std::optional<std::filesystem::path> retargeted = findDescendantRetarget(folder.value());
+        if (! retargeted.has_value())
+        {
+            return;
+        }
+
+        // If the rewritten path does not exist (e.g. a deeper segment changed too), fall back to the
+        // nearest existing ancestor so the pane never stays on a dead path.
+        std::filesystem::path destination = retargeted.value();
+        std::error_code existsError;
+        while (! destination.empty() && ! std::filesystem::exists(destination, existsError))
+        {
+            const std::filesystem::path parent = destination.parent_path();
+            if (parent.empty() || parent.native() == destination.native())
+            {
+                break;
+            }
+
+            destination = parent;
+        }
+
+        if (destination.empty())
+        {
+            destination = retargeted.value();
+        }
+
+        SetFolderPath(pane, destination);
+    };
+
+    refreshIfAffected(Pane::Left);
+    refreshIfAffected(Pane::Right);
+}
+
+bool FolderWindow::RevealBatchRenamePathInPane(const Pane pane, const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path parent = path.parent_path();
+    const std::wstring leaf            = path.filename().native();
+    if (parent.empty() || leaf.empty())
+    {
+        return false;
+    }
+
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.RememberFocusedItemForFolder(parent, leaf);
+
+    const std::optional<std::filesystem::path> currentFolder = state.folderView.GetFolderPath();
+    if (currentFolder.has_value() && OrdinalString::EqualsNoCasePath(currentFolder.value(), parent))
+    {
+        return state.folderView.PrepareForExternalCommand(leaf);
+    }
+
+    SetFolderPath(pane, parent);
+    return true;
+}
+
+void FolderWindow::CommandBatchRename(Pane pane, std::optional<std::filesystem::path> rootOverride, std::vector<std::filesystem::path> initialPathsOverride)
+{
+    SetActivePane(pane);
+    if (! _settings)
+    {
+        return;
+    }
+
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+
+    BatchRenamePaneContext context{};
+    context.fileSystem      = state.fileSystem;
+    context.pluginId        = state.pluginId;
+    context.pluginShortId   = state.pluginShortId;
+    context.instanceContext = state.instanceContext;
+    context.rootPluginPath  = rootOverride.has_value() ? rootOverride.value() : state.currentPath.value_or(std::filesystem::path{});
+    if (! rootOverride.has_value())
+    {
+        context.initialPaths = initialPathsOverride.empty() ? state.folderView.GetSelectedOrFocusedPaths() : std::move(initialPathsOverride);
+    }
+    // Capture the originating pane's identity now: the Batch Rename window is modeless, so the pane may
+    // navigate elsewhere (e.g. into an archive) before renames complete.
+    context.onSuccessfulRename = [this, sourcePluginId = state.pluginId, sourceInstanceContext = state.instanceContext](
+                                     std::span<const std::filesystem::path> sourcePaths,
+                                     std::span<const std::filesystem::path> targetPaths) noexcept
+    {
+        RefreshPanesAfterBatchRename(sourcePluginId, sourceInstanceContext, sourcePaths, targetPaths);
+    };
+    context.onRevealPath = [this, pane](const std::filesystem::path& path) noexcept
+    { return RevealBatchRenamePathInPane(pane, path); };
+
+    static_cast<void>(ShowBatchRenameWindow(_hWnd.get(), *_settings, _theme, std::move(context)));
 }
 
 void FolderWindow::CommandView(Pane pane)

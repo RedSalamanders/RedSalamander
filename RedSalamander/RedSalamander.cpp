@@ -52,6 +52,7 @@
 #include "ExceptionHelpers.h"
 #include "Version.h"
 
+#include "BatchRenameWindow.h"
 #include "CommandRegistry.h"
 #include "CompareDirectoriesWindow.h"
 #include "ConnectionCredentialPromptDialog.h"
@@ -2860,6 +2861,7 @@ static bool MenuContainsCommandIdRecursive(HMENU menu, UINT commandId) noexcept
         case IDM_PANE_CLIPBOARD_COPY: return FluentIcons::kCopy;
         case IDM_PANE_CLIPBOARD_PASTE: return FluentIcons::kPaste;
         case IDM_PANE_RENAME: return FluentIcons::kRename;
+        case IDM_PANE_BATCH_RENAME: return FluentIcons::kRename;
         case IDM_PANE_DELETE: return FluentIcons::kDelete;
         case IDM_PANE_OPEN_PROPERTIES: return FluentIcons::kInfo;
         case IDM_PANE_CONNECT: return FluentIcons::kMapDrive;
@@ -4536,6 +4538,11 @@ public:
     MainMenuBarHost(MainMenuBarHost&&)                 = delete;
     MainMenuBarHost& operator=(MainMenuBarHost&&)      = delete;
 
+    ~MainMenuBarHost() noexcept
+    {
+        Destroy();
+    }
+
     [[nodiscard]] bool EnsureCreated(HWND ownerWindow) noexcept
     {
         if (! ownerWindow || IsWindow(ownerWindow) == FALSE)
@@ -4594,11 +4601,14 @@ public:
 
     void Destroy() noexcept
     {
+        const HWND hwnd = _hwnd.get();
         _host.Detach();
-        _menuBar = nullptr;
+        ResetDestroyedWindowState();
+        if (hwnd && IsWindow(hwnd) != FALSE)
+        {
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+        }
         _hwnd.reset();
-        _ownerWindow      = nullptr;
-        _focusRestoreHwnd = nullptr;
     }
 
     void SetTheme(const AppTheme& theme) noexcept
@@ -4774,6 +4784,13 @@ public:
         return true;
     }
 
+#ifdef ENABLE_TESTS
+    void DebugSetHoverSuppressionCursorOverride(const std::optional<POINT>& point) noexcept
+    {
+        _debugMenuBarSuppressionCursorOverride = point;
+    }
+#endif
+
 private:
     static constexpr wchar_t kWindowClassName[] = L"RedSalamander.DxMainMenuBar";
 
@@ -4838,6 +4855,21 @@ private:
         }
     }
 
+    // Returns the live cursor point used to arm menu-bar stale-hover suppression. Production
+    // reads the real OS cursor; self-tests may inject a deterministic point so they can drive
+    // the suppression with synthetic delivered messages instead of warping the real cursor.
+    [[nodiscard]] bool ReadHoverSuppressionCursor(POINT& cursor) const noexcept
+    {
+#ifdef ENABLE_TESTS
+        if (_debugMenuBarSuppressionCursorOverride.has_value())
+        {
+            cursor = _debugMenuBarSuppressionCursorOverride.value();
+            return true;
+        }
+#endif
+        return GetCursorPos(&cursor) != FALSE; // getcursorpos-allow: menu-bar stale-hover suppression only
+    }
+
     void ArmMenuBarHoverSuppressionAtCursor() noexcept
     {
         _suppressedMenuBarHoverPoint.reset();
@@ -4847,7 +4879,7 @@ private:
         }
 
         POINT cursor{};
-        if (GetCursorPos(&cursor) == FALSE) // getcursorpos-allow: suppressing stale post-menu hover only
+        if (! ReadHoverSuppressionCursor(cursor))
         {
             return;
         }
@@ -4868,7 +4900,7 @@ private:
         }
 
         POINT cursor{};
-        if (GetCursorPos(&cursor) == FALSE) // getcursorpos-allow: suppressing stale live cursor hover during menu activation only
+        if (! ReadHoverSuppressionCursor(cursor))
         {
             return;
         }
@@ -5363,6 +5395,31 @@ private:
         UpdateSelectedIndexSnapshot();
     }
 
+    void ResetDestroyedWindowState() noexcept
+    {
+        _menuBar = nullptr;
+        _selectedIndexSnapshot.store(-1, std::memory_order_release);
+        _visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
+        _visualHighlightCountSnapshot.store(0, std::memory_order_release);
+        _ownerWindow        = nullptr;
+        _focusRestoreHwnd   = nullptr;
+        _popupSessionActive = false;
+        _activePopupIndex.reset();
+        _pendingHoverRootSwitchIndex.reset();
+        _suppressedMenuBarHoverPoint.reset();
+    }
+
+    void OnNcDestroy(HWND hwnd) noexcept
+    {
+        _host.Detach();
+        ResetDestroyedWindowState();
+        if (_hwnd.get() == hwnd)
+        {
+            static_cast<void>(_hwnd.release());
+        }
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+    }
+
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
     {
         auto* self = reinterpret_cast<MainMenuBarHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -5433,14 +5490,7 @@ private:
             {
                 if (message == WM_NCDESTROY)
                 {
-                    self->_menuBar = nullptr;
-                    self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
-                    self->_visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
-                    self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
-                    self->_focusRestoreHwnd   = nullptr;
-                    self->_popupSessionActive = false;
-                    self->_activePopupIndex.reset();
-                    self->_pendingHoverRootSwitchIndex.reset();
+                    self->OnNcDestroy(hwnd);
                 }
                 else
                 {
@@ -5465,14 +5515,7 @@ private:
             }
             if (message == WM_NCDESTROY)
             {
-                self->_menuBar = nullptr;
-                self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
-                self->_visualHighlightIndexSnapshot.store(-1, std::memory_order_release);
-                self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
-                self->_focusRestoreHwnd   = nullptr;
-                self->_popupSessionActive = false;
-                self->_activePopupIndex.reset();
-                self->_pendingHoverRootSwitchIndex.reset();
+                self->OnNcDestroy(hwnd);
             }
         }
 
@@ -5514,9 +5557,9 @@ private:
     }
 
     HWND _ownerWindow = nullptr;
-    wil::unique_hwnd _hwnd;
     AppTheme _theme{};
     RedSalamander::DxUi::WindowHost _host;
+    wil::unique_hwnd _hwnd;
     RedSalamander::DxUi::MenuBar* _menuBar = nullptr;
     std::atomic<int> _selectedIndexSnapshot{-1};
     std::atomic<int> _visualHighlightIndexSnapshot{-1};
@@ -5526,6 +5569,12 @@ private:
     std::optional<size_t> _activePopupIndex;
     std::optional<size_t> _pendingHoverRootSwitchIndex;
     std::optional<POINT> _suppressedMenuBarHoverPoint;
+#ifdef ENABLE_TESTS
+    // Self-test override for the live cursor used to arm stale-hover suppression. Lets the
+    // menu-bar self-tests exercise the suppression deterministically with delivered messages
+    // instead of warping the interactive user's real cursor (see ReadHoverSuppressionCursor).
+    std::optional<POINT> _debugMenuBarSuppressionCursorOverride;
+#endif
 };
 
 MainMenuBarHost g_mainMenuBarHost;
@@ -5636,6 +5685,11 @@ MainMenuBarHost g_mainMenuBarHost;
     }
 
     return g_mainMenuBarHost.HitTestItemScreenPoint(screenPoint, outIndex);
+}
+
+void DebugSetMainMenuBarHoverSuppressionCursorOverride(const std::optional<POINT>& screenPoint) noexcept
+{
+    g_mainMenuBarHost.DebugSetHoverSuppressionCursorOverride(screenPoint);
 }
 #endif
 
@@ -6875,7 +6929,7 @@ constexpr wchar_t kRedSalamanderHelpText[] =
     L"  --commands-selftest             Run Commands self-test suite.\r\n"
     L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
     L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
-    L"  --selftest-case=NAME            Run the exact matching self-test case, or a case-prefix family when NAME ends in '_'.\r\n"
+    L"  --selftest-case=NAME            Run the exact matching self-test case, a case-prefix family when NAME ends in '_', or comma-separated exact cases.\r\n"
     L"  --selftest-list-cases           Emit self-test case inventory JSON and exit; combine with suite flags or --selftest-case.\r\n"
     L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by finite N, clamped to [0.1, 100.0] (default 1.0).\r\n"
 #endif
@@ -8067,6 +8121,7 @@ static void ApplyAppTheme(HWND hWnd)
     UpdateConnectionManagerWindowsTheme(theme);
     UpdateConnectionCredentialPromptWindowsTheme(theme);
     UpdateCompareDirectoriesWindowsTheme(theme);
+    UpdateBatchRenameWindowsTheme(theme);
     UpdateFindFilesWindowsTheme(theme);
     UpdatePreferencesWindowsTheme(theme);
     UpdatePluginConfigurationWindowsTheme(theme);
@@ -9334,6 +9389,12 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
 
             const AppTheme theme = ResolveConfiguredTheme();
             static_cast<void>(ShowFindFilesWindow(hWnd, g_settings, theme, std::move(context)));
+            break;
+        }
+        case IDM_PANE_BATCH_RENAME:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandBatchRename(pane);
             break;
         }
         case IDM_APP_SWAP_PANES: g_folderWindow.SwapPanes(); break;

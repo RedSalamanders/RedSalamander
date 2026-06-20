@@ -92,6 +92,7 @@ Describe 'Run-AllTests plan helper' {
                 'MonitorTest',
                 'LocalizationTests',
                 'RedConfigureTests',
+                'PluginContractTests',
                 'RedSalamanderMonitorEtwLatency',
                 'PerformanceTests2',
                 'ToolsPesterTests',

@@ -125,6 +125,13 @@ inline constexpr UINT kItemPropertiesRemoveStream               = WM_APP + 0x541
 inline constexpr UINT kFolderWindowCloseOpenedFilesDialog       = WM_APP + 0x542;
 inline constexpr UINT kFolderWindowCloseSharedDirectoriesDialog = WM_APP + 0x543;
 
+// Batch Rename (background / debug)
+inline constexpr UINT kBatchRenameTaskUpdate = WM_APP + 0x544;
+inline constexpr UINT kBatchRenameCompleted  = WM_APP + 0x545;
+#ifdef ENABLE_TESTS
+inline constexpr UINT kBatchRenameWindowDebug = WM_APP + 0x546;
+#endif
+
 // Splash screen
 inline constexpr UINT kSplashScreenSetText  = WM_APP + 0x6F0;
 inline constexpr UINT kSplashScreenRecenter = WM_APP + 0x6F1;

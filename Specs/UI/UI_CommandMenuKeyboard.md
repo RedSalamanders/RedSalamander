@@ -462,6 +462,7 @@ Notation:
 #### Files (targets Focused pane unless explicitly stated)
 
 - Rename… (`F2`) `[cmd/pane/rename]`
+- Batch Rename… (`⊘`) `[cmd/pane/batchRename]`
 - Open / Execute (`Enter`) `[cmd/pane/executeOpen]`
 - View (`F3`) `[cmd/pane/view]`
 - View Width… (`Ctrl+Shift+F3`) `[cmd/app/viewWidth]`
@@ -757,7 +758,7 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
 
 #### Rename (`cmd/pane/rename`)
 
-- Invoking the command MUST show a modal dialog:
+- Invoking the command with exactly one focused file MUST show a modal dialog:
   ```text
   Title: Rename Item
 
@@ -775,10 +776,20 @@ Settings-driven external viewer/editor/user-menu launch strings MUST support the
   - For files, the dialog SHOULD select the name without its extension (up to the last `.`).
   - For folders, the dialog SHOULD select the full name.
 - `Enter` commits; `Escape` cancels.
+- If more than one item is selected, `cmd/pane/rename` MUST route directly to `cmd/pane/batchRename` with the selected paths as the target set.
+- If the focused item is a folder, the standard rename prompt MUST expose a `Batch...` action that opens Batch Rename rooted at that folder without performing a single rename.
 - While the name field is focused, standard edit navigation and clipboard keys MUST stay local to the field: arrows, Home/End, Backspace/Delete,
   `Ctrl+Left/Right`, `Ctrl+Backspace/Delete`, `Ctrl+A/C/X/V/Z/Y`, `Ctrl+Insert`, `Shift+Insert`, and `Shift+Delete` MUST edit, select,
   copy, cut, paste, undo, or redo the proposed name instead of dispatching pane shortcuts.
 - The new name MUST be trimmed; empty input MUST be rejected (warning beep) and the dialog MUST remain open.
+
+#### Batch Rename (`cmd/pane/batchRename`)
+
+- Invoking the command MUST open the Batch Rename window described by `Specs/UI/UI_BatchRenameWindow.md`.
+- The command target is the focused pane when focus is inside a pane; otherwise it is the active pane.
+- The initial target set is selected items when there is a selection. If no item is selected, the focused item or current folder scope is used according to the Batch Rename window spec.
+- The command MUST remain preview-first: no rename may run until the Batch Rename preview has produced a valid plan and the user invokes `Rename`.
+- The command has no default keyboard shortcut in v1; users may assign one through the shortcut settings once the command is registered.
 
 #### Change Case (`cmd/pane/changeCase`)
 
@@ -936,8 +947,10 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 | L         | ⊘                                  | Focus Address Bar                | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | T         | ⊘                                  | ⊘                                | ⊘                        | ⊘                                  | ⊘                                 | Command Shell     | ⊘                     |
 | D         | ⊘                                  | ⊘                                | Focus Address Bar        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
-| Up        | ⊘                                  | ⊘                                | Up One Directory         | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
-| Down      | ⊘                                  | ⊘                                | Show Folders History     | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| Up        | ⊘                                  | ⊘                                | Go to Previous Selected Name | ⊘                              | ⊘                                 | ⊘                 | ⊘                     |
+| Down      | ⊘                                  | ⊘                                | Go to Next Selected Name | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| Left      | ⊘                                  | ⊘                                | History Back             | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| Right     | ⊘                                  | ⊘                                | History Forward          | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | /         | ⊘                                  | ⊘                                | About                    | ⊘                                  | ⊘                                 | ⊘                 | About                 |
 | 2         | ⊘                                  | ⊘                                | Display as Brief         | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 3         | ⊘                                  | ⊘                                | Display as Detailed      | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
@@ -952,6 +965,7 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 
 Notes:
 - Unmodified digit keys (`0`-`9`) and unmodified letter keys are unbound by default so they can be used for incremental search typing; Hot Paths use `Ctrl+<digit>` / `Ctrl+Shift+<digit>` and do not interfere with typing.
+- Binding migrations: the permanent-delete chords (`Shift+F8`, `Shift+Del`, `Ctrl+Shift+Del`) bind `cmd/pane/permanentDelete` (the former `cmd/pane/permanentDeleteWithValidation` command id was renamed to `cmd/pane/permanentDelete`); `Ctrl+F2` now binds `cmd/pane/sort/none` (it previously bound `cmd/pane/changeAttributes`, which is reached via `Ctrl+F8`). Startup default-restoration treats these as the canonical defaults documented above.
 
 ### Shortcut Customization UI (Preferences)
 

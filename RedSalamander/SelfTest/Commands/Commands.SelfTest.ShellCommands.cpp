@@ -2696,6 +2696,11 @@ struct ClipboardDropEffectReadStatus
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     ec.clear();
+    const auto cleanupFiles = wil::scope_exit([root]() noexcept
+    {
+        std::error_code removeEc;
+        std::filesystem::remove_all(root, removeEc);
+    });
 
     state.Require(SelfTest::EnsureDirectory(sourceDir), L"Failed to create drag/drop missing-callback source directory.");
     state.Require(SelfTest::EnsureDirectory(destRoot), L"Failed to create drag/drop missing-callback destination directory.");

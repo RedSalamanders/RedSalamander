@@ -1,16 +1,18 @@
 bool IsAutoDismissableFileOperationCompletion(HRESULT resultHr, unsigned long warningCount, unsigned long errorCount) noexcept
 {
+    // Recorded issues must stay reachable: even a cancelled task keeps its card when it already
+    // collected warnings or errors, so the user can open the diagnostics.
+    if (warningCount != 0 || errorCount != 0)
+    {
+        return false;
+    }
+
     if (IsCancellationStatus(resultHr))
     {
         return true;
     }
 
-    if (FAILED(resultHr))
-    {
-        return false;
-    }
-
-    return warningCount == 0 && errorCount == 0;
+    return SUCCEEDED(resultHr);
 }
 
 FolderWindow::FileOperationState::FileOperationState(FolderWindow& owner) : _owner(owner)
@@ -34,8 +36,14 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                                                          uint64_t initialSpeedLimitBytesPerSecond,
                                                          ExecutionMode executionMode,
                                                          bool requireConfirmation,
-                                                         wil::com_ptr<IFileSystem> destinationFileSystem)
+                                                         wil::com_ptr<IFileSystem> destinationFileSystem,
+                                                         uint64_t* taskIdOut)
 {
+    if (taskIdOut)
+    {
+        *taskIdOut = 0;
+    }
+
     if (! fileSystem)
     {
         Debug::Error(L"FolderWindow StartOperation null filesystem");
@@ -48,14 +56,16 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         return S_FALSE;
     }
 
-    if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, operation))
-    {
-        Debug::Error(L"FolderWindow StartOperation provider rejected same-filesystem operation op={}", static_cast<unsigned int>(operation));
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-    }
-
     const std::wstring& sourcePluginId      = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginId : _owner._rightPane.pluginId;
     const std::wstring& sourcePluginShortId = sourcePane == FolderWindow::Pane::Left ? _owner._leftPane.pluginShortId : _owner._rightPane.pluginShortId;
+
+    if (! destinationFileSystem && ! CanSameFileSystemOperation(fileSystem, operation, sourcePluginId))
+    {
+        Debug::Error(L"FolderWindow StartOperation provider rejected same-filesystem operation plugin:{} op={}",
+                     sourcePluginId,
+                     static_cast<unsigned int>(operation));
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
 
     if (operation == FILESYSTEM_COPY || operation == FILESYSTEM_MOVE)
     {
@@ -486,7 +496,53 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
             }
         };
 
-        const std::wstring destinationFolderText = destinationFolder.wstring();
+        // Junction/symlink/subst aliases must not defeat the overlap guard: resolve existing
+        // paths to their physical final form before comparing. Falls back to the textual path
+        // when it cannot be opened (remote/plugin namespaces keep today's string semantics).
+        const auto canonicalizeExistingPath = [](const std::wstring& text) noexcept -> std::wstring
+        {
+            wil::unique_hfile handle(CreateFileW(text.c_str(),
+                                                 FILE_READ_ATTRIBUTES,
+                                                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                 nullptr,
+                                                 OPEN_EXISTING,
+                                                 FILE_FLAG_BACKUP_SEMANTICS,
+                                                 nullptr));
+            if (! handle)
+            {
+                return text;
+            }
+
+            std::wstring resolved;
+            resolved.resize(0x8000);
+            const DWORD length =
+                GetFinalPathNameByHandleW(handle.get(), resolved.data(), static_cast<DWORD>(resolved.size()), FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+            if (length == 0 || length >= resolved.size())
+            {
+                return text;
+            }
+            resolved.resize(length);
+
+            constexpr std::wstring_view kExtendedUnc = L"\\\\?\\UNC\\";
+            constexpr std::wstring_view kExtended    = L"\\\\?\\";
+            if (resolved.starts_with(kExtendedUnc))
+            {
+                resolved = L"\\\\" + resolved.substr(kExtendedUnc.size());
+            }
+            else if (resolved.starts_with(kExtended))
+            {
+                resolved.erase(0, kExtended.size());
+            }
+            return resolved;
+        };
+
+        const std::wstring destinationFolderText      = destinationFolder.wstring();
+        const std::wstring destinationFolderCanonical = canonicalizeExistingPath(destinationFolderText);
+        const auto normalizePathCandidate = [&](std::wstring text) noexcept -> std::wstring
+        {
+            normalizeSlashes(text);
+            return text;
+        };
 
         const bool haveAttributesHint = sourcePathAttributesHint.size() == sourcePaths.size();
 
@@ -509,20 +565,39 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                 continue;
             }
 
-            const std::wstring destinationItemText = JoinFolderAndLeaf(destinationFolderText, leaf);
+            const std::array<std::wstring, 2> sourceCandidates{
+                normalizePathCandidate(sourceText),
+                normalizePathCandidate(canonicalizeExistingPath(sourceText)),
+            };
+            const std::array<std::wstring, 2> destinationCandidates{
+                normalizePathCandidate(JoinFolderAndLeaf(destinationFolderText, leaf)),
+                normalizePathCandidate(JoinFolderAndLeaf(destinationFolderCanonical, leaf)),
+            };
 
-            std::wstring sourceNormalized          = sourceText;
-            std::wstring destinationItemNormalized = destinationItemText;
-            normalizeSlashes(sourceNormalized);
-            normalizeSlashes(destinationItemNormalized);
+            bool overlaps = false;
+            for (const std::wstring& sourceCandidate : sourceCandidates)
+            {
+                for (const std::wstring& destinationCandidate : destinationCandidates)
+                {
+                    if (IsSameOrChildPath(sourceCandidate, destinationCandidate))
+                    {
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (overlaps)
+                {
+                    break;
+                }
+            }
 
-            if (! IsSameOrChildPath(sourceNormalized, destinationItemNormalized))
+            if (! overlaps)
             {
                 continue;
             }
 
             invalidSourceText          = sourceText;
-            invalidDestinationItemText = destinationItemText;
+            invalidDestinationItemText = JoinFolderAndLeaf(destinationFolderText, leaf);
             break;
         }
 
@@ -623,6 +698,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
     }
 
     Task* rawTask = task.get();
+    const uint64_t startedTaskId = rawTask->_taskId;
 
     {
         std::scoped_lock lock(_mutex);
@@ -632,6 +708,10 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
     EnsurePopupVisible();
 
     rawTask->_thread = std::jthread([rawTask](std::stop_token stopToken) noexcept { rawTask->ThreadMain(stopToken); });
+    if (taskIdOut)
+    {
+        *taskIdOut = startedTaskId;
+    }
     return S_OK;
 }
 
@@ -859,6 +939,30 @@ void FolderWindow::FileOperationState::CollectDiagnostics(std::vector<TaskDiagno
     for (const auto& entry : _diagnosticsInMemory)
     {
         outEntries.push_back(entry);
+    }
+}
+
+void FolderWindow::FileOperationState::CollectTaskDiagnosticSnapshot(uint64_t taskId,
+                                                                     unsigned long& warningCount,
+                                                                     unsigned long& errorCount,
+                                                                     std::wstring& lastDiagnosticMessage) noexcept
+{
+    warningCount = 0;
+    errorCount   = 0;
+    lastDiagnosticMessage.clear();
+
+    std::scoped_lock lock(_diagnosticsMutex);
+    const auto countsIt = _taskDiagnosticCounts.find(taskId);
+    if (countsIt != _taskDiagnosticCounts.end())
+    {
+        warningCount = countsIt->second.first;
+        errorCount   = countsIt->second.second;
+    }
+
+    const auto messageIt = _taskLastDiagnosticMessage.find(taskId);
+    if (messageIt != _taskLastDiagnosticMessage.end())
+    {
+        lastDiagnosticMessage = messageIt->second;
     }
 }
 

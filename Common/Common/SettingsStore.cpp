@@ -3761,6 +3761,224 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
     }
 }
 
+Common::Settings::BatchRenameCaseStyle ParseBatchRenameCaseStyle(std::string_view style) noexcept
+{
+    if (style == "lower")
+    {
+        return Common::Settings::BatchRenameCaseStyle::Lower;
+    }
+    if (style == "upper")
+    {
+        return Common::Settings::BatchRenameCaseStyle::Upper;
+    }
+    if (style == "mixed")
+    {
+        return Common::Settings::BatchRenameCaseStyle::Mixed;
+    }
+    return Common::Settings::BatchRenameCaseStyle::None;
+}
+
+const char* BatchRenameCaseStyleToString(Common::Settings::BatchRenameCaseStyle style) noexcept
+{
+    switch (style)
+    {
+        case Common::Settings::BatchRenameCaseStyle::None: return "none";
+        case Common::Settings::BatchRenameCaseStyle::Lower: return "lower";
+        case Common::Settings::BatchRenameCaseStyle::Upper: return "upper";
+        case Common::Settings::BatchRenameCaseStyle::Mixed: return "mixed";
+    }
+    return "none";
+}
+
+constexpr size_t kMaxBatchRenameHistoryItems = 10u;
+
+void SanitizeBatchRenameHistory(std::vector<std::wstring>& history)
+{
+    std::vector<std::wstring> sanitized;
+    sanitized.reserve(std::min(history.size(), kMaxBatchRenameHistoryItems));
+    for (const std::wstring& rawEntry : history)
+    {
+        std::wstring entry = StripSearchSingleLineControlCharacters(rawEntry);
+        if (entry.empty())
+        {
+            continue;
+        }
+
+        const bool duplicate =
+            std::any_of(sanitized.begin(), sanitized.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, entry); });
+        if (duplicate)
+        {
+            continue;
+        }
+
+        sanitized.push_back(std::move(entry));
+        if (sanitized.size() >= kMaxBatchRenameHistoryItems)
+        {
+            break;
+        }
+    }
+
+    history = std::move(sanitized);
+}
+
+void SanitizeBatchRenameSettings(Common::Settings::BatchRenameSettings& settings)
+{
+    SanitizeBatchRenameHistory(settings.recentMasks);
+    SanitizeBatchRenameHistory(settings.recentNameTemplates);
+    SanitizeBatchRenameHistory(settings.recentSearchPatterns);
+    SanitizeBatchRenameHistory(settings.recentReplacePatterns);
+
+    settings.lastRoot            = StripSearchSingleLineControlCharacters(settings.lastRoot);
+    settings.flattenSeparator    = StripSearchSingleLineControlCharacters(settings.flattenSeparator);
+    settings.previewSortColumnId = StripSearchSingleLineControlCharacters(settings.previewSortColumnId);
+    if (settings.flattenSeparator.empty())
+    {
+        settings.flattenSeparator = Common::Settings::BatchRenameSettings{}.flattenSeparator;
+    }
+}
+
+void ParseBatchRenameSettings(yyjson_val* root, Common::Settings::Settings& out)
+{
+    yyjson_val* batchRename = yyjson_obj_get(root, "batchRename");
+    if (! batchRename || ! yyjson_is_obj(batchRename))
+    {
+        return;
+    }
+
+    Common::Settings::BatchRenameSettings settings;
+
+    auto parseHistory = [&](const char* key, std::vector<std::wstring>& dest)
+    {
+        yyjson_val* arr = yyjson_obj_get(batchRename, key);
+        if (! arr || ! yyjson_is_arr(arr))
+        {
+            return;
+        }
+
+        const size_t count = yyjson_arr_size(arr);
+        dest.reserve(std::min(count, kMaxBatchRenameHistoryItems));
+        for (size_t i = 0; i < count && dest.size() < kMaxBatchRenameHistoryItems; ++i)
+        {
+            yyjson_val* value = yyjson_arr_get(arr, i);
+            if (! value || ! yyjson_is_str(value))
+            {
+                continue;
+            }
+
+            const char* utf8 = yyjson_get_str(value);
+            if (! utf8)
+            {
+                continue;
+            }
+
+            std::wstring text = StripSearchSingleLineControlCharacters(Utf16FromUtf8(utf8));
+            if (text.empty())
+            {
+                continue;
+            }
+
+            const bool duplicate =
+                std::any_of(dest.begin(), dest.end(), [&](const std::wstring& existing) noexcept { return OrdinalString::EqualsNoCase(existing, text); });
+            if (! duplicate)
+            {
+                dest.push_back(std::move(text));
+            }
+        }
+    };
+
+    parseHistory("recentMasks", settings.recentMasks);
+    parseHistory("recentNameTemplates", settings.recentNameTemplates);
+    parseHistory("recentSearchPatterns", settings.recentSearchPatterns);
+    parseHistory("recentReplacePatterns", settings.recentReplacePatterns);
+
+    if (const auto lastRoot = GetString(batchRename, "lastRoot"))
+    {
+        settings.lastRoot = StripSearchSingleLineControlCharacters(Utf16FromUtf8(lastRoot.value()));
+    }
+    GetBool(batchRename, "includeSubdirectories", settings.includeSubdirectories);
+    GetBool(batchRename, "includeFiles", settings.includeFiles);
+    GetBool(batchRename, "includeFolders", settings.includeFolders);
+    GetBool(batchRename, "regexEnabled", settings.regexEnabled);
+    GetBool(batchRename, "caseSensitive", settings.caseSensitive);
+    GetBool(batchRename, "wholeWords", settings.wholeWords);
+    GetBool(batchRename, "replaceOnce", settings.replaceOnce);
+    GetBool(batchRename, "excludeExtension", settings.excludeExtension);
+
+    if (const auto flattenSeparator = GetString(batchRename, "flattenSeparator"))
+    {
+        settings.flattenSeparator = StripSearchSingleLineControlCharacters(Utf16FromUtf8(flattenSeparator.value()));
+    }
+    if (const auto fileNameCaseStyle = GetString(batchRename, "fileNameCaseStyle"))
+    {
+        settings.fileNameCaseStyle = ParseBatchRenameCaseStyle(fileNameCaseStyle.value());
+    }
+    if (const auto extensionCaseStyle = GetString(batchRename, "extensionCaseStyle"))
+    {
+        settings.extensionCaseStyle = ParseBatchRenameCaseStyle(extensionCaseStyle.value());
+    }
+    if (const auto previewSortColumnId = GetString(batchRename, "previewSortColumnId"))
+    {
+        settings.previewSortColumnId = StripSearchSingleLineControlCharacters(Utf16FromUtf8(previewSortColumnId.value()));
+    }
+    GetBool(batchRename, "previewSortDescending", settings.previewSortDescending);
+
+    if (yyjson_val* previewGridLayout = yyjson_obj_get(batchRename, "previewGridLayout"); previewGridLayout && yyjson_is_arr(previewGridLayout))
+    {
+        const size_t entryCount = yyjson_arr_size(previewGridLayout);
+        settings.previewGridLayout.reserve(entryCount);
+        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
+        {
+            yyjson_val* entry = yyjson_arr_get(previewGridLayout, entryIndex);
+            if (! entry || ! yyjson_is_obj(entry))
+            {
+                continue;
+            }
+
+            const auto columnId = GetString(entry, "columnId");
+            if (! columnId.has_value())
+            {
+                continue;
+            }
+
+            Common::Settings::GridColumnLayoutEntry layoutEntry{};
+            layoutEntry.columnId = StripSearchSingleLineControlCharacters(Utf16FromUtf8(columnId.value()));
+            if (layoutEntry.columnId.empty())
+            {
+                continue;
+            }
+
+            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
+            {
+                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
+            }
+            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
+            {
+                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
+            }
+
+            settings.previewGridLayout.push_back(std::move(layoutEntry));
+        }
+    }
+
+    SanitizeBatchRenameSettings(settings);
+
+    const Common::Settings::BatchRenameSettings defaults{};
+    const bool hasNonDefault =
+        ! settings.lastRoot.empty() || ! settings.recentMasks.empty() || ! settings.recentNameTemplates.empty() ||
+        ! settings.recentSearchPatterns.empty() || ! settings.recentReplacePatterns.empty() ||
+        settings.includeSubdirectories != defaults.includeSubdirectories || settings.includeFiles != defaults.includeFiles ||
+        settings.includeFolders != defaults.includeFolders || settings.regexEnabled != defaults.regexEnabled ||
+        settings.caseSensitive != defaults.caseSensitive || settings.wholeWords != defaults.wholeWords ||
+        settings.replaceOnce != defaults.replaceOnce || settings.excludeExtension != defaults.excludeExtension ||
+        settings.flattenSeparator != defaults.flattenSeparator || settings.fileNameCaseStyle != defaults.fileNameCaseStyle ||
+        settings.extensionCaseStyle != defaults.extensionCaseStyle || ! settings.previewSortColumnId.empty() ||
+        settings.previewSortDescending != defaults.previewSortDescending || ! settings.previewGridLayout.empty();
+    if (hasNonDefault)
+    {
+        out.batchRename = std::move(settings);
+    }
+}
+
 HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexcept
 {
     yyjson_val* shortcuts = yyjson_obj_get(root, "shortcuts");
@@ -4935,6 +5153,7 @@ void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
     ParseHotPaths(root, out);
     ParseSelectionMasks(root, out);
     ParseSearchSettings(root, out);
+    ParseBatchRenameSettings(root, out);
 
     out.schemaVersion = 16;
     if (recovery)
@@ -6955,6 +7174,150 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 }
 
                 yyjson_mut_obj_add_val(doc, searchObj, "resultsGridLayout", layoutArr);
+            }
+        }
+    }
+
+    if (settings.batchRename)
+    {
+        Common::Settings::BatchRenameSettings batchRename = settings.batchRename.value();
+        SanitizeBatchRenameSettings(batchRename);
+
+        const Common::Settings::BatchRenameSettings defaults{};
+        const bool wroteBatchRename =
+            ! batchRename.lastRoot.empty() || ! batchRename.recentMasks.empty() || ! batchRename.recentNameTemplates.empty() ||
+            ! batchRename.recentSearchPatterns.empty() || ! batchRename.recentReplacePatterns.empty() ||
+            batchRename.includeSubdirectories != defaults.includeSubdirectories || batchRename.includeFiles != defaults.includeFiles ||
+            batchRename.includeFolders != defaults.includeFolders || batchRename.regexEnabled != defaults.regexEnabled ||
+            batchRename.caseSensitive != defaults.caseSensitive || batchRename.wholeWords != defaults.wholeWords ||
+            batchRename.replaceOnce != defaults.replaceOnce || batchRename.excludeExtension != defaults.excludeExtension ||
+            batchRename.flattenSeparator != defaults.flattenSeparator || batchRename.fileNameCaseStyle != defaults.fileNameCaseStyle ||
+            batchRename.extensionCaseStyle != defaults.extensionCaseStyle || ! batchRename.previewSortColumnId.empty() ||
+            batchRename.previewSortDescending != defaults.previewSortDescending || ! batchRename.previewGridLayout.empty();
+        if (wroteBatchRename)
+        {
+            yyjson_mut_val* batchRenameObj = yyjson_mut_obj(doc);
+            if (! batchRenameObj)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, root, "batchRename", batchRenameObj);
+
+            auto writeHistory = [&](const char* key, const std::vector<std::wstring>& history) -> HRESULT
+            {
+                if (history.empty())
+                {
+                    return S_OK;
+                }
+
+                yyjson_mut_val* arr = yyjson_mut_arr(doc);
+                if (! arr)
+                {
+                    return E_OUTOFMEMORY;
+                }
+                yyjson_mut_obj_add_val(doc, batchRenameObj, key, arr);
+
+                size_t added = 0;
+                for (const auto& entry : history)
+                {
+                    if (entry.empty())
+                    {
+                        continue;
+                    }
+
+                    if (const HRESULT hr = AppendStringArrayValue(doc, arr, entry); FAILED(hr))
+                    {
+                        return hr;
+                    }
+                    ++added;
+                    if (added >= kMaxBatchRenameHistoryItems)
+                    {
+                        break;
+                    }
+                }
+
+                return S_OK;
+            };
+
+            if (! batchRename.lastRoot.empty())
+            {
+                if (const HRESULT hr = AddStringObjectMember(doc, batchRenameObj, "lastRoot", batchRename.lastRoot); FAILED(hr))
+                {
+                    return hr;
+                }
+            }
+            if (const HRESULT hr = writeHistory("recentMasks", batchRename.recentMasks); FAILED(hr))
+            {
+                return hr;
+            }
+            if (const HRESULT hr = writeHistory("recentNameTemplates", batchRename.recentNameTemplates); FAILED(hr))
+            {
+                return hr;
+            }
+            if (const HRESULT hr = writeHistory("recentSearchPatterns", batchRename.recentSearchPatterns); FAILED(hr))
+            {
+                return hr;
+            }
+            if (const HRESULT hr = writeHistory("recentReplacePatterns", batchRename.recentReplacePatterns); FAILED(hr))
+            {
+                return hr;
+            }
+
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "includeSubdirectories", batchRename.includeSubdirectories);
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "includeFiles", batchRename.includeFiles);
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "includeFolders", batchRename.includeFolders);
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "regexEnabled", batchRename.regexEnabled);
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "caseSensitive", batchRename.caseSensitive);
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "wholeWords", batchRename.wholeWords);
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "replaceOnce", batchRename.replaceOnce);
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "excludeExtension", batchRename.excludeExtension);
+            if (const HRESULT hr = AddStringObjectMember(doc, batchRenameObj, "flattenSeparator", batchRename.flattenSeparator); FAILED(hr))
+            {
+                return hr;
+            }
+            yyjson_mut_obj_add_str(doc, batchRenameObj, "fileNameCaseStyle", BatchRenameCaseStyleToString(batchRename.fileNameCaseStyle));
+            yyjson_mut_obj_add_str(doc, batchRenameObj, "extensionCaseStyle", BatchRenameCaseStyleToString(batchRename.extensionCaseStyle));
+
+            if (! batchRename.previewSortColumnId.empty())
+            {
+                if (const HRESULT hr = AddStringObjectMember(doc, batchRenameObj, "previewSortColumnId", batchRename.previewSortColumnId); FAILED(hr))
+                {
+                    return hr;
+                }
+            }
+            yyjson_mut_obj_add_bool(doc, batchRenameObj, "previewSortDescending", batchRename.previewSortDescending);
+
+            if (! batchRename.previewGridLayout.empty())
+            {
+                yyjson_mut_val* layoutArr = yyjson_mut_arr(doc);
+                if (! layoutArr)
+                {
+                    return E_OUTOFMEMORY;
+                }
+
+                for (const auto& entry : batchRename.previewGridLayout)
+                {
+                    if (entry.columnId.empty())
+                    {
+                        continue;
+                    }
+
+                    yyjson_mut_val* layoutObj = yyjson_mut_obj(doc);
+                    if (! layoutObj)
+                    {
+                        return E_OUTOFMEMORY;
+                    }
+
+                    if (const HRESULT hr = AddStringObjectMember(doc, layoutObj, "columnId", entry.columnId); FAILED(hr))
+                    {
+                        return hr;
+                    }
+                    yyjson_mut_obj_add_uint(doc, layoutObj, "displayIndex", entry.displayIndex);
+                    yyjson_mut_obj_add_real(doc, layoutObj, "widthDip", entry.widthDip);
+                    yyjson_mut_arr_add_val(layoutArr, layoutObj);
+                }
+
+                yyjson_mut_obj_add_val(doc, batchRenameObj, "previewGridLayout", layoutArr);
             }
         }
     }

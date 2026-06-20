@@ -138,9 +138,15 @@ LRESULT FolderView::OnSetFocusMessage() noexcept
     return 0;
 }
 
-LRESULT FolderView::OnKillFocusMessage() noexcept
+LRESULT FolderView::OnKillFocusMessage(HWND newFocus) noexcept
 {
-    ExitIncrementalSearch();
+    // WM_KILLFOCUS may carry a null target during transient activation holes.
+    // Preserve integrated Quick Search until focus moves outside the folder view.
+    const bool focusStayedInView = _hWnd && newFocus != nullptr && (newFocus == _hWnd.get() || IsChild(_hWnd.get(), newFocus) != FALSE);
+    if (newFocus != nullptr && ! focusStayedInView)
+    {
+        ExitIncrementalSearch();
+    }
 
     if (! _hWnd)
     {
@@ -151,6 +157,22 @@ LRESULT FolderView::OnKillFocusMessage() noexcept
     if (parent)
     {
         PostMessageW(parent, WndMsg::kPaneFocusChanged, 0, 0);
+        if (newFocus == nullptr && _incrementalSearch.active)
+        {
+            HWND restoreTarget = parent;
+            const HWND root    = GetAncestor(parent, GA_ROOT);
+            if (root && IsWindow(root) != FALSE)
+            {
+                DWORD foregroundProcessId = 0;
+                const HWND foreground     = GetForegroundWindow();
+                if (! foreground ||
+                    (GetWindowThreadProcessId(foreground, &foregroundProcessId) != 0 && foregroundProcessId == GetCurrentProcessId()))
+                {
+                    restoreTarget = root;
+                }
+            }
+            static_cast<void>(PostMessageW(restoreTarget, WndMsg::kPaneRestoreFolderFocus, 0, 0));
+        }
     }
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
     return 0;
@@ -986,7 +1008,16 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
             break;
         case VK_F2:
             ExitIncrementalSearch();
-            RenameFocusedItem();
+            // Match FolderWindow::CommandRename: a multi-item selection opens Batch Rename for the
+            // selection (empty target path), a single item keeps the inline rename prompt.
+            if (_batchRenameRequestCallback && GetSelectedPaths().size() > 1u)
+            {
+                _batchRenameRequestCallback({}, false);
+            }
+            else
+            {
+                RenameFocusedItem();
+            }
             break;
     }
 }

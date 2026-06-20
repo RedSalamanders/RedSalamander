@@ -7,8 +7,10 @@
 #include "RedConfigureApp.h"
 #include "RedConfigureRoot.h"
 #include "RedConfigureSession.h"
+#include "RedConfigureSplashScreen.h"
 #include "SettingsStore.h"
 #include "resource.h"
+#include "Helpers.h"
 
 #include <algorithm>
 #include <array>
@@ -63,6 +65,7 @@ public:
 
     [[nodiscard]] HWND Create(int showCommand) noexcept
     {
+        Debug::Perf::Scope createPerf(L"redconfigure.startup.create_window_us");
         HICON icon = ::LoadIconW(_instance, MAKEINTRESOURCEW(IDI_REDCONFIGURE_APP));
         if (! icon)
         {
@@ -169,6 +172,8 @@ private:
 
     [[nodiscard]] bool OnCreate()
     {
+        Debug::Perf::Scope createPerf(L"redconfigure.startup.on_create_us");
+        RedConfigure::SplashScreen::SetOwner(_hwnd);
         if (! _dxHost.Attach(_hwnd))
         {
             return false;
@@ -176,6 +181,7 @@ private:
 
         _dxHost.SetTheme(RedSalamander::DxUi::MakeDefaultThemePalette(false));
 
+        SetSplashStatus(IDS_REDCONFIGURE_SPLASH_STATUS_DETECTING_WORKSPACE);
         std::filesystem::path root;
         std::array<wchar_t, 32768> modulePath{};
         const DWORD moduleLength = ::GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
@@ -200,10 +206,22 @@ private:
         _dxHost.SetRoot(std::move(ui.control));
         if (_rootController)
         {
+            SetSplashStatus(IDS_REDCONFIGURE_SPLASH_STATUS_LOADING_WORKSPACE);
+            Debug::Perf::Scope reloadPerf(L"redconfigure.startup.workspace_reload_us");
             _rootController->ReloadWorkspaceFromFields();
         }
         Layout();
+        SetSplashStatus(IDS_REDCONFIGURE_SPLASH_STATUS_OPENING_WORKBENCH);
         return _dxHost.PrimeForShow();
+    }
+
+    void SetSplashStatus(UINT resourceId) const
+    {
+        const std::wstring status = LoadAppString(_instance, resourceId);
+        if (! status.empty())
+        {
+            RedConfigure::SplashScreen::IfExistSetText(status);
+        }
     }
 
     void Layout() noexcept
@@ -231,6 +249,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
         return 1;
     }
 
+    RedConfigure::SplashScreen::BeginImmediateOpen(instance, LoadAppString(instance, IDS_REDCONFIGURE_SPLASH_STATUS_STARTING));
+    const auto closeSplash = wil::scope_exit([]() noexcept
+    {
+        RedConfigure::SplashScreen::CloseIfExist();
+    });
+
     MainWindow window(instance);
     wil::unique_hwnd hwnd(window.Create(showCommand));
     if (! hwnd)
@@ -243,6 +267,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand)
         }
         return 1;
     }
+
+    RedConfigure::SplashScreen::CloseIfExist();
 
     MSG msg{};
     while (::GetMessageW(&msg, nullptr, 0, 0) > 0)

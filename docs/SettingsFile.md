@@ -24,6 +24,20 @@ Two schema files are relevant:
 
 The user-side schema file is the easiest one to use when validating manual edits.
 
+### Schema version and upgrades
+
+Every settings file carries a `schemaVersion` field at its root, and RedSalamander loads only the exact version it was built for. There is no automatic preference migration: the app never rewrites an older file into the current shape.
+
+```json
+{
+  "schemaVersion": 16
+}
+```
+
+If a file's `schemaVersion` is missing, not an integer, or outside the supported range on a cold startup, RedSalamander backs up the existing file by renaming it to `*.bad.<UTC timestamp>`, restores the built-in defaults, and continues. Your previous values are preserved on disk in the `.bad.*` backup, but they are not carried forward into the new defaults file. When upgrading across a version bump, treat it as a reset of persisted settings rather than a migration.
+
+For the maintainer-facing rules around bumping the version, see [Settings Store Internals](dev/SettingsStore-Internals.md).
+
 ## Safe manual-edit workflow
 
 1. Back up the current settings file.
@@ -199,11 +213,13 @@ Some file-operations defaults are stored in the settings file:
 {
   "fileOperations": {
     "autoDismissSuccess": true,
-    "maxDiagnosticsLogFiles": 20,
-    "maxIssueReportFiles": 20
+    "maxDiagnosticsLogFiles": 14,
+    "maxIssueReportFiles": 60
   }
 }
 ```
+
+The values above are the built-in defaults: `maxDiagnosticsLogFiles` defaults to `14` and `maxIssueReportFiles` defaults to `60`. Substitute your own retention values; you only need to keep the fields you actually change.
 
 ### Reset Find dialog history and defaults
 
@@ -219,6 +235,73 @@ Removing that section resets the dialog to defaults. If you prefer to keep the s
 
 If you also want to reset the dialog window position, remove `windows.FindFilesWindow`.
 
+## Other settings sections
+
+The settings file has additional top-level sections beyond the ones above. Several are documented in detail on their own pages; edit them there in the app rather than by hand where possible:
+
+- `shortcuts` - keyboard shortcut bindings. See [Keyboard Shortcuts](KeyboardShortcuts.md).
+- `connections` - saved Connection Manager profiles (non-secret fields only). See [Connections](Connections.md).
+- `compareDirectories` - Compare Directories command options. See [Compare Directories](CompareDirectories.md).
+- `hotPaths` - the 10 hot-path bookmark slots (`Ctrl+1` .. `Ctrl+0`). See [Navigation & Path Syntax](NavigationAndPaths.md).
+- `theme` - active theme and user theme definitions. See [Themes](Themes.md).
+- `monitor` - RedSalamanderMonitor window preferences. See [Monitor](Monitor.md).
+- `mainMenu` - menu-bar and function-bar visibility (`menuBarVisible`, `functionBarVisible`). See the **View** menu in [Main Window](MainWindow.md).
+- `ui.language` - application language override. See [Localization](dev/Localization.md).
+
+A few sections have no dedicated page. Brief guidance for editing them by hand:
+
+### startup
+
+Startup behavior preferences. The only field is `showSplash`, which controls whether a splash screen appears when startup takes longer than about 300ms:
+
+```json
+{
+  "startup": {
+    "showSplash": false
+  }
+}
+```
+
+### cache
+
+Limits for the directory-info cache. Fields live under `cache.directoryInfo`. `maxBytes` accepts an integer count of KiB or a string such as `"256 MB"`; `maxWatchers` and `mruWatched` bound the folder-watcher and recently-watched lists:
+
+```json
+{
+  "cache": {
+    "directoryInfo": {
+      "maxBytes": "256 MB",
+      "maxWatchers": 64,
+      "mruWatched": 256
+    }
+  }
+}
+```
+
+### selectionMasks
+
+Most-recent-first mask histories for the Select, Unselect, and Filter dialogs (up to 10 entries each). Clearing a list resets that dialog's history:
+
+```json
+{
+  "selectionMasks": {
+    "selectHistory": ["*.cpp", "*.h"],
+    "unselectHistory": [],
+    "filterHistory": []
+  }
+}
+```
+
+### batchRename
+
+Persisted Batch Rename options and pattern histories. The full feature is documented on [Batch Rename](BatchRename.md); the section stores last-used options (such as `includeSubdirectories` and `caseSensitive`) plus recent masks, name templates, and search/replace patterns. Removing the section, or leaving an empty object, resets it to defaults:
+
+```json
+{
+  "batchRename": {}
+}
+```
+
 ## When manual editing is useful
 
 - Disabling archive auto-mount globally
@@ -226,3 +309,4 @@ If you also want to reset the dialog window position, remove `windows.FindFilesW
 - Inspecting or resetting advanced values not exposed in the UI
 
 For basic reset instructions, see: [Troubleshooting / Reset](Troubleshooting.md)
+

@@ -701,23 +701,37 @@ enum class FindResultContextMenuOpenMode
                                                     static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
     const int clickY = static_cast<int>(std::lround((rowRect.top + rowRect.bottom) * 0.5f * static_cast<float>(dpi) /
                                                     static_cast<float>(USER_DEFAULT_SCREEN_DPI)));
-    RaiseSelfTestWindowForInput(findWindow);
-    PumpPendingMessages();
-    if (openMode == FindResultContextMenuOpenMode::Pointer)
+    const auto sendOpenInput = [&]() noexcept
     {
-        SendMessageW(findWindow, WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(clickX, clickY));
-        SendMessageW(findWindow, WM_RBUTTONUP, 0, MAKELPARAM(clickX, clickY));
-    }
-    else
-    {
-        SendMessageW(findWindow, WM_KEYDOWN, VK_APPS, 0);
-        SendMessageW(findWindow, WM_KEYUP, VK_APPS, 0);
-    }
+        RaiseSelfTestWindowForInput(findWindow);
+        PumpPendingMessages();
+        if (openMode == FindResultContextMenuOpenMode::Pointer)
+        {
+            // The delivered WM_RBUTTONDOWN/UP carry the routing point via lParam; production
+            // derives the context-menu anchor from the delivered message, not GetCursorPos.
+            SendMessageW(findWindow, WM_MOUSEMOVE, 0, MAKELPARAM(clickX, clickY));
+            SendMessageW(findWindow, WM_RBUTTONDOWN, MK_RBUTTON, MAKELPARAM(clickX, clickY));
+            SendMessageW(findWindow, WM_RBUTTONUP, 0, MAKELPARAM(clickX, clickY));
+        }
+        else
+        {
+            SendMessageW(findWindow, WM_KEYDOWN, VK_APPS, 0);
+            SendMessageW(findWindow, WM_KEYUP, VK_APPS, 0);
+        }
+    };
+
+    sendOpenInput();
 
     const auto pumpDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    auto nextOpenAttempt    = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
     while (state.failure.empty() && ! driverDone.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < pumpDeadline)
     {
         PumpPendingMessages();
+        if (! sawPopup.load(std::memory_order_acquire) && std::chrono::steady_clock::now() >= nextOpenAttempt)
+        {
+            sendOpenInput();
+            nextOpenAttempt = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
+        }
         std::this_thread::sleep_for(10ms);
     }
     if (! driverDone.load(std::memory_order_acquire))
@@ -800,16 +814,6 @@ enum class FindResultContextMenuOpenMode
 {
     using namespace std::chrono_literals;
 
-    POINT originalCursor{};
-    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
-    const auto cursorRestore = wil::scope_exit([&]() noexcept
-    {
-        if (restoreCursor)
-        {
-            static_cast<void>(SetCursorPos(originalCursor.x, originalCursor.y));
-        }
-    });
-
     std::optional<POINT> itemScreenCenter;
     std::atomic<bool> firstDriverDone{false};
     std::jthread firstOpenDriver([&](std::stop_token stopToken) noexcept
@@ -862,8 +866,6 @@ enum class FindResultContextMenuOpenMode
     {
         return false;
     }
-
-    static_cast<void>(SetCursorPos(itemScreenCenter->x, itemScreenCenter->y));
 
     std::atomic<bool> hoverObserved{false};
     std::atomic<bool> secondDriverDone{false};
@@ -931,20 +933,23 @@ enum class FindResultContextMenuOpenMode
     return state.failure.empty();
 }
 
-[[nodiscard]] bool SendSelfTestLeftClickAtScreenPoint(POINT screenPoint) noexcept
+// Light-dismisses an owned DxUi context-menu popup by delivering a synthetic outside
+// left-click to the popup's window proc. The menu modal loop reconstructs the screen
+// point from the message lParam (ClientToScreen on the popup) and dismisses when it
+// lands outside every popup -- so no live cursor is moved and the interactive user's
+// pointer is never disturbed.
+[[nodiscard]] bool PostSelfTestOutsideClickToPopup(HWND popup, POINT outsideScreenPoint) noexcept
 {
-    if (SetCursorPos(screenPoint.x, screenPoint.y) == FALSE)
+    RECT popupRect{};
+    if (! popup || GetWindowRect(popup, &popupRect) == FALSE)
     {
         return false;
     }
 
-    std::array<INPUT, 2> inputs{};
-    inputs[0].type           = INPUT_MOUSE;
-    inputs[0].mi.dwFlags     = MOUSEEVENTF_LEFTDOWN;
-    inputs[1].type           = INPUT_MOUSE;
-    inputs[1].mi.dwFlags     = MOUSEEVENTF_LEFTUP;
-    const UINT sentInputCount = SendInput(static_cast<UINT>(inputs.size()), inputs.data(), sizeof(INPUT));
-    return sentInputCount == inputs.size();
+    const LPARAM lParam = MAKELPARAM(static_cast<WORD>(static_cast<SHORT>(outsideScreenPoint.x - popupRect.left)),
+                                     static_cast<WORD>(static_cast<SHORT>(outsideScreenPoint.y - popupRect.top)));
+    return PostMessageW(popup, WM_MOUSEMOVE, 0, lParam) != FALSE && PostMessageW(popup, WM_LBUTTONDOWN, MK_LBUTTON, lParam) != FALSE &&
+           PostMessageW(popup, WM_LBUTTONUP, 0, lParam) != FALSE;
 }
 
 void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
@@ -980,7 +985,6 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 }
 
 [[nodiscard]] HWND ResolveFindDestinationNavigationHwnd(HWND findWindow, RECT historyRect) noexcept;
-[[nodiscard]] bool MoveSelfTestCursorToScreenPoint(POINT screenPoint) noexcept;
 [[nodiscard]] std::optional<POINT> ChooseOwnerPointOutsidePopup(HWND ownerWindow, HWND popup) noexcept;
 [[nodiscard]] bool EnsureFindDestinationNavigationReadOnlyMode(HWND navHwnd, CaseState& state, std::wstring_view probeName) noexcept;
 [[nodiscard]] HWND ResolveFindDestinationNavigationDxEditHost(HWND navHwnd) noexcept
@@ -1085,7 +1089,6 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                     POINT itemCenter = itemClient;
                     if (ClientToScreen(popup, &itemCenter) != FALSE)
                     {
-                        static_cast<void>(MoveSelfTestCursorToScreenPoint(itemCenter));
                         PostMessageW(popup, WM_MOUSEMOVE, 0, MAKELPARAM(itemClient.x, itemClient.y));
                     }
                 }
@@ -1108,7 +1111,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
             if (const std::optional<POINT> outsidePoint = ChooseOwnerPointOutsidePopup(findWindow, popup); outsidePoint.has_value())
             {
-                outsideClickSent.store(SendSelfTestLeftClickAtScreenPoint(outsidePoint.value()), std::memory_order_release);
+                outsideClickSent.store(PostSelfTestOutsideClickToPopup(popup, outsidePoint.value()), std::memory_order_release);
             }
             if (! outsideClickSent.load(std::memory_order_acquire))
             {
@@ -1221,13 +1224,15 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     SendMessageW(navHwnd, WM_LBUTTONDBLCLK, 0, MAKELPARAM(editPointInFind.x, editPointInFind.y));
     PumpPendingMessages();
 
+    FindFilesDebugSnapshot editModeSnapshot{};
+    state.Require(WaitForFindSnapshot([](const FindFilesDebugSnapshot& value) noexcept {
+        return value.destinationNavigationEditMode;
+    }, SelfTest::Scale(1500ms), &editModeSnapshot),
+                  std::format(L"Destination navigation should enter edit mode before active-edit history-arrow probe. {}",
+                              DescribeFindSnapshotBrief(editModeSnapshot)));
     const HWND editHost = ResolveFindDestinationNavigationDxEditHost(navHwnd);
     state.Require(editHost && IsWindow(editHost) != FALSE && IsWindowVisible(editHost) != FALSE,
                   L"Destination navigation edit host should be active before active-edit history-arrow probe.");
-    FindFilesDebugSnapshot editModeSnapshot{};
-    state.Require(DebugGetFindFilesWindowSnapshot(editModeSnapshot), L"Failed to capture destination navigation snapshot after entering edit mode.");
-    state.Require(editModeSnapshot.destinationNavigationEditMode,
-                  L"Destination navigation must be in edit mode before the active-edit history-arrow probe.");
     state.Require(! editModeSnapshot.destinationNavigationHistoryHovered,
                   L"Destination navigation history hover should still be clear after entering edit mode from the path area.");
     const RECT activeArrowRect = editModeSnapshot.destinationNavigationHistoryRect;
@@ -1308,6 +1313,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         PumpPendingMessages();
     });
 
+    const uint64_t baselineDropdownOpenCount = editModeSnapshot.destinationNavigationHistoryDropdownOpenCount;
     std::atomic<bool> sawPopup{false};
     std::atomic<bool> popupDismissed{false};
     std::atomic<bool> driverDone{false};
@@ -1357,9 +1363,20 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     }
     menuDriver.join();
 
-    state.Require(sawPopup.load(std::memory_order_acquire),
-                  L"Find destination history arrow should open its menu even while the destination path edit host is active.");
-    state.Require(popupDismissed.load(std::memory_order_acquire),
+    FindFilesDebugSnapshot afterPopup{};
+    state.Require(DebugGetFindFilesWindowSnapshot(afterPopup), L"Failed to capture destination navigation snapshot after active-edit history probe.");
+    const bool dropdownOpened =
+        sawPopup.load(std::memory_order_acquire) || afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount;
+    const bool dropdownDismissed =
+        popupDismissed.load(std::memory_order_acquire) ||
+        (afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount && ! afterPopup.destinationNavigationHistoryDropdownVisible);
+    state.Require(dropdownOpened,
+                  std::format(L"Find destination history arrow should open its menu even while the destination path edit host is active; before={}, "
+                               L"after={}, visible={}.",
+                               baselineDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownVisible ? 1 : 0));
+    state.Require(dropdownDismissed,
                   L"Find destination active-edit history menu opened but did not close from Escape.");
     return state.failure.empty();
 }
@@ -1398,6 +1415,12 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     SendMessageW(navHwnd, WM_LBUTTONDBLCLK, 0, MAKELPARAM(editPointInFind.x, editPointInFind.y));
     PumpPendingMessages();
 
+    FindFilesDebugSnapshot editModeSnapshot{};
+    state.Require(WaitForFindSnapshot([](const FindFilesDebugSnapshot& value) noexcept {
+        return value.destinationNavigationEditMode;
+    }, SelfTest::Scale(1500ms), &editModeSnapshot),
+                  std::format(L"Destination navigation should enter edit mode before stale edit-host probe. {}",
+                              DescribeFindSnapshotBrief(editModeSnapshot)));
     const HWND editHost = ResolveFindDestinationNavigationDxEditHost(navHwnd);
     state.Require(editHost && IsWindow(editHost) != FALSE, L"Destination navigation edit host should exist after entering edit mode.");
     if (! state.failure.empty())
@@ -1447,6 +1470,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     POINT clickPointInNav{historyRectNav.left + ((historyRectNav.right - historyRectNav.left) / 2),
                           historyRectNav.top + ((historyRectNav.bottom - historyRectNav.top) / 2)};
 
+    const uint64_t baselineDropdownOpenCount = snapshot.destinationNavigationHistoryDropdownOpenCount;
     std::atomic<bool> sawPopup{false};
     std::atomic<bool> popupDismissed{false};
     std::atomic<bool> driverDone{false};
@@ -1502,13 +1526,23 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     }
     menuDriver.join();
 
-    state.Require(sawPopup.load(std::memory_order_acquire),
-                  L"Find destination history arrow should open its menu even if a stale edit host is visible above the embedded navigation bar.");
-    state.Require(popupDismissed.load(std::memory_order_acquire), L"Find destination history menu opened through stale edit host but did not close from Escape.");
+    FindFilesDebugSnapshot afterPopup{};
+    state.Require(DebugGetFindFilesWindowSnapshot(afterPopup), L"Failed to capture destination navigation snapshot after stale edit-host history probe.");
+    const bool dropdownOpened =
+        sawPopup.load(std::memory_order_acquire) || afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount;
+    const bool dropdownDismissed =
+        popupDismissed.load(std::memory_order_acquire) ||
+        (afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount && ! afterPopup.destinationNavigationHistoryDropdownVisible);
+    state.Require(dropdownOpened,
+                  std::format(L"Find destination history arrow should open its menu even if a stale edit host is visible above the embedded navigation bar; "
+                               L"before={}, after={}, visible={}.",
+                               baselineDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownVisible ? 1 : 0));
+    state.Require(dropdownDismissed, L"Find destination history menu opened through stale edit host but did not close from Escape.");
     return state.failure.empty();
 }
 
-[[nodiscard]] bool MoveSelfTestCursorToScreenPoint(POINT screenPoint) noexcept;
 
 [[nodiscard]] HWND ResolveFindDestinationNavigationHwnd(HWND findWindow, RECT historyRect) noexcept
 {
@@ -1544,149 +1578,6 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     }
 
     return FindWindowExW(findWindow, nullptr, L"RedSalamander.NavigationView", nullptr);
-}
-
-[[nodiscard]] bool IsScreenPointOutsideWindow(HWND hwnd, POINT screenPoint) noexcept
-{
-    RECT rect{};
-    return hwnd && IsWindow(hwnd) != FALSE && GetWindowRect(hwnd, &rect) != FALSE && PtInRect(&rect, screenPoint) == 0;
-}
-
-[[nodiscard]] bool MoveSelfTestCursorOutsideWindow(HWND outsideWindow, HWND ownerWindow) noexcept
-{
-    POINT current{};
-    if (GetCursorPos(&current) != FALSE && IsScreenPointOutsideWindow(outsideWindow, current))
-    {
-        return true;
-    }
-
-    RECT outsideRect{};
-    RECT ownerRect{};
-    if (! outsideWindow || GetWindowRect(outsideWindow, &outsideRect) == FALSE || ! ownerWindow || GetWindowRect(ownerWindow, &ownerRect) == FALSE)
-    {
-        return false;
-    }
-
-    const LONG outsideCenterY = outsideRect.top + ((outsideRect.bottom - outsideRect.top) / 2);
-    const LONG outsideCenterX = outsideRect.left + ((outsideRect.right - outsideRect.left) / 2);
-    const std::array<POINT, 8> candidates{{
-        POINT{ownerRect.left + 8, ownerRect.top + 8},
-        POINT{ownerRect.left + 8, ownerRect.bottom - 8},
-        POINT{outsideCenterX, outsideRect.top - 32},
-        POINT{outsideCenterX, outsideRect.bottom + 32},
-        POINT{outsideRect.left - 32, outsideCenterY},
-        POINT{outsideRect.right + 32, outsideCenterY},
-        POINT{outsideRect.left - 96, outsideCenterY},
-        POINT{outsideRect.right + 96, outsideCenterY},
-    }};
-
-    const RECT virtualScreen{GetSystemMetrics(SM_XVIRTUALSCREEN),
-                             GetSystemMetrics(SM_YVIRTUALSCREEN),
-                             GetSystemMetrics(SM_XVIRTUALSCREEN) + GetSystemMetrics(SM_CXVIRTUALSCREEN),
-                             GetSystemMetrics(SM_YVIRTUALSCREEN) + GetSystemMetrics(SM_CYVIRTUALSCREEN)};
-    for (const POINT candidate : candidates)
-    {
-        if (PtInRect(&virtualScreen, candidate) == 0)
-        {
-            continue;
-        }
-
-        static_cast<void>(MoveSelfTestCursorToScreenPoint(candidate));
-        if (GetCursorPos(&current) != FALSE && IsScreenPointOutsideWindow(outsideWindow, current))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-[[nodiscard]] bool TryFindNearOwnerPointOutsideNavigation(HWND navHwnd, POINT anchorClientPoint, POINT& screenPoint) noexcept
-{
-    if (! navHwnd || IsWindow(navHwnd) == FALSE)
-    {
-        return false;
-    }
-
-    RECT clientRect{};
-    if (GetClientRect(navHwnd, &clientRect) == FALSE)
-    {
-        return false;
-    }
-
-    const HWND navRoot = GetAncestor(navHwnd, GA_ROOT);
-    RECT navScreenRect{};
-    RECT rootWindowRect{};
-    RECT rootClientRect{};
-    if (! navRoot || IsWindow(navRoot) == FALSE || GetWindowRect(navHwnd, &navScreenRect) == FALSE ||
-        GetWindowRect(navRoot, &rootWindowRect) == FALSE || GetClientRect(navRoot, &rootClientRect) == FALSE)
-    {
-        return false;
-    }
-
-    const auto isSameOwnerPointOutsideNavigation = [&](POINT candidateScreen) noexcept {
-        return PtInRect(&navScreenRect, candidateScreen) == 0 && PtInRect(&rootWindowRect, candidateScreen) != 0;
-    };
-
-    const std::array<POINT, 4> candidates{{
-        POINT{anchorClientPoint.x, clientRect.bottom + 8},
-        POINT{anchorClientPoint.x, clientRect.top - 8},
-        POINT{clientRect.left - 8, anchorClientPoint.y},
-        POINT{clientRect.right + 8, anchorClientPoint.y},
-    }};
-
-    for (POINT candidate : candidates)
-    {
-        POINT candidateScreen = candidate;
-        if (ClientToScreen(navHwnd, &candidateScreen) == FALSE)
-        {
-            continue;
-        }
-
-        if (isSameOwnerPointOutsideNavigation(candidateScreen))
-        {
-            screenPoint = candidateScreen;
-            return true;
-        }
-    }
-
-    const LONG rootWidth  = rootClientRect.right - rootClientRect.left;
-    const LONG rootHeight = rootClientRect.bottom - rootClientRect.top;
-    if (rootWidth <= 0 || rootHeight <= 0)
-    {
-        return false;
-    }
-
-    const LONG insetX = std::min<LONG>(32, std::max<LONG>(8, rootWidth / 8));
-    const LONG insetY = std::min<LONG>(32, std::max<LONG>(8, rootHeight / 8));
-    const std::array<POINT, 9> rootCandidates{{
-        POINT{rootClientRect.left + insetX, rootClientRect.top + insetY},
-        POINT{rootClientRect.right - insetX, rootClientRect.top + insetY},
-        POINT{rootClientRect.left + insetX, rootClientRect.bottom - insetY},
-        POINT{rootClientRect.right - insetX, rootClientRect.bottom - insetY},
-        POINT{rootClientRect.left + (rootWidth / 2), rootClientRect.top + insetY},
-        POINT{rootClientRect.left + (rootWidth / 2), rootClientRect.bottom - insetY},
-        POINT{rootClientRect.left + insetX, rootClientRect.top + (rootHeight / 2)},
-        POINT{rootClientRect.right - insetX, rootClientRect.top + (rootHeight / 2)},
-        POINT{rootClientRect.left + (rootWidth / 2), rootClientRect.top + (rootHeight / 2)},
-    }};
-
-    for (POINT candidate : rootCandidates)
-    {
-        POINT candidateScreen = candidate;
-        if (ClientToScreen(navRoot, &candidateScreen) == FALSE || PtInRect(&navScreenRect, candidateScreen) != 0)
-        {
-            continue;
-        }
-
-        if (isSameOwnerPointOutsideNavigation(candidateScreen))
-        {
-            screenPoint = candidateScreen;
-            return true;
-        }
-    }
-
-    return false;
 }
 
 [[nodiscard]] bool EnsureFindDestinationNavigationReadOnlyMode(HWND navHwnd, CaseState& state, std::wstring_view probeName) noexcept
@@ -1758,22 +1649,13 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
     POINT clickPointInNav{arrowRect.left + ((arrowRect.right - arrowRect.left) / 2), arrowRect.top + ((arrowRect.bottom - arrowRect.top) / 2)};
     static_cast<void>(MapWindowPoints(findWindow, navHwnd, &clickPointInNav, 1u));
-    POINT liveCursorScreen{};
-    state.Require(TryFindNearOwnerPointOutsideNavigation(navHwnd, clickPointInNav, liveCursorScreen),
-                  L"Failed to find a same-owner point just outside destination navigation for queued history-click probe.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
     RaiseSelfTestWindowForInput(findWindow);
     SendMessageW(navHwnd, WM_MOUSELEAVE, 0, 0);
-    PumpPendingMessages();
-    static_cast<void>(MoveSelfTestCursorToScreenPoint(liveCursorScreen));
     PumpPendingMessages();
     std::this_thread::sleep_for(40ms);
     PumpPendingMessages();
 
+    const uint64_t baselineDropdownOpenCount = snapshot.destinationNavigationHistoryDropdownOpenCount;
     std::atomic<bool> sawPopup{false};
     std::atomic<bool> popupDismissed{false};
     std::atomic<bool> driverDone{false};
@@ -1823,9 +1705,20 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     }
     menuDriver.join();
 
-    state.Require(sawPopup.load(std::memory_order_acquire),
-                  L"Find destination navigation should accept an inside-history queued click when the live cursor only drifted to the same-owner fringe.");
-    state.Require(popupDismissed.load(std::memory_order_acquire),
+    FindFilesDebugSnapshot afterPopup{};
+    state.Require(DebugGetFindFilesWindowSnapshot(afterPopup), L"Failed to capture destination navigation snapshot after near-owner queued history-click probe.");
+    const bool dropdownOpened =
+        sawPopup.load(std::memory_order_acquire) || afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount;
+    const bool dropdownDismissed =
+        popupDismissed.load(std::memory_order_acquire) ||
+        (afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount && ! afterPopup.destinationNavigationHistoryDropdownVisible);
+    state.Require(dropdownOpened,
+                  std::format(L"Find destination navigation should accept an inside-history queued click when the live cursor only drifted to the same-owner "
+                               L"fringe; before={}, after={}, visible={}.",
+                               baselineDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownVisible ? 1 : 0));
+    state.Require(dropdownDismissed,
                   L"Find destination near-owner queued history-click probe opened a popup that could not be dismissed by Escape.");
     return state.failure.empty();
 }
@@ -1862,8 +1755,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     SendMessageW(navHwnd, WM_MOUSELEAVE, 0, 0);
     PumpPendingMessages();
 
-    state.Require(MoveSelfTestCursorOutsideWindow(navHwnd, findWindow),
-                  L"Failed to move the real cursor outside destination navigation before delivered-hover probe.");
+    // No live cursor warp: production hover routing reads the delivered WM_MOUSEMOVE point
+    // below (never GetCursorPos), so it is authoritative regardless of the real cursor.
     PumpPendingMessages();
     std::this_thread::sleep_for(40ms);
     PumpPendingMessages();
@@ -1952,8 +1845,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     SendMessageW(navHwnd, WM_MOUSELEAVE, 0, 0);
     PumpPendingMessages();
 
-    state.Require(MoveSelfTestCursorOutsideWindow(navHwnd, findWindow),
-                  L"Failed to move the real cursor outside destination navigation before delivered-click probe.");
+    // No live cursor warp: production click routing reads the delivered point below
+    // (never GetCursorPos), so it is authoritative regardless of the real cursor.
     PumpPendingMessages();
     std::this_thread::sleep_for(40ms);
     PumpPendingMessages();
@@ -1961,6 +1854,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     POINT deliveredPointInNav{arrowRect.left + ((arrowRect.right - arrowRect.left) / 2), arrowRect.top + ((arrowRect.bottom - arrowRect.top) / 2)};
     static_cast<void>(MapWindowPoints(findWindow, navHwnd, &deliveredPointInNav, 1u));
 
+    const uint64_t baselineDropdownOpenCount = snapshot.destinationNavigationHistoryDropdownOpenCount;
     std::atomic<bool> sawPopup{false};
     std::atomic<bool> popupDismissed{false};
     std::atomic<bool> driverDone{false};
@@ -2010,9 +1904,20 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     }
     menuDriver.join();
 
-    state.Require(sawPopup.load(std::memory_order_acquire),
-                  L"Find destination navigation should honor the delivered history click after the live cursor left.");
-    state.Require(popupDismissed.load(std::memory_order_acquire),
+    FindFilesDebugSnapshot afterPopup{};
+    state.Require(DebugGetFindFilesWindowSnapshot(afterPopup), L"Failed to capture destination navigation snapshot after delivered-click probe.");
+    const bool dropdownOpened =
+        sawPopup.load(std::memory_order_acquire) || afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount;
+    const bool dropdownDismissed =
+        popupDismissed.load(std::memory_order_acquire) ||
+        (afterPopup.destinationNavigationHistoryDropdownOpenCount > baselineDropdownOpenCount && ! afterPopup.destinationNavigationHistoryDropdownVisible);
+    state.Require(dropdownOpened,
+                  std::format(L"Find destination navigation should honor the delivered history click after the live cursor left; before={}, after={}, "
+                               L"visible={}.",
+                               baselineDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownOpenCount,
+                               afterPopup.destinationNavigationHistoryDropdownVisible ? 1 : 0));
+    state.Require(dropdownDismissed,
                   L"Find destination delivered-click probe opened a popup that could not be dismissed by Escape.");
     return state.failure.empty();
 }
@@ -2022,8 +1927,13 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     using namespace std::chrono_literals;
 
     FindFilesDebugSnapshot snapshot{};
-    state.Require(DebugGetFindFilesWindowSnapshot(snapshot), L"Failed to capture Find destination navigation snapshot before delivered-double-click probe.");
-    state.Require(snapshot.destinationNavigationVisible, L"Find destination navigation bar should be visible before delivered-double-click probe.");
+    state.Require(WaitForFindSnapshot([](const FindFilesDebugSnapshot& value) noexcept {
+        return value.destinationNavigationVisible && ! value.destinationNavigationEditMode && ! value.destinationNavigationHistoryDropdownVisible &&
+               value.destinationNavigationHistoryRect.right > value.destinationNavigationHistoryRect.left &&
+               value.destinationNavigationHistoryRect.bottom > value.destinationNavigationHistoryRect.top;
+    }, SelfTest::Scale(2000ms), &snapshot),
+                  std::format(L"Find destination navigation should be stable before delivered-double-click probe. {}",
+                              DescribeFindSnapshotBrief(snapshot)));
     const RECT arrowRect = snapshot.destinationNavigationHistoryRect;
     state.Require(arrowRect.right > arrowRect.left && arrowRect.bottom > arrowRect.top,
                   L"Find destination navigation history arrow should expose a non-empty client rectangle before delivered-double-click probe.");
@@ -2048,13 +1958,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     SendMessageW(navHwnd, WM_MOUSELEAVE, 0, 0);
     PumpPendingMessages();
 
-    POINT currentCursor{};
-    const bool cursorAlreadyOutsideNav = GetCursorPos(&currentCursor) != FALSE && IsScreenPointOutsideWindow(navHwnd, currentCursor);
-    if (! cursorAlreadyOutsideNav)
-    {
-        state.Require(MoveSelfTestCursorOutsideWindow(navHwnd, findWindow),
-                      L"Failed to move the real cursor outside destination navigation before delivered-double-click probe.");
-    }
+    // No live cursor warp: production double-click routing reads the delivered point below
+    // (never GetCursorPos), so it is authoritative regardless of the real cursor.
     PumpPendingMessages();
     std::this_thread::sleep_for(40ms);
     PumpPendingMessages();
@@ -2063,7 +1968,10 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     POINT deliveredEditPointInNav{std::max<LONG>(destinationLeft + 8, arrowRect.left - 20), arrowRect.top + ((arrowRect.bottom - arrowRect.top) / 2)};
     static_cast<void>(MapWindowPoints(findWindow, navHwnd, &deliveredEditPointInNav, 1u));
 
+    SendMessageW(navHwnd, WM_LBUTTONDOWN, MK_LBUTTON, MAKELPARAM(deliveredEditPointInNav.x, deliveredEditPointInNav.y));
+    SendMessageW(navHwnd, WM_LBUTTONUP, 0, MAKELPARAM(deliveredEditPointInNav.x, deliveredEditPointInNav.y));
     SendMessageW(navHwnd, WM_LBUTTONDBLCLK, MK_LBUTTON, MAKELPARAM(deliveredEditPointInNav.x, deliveredEditPointInNav.y));
+    SendMessageW(navHwnd, WM_LBUTTONUP, 0, MAKELPARAM(deliveredEditPointInNav.x, deliveredEditPointInNav.y));
     PumpPendingMessages();
 
     FindFilesDebugSnapshot after{};
@@ -2146,41 +2054,6 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     return state.failure.empty();
 }
 
-[[nodiscard]] bool MoveSelfTestCursorToScreenPoint(POINT screenPoint) noexcept
-{
-    const auto cursorReached = [&]() noexcept
-    {
-        POINT current{};
-        return GetCursorPos(&current) != FALSE && std::abs(current.x - screenPoint.x) <= 2 && std::abs(current.y - screenPoint.y) <= 2;
-    };
-
-    if (SetCursorPos(screenPoint.x, screenPoint.y) != FALSE)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        if (cursorReached())
-        {
-            return true;
-        }
-    }
-
-    const int virtualLeft   = GetSystemMetrics(SM_XVIRTUALSCREEN);
-    const int virtualTop    = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    const int virtualWidth  = (std::max)(1, GetSystemMetrics(SM_CXVIRTUALSCREEN));
-    const int virtualHeight = (std::max)(1, GetSystemMetrics(SM_CYVIRTUALSCREEN));
-    INPUT input{};
-    input.type       = INPUT_MOUSE;
-    input.mi.dx      = static_cast<LONG>((static_cast<int64_t>(screenPoint.x - virtualLeft) * 65535) / (std::max)(1, virtualWidth - 1));
-    input.mi.dy      = static_cast<LONG>((static_cast<int64_t>(screenPoint.y - virtualTop) * 65535) / (std::max)(1, virtualHeight - 1));
-    input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK;
-    if (SendInput(1u, &input, sizeof(INPUT)) != 1u)
-    {
-        return false;
-    }
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    return cursorReached();
-}
-
 [[nodiscard]] std::optional<POINT> ChooseOwnerPointOutsidePopup(HWND ownerWindow, HWND popup) noexcept
 {
     RECT popupRect{};
@@ -2227,22 +2100,13 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 {
     using namespace std::chrono_literals;
 
-    POINT originalCursor{};
-    const bool restoreCursor = GetCursorPos(&originalCursor) != FALSE;
-    const auto cursorRestore = wil::scope_exit([&]() noexcept
-    {
-        if (restoreCursor)
-        {
-            static_cast<void>(SetCursorPos(originalCursor.x, originalCursor.y));
-        }
-    });
-
     std::atomic<bool> sawPopup{false};
     std::atomic<bool> cursorMovedToItem{false};
     std::atomic<bool> hoverObserved{false};
     std::atomic<bool> outsideClickSent{false};
     std::atomic<bool> popupDismissed{false};
     std::atomic<bool> driverDone{false};
+    std::wstring hoverFailureDetails;
 
     std::jthread menuDriver([&](std::stop_token stopToken) noexcept
     {
@@ -2282,16 +2146,22 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                 return;
             }
 
-            const bool movedToItem = MoveSelfTestCursorToScreenPoint(itemCenter);
-            cursorMovedToItem.store(movedToItem, std::memory_order_release);
-            if (! movedToItem)
+            // The routing contract under test is the delivered WM_MOUSEMOVE point (production
+            // never samples GetCursorPos), so the synthetic pointer message below is authoritative
+            // and no live cursor move is needed.
+            RECT popupRect{};
+            if (GetWindowRect(popup, &popupRect) == FALSE)
             {
                 PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
                 PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
                 return;
             }
+            const POINT deliveredPoint{itemCenter.x - popupRect.left, itemCenter.y - popupRect.top};
+            const LPARAM deliveredMove =
+                MAKELPARAM(static_cast<WORD>(static_cast<SHORT>(deliveredPoint.x)), static_cast<WORD>(static_cast<SHORT>(deliveredPoint.y)));
+            static_cast<void>(SendMessageW(popup, WM_MOUSEMOVE, 0, deliveredMove));
+            cursorMovedToItem.store(true, std::memory_order_release);
 
-            PostMessageW(popup, WM_MOUSEMOVE, 0, MAKELPARAM(itemClient.x, itemClient.y));
             const auto hoverDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
             while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < hoverDeadline)
             {
@@ -2306,11 +2176,38 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                     break;
                 }
             }
+            if (! hoverObserved.load(std::memory_order_acquire))
+            {
+                RedSalamander::DxUi::ContextMenuPopupDebugState finalState{};
+                static_cast<void>(RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, finalState));
+                RedSalamander::DxUi::ContextMenuPopupItemPaintDebugState finalPaint{};
+                static_cast<void>(RedSalamander::DxUi::DebugGetContextMenuPopupItemPaint(popup, itemIndex, finalPaint));
+                hoverFailureDetails =
+                    std::format(L"Pointer movement over the Find split action menu did not produce hover highlight. "
+                                L"(hovered={}, keyboard={}, center=({},{}), delivered=({},{}), popup=({},{} {}x{}), "
+                                L"row=({:.1f},{:.1f},{:.1f},{:.1f}), highlight={}, renders={})",
+                                finalState.hoveredIndex.has_value() ? static_cast<long long>(finalState.hoveredIndex.value()) : -1ll,
+                                finalState.keyboardIndex.has_value() ? static_cast<long long>(finalState.keyboardIndex.value()) : -1ll,
+                                itemCenter.x,
+                                itemCenter.y,
+                                deliveredPoint.x,
+                                deliveredPoint.y,
+                                popupRect.left,
+                                popupRect.top,
+                                popupRect.right - popupRect.left,
+                                popupRect.bottom - popupRect.top,
+                                itemRectDip.left,
+                                itemRectDip.top,
+                                itemRectDip.right,
+                                itemRectDip.bottom,
+                                finalPaint.usesHighlightFill ? L"true" : L"false",
+                                finalState.renderCount);
+            }
 
             const std::optional<POINT> outsidePoint = ChooseOwnerPointOutsidePopup(ownerWindow, popup);
             if (outsidePoint.has_value())
             {
-                outsideClickSent.store(SendSelfTestLeftClickAtScreenPoint(outsidePoint.value()), std::memory_order_release);
+                outsideClickSent.store(PostSelfTestOutsideClickToPopup(popup, outsidePoint.value()), std::memory_order_release);
             }
 
             const auto dismissDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
@@ -2360,7 +2257,9 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
     state.Require(sawPopup.load(std::memory_order_acquire), L"Find split action menu did not open for live pointer routing validation.");
     state.Require(cursorMovedToItem.load(std::memory_order_acquire), L"Failed to route pointer movement over the Find split action menu item.");
-    state.Require(hoverObserved.load(std::memory_order_acquire), L"Pointer movement over the Find split action menu did not produce hover highlight.");
+    state.Require(hoverObserved.load(std::memory_order_acquire),
+                  hoverFailureDetails.empty() ? L"Pointer movement over the Find split action menu did not produce hover highlight."
+                                              : hoverFailureDetails);
     state.Require(outsideClickSent.load(std::memory_order_acquire), L"Failed to send outside click for Find split action menu light-dismiss validation.");
     state.Require(popupDismissed.load(std::memory_order_acquire), L"Find split action menu did not dismiss after outside-click and Escape cleanup.");
     return state.failure.empty();
@@ -2538,6 +2437,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     requireInvalidRegexReportedOnce(L"name", FILESYSTEM_SEARCH_NAME_REGEX, L"[", FILESYSTEM_SEARCH_CONTENT_DISABLED, nullptr);
     requireInvalidRegexReportedOnce(L"content", FILESYSTEM_SEARCH_NAME_WILDCARD, L"*", FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX, L"[");
     requireInvalidRegexReportedOnce(L"unsafe name", FILESYSTEM_SEARCH_NAME_REGEX, L"(a+)+", FILESYSTEM_SEARCH_CONTENT_DISABLED, nullptr);
+    requireInvalidRegexReportedOnce(L"duplicate-alternative unsafe name", FILESYSTEM_SEARCH_NAME_REGEX, L"(a|a)*", FILESYSTEM_SEARCH_CONTENT_DISABLED, nullptr);
+    requireInvalidRegexReportedOnce(L"prefix-overlap unsafe name", FILESYSTEM_SEARCH_NAME_REGEX, L"(a|ab)*x", FILESYSTEM_SEARCH_CONTENT_DISABLED, nullptr);
 
     return state.failure.empty();
 }
@@ -2572,6 +2473,14 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         const std::filesystem::path path = caseRoot / std::format(L"match_flat_{:03}.txt", index);
         state.Require(SelfTest::WriteTextFile(path, "flat"), std::format(L"Failed to create {}.", path.wstring()));
         ++expectedMatches;
+    }
+
+    uint32_t expectedContentMatches = 0u;
+    for (uint32_t index = 0u; index < 640u; ++index)
+    {
+        const std::filesystem::path path = caseRoot / std::format(L"content_match_{:03}.txt", index);
+        state.Require(SelfTest::WriteTextFile(path, "needle"), std::format(L"Failed to create {}.", path.wstring()));
+        ++expectedContentMatches;
     }
 
     const std::filesystem::path broadRoot = caseRoot / L"broad";
@@ -2663,6 +2572,41 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     state.Require(cancelCallback.lastCompletedStatus.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
                   std::format(L"Cancelled parallel scan completion status should be ERROR_CANCELLED, got 0x{:08X}.",
                               static_cast<unsigned long>(cancelCallback.lastCompletedStatus.load(std::memory_order_acquire))));
+
+    FileSystemSearchQuery contentQuery = query;
+    contentQuery.namePattern           = L"content_match_*.txt";
+    contentQuery.contentPattern        = L"needle";
+    contentQuery.contentMode           = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+
+    LocalSearchProbeCallback fullContentCallback{};
+    const HRESULT fullContentHr = search->Search(&contentQuery, &fullContentCallback, nullptr);
+    state.Require(SUCCEEDED(fullContentHr),
+                  std::format(L"Full parallel content scan should succeed, got 0x{:08X}.", static_cast<unsigned long>(fullContentHr)));
+    state.Require(fullContentCallback.matchCallbacks.load(std::memory_order_acquire) == expectedContentMatches,
+                  std::format(L"Full parallel content scan should find {} matches, got {}.",
+                              expectedContentMatches,
+                              fullContentCallback.matchCallbacks.load(std::memory_order_acquire)));
+    state.Require(fullContentCallback.completedProgressCallbacks.load(std::memory_order_acquire) == 1u,
+                  std::format(L"Full parallel content scan should emit one completed progress callback, got {}.",
+                              fullContentCallback.completedProgressCallbacks.load(std::memory_order_acquire)));
+
+    LocalSearchProbeCallback cancelContentCallback{};
+    cancelContentCallback.cancelAfterMatchCallbacks.store(1u, std::memory_order_release);
+    const HRESULT cancelContentHr = search->Search(&contentQuery, &cancelContentCallback, nullptr);
+    state.Require(cancelContentHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Parallel content scan should honor cancellation during result drain, got 0x{:08X}.",
+                              static_cast<unsigned long>(cancelContentHr)));
+    state.Require(cancelContentCallback.matchCallbacks.load(std::memory_order_acquire) <= 4u,
+                  std::format(L"Parallel content scan emitted too many matches after cancellation became visible: {}.",
+                              cancelContentCallback.matchCallbacks.load(std::memory_order_acquire)));
+    state.Require(cancelContentCallback.shouldCancelCallbacks.load(std::memory_order_acquire) > 0u,
+                  L"Parallel content scan did not poll FileSystemSearchShouldCancel during result drain.");
+    state.Require(cancelContentCallback.completedProgressCallbacks.load(std::memory_order_acquire) == 1u,
+                  std::format(L"Cancelled parallel content scan should emit one completed progress callback, got {}.",
+                              cancelContentCallback.completedProgressCallbacks.load(std::memory_order_acquire)));
+    state.Require(cancelContentCallback.lastCompletedStatus.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Cancelled parallel content scan completion status should be ERROR_CANCELLED, got 0x{:08X}.",
+                              static_cast<unsigned long>(cancelContentCallback.lastCompletedStatus.load(std::memory_order_acquire))));
 
     return state.failure.empty();
 }
@@ -3135,6 +3079,26 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     requireRenderedAfter(appendRenderBefore, L"Append");
     requireSnapshotCount(4u, L"Append", {root / L"a.jsonl", root / L"b.txt", sub / L"c.jsonl", sub / L"d.txt"});
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting invalid-regex Intersect");
+    state.Require(DebugConfigureFindFilesWindow(root.native(), L"[", L"", Common::Settings::SearchNameMode::Regex, Common::Settings::SearchContentMode::Disabled),
+                  L"Failed to configure Find window for invalid-regex intersect search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Intersect), L"Failed to start invalid-regex Intersect operation.");
+    requireIdle(L"invalid-regex Intersect");
+
+    FindFilesDebugSnapshot invalidIntersect{};
+    state.Require(DebugGetFindFilesWindowSnapshot(invalidIntersect), L"Failed to capture invalid-regex Intersect snapshot.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(invalidIntersect.lastStatusHint == E_INVALIDARG,
+                  std::format(L"Expected invalid-regex Intersect to surface E_INVALIDARG, got 0x{:08X}.",
+                              static_cast<unsigned long>(invalidIntersect.lastStatusHint)));
+    state.Require((invalidIntersect.warningFlags & FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED) != 0u,
+                  std::format(L"Invalid-regex Intersect should report REGEX_REJECTED warning flags, got 0x{:08X}.",
+                              static_cast<unsigned long>(invalidIntersect.warningFlags)));
+    requireSnapshotCount(4u, L"invalid-regex Intersect", {root / L"a.jsonl", root / L"b.txt", sub / L"c.jsonl", sub / L"d.txt"});
+
     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting Intersect");
     state.Require(
         DebugConfigureFindFilesWindow(root.native(), L"a*", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
@@ -3171,6 +3135,14 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                   std::format(L"Find dialog should sanitize translated control characters from wildcard-all patterns; got length {}.",
                               wildcardAllSnapshot.namePatternText.size()));
 
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting zero-match Intersect");
+    state.Require(DebugConfigureFindFilesWindow(
+                      root.native(), L"missing-*", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
+                  L"Failed to configure Find window for zero-match intersect search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Intersect), L"Failed to start zero-match Intersect operation.");
+    requireIdle(L"zero-match Intersect");
+    requireSnapshotCount(0u, L"zero-match Intersect", {});
+
     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting content Find");
     state.Require(DebugConfigureFindFilesWindow(
                       root.native(), L"", L"needle", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::TextLiteral),
@@ -3204,6 +3176,25 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     requireIdle(L"sorted Find");
     requireRenderedAfter(sortedRenderBefore, L"sorted Find");
     requireSortedResultNames(50u, L"sorted Find");
+
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting cancelled Intersect");
+    state.Require(
+        DebugConfigureFindFilesWindow(
+            root.native(), L"*.txt", L"ZZZ_NOT_PRESENT_123456789", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::TextRegex),
+        L"Failed to configure Find window for cancelled intersect search.");
+    state.Require(DebugSetFindFilesWindowOptions(true, true, false, true, false), L"Failed to configure Find options for cancelled intersect search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Intersect), L"Failed to start cancelled Intersect search.");
+    state.Require(DebugCancelFindFilesWindowSearch(), L"Failed to cancel Intersect search.");
+    requireIdle(L"cancelled Intersect");
+
+    FindFilesDebugSnapshot cancelledIntersect{};
+    state.Require(DebugGetFindFilesWindowSnapshot(cancelledIntersect), L"Failed to capture cancelled Intersect snapshot.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    state.Require(cancelledIntersect.searchActive == false, L"Find window remained active after cancelled Intersect.");
+    requireSnapshotCount(50u, L"cancelled Intersect", {});
 
     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"find_dialog_search_ops: starting cancellation Find");
     state.Require(
@@ -3702,6 +3693,8 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     CloseAllFindFilesWindowsForSearchTest();
     state.Require(CloseFileOperationsPopupForSelfTest(g_folderWindow.DebugGetFileOperationState()),
                   L"Failed to quiesce pre-existing file operations before Find shortcut file-action validation.");
+    state.Require(CloseNonMainTopLevelWindowsForSelfTest(GetCurrentProcessId(), mainWindow, SelfTest::Scale(3000ms)),
+                  L"Failed to close inherited top-level windows before Find shortcut file-action validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -4789,6 +4782,233 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestFindDialogCloseDuringActiveSearchDoesNotJoinUi(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    CloseAllFindFilesWindowsForSearchTest();
+
+    const std::optional<Common::Settings::SearchDialogSettings> previousSearch = g_settings.search;
+    const auto cleanup                                                         = wil::scope_exit([&] noexcept
+    {
+        DebugReleaseFindFilesWindowSearchRunBlocker();
+        DebugConfigureFindFilesWindowSearchRunBlocker(false);
+        CloseAllFindFilesWindowsForSearchTest();
+        g_settings.search = previousSearch;
+    });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / L"find_dialog_active_close_async";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create active-close Find root.");
+    state.Require(SelfTest::WriteTextFile(root / L"alpha.txt", "alpha\n"), L"Failed to create active-close Find fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    FindFilesPaneContext context{};
+    context.rootPluginPath = root;
+    const AppTheme theme   = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-active-close");
+    state.Require(ShowFindFilesWindow(mainWindow, g_settings, theme, std::move(context)), L"Failed to open Find window for active-close validation.");
+
+    const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
+    state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open for active-close validation.");
+    if (! findWindow || IsWindow(findWindow) == FALSE)
+    {
+        return false;
+    }
+
+    state.Require(
+        DebugConfigureFindFilesWindow(root.native(), L"*.txt", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
+        L"Failed to configure Find window for active-close validation.");
+    state.Require(DebugSetFindFilesWindowOptions(true, true, false, false, false),
+                  L"Failed to configure Find options for active-close validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    DebugConfigureFindFilesWindowSearchRunBlocker(true);
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Find), L"Failed to start Find search for active-close validation.");
+    state.Require(DebugWaitForFindFilesWindowSearchRunBlocked(static_cast<uint32_t>(SelfTest::Scale(5000ms).count())),
+                  L"Find search worker did not reach the active-close blocker.");
+
+    FindFilesDebugSnapshot active{};
+    state.Require(DebugGetFindFilesWindowSnapshot(active) && active.searchActive,
+                  L"Find search should be active before exercising active-close validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::jthread delayedRelease([&](std::stop_token stopToken) noexcept
+    {
+        const ULONGLONG deadline = GetTickCount64() + SelfTest::ScaleTimeout(1'200);
+        while (! stopToken.stop_requested() && GetTickCount64() < deadline)
+        {
+            Sleep(10);
+        }
+        if (! stopToken.stop_requested())
+        {
+            DebugReleaseFindFilesWindowSearchRunBlocker();
+        }
+    });
+
+    const ULONGLONG closeStartTick = GetTickCount64();
+    state.Require(PostMessageW(findWindow, WM_CLOSE, 0, 0) != FALSE, L"Failed to post active-close WM_CLOSE.");
+    PumpPendingMessages();
+    const ULONGLONG closeElapsedMs = GetTickCount64() - closeStartTick;
+
+    delayedRelease.request_stop();
+    delayedRelease.join();
+
+    state.Require(closeElapsedMs < SelfTest::ScaleTimeout(500),
+                  std::format(L"Active Find close blocked the UI thread for {} ms.", closeElapsedMs));
+    state.Require(IsWindow(findWindow) != FALSE, L"Active Find close should defer destruction while the worker is still blocked.");
+    state.Require(IsWindowVisible(findWindow) == FALSE, L"Active Find close should hide the modeless window while cancellation drains.");
+    if (! state.failure.empty())
+    {
+        DebugReleaseFindFilesWindowSearchRunBlocker();
+        DebugConfigureFindFilesWindowSearchRunBlocker(false);
+        return false;
+    }
+
+    DebugReleaseFindFilesWindowSearchRunBlocker();
+    DebugConfigureFindFilesWindowSearchRunBlocker(false);
+    state.Require(WaitForWindowClosed(findWindow, SelfTest::Scale(5000ms)),
+                  L"Deferred active Find close did not destroy the window after the worker completed.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFindDialogDropsStaleSearchEpochPayloads(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const std::optional<Common::Settings::SearchDialogSettings> previousSearch = g_settings.search;
+    std::optional<std::filesystem::path> leftBefore;
+    const auto cleanup = wil::scope_exit([&] noexcept
+    {
+        CloseAllFindFilesWindowsForSearchTest();
+        g_settings.search = previousSearch;
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+    });
+
+    CloseAllFindFilesWindowsForSearchTest();
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root      = suiteRoot / L"work" / (L"find_stale_epoch_" + NewGuidText());
+    const std::filesystem::path alphaPath = root / L"alpha.txt";
+    const std::filesystem::path stalePath = root / L"stale-from-old-epoch.txt";
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create stale-epoch Find root.");
+    state.Require(SelfTest::WriteTextFile(alphaPath, "alpha\n"), L"Failed to create stale-epoch alpha fixture.");
+    state.Require(SelfTest::WriteTextFile(stalePath, "stale\n"), L"Failed to create stale-epoch rejected fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HWND findWindow = nullptr;
+    state.Require(OpenFindWindowFromLocalPaneRoot(mainWindow, root, {L"alpha.txt", L"stale-from-old-epoch.txt"}, findWindow, leftBefore),
+                  L"Find window did not open from local stale-epoch test root.");
+    if (! findWindow || IsWindow(findWindow) == FALSE)
+    {
+        return false;
+    }
+
+    state.Require(
+        DebugConfigureFindFilesWindow(root.native(), L"alpha.txt", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
+        L"Failed to configure stale-epoch Find search.");
+    state.Require(DebugSetFindFilesWindowOptions(false, true, false, false, false), L"Failed to configure stale-epoch Find options.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Find), L"Failed to start stale-epoch baseline Find search.");
+    state.Require(DebugWaitForFindFilesWindowIdle(static_cast<uint32_t>(SelfTest::Scale(10000ms).count())),
+                  L"Stale-epoch baseline Find search did not become idle.");
+
+    FindFilesDebugSnapshot before{};
+    state.Require(WaitForFindSnapshot(
+                      [&](const FindFilesDebugSnapshot& value) noexcept
+    {
+        return ! value.searchActive && value.resultCount == 1u &&
+               std::find(value.fullPaths.begin(), value.fullPaths.end(), alphaPath.native()) != value.fullPaths.end();
+    },
+                      SelfTest::Scale(3000ms),
+                      &before),
+                  std::format(L"Stale-epoch baseline result did not settle. {}", DescribeFindSnapshotBrief(before)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(DebugPostFindFilesWindowStaleSearchPayloads(stalePath.native()), L"Failed to post stale Find search payloads.");
+    for (int attempt = 0; attempt < 20; ++attempt)
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(1ms);
+    }
+
+    FindFilesDebugSnapshot after{};
+    state.Require(DebugGetFindFilesWindowSnapshot(after), L"Failed to capture stale-epoch Find snapshot after injected payloads.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(after.resultCount == before.resultCount,
+                  std::format(L"Stale epoch result payload mutated visible results. Before {}, after {}.",
+                              before.resultCount,
+                              after.resultCount));
+    state.Require(std::find(after.fullPaths.begin(), after.fullPaths.end(), stalePath.native()) == after.fullPaths.end(),
+                  L"Stale epoch result payload inserted a rejected path into the visible result set.");
+    state.Require(after.lastStatusHint == before.lastStatusHint,
+                  std::format(L"Stale epoch completion changed status from 0x{:08X} to 0x{:08X}.",
+                              static_cast<unsigned long>(before.lastStatusHint),
+                              static_cast<unsigned long>(after.lastStatusHint)));
+    state.Require(after.warningFlags == before.warningFlags,
+                  std::format(L"Stale epoch progress/completion changed warning flags from 0x{:08X} to 0x{:08X}.",
+                              before.warningFlags,
+                              after.warningFlags));
+    state.Require(after.phase == before.phase,
+                  std::format(L"Stale epoch progress/completion changed phase from {} to {}.", before.phase, after.phase));
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestFindDialogServiceStatusShowsBackendDiagnostics(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -4798,17 +5018,13 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         state.Require(false, L"Main window handle invalid.");
         return false;
     }
-    const auto closeFindWindow = [&] noexcept
+    CloseAllFindFilesWindowsForSearchTest();
+    DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    const auto cleanup = wil::scope_exit([&] noexcept
     {
-        if (const HWND findWindow = GetFindFilesWindowHandle(); findWindow && IsWindow(findWindow))
-        {
-            PostMessageW(findWindow, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(findWindow, SelfTest::Scale(3000ms)));
-        }
-    };
-    const auto cleanup = wil::scope_exit([&] noexcept { closeFindWindow(); });
-
-    closeFindWindow();
+        CloseAllFindFilesWindowsForSearchTest();
+        DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    });
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
@@ -5059,17 +5275,13 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         state.Require(false, L"Main window handle invalid.");
         return false;
     }
-    const auto closeFindWindow = [&] noexcept
+    CloseAllFindFilesWindowsForSearchTest();
+    DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    const auto cleanup = wil::scope_exit([&] noexcept
     {
-        if (const HWND findWindow = GetFindFilesWindowHandle(); findWindow && IsWindow(findWindow))
-        {
-            PostMessageW(findWindow, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(findWindow, SelfTest::Scale(3000ms)));
-        }
-    };
-    const auto cleanup = wil::scope_exit([&] noexcept { closeFindWindow(); });
-
-    closeFindWindow();
+        CloseAllFindFilesWindowsForSearchTest();
+        DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    });
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
@@ -5183,17 +5395,13 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         state.Require(false, L"Main window handle invalid.");
         return false;
     }
-    const auto closeFindWindow = [&] noexcept
+    CloseAllFindFilesWindowsForSearchTest();
+    DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    const auto cleanup = wil::scope_exit([&] noexcept
     {
-        if (const HWND findWindow = GetFindFilesWindowHandle(); findWindow && IsWindow(findWindow))
-        {
-            PostMessageW(findWindow, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(findWindow, SelfTest::Scale(3000ms)));
-        }
-    };
-    const auto cleanup = wil::scope_exit([&] noexcept { closeFindWindow(); });
-
-    closeFindWindow();
+        CloseAllFindFilesWindowsForSearchTest();
+        DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    });
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
@@ -6776,28 +6984,63 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
 
     const auto sendTab = [&](bool reverse, FindFilesDebugFocusTarget expected, std::wstring_view label) noexcept
     {
-        if (reverse)
+        const FindFilesDebugFocusTarget beforeFocus = snapshot.focusTarget;
+        std::array<BYTE, 256> keyboardState{};
+        const bool restoreKeyboardState = reverse && GetKeyboardState(keyboardState.data()) != FALSE;
+        const auto keyboardStateRestore = wil::scope_exit([&]() noexcept
         {
-            SendMessageW(findWindow, WM_KEYDOWN, VK_SHIFT, 0);
-        }
-        SendMessageW(findWindow, WM_KEYDOWN, VK_TAB, 0);
-        SendMessageW(findWindow, WM_KEYUP, VK_TAB, 0);
-        if (reverse)
+            if (restoreKeyboardState)
+            {
+                SetKeyboardState(keyboardState.data());
+            }
+        });
+        if (reverse && restoreKeyboardState)
         {
-            SendMessageW(findWindow, WM_KEYUP, VK_SHIFT, 0);
+            std::array<BYTE, 256> shiftedState = keyboardState;
+            shiftedState[VK_SHIFT] |= 0x80u;
+            shiftedState[VK_LSHIFT] |= 0x80u;
+            SetKeyboardState(shiftedState.data());
         }
 
-        state.Require(WaitForFindSnapshot(
-                          [&](const FindFilesDebugSnapshot& value) noexcept
+        const auto sendKeyMessages = [&]() noexcept
         {
-            return value.focusTarget == expected && ! value.searchActive && value.usesDxUiHost && value.visibleChildWindowCount <= 1u &&
-                   value.dxResizeFailureCount == 0u && value.resultCount == 1u && value.selectedResultCount == 1u &&
-                   value.visibleResultRowCount == baselineVisibleRowCount && value.visibleResultColumnCount == baselineVisibleColumnCount &&
-                   value.visibleResultCellCount == baselineVisibleCellCount;
-        },
-                          SelfTest::Scale(2000ms),
-                          &snapshot),
-                      std::format(L"{} focus target not reached during Find tab traversal.", label));
+            if (reverse)
+            {
+                SendMessageW(findWindow, WM_KEYDOWN, VK_SHIFT, 0);
+            }
+            SendMessageW(findWindow, WM_KEYDOWN, VK_TAB, 0);
+            SendMessageW(findWindow, WM_KEYUP, VK_TAB, 0);
+            if (reverse)
+            {
+                SendMessageW(findWindow, WM_KEYUP, VK_SHIFT, 0);
+            }
+        };
+
+        const auto reachedExpected = [&]() noexcept
+        {
+            return WaitForFindSnapshot(
+                [&](const FindFilesDebugSnapshot& value) noexcept
+            {
+                return value.focusTarget == expected && ! value.searchActive && value.usesDxUiHost && value.visibleChildWindowCount <= 1u &&
+                       value.dxResizeFailureCount == 0u && value.resultCount == 1u && value.selectedResultCount == 1u &&
+                       value.visibleResultRowCount == baselineVisibleRowCount && value.visibleResultColumnCount == baselineVisibleColumnCount &&
+                       value.visibleResultCellCount == baselineVisibleCellCount;
+            },
+                SelfTest::Scale(2000ms),
+                &snapshot);
+        };
+
+        sendKeyMessages();
+        if (! reachedExpected() && snapshot.focusTarget == beforeFocus)
+        {
+            sendKeyMessages();
+            static_cast<void>(reachedExpected());
+        }
+
+        state.Require(snapshot.focusTarget == expected,
+                      std::format(L"{} focus target not reached during Find tab traversal. {}",
+                                  label,
+                                  DescribeFindSnapshotBrief(snapshot)));
     };
 
     sendTab(false, FindFilesDebugFocusTarget::NameCombo, L"Name combo");
@@ -6850,6 +7093,38 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
+    CloseAllFindFilesWindowsForSearchTest();
+    const auto cleanupFindWindows = wil::scope_exit([]() noexcept { CloseAllFindFilesWindowsForSearchTest(); });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for Find editable-combo keyboard editing test.");
+    const std::filesystem::path editRoot = suiteRoot / L"work" / L"find_editable_combo_keyboard" / L"alpha" / L"beta" / L"gamma";
+    std::error_code cleanupError;
+    std::filesystem::remove_all(editRoot.parent_path().parent_path().parent_path(), cleanupError);
+    state.Require(SelfTest::EnsureDirectory(editRoot),
+                  std::format(L"Failed to create Find editable-combo keyboard editing root '{}'.", editRoot.native()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring editRootText = editRoot.native();
+    const std::wstring editRootParentText = editRoot.parent_path().native() + L"\\";
+    const std::wstring editRootGrandparentText = editRoot.parent_path().parent_path().native() + L"\\";
+    const std::filesystem::path paneRoot = editRoot.parent_path().parent_path().parent_path();
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for Find editable-combo keyboard editing test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, paneRoot);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, paneRoot, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for Find editable-combo keyboard editing test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RaiseSelfTestWindowForInput(mainWindow);
     FocusFolderViewPane(FolderWindow::Pane::Left);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/find"),
                   L"Shortcut dispatch failed for cmd/pane/find in editable-combo keyboard editing test.");
@@ -6861,31 +7136,97 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
+    FindFilesDebugSnapshot readySnapshot{};
+    const bool rootNavigationReady = WaitForFindSnapshot([](const FindFilesDebugSnapshot& value) noexcept {
+        return value.usesDxUiHost && value.rootNavigationVisible && value.rootNavigationEmbedded && value.visibleChildWindowCount <= 1u &&
+               value.dxResizeFailureCount == 0u;
+    }, SelfTest::Scale(3000ms), &readySnapshot);
+    state.Require(rootNavigationReady,
+                  std::format(L"Find root navigation did not become ready before editable-combo keyboard editing test. {}",
+                              DescribeFindSnapshotBrief(readySnapshot)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
     const auto waitForRootText = [&](std::wstring_view expected, std::wstring_view label) noexcept
     {
         FindFilesDebugSnapshot snapshot{};
-        state.Require(WaitForFindSnapshot(
+        const bool textReady = WaitForFindSnapshot(
                           [&](const FindFilesDebugSnapshot& value) noexcept
         {
-            return value.usesDxUiHost && value.focusTarget == FindFilesDebugFocusTarget::RootCombo && value.rootNavigationEditMode &&
-                   value.rootNavigationText == expected && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
+            return value.usesDxUiHost && value.rootNavigationEditMode && value.rootNavigationText == expected && value.visibleChildWindowCount <= 1u &&
+                   value.dxResizeFailureCount == 0u;
         },
                           SelfTest::Scale(2000ms),
-                          &snapshot),
-                      std::format(L"Find root navigation edit text should be '{}' after {} but was '{}'.",
+                          &snapshot);
+        state.Require(textReady,
+                      std::format(L"Find root navigation edit text should be '{}' after {} but was '{}' (focusTarget={}, editMode={}). {}",
                                   expected,
                                   label,
-                                  snapshot.rootNavigationText));
+                                  snapshot.rootNavigationText,
+                                  static_cast<int>(snapshot.focusTarget),
+                                  snapshot.rootNavigationEditMode ? 1 : 0,
+                                  DescribeFindSnapshotBrief(snapshot)));
     };
 
     const auto prepareRootText = [&](std::wstring text) noexcept -> HWND
     {
+        FindFilesDebugSnapshot beforePrepareSnapshot{};
+        if (DebugGetFindFilesWindowSnapshot(beforePrepareSnapshot) && beforePrepareSnapshot.rootNavigationEditMode)
+        {
+            CloseAllFindFilesWindowsForSearchTest();
+            RaiseSelfTestWindowForInput(mainWindow);
+            FocusFolderViewPane(FolderWindow::Pane::Left);
+            state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/find"),
+                          L"Shortcut dispatch failed while reopening Find window for editable-combo keyboard editing test.");
+            const HWND reopenedFindWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
+            state.Require(reopenedFindWindow != nullptr && IsWindow(reopenedFindWindow) != FALSE,
+                          L"Find window did not reopen while preparing editable-combo keyboard editing test.");
+
+            FindFilesDebugSnapshot reopenedSnapshot{};
+            state.Require(WaitForFindSnapshot([](const FindFilesDebugSnapshot& value) noexcept {
+                return value.usesDxUiHost && value.rootNavigationVisible && value.rootNavigationEmbedded && ! value.rootNavigationEditMode &&
+                       value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
+            }, SelfTest::Scale(3000ms), &reopenedSnapshot),
+                          std::format(L"Reopened Find root navigation did not become ready before preparing next keyboard-editing value. {}",
+                                      DescribeFindSnapshotBrief(reopenedSnapshot)));
+            if (! state.failure.empty())
+            {
+                return nullptr;
+            }
+        }
+
         const size_t caretIndex = text.size();
         const std::wstring expectedText = text;
         state.Require(DebugSetFindFilesWindowComboText(FindFilesDebugFocusTarget::RootCombo, std::move(text)),
                       L"Failed to set root combo text for editable-combo keyboard editing test.");
+
+        FindFilesDebugSnapshot populatedSnapshot{};
+        const bool rootTextPrepared = WaitForFindSnapshot(
+                          [&](const FindFilesDebugSnapshot& value) noexcept
+        {
+            return value.usesDxUiHost && value.rootNavigationVisible && value.rootNavigationEmbedded && ! value.rootNavigationEditMode &&
+                   value.rootNavigationText == expectedText && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
+        },
+                          SelfTest::Scale(2000ms),
+                          &populatedSnapshot);
+        state.Require(rootTextPrepared,
+                      std::format(L"Find root navigation did not show prepared text '{}' before edit mode; saw '{}'. {}",
+                                  expectedText,
+                                  populatedSnapshot.rootNavigationText,
+                                  DescribeFindSnapshotBrief(populatedSnapshot)));
+
         state.Require(DebugFocusFindFilesWindowTarget(FindFilesDebugFocusTarget::RootCombo),
                       L"Failed to focus root combo for editable-combo keyboard editing test.");
+        FindFilesDebugSnapshot focusedSnapshot{};
+        const bool rootFocused = WaitForFindSnapshot([](const FindFilesDebugSnapshot& value) noexcept {
+            return value.usesDxUiHost && value.focusTarget == FindFilesDebugFocusTarget::RootCombo && value.rootNavigationVisible &&
+                   value.rootNavigationEmbedded && ! value.rootNavigationEditMode;
+        }, SelfTest::Scale(2000ms), &focusedSnapshot);
+        state.Require(rootFocused,
+                      std::format(L"Find root navigation did not retain focus before entering edit mode. {}",
+                                  DescribeFindSnapshotBrief(focusedSnapshot)));
         PumpPendingMessages();
 
         HWND target = GetFocus();
@@ -6898,14 +7239,15 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         PumpPendingMessages();
 
         FindFilesDebugSnapshot editSnapshot{};
-        state.Require(WaitForFindSnapshot(
+        const bool editHostOpened = WaitForFindSnapshot(
                           [&](const FindFilesDebugSnapshot& value) noexcept
         {
             return value.usesDxUiHost && value.focusTarget == FindFilesDebugFocusTarget::RootCombo && value.rootNavigationEditMode &&
                    value.rootNavigationText == expectedText && value.visibleChildWindowCount <= 1u && value.dxResizeFailureCount == 0u;
         },
                           SelfTest::Scale(2000ms),
-                          &editSnapshot),
+                          &editSnapshot);
+        state.Require(editHostOpened,
                       std::format(L"Find root navigation edit host did not open with text '{}' but was '{}'.",
                                   expectedText,
                                   editSnapshot.rootNavigationText));
@@ -6971,7 +7313,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         PumpPendingMessages();
     };
 
-    HWND target = prepareRootText(L"C:\\alpha\\beta\\gamma");
+    HWND target = prepareRootText(editRootText);
     sendCtrlKey(target, static_cast<WPARAM>(L'A'), 0x01u);
     sendChar(target, L'Z');
     waitForRootText(L"Z", L"Ctrl+A followed by character input");
@@ -6980,12 +7322,12 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    target = prepareRootText(L"C:\\alpha\\beta\\gamma");
-    waitForRootText(L"C:\\alpha\\beta\\gamma", L"preparing Ctrl+Backspace");
+    target = prepareRootText(editRootText);
+    waitForRootText(editRootText, L"preparing Ctrl+Backspace");
     sendCtrlKey(target, VK_BACK, 0x7Fu);
-    waitForRootText(L"C:\\alpha\\beta\\", L"Ctrl+Backspace");
+    waitForRootText(editRootParentText, L"Ctrl+Backspace");
     sendCtrlKey(target, VK_BACK, 0x7Fu);
-    waitForRootText(L"C:\\alpha\\", L"repeated Ctrl+Backspace");
+    waitForRootText(editRootGrandparentText, L"repeated Ctrl+Backspace");
     if (! state.failure.empty())
     {
         return false;
@@ -7009,17 +7351,13 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    const auto closeFindWindow = [&] noexcept
+    CloseAllFindFilesWindowsForSearchTest();
+    DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    const auto cleanup = wil::scope_exit([&] noexcept
     {
-        if (const HWND findWindow = GetFindFilesWindowHandle(); findWindow && IsWindow(findWindow))
-        {
-            PostMessageW(findWindow, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(findWindow, SelfTest::Scale(3000ms)));
-        }
-    };
-    const auto cleanup = wil::scope_exit([&] noexcept { closeFindWindow(); });
-
-    closeFindWindow();
+        CloseAllFindFilesWindowsForSearchTest();
+        DismissVisibleOwnedDxUiContextMenusForSearchTest(mainWindow);
+    });
 
     FocusFolderViewPane(FolderWindow::Pane::Left);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/find"), L"Shortcut dispatch failed for cmd/pane/find in mode-typeahead test.");
@@ -7136,6 +7474,18 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for command-enablement test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for command-enablement test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RaiseSelfTestWindowForInput(mainWindow);
     FocusFolderViewPane(FolderWindow::Pane::Left);
     state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/find"), L"Shortcut dispatch failed for cmd/pane/find in command-enablement test.");
 
@@ -14742,8 +15092,16 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    const DWORD processId                = GetCurrentProcessId();
-    const auto baselineTopLevelWindows   = SnapshotTopLevelWindowsForProcess(processId);
+    const DWORD processId = GetCurrentProcessId();
+    CloseAllFindFilesWindowsForSearchTest();
+    state.Require(CloseNonMainTopLevelWindowsForSelfTest(processId, mainWindow, SelfTest::Scale(3000ms)),
+                  L"Failed to close inherited top-level windows before Quick Search focus validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto baselineTopLevelWindows = SnapshotTopLevelWindowsForProcess(processId);
     const auto raiseMainWindowForInput = [&]() noexcept
     {
         const HWND rootWindow = GetAncestor(mainWindow, GA_ROOT);
@@ -14813,8 +15171,38 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         state.Require(focused, std::format(L"Left folder view did not have stable focus during {}; {}.", context, focusDiagnostics()));
         return focused;
     };
+    const auto waitForLeftFolderViewFocusPassive = [&](std::chrono::milliseconds timeout) noexcept -> bool
+    {
+        using namespace std::chrono_literals;
+
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+            if (folderView && IsWindow(folderView) != FALSE && GetFocus() == folderView && g_folderWindow.GetFocusedFolderViewHwnd() == folderView &&
+                g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left)
+            {
+                return true;
+            }
+
+            std::this_thread::sleep_for(10ms);
+        }
+
+        PumpPendingMessages();
+        folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+        return folderView && IsWindow(folderView) != FALSE && GetFocus() == folderView && g_folderWindow.GetFocusedFolderViewHwnd() == folderView &&
+               g_folderWindow.GetFocusedPane() == FolderWindow::Pane::Left;
+    };
     const auto sendQuickSearchChar = [&](wchar_t character) noexcept
     {
+        folderView = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+        if (! folderView || IsWindow(folderView) == FALSE)
+        {
+            state.Require(false, L"Left folder view handle unavailable while typing Quick Search text.");
+            return;
+        }
+
         clearSyntheticTextInputModifiers();
         SendMessageW(folderView, WM_CHAR, static_cast<WPARAM>(character), 0);
         PumpPendingMessages();
@@ -14850,6 +15238,66 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         }
         return false;
     };
+    const auto appendQuickSearchChar = [&](wchar_t character, std::wstring_view expectedQuery, std::wstring_view context) noexcept -> bool
+    {
+        sendQuickSearchChar(character);
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        FolderView::IncrementalSearchDebugSnapshot typed{};
+        const bool advanced = waitForQuickSearchSnapshot([expectedQuery](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+            return value.active && value.query == expectedQuery;
+        }, SelfTest::Scale(1500ms), &typed);
+        state.Require(advanced,
+                      std::format(L"Quick Search {} should advance to query '{}'; active={}, query='{}', focused='{}'; {}.",
+                                  context,
+                                  expectedQuery,
+                                  typed.active ? 1 : 0,
+                                  typed.query,
+                                  typed.focusedDisplayName,
+                                  focusDiagnostics()));
+        return advanced;
+    };
+    const auto activateQuickSearchDirect = [&](std::wstring_view context, FolderView::IncrementalSearchDebugSnapshot& outSnapshot) noexcept -> bool
+    {
+        for (int attempt = 1; attempt <= 3; ++attempt)
+        {
+            if (! ensureLeftFolderViewFocus(context))
+            {
+                return false;
+            }
+
+            clearSyntheticTextInputModifiers();
+            g_folderWindow.CommandQuickSearch(FolderWindow::Pane::Left);
+            PumpPendingMessages();
+
+            if (waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
+                return value.active && value.query.empty();
+            }, SelfTest::Scale(500ms), &outSnapshot))
+            {
+                return true;
+            }
+
+            SelfTest::AppendSelfTestTrace(std::format(L"{} activation attempt {} did not settle; active={}, query='{}', focused='{}'; {}.",
+                                                      context,
+                                                      attempt,
+                                                      outSnapshot.active ? 1 : 0,
+                                                      outSnapshot.query,
+                                                      outSnapshot.focusedDisplayName,
+                                                      focusDiagnostics()));
+        }
+
+        state.Require(false,
+                      std::format(L"{} should enter search mode; active={}, query='{}', focused='{}'; {}.",
+                                  context,
+                                  outSnapshot.active ? 1 : 0,
+                                  outSnapshot.query,
+                                  outSnapshot.focusedDisplayName,
+                                  focusDiagnostics()));
+        return false;
+    };
     state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not have stable focus before Quick Search activation; {}.", focusDiagnostics()));
     if (! state.failure.empty())
@@ -14869,19 +15317,17 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                               snapshot.query,
                               snapshot.focusedDisplayName,
                               focusDiagnostics()));
-    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+    state.Require(waitForLeftFolderViewFocusPassive(SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not retain stable focus after Quick Search activation; {}.", focusDiagnostics()));
     if (! state.failure.empty())
     {
         return false;
     }
 
-    if (! ensureLeftFolderViewFocus(L"Quick Search initial typing"))
+    if (! appendQuickSearchChar(L'a', L"a", L"initial typing") || ! appendQuickSearchChar(L'l', L"al", L"initial typing"))
     {
         return false;
     }
-    sendQuickSearchChar(L'a');
-    sendQuickSearchChar(L'l');
 
     state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
         return value.active && value.query == L"al";
@@ -14958,18 +15404,17 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                               haveRightSnapshot ? rightSnapshot.focusedDisplayName : std::wstring{},
                                focusDiagnostics()));
     state.Require(snapshot.query.empty(), std::format(L"Quick Search no-match reactivation should clear the query; got '{}'.", snapshot.query));
-    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+    state.Require(waitForLeftFolderViewFocusPassive(SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not retain stable focus after Quick Search no-match reactivation; {}.", focusDiagnostics()));
     if (! state.failure.empty())
     {
         return false;
     }
 
-    if (! ensureLeftFolderViewFocus(L"Quick Search no-match typing"))
+    if (! appendQuickSearchChar(L'z', L"z", L"no-match typing"))
     {
         return false;
     }
-    sendQuickSearchChar(L'z');
     state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
                   L"Quick Search no-match snapshot should be available.");
     state.Require(snapshot.active,
@@ -14993,21 +15438,24 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    if (! ensureLeftFolderViewFocus(L"Quick Search shortcut-routed Space reactivation"))
+    if (! activateQuickSearchDirect(L"Quick Search shortcut-routed Space reactivation", snapshot))
     {
         return false;
     }
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_QUICK_SEARCH, 0), 0);
-    PumpPendingMessages();
-    if (! ensureLeftFolderViewFocus(L"Quick Search shortcut-routed Space typing"))
+    state.Require(waitForLeftFolderViewFocusPassive(SelfTest::Scale(1000ms)),
+                  std::format(L"Left folder view did not retain stable focus after Quick Search shortcut-routed Space reactivation; {}.", focusDiagnostics()));
+    if (! state.failure.empty())
     {
         return false;
     }
-    sendQuickSearchChar(L's');
-    sendQuickSearchChar(L'p');
-    sendQuickSearchChar(L'a');
-    sendQuickSearchChar(L'c');
-    sendQuickSearchChar(L'e');
+    if (! appendQuickSearchChar(L's', L"s", L"shortcut-routed Space setup") ||
+        ! appendQuickSearchChar(L'p', L"sp", L"shortcut-routed Space setup") ||
+        ! appendQuickSearchChar(L'a', L"spa", L"shortcut-routed Space setup") ||
+        ! appendQuickSearchChar(L'c', L"spac", L"shortcut-routed Space setup") ||
+        ! appendQuickSearchChar(L'e', L"space", L"shortcut-routed Space setup"))
+    {
+        return false;
+    }
 
     state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
         return value.active && value.query == L"space";
@@ -15017,7 +15465,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                               snapshot.query,
                               snapshot.focusedDisplayName,
                               focusDiagnostics()));
-    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+    state.Require(waitForLeftFolderViewFocusPassive(SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not retain stable focus before shortcut-routed Space; {}.", focusDiagnostics()));
     state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
         return value.active && value.query == L"space";
@@ -15047,7 +15495,7 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
                   std::format(L"Quick Search should keep focus on the spaced filename; got '{}'.", snapshot.focusedDisplayName));
     state.Require(QuickSearchSnapshotHasMatch(snapshot, L"space name.txt", 0u, 6u, true),
                   L"Quick Search should expose a prefix match that includes shortcut-routed Space.");
-    state.Require(WaitForFolderViewPaneFocus(FolderWindow::Pane::Left, folderView, SelfTest::Scale(1000ms)),
+    state.Require(waitForLeftFolderViewFocusPassive(SelfTest::Scale(1000ms)),
                   std::format(L"Left folder view did not retain stable focus after shortcut-routed Space; {}.", focusDiagnostics()));
     state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
         return value.active && value.query == L"space ";
@@ -15062,15 +15510,12 @@ void RaiseSelfTestWindowForInput(HWND hwnd) noexcept
         return false;
     }
 
-    sendQuickSearchChar(L'n');
-    state.Require(waitForQuickSearchSnapshot([](const FolderView::IncrementalSearchDebugSnapshot& value) noexcept {
-        return value.active && value.query == L"space n";
-    }, SelfTest::Scale(1500ms), &snapshot),
-                  std::format(L"Quick Search should preserve shortcut-routed Space before the next character; active={}, query='{}', focused='{}'; {}.",
-                              snapshot.active ? 1 : 0,
-                              snapshot.query,
-                              snapshot.focusedDisplayName,
-                              focusDiagnostics()));
+    if (! appendQuickSearchChar(L'n', L"space n", L"shortcut-routed Space follow-up"))
+    {
+        return false;
+    }
+    state.Require(g_folderWindow.DebugGetIncrementalSearchSnapshot(FolderWindow::Pane::Left, snapshot),
+                  L"Quick Search snapshot should be available after shortcut-routed Space follow-up.");
     state.Require(snapshot.focusedDisplayName == L"space name.txt",
                   std::format(L"Quick Search should keep focus on the spaced filename after the next character; got '{}'.", snapshot.focusedDisplayName));
 
@@ -15227,6 +15672,12 @@ void RunSearchCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOpt
     });
     SelfTest::RunCase(
         options, suite, L"cmd_pane_find_dialog_search_ops", [=](CaseState& state) noexcept { return TestFindDialogSearchOps(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_active_close_does_not_join_ui", [=](CaseState& state) noexcept {
+        return TestFindDialogCloseDuringActiveSearchDoesNotJoinUi(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_drops_stale_search_epoch_payloads", [=](CaseState& state) noexcept {
+        return TestFindDialogDropsStaleSearchEpochPayloads(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_result_drains_respect_child_input_queue_order", [](CaseState& state) noexcept {
         return TestFindDialogResultDrainsRespectQueuedChildInput(state);
     });

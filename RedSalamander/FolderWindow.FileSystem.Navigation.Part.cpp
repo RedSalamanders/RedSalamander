@@ -261,6 +261,14 @@ void FolderWindow::CommandQuickSearch(Pane pane)
 
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.ActivateIncrementalSearch();
+    FocusPaneFolderView(pane);
+    if (_hWnd)
+    {
+        // Menu/accelerator activation can leave a transient null Win32 focus after the command returns.
+        // Keep the repair scoped to the folder-window host so top-level activation churn cannot immediately
+        // deliver a non-null WM_KILLFOCUS back to the active pane and exit the new Quick Search session.
+        static_cast<void>(PostMessageW(_hWnd.get(), WndMsg::kPaneRestoreFolderFocus, 0, 0));
+    }
 }
 
 bool FolderWindow::CreateCommandLineControls(HWND parent) noexcept

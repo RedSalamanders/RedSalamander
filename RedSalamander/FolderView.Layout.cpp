@@ -64,10 +64,29 @@ void FolderView::LayoutItems()
     Debug::Perf::Scope layoutPerf(L"render.layout_items_us");
     layoutPerf.SetValue0(static_cast<uint64_t>(_items.size()));
 
+    // Metric-only phase decomposition of the layout pass (no behavior change). markLayoutPhase emits
+    // the elapsed time since the previous mark as folder.layout.<phase>_us; the five phases nest in
+    // the render.layout_items_us Scope and sum to roughly its value. Gated on capture so normal
+    // builds pay nothing. See Specs/Plans/Done/FolderView_LayoutPassDecomposition_MetricPilot.
+    const bool perfCapture = Debug::Perf::IsCaptureEnabled();
+    auto phaseStart        = perfCapture ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    auto markLayoutPhase   = [&](const wchar_t* name) noexcept
+    {
+        if (! perfCapture)
+        {
+            return;
+        }
+        const auto now    = std::chrono::steady_clock::now();
+        const uint64_t us = std::max<uint64_t>(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(now - phaseStart).count()), 1ull);
+        Debug::Perf::EmitDurationUs(name, us);
+        phaseStart = now;
+    };
+
     EnsureDeviceIndependentResources();
 
     // Ensure estimated metrics are computed from actual font (DPI-aware)
     UpdateEstimatedMetrics();
+    markLayoutPhase(L"folder.layout.setup_us");
 
     const float clientWidthDip  = std::max(0.0f, DipFromPx(_clientSize.cx));
     const float clientHeightDip = std::max(0.0f, DipFromPx(_clientSize.cy));
@@ -238,6 +257,7 @@ void FolderView::LayoutItems()
         _cachedMaxDetailsWidth  = maxDetailsWidth;
         _cachedMaxMetadataWidth = maxMetadataWidth;
         _itemMetricsCached      = true;
+        Debug::Perf::EmitCounter(L"folder.layout.metrics_estimate_pass_count", 1);
 
         Debug::Info(L"FolderView::LayoutItems estimated {} items, max width={:.1f}, max height={:.1f}", _items.size(), maxLabelWidth, maxLabelHeight);
     }
@@ -249,6 +269,7 @@ void FolderView::LayoutItems()
         maxDetailsWidth  = _cachedMaxDetailsWidth;
         maxMetadataWidth = _cachedMaxMetadataWidth;
     }
+    markLayoutPhase(L"folder.layout.estimate_metrics_us");
 
     if (maxLabelHeight <= 0.0f)
     {
@@ -310,6 +331,7 @@ void FolderView::LayoutItems()
         .includeMetadataLine  = includeMetadataLine,
         .items                = columnTextMetrics,
     });
+    markLayoutPhase(L"folder.layout.column_resolve_us");
 
     _columnLayout  = std::move(columnLayout.columns);
     _tileWidthDip  = columnLayout.maxColumnWidthDip;
@@ -357,8 +379,11 @@ void FolderView::LayoutItems()
         }
     }
 
+    markLayoutPhase(L"folder.layout.bounds_us");
+
     _lastLayoutWidth = _tileWidthDip;
     UpdateItemTextLayouts();
+    markLayoutPhase(L"folder.layout.update_text_layouts_us");
 
     _contentHeight                  = clientHeightDip;
     _contentWidth                   = std::max({columnLayout.contentWidthDip, maxRight + kColumnSpacingDip, clientWidthDip});
@@ -440,6 +465,15 @@ void FolderView::UpdateItemTextLayouts()
     const size_t rangeStart         = (startIndex > bufferBefore) ? startIndex - bufferBefore : 0;
     const size_t rangeEnd           = std::min(endIndex + bufferAfter, _items.size());
 
+    // Decomposition counter: how many items this visible+predictive-buffer pass actually iterates
+    // (value0), against the full item count (value1). Distinguishes "range too large" from
+    // "per-item work too slow" for the dominant update_text_layouts phase. Gated like the rest of this
+    // metric-only instrumentation so the layout hot path pays nothing when capture is off.
+    if (Debug::Perf::IsCaptureEnabled())
+    {
+        Debug::Perf::Emit(L"folder.layout.update_visible_item_count", L"counter", 0, rangeEnd - rangeStart, _items.size());
+    }
+
     for (size_t i = rangeStart; i < rangeEnd; ++i)
     {
         auto& item                   = _items[i];
@@ -459,7 +493,8 @@ void FolderView::UpdateItemTextLayouts()
         if (! item.labelLayout)
         {
             wil::com_ptr<IDWriteTextLayout> layout;
-            HRESULT hr = _dwriteFactory->CreateTextLayout(item.displayName.data(),
+            HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Label,
+                                                          item.displayName.data(),
                                                           static_cast<UINT32>(item.displayName.length()),
                                                           _labelFormat.get(),
                                                           constrainedWidth,
@@ -518,7 +553,7 @@ void FolderView::UpdateItemTextLayouts()
         if (! item.detailsLayout)
         {
             wil::com_ptr<IDWriteTextLayout> layout;
-            const HRESULT hr = _dwriteFactory->CreateTextLayout(item.detailsText.c_str(),
+            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details, item.detailsText.c_str(),
                                                                 static_cast<UINT32>(item.detailsText.length()),
                                                                 _detailsFormat.get(),
                                                                 constrainedWidth,
@@ -562,7 +597,7 @@ void FolderView::UpdateItemTextLayouts()
         if (! item.metadataLayout && ! item.metadataText.empty())
         {
             wil::com_ptr<IDWriteTextLayout> layout;
-            const HRESULT hr = _dwriteFactory->CreateTextLayout(item.metadataText.c_str(),
+            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata, item.metadataText.c_str(),
                                                                 static_cast<UINT32>(item.metadataText.length()),
                                                                 _detailsFormat.get(),
                                                                 constrainedWidth,
@@ -728,6 +763,36 @@ std::wstring_view FolderView::GetVisualDisplayName(const FolderItem& item) const
     return item.GetNameWithoutExtension();
 }
 
+HRESULT FolderView::CreateInstrumentedItemTextLayout(ItemTextLayoutKind kind,
+                                                     const wchar_t* text,
+                                                     UINT32 length,
+                                                     IDWriteTextFormat* format,
+                                                     float maxWidth,
+                                                     float maxHeight,
+                                                     IDWriteTextLayout** layout) noexcept
+{
+    // Single instrumented seam for all per-item DirectWrite text-layout creation
+    // (UpdateItemTextLayouts, EnsureItemTextLayout, ProcessIdleLayoutBatch). Metric-only: counts
+    // and times creation so a future patch can decide whether a layout cache is justified. This is
+    // also the natural hook point for that future cache lookup. UI-thread only.
+    const bool capture   = Debug::Perf::IsCaptureEnabled();
+    const auto startedAt = capture ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+
+    const HRESULT hr = _dwriteFactory->CreateTextLayout(text, length, format, maxWidth, maxHeight, layout);
+
+    if (capture)
+    {
+        // Clamp to >= 1us so the JSONL sink encodes this as a duration ("us"), not a counter.
+        const uint64_t elapsedUs = std::max<uint64_t>(Debug::Perf::ElapsedUs(startedAt), 1u);
+        Debug::Perf::EmitDurationUs(L"dwrite.text_layout.create_us", elapsedUs, static_cast<uint64_t>(kind), 0u, hr);
+        Debug::Perf::EmitCounter(L"dwrite.text_layout.create_count", 1u, hr);
+        _frameTextLayoutCreateUs += elapsedUs;
+        ++_frameTextLayoutCreateCount;
+    }
+
+    return hr;
+}
+
 void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
 {
     if (! _dwriteFactory || ! _labelFormat)
@@ -753,7 +818,7 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
     if (! item.labelLayout)
     {
         wil::com_ptr<IDWriteTextLayout> layout;
-        HRESULT hr = _dwriteFactory->CreateTextLayout(
+        HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Label,
             labelText.data(), static_cast<UINT32>(labelText.length()), _labelFormat.get(), constrainedWidth, constrainedHeight, layout.addressof());
         if (SUCCEEDED(hr))
         {
@@ -793,7 +858,7 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
         if (! item.detailsLayout && ! item.detailsText.empty())
         {
             wil::com_ptr<IDWriteTextLayout> layout;
-            const HRESULT hr = _dwriteFactory->CreateTextLayout(item.detailsText.c_str(),
+            const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details, item.detailsText.c_str(),
                                                                 static_cast<UINT32>(item.detailsText.length()),
                                                                 _detailsFormat.get(),
                                                                 constrainedWidth,
@@ -829,7 +894,7 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
             if (! item.metadataLayout && ! item.metadataText.empty())
             {
                 wil::com_ptr<IDWriteTextLayout> layout;
-                const HRESULT hr = _dwriteFactory->CreateTextLayout(item.metadataText.c_str(),
+                const HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata, item.metadataText.c_str(),
                                                                     static_cast<UINT32>(item.metadataText.length()),
                                                                     _detailsFormat.get(),
                                                                     constrainedWidth,
@@ -942,7 +1007,7 @@ void FolderView::ProcessIdleLayoutBatch()
 
         // Create label layout
         wil::com_ptr<IDWriteTextLayout> layout;
-        HRESULT hr = _dwriteFactory->CreateTextLayout(item.displayName.data(),
+        HRESULT hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Label, item.displayName.data(),
                                                       static_cast<UINT32>(item.displayName.length()),
                                                       _labelFormat.get(),
                                                       constrainedWidth,
@@ -978,7 +1043,7 @@ void FolderView::ProcessIdleLayoutBatch()
             if (! item.detailsLayout && ! item.detailsText.empty())
             {
                 wil::com_ptr<IDWriteTextLayout> detailsLayout;
-                hr = _dwriteFactory->CreateTextLayout(item.detailsText.c_str(),
+                hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Details, item.detailsText.c_str(),
                                                       static_cast<UINT32>(item.detailsText.length()),
                                                       _detailsFormat.get(),
                                                       constrainedWidth,
@@ -1007,7 +1072,7 @@ void FolderView::ProcessIdleLayoutBatch()
                 if (! item.metadataLayout && ! item.metadataText.empty())
                 {
                     wil::com_ptr<IDWriteTextLayout> metaLayout;
-                    hr = _dwriteFactory->CreateTextLayout(item.metadataText.c_str(),
+                    hr = CreateInstrumentedItemTextLayout(ItemTextLayoutKind::Metadata, item.metadataText.c_str(),
                                                           static_cast<UINT32>(item.metadataText.length()),
                                                           _detailsFormat.get(),
                                                           constrainedWidth,

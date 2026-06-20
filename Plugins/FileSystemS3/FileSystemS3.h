@@ -316,6 +316,16 @@ private:
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": ["*"], "move": ["*"] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "supported"
   }
 }
 )json";
@@ -340,6 +350,16 @@ private:
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": [] },
     "import": { "copy": ["*"], "move": ["*"] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "notApplicable"
   }
 }
 )json";

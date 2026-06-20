@@ -6,6 +6,9 @@
 #include "SearchTextHelpers.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <limits>
 #include <regex>
 #include <string_view>
@@ -15,6 +18,7 @@
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/com.h>
+#include <wil/resource.h>
 #pragma warning(pop)
 
 namespace SearchFallbackEngine
@@ -27,6 +31,27 @@ constexpr HRESULT kCancelledHr            = HRESULT_FROM_WIN32(ERROR_CANCELLED);
 constexpr HRESULT kFileTooLargeHr         = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
 constexpr HRESULT kAccessDeniedHr         = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
 constexpr HRESULT kNotSupportedHr         = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+constexpr uint32_t kMaxFollowSymlinkDepth = 1024u;
+constexpr size_t kMaxQueuedFollowSymlinkDirectories = 1'000'000u;
+
+struct DirectoryVisitIdentity final
+{
+    uint32_t volumeSerialNumber = 0u;
+    uint64_t fileIndex          = 0u;
+
+    friend bool operator==(const DirectoryVisitIdentity& lhs, const DirectoryVisitIdentity& rhs) noexcept
+    {
+        return lhs.volumeSerialNumber == rhs.volumeSerialNumber && lhs.fileIndex == rhs.fileIndex;
+    }
+};
+
+struct DirectoryVisitIdentityHash final
+{
+    [[nodiscard]] size_t operator()(const DirectoryVisitIdentity& value) const noexcept
+    {
+        return std::hash<uint64_t>{}((static_cast<uint64_t>(value.volumeSerialNumber) << 32u) ^ value.fileIndex);
+    }
+};
 
 struct SearchEntryMetadata final
 {
@@ -50,6 +75,13 @@ struct SearchContentResult final
     std::wstring previewText;
 };
 
+struct FileInfoBufferEntry final
+{
+    std::wstring_view name;
+    FileInfo* nextEntry = nullptr;
+    bool processEntry   = false;
+};
+
 struct SearchRuntime final
 {
     SearchRuntime()                                = default;
@@ -69,6 +101,7 @@ struct SearchRuntime final
     std::unique_ptr<std::wregex> nameRegex;
     std::unique_ptr<std::wregex> contentRegex;
     std::unordered_set<std::wstring> queuedDirectories;
+    std::unordered_set<DirectoryVisitIdentity, DirectoryVisitIdentityHash> queuedDirectoryIdentities;
     bool includeFiles                       = false;
     bool includeDirectories                 = false;
     bool recursive                          = false;
@@ -90,6 +123,70 @@ struct SearchRuntime final
     bool hasReportedProgress                = false;
     bool stopRequested                      = false;
 };
+
+void FlagMalformedDirectoryEntry(SearchRuntime& runtime) noexcept
+{
+    runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+}
+
+[[nodiscard]] bool ReadFileInfoBufferEntry(SearchRuntime& runtime,
+                                           FileInfo* entry,
+                                           std::byte* base,
+                                           std::byte* end,
+                                           FileInfoBufferEntry& outEntry) noexcept
+{
+    outEntry = {};
+    if (entry == nullptr)
+    {
+        return false;
+    }
+
+    auto* const entryBytes = reinterpret_cast<std::byte*>(entry);
+    if (entryBytes < base || entryBytes >= end)
+    {
+        FlagMalformedDirectoryEntry(runtime);
+        return false;
+    }
+
+    const size_t remainingBytes     = static_cast<size_t>(end - entryBytes);
+    constexpr size_t kFileNameStart = offsetof(FileInfo, FileName);
+    if (remainingBytes < kFileNameStart)
+    {
+        FlagMalformedDirectoryEntry(runtime);
+        return false;
+    }
+
+    size_t entrySpanBytes = remainingBytes;
+    if (entry->NextEntryOffset != 0u)
+    {
+        const size_t nextOffset = static_cast<size_t>(entry->NextEntryOffset);
+        if (nextOffset < kFileNameStart || nextOffset > remainingBytes)
+        {
+            FlagMalformedDirectoryEntry(runtime);
+            return false;
+        }
+
+        auto* const nextBytes = entryBytes + nextOffset;
+        if (static_cast<size_t>(end - nextBytes) < kFileNameStart)
+        {
+            FlagMalformedDirectoryEntry(runtime);
+            return false;
+        }
+
+        outEntry.nextEntry = reinterpret_cast<FileInfo*>(nextBytes);
+        entrySpanBytes     = nextOffset;
+    }
+
+    if (entry->FileNameSize > (entrySpanBytes - kFileNameStart) || (entry->FileNameSize % sizeof(wchar_t)) != 0u)
+    {
+        FlagMalformedDirectoryEntry(runtime);
+        return true;
+    }
+
+    outEntry.name         = std::wstring_view(entry->FileName, static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t));
+    outEntry.processEntry = true;
+    return true;
+}
 
 [[nodiscard]] unsigned long ByteCountOfString(std::wstring_view text) noexcept
 {
@@ -249,7 +346,99 @@ struct SearchRuntime final
         key.pop_back();
     }
 
-    return key;
+    return OrdinalString::FoldCaseInvariant(key);
+}
+
+[[nodiscard]] std::wstring ToWin32ExtendedPath(std::wstring_view path) noexcept
+{
+    if (path.empty() || path.rfind(LR"(\\?\)", 0u) == 0 || path.rfind(LR"(\\.\)", 0u) == 0)
+    {
+        return std::wstring(path);
+    }
+
+    if (path.rfind(LR"(\\)", 0u) == 0)
+    {
+        std::wstring extended(LR"(\\?\UNC\)");
+        extended.append(path.substr(2u));
+        return extended;
+    }
+
+    if (path.size() >= 3u && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/'))
+    {
+        std::wstring extended(LR"(\\?\)");
+        extended.append(path);
+        return extended;
+    }
+
+    return std::wstring(path);
+}
+
+[[nodiscard]] HRESULT TryGetDirectoryVisitIdentity(std::wstring_view path, DirectoryVisitIdentity& outIdentity) noexcept
+{
+    outIdentity = {};
+    if (path.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring extendedPath = ToWin32ExtendedPath(path);
+    wil::unique_handle handle(::CreateFileW(extendedPath.c_str(),
+                                            FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            OPEN_EXISTING,
+                                            FILE_FLAG_BACKUP_SEMANTICS,
+                                            nullptr));
+    if (! handle)
+    {
+        const DWORD lastError = ::GetLastError();
+        return HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_FILE_NOT_FOUND);
+    }
+
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (::GetFileInformationByHandle(handle.get(), &info) == 0)
+    {
+        const DWORD lastError = ::GetLastError();
+        return HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_GEN_FAILURE);
+    }
+
+    outIdentity.volumeSerialNumber = info.dwVolumeSerialNumber;
+    outIdentity.fileIndex          = (static_cast<uint64_t>(info.nFileIndexHigh) << 32u) | static_cast<uint64_t>(info.nFileIndexLow);
+    return S_OK;
+}
+
+[[nodiscard]] bool MarkQueuedDirectory(SearchRuntime& runtime, std::wstring_view fullPath) noexcept
+{
+    if (runtime.followSymlinks && runtime.queuedDirectories.size() >= kMaxQueuedFollowSymlinkDirectories)
+    {
+        runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+        return false;
+    }
+
+    const std::wstring visitKey = NormalizeVisitKey(fullPath);
+    if (! runtime.queuedDirectories.insert(visitKey).second)
+    {
+        return false;
+    }
+
+    if (! runtime.followSymlinks)
+    {
+        return true;
+    }
+
+    DirectoryVisitIdentity identity{};
+    if (FAILED(TryGetDirectoryVisitIdentity(fullPath, identity)))
+    {
+        return true;
+    }
+
+    if (! runtime.queuedDirectoryIdentities.insert(identity).second)
+    {
+        runtime.queuedDirectories.erase(visitKey);
+        return false;
+    }
+
+    return true;
 }
 
 HRESULT CheckSearchCancelled(SearchRuntime& runtime) noexcept
@@ -311,6 +500,14 @@ HRESULT ReportSearchProgress(SearchRuntime& runtime, FileSystemSearchPhase phase
     return S_OK;
 }
 
+HRESULT RejectRegexSearch(SearchRuntime& runtime, std::wstring_view regexKind, std::wstring_view rejectReason) noexcept
+{
+    Debug::Warning(L"SearchFallbackEngine: {} regex rejected: {}", regexKind, rejectReason);
+    runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED;
+    static_cast<void>(ReportSearchProgress(runtime, FILESYSTEM_SEARCH_PHASE_COMPLETED, nullptr, E_INVALIDARG, true));
+    return E_INVALIDARG;
+}
+
 [[nodiscard]] bool MatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName) noexcept
 {
     switch (runtime.query->nameMode)
@@ -322,7 +519,24 @@ HRESULT ReportSearchProgress(SearchRuntime& runtime, FileSystemSearchPhase phase
             size_t position = std::wstring::npos;
             return FindLiteral(displayName, runtime.namePattern, runtime.matchCaseName, position);
         }
-        case FILESYSTEM_SEARCH_NAME_REGEX: return runtime.nameRegex && std::regex_search(displayName, *runtime.nameRegex);
+        case FILESYSTEM_SEARCH_NAME_REGEX:
+        {
+            if (! runtime.nameRegex)
+            {
+                return false;
+            }
+
+            // noexcept boundary: std::regex_search may throw regex_error on
+            // implementation-defined complexity/stack limits.
+            try
+            {
+                return std::regex_search(displayName, *runtime.nameRegex);
+            }
+            catch (const std::regex_error&)
+            {
+                return false;
+            }
+        }
     }
 
     return false;
@@ -384,6 +598,7 @@ HRESULT MatchFileContent(SearchRuntime& runtime, const std::wstring& fullPath, S
                                                  helperResult);
     if (hr == kFileTooLargeHr)
     {
+        runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
         return S_OK;
     }
     if (FAILED(hr))
@@ -401,6 +616,11 @@ HRESULT MatchFileContent(SearchRuntime& runtime, const std::wstring& fullPath, S
         }
 
         return hr;
+    }
+
+    if (helperResult.overflowSkipped)
+    {
+        runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
     }
 
     result.matched     = helperResult.matched;
@@ -461,7 +681,26 @@ HRESULT EvaluateEntry(SearchRuntime& runtime, const SearchEntryMetadata& entry) 
         ++runtime.scannedFiles;
     }
 
+    if (runtime.query->nameMode == FILESYSTEM_SEARCH_NAME_REGEX)
+    {
+        const HRESULT hr = CheckSearchCancelled(runtime);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
     const bool nameMatched = MatchNamePattern(runtime, entry.displayName);
+
+    if (runtime.query->nameMode == FILESYSTEM_SEARCH_NAME_REGEX)
+    {
+        const HRESULT hr = CheckSearchCancelled(runtime);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
     if (runtime.query->nameMode != FILESYSTEM_SEARCH_NAME_DISABLED && ! nameMatched)
     {
         return S_OK;
@@ -509,11 +748,12 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
     {
         std::wstring fullPath;
         std::wstring relativeBase;
+        uint32_t depth = 0u;
     };
 
     std::vector<DirectoryFrame> stack;
-    stack.push_back({runtime.rootPath, std::wstring()});
-    runtime.queuedDirectories.insert(NormalizeVisitKey(runtime.rootPath));
+    stack.push_back({runtime.rootPath, std::wstring(), 0u});
+    static_cast<void>(MarkQueuedDirectory(runtime, runtime.rootPath));
 
     while (! stack.empty() && ! runtime.stopRequested)
     {
@@ -547,40 +787,65 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
             return hr;
         }
 
-        unsigned long count = 0u;
-        hr                  = information->GetCount(&count);
+        FileInfo* head = nullptr;
+        hr             = information->GetBuffer(&head);
         if (FAILED(hr))
         {
             return hr;
         }
 
-        for (unsigned long index = 0u; index < count && ! runtime.stopRequested; ++index)
+        unsigned long bufferSizeBytes = 0u;
+        hr                            = information->GetBufferSize(&bufferSizeBytes);
+        if (FAILED(hr))
         {
-            FileInfo* entry = nullptr;
-            hr              = information->Get(index, &entry);
-            if (FAILED(hr) || entry == nullptr)
+            return hr;
+        }
+
+        constexpr size_t kFileNameStart = offsetof(FileInfo, FileName);
+        if (head == nullptr)
+        {
+            if (bufferSizeBytes != 0u)
             {
-                return FAILED(hr) ? hr : E_FAIL;
+                FlagMalformedDirectoryEntry(runtime);
+            }
+            continue;
+        }
+
+        if (bufferSizeBytes < kFileNameStart)
+        {
+            FlagMalformedDirectoryEntry(runtime);
+            continue;
+        }
+
+        std::byte* const base = reinterpret_cast<std::byte*>(head);
+        std::byte* const end  = base + bufferSizeBytes;
+        for (FileInfo* entry = head; entry != nullptr && ! runtime.stopRequested;)
+        {
+            FileInfoBufferEntry bufferEntry{};
+            if (! ReadFileInfoBufferEntry(runtime, entry, base, end, bufferEntry))
+            {
+                break;
             }
 
-            const std::wstring_view name(entry->FileName, entry->FileNameSize / sizeof(wchar_t));
-            if (IsDotOrDotDot(name))
+            const FileInfo* const rawEntry = entry;
+            entry                          = bufferEntry.nextEntry;
+            if (! bufferEntry.processEntry || IsDotOrDotDot(bufferEntry.name))
             {
                 continue;
             }
 
             SearchEntryMetadata metadata{};
-            metadata.displayName = std::wstring(name);
+            metadata.displayName = std::wstring(bufferEntry.name);
             metadata.relativePath =
                 frame.relativeBase.empty() ? metadata.displayName : AppendPath(frame.relativeBase, metadata.displayName, PickPathSeparator(frame.fullPath));
             metadata.fullPath       = AppendPath(frame.fullPath, metadata.displayName);
-            metadata.fileAttributes = entry->FileAttributes;
-            metadata.creationTime   = entry->CreationTime;
-            metadata.lastAccessTime = entry->LastAccessTime;
-            metadata.lastWriteTime  = entry->LastWriteTime;
-            metadata.changeTime     = entry->ChangeTime;
-            metadata.endOfFile      = entry->EndOfFile;
-            metadata.allocationSize = entry->AllocationSize;
+            metadata.fileAttributes = rawEntry->FileAttributes;
+            metadata.creationTime   = rawEntry->CreationTime;
+            metadata.lastAccessTime = rawEntry->LastAccessTime;
+            metadata.lastWriteTime  = rawEntry->LastWriteTime;
+            metadata.changeTime     = rawEntry->ChangeTime;
+            metadata.endOfFile      = rawEntry->EndOfFile;
+            metadata.allocationSize = rawEntry->AllocationSize;
 
             hr = EvaluateEntry(runtime, metadata);
             if (FAILED(hr))
@@ -592,10 +857,15 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
             const bool isReparse   = (metadata.fileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
             if (runtime.recursive && isDirectory && (! isReparse || runtime.followSymlinks))
             {
-                const std::wstring visitKey = NormalizeVisitKey(metadata.fullPath);
-                if (runtime.queuedDirectories.insert(visitKey).second)
+                if (runtime.followSymlinks && frame.depth >= kMaxFollowSymlinkDepth)
                 {
-                    stack.push_back({metadata.fullPath, metadata.relativePath});
+                    runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+                    continue;
+                }
+
+                if (MarkQueuedDirectory(runtime, metadata.fullPath))
+                {
+                    stack.push_back({metadata.fullPath, metadata.relativePath, frame.depth + 1u});
                 }
             }
         }
@@ -676,14 +946,40 @@ HRESULT Execute(IFileSystem* fileSystem, const FileSystemSearchQuery* query, IFi
 
         if (query->nameMode == FILESYSTEM_SEARCH_NAME_REGEX)
         {
+            std::wstring rejectReason;
+            if (! SearchTextHelpers::ValidateRegexPatternSafety(runtime.namePattern, rejectReason))
+            {
+                return RejectRegexSearch(runtime, L"name", rejectReason);
+            }
+
             const auto flags  = runtime.matchCaseName ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
-            runtime.nameRegex = std::make_unique<std::wregex>(runtime.namePattern, flags);
+            try
+            {
+                runtime.nameRegex = std::make_unique<std::wregex>(runtime.namePattern, flags);
+            }
+            catch (const std::regex_error&)
+            {
+                return RejectRegexSearch(runtime, L"name", L"Invalid regex syntax.");
+            }
         }
 
         if (query->contentMode == FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX)
         {
+            std::wstring rejectReason;
+            if (! SearchTextHelpers::ValidateRegexPatternSafety(runtime.contentPattern, rejectReason))
+            {
+                return RejectRegexSearch(runtime, L"content", rejectReason);
+            }
+
             const auto flags = runtime.matchCaseContent ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
-            runtime.contentRegex = std::make_unique<std::wregex>(runtime.contentPattern, flags);
+            try
+            {
+                runtime.contentRegex = std::make_unique<std::wregex>(runtime.contentPattern, flags);
+            }
+            catch (const std::regex_error&)
+            {
+                return RejectRegexSearch(runtime, L"content", L"Invalid regex syntax.");
+            }
         }
 
         HRESULT hr = ReportSearchProgress(runtime, FILESYSTEM_SEARCH_PHASE_INITIALIZING, &runtime.rootPath, S_OK, true);

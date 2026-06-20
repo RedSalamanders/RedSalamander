@@ -254,20 +254,34 @@ SelfTest::RunCase(options,
 
     const std::wstring appId                 = std::format(L"RedSalamanderSelfTestOAuth{}", id);
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    const std::filesystem::path schemaPath   = Common::Settings::GetSettingsSchemaPath(appId);
     const auto cleanupSettings               = wil::scope_exit([&] noexcept
     {
         std::error_code ec;
         std::filesystem::remove(settingsPath, ec);
+        std::filesystem::remove(schemaPath, ec);
     });
 
     const HRESULT saveHr = Common::Settings::SaveSettings(appId, settings);
-    state.Require(SUCCEEDED(saveHr), std::format(L"SaveSettings failed. hr=0x{:08X}", static_cast<unsigned long>(saveHr)));
+    if (! state.Require(saveHr == S_OK, std::format(L"SaveSettings failed. hr=0x{:08X}", static_cast<unsigned long>(saveHr))))
+    {
+        return false;
+    }
 
     Common::Settings::Settings loaded;
     const HRESULT loadHr = Common::Settings::LoadSettings(appId, loaded);
-    state.Require(SUCCEEDED(loadHr), std::format(L"LoadSettings failed. hr=0x{:08X}", static_cast<unsigned long>(loadHr)));
-    state.Require(loaded.connections.has_value(), L"Expected connections settings after reload.");
-    state.Require(! loaded.connections->items.empty(), L"Expected one connection profile after reload.");
+    if (! state.Require(loadHr == S_OK, std::format(L"LoadSettings failed. hr=0x{:08X}", static_cast<unsigned long>(loadHr))))
+    {
+        return false;
+    }
+    if (! state.Require(loaded.connections.has_value(), L"Expected connections settings after reload."))
+    {
+        return false;
+    }
+    if (! state.Require(! loaded.connections->items.empty(), L"Expected one connection profile after reload."))
+    {
+        return false;
+    }
     state.Require(loaded.connections->items.front().authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce,
                   L"Expected OAuth2 PKCE auth mode after settings round-trip.");
 

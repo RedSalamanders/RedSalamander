@@ -970,7 +970,7 @@ private:
             .showFocus       = false,
             .cornerRadiusDip = radius,
         };
-        RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, nullptr, RedSalamander::DxUi::ThemePalette{}, chrome);
+        RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, nullptr, MakeChromeThemePalette(), chrome);
 #if defined(ENABLE_TESTS)
         _debugUsesSharedCloseChrome = true;
 #endif
@@ -1019,6 +1019,30 @@ private:
         }
 
         std::reverse(_buttonRects.begin(), _buttonRects.end());
+    }
+
+    [[nodiscard]] RedSalamander::DxUi::ThemePalette MakeChromeThemePalette() const noexcept
+    {
+        // AlertOverlay paints from its own AlertTheme, but the shared button
+        // chrome helper consumes a DxUi::ThemePalette (a Standard focus ring is
+        // painted from the palette's focus strokes). Derive the fields the
+        // chrome path can read from the overlay theme so the ring stays visible
+        // and theme-correct instead of relying on default-palette colors.
+        RedSalamander::DxUi::ThemePalette palette{};
+        palette.dark             = _theme.darkBase;
+        palette.highContrast     = _theme.highContrast;
+        palette.accent           = _theme.accent;
+        palette.text             = _theme.text;
+        palette.windowBackground = _theme.background;
+        palette.focusStroke      = _theme.accent;
+        palette.focusStrokeOuter = _theme.darkBase ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f);
+        palette.focusStrokeInner = _theme.darkBase ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f) : D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f);
+        if (_theme.highContrast)
+        {
+            palette.focusStrokeOuter = _theme.text;
+            palette.focusStrokeInner = _theme.background;
+        }
+        return palette;
     }
 
     [[nodiscard]] RedSalamander::DxUi::ButtonChromeCustomStyle MakeOverlayButtonChromeStyle(const ButtonRect& btn, bool hot, bool focused, float cornerDip) const
@@ -1079,7 +1103,7 @@ private:
             chrome.focused         = focused;
             chrome.keyboardFocused = focused;
             chrome.customStyle     = MakeOverlayButtonChromeStyle(btn, hot, focused, cornerDip);
-            RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, RedSalamander::DxUi::ThemePalette{}, chrome);
+            RedSalamander::DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
 #if defined(ENABLE_TESTS)
             _debugUsesSharedButtonChrome = true;
 #endif

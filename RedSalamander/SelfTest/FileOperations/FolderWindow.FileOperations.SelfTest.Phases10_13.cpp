@@ -21,9 +21,15 @@ case SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus:
             Fail(L"Partial move status test failed to prepare source/destination folders.");
             return true;
         }
-        if (! SetFileAttributesW(srcFile.c_str(), FILE_ATTRIBUTE_READONLY))
+
+        // Hold the source open without FILE_SHARE_DELETE so the move's source-delete phase
+        // fails deterministically after the copy succeeded (readonly sources now move like a
+        // rename would, so they no longer trigger this path).
+        state.holdOpenHandle.reset(CreateFileW(
+            srcFile.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (! state.holdOpenHandle)
         {
-            Fail(L"Partial move status test failed to make the source file read-only.");
+            Fail(L"Partial move status test failed to hold the source file open.");
             return true;
         }
 
@@ -59,6 +65,8 @@ case SelfTestState::Step::FileOps_CrossVolumeMovePartialFailureStatus:
         {
             return false;
         }
+
+        state.holdOpenHandle.reset();
 
         if (state.forceMoveCopyFallbackEnvBackedUp)
         {
@@ -296,7 +304,7 @@ case SelfTestState::Step::FileOps_DeleteToctouSwapGuard:
                       1,
                       S_OK);
 
-    NextStep(state, SelfTestState::Step::Phase5_PreCalcSettingsApplied);
+    NextStep(state, SelfTestState::Step::Fairstream_MoveFallbackPreservesUncopiedNewFiles);
     return false;
 }
 
@@ -635,6 +643,10 @@ case SelfTestState::Step::Phase11_CrossFileSystemBridge:
 
     if (state.stepState == 0)
     {
+        static_cast<void>(SetPluginConfiguration(
+            state.infoLocal.get(),
+            R"json({"concurrencyMode":"manual","copyMoveMaxConcurrency":4,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048,"reparsePointPolicy":"copyReparse","searchBackendPreference":"auto","searchMaxDirectoryWalkers":4})json"));
+
         if (! RecreateEmptyDirectory(srcDir) || ! RecreateEmptyDirectory(dstDir) || ! RecreateEmptyDirectory(moveDir))
         {
             Fail(L"Failed to reset bridge test directories.");
@@ -1520,6 +1532,14 @@ case SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines:
         Fail(L"Bridge wide-shallow test expected file copying to start before directory producer completion.");
         return true;
     }
+    constexpr uint64_t kExpectedMaxBridgeAdmissionQueueDepth = 16u;
+    if (it->second.bridgeAdmissionMaxQueueDepth > kExpectedMaxBridgeAdmissionQueueDepth)
+    {
+        Fail(std::format(L"Bridge admission queue should stay bounded at {} entries; observed {}.",
+                         kExpectedMaxBridgeAdmissionQueueDepth,
+                         it->second.bridgeAdmissionMaxQueueDepth));
+        return true;
+    }
 
     wil::com_ptr<IFileSystemIO> dummyIo;
     if (FAILED(state.fsDummy->QueryInterface(IID_PPV_ARGS(dummyIo.addressof()))) || ! dummyIo)
@@ -1823,7 +1843,19 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
         return true;
     }
 
-    constexpr unsigned int kBaselineConcurrency   = 4u;
+    // The no-override baseline resolves to the local storage profile's preferred concurrency
+    // (the engine probes the real medium since Fairstream 5D); derive it from the same probe.
+    unsigned int kBaselineConcurrency = 4u;
+    {
+        FileSystemStorageCharacteristics storageCharacteristics{};
+        storageCharacteristics.sizeBytes = sizeof(storageCharacteristics);
+        const std::wstring storageProbePath = state.tempRoot.wstring();
+        if (state.fsLocal && SUCCEEDED(state.fsLocal->GetStorageCharacteristics(storageProbePath.c_str(), &storageCharacteristics)) &&
+            storageCharacteristics.preferredCopyMoveConcurrency != 0u)
+        {
+            kBaselineConcurrency = storageCharacteristics.preferredCopyMoveConcurrency;
+        }
+    }
     constexpr unsigned int kCandidateConcurrency  = 2u;
     constexpr int kFileCount                      = 16;
     constexpr size_t kFileBytes                   = 4ull * 1024ull * 1024ull;
@@ -2037,6 +2069,11 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
             return 0;
         }
 
+        if (popupSnapshot.effectiveConcurrencyBudget == 0u)
+        {
+            return 0; // resolved values not published yet; keep polling
+        }
+
         if (! popupSnapshot.autoConcurrencyUsed || popupSnapshot.autoTunedConcurrency != kBaselineConcurrency ||
             popupSnapshot.effectiveConcurrencyBudget != kCandidateConcurrency)
         {
@@ -2076,6 +2113,16 @@ case SelfTestState::Step::Phase11_ConnectionOverridePrecedence:
         if (! BackupPluginConfiguration(state.infoDummy.get(), state.connOverrideDummyConfigSnapshot))
         {
             Fail(L"Failed to snapshot dummy configuration for @conn precedence validation.");
+            return true;
+        }
+
+        const std::string localConfig =
+            std::format(R"json({{"concurrencyMode":"manual","copyMoveMaxConcurrency":{},"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048,"reparsePointPolicy":"copyReparse","searchBackendPreference":"auto","searchMaxDirectoryWalkers":4}})json",
+                        kBaselineConcurrency);
+        if (! SetPluginConfiguration(state.infoLocal.get(), localConfig))
+        {
+            restoreOverridePerfState();
+            Fail(L"Failed to reset local plugin concurrency before @conn precedence validation.");
             return true;
         }
 

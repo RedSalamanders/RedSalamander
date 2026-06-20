@@ -36,6 +36,9 @@
     <ClCompile Include="RedConfigureSession.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="RedConfigureSplashScreen.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="RedConfigureTraceProvider.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -72,6 +75,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RedConfigureSession.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RedConfigureSplashScreen.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="RedConfigureThemeExampleControl.h">

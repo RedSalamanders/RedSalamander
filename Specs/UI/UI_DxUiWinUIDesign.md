@@ -2,7 +2,7 @@
 
 **Author:** Ripley (Lead / Reviewer)
 **Date:** 2026-04-04
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-06-09
 **Status:** Authoritative design and behavior contract for `DxUi`; rollout closure and archived validation history live in `Specs/Plans/Done/UI_DxUiWinUIDesignAlignmentPlan.md`
 **Scope:** Design system tokens, control specifications, retained-host behavior, and verification requirements
 **Inspiration:** WinUI 3 / Windows 11 Fluent Design System
@@ -337,6 +337,7 @@ Per-monitor DPI awareness is required for all DxUI hosts and for hybrid shell wi
 2. DPI-sensitive retained caches such as multiline text layouts, tooltip layouts, and popup/window metrics MUST invalidate on that path and rebuild at the new DPI rather than reusing stale measurements.
 3. Child/custom windows that own local DPI-sensitive chrome or measurements MUST listen for `WM_DPICHANGED_AFTERPARENT` and refresh their local DPI state when the parent window crosses monitors.
 4. `NavigationView` edit-suggest and full-path popups MUST survive a live DPI transition and recompute their geometry instead of requiring a close/reopen cycle.
+5. DxUI-owned popup windows, including menu flyouts, context menus, cascading submenus, and ComboBox dropdowns, MUST handle `WM_DPICHANGED` and `WM_DPICHANGED_AFTERPARENT` while open. The popup host DPI, visible surface rect, transparent shadow window rect, rounded window region, backdrop snapshot, row metrics, scroll viewport, and scrollbar state must be recomputed at the new DPI without closing/reopening the popup or leaving clipped stale geometry when the window crosses monitors with different scaling.
 
 **Design principle:** The retained layout model stays DIP-based. The important DPI work is shared cache invalidation, popup/window metric refresh, and crisp rerasterization at the new scale rather than introducing manual pixel-space layout branches.
 

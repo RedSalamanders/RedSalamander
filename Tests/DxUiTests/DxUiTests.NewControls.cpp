@@ -1377,6 +1377,34 @@ void TestStatusStripPaintHandlesMissingDeviceContext()
     Require(true, "status strip multi-section paint tolerates a missing device context");
 }
 
+void TestTagPickerAddsRemovesAndDedupesOptions()
+{
+    using namespace RedSalamander::DxUi;
+
+    TagPicker picker;
+    picker.SetBounds(D2D1::RectF(0.0f, 0.0f, 360.0f, 36.0f));
+    picker.SetOptions(L"All owners", {L"FileSystem", L"FileSystem", L"ViewerText"});
+
+    size_t changedCount = 0u;
+    picker.SetOnSelectionChanged([&changedCount](std::span<const std::wstring>) { ++changedCount; });
+
+    Require(picker.GetOptions().size() == 2u, "tag picker dedupes duplicate options");
+    Require(picker.SelectOption(L"All owners"), "tag picker accepts the all-option command");
+    Require(picker.GetSelectedValues().size() == 2u, "tag picker all-option selects every deduped option");
+    Require(picker.GetDisplayTagCount() == 1u, "tag picker collapses an all-selection into one display tag");
+    Require(picker.GetDisplayTagText(0u) == L"All owners", "tag picker all-selection tag uses the configured all label");
+
+    Require(picker.RemoveDisplayTag(0u), "tag picker removes the all-selection tag");
+    Require(picker.GetSelectedValues().empty(), "removing the all tag clears selected options");
+    Require(picker.SelectOption(L"ViewerText"), "tag picker selects an individual option");
+    Require(picker.GetSelectedValues().size() == 1u && picker.GetSelectedValues().front() == L"ViewerText", "tag picker stores individual selected option");
+
+    picker.SetInputText(L"file");
+    Require(picker.CommitInput(), "tag picker commits the best suggestion from typed input");
+    Require(picker.GetSelectedValues().size() == 2u, "typed suggestion commit adds the matching option tag");
+    Require(changedCount >= 4u, "tag picker notifies selection changes");
+}
+
 // ---------------------------------------------------------------------------
 // Smoke overlay
 // ---------------------------------------------------------------------------
@@ -1492,6 +1520,7 @@ void RunNewControlTests()
     TestStatusStripRightAlignedLeadingEllipsisSections();
     TestStatusStripBlendWithWindowBackgroundRoundtrips();
     TestStatusStripPaintHandlesMissingDeviceContext();
+    TestTagPickerAddsRemovesAndDedupesOptions();
 
     // Smoke overlay
     TestSmokeOverlayDefaultIsFalse();

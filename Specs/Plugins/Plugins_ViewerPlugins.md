@@ -46,6 +46,8 @@ Optional embedded preview-capable plugins (loaded from `<exeDir>\\Plugins` when 
 - `builtin/viewer-json`: WebView2-based JSON/JSON5/JSONL viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 - `builtin/viewer-markdown`: WebView2-based Markdown viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 
+> **Embedded preview allowlist is hard-coded in the host.** The set of viewer plugin ids that are eligible for the embedded preview pane is currently a hard-coded allowlist in the host (`SupportsEmbeddedPreviewViewer` in `RedSalamander/FolderWindow.Viewers.cpp`). A viewer plugin that implements `VIEWER_OPEN_FLAG_EMBEDDED` correctly will still be refused embedded hosting (and fall back to the item-properties placeholder) unless its plugin id is added to that allowlist. When introducing a new embedded-capable viewer, add its id to `SupportsEmbeddedPreviewViewer` and update the embedded-preview-capable lists above.
+
 ## Settings (host responsibility)
 
 Viewer selection is controlled by schema v16 file-action settings:
@@ -226,6 +228,12 @@ Key responsibilities:
 - host must call `IViewer::SetCallback(nullptr, nullptr)` before releasing/unloading the plugin
 - `IViewer::SetCallback(nullptr, nullptr)` is the synchronous drain point for this registration-style callback: after it returns, the plugin must not invoke the previous callback again
 - queued or background work that might still report `ViewerClosed` must either complete before `SetCallback(nullptr, nullptr)` returns or self-drop as stale before invoking the callback
+
+**Threading / lifetime (consolidated):**
+
+- Because `SetCallback(nullptr, nullptr)` synchronously drains in-flight callback delivery, the host MUST NOT clear the callback (call `SetCallback(nullptr, nullptr)`) from inside its own `IViewerCallback::ViewerClosed` handler. Doing so deadlocks: the drain would wait for the very `ViewerClosed` invocation that is calling it. The host instead unregisters its instance and defers the actual callback clear + `Close()` to a separate teardown path (`FolderWindow::ShutdownViewers` clears callbacks from the host side before forcing `Close()`; see `RedSalamander/FolderWindow.Viewers.cpp`).
+- Plugins MUST NOT hold a lock across the `SetCallback(nullptr, nullptr)` drain wait if callback delivery (the `ViewerClosed` path) can acquire that same lock; otherwise the drain self-deadlocks.
+- The callback is a weak, registration-style pointer: a plugin may only invoke the currently registered callback, and only until `SetCallback(nullptr, nullptr)` returns.
 
 ## Theme contract
 

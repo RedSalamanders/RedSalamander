@@ -9,9 +9,11 @@ RedConfigure uses task modes rather than implementation pages:
 3. `Themes`
 4. `Review & Export`
 
-The left rail switches modes. The header shows the current mode title and purpose. A scope line keeps the active culture, owner, and theme visible while editing.
+The left rail switches modes. When the window is narrow, the rail collapses to icon-only Segoe/Fluent glyph buttons with tooltips. The header shows the current mode title and scope line only; pages must not spend vertical space on a descriptive subtitle. The scope line keeps the current workspace breadth visible, such as checked owners/languages in Localization and scan health on Start.
 
 On `Start`, the scope line shows scan health only; culture and active owner are not shown there because they are edited in `Localization`.
+
+RedConfigure shows a lightweight splash immediately at process startup while the main window discovers and loads the workspace. The splash must be owned by a separate UI thread so its animation continues while the main thread performs synchronous startup work. It closes automatically after the main window has prepared its first visible frame, and close requests before the splash window is created must suppress the pending open.
 
 ## Start
 
@@ -27,20 +29,23 @@ When launched from a build output folder such as `.build\x64\Debug`, the workspa
 
 `Localization` is a single workbench containing:
 
-- culture selector
-- active resource owner selector
+- owner tag picker with removable tags and an `All owners` command
+- target-language tag picker with removable tags and an `All languages` command
 - search and filters
-- one primary resources table
-- focused source/target editor
-- placeholder validation status
+- one primary localization review table
+- read-only English source editor with selected-cell context in the same header row
+- stacked target editors for every selected non-English language
+- placeholder validation status shown beside the English source header only when there is a problem
 
-The culture selector lists existing cultures discovered from `Lang\<culture>\` satellite resources first, then official Windows locale names as `new` targets. Culture entries must show both the culture code and a readable language/region name, for example `fr-FR - French (France)`. Selecting a `new` target creates that culture in the working model; the output file is created only on export.
+Owner and language selectors use the shared DxUi tag picker control. Selected tags are badges inside the picker input frame, before the editable text/drop-down area. If the badges do not fit on one line, the picker grows to two or more internal rows and wraps badges before the text/drop-down area instead of placing badges outside the control or hiding them. The drop-down starts with `All owners` or `All languages`, followed by the available deduplicated options. Typing in the picker filters/autosuggests matching options. Arrow keys move the highlighted suggestion without adding a badge; Enter or mouse selection commits the highlighted suggestion. Committing a concrete suggestion adds a tag, removes that option from the suggestion list, and hides the all-option while any concrete tag is selected. Removing a tag puts that option back into the suggestion list, and the all-option returns when no concrete tag remains. Selecting all options collapses the display to the single all-tag; while the all-tag is active, concrete suggestions remain available and committing one replaces the all-tag with that concrete selection. Each visible tag has an `x` affordance that removes that selection. Owner options must be deduplicated by display name so repeated plugin/application owner names do not create duplicate selector entries. Language options must never include `en-US`: English is the read-only source language, so offering it would create a dead option that silently reverts.
 
-Editing target text updates the in-memory model immediately. Invalid placeholder edits must be rejected and must leave the previous valid target text in the model.
+English source text is read-only. The selected-cell owner/ID context must be displayed next to the `English source` label so the text and its row identity stay local to each other. The English edit box must align its left edge with the target-language edit boxes, leaving the culture-label gutter consistent across source and target rows. Editing target text updates the in-memory model immediately for the edited non-English language cell. All selected target languages are editable at the same time through stacked full-width editor rows. Source and target editors are multiline, and each row must size from explicit `\n` line breaks and width-based wrapping so newline-bearing or wrapped resources are visible without being forced into a single-line-height control.
 
-The resource table is the main workflow surface. It shows ID, source, target, and status in one place. Header clicks cycle sorting for sortable columns. Search matches ID/source/target text, the ID filter narrows resource IDs, and the status filter can show all rows, OK rows, or problem rows. The visible translation count must show filtered rows versus total rows when a filter is active.
+Placeholder validation is problem-first. A clean selected cell must not show an `OK` validation line. When the selected source/target set has a validation problem, the status text appears beside the English source header, uses the theme error color, and renders with a bold/strong font.
 
-The Localization layout must have a compact mode for high-DPI or narrow first-open sizes. In compact mode, culture/owner controls and filters stack into separate rows, and the resource table, editor labels, edit boxes, and validation/status line occupy reserved vertical bands without overlap.
+The localization review table is the main workflow surface. It shows owner, ID, English source, one column for each checked target language, and status in one place. Review rows must be tall enough for at least two lines of source/target information, and source/target cells must wrap to at least two visible lines. Clean rows leave the status cell blank; problem rows show the validation status; rows whose visible target cells have no existing translation show the `Missing translation` status with a distinct row tone (validation problems take precedence). Header clicks cycle sorting for sortable columns. Search matches owner, ID, English source, and visible target-language text; the ID filter narrows resource IDs; and the status filter can show all rows, OK rows, or problem rows — missing-translation rows count as problem rows. The visible translation count must show filtered rows versus total rows when a filter is active.
+
+The Localization layout must have a compact mode for high-DPI or narrow first-open sizes. In compact mode, owner selector, language selector, and filters stack into reserved rows, and the review table, stacked editor labels, edit boxes, and problem-only validation status occupy reserved vertical bands without overlap. The workbench body must have a page-level vertical scroller whenever the filters, two-line review table, and fully sized editor rows exceed the available viewport; the table must not collapse below its two-row minimum to avoid page scrolling.
 
 The earlier separate inventory table is not part of the user workflow. Unsupported or not-yet-editable resource forms may remain in the internal inventory model, but the visible Localization page should not show two unrelated tables.
 
@@ -94,6 +99,8 @@ Batch controls may apply direct color transforms to the current token group. A g
 - explicit export actions
 
 The page must make output paths and generated text visible before writing existing files.
+
+The localization `.rc` preview lists exactly the changed target-language satellite files that the export action will write: one generated file per dirty owner/culture pair. Export writes only those changed target-language satellite files and must not rewrite embedded English resources.
 
 ## Localization
 

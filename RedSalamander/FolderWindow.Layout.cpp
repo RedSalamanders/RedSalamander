@@ -1460,11 +1460,6 @@ void FolderWindow::OnDpiChanged(float newDpi)
     Debug::Perf::Scope perf(L"folderwindow.ui.dpi_change_us");
     _dpi = static_cast<UINT>(newDpi);
 
-    CalculateLayout();
-    AdjustChildWindows();
-    UpdatePaneStatusBar(Pane::Left);
-    UpdatePaneStatusBar(Pane::Right);
-
     if (_leftPane.hFolderView)
     {
         _leftPane.folderView.OnDpiChanged(newDpi);
@@ -1488,5 +1483,15 @@ void FolderWindow::OnDpiChanged(float newDpi)
     if (_functionBar.GetHwnd())
     {
         _functionBar.SetDpi(_dpi);
+    }
+
+    CalculateLayout();
+    AdjustChildWindows();
+    UpdatePaneStatusBar(Pane::Left);
+    UpdatePaneStatusBar(Pane::Right);
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, TRUE);
     }
 }

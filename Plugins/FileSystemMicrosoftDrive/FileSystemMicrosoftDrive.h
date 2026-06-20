@@ -337,6 +337,16 @@ private:
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": [] },
     "import": { "copy": ["*"], "move": [] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalIgnoreCase",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "supported"
   }
 }
 )json";

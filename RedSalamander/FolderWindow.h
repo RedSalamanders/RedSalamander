@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <stop_token>
 #include <string>
 #include <string_view>
@@ -349,6 +350,7 @@ public:
     std::optional<std::filesystem::path> GetCurrentPath(Pane pane) const;
     std::optional<std::filesystem::path> GetCurrentPluginPath(Pane pane) const;
     [[nodiscard]] std::optional<std::filesystem::path> GetFocusedItemPath(Pane pane) const;
+    [[nodiscard]] std::vector<std::filesystem::path> GetSelectedOrFocusedPaths(Pane pane) const;
     std::vector<std::filesystem::path> GetFolderHistory(Pane pane) const;
     void SetFolderHistory(Pane pane, const std::vector<std::filesystem::path>& history);
 
@@ -382,6 +384,11 @@ public:
     [[nodiscard]] bool GetShowSystemFiles() const noexcept;
 
     void CommandRename(Pane pane);
+    // `rootOverride` roots a folder-scope launch; `initialPathsOverride` seeds explicit targets when
+    // no root override is given (empty = use the pane's current selection or focused item).
+    void CommandBatchRename(Pane pane,
+                            std::optional<std::filesystem::path> rootOverride       = std::nullopt,
+                            std::vector<std::filesystem::path> initialPathsOverride = {});
     void CommandView(Pane pane);
     void CommandAlternateView(Pane pane);
     void CommandViewWith(Pane pane, std::wstring_view actionId);
@@ -450,19 +457,22 @@ public:
                                                FileSystemOperation operation,
                                                std::vector<std::filesystem::path> sourcePaths,
                                                FileSystemFlags flags,
-                                               bool requireConfirmation) noexcept;
+                                               bool requireConfirmation,
+                                               uint64_t* taskIdOut = nullptr) noexcept;
     HRESULT StartFileOperationForResolvedPathsToOtherPane(std::wstring_view sourcePluginId,
                                                           std::wstring_view sourceInstanceContext,
                                                           FileSystemOperation operation,
                                                           std::vector<std::filesystem::path> sourcePaths,
                                                           FileSystemFlags flags,
-                                                          std::optional<std::filesystem::path>* outDestinationFolder = nullptr) noexcept;
+                                                          std::optional<std::filesystem::path>* outDestinationFolder = nullptr,
+                                                          uint64_t* taskIdOut = nullptr) noexcept;
     HRESULT StartFileOperationForResolvedPathsToDestination(std::wstring_view sourcePluginId,
                                                             std::wstring_view sourceInstanceContext,
                                                             FileSystemOperation operation,
                                                             std::vector<std::filesystem::path> sourcePaths,
                                                             std::filesystem::path destinationFolder,
-                                                            FileSystemFlags flags) noexcept;
+                                                            FileSystemFlags flags,
+                                                            uint64_t* taskIdOut = nullptr) noexcept;
     [[nodiscard]] std::optional<std::filesystem::path> GetOtherPaneDestinationForResolvedPaths(
         std::wstring_view sourcePluginId,
         std::wstring_view sourceInstanceContext,
@@ -616,6 +626,7 @@ public:
 
     struct FileOperationCompletedEvent
     {
+        uint64_t taskId              = 0;
         FileSystemOperation operation = static_cast<FileSystemOperation>(0);
         Pane sourcePane               = Pane::Left;
         std::optional<Pane> destinationPane;
@@ -624,7 +635,10 @@ public:
         HRESULT hr = S_OK;
     };
     using FileOperationCompletedCallback = std::function<void(const FileOperationCompletedEvent& e)>;
-    void SetFileOperationCompletedCallback(FileOperationCompletedCallback callback);
+    // Multicast: several windows (Compare Directories, Find Files) observe completions
+    // independently. Returns a token for RemoveFileOperationCompletedCallback.
+    [[nodiscard]] uint64_t AddFileOperationCompletedCallback(FileOperationCompletedCallback callback, std::weak_ptr<void> lifetimeGuard = {});
+    void RemoveFileOperationCompletedCallback(uint64_t token) noexcept;
 
     struct InformationalTaskUpdate final
     {
@@ -1048,6 +1062,10 @@ public:
     void DebugResetPaneVisibilityState(Pane pane) noexcept;
     [[nodiscard]] FolderView::FilterWatermarkVisualMode DebugGetFilterWatermarkVisualMode(Pane pane) const noexcept;
     [[nodiscard]] bool DebugGetPaneAlertSnapshot(Pane pane, FolderView::AlertOverlayDebugSnapshot& out) const noexcept;
+    [[nodiscard]] FolderView::RenderingDebugSnapshot DebugGetPaneRenderingSnapshot(Pane pane) const noexcept;
+    void DebugReportPaneRenderingFailureForSelfTest(Pane pane, HRESULT hr) const;
+    void DebugAgePaneRenderingFailureForSelfTest(Pane pane, uint64_t ageMs) const noexcept;
+    void DebugClearPaneRenderingFailureForSelfTest(Pane pane) const;
 #endif
 
     void ShowPaneAlertOverlay(Pane pane,
@@ -1087,6 +1105,15 @@ private:
     // Class registration
     static ATOM RegisterWndClass(HINSTANCE instance);
     static constexpr PCWSTR kClassName = L"RedSalamander.FolderWindow";
+
+    // `sourcePluginId`/`sourceInstanceContext` are the originating pane's identity captured when the
+    // (modeless) Batch Rename window was opened; panes are matched against that captured identity so
+    // the originating pane navigating elsewhere while the window is open does not skew the comparison.
+    void RefreshPanesAfterBatchRename(std::wstring_view sourcePluginId,
+                                      std::wstring_view sourceInstanceContext,
+                                      std::span<const std::filesystem::path> sourcePaths,
+                                      std::span<const std::filesystem::path> targetPaths) noexcept;
+    [[nodiscard]] bool RevealBatchRenamePathInPane(Pane pane, const std::filesystem::path& path) noexcept;
 
     // Window procedure
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -1563,7 +1590,16 @@ private:
     uint32_t _statusBarRainbowHueDegrees = 0;
     ShowSortMenuCallback _showSortMenuCallback;
     PanePathChangedCallback _panePathChangedCallback;
-    FileOperationCompletedCallback _fileOperationCompletedCallback;
+
+    struct FileOperationCompletedSubscription final
+    {
+        uint64_t token = 0;
+        FileOperationCompletedCallback callback;
+        std::weak_ptr<void> lifetimeGuard;
+        bool hasLifetimeGuard = false;
+    };
+    std::vector<FileOperationCompletedSubscription> _fileOperationCompletedCallbacks;
+    uint64_t _nextFileOperationCompletedCallbackToken = 1;
 
     std::unique_ptr<FileOperationState, FileOperationStateDeleter> _fileOperations;
 #ifdef ENABLE_TESTS

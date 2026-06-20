@@ -70,6 +70,7 @@ FolderWindow also recognizes host-reserved, non-plugin prefixes for Connection M
 
 Navigation notes:
 - `/@conn:<connectionName>/` is treated as a terminal root; navigate-up does not climb above it.
+- `SetFolderPath` may skip the navigation pipeline for a redundant same-path request on a plain local (`file`, no instance context) pane only when **both** hold: the requested path is byte-identical to the pane's current path (after normalization), and the last enumeration of that folder succeeded. Re-entering a path whose enumeration failed (access denied, offline share, ejected media) MUST re-enumerate, and a case-only change (`C:\foo` → `C:\FOO`) MUST re-run navigation so the displayed casing refreshes.
 
 ## Cross-Pane Mutation Propagation
 

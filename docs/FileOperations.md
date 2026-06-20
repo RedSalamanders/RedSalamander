@@ -61,6 +61,8 @@ Some tasks start with a pre-calculation (“preflight”) scan that computes tot
 For very large trees, preflight can take time; **Skip preflight** starts the operation without those totals.
 When preflight is skipped, the popup still shows best-effort **completed files/folders** counts for the top-level selection, but totals and ETA/remaining time may be unavailable until the operation finishes.
 
+**Copy behaves differently from Move/Delete here.** For **Copy**, the pre-calculation scan runs *alongside* the transfer: bytes can start moving before the recursive size scan finishes, so you may see a brief **Calculating** phase that overlaps or precedes the running transfer. While totals are still being discovered they stay "estimating", and once preflight publishes its final totals they reconcile in place (the displayed totals and ETA jump to the calculated values). The card switches to the **Running** status as soon as the transfer starts, rather than waiting on a blocking **Calculating** phase. **Move** and **Delete** keep the older, strictly sequential order (preflight completes before any bytes move or items are removed), because they modify or remove the source and a concurrent scan would be sizing a tree that is being changed. For developer details see [dev/FileOperationsEngine.md](dev/FileOperationsEngine.md).
+
 ### Conflicts (overwrite, retry, skip…)
 
 If a task hits a conflict (destination exists, read-only, access denied, sharing violation, disk full, path too long, etc.), the task shows an inline prompt with action buttons such as:
@@ -96,7 +98,7 @@ Notes:
 
 When an operation starts, RedSalamander creates a **task** and shows it in the File Operations popup:
 
-- Pre-calculation (“pre-calc”) may run first to compute totals (bytes/items). You can **Skip** pre-calc.
+- Pre-calculation (“pre-calc”) may run first to compute totals (bytes/items). You can **Skip** pre-calc. For **Copy**, pre-calc overlaps the running transfer (the card shows **Running** while totals reconcile in place); **Move** and **Delete** finish pre-calc before they start (see [Preflight / “Calculating…”](#preflight--calculating)).
 - Tasks can be **Paused** and **Canceled**.
 - Execution mode can be **Wait** (sequential queue) or **Parallel** (multiple tasks run concurrently).
 - Copy/Move tasks support a per-task **Speed Limit**.

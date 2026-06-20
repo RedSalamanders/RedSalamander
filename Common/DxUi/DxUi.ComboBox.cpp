@@ -561,6 +561,22 @@ ComboBoxVariant ComboBox::GetVariant() const noexcept
     return _variant;
 }
 
+void ComboBox::SetChromeVisible(bool visible) noexcept
+{
+    if (_chromeVisible == visible)
+    {
+        return;
+    }
+
+    _chromeVisible = visible;
+    RequestInvalidate();
+}
+
+bool ComboBox::IsChromeVisible() const noexcept
+{
+    return _chromeVisible;
+}
+
 void ComboBox::SetMaxVisibleItems(size_t maxItems) noexcept
 {
     _maxVisibleItemsOverride = maxItems;
@@ -758,14 +774,17 @@ void ComboBox::Paint(WindowHost& host) const
         ResolveComboBoxVisualStyle(theme, _variant, IsEnabled(), IsHovered(), _open, HasFocus(), HasFocus() && host.IsKeyboardFocusVisible());
     const D2D1_RECT_F bounds       = SnapRectToPixel(host, GetBounds());
     const D2D1_COLOR_F transparent = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
-    DrawRoundedRect(host, bounds, style.fieldFill, style.showOuterBorder ? style.fieldBorder : transparent, style.cornerRadiusDip);
+    if (_chromeVisible)
+    {
+        DrawRoundedRect(host, bounds, style.fieldFill, style.showOuterBorder ? style.fieldBorder : transparent, style.cornerRadiusDip);
+    }
 
     const D2D1_RECT_F buttonRect = GetDropButtonRect();
-    if (style.showButtonBackground)
+    if (_chromeVisible && style.showButtonBackground)
     {
         DrawRoundedRect(host, buttonRect, style.buttonFill, style.buttonBorder, std::max(3.0f, style.cornerRadiusDip - 1.0f));
     }
-    if (style.showButtonSplit)
+    if (_chromeVisible && style.showButtonSplit)
     {
         if (auto* dc = host.GetDeviceContext())
         {
@@ -775,7 +794,7 @@ void ComboBox::Paint(WindowHost& host) const
                          1.0f);
         }
     }
-    if (style.showLeftFocusAccent)
+    if (_chromeVisible && style.showLeftFocusAccent)
     {
         const D2D1_RECT_F accentRect = D2D1::RectF(GetBounds().left + 3.0f, GetBounds().top + 3.0f, GetBounds().left + 6.0f, GetBounds().bottom - 3.0f);
         DrawRoundedRect(host, accentRect, style.focusAccent, style.focusAccent, 1.5f);
@@ -1766,9 +1785,14 @@ bool ComboBox::OnCopy(WindowHost& host)
     return host.CopyTextToClipboard(GetSelectedValue());
 }
 
-bool ComboBox::DebugIsPopupOpen() const noexcept
+bool ComboBox::IsPopupOpen() const noexcept
 {
     return _open;
+}
+
+bool ComboBox::DebugIsPopupOpen() const noexcept
+{
+    return IsPopupOpen();
 }
 
 bool ComboBox::Tick(WindowHost& /*host*/, uint64_t nowTickMs)
@@ -2590,16 +2614,22 @@ void ComboBox::CommitSelection(WindowHost& host, size_t itemIndex, bool closePop
         _dragSelecting = false;
         NotifyTextChanged();
     }
-    if (_onSelectionChanged)
-    {
-        _onSelectionChanged(itemIndex);
-    }
     if (closePopup)
     {
         ClosePopup();
     }
+    // Snapshot the state the rest of this method needs before notifying: the
+    // selection-changed callback may re-enter and mutate this control (e.g.
+    // TagPicker calls SetItems / SetSelectedIndex(std::nullopt) mid-callback),
+    // including replacing the callback itself. The callback intentionally fires
+    // after ClosePopup so consumers observe the popup as closed.
+    const bool wasEditable = _editable;
+    if (const std::function<void(size_t)> onSelectionChanged = _onSelectionChanged; onSelectionChanged)
+    {
+        onSelectionChanged(itemIndex);
+    }
     EnsurePopupSelectionVisible(closePopup ? nullptr : &host);
-    if (_editable)
+    if (wasEditable)
     {
         host.SyncTextInput(this);
     }

@@ -36,4 +36,8 @@ extern const int kFileSystemModuleAnchor;
 // Stops and joins the shared background copy/move worker threads.
 // Intended to be invoked at a host "quiet point" when the last FileSystem instance is being destroyed.
 void ShutdownSharedFileOpsJobScheduler() noexcept;
+
+#if defined(_DEBUG)
+void RunDebugSharedFileOpsSchedulerShutdownSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+#endif
 } // namespace FileSystemInternal

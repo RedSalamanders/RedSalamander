@@ -556,7 +556,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     }
     state.Require(waitForEditValue(editName, editedEditValue), L"Preferences File Operations bridge-buffer edit did not settle to the edited value.");
 
-    if (! InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText))
+    if (! InvokeVisibleDescendantByNameWithMessagePump(
+            getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences File Operations shell Cancel invoke"))
     {
         state.Require(DebugCancelPreferencesDialog(),
                       L"Preferences shell Cancel action did not expose a visible DX button for the File Operations live interaction test, and the direct debug "
@@ -1084,7 +1085,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    if (! InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText))
+    if (! InvokeVisibleDescendantByNameWithMessagePump(
+            getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Monitor filter-preset shell Cancel invoke"))
     {
         state.Require(DebugCancelPreferencesDialog(),
                       L"Preferences shell Cancel action did not expose a visible DX button during Monitor filter-preset validation.");
@@ -2032,7 +2034,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    if (! InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText))
+    if (! InvokeVisibleDescendantByNameWithMessagePump(
+            getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences File Operations custom-bandwidth shell Cancel invoke"))
     {
         state.Require(DebugCancelPreferencesDialog(),
                       L"Preferences shell Cancel action did not expose a visible DX button during File Operations custom-bandwidth validation.");
@@ -2773,7 +2776,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     state.Require(waitForEditValue(editName, editedValue),
                   L"Preferences Compare Directories page visible DX edit did not settle to the edited value during shell Cancel discard validation.");
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+        InvokeVisibleDescendantByNameWithMessagePump(
+            getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences Compare Directories shell Cancel invoke"),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Compare Directories discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Compare Directories "
@@ -3167,7 +3171,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                   L"Preferences Compare Directories Ignore files edit did not accept live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(ignoreFilesEditName, editedIgnoreFilesPatterns),
                   L"Preferences Compare Directories Ignore files edit did not settle to the edited value.");
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(),
+                      UIA_ButtonControlTypeId,
+                      cancelButtonText,
+                      L"Preferences Compare Directories page-specific shell Cancel invoke"),
                   L"Preferences shell Cancel action did not expose live UIA InvokePattern interaction during Compare Directories page-specific validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after Compare Directories page-specific Cancel validation.");
@@ -4200,10 +4208,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     const auto closeWindow = wil::scope_exit([&]
     {
-        if (IsWindow(prefs) != FALSE)
+        const HWND activePrefs = (prefs && IsWindow(prefs) != FALSE) ? prefs : GetPreferencesDialogHandle();
+        if (activePrefs && IsWindow(activePrefs) != FALSE)
         {
-            PostMessageW(prefs, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(prefs, SelfTest::Scale(std::chrono::milliseconds{2000})));
+            PostMessageW(activePrefs, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(activePrefs, SelfTest::Scale(std::chrono::milliseconds{2000})));
         }
     });
 
@@ -4493,8 +4502,39 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                                  const PreferencesShellDebugFocusTarget expectedRetainedShellTarget,
                                  std::wstring_view label) noexcept
         {
-            const HWND focused = GetFocus();
-            const HWND target  = (focused && IsChild(prefs, focused) != FALSE) ? focused : prefs;
+            const auto resolveTabTarget = [&]() noexcept -> HWND
+            {
+                const HWND focused = GetFocus();
+                if (focused && (focused == prefs || IsChild(prefs, focused) != FALSE))
+                {
+                    return focused;
+                }
+
+                PreferencesDebugSnapshot currentSnapshot{};
+                if (DebugGetPreferencesDialogSnapshot(currentSnapshot))
+                {
+                    if (currentSnapshot.categoryTreeFocused && categoryTreeHost && IsWindow(categoryTreeHost) != FALSE)
+                    {
+                        return categoryTreeHost;
+                    }
+
+                    const HWND shellHost = DebugGetPreferencesShellHostHandle();
+                    if (currentSnapshot.shellFocusTarget != PreferencesShellDebugFocusTarget::None && shellHost && IsWindow(shellHost) != FALSE)
+                    {
+                        return shellHost;
+                    }
+                }
+
+                return prefs;
+            };
+
+            const HWND target = resolveTabTarget();
+            if (target != prefs && GetFocus() != target)
+            {
+                SetFocus(target);
+                PumpPendingMessages();
+            }
+
             if (reverse)
             {
                 SendMessageW(target, WM_KEYDOWN, VK_SHIFT, 0);
@@ -4886,6 +4926,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)), L"Failed to focus the Preferences category host for page-navigation test.");
     PumpPendingMessages();
+    state.Require(DebugSelectPreferencesCategory(kPrefCategoryGeneral),
+                  L"Failed to reset the Preferences category tree to General before page-navigation test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(1000ms)),
+                  L"Failed to refocus the Preferences category host after page-navigation reset.");
+    PumpPendingMessages();
 
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot) noexcept
     {
@@ -4907,9 +4952,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     };
 
     PreferencesDebugSnapshot snapshot{};
-    state.Require(waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept { return value.categoryTreeFocused; }, snapshot),
-                  L"Preferences category host did not retain keyboard focus for page-navigation test.");
-    state.Require(snapshot.categoryTreeHasSelectedItem, L"Preferences category tree did not report an initial selected item.");
+    state.Require(waitForSnapshot(
+                      [](const PreferencesDebugSnapshot& value) noexcept
+    { return value.currentCategory == kPrefCategoryGeneral && value.categoryTreeFocused && value.categoryTreeHasSelectedItem && PreferencesPageTitleMatchesSelection(value); },
+                      snapshot),
+                  L"Preferences category tree did not settle on a focused General selection before page-navigation test.");
     const size_t initialSelectedVisibleIndex = snapshot.categoryTreeSelectedVisibleIndex;
     const int initialPageScrollY             = snapshot.pageScrollY;
 

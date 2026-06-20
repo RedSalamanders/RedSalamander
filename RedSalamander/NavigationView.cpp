@@ -245,6 +245,21 @@ void TraceNavigationWindowRaw(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
     return OrdinalString::EqualsNoCasePath(lhs.value(), rhs.value());
 }
+
+[[nodiscard]] bool OptionalPathTextEquals(const std::optional<std::filesystem::path>& lhs, const std::optional<std::filesystem::path>& rhs) noexcept
+{
+    if (lhs.has_value() != rhs.has_value())
+    {
+        return false;
+    }
+
+    if (! lhs.has_value())
+    {
+        return true;
+    }
+
+    return lhs->native() == rhs->native();
+}
 } // namespace
 
 NavigationView::NavigationView() = default;
@@ -1055,7 +1070,21 @@ void NavigationView::OnDpiChanged(float newDpi)
     UpdateMenuIconBitmap();
 
     ApplyDxEditHostThemes();
-    UpdatePathEditHostLayout();
+
+    // Re-run the full section/breadcrumb layout at the new DPI. The host window may have
+    // already resized this child during its own WM_DPICHANGED handling (before our DPI state
+    // was updated), which rebuilt the breadcrumb segments with stale-DPI fonts; OnSize
+    // rebuilds the section rects, swap-chain target, breadcrumb segments, and the edit host
+    // from the current client size, so the order of resize vs. DPI notification cannot leave
+    // stale-scale content behind.
+    if (_clientSize.cx > 0 && _clientSize.cy > 0)
+    {
+        OnSize(static_cast<UINT>(_clientSize.cx), static_cast<UINT>(_clientSize.cy));
+    }
+    else
+    {
+        UpdatePathEditHostLayout();
+    }
 
     if (_editSuggestPopup)
     {
@@ -1146,9 +1175,19 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
         nextCurrentPath     = NavigationLocation::FormatHistoryPath(shortId, nextInstanceContext, pluginPath);
     }
 
-    const bool samePath = OptionalPathEquals(_currentPath, nextCurrentPath) && OptionalPathEquals(_currentPluginPath, nextPluginPath) &&
-                          OptionalPathEquals(_currentEditPath, nextEditPath) && _currentInstanceContext == nextInstanceContext;
-    if (samePath && _breadcrumbLayoutCacheValid)
+    const bool sameLocation = OptionalPathEquals(_currentPath, nextCurrentPath) && OptionalPathEquals(_currentPluginPath, nextPluginPath) &&
+                              _currentInstanceContext == nextInstanceContext;
+    const bool sameEditPath = OptionalPathEquals(_currentEditPath, nextEditPath);
+    const bool samePath     = sameLocation && (_editMode || sameEditPath);
+    // `samePath` is case-insensitive: it decides location identity (edit mode/popup handling below).
+    // While path edit is active, `_currentEditPath` tracks user-typed text, not the pane's identity.
+    // A same-location refresh must not retire edit mode just because the user has edited the buffer.
+    // The short-circuit additionally requires byte-equal text so a case-only change (e.g. after a
+    // case-only rename of the current location) still refreshes the displayed breadcrumb strings.
+    const bool samePathText = samePath && OptionalPathTextEquals(_currentPath, nextCurrentPath) &&
+                              OptionalPathTextEquals(_currentPluginPath, nextPluginPath) &&
+                              (_editMode || OptionalPathTextEquals(_currentEditPath, nextEditPath));
+    if (samePathText && _breadcrumbLayoutCacheValid)
     {
         return;
     }
@@ -1162,9 +1201,12 @@ void NavigationView::SetPath(const std::optional<std::filesystem::path>& path)
         CloseFullPathPopup();
     }
 
-    _currentPath            = std::move(nextCurrentPath);
-    _currentPluginPath      = std::move(nextPluginPath);
-    _currentEditPath        = std::move(nextEditPath);
+    _currentPath       = std::move(nextCurrentPath);
+    _currentPluginPath = std::move(nextPluginPath);
+    if (! _editMode || ! sameLocation)
+    {
+        _currentEditPath = std::move(nextEditPath);
+    }
     _currentInstanceContext = std::move(nextInstanceContext);
 
     if (! _dwriteFactory || ! _pathFormat || ! _separatorFormat)
@@ -1497,6 +1539,7 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     out.showDiskInfoSection     = _showDiskInfoSection;
     out.menuIconBitmapLoaded    = _menuIconBitmapD2D != nullptr;
     out.historyCount            = _pathHistory.size();
+    out.historyDropdownOpenCount = _debugHistoryDropdownOpenCount;
     out.menuRegionRect          = _sectionDriveRect;
     out.pathRegionRect          = _sectionPathRect;
     out.historyRegionRect       = _sectionHistoryRect;

@@ -3,10 +3,7 @@
 #include "framework.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <cwctype>
 #include <filesystem>
-#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -16,6 +13,7 @@
 #include <wil/com.h>
 
 #include "PlugInterfaces/FileSystem.h"
+#include "FileSystemRenameBatch.h"
 
 namespace
 {
@@ -52,7 +50,9 @@ namespace
     bool newWord = true;
     for (wchar_t& ch : out)
     {
-        if (std::iswalnum(static_cast<wint_t>(ch)) == 0)
+        // Classify and upcase through the Windows character tables so non-ASCII initials
+        // (e.g. "école") capitalize correctly; the C-locale towupper/iswalnum are ASCII-only.
+        if (::IsCharAlphaNumericW(ch) == FALSE)
         {
             newWord = true;
             continue;
@@ -60,17 +60,12 @@ namespace
 
         if (newWord)
         {
-            ch      = static_cast<wchar_t>(std::towupper(static_cast<wint_t>(ch)));
+            ::CharUpperBuffW(&ch, 1u);
             newWord = false;
         }
     }
 
     return out;
-}
-
-[[nodiscard]] bool ContainsPathSeparator(std::wstring_view text) noexcept
-{
-    return text.find(L'\\') != std::wstring_view::npos || text.find(L'/') != std::wstring_view::npos;
 }
 
 [[nodiscard]] size_t PathDepthKey(const std::filesystem::path& p) noexcept
@@ -131,112 +126,6 @@ namespace
     return std::filesystem::path(std::move(result));
 }
 
-struct RenameOp final
-{
-    std::filesystem::path sourcePath;
-    std::wstring newLeaf;
-    size_t depth = 0;
-};
-
-[[nodiscard]] HRESULT RenameBatch(IFileSystem& fileSystem,
-                                  std::span<const RenameOp> ops,
-                                  FileSystemFlags flags,
-                                  const FileSystemOptions* options,
-                                  IFileSystemCallback* callback,
-                                  void* cookie) noexcept
-{
-    if (ops.empty())
-    {
-        return S_OK;
-    }
-
-    uint64_t totalBytes64 = static_cast<uint64_t>(ops.size()) * static_cast<uint64_t>(sizeof(FileSystemRenamePair));
-    for (const RenameOp& op : ops)
-    {
-        const std::wstring& sourceText = op.sourcePath.native();
-        const size_t sourceLen         = sourceText.size();
-        const size_t nameLen           = op.newLeaf.size();
-
-        totalBytes64 += static_cast<uint64_t>((sourceLen + 1u) * sizeof(wchar_t));
-        totalBytes64 += static_cast<uint64_t>((nameLen + 1u) * sizeof(wchar_t));
-        if (totalBytes64 > static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()))
-        {
-            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-        }
-    }
-
-    FileSystemArenaOwner arenaOwner;
-    const HRESULT initHr = arenaOwner.Initialize(static_cast<unsigned long>(totalBytes64));
-    if (FAILED(initHr))
-    {
-        return initHr;
-    }
-
-    FileSystemArena* arena = arenaOwner.Get();
-    auto* pairs            = static_cast<FileSystemRenamePair*>(AllocateFromFileSystemArena(
-        arena, static_cast<unsigned long>(ops.size() * sizeof(FileSystemRenamePair)), static_cast<unsigned long>(alignof(FileSystemRenamePair))));
-    if (! pairs)
-    {
-        return E_OUTOFMEMORY;
-    }
-
-    for (size_t i = 0; i < ops.size(); ++i)
-    {
-        const RenameOp& op           = ops[i];
-        const std::wstring& source   = op.sourcePath.native();
-        const std::wstring_view name = op.newLeaf;
-
-        if (source.empty() || name.empty())
-        {
-            return E_INVALIDARG;
-        }
-
-        if (ContainsPathSeparator(name))
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
-        }
-
-        const size_t sourceLen = source.size();
-        const size_t nameLen   = name.size();
-
-        if (sourceLen > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()) - 1u ||
-            nameLen > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()) - 1u)
-        {
-            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-        }
-
-        auto* sourceBuf = static_cast<wchar_t*>(
-            AllocateFromFileSystemArena(arena, static_cast<unsigned long>((sourceLen + 1u) * sizeof(wchar_t)), static_cast<unsigned long>(alignof(wchar_t))));
-        if (! sourceBuf)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        auto* nameBuf = static_cast<wchar_t*>(
-            AllocateFromFileSystemArena(arena, static_cast<unsigned long>((nameLen + 1u) * sizeof(wchar_t)), static_cast<unsigned long>(alignof(wchar_t))));
-        if (! nameBuf)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        ::CopyMemory(sourceBuf, source.data(), sourceLen * sizeof(wchar_t));
-        sourceBuf[sourceLen] = L'\0';
-
-        ::CopyMemory(nameBuf, name.data(), nameLen * sizeof(wchar_t));
-        nameBuf[nameLen] = L'\0';
-
-        pairs[i].sizeBytes  = sizeof(FileSystemRenamePair);
-        pairs[i].sourcePath = sourceBuf;
-        pairs[i].newName    = nameBuf;
-    }
-
-    if (ops.size() > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))
-    {
-        return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
-    }
-
-    return fileSystem.RenameItems(pairs, static_cast<unsigned long>(ops.size()), flags, options, callback, cookie);
-}
 } // namespace
 
 namespace ChangeCase
@@ -478,7 +367,7 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
         });
     }
 
-    std::vector<RenameOp> renames;
+    std::vector<FileSystemRenameBatch::RenameOp> renames;
     renames.reserve(paths.size());
 
     for (const auto& path : paths)
@@ -496,7 +385,7 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
             continue;
         }
 
-        RenameOp op{};
+        FileSystemRenameBatch::RenameOp op{};
         op.sourcePath = path;
         op.newLeaf    = std::move(newLeaf);
         op.depth      = PathDepthKey(path);
@@ -545,8 +434,8 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
                 progress(progressUpdate, progressCookie);
             }
 
-            const HRESULT hr =
-                RenameBatch(fileSystem, std::span<const RenameOp>(renames.data() + batchStart, batchEnd - batchStart), flags, nullptr, nullptr, nullptr);
+            const HRESULT hr = FileSystemRenameBatch::Execute(
+                fileSystem, std::span<const FileSystemRenameBatch::RenameOp>(renames.data() + batchStart, batchEnd - batchStart), flags);
             if (FAILED(hr))
             {
                 return hr;

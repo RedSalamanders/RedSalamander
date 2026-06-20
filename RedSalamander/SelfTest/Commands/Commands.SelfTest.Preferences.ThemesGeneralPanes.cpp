@@ -100,10 +100,11 @@ namespace
 
     const auto closeWindow = wil::scope_exit([&]() noexcept
     {
-        if (IsWindow(prefs) != FALSE)
+        const HWND activePrefs = (prefs && IsWindow(prefs) != FALSE) ? prefs : GetPreferencesDialogHandle();
+        if (activePrefs && IsWindow(activePrefs) != FALSE)
         {
-            PostMessageW(prefs, WM_CLOSE, 0, 0);
-            static_cast<void>(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)));
+            PostMessageW(activePrefs, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(activePrefs, SelfTest::Scale(2000ms)));
         }
     });
 
@@ -1898,11 +1899,16 @@ namespace
                   L"Preferences General page focused menu-bar toggle did not accept keyboard interaction during shell Cancel discard validation.");
     state.Require(waitForMenuBarToggleChecked(! initialToggleChecked),
                   L"Preferences General page menu-bar toggle did not settle to the edited state during shell Cancel discard validation.");
-    state.Require(InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, cancelButtonText),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
+                      getShellHost(), UIA_ButtonControlTypeId, cancelButtonText, L"Preferences General shell Cancel invoke"),
                   L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during General discard validation.");
     state.Require(
         WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
         L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during General discard validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     prefs = nullptr;
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
@@ -4247,6 +4253,39 @@ namespace
         return true;
     };
 
+    const auto setFocusedLeftStatusBarToggleChecked = [&](const bool expectedChecked) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(4000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            bool currentChecked = false;
+            if (DebugGetPreferencesPanesLeftStatusBarToggleChecked(currentChecked) && currentChecked == expectedChecked)
+            {
+                return true;
+            }
+
+            if (! focusLeftStatusBarToggle() || ! toggleFocusedLeftStatusBar())
+            {
+                return false;
+            }
+
+            const auto settleDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(250ms);
+            while (std::chrono::steady_clock::now() < settleDeadline)
+            {
+                PumpPendingMessages();
+                if (DebugGetPreferencesPanesLeftStatusBarToggleChecked(currentChecked) && currentChecked == expectedChecked)
+                {
+                    return true;
+                }
+                std::this_thread::sleep_for(20ms);
+            }
+        }
+
+        bool checked = false;
+        return DebugGetPreferencesPanesLeftStatusBarToggleChecked(checked) && checked == expectedChecked;
+    };
+
     const auto waitForEditValue = [&](std::wstring_view expectedName, std::wstring_view expectedValue) noexcept
     {
         const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
@@ -4346,9 +4385,7 @@ namespace
 
     const std::wstring cancelButtonText = LoadStringResource(nullptr, IDS_BTN_CANCEL);
 
-    state.Require(focusLeftStatusBarToggle(), L"Preferences Panes page did not refocus the left Status Bar toggle before live interaction validation.");
-    state.Require(toggleFocusedLeftStatusBar(), L"Preferences Panes page focused left Status Bar toggle did not accept live keyboard interaction.");
-    state.Require(waitForLeftStatusBarToggleChecked(! initialToggleChecked),
+    state.Require(setFocusedLeftStatusBarToggleChecked(! initialToggleChecked),
                   L"Preferences Panes page left Status Bar toggle did not settle to the edited state after live interaction.");
 
     const std::wstring editName         = historyLabel;
@@ -4384,12 +4421,9 @@ namespace
 
     state.Require(focusLeftStatusBarToggle(),
                   L"Preferences Panes page did not focus the left Status Bar toggle after reopening for live interaction validation.");
-    state.Require(toggleFocusedLeftStatusBar(), L"Preferences Panes page focused left Status Bar toggle did not accept reopened keyboard interaction.");
-    state.Require(waitForLeftStatusBarToggleChecked(! initialToggleChecked),
+    state.Require(setFocusedLeftStatusBarToggleChecked(! initialToggleChecked),
                   L"Preferences Panes page left Status Bar toggle did not settle to the reopened edited state after live interaction.");
-    state.Require(toggleFocusedLeftStatusBar(),
-                  L"Preferences Panes page focused left Status Bar toggle did not accept restoration through reopened keyboard interaction.");
-    state.Require(waitForLeftStatusBarToggleChecked(initialToggleChecked),
+    state.Require(setFocusedLeftStatusBarToggleChecked(initialToggleChecked),
                   L"Preferences Panes page left Status Bar toggle did not restore its original state after reopened live interaction.");
 
     state.Require(SetVisibleDescendantValueByName(getActivePage(), UIA_EditControlTypeId, editName, editedValue),

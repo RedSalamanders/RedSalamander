@@ -2085,6 +2085,9 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
                                        focusFirstNavigableItem ? 1 : 0,
                                        reinterpret_cast<uintptr_t>(GetActiveWindow()),
                                        reinterpret_cast<uintptr_t>(GetForegroundWindow()));
+#ifdef ENABLE_TESTS
+    ++_debugHistoryDropdownOpenCount;
+#endif
     const auto selectedId =
         RedSalamander::DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);

@@ -1,6 +1,6 @@
 # File Operations Specification
 
-Last updated: 2026-06-06
+Last updated: 2026-06-16
 
 Normative sections use RFC-2119 keywords (MUST/SHOULD/MAY). Appendices are informative.
 
@@ -36,6 +36,8 @@ File Operations is a performance-sensitive subsystem. Any new feature or optimiz
 This requirement is mandatory from the first landing of the feature or optimization, including baseline-only instrumentation work.
 
 File Operations work SHOULD prefer the existing `FileOps.*` metric families when they already cover the scenario; otherwise the change MUST add the missing metrics with the feature.
+
+Correctness selftests for concurrency, conflict routing, and destructive safety MUST prove the vulnerable behavior they claim to protect. A test that only proves eventual completion is not enough for liveness-sensitive paths; it MUST also assert a relevant progress/dispatch shape. A conflict-routing test MUST use distinguishable decisions and verify the final state of each affected child independently. A UI-sampler test MUST either drive the sampler deterministically or prove the live window/timer prerequisite it relies on.
 
 Progress-display investigations MUST keep UI cadence and operation cadence separable:
 
@@ -186,6 +188,10 @@ The progress popup may receive synchronous Win32 callbacks while it is being sho
 - Batch Copy/Move MUST bound actual file transfers by the operation's effective `copyMoveMaxConcurrency` even when several selected roots each start recursive worker jobs. Recursive worker jobs MAY expose a larger per-root worker allowance to improve queue fairness, but file-transfer admission MUST remain gated by the shared operation state.
 - Cross-volume Move copy-delete fallback MUST use the same recursive copy engine and operation-level transfer budget as Copy. Debug selftests MAY force the `ERROR_NOT_SAME_DEVICE` fallback path on a same-volume move, but production Release behavior MUST only take that path after the OS reports the cross-device move error.
 - Serial copy fallback is still intentional for max concurrency `1`, non-recursive directory operations, root reparse points that are not followed, non-directory sources, scheduler unavailability, cancellation/error convergence, and operations where parallel setup is not useful.
+- Recursive directory copy and multi-item delete MUST dispatch each unit of work as a **short scheduler work item** (the worker returns to the shared pool between units) rather than running a long-lived per-worker consumer loop. A single large operation MUST NOT pin every shared-pool worker for its whole duration; concurrent file operations share the pool fairly and each continues making progress (no zero-progress stall).
+- Recursive copy saturation coverage MUST assert more than eventual completion: it MUST prove that dispatch work continues beyond the configured transfer concurrency (for example with `FileOps.CopyRecursiveParallel.WorkItemDispatches`) and/or that at least two distinct selected roots make in-flight progress in the same sample window when the concurrency budget permits it.
+- **Storage-adaptive concurrency**: the built-in Local FileSystem MUST probe the destination volume's medium (seek-penalty / bus type) and adapt copy/move and delete concurrency to it. Seek-penalty/rotational (HDD) media MUST clamp copy/move concurrency to `1`; NVMe MAY queue deeply; SSD uses a moderate degree; removable media clamps low. On probe failure the host MUST fall back to the historical default concurrency.
+- Storage-adaptive probing MUST resolve the real volume root before opening a device for IOCTLs. Mounted-volume and SUBST-style aliases MUST probe the backing volume, not the lexical drive letter. If seek-penalty classification fails but bus type succeeds, an NVMe bus type MUST still select the NVMe/deep-queue profile.
 - The host MUST drive progress via `IFileSystemCallback` and forward updates to the UI thread.
 - The host MAY surface background work as Informational Tasks. Informational Tasks:
   - MUST NOT participate in Wait/Parallel queueing rules.
@@ -212,10 +218,13 @@ Focused teardown coverage is split across `--fileops-selftest --selftest-case=Ph
 
 - The host MUST reject **Copy**/**Move** when any source item would be copied/moved onto itself or into its own subtree (destination folder overlaps the source item), because this can recurse indefinitely or produce confusing no-op operations.
   - The host MUST show a localized error (see `IDS_FMT_FILEOPS_INVALID_DESTINATION_OVERLAP`).
+  - The overlap check MUST compare both raw normalized paths and resolved/canonicalized candidates when canonicalization is available. A failed or degraded canonicalization result MUST NOT create an alias bypass that allows copy/move into the source itself or its subtree.
 
 - **Same-context copy/move**:
   - If both panes are operating on the same effective file system context (same filesystem plugin id + same per-instance mount context when the plugin uses `IFileSystemInitialize`), the host SHOULD execute Copy/Move using that plugin instance directly.
-  - Before creating a same-context Copy/Move/Delete task, the host MUST read `IFileSystem::GetCapabilities()` and reject the operation when capabilities fail, are missing/empty/invalid, or advertise the corresponding operation as unsupported (`operations.copy`, `operations.move`, or `operations.delete` is `false`). Rejection MUST happen before task creation, popup allocation, or worker-thread start, and MUST show localized pane feedback.
+  - Before creating a same-context Copy/Move/Delete task, the host MUST read `IFileSystem::GetCapabilities()` and reject the operation when capabilities fail, are missing/empty/invalid, omit or malform mandatory `pathIdentity`, advertise unstable path text (`pathIdentity.pathTextStableIdentity == false`), or advertise the corresponding operation as unsupported (`operations.copy`, `operations.move`, or `operations.delete` is `false`). Rejection MUST happen before task creation, popup allocation, or worker-thread start, and MUST show localized pane feedback.
+  - `pathIdentity` is mandatory provider capability data for every built-in provider. Identity-sensitive planners such as Batch Rename and the shared same-context Copy/Move/Delete gate MUST fail closed before mutation when `pathIdentity` is missing, malformed, unstable, or unsupported.
+  - A failed `GetCapabilities()` HRESULT (including `ERROR_NOT_SUPPORTED`/`E_NOTIMPL`), a null/empty document, or invalid/unparseable JSON is a provider contract violation: the host applies the fail-closed handling above and logs the violation via `Debug::Error` once per provider instance (not once per call).
   - If an unsupported provider API is reached directly despite the host guard, the provider MUST return `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` without mutating provider state.
 
 - **Cross-context (cross-filesystem) copy/move**:
@@ -226,19 +235,20 @@ Focused teardown coverage is split across `--fileops-selftest --selftest-case=Ph
 
 ### Built-in Provider Capability Matrix (Normative)
 
-`IFileSystem::GetCapabilities()` is mandatory and is the source of truth for host enablement. Missing, empty, invalid, or failed capability responses are provider contract violations and host-side rejections. Same-provider API support below applies to both singular and bulk APIs: `CopyItem` + `CopyItems`, `MoveItem` + `MoveItems`, and `DeleteItem` + `DeleteItems`.
+`IFileSystem::GetCapabilities()` is mandatory and is the source of truth for host enablement, provider path identity, and same-provider mutation planning. Failed (`ERROR_NOT_SUPPORTED`/`E_NOTIMPL`/other), empty, or invalid capability responses are provider contract violations and host-side rejections (fail-closed, logged once per provider instance). Same-provider API support below applies to both singular and bulk APIs: `CopyItem` + `CopyItems`, `MoveItem` + `MoveItems`, and `DeleteItem` + `DeleteItems`. The `Path identity` column summarizes the mandatory `pathIdentity` profile from `Specs/Plugins/Plugins_VirtualFileSystem.md`; host planners such as Batch Rename MUST use that profile instead of local ad hoc comparison helpers, and same-context Copy/Move/Delete MUST reject missing, malformed, unsupported, or unstable profiles before task creation.
 
-| Provider | Same-provider Copy | Same-provider Move | Same-provider Delete | Cross-FS export copy/move | Cross-FS import copy/move | Advertised concurrency | Progress-stream contract |
-|----------|--------------------|--------------------|----------------------|---------------------------|---------------------------|------------------------|--------------------------|
-| Local FileSystem (`builtin/file-system`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `1..16` (default `4`), delete `1..64` (default `8`), recycle delete `1..16` (default `2`) | Recursive copy/move uses stable nonzero stream IDs for concurrent workers; callbacks for one logical operation are serialized. |
-| FileSystemDummy (`builtin/file-system-dummy`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `4`, delete `8`, recycle delete `2` | Deterministic offline conformance provider; writable recursive copy/move MUST merge existing destination directories and report item/progress callbacks with stable stream IDs. |
-| 7-Zip (`builtin/file-system-7z`) | no | no | no | `*` / none | none / none | `1` / `1` / `1` | Same-provider mutation APIs return `ERROR_NOT_SUPPORTED`; export-copy uses the host bridge and host stream IDs. |
-| Google Drive (`builtin/file-system-gdrive`) | no | no | no | none / none | none / none | `1` / `1` / `1` | File-operation mutation/IO APIs return `ERROR_NOT_SUPPORTED`; no live credentials are required for capability checks. |
-| Microsoft Drive (`builtin/file-system-onedrive-personal`, `builtin/file-system-onedrive-business`, `builtin/file-system-sharepoint`) | no | yes | yes | `*` / none | `*` / none | copy/move `1`, delete `4`, recycle delete `1` | Same-provider copy is disabled by the host; move/delete progress is provider-owned with copy/move effectively single-stream. |
-| Curl FTP/SFTP/SCP (`builtin/file-system-ftp`, `builtin/file-system-sftp`, `builtin/file-system-scp`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `1..8` from plugin settings (default `4`), delete `1..8` (default `4`), recycle delete `1` | Bulk copy/move/delete use bounded provider schedulers; concurrent transfers use stable stream IDs. |
-| Curl IMAP (`builtin/file-system-imap`) | no | no | yes | `*` / `*` | none / none | `1` / `1` / `1` | Copy/move are export-only bridge candidates; same-provider copy/move APIs return unsupported. |
-| S3 (`builtin/file-system-s3`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `1`, delete `8`, recycle delete `1` | Same-provider transfers are effectively single-stream and MAY report stream `0`; delete may run higher provider concurrency. |
-| S3 Table (`builtin/file-system-s3table`) | no | no | no | `*` / none | `*` / `*` | `1` / `1` / `1` | Same-provider mutations return unsupported; cross-FS import/export is host-bridge mediated. |
+| Provider | Same-provider Copy | Same-provider Move | Same-provider Delete | Cross-FS export copy/move | Cross-FS import copy/move | Advertised concurrency | Path identity | Progress-stream contract |
+|----------|--------------------|--------------------|----------------------|---------------------------|---------------------------|------------------------|---------------|--------------------------|
+| Local FileSystem (`builtin/file-system`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `1..16` (default `4`), delete `1..64` (default `8`), recycle delete `1..16` (default `2`) | stable, `ordinalIgnoreCase`, `\` preferred, case-only rename supported | Recursive copy/move uses stable nonzero stream IDs for concurrent workers; callbacks for one logical operation are serialized. |
+| FileSystemDummy (`builtin/file-system-dummy`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `4`, delete `8`, recycle delete `2` | stable, `ordinalIgnoreCase`, `\` preferred, case-only rename supported | Deterministic offline conformance provider; writable recursive copy/move MUST merge existing destination directories and report item/progress callbacks with stable stream IDs. |
+| 7-Zip (`builtin/file-system-7z`) | no | no | no | `*` / none | none / none | `1` / `1` / `1` | stable, `ordinalCaseSensitive`, `/` preferred, mutation not applicable | Same-provider mutation APIs return `ERROR_NOT_SUPPORTED`; export-copy uses the host bridge and host stream IDs. |
+| Google Drive (`builtin/file-system-gdrive`) | no | no | no | none / none | none / none | `1` / `1` / `1` | `ordinalCaseSensitive`; `pathTextStableIdentity = false` (duplicate display names) unless paths encode stable item IDs — fail-closed comes from that flag, never from `componentComparison: "unknown"` | File-operation mutation/IO APIs return `ERROR_NOT_SUPPORTED`; no live credentials are required for capability checks. |
+| Microsoft Drive (`builtin/file-system-onedrive-personal`, `builtin/file-system-onedrive-business`, `builtin/file-system-sharepoint`) | no | yes | yes | `*` / none | `*` / none | copy/move `1`, delete `4`, recycle delete `1` | stable, `ordinalIgnoreCase`, `/` preferred, case-only rename supported | Same-provider copy is disabled by the host; move/delete progress is provider-owned with copy/move effectively single-stream. |
+| Curl FTP (`builtin/file-system-ftp`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `1..8` from plugin settings (default `4`), delete `1..8` (default `4`), recycle delete `1` | stable; `ordinalCaseSensitive` conservative default (the proven instance relation when determinable). MUST be concrete — never `unknown` | Bulk copy/move/delete use bounded provider schedulers; concurrent transfers use stable stream IDs. |
+| Curl SFTP/SCP (`builtin/file-system-sftp`, `builtin/file-system-scp`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `1..8` from plugin settings (default `4`), delete `1..8` (default `4`), recycle delete `1` | stable, `ordinalCaseSensitive`, `/` preferred, case-only rename supported | Bulk copy/move/delete use bounded provider schedulers; concurrent transfers use stable stream IDs. |
+| Curl IMAP (`builtin/file-system-imap`) | no | no | yes | `*` / `*` | none / none | `1` / `1` / `1` | stable, `ordinalCaseSensitive`, `/` preferred, mutation not applicable | Copy/move are export-only bridge candidates; same-provider copy/move APIs return unsupported. |
+| S3 (`builtin/file-system-s3`) | yes | yes | yes | `*` / `*` | `*` / `*` | copy/move `1`, delete `8`, recycle delete `1` | stable, `ordinalCaseSensitive`, `/` preferred, case-only rename supported | Same-provider transfers are effectively single-stream and MAY report stream `0`; delete may run higher provider concurrency. |
+| S3 Table (`builtin/file-system-s3table`) | no | no | no | `*` / none | `*` / `*` | `1` / `1` / `1` | stable, `ordinalCaseSensitive`, `/` preferred, mutation not applicable | Same-provider mutations return unsupported; cross-FS import/export is host-bridge mediated. |
 
 Writable recursive providers (Local FileSystem, FileSystemDummy, Curl FTP/SFTP/SCP, S3, and Microsoft Drive where the operation is supported) MUST apply the directory-merge rule from Conflict Handling: an existing destination directory is a merge target, not an overwrite conflict. Providers that cannot satisfy the operation contract MUST advertise it as unsupported and return `ERROR_NOT_SUPPORTED` if called directly.
 
@@ -247,6 +257,14 @@ Provider conformance coverage:
 - `--fileops-selftest --selftest-case=FileOps_ProviderCapabilityMatrix` validates the offline capability matrix for Local FileSystem, FileSystemDummy, and 7-Zip, verifies direct 7-Zip unsupported APIs, verifies host rejection before task creation, and checks FileSystemDummy recursive copy/move directory-merge integrity without live network credentials.
 - Remote/network provider file-operation smoke coverage remains sandbox-gated under Phase 16 selftests; these tests MUST skip rather than touch live user data when credentials or dedicated selftest roots are unavailable.
 - Recursive progress-stream and cancellation contracts are also protected by Phase 7 copy/move parallelism cases and Phase 11 bridge cases.
+
+Object-store / Graph provider declarations (conformance-checked offline):
+
+- S3 declares copy + move + delete (object-store folder merge with per-object conflicts).
+- Microsoft Drive declares move + delete but NOT same-provider copy; the host bridges copy, and directory-onto-directory move merges server-side.
+- Microsoft Drive Graph mutations that are safe to replay, such as PATCH child moves and DELETE, MAY retry throttled/transient transport responses within the provider's bounded retry policy. Ambiguous POST create operations MUST NOT use blind transport retry; they MUST reconcile by re-querying the parent before deciding whether to replay or fail.
+- S3 per-object merge/copy conflict retries MUST be bounded per object and MUST poll cancellation between retry/reprobe/delete steps so a remote prefix operation cannot become an unbounded or uncancelable loop.
+- The provider-specific merge/conflict EXECUTION for S3 and Microsoft Drive is validated by code review and the shared host-side merge engine, with deterministic debug Graph/object-store selftests for retry, reconciliation, depth-cap, and type-mismatch cases that can run without live credentials.
 
 ### Pause / Cancel
 
@@ -269,6 +287,7 @@ Conflict handling covers per-item failures that require a user decision (overwri
 #### Defaults
 
 - Copy/Move MUST start without allowing overwrite and without allowing replace-readonly (conflicts must surface).
+- A retry/re-run Copy/Move MAY suppress an `already exists` prompt only when the existing destination file is byte-identical to the current source. Same size and last-write time alone are insufficient proof and MUST still surface the normal conflict.
 - A source directory whose destination path already exists as a directory MUST be merged by recursing into the existing destination directory. Directory-vs-directory existence is not an overwrite conflict; only file-vs-existing-file, file-vs-existing-directory, and directory-vs-existing-file collisions raise the `already exists` conflict. Same-volume Move MUST apply the same merge rule, falling back to copy/delete when the platform rename API cannot move a directory onto an existing directory.
 - Directory reparse-point copy under copy-reparse policy MUST treat an existing destination directory as a valid merge target instead of requiring overwrite permission before recreating the reparse point.
 - Delete SHOULD start by using Recycle Bin when supported.
@@ -279,7 +298,9 @@ Conflict handling covers per-item failures that require a user decision (overwri
 
 - Built-in local FileSystem delete and overwrite-cleanup paths MUST decide file/directory/reparse status from a handle opened with `FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS`, not only from a prior path attribute snapshot. Reparse points MUST be deleted as links and MUST NOT be recursively traversed by delete or overwrite cleanup.
 - Recursive delete implementations MUST re-open each queued child/frame no-follow before deciding whether to recurse. Enumeration attributes are advisory only and MUST NOT be the final destructive decision when another process could have swapped the path.
+- Empty-only replacement of an existing real directory by a reparse-point copy MUST use a single non-recursive remove attempt on the destination directory. It MUST NOT pre-scan with `IsDirectoryEmpty` and then perform a separate destructive action, because a concurrent child creation between those steps would turn an empty-only grant into a stale decision.
 - Cross-volume Move copy/delete fallback MUST report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` when the copy succeeded but the source delete or cleanup cannot finish. The completed task diagnostics and Issues pane MUST make the outcome explicit with "source preserved" and "partial copy left" wording so users know both sides may need review.
+- Cross-filesystem Move MUST NOT delete a source file unless the destination file has been byte-proven complete. When the source reader reports a size, copied bytes MUST match that size before source deletion is eligible. If the source size cannot be obtained, the bridge MUST either prove the destination against another reliable source-size signal or preserve the source and report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
 - Copy-reparse retargeting MAY remap targets that point inside the copied source root into the copied destination root. After remapping, the normalized target MUST still be inside the destination root; otherwise the provider MUST fail the reparse copy instead of creating an escaped destination target.
 - Deterministic destructive selftests MUST keep out-of-tree sentinel content and assert it remains untouched after injected file/dir/reparse swaps.
 
@@ -302,6 +323,8 @@ Conflict handling covers per-item failures that require a user decision (overwri
 - Conflicts MUST be resolved by an inline prompt in the file operations popup (no modal dialogs).
 - When a task encounters a conflict, the host MUST block that task’s forward progress until a decision is made.
 - If a task is executing multiple items concurrently (plugin or host internal parallelism), the host MUST serialize prompts (at most one active prompt per task) and MUST ensure all in-flight workers for that task converge to a stopped/paused state at progress checkpoints while waiting for the decision.
+- Conflict-routing regression coverage for serialized parallel prompts MUST use mixed per-child decisions in one task (for example Overwrite for some colliding children and Skip for others) and assert the resulting destination content for each child. Repeating the same answer for every prompt is not sufficient evidence that decisions are routed to the intended child.
+- Directory merge is the default: copying/moving a folder onto an existing folder of the same name MERGES children rather than raising a top-level `already exists`. When a merged folder has a CHILD that collides, the conflict prompt MUST name the colliding CHILD by its leaf name (e.g. `collide.txt`), not the whole top-level directory.
 - For recursive directory operations, conflicts SHOULD be raised at the most-specific failing path (file/subdir), not by aborting the entire top-level directory item.
   - Plugins SHOULD invoke `IFileSystemCallback::FileSystemIssue(...)` and continue traversal based on the returned action.
   - If any sub-items are skipped (or partially fail) and the operation continues, the plugin SHOULD return `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)` for the top-level item.
@@ -323,6 +346,13 @@ Retry and apply-to-all rules:
 
 - Retry MUST be capped to at most one retry per (item, bucket). If the retry fails with the same bucket again, Retry MUST NOT be offered again for that (item, bucket) and the UI MUST indicate that the retry failed.
 - “Apply to all similar” MUST only apply to non-retry actions and MUST be cached per-task per-bucket. Retry MUST NOT be cached.
+
+One-shot grant scope:
+
+- **Overwrite** and **Replace read-only** granted from a conflict prompt are ONE-SHOT: they apply only to the single item that was answered. The host MUST clear them at child-loop exit and at each directory-recursion entry, so a grant never leaks to a sibling or descendant item.
+- The ONLY way to broaden such a grant to many items is the explicit **Apply to all similar** toggle.
+- This holds identically for sequential and parallel execution: per-worker grants MUST NOT leak across items.
+- The emitted action set never includes a separate **Skip all** broadening for these grants — **Apply to all** combined with **Skip** covers it.
 
 ### Wait / Parallel mode
 
@@ -370,9 +400,16 @@ When Copy/Move must execute across different filesystem contexts, the host MAY p
   - use a unique `progressStreamId` per concurrent worker (stable within the operation),
   - serialize `IFileSystemCallback` invocations (no concurrent callback entry).
 
+Per-file conflicts under the bridge:
+
+- When the bridge copies/moves a DIRECTORY across providers and a CHILD collides with a pre-existing destination item, the bridge MUST raise a per-FILE conflict naming that child (not the whole directory). **Skip** preserves the existing child and continues copying non-colliding siblings; the operation then ends as `ERROR_PARTIAL_COPY`.
+- The bridge MUST NOT fail the whole directory closed on a single child collision.
+- Temp staging files (when the materialization fallback is used) MUST use unpredictable (CSPRNG) names, must be created with exclusive-create/no-follow semantics, and cancellation MUST leave no temp residue. Overwrite/replace grants for the final destination MUST NOT authorize overwriting a temp staging path.
+
 Move semantics under the bridge:
 
 - Cross-filesystem **Move** SHOULD be implemented as Copy + Delete (delete after successful copy).
+- For file Move, the bridge MUST revalidate the promoted destination before deleting the source when source-size verification was uncertain or provider I/O can report a successful short transfer. If destination validation fails or is unavailable, the item MUST finish as `ERROR_PARTIAL_COPY` with the source preserved.
 - On partial failure, the host SHOULD follow the existing conflict/continue-on-error rules for the task.
 
 ### Drag & Drop (Normative)
@@ -400,6 +437,12 @@ This enables accurate progress totals and improves ETA accuracy.
 - Pre-calc runs as part of the same task, before invoking `IFileSystem::*`.
 - In Wait mode, pre-calc MUST execute while holding the queue slot (sequential with respect to other queued tasks).
 - The host MAY parallelize pre-calc across source roots and recursive child directories within one task, bounded by `fileOperations.preCalcMaxWorkers`. Cancellation and Skip MUST remain responsive while worker fan-out is active.
+
+**Early admission (Copy overlap)**:
+
+- For **Copy** operations, pre-calculation runs CONCURRENTLY with the transfer: bytes begin moving before the recursive size scan finishes, so deep-tree first-byte latency drops. Once the transfer has started (gated on the operation's start tick), the UI MUST show a **Running** status rather than the blocking **Calculating** status; totals and ETA remain `estimating` until pre-calc publishes final totals, which then reconcile in place.
+- **Move** and **Delete** MUST keep the SERIAL order (pre-calculation completes before execution) because they modify/remove the source — a concurrent scan would size a tree that is being deleted.
+- The serial path retains the cancel-during-pre-calc fast exit (see "Cancel button behavior"). For the Copy overlap, cancellation flows through the transfer's result instead.
 
 ### Interface contract
 
@@ -525,8 +568,9 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
 - Bandwidth graph (Copy/Move):
   - Shows recent throughput history.
   - Samples represent the smoothed display throughput at popup timer cadence.
-  - In rainbow mode, each graph sample MUST attribute its filled area by active progress-stream byte share for that timer bucket. Equal concurrent streams SHOULD produce equal visible color bands within tolerance; the latest progress callback MUST NOT recolor the whole sample by itself.
-  - Non-rainbow mode remains a single theme-colored graph and is not affected by per-stream hue attribution.
+  - The graph MUST render one colour band per active transfer stream by default in all themes, using a theme-harmonized palette (the Rainbow theme keeps its existing look). Each graph sample MUST attribute its filled area by active progress-stream byte share for that timer bucket. Each stream's band height reflects its cumulative byte share, so equal-rate parallel streams render as visually equal bands within tolerance; the latest progress callback MUST NOT recolor the whole sample by itself.
+  - Graph-band fairness coverage MUST drive the rate-history/sampler deterministically when validating band attribution. It MUST NOT depend on popup visibility, `ShowWindow` timing, or live timer cadence unless the test explicitly asserts those prerequisites.
+  - Bands engage only once history carries ≥2 concurrent streams; a single-file copy keeps the classic single theme-colored fill.
   - When speed limit is active, shows a horizontal line at the effective limit.
   - Y-axis MUST auto-scale with headroom so the graph remains readable.
   - Overlay text MUST have a drop shadow for visibility against colored graph backgrounds.
@@ -568,6 +612,12 @@ When paths do not fit, the UI MUST truncate using a **middle ellipsis** (`…`) 
 - Source line: preserve the file/folder name at the end.
 - Destination line: destination is a folder path; do not show a filename.
 - When showing a per-file mini progress indicator on the right (parallel in-flight display), the UI MUST reserve space and clip text so the filename/path never renders underneath the progress indicator.
+
+## Completion Event Consumers (Normative)
+
+Consumers such as Compare Directories and Find Files MAY subscribe to file-operation completion notifications, but completion fan-out MUST NOT extend a destroyed consumer's lifetime or call back into invalid UI state. A subscription that targets a window/object with independent lifetime SHOULD include a weak lifetime guard; the multicast dispatcher MUST skip expired guarded subscriptions and remove explicitly unsubscribed tokens.
+
+Find Files result commands that start Move/Delete operations MUST defer row removal until the matching file-operation task completes successfully. Pending removals MUST be keyed by the stable task id, not by operation plus source path alone, so overlapping or repeated operations cannot remove rows for the wrong task. Pending removals SHOULD be age-reaped to avoid unbounded retention after missing or abandoned completion notifications; a failed, cancelled, or partial task MUST leave the original result rows visible.
 
 ## Speed Limit (Normative)
 
@@ -762,6 +812,7 @@ This plan is explicitly tied to the existing specs and current codebase state (a
   - `CopyProgressRoutine` enforces a task-global bandwidth cap across workers (best-effort) and serializes callback delivery (host never sees concurrent callback calls).
   - Delete populates `completedBytes` best-effort using deleted file sizes (to support size progress when pre-calc totals exist).
   - Recursive name-only scan search uses `searchMaxDirectoryWalkers` (default `4`, configurable `1..8`) for the bounded parallel directory walk.
+- Batch Rename preview planning is host-owned and MUST produce leaf-only targets before provider mutation. Execution uses `IFileSystem::RenameItems` for same-provider leaf renames, skips no-op rows, revalidates the preview snapshot before mutation, and reports long-running progress through the File Operations informational-task path when needed. Local Batch Rename execution MUST preflight changed sources and external destination conflicts before provider dispatch so a stale preview cannot partially rename earlier rows. Host callers that batch leaf renames SHOULD use `RedSalamander/FileSystemRenameBatch.*` to marshal `FileSystemRenamePair` arrays and strings into one `FileSystemArena` allocation; if `RenameItems` reports unsupported with `E_NOTIMPL`, `ERROR_CALL_NOT_IMPLEMENTED`, or `ERROR_NOT_SUPPORTED`, that helper MAY fall back to one `RenameItem` call per row. Batch Rename executes parent/child selections in deepest-first depth groups before notifying `DirectoryInfoCache::NotifyPathMoved` for successful rows. The built-in local FileSystem plugin's case-only rename handling remains the provider-side responsibility.
 
 ### Cross-Layer Contract Decisions (resolve before parallel ops)
 

@@ -824,13 +824,15 @@ The host uses this to:
 - enable/disable UI commands (rename/delete/properties, etc.)
 - decide whether same-provider copy/move/delete can create a task
 - decide whether cross-filesystem copy/move is allowed (explicit opt-in, per plugin pair)
+- decide which provider-native path identity relation host-side planners must use for collision, dependency, cache-notification, and refresh decisions
 
 Capabilities are returned via `IFileSystem::GetCapabilities(...)` on the active filesystem instance.
 
 Normative rules:
-- Every `IFileSystem` implementation MUST return `S_OK` and a non-empty UTF-8 JSON document with `version: 1`, `operations`, `concurrency`, and `crossFileSystem`.
-- Providers MUST advertise unsupported actions with `false` operation fields or empty import/export policy lists. Returning `ERROR_NOT_SUPPORTED`, `E_NOTIMPL`, an empty document, or `nullptr` for `jsonUtf8` is a provider contract violation.
-- The host MUST treat a missing, failed, empty, or invalid capabilities response as unsupported and reject same-provider Copy/Move/Delete before task creation.
+- Every `IFileSystem` implementation MUST return `S_OK` and a non-empty UTF-8 JSON document with `version: 1`, `operations`, `concurrency`, `crossFileSystem`, and `pathIdentity`.
+- Providers MUST advertise unsupported actions with `false` operation fields or empty import/export policy lists. Returning `ERROR_NOT_SUPPORTED`, `E_NOTIMPL`, an empty document, or `nullptr` for `jsonUtf8` is a contract violation.
+- The host MUST treat any failed `GetCapabilities` HRESULT, a null/empty document, an invalid/unparseable document, or a document missing the required `operations`, `concurrency`, `crossFileSystem`, or `pathIdentity` objects as a provider contract violation: capability-gated operations are disabled (fail-closed, same-provider Copy/Move/Delete/Batch Rename rejected before task creation) and the violation is logged via `Debug::Error` once per provider instance (identifying the plugin id when known).
+- Missing, malformed, unstable, or unsupported `pathIdentity` is also a provider contract violation. Host planners that need predictive path identity, including Batch Rename and same-context Copy/Move/Delete, MUST reject before mutation rather than falling back to a guessed relation.
 
 **Per-instance rule:** capabilities are **per `IFileSystem` instance**, and MAY vary based on:
 - plugin mode (e.g. S3 vs S3Tables),
@@ -838,6 +840,52 @@ Normative rules:
 - connection/profile configuration.
 
 The host MUST treat capabilities as instance-scoped and MUST NOT assume a DLL has a single fixed capability set.
+
+#### Provider path identity (`pathIdentity`) (mandatory)
+
+`pathIdentity` is the provider-native rule for deciding whether two plugin-path components or full plugin paths identify the same item inside one `IFileSystem` instance. Host code that predicts collisions or pairs mutation results MUST use this profile through a shared helper; it MUST NOT embed ad hoc `CharUpper`, `LCMapStringEx`, `_wcsicmp`, `CompareStringOrdinal`, or exact-string decisions at call sites.
+
+Supported `pathIdentity` fields:
+
+- `version`: MUST be `1`.
+- `pathTextStableIdentity`: MUST be `true` when canonical plugin path text uniquely identifies one item in this instance. Providers that allow duplicate display names in one parent MUST encode a stable disambiguator in plugin paths before setting this to `true`; otherwise they MUST set it to `false`.
+- `componentComparison`: MUST be exactly one of the two concrete relations below. A plugin MUST commit to the relation it actually enforces. **`unknown` (or any value other than the two below) is NOT a legal plugin value** — a plugin MUST NOT emit it, and the host treats it as a capability contract violation (fail closed). A plugin that cannot positively prove its instance relation MUST still declare the conservative concrete relation it enforces (default `ordinalCaseSensitive`, which is data-safe: without overwrite flags an existing destination fails with `ERROR_ALREADY_EXISTS` rather than being overwritten); it MUST NOT punt. Note that path-text uniqueness is a *separate* axis carried by `pathTextStableIdentity` (e.g. duplicate display names) — it is not encoded through `componentComparison`.
+  - `ordinalCaseSensitive`: UTF-16 code-unit equality; no locale folding and no Unicode normalization.
+  - `ordinalIgnoreCase`: Windows ordinal case-insensitive equality, equivalent to `CompareStringOrdinal(..., TRUE)` for equality. This is accent-sensitive and normalization-sensitive; composed and decomposed Unicode remain distinct unless the provider itself canonicalizes them in path text.
+- `normalization`: MUST be `none` for v1. Providers MUST NOT claim Unicode normalization that the host helper does not implement.
+- `preferredSeparator`: The separator the provider emits for canonical plugin paths, usually `"\\"` for local Windows-like providers and `"/"` for remote/object/archive providers.
+- `acceptedSeparators`: The separators the provider accepts as equivalent during path parsing. Local Windows-like providers usually accept both `"\\"` and `"/"`; object and URL-like providers usually accept only `"/"`.
+- `casePreserving`: `true` when the provider preserves display casing even if identity is case-insensitive.
+- `caseOnlyRename`: MUST be one of `supported`, `noOp`, `unsupported`, or `notApplicable`. Case-only rename means source and destination components differ as text but compare equal by `componentComparison`.
+
+Host obligations:
+
+- The host MUST parse `pathIdentity` into one `FileSystemPathIdentity` profile per active provider instance and reuse that profile for every host-side path identity decision for that provider.
+- Maps and caches MAY use folded keys for speed only when the helper owns the key algorithm; callers MUST verify key hits with the helper equality relation before treating them as equal.
+- If `pathTextStableIdentity` is `false`, `componentComparison` is absent or not one of the two allowed concrete values (a plugin emitting `unknown` is a contract violation, not a legal state), `normalization` is not `none`, or any required field is invalid, host planners that need predictive identity MUST reject the feature before mutation rather than falling back to a guessed relation. `unknown` exists only as the host's internal label for such a rejected/contract-violating profile; it is never a value a conforming plugin sends.
+- User text features such as case-insensitive search/replace, sorting labels, or macro-name lookup are not path identity decisions. They MAY use UI text semantics, but those helpers MUST NOT be reused for collision/dependency/refresh/undo decisions.
+- For a provider whose `componentComparison` is `ordinalIgnoreCase` — notably the **local Windows file system** (`builtin/file-system`) and its local-equivalent (`builtin/file-system-dummy`) — the host MUST apply exactly Windows ordinal case-insensitive equality (`CompareStringOrdinal(left, -1, right, -1, TRUE) == CSTR_EQUAL`) at **every** path-identity decision site for that provider, with no per-site variation. The host MUST NOT substitute `CharUpper*`/uppercase folding, `LCMapStringEx`/invariant-lowercase folding, `_wcsicmp`, or `std::filesystem::path` equality for that relation. When a local pane has no live `IFileSystem` instance, the host MUST use the default local `ordinalIgnoreCase` profile rather than a guessed relation.
+
+Provider obligations:
+
+- Providers MUST declare the relation they actually enforce for siblings in the current instance, not a convenient UI sort relation.
+- If behavior can vary by connection, server, bucket, archive, or mount context, the provider MUST return the instance-specific relation from `GetCapabilities()`. If it cannot positively determine the instance relation, it MUST still return a concrete conservative relation (default `ordinalCaseSensitive`) — it MUST NOT return `unknown`.
+- Providers that support same-provider rename MUST keep `RenameItem` and `RenameItems` collision behavior consistent with `pathIdentity`. Without overwrite flags, a destination that already identifies an existing sibling by `componentComparison` MUST fail rather than silently replacing it.
+
+Current built-in provider declarations:
+
+| Provider | `pathTextStableIdentity` | `componentComparison` | Separators | `caseOnlyRename` | Notes |
+|----------|--------------------------|-----------------------|------------|------------------|-------|
+| Local FileSystem (`builtin/file-system`) | `true` | `ordinalIgnoreCase` | preferred `"\\"`, accepts `"\\"` and `"/"` | `supported` | Host treats local paths as Windows ordinal case-insensitive for collision/dependency planning. Per-directory Windows case-sensitive mode is not a supported Batch Rename surface until a path-scoped identity extension exists. |
+| FileSystemDummy (`builtin/file-system-dummy`) | `true` | `ordinalIgnoreCase` | preferred `"\\"`, accepts `"\\"` and `"/"` | `supported` | Mirrors the local Windows-like identity relation for deterministic offline testing. |
+| 7-Zip (`builtin/file-system-7z`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported; archive entry paths remain exact text identities. |
+| Google Drive (`builtin/file-system-gdrive`) | `false` unless plugin paths encode stable item IDs | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported today. Display names are case-distinct, so the concrete relation is `ordinalCaseSensitive`; fail-closed comes from `pathTextStableIdentity = false` (duplicate display names), NOT from a `componentComparison` of `unknown`. |
+| Microsoft Drive (`builtin/file-system-onedrive-personal`, `builtin/file-system-onedrive-business`, `builtin/file-system-sharepoint`) | `true` | `ordinalIgnoreCase` | preferred `"/"`, accepts `"/"` | `supported` | The provider's sibling lookup and debug Graph model are case-insensitive. |
+| Curl SFTP/SCP (`builtin/file-system-sftp`, `builtin/file-system-scp`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `supported` | POSIX-like remote paths are treated as exact UTF-16 component identities after protocol decoding. |
+| Curl FTP (`builtin/file-system-ftp`) | `true` | `ordinalCaseSensitive` (conservative default; the proven relation when the connection can determine it) | preferred `"/"`, accepts `"/"` | `supported` | FTP path text uniquely identifies items (no duplicate display names), so `pathTextStableIdentity` is `true`. Server case behavior varies, but the plugin MUST declare a concrete relation — never `unknown`. The conservative `ordinalCaseSensitive` default is data-safe (worst case: a spurious `ERROR_ALREADY_EXISTS` on a case-insensitive server, never an overwrite); the plugin SHOULD upgrade to the proven instance relation when it can (e.g. from server type/`FEAT`). |
+| Curl IMAP (`builtin/file-system-imap`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider rename/move is unsupported. |
+| S3 (`builtin/file-system-s3`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `supported` | Object keys are exact byte/text identities after the plugin's UTF-16 path decoding. |
+| S3 Table (`builtin/file-system-s3table`) | `true` | `ordinalCaseSensitive` | preferred `"/"`, accepts `"/"` | `notApplicable` | Same-provider mutation is unsupported. |
 
 ### 4e. Transfer Hints (`IFileSystem::GetTransferHints`)
 
@@ -884,16 +932,31 @@ Capabilities JSON (version 1):
     "read": true,   // supports enumeration + IFileReader
     "write": false  // supports IFileWriter via IFileSystemIO::CreateFileWriter
   },
+  "concurrency": {
+    "copyMoveMax": 4,
+    "deleteMax": 8,
+    "deleteRecycleBinMax": 2
+  },
   "crossFileSystem": {
     // Plugin ids are long-form ids (PluginMetaData.id), case-insensitive.
     // "*" means any plugin id.
     "export": { "copy": ["*"], "move": ["*"] }, // this plugin may be the SOURCE when destination id matches
     "import": { "copy": ["builtin/file-system"], "move": [] } // this plugin may be the DESTINATION when source id matches
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalIgnoreCase",
+    "normalization": "none",
+    "preferredSeparator": "\\",
+    "acceptedSeparators": ["\\", "/"],
+    "casePreserving": true,
+    "caseOnlyRename": "supported"
   }
 }
 ```
 
-### 4e. Item properties (`IFileSystemIO::GetItemProperties`) (optional)
+### 4g. Item properties (`IFileSystemIO::GetItemProperties`) (optional)
 
 Provides item properties for non-Win32 paths (and optionally for Win32 paths) so the host can show a themed properties dialog.
 
@@ -930,7 +993,7 @@ The host treats field values as display text, not typed values; plugins should f
 
 `streams` is optional and lists named streams for the item. The default unnamed data stream is not listed. `name` is the logical stream name without Win32 `:` delimiters or `:$DATA` suffix. `sizeBytes` is the stream size as an unsigned integer; `displaySize` is the plugin-provided localized/display string; `canRemove` only means the stream is semantically removable if the active filesystem also implements `IFileSystemItemStreams`.
 
-### 4f. Item stream operations (`IFileSystemItemStreams`) (optional)
+### 4h. Item stream operations (`IFileSystemItemStreams`) (optional)
 
 **UUID:** `{9435eb43-828f-43d3-a9a9-8d9c7f7ebe36}`
 
@@ -1255,6 +1318,7 @@ typedef struct FileSystemArena
 - `totalItems`/`totalBytes` may be `0` when unknown.
 - Pointer parameters passed to callbacks are only valid for the duration of the callback call.
 - For any struct that includes `sizeBytes`, the creator MUST set `sizeBytes = sizeof(StructName)` before passing it across the host↔plugin boundary, and the consumer MUST validate it before reading other fields.
+- Any plugin entry point that accepts `FileSystemOptions*` MUST validate `options->sizeBytes == sizeof(FileSystemOptions)` before reading any later option field. `CopyItem`, `MoveItem`, `CopyItems`, `MoveItems`, `DeleteItem`, `DeleteItems`, `RenameItem`, and `RenameItems` MUST all fail malformed options with `E_INVALIDARG` when `options != nullptr`.
 - For this in-repo ABI sweep, `sizeBytes != sizeof(StructName)` is treated as a contract violation and implementations SHOULD fail the call with `E_INVALIDARG`.
 - For `[out]` structs (e.g. `FileSystemDirectorySizeResult* result`), the caller MUST initialize `result->sizeBytes` before calling into the plugin.
 - `FileSystemOptions::bandwidthLimitBytesPerSecond` applies to data-transfer operations (copy/move) and MAY be ignored for rename/delete.
@@ -1264,6 +1328,8 @@ typedef struct FileSystemArena
 - If `FILESYSTEM_FLAG_CONTINUE_ON_ERROR` is not set, plugins SHOULD stop at the first failure.
 - If any item fails and the operation continues, plugins SHOULD return `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
 - If `FILESYSTEM_FLAG_RECURSIVE` is not set and a directory requires recursion, plugins SHOULD return `HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY)`.
+- Recursive Move implementations MUST NOT treat children skipped by parser validation as successfully moved. If enumeration drops a malformed child record (for example an empty remote display name), the source parent MUST be considered incomplete, the operation MUST preserve that source parent, and the provider SHOULD report `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
+- Provider-side Move implementations that upload or copy data before deleting a source MUST prove the destination object/file is complete before source deletion. For staged remote uploads, the staged object SHOULD be re-statted before promotion and its size MUST match the source size; otherwise the staged object should be cleaned up and the source preserved with `HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY)`.
 
 **Arena Pattern (Required):**
 - All pointer fields in `FileSystemRenamePair`, plus all string pointer parameters passed via `IFileSystemCallback`, MUST reference memory inside a `FileSystemArena`.

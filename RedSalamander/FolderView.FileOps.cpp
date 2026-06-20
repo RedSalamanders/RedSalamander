@@ -905,11 +905,30 @@ void FolderView::RenameFocusedItem()
     const bool originalIsDirectory       = item.isDirectory;
     const std::filesystem::path fullPath = GetItemFullPath(item);
 
-    auto prompt = PromptForRename(_hWnd.get(), originalName, originalIsDirectory, _appTheme);
-    if (! prompt || prompt->empty())
+    RenamePromptResult prompt = PromptForRename(_hWnd.get(), originalName, originalIsDirectory, _appTheme);
+    if (prompt.action == RenamePromptAction::Cancel)
+    {
         return;
+    }
 
-    std::filesystem::path target = fullPath.parent_path() / *prompt;
+    if (prompt.action == RenamePromptAction::BatchRename)
+    {
+        if (_batchRenameRequestCallback)
+        {
+            // Folders root Batch Rename at the folder; files seed it with the prompted item.
+            // The item path is captured before the modal prompt, so a folder refresh that
+            // clears the live selection while the prompt is open cannot change the target.
+            _batchRenameRequestCallback(fullPath, originalIsDirectory);
+        }
+        return;
+    }
+
+    if (prompt.text.empty())
+    {
+        return;
+    }
+
+    std::filesystem::path target = fullPath.parent_path() / prompt.text;
     const FileSystemFlags flags  = FILESYSTEM_FLAG_NONE;
     const HRESULT hr             = _fileSystem->RenameItem(fullPath.c_str(), target.c_str(), flags, nullptr, nullptr, nullptr);
     if (FAILED(hr))

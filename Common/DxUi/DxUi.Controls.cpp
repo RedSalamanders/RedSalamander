@@ -893,6 +893,13 @@ void DrawButtonChrome(ID2D1RenderTarget* target,
     {
         if (style.focusRing == ButtonChromeFocusRing::Standard)
         {
+            // The Standard two-stroke ring is painted from the palette's focus
+            // strokes; callers passing a transparent/default-constructed palette
+            // would get an invisible or wrong-theme ring.
+            if (theme.focusStrokeOuter.a <= 0.0f && theme.focusStrokeInner.a <= 0.0f)
+            {
+                Debug::Error(L"DrawButtonChrome: a Standard focus ring requires a palette with visible focus strokes.");
+            }
             DrawRawFocusRing(target, brush, theme, spec.bounds, cornerRadius);
         }
         else
@@ -3456,6 +3463,640 @@ D2D1_RECT_F Slider::DebugGetFillRect() const noexcept
     return GetFillRect();
 }
 #endif
+
+// --- TagPicker ---
+
+namespace
+{
+[[nodiscard]] wchar_t ToLowerTagPickerChar(wchar_t ch) noexcept
+{
+    return static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
+}
+
+[[nodiscard]] bool TagPickerEqualsIgnoreCase(std::wstring_view lhs, std::wstring_view rhs) noexcept
+{
+    if (lhs.size() != rhs.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0u; index < lhs.size(); ++index)
+    {
+        if (ToLowerTagPickerChar(lhs[index]) != ToLowerTagPickerChar(rhs[index]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool TagPickerStartsWithIgnoreCase(std::wstring_view text, std::wstring_view prefix) noexcept
+{
+    if (prefix.size() > text.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0u; index < prefix.size(); ++index)
+    {
+        if (ToLowerTagPickerChar(text[index]) != ToLowerTagPickerChar(prefix[index]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool TagPickerContainsIgnoreCase(std::wstring_view text, std::wstring_view needle) noexcept
+{
+    if (needle.empty())
+    {
+        return true;
+    }
+    if (needle.size() > text.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0u; index + needle.size() <= text.size(); ++index)
+    {
+        if (TagPickerStartsWithIgnoreCase(text.substr(index), needle))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+constexpr float kTagPickerMinHeightDip      = 32.0f;
+constexpr float kTagPickerFramePaddingDip   = 4.0f;
+constexpr float kTagPickerGapDip            = 6.0f;
+constexpr float kTagPickerRowGapDip         = 4.0f;
+constexpr float kTagPickerRowHeightDip      = 24.0f;
+constexpr float kTagPickerRemoveWidthDip    = 18.0f;
+constexpr float kTagPickerMinComboWidthDip  = 96.0f;
+constexpr float kTagPickerMinTagWidthDip    = 48.0f;
+constexpr float kTagPickerMaxTagWidthDip    = 172.0f;
+} // namespace
+
+TagPicker::TagPicker()
+{
+    _combo = AddChild<ComboBox>();
+    _combo->SetEditable(true);
+    _combo->SetChromeVisible(false);
+    _combo->SetAutoOpenOnTextInput(true);
+    _combo->SetMaxVisibleItems(8u);
+    _combo->SetOnSelectionChanged([this](size_t)
+    {
+        if (_syncingCombo || ! _combo)
+        {
+            return;
+        }
+        if (_combo->IsPopupOpen())
+        {
+            return;
+        }
+
+        static_cast<void>(SelectOption(_combo->GetSelectedValue()));
+    });
+    _combo->SetOnSubmitted([this] { static_cast<void>(CommitInput()); });
+}
+
+void TagPicker::SetOptions(std::wstring allLabel, std::vector<std::wstring> options)
+{
+    _allLabel = std::move(allLabel);
+    _options.clear();
+    _options.reserve(options.size());
+    for (std::wstring& option : options)
+    {
+        if (option.empty() || ContainsOption(option))
+        {
+            continue;
+        }
+        _options.push_back(std::move(option));
+    }
+
+    PruneSelectedValues();
+    RefreshComboItems();
+    RebuildDisplayTags();
+    LayoutParts();
+    RequestInvalidate();
+}
+
+std::span<const std::wstring> TagPicker::GetOptions() const noexcept
+{
+    return _options;
+}
+
+void TagPicker::SetSelectedValues(std::vector<std::wstring> values)
+{
+    _selectedValues.clear();
+    _selectedValues.reserve(values.size());
+    for (std::wstring& value : values)
+    {
+        const std::optional<size_t> optionIndex = FindOptionIndex(value);
+        if (! optionIndex || ContainsSelectedValue(_options[optionIndex.value()]))
+        {
+            continue;
+        }
+        _selectedValues.push_back(_options[optionIndex.value()]);
+    }
+
+    RebuildDisplayTags();
+    RefreshComboItems();
+    LayoutParts();
+    RequestInvalidate();
+}
+
+std::span<const std::wstring> TagPicker::GetSelectedValues() const noexcept
+{
+    return _selectedValues;
+}
+
+void TagPicker::SetInputText(std::wstring text)
+{
+    if (! _combo)
+    {
+        return;
+    }
+
+    _syncingCombo = true;
+    _combo->SetText(std::move(text));
+    _syncingCombo = false;
+}
+
+std::wstring_view TagPicker::GetInputText() const noexcept
+{
+    return _combo ? _combo->GetText() : std::wstring_view{};
+}
+
+bool TagPicker::SelectOption(std::wstring_view value)
+{
+    if (value.empty())
+    {
+        return false;
+    }
+
+    bool changed = false;
+    if (!_allLabel.empty() && TagPickerEqualsIgnoreCase(value, _allLabel))
+    {
+        changed = _selectedValues.size() != _options.size();
+        _selectedValues = _options;
+    }
+    else if (const std::optional<size_t> optionIndex = FindOptionIndex(value))
+    {
+        const std::wstring& option = _options[optionIndex.value()];
+        if (IsAllSelectionActive())
+        {
+            _selectedValues.clear();
+        }
+        if (! ContainsSelectedValue(option))
+        {
+            _selectedValues.push_back(option);
+            changed = true;
+        }
+    }
+    else
+    {
+        return false;
+    }
+
+    if (_combo)
+    {
+        _syncingCombo = true;
+        _combo->SetText({});
+        _combo->SetSelectedIndex(std::nullopt);
+        _syncingCombo = false;
+    }
+
+    if (changed)
+    {
+        RebuildDisplayTags();
+        RefreshComboItems();
+        LayoutParts();
+        NotifySelectionChanged();
+        RequestInvalidate();
+    }
+    return true;
+}
+
+bool TagPicker::CommitInput()
+{
+    if (! _combo)
+    {
+        return false;
+    }
+
+    const std::wstring input(_combo->GetText());
+    if (input.empty())
+    {
+        return false;
+    }
+
+    if (!_allLabel.empty() && TagPickerEqualsIgnoreCase(input, _allLabel))
+    {
+        return SelectOption(_allLabel);
+    }
+
+    if (const std::optional<size_t> optionIndex = FindBestInputMatch(input))
+    {
+        return SelectOption(_options[optionIndex.value()]);
+    }
+    return false;
+}
+
+bool TagPicker::RemoveDisplayTag(size_t displayTagIndex)
+{
+    if (displayTagIndex >= _displayTags.size())
+    {
+        return false;
+    }
+
+    if (_displayTags[displayTagIndex].all)
+    {
+        if (_selectedValues.empty())
+        {
+            return true;
+        }
+        _selectedValues.clear();
+    }
+    else
+    {
+        const std::wstring value = _displayTags[displayTagIndex].value;
+        const auto it           = std::find_if(_selectedValues.begin(),
+                                     _selectedValues.end(),
+                                     [&value](const std::wstring& candidate) noexcept { return TagPickerEqualsIgnoreCase(candidate, value); });
+        if (it == _selectedValues.end())
+        {
+            return false;
+        }
+        _selectedValues.erase(it);
+    }
+
+    RebuildDisplayTags();
+    RefreshComboItems();
+    LayoutParts();
+    NotifySelectionChanged();
+    RequestInvalidate();
+    return true;
+}
+
+size_t TagPicker::GetDisplayTagCount() const noexcept
+{
+    return _displayTags.size();
+}
+
+std::wstring_view TagPicker::GetDisplayTagText(size_t displayTagIndex) const noexcept
+{
+    return displayTagIndex < _displayTags.size() ? std::wstring_view(_displayTags[displayTagIndex].text) : std::wstring_view{};
+}
+
+float TagPicker::GetPreferredHeightDip(float widthDip) const noexcept
+{
+    return ComputePreferredHeightDip(widthDip, GetHost());
+}
+
+void TagPicker::SetOnSelectionChanged(std::function<void(std::span<const std::wstring>)> onSelectionChanged)
+{
+    _onSelectionChanged = std::move(onSelectionChanged);
+}
+
+void TagPicker::Paint(WindowHost& host) const
+{
+    const ThemePalette& theme = host.GetTheme();
+    const bool comboFocused   = _combo && _combo->HasFocus();
+    const bool comboHovered   = _combo && _combo->IsHovered();
+    const bool comboOpen      = _combo && _combo->IsPopupOpen();
+    const ComboBoxVisualStyle fieldStyle =
+        ResolveComboBoxVisualStyle(theme, ComboBoxVariant::Edit, IsEnabled(), IsHovered() || comboHovered, comboOpen, comboFocused, host.IsKeyboardFocusVisible());
+    const D2D1_RECT_F frameBounds = SnapRectToPixel(host, GetBounds());
+    DrawRoundedRect(host, frameBounds, fieldStyle.fieldFill, fieldStyle.fieldBorder, fieldStyle.cornerRadiusDip);
+
+    const D2D1_COLOR_F tagFill =
+        theme.highContrast ? theme.headerBackground : BlendColor(theme.accent, theme.cardBackground, theme.dark ? 0.78f : 0.86f);
+    const D2D1_COLOR_F tagBorder = theme.highContrast ? theme.borderStrong : BlendColor(theme.accent, theme.borderDefault, theme.dark ? 0.44f : 0.30f);
+    const D2D1_COLOR_F textColor = theme.highContrast ? theme.text : ChooseContrastingTextColor(tagFill);
+    const D2D1_COLOR_F removeColor = BlendColor(textColor, tagFill, 0.18f);
+
+    for (size_t index = 0u; index < _tagRects.size() && index < _displayTags.size(); ++index)
+    {
+        const D2D1_RECT_F tagRect = _tagRects[index];
+        if (tagRect.right <= tagRect.left || tagRect.bottom <= tagRect.top)
+        {
+            continue;
+        }
+
+        DrawRoundedRect(host, tagRect, tagFill, tagBorder, 5.0f);
+        const D2D1_RECT_F removeRect = index < _tagRemoveRects.size()
+                                           ? _tagRemoveRects[index]
+                                           : D2D1::RectF(tagRect.right - kTagPickerRemoveWidthDip, tagRect.top, tagRect.right, tagRect.bottom);
+        const D2D1_RECT_F textRect   = D2D1::RectF(tagRect.left + 8.0f, tagRect.top, std::max(tagRect.left + 8.0f, removeRect.left - 2.0f), tagRect.bottom);
+        DrawSingleLineTextClipped(host, _displayTags[index].text, textRect, FontRole::Small, textColor, 0.0f, ResolveReadingDirection(GetFlowDirection()));
+        DrawCenteredText(host, L"×", removeRect, FontRole::Small, removeColor, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    }
+
+    Panel::Paint(host);
+}
+
+bool TagPicker::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers)
+{
+    if (rightButton)
+    {
+        return Panel::OnMouseDown(host, point, rightButton, modifiers);
+    }
+
+    for (size_t index = 0u; index < _tagRemoveRects.size(); ++index)
+    {
+        if (PointInRect(_tagRemoveRects[index], point))
+        {
+            static_cast<void>(RemoveDisplayTag(index));
+            Invalidate(host);
+            return true;
+        }
+    }
+
+    if (_combo && PointInRect(GetBounds(), point) && ! PointInRect(_combo->GetBounds(), point))
+    {
+        host.SetFocusControl(_combo);
+        Invalidate(host);
+        return true;
+    }
+
+    return Panel::OnMouseDown(host, point, rightButton, modifiers);
+}
+
+#if defined(ENABLE_TESTS)
+size_t TagPicker::DebugGetLaidOutDisplayTagCount() const noexcept
+{
+    return _tagRects.size();
+}
+
+D2D1_RECT_F TagPicker::DebugGetDisplayTagRect(size_t displayTagIndex) const noexcept
+{
+    return displayTagIndex < _tagRects.size() ? _tagRects[displayTagIndex] : D2D1::RectF();
+}
+
+D2D1_RECT_F TagPicker::DebugGetInputRect() const noexcept
+{
+    return _combo ? _combo->GetBounds() : D2D1::RectF();
+}
+
+ComboBox* TagPicker::DebugGetEmbeddedCombo() noexcept
+{
+    return _combo;
+}
+
+const ComboBox* TagPicker::DebugGetEmbeddedCombo() const noexcept
+{
+    return _combo;
+}
+#endif
+
+void TagPicker::OnBoundsChanged() noexcept
+{
+    LayoutParts();
+}
+
+Control* TagPicker::HitTest(D2D1_POINT_2F point)
+{
+    return Panel::HitTest(point);
+}
+
+const Control* TagPicker::HitTest(D2D1_POINT_2F point) const
+{
+    return Panel::HitTest(point);
+}
+
+void TagPicker::RefreshComboItems()
+{
+    if (! _combo)
+    {
+        return;
+    }
+
+    std::vector<ComboBox::Item> items;
+    items.reserve(_options.size() + (!_allLabel.empty() ? 1u : 0u));
+    const bool allSelectionActive = IsAllSelectionActive();
+    if (! _allLabel.empty() && _selectedValues.empty())
+    {
+        items.push_back(ComboBox::Item{.value = _allLabel, .display = _allLabel});
+    }
+    for (const std::wstring& option : _options)
+    {
+        if (! allSelectionActive && ContainsSelectedValue(option))
+        {
+            continue;
+        }
+        items.push_back(ComboBox::Item{.value = option, .display = option});
+    }
+
+    _syncingCombo = true;
+    _combo->SetItems(std::move(items));
+    _combo->SetSelectedIndex(std::nullopt);
+    _syncingCombo = false;
+}
+
+void TagPicker::RebuildDisplayTags()
+{
+    _displayTags.clear();
+    if (!_options.empty() && _selectedValues.size() == _options.size() && !_allLabel.empty())
+    {
+        _displayTags.push_back(DisplayTag{.text = _allLabel, .value = _allLabel, .all = true});
+        return;
+    }
+
+    _displayTags.reserve(_selectedValues.size());
+    for (const std::wstring& value : _selectedValues)
+    {
+        _displayTags.push_back(DisplayTag{.text = value, .value = value});
+    }
+}
+
+void TagPicker::LayoutParts() noexcept
+{
+    _tagRects.clear();
+    _tagRemoveRects.clear();
+
+    if (! _combo)
+    {
+        return;
+    }
+
+    const D2D1_RECT_F bounds = GetBounds();
+    const float width       = std::max(0.0f, bounds.right - bounds.left);
+    const float height      = std::max(0.0f, bounds.bottom - bounds.top);
+    if (width <= 0.0f || height <= 0.0f)
+    {
+        _combo->SetBounds(D2D1::RectF(bounds.left, bounds.top, bounds.left, bounds.top));
+        return;
+    }
+
+    const WindowHost* host          = GetHost();
+    const float preferredHeight     = ComputePreferredHeightDip(width, host);
+    const float preferredContentH   = std::max(kTagPickerRowHeightDip, preferredHeight - (kTagPickerFramePaddingDip * 2.0f));
+    const float rowTopInset         = std::max(kTagPickerFramePaddingDip, (height - preferredContentH) * 0.5f);
+    const float rowLeft             = bounds.left + kTagPickerFramePaddingDip;
+    const float rowRight            = std::max(rowLeft, bounds.right - kTagPickerFramePaddingDip);
+    float rowTop                    = bounds.top + rowTopInset;
+    float x                         = rowLeft;
+    const auto moveToNextRow = [&]() noexcept
+    {
+        rowTop += kTagPickerRowHeightDip + kTagPickerRowGapDip;
+        x = rowLeft;
+    };
+
+    for (const DisplayTag& tag : _displayTags)
+    {
+        const float tagW = MeasureDisplayTagWidthDip(tag, kTagPickerRowHeightDip, host);
+        if (x > rowLeft && x + tagW > rowRight)
+        {
+            moveToNextRow();
+        }
+
+        const float tagRight      = std::min(rowRight, x + tagW);
+        const D2D1_RECT_F tagRect = D2D1::RectF(x, rowTop, std::max(x + 24.0f, tagRight), rowTop + kTagPickerRowHeightDip);
+        _tagRects.push_back(tagRect);
+        _tagRemoveRects.push_back(
+            D2D1::RectF(std::max(tagRect.left, tagRect.right - kTagPickerRemoveWidthDip), tagRect.top, tagRect.right, tagRect.bottom));
+        x = tagRect.right + kTagPickerGapDip;
+    }
+
+    if (x > rowLeft && x + kTagPickerMinComboWidthDip > rowRight)
+    {
+        moveToNextRow();
+    }
+
+    const float comboLeft = std::clamp(x, rowLeft, std::max(rowLeft, rowRight - kTagPickerMinComboWidthDip));
+    _combo->SetBounds(D2D1::RectF(comboLeft, rowTop, rowRight, rowTop + kTagPickerRowHeightDip));
+}
+
+float TagPicker::ComputePreferredHeightDip(float widthDip, const WindowHost* host) const noexcept
+{
+    const float availableWidth = std::max(0.0f, widthDip - (kTagPickerFramePaddingDip * 2.0f));
+    if (availableWidth <= 0.0f)
+    {
+        return kTagPickerMinHeightDip;
+    }
+
+    size_t rowCount = 1u;
+    float x         = 0.0f;
+    for (const DisplayTag& tag : _displayTags)
+    {
+        const float tagW = MeasureDisplayTagWidthDip(tag, kTagPickerRowHeightDip, host);
+        if (x > 0.0f && x + tagW > availableWidth)
+        {
+            ++rowCount;
+            x = 0.0f;
+        }
+
+        x = std::min(availableWidth, x + tagW) + kTagPickerGapDip;
+    }
+
+    if (x > 0.0f && x + kTagPickerMinComboWidthDip > availableWidth)
+    {
+        ++rowCount;
+    }
+
+    const float rowsH = (static_cast<float>(rowCount) * kTagPickerRowHeightDip) + (static_cast<float>(rowCount - 1u) * kTagPickerRowGapDip);
+    return std::max(kTagPickerMinHeightDip, rowsH + (kTagPickerFramePaddingDip * 2.0f));
+}
+
+float TagPicker::MeasureDisplayTagWidthDip(const DisplayTag& tag, float rowHeightDip, const WindowHost* host) const noexcept
+{
+    const DWRITE_READING_DIRECTION readingDirection = ResolveReadingDirection(GetFlowDirection());
+    const float measuredTextW                       = MeasureSingleLineTextWidthDip(host, tag.text, FontRole::Small, rowHeightDip, readingDirection);
+    const float maxTagWidth                         = std::max(kTagPickerMinTagWidthDip, kTagPickerMaxTagWidthDip);
+    return std::clamp(measuredTextW + kTagPickerRemoveWidthDip + 18.0f, kTagPickerMinTagWidthDip, maxTagWidth);
+}
+
+void TagPicker::NotifySelectionChanged()
+{
+    if (_onSelectionChanged)
+    {
+        _onSelectionChanged(_selectedValues);
+    }
+}
+
+bool TagPicker::ContainsOption(std::wstring_view value) const noexcept
+{
+    return FindOptionIndex(value).has_value();
+}
+
+bool TagPicker::ContainsSelectedValue(std::wstring_view value) const noexcept
+{
+    return std::any_of(_selectedValues.begin(),
+                       _selectedValues.end(),
+                       [value](const std::wstring& selected) noexcept { return TagPickerEqualsIgnoreCase(selected, value); });
+}
+
+bool TagPicker::IsAllSelectionActive() const noexcept
+{
+    return !_allLabel.empty() && !_options.empty() && _selectedValues.size() == _options.size();
+}
+
+std::optional<size_t> TagPicker::FindOptionIndex(std::wstring_view value) const noexcept
+{
+    for (size_t index = 0u; index < _options.size(); ++index)
+    {
+        if (TagPickerEqualsIgnoreCase(_options[index], value))
+        {
+            return index;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<size_t> TagPicker::FindBestInputMatch(std::wstring_view input) const noexcept
+{
+    for (size_t index = 0u; index < _options.size(); ++index)
+    {
+        if (TagPickerEqualsIgnoreCase(_options[index], input))
+        {
+            return index;
+        }
+    }
+
+    for (size_t index = 0u; index < _options.size(); ++index)
+    {
+        if (TagPickerStartsWithIgnoreCase(_options[index], input))
+        {
+            return index;
+        }
+    }
+
+    for (size_t index = 0u; index < _options.size(); ++index)
+    {
+        if (TagPickerContainsIgnoreCase(_options[index], input))
+        {
+            return index;
+        }
+    }
+    return std::nullopt;
+}
+
+void TagPicker::PruneSelectedValues()
+{
+    std::vector<std::wstring> pruned;
+    pruned.reserve(_selectedValues.size());
+    for (const std::wstring& selected : _selectedValues)
+    {
+        const std::optional<size_t> optionIndex = FindOptionIndex(selected);
+        if (! optionIndex)
+        {
+            continue;
+        }
+
+        const std::wstring& option = _options[optionIndex.value()];
+        const bool alreadyAdded = std::any_of(pruned.begin(),
+                                              pruned.end(),
+                                              [&option](const std::wstring& candidate) noexcept { return TagPickerEqualsIgnoreCase(candidate, option); });
+        if (! alreadyAdded)
+        {
+            pruned.push_back(option);
+        }
+    }
+    _selectedValues = std::move(pruned);
+}
 
 // --- Toolbar ---
 

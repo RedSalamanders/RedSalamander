@@ -2407,6 +2407,7 @@ namespace
     const Common::Settings::Settings baselineSettings = g_settings;
     const auto restoreSettings                        = wil::scope_exit([&]() noexcept { g_settings = baselineSettings; });
 
+    SelfTest::AppendSelfTestTrace(L"Viewers live-search: seeding viewer associations");
     TestSetViewerAssociationRows({{L".selftest-viewers-001", L"builtin/viewer-text"},
                                   {L".selftest-viewers-002", L"builtin/viewer-pe"},
                                   {L".selftest-viewers-003", L"builtin/viewer-text"}});
@@ -2414,8 +2415,15 @@ namespace
     auto waitForPreferencesWindow = [&]() noexcept { return WaitForWindow([] noexcept { return GetPreferencesDialogHandle(); }, SelfTest::Scale(3000ms)); };
 
     auto prefs = HWND{};
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
+    SelfTest::AppendSelfTestTrace(L"Viewers live-search: posting Preferences open command");
+    state.Require(PostMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0) != FALSE,
+                  L"Failed to post Preferences open command for Viewers live search interaction test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     prefs = waitForPreferencesWindow();
+    SelfTest::AppendSelfTestTrace(L"Viewers live-search: Preferences window wait returned");
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not open for Viewers live search interaction test.");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
@@ -2519,10 +2527,12 @@ namespace
     };
 
     PreferencesDebugSnapshot snapshot{};
+    SelfTest::AppendSelfTestTrace(L"Viewers live-search: navigating to Viewers page");
     if (! navigateToViewersPage(prefs, snapshot))
     {
         return false;
     }
+    SelfTest::AppendSelfTestTrace(L"Viewers live-search: Viewers page ready");
 
     state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_VIEWERS),
                   L"Preferences Viewers page title did not settle before live search interaction validation.");
@@ -2578,7 +2588,8 @@ namespace
     constexpr std::wstring_view kSearchText = L"__codex_no_match__";
     const std::wstring editName             = searchEditName;
     const std::wstring initialEditValue     = initialValueState->value;
-    state.Require(SetVisibleDescendantValueByName(activePage, UIA_EditControlTypeId, editName, kSearchText),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      activePage, UIA_EditControlTypeId, editName, kSearchText, L"Preferences Viewers initial live search SetValue"),
                   L"Preferences Viewers page visible DX search edit did not accept live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(editName, kSearchText),
                   L"Preferences Viewers page visible DX search edit did not settle to the edited value after live UIA mutation.");
@@ -2604,15 +2615,23 @@ namespace
     }
 
     state.Require(
-        InvokeVisibleDescendantByName(getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText),
+        InvokeVisibleDescendantByNameWithMessagePump(
+            getShellHost(), UIA_ButtonControlTypeId, shellCancelButtonText, L"Preferences Viewers shell Cancel"),
         L"Preferences shell visible DX Cancel action did not expose live UIA InvokePattern interaction during Viewers live search discard validation.");
     state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(3000ms)),
                   L"Preferences dialog did not close after live UIA InvokePattern interaction on the visible DX Cancel action during Viewers live search "
                   L"discard validation.");
     prefs = nullptr;
 
-    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0);
+    SelfTest::AppendSelfTestTrace(L"Viewers live-search: posting Preferences reopen command");
+    state.Require(PostMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_FILE_PREFERENCES, 0), 0) != FALSE,
+                  L"Failed to post Preferences reopen command for Viewers live search discard validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
     prefs = waitForPreferencesWindow();
+    SelfTest::AppendSelfTestTrace(L"Viewers live-search: Preferences reopen wait returned");
     state.Require(prefs != nullptr && IsWindow(prefs) != FALSE, L"Preferences window did not reopen for Viewers live search discard validation.");
     if (! prefs || IsWindow(prefs) == FALSE)
     {
@@ -2659,7 +2678,8 @@ namespace
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(reopenedActivePage, UIA_EditControlTypeId, editName, kSearchText),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(
+                      reopenedActivePage, UIA_EditControlTypeId, editName, kSearchText, L"Preferences Viewers reopened live search SetValue"),
                   L"Preferences Viewers page visible DX search edit did not accept live UIA ValuePattern mutation after shell Cancel reopen.");
     state.Require(waitForEditValue(editName, kSearchText),
                   L"Preferences Viewers page visible DX search edit did not settle to the edited value after shell Cancel reopen.");
@@ -2676,7 +2696,11 @@ namespace
         return false;
     }
 
-    state.Require(SetVisibleDescendantValueByName(DebugGetPreferencesActivePageHandle(), UIA_EditControlTypeId, editName, initialEditValue),
+    state.Require(SetVisibleDescendantValueByNameWithMessagePump(DebugGetPreferencesActivePageHandle(),
+                                                                 UIA_EditControlTypeId,
+                                                                 editName,
+                                                                 initialEditValue,
+                                                                 L"Preferences Viewers restore live search SetValue"),
                   L"Preferences Viewers page visible DX search edit did not accept restoration through live UIA ValuePattern.");
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences Viewers page visible DX search edit did not restore its original value after live UIA mutation.");

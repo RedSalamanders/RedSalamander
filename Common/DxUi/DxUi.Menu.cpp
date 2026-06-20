@@ -1320,6 +1320,8 @@ struct MenuController; // forward
 [[nodiscard]] bool ProcessMenuPopupMessage(MenuController& controller, HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 void FinalizeAsyncMenuController(MenuController& controller) noexcept;
 void DestroyMenuPopupWindow(MenuPopup& popup) noexcept;
+[[nodiscard]] UINT ResolveMenuPopupMessageDpi(HWND hwnd, UINT msg, WPARAM wp) noexcept;
+void RelayoutMenuPopupForDpi(MenuPopup& popup, UINT dpi, const RECT* suggestedWindowRect) noexcept;
 
 struct MenuPopup
 {
@@ -1365,6 +1367,7 @@ struct MenuPopup
     MenuPopupShadowMargins shadowMargins;
     bool usesSystemBackdrop           = false;
     bool usesAppBackdropBlur          = false;
+    bool isSubmenu                    = false;
     bool mouseInsideMenu              = false;
     float scrollOffsetDip             = 0.0f;
     bool draggingScrollbarThumb       = false;
@@ -1569,6 +1572,11 @@ struct MenuController
     bool asyncSession = false;
     bool asyncFinalizing = false;
     bool asyncInteractionActive = false;
+    // True while DestroyMenuPopupWindow runs DestroyWindow on one of this
+    // controller's popups. Distinguishes controller-initiated popup destruction
+    // (submenu close, chain replacement, root switch) from external teardown so
+    // the popup WndProc does not finalize the async session re-entrantly.
+    bool destroyingPopupWindow = false;
     HWND previousCapture = nullptr;
     HWND previousFocus = nullptr;
     bool ignoreInitialLeftButtonUp = false;
@@ -2029,12 +2037,24 @@ static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                 popup->hwnd = nullptr;
             }
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-            if (controller && controller->asyncSession && ! controller->asyncFinalizing)
+            // Finalize only for external teardown (e.g. the owner window being
+            // destroyed while the async menu is open). Controller-initiated
+            // destroys (submenu close, chain replacement, root switch) reach this
+            // handler synchronously from DestroyMenuPopupWindow's DestroyWindow
+            // call; finalizing here would delete the controller and its popups
+            // while that caller is still using them.
+            if (controller && controller->asyncSession && ! controller->asyncFinalizing && ! controller->destroyingPopupWindow)
             {
                 controller->Dismiss();
                 FinalizeAsyncMenuController(*controller);
             }
             return DefWindowProcW(hwnd, msg, wp, lp);
+        }
+        if (msg == WM_DPICHANGED || msg == WM_DPICHANGED_AFTERPARENT)
+        {
+            const UINT dpi = ResolveMenuPopupMessageDpi(hwnd, msg, wp);
+            RelayoutMenuPopupForDpi(*popup, dpi, msg == WM_DPICHANGED ? reinterpret_cast<const RECT*>(lp) : nullptr);
+            return 0;
         }
         if (msg == WM_NCHITTEST)
         {
@@ -2047,7 +2067,8 @@ static LRESULT CALLBACK MenuWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return HTCLIENT;
         }
 
-        if (controller && controller->asyncSession && controller->asyncInteractionActive && ! controller->asyncFinalizing)
+        if (controller && controller->asyncSession && controller->asyncInteractionActive && ! controller->asyncFinalizing &&
+            ! controller->destroyingPopupWindow)
         {
             const bool dismissForActivation =
                 (msg == WM_ACTIVATEAPP && wp == FALSE) ||
@@ -2924,6 +2945,124 @@ void ApplyMenuPopupWindowRegion(HWND hwnd, const MenuPopupShadowMargins& shadowM
     }
 }
 
+[[nodiscard]] UINT ResolveMenuPopupMessageDpi(HWND hwnd, UINT msg, WPARAM wp) noexcept
+{
+    UINT dpi = msg == WM_DPICHANGED ? static_cast<UINT>(HIWORD(wp)) : 0u;
+    if (dpi == 0u && hwnd && IsWindow(hwnd) != FALSE)
+    {
+        dpi = GetDpiForWindow(hwnd);
+    }
+    if (dpi == 0u)
+    {
+        dpi = GetDpiForSystem();
+    }
+    return dpi == 0u ? USER_DEFAULT_SCREEN_DPI : dpi;
+}
+
+[[nodiscard]] RECT ComputePopupSurfaceRectFromTopLeft(POINT topLeft, float widthDip, float heightDip, UINT dpi) noexcept
+{
+    const int widthPx  = DipExtentToPixels(widthDip, dpi);
+    const int heightPx = DipExtentToPixels(heightDip, dpi);
+
+    const HMONITOR monitor = MonitorFromPoint(topLeft, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{};
+    mi.cbSize = sizeof(mi);
+    if (monitor == nullptr || GetMonitorInfoW(monitor, &mi) == FALSE)
+    {
+        mi.rcWork = RECT{GetSystemMetrics(SM_XVIRTUALSCREEN),
+                         GetSystemMetrics(SM_YVIRTUALSCREEN),
+                         GetSystemMetrics(SM_XVIRTUALSCREEN) + (std::max)(1, GetSystemMetrics(SM_CXVIRTUALSCREEN)),
+                         GetSystemMetrics(SM_YVIRTUALSCREEN) + (std::max)(1, GetSystemMetrics(SM_CYVIRTUALSCREEN))};
+    }
+
+    const RECT work = mi.rcWork;
+    const int maxX  = (std::max)(static_cast<int>(work.left), static_cast<int>(work.right - widthPx));
+    const int maxY  = (std::max)(static_cast<int>(work.top), static_cast<int>(work.bottom - heightPx));
+    const int x     = std::clamp(static_cast<int>(topLeft.x), static_cast<int>(work.left), maxX);
+    const int y     = std::clamp(static_cast<int>(topLeft.y), static_cast<int>(work.top), maxY);
+    return RECT{x, y, x + widthPx, y + heightPx};
+}
+
+void RefreshMenuPopupBackdrop(MenuPopup& popup, const RECT& surfaceRectPx) noexcept
+{
+    popup.backdropSnapshot = {};
+    popup.usesAppBackdropBlur = false;
+
+    const MenuItemVisualStyle itemStyle     = ResolveMenuVisualStyle(popup.host.GetTheme());
+    const MenuSurfaceMaterialStyle material = ResolveMenuSurfaceMaterialStyle(popup.host.GetTheme(), itemStyle);
+    if (material.backdropOpacity <= 0.0f || material.backdropBlurDip <= 0.0f)
+    {
+        return;
+    }
+
+    const auto backdropStartedAt = std::chrono::steady_clock::now();
+    popup.usesAppBackdropBlur    = CaptureMenuBackdropScreenRegion(surfaceRectPx, popup.backdropSnapshot.capture);
+    Debug::Perf::Emit(L"dxui.menu.backdrop_capture_us",
+                      popup.isSubmenu ? L"submenu_dpi" : L"root_dpi",
+                      Debug::Perf::ElapsedUs(backdropStartedAt),
+                      static_cast<uint64_t>(surfaceRectPx.right - surfaceRectPx.left),
+                      static_cast<uint64_t>(surfaceRectPx.bottom - surfaceRectPx.top),
+                      popup.usesAppBackdropBlur ? S_OK : E_FAIL);
+}
+
+void RelayoutMenuPopupForDpi(MenuPopup& popup, UINT dpi, const RECT* suggestedWindowRect) noexcept
+{
+    if (! popup.hwnd || IsWindow(popup.hwnd) == FALSE || dpi == 0u)
+    {
+        return;
+    }
+
+    const auto startedAt = std::chrono::steady_clock::now();
+    popup.dpi           = dpi;
+
+    bool hostDpiHandled = false;
+    static_cast<void>(popup.host.HandleMessage(popup.hwnd, WM_DPICHANGED, MAKEWPARAM(static_cast<WORD>(dpi), static_cast<WORD>(dpi)), 0, hostDpiHandled));
+
+    POINT surfaceTopLeft{popup.surfaceRectPx.left, popup.surfaceRectPx.top};
+    if (suggestedWindowRect)
+    {
+        surfaceTopLeft.x = suggestedWindowRect->left + DipExtentToPixels(popup.shadowMargins.leftDip, dpi);
+        surfaceTopLeft.y = suggestedWindowRect->top + DipExtentToPixels(popup.shadowMargins.topDip, dpi);
+    }
+
+    const D2D1_SIZE_F sizeDip = ComputeMenuSize(popup.items, popup.itemCount, popup.host, &popup.acceleratorColumnWidthDip);
+    const float requestedVisibleHeightDip =
+        (! popup.isSubmenu && popup.controller && popup.controller->sessionCallbacks.maxRootHeightDip > 0.0f)
+            ? (std::min)(sizeDip.height, popup.controller->sessionCallbacks.maxRootHeightDip)
+            : sizeDip.height;
+
+    const RECT surfaceRectPx     = ComputePopupSurfaceRectFromTopLeft(surfaceTopLeft, sizeDip.width, requestedVisibleHeightDip, dpi);
+    const RECT windowRect        = ComputePopupWindowRect(surfaceRectPx, popup.shadowMargins, dpi);
+    const int windowWidthPx      = windowRect.right - windowRect.left;
+    const int windowHeightPx     = windowRect.bottom - windowRect.top;
+    popup.menuWidthDip           = popup.PixelToDip(static_cast<float>(surfaceRectPx.right - surfaceRectPx.left));
+    popup.menuHeightDip          = popup.PixelToDip(static_cast<float>(surfaceRectPx.bottom - surfaceRectPx.top));
+    popup.windowWidthDip         = popup.PixelToDip(static_cast<float>(windowWidthPx));
+    popup.windowHeightDip        = popup.PixelToDip(static_cast<float>(windowHeightPx));
+    popup.surfaceRectPx          = surfaceRectPx;
+    popup.windowRectPx           = windowRect;
+    popup.contentHeightDip       = sizeDip.height;
+    popup.draggingScrollbarThumb = false;
+    popup.scrollbarHotPart       = MenuPopup::ScrollbarHotPart::None;
+    popup.ClampScrollOffset();
+
+    SetWindowPos(popup.hwnd, HWND_TOP, windowRect.left, windowRect.top, windowWidthPx, windowHeightPx, SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+    ApplyMenuPopupWindowRegion(popup.hwnd, popup.shadowMargins, dpi, windowWidthPx, windowHeightPx);
+    if (Control* const root = popup.host.GetRoot())
+    {
+        root->SetBounds(D2D1::RectF(0.0f, 0.0f, popup.windowWidthDip, popup.windowHeightDip));
+    }
+    RefreshMenuPopupBackdrop(popup, surfaceRectPx);
+    popup.host.Invalidate();
+
+    Debug::Perf::Emit(L"dxui.menu.dpi_relayout_us",
+                      popup.isSubmenu ? L"submenu" : L"root",
+                      Debug::Perf::ElapsedUs(startedAt),
+                      static_cast<uint64_t>(popup.itemCount),
+                      static_cast<uint64_t>(dpi),
+                      S_OK);
+}
+
 // ---------------------------------------------------------------------------
 // Create/show a menu popup window
 // ---------------------------------------------------------------------------
@@ -2959,6 +3098,7 @@ bool CreateMenuPopupWindow(MenuController& controller,
     popup->items      = popup->ownedItems.data();
     popup->itemCount  = popup->ownedItems.size();
     popup->controller = &controller;
+    popup->isSubmenu  = isSubmenu;
 
     HINSTANCE hInstance = GetModuleHandleW(nullptr);
     EnsureMenuWindowClass(hInstance);
@@ -3000,7 +3140,13 @@ bool CreateMenuPopupWindow(MenuController& controller,
                                   L"owner={:#x} hwnd={:#x} stage=WindowHost.Attach",
                                   TraceHwndValue(controller.ownerHwnd),
                                   TraceHwndValue(hwnd));
+        // Controller-initiated destroy: keep the WM_NCDESTROY external-teardown
+        // guard from finalizing the async session re-entrantly (see
+        // DestroyMenuPopupWindow).
+        const bool previousDestroying     = controller.destroyingPopupWindow;
+        controller.destroyingPopupWindow  = true;
         DestroyWindow(hwnd);
+        controller.destroyingPopupWindow  = previousDestroying;
         return false;
     }
     popup->host.SetTheme(controller.theme);
@@ -3166,7 +3312,23 @@ void DestroyMenuPopupWindow(MenuPopup& popup) noexcept
     const HWND hwnd = popup.hwnd;
     if (hwnd && IsWindow(hwnd) != FALSE)
     {
+        // DestroyWindow delivers WM_NCDESTROY (and possibly WM_CAPTURECHANGED)
+        // synchronously while GWLP_USERDATA still points at this popup. Mark the
+        // destroy as controller-initiated so the popup WndProc's external-teardown
+        // guard does not Dismiss + FinalizeAsyncMenuController re-entrantly, which
+        // would delete this popup (and the controller) while callers such as
+        // CloseSubmenuChainFrom and CloseTopmostSubmenu are still using them.
+        MenuController* const controller = popup.controller;
+        const bool previousDestroying    = controller ? controller->destroyingPopupWindow : false;
+        if (controller)
+        {
+            controller->destroyingPopupWindow = true;
+        }
         DestroyWindow(hwnd);
+        if (controller)
+        {
+            controller->destroyingPopupWindow = previousDestroying;
+        }
     }
 
     popup.host.Detach();
@@ -3257,6 +3419,35 @@ void CloseSubmenuChainFrom(MenuController& controller, MenuPopup& parent) noexce
     if (closedAny && parent.hwnd)
     {
         InvalidatePopup(parent);
+    }
+}
+
+// Fires a pending submenu hover timer on a popup: opens the deferred submenu or
+// closes the open submenu chain. Shared by the async WndProc path and the modal
+// loop path, which receive the WM_TIMER through different message routes.
+void HandleSubmenuHoverTimer(MenuController& controller, MenuPopup& popup)
+{
+    if (popup.hoverTimerId == 0 || popup.hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::None)
+    {
+        return;
+    }
+
+    if (popup.hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingOpen && popup.hoverTimerItemIndex < popup.itemCount)
+    {
+        KillTimer(popup.hwnd, kSubmenuHoverTimerId);
+        popup.hoverTimerId         = 0;
+        popup.hoverTimerKind       = MenuPopup::SubmenuHoverTimerKind::None;
+        const size_t openItemIndex = popup.hoverTimerItemIndex;
+        popup.hoverTimerItemIndex  = SIZE_MAX;
+        OpenSubmenu(controller, popup, openItemIndex, false);
+    }
+    else if (popup.hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingClose)
+    {
+        KillTimer(popup.hwnd, kSubmenuHoverTimerId);
+        popup.hoverTimerId        = 0;
+        popup.hoverTimerKind      = MenuPopup::SubmenuHoverTimerKind::None;
+        popup.hoverTimerItemIndex = SIZE_MAX;
+        CloseSubmenuChainFrom(controller, popup);
     }
 }
 
@@ -3727,7 +3918,10 @@ void TraceMenuPointerRoute(
     {
         if (IsStaleRootSwitchPointerMoveAfterKeyboard(controller, event))
         {
-            RememberRootSwitchPointerPoint(controller, routedRootSwitchPoint);
+            if (ShouldRememberRejectedRootSwitchPointer(event))
+            {
+                RememberRootSwitchPointerPoint(controller, routedRootSwitchPoint);
+            }
             DXUI_MENU_TRACE(L"DxUi::MenuTrace Popup root-switch-stale-after-keyboard point=({}, {}) messageTime={} keyboardTime={}",
                             routedRootSwitchPoint.x,
                             routedRootSwitchPoint.y,
@@ -4400,28 +4594,9 @@ void TraceMenuKeyboardRoute(
 
     if (msg == WM_TIMER && wp == kSubmenuHoverTimerId)
     {
-        MenuPopup* popup = controller.FindPopupForHwnd(hwnd);
-        if (! popup || popup->hoverTimerId == 0 || popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::None)
+        if (MenuPopup* popup = controller.FindPopupForHwnd(hwnd))
         {
-            return true;
-        }
-
-        if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingOpen && popup->hoverTimerItemIndex < popup->itemCount)
-        {
-            KillTimer(popup->hwnd, kSubmenuHoverTimerId);
-            popup->hoverTimerId        = 0;
-            popup->hoverTimerKind      = MenuPopup::SubmenuHoverTimerKind::None;
-            const size_t openItemIndex = popup->hoverTimerItemIndex;
-            popup->hoverTimerItemIndex = SIZE_MAX;
-            OpenSubmenu(controller, *popup, openItemIndex, false);
-        }
-        else if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingClose)
-        {
-            KillTimer(popup->hwnd, kSubmenuHoverTimerId);
-            popup->hoverTimerId        = 0;
-            popup->hoverTimerKind      = MenuPopup::SubmenuHoverTimerKind::None;
-            popup->hoverTimerItemIndex = SIZE_MAX;
-            CloseSubmenuChainFrom(controller, *popup);
+            HandleSubmenuHoverTimer(controller, *popup);
         }
 
         return true;
@@ -4754,27 +4929,9 @@ void RunMenuModalLoop(MenuController& controller)
         // they mutate the popup cascade, not the individual popup window.
         if (msg.message == WM_TIMER && msg.wParam == kSubmenuHoverTimerId)
         {
-            MenuPopup* popup = controller.FindPopupForHwnd(msg.hwnd);
-            if (! popup || popup->hoverTimerId == 0 || popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::None)
+            if (MenuPopup* popup = controller.FindPopupForHwnd(msg.hwnd))
             {
-                continue;
-            }
-
-            if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingOpen && popup->hoverTimerItemIndex < popup->itemCount)
-            {
-                KillTimer(popup->hwnd, kSubmenuHoverTimerId);
-                popup->hoverTimerId   = 0;
-                popup->hoverTimerKind = MenuPopup::SubmenuHoverTimerKind::None;
-                OpenSubmenu(controller, *popup, popup->hoverTimerItemIndex, false);
-                popup->hoverTimerItemIndex = SIZE_MAX;
-            }
-            else if (popup->hoverTimerKind == MenuPopup::SubmenuHoverTimerKind::PendingClose)
-            {
-                KillTimer(popup->hwnd, kSubmenuHoverTimerId);
-                popup->hoverTimerId        = 0;
-                popup->hoverTimerKind      = MenuPopup::SubmenuHoverTimerKind::None;
-                popup->hoverTimerItemIndex = SIZE_MAX;
-                CloseSubmenuChainFrom(controller, *popup);
+                HandleSubmenuHoverTimer(controller, *popup);
             }
             continue;
         }
@@ -5091,6 +5248,9 @@ bool ContextMenu::ShowAsync(HWND ownerHwnd,
     ActiveAsyncMenuControllers().push_back(std::move(controller));
     if (! BeginAsyncMenuInteraction(controllerRef))
     {
+        // Contract: returning false means the closed callback never fires. Drop
+        // it before finalizing so FinalizeAsyncMenuController cannot invoke it.
+        controllerRef.asyncOnClosed = nullptr;
         FinalizeAsyncMenuController(controllerRef);
         return false;
     }

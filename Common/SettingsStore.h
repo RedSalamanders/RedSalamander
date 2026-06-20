@@ -420,6 +420,42 @@ struct SearchDialogSettings
     std::vector<GridColumnLayoutEntry> resultsGridLayout;
 };
 
+enum class BatchRenameCaseStyle : uint8_t
+{
+    None,
+    Lower,
+    Upper,
+    Mixed,
+};
+
+struct BatchRenameSettings
+{
+    std::wstring lastRoot;
+    std::vector<std::wstring> recentMasks;
+    std::vector<std::wstring> recentNameTemplates;
+    std::vector<std::wstring> recentSearchPatterns;
+    std::vector<std::wstring> recentReplacePatterns;
+
+    bool includeSubdirectories = false;
+    bool includeFiles          = true;
+    bool includeFolders        = false;
+    bool regexEnabled          = false;
+    bool caseSensitive         = true;
+    bool wholeWords            = false;
+    bool replaceOnce           = false;
+    bool excludeExtension      = false;
+
+    std::wstring flattenSeparator = L" - ";
+    BatchRenameCaseStyle fileNameCaseStyle  = BatchRenameCaseStyle::None;
+    BatchRenameCaseStyle extensionCaseStyle = BatchRenameCaseStyle::None;
+
+    std::wstring previewSortColumnId;
+    bool previewSortDescending = false;
+    std::vector<GridColumnLayoutEntry> previewGridLayout;
+
+    bool operator==(const BatchRenameSettings&) const = default;
+};
+
 enum class FileActionKind : uint8_t
 {
     ViewerPlugin,
@@ -747,6 +783,7 @@ struct Settings
     std::optional<HotPathsSettings> hotPaths;
     std::optional<SelectionMasksSettings> selectionMasks;
     std::optional<SearchDialogSettings> search;
+    std::optional<BatchRenameSettings> batchRename;
 };
 
 struct SettingsFileStamp

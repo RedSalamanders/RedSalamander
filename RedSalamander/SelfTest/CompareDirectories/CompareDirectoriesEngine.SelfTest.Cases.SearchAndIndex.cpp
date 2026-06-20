@@ -354,6 +354,227 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"local_search_fallback_follow_symlink_loop_guard",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_fallback_follow_symlink_loop_guard", caseRoot),
+                  L"Failed to prepare search_fallback_follow_symlink_loop_guard root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"needle.txt", "fallback loop guard"), L"Failed to create fallback needle.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path loopPath = caseRoot / L"loop";
+    const bool linkCreated               = TryCreateDirectorySymlink(loopPath, caseRoot);
+    if (! linkCreated)
+    {
+        const DWORD err = ::GetLastError();
+        if (err == ERROR_PRIVILEGE_NOT_HELD || err == ERROR_ACCESS_DENIED || err == ERROR_INVALID_PARAMETER)
+        {
+            Debug::Warning(L"CompareSelfTest: skipping fallback search symlink-loop guard test (CreateSymbolicLinkW failed: {}).", err);
+            return true;
+        }
+
+        state.Require(false, std::format(L"CreateSymbolicLinkW failed unexpectedly for fallback search loop guard: {}.", err));
+        return false;
+    }
+
+    std::wstring rootText    = caseRoot.wstring();
+    std::wstring namePattern = L"needle.txt";
+
+    FileSystemSearchQuery query{};
+    query.sizeBytes   = sizeof(FileSystemSearchQuery);
+    query.rootPath    = rootText.c_str();
+    query.namePattern = namePattern.c_str();
+    query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES | FILESYSTEM_SEARCH_FOLLOW_SYMLINKS);
+    query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+    RecordingSearchCallback callback(RecordingSearchCallback::Mode::Success, 64u);
+    const HRESULT hr = SearchFallbackEngine::Execute(baseFs.get(), &query, &callback, nullptr);
+    state.Require(SUCCEEDED(hr), std::format(L"Fallback follow-symlink search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const auto matches = callback.Matches();
+    state.Require(matches.size() == 1u, std::format(L"Fallback follow-symlink search expected 1 match, got {}.", matches.size()));
+    state.Require(FindRecordedSearchMatch(matches, L"needle.txt") != nullptr, L"Fallback follow-symlink search missing needle.txt.");
+
+    const auto progressSnapshots            = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(completed != nullptr, L"Fallback follow-symlink search missing completed progress.");
+    if (completed != nullptr)
+    {
+        state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Fallback follow-symlink search should report scan backend.");
+        state.Require(completed->scannedDirectories < 8u,
+                      std::format(L"Fallback follow-symlink search visited too many directories: {}.", completed->scannedDirectories));
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_search_fallback_single_pass_large_directory",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_fallback_single_pass_large_directory", caseRoot),
+                  L"Failed to prepare search_fallback_single_pass_large_directory root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    constexpr size_t kEntryCount = 4096u;
+
+    ReadDirectoryTestBehavior behavior{};
+    behavior.targetPath = caseRoot;
+    behavior.rawEntries.reserve(kEntryCount);
+    for (size_t index = 0u; index < kEntryCount; ++index)
+    {
+        behavior.rawEntries.push_back({std::format(L"hit_{:04}.txt", index), FILE_ATTRIBUTE_ARCHIVE, false});
+    }
+
+    const wil::com_ptr<IFileSystem> wrappedFs = CreateReadDirectoryBehaviorFileSystem(baseFs, behavior);
+    state.Require(static_cast<bool>(wrappedFs), L"Failed to create synthetic large-directory ReadDirectoryInfo wrapper.");
+    if (! wrappedFs)
+    {
+        return false;
+    }
+
+    const std::wstring rootText    = caseRoot.wstring();
+    const std::wstring namePattern = L"hit_*.txt";
+
+    FileSystemSearchQuery query{};
+    query.sizeBytes   = sizeof(FileSystemSearchQuery);
+    query.rootPath    = rootText.c_str();
+    query.namePattern = namePattern.c_str();
+    query.flags       = FILESYSTEM_SEARCH_INCLUDE_FILES;
+    query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+    RecordingSearchCallback callback;
+    const auto started = std::chrono::steady_clock::now();
+    const HRESULT hr   = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
+    const uint64_t elapsedUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
+
+    const auto matches = callback.Matches();
+    Debug::Perf::Emit(L"compare.selftest.local_search_fallback_buffer_enumeration_us",
+                      std::format(L"entries={}", kEntryCount),
+                      elapsedUs,
+                      kEntryCount,
+                      static_cast<uint64_t>(matches.size()),
+                      hr);
+    AppendCompareSelfTestTraceLine(std::format(L"Case: local_search_fallback_single_pass_large_directory elapsedUs={} entries={} matches={} hr=0x{:08X}",
+                                               elapsedUs,
+                                               kEntryCount,
+                                               matches.size(),
+                                               static_cast<unsigned long>(hr)));
+
+    state.Require(SUCCEEDED(hr), std::format(L"Fallback large-directory search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(matches.size() == kEntryCount, std::format(L"Fallback large-directory search expected {} matches, got {}.", kEntryCount, matches.size()));
+    state.Require(FindRecordedSearchMatch(matches, L"hit_0000.txt") != nullptr, L"Fallback large-directory search missing first entry.");
+    state.Require(FindRecordedSearchMatch(matches, L"hit_4095.txt") != nullptr, L"Fallback large-directory search missing last entry.");
+
+    const auto progressSnapshots            = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(completed != nullptr, L"Fallback large-directory search missing completed progress.");
+    if (completed != nullptr)
+    {
+        state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Fallback large-directory search should report scan backend.");
+        state.Require(completed->scannedDirectories == 1u,
+                      std::format(L"Fallback large-directory search scannedDirectories mismatch. got={}", completed->scannedDirectories));
+        state.Require(completed->scannedFiles == kEntryCount,
+                      std::format(L"Fallback large-directory search scannedFiles mismatch. got={}", completed->scannedFiles));
+        state.Require(completed->matchedEntries == kEntryCount,
+                      std::format(L"Fallback large-directory search matchedEntries mismatch. got={}", completed->matchedEntries));
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_search_fallback_malformed_entry_skips_with_warning",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_fallback_malformed_entry_skips_with_warning", caseRoot),
+                  L"Failed to prepare search_fallback_malformed_entry_skips_with_warning root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    ReadDirectoryTestBehavior behavior{};
+    behavior.targetPath = caseRoot;
+    behavior.rawEntries = {
+        {L"good-before.txt", FILE_ATTRIBUTE_ARCHIVE, false},
+        {L"bad-entry.txt", FILE_ATTRIBUTE_ARCHIVE, true},
+        {L"good-after.txt", FILE_ATTRIBUTE_ARCHIVE, false},
+    };
+
+    const wil::com_ptr<IFileSystem> wrappedFs = CreateReadDirectoryBehaviorFileSystem(baseFs, behavior);
+    state.Require(static_cast<bool>(wrappedFs), L"Failed to create malformed-entry ReadDirectoryInfo wrapper.");
+    if (! wrappedFs)
+    {
+        return false;
+    }
+
+    const std::wstring rootText    = caseRoot.wstring();
+    const std::wstring namePattern = L"*.txt";
+
+    FileSystemSearchQuery query{};
+    query.sizeBytes   = sizeof(FileSystemSearchQuery);
+    query.rootPath    = rootText.c_str();
+    query.namePattern = namePattern.c_str();
+    query.flags       = FILESYSTEM_SEARCH_INCLUDE_FILES;
+    query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+    RecordingSearchCallback callback;
+    const HRESULT hr = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
+    state.Require(SUCCEEDED(hr), std::format(L"Fallback malformed-entry search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const auto matches = callback.Matches();
+    state.Require(matches.size() == 2u, std::format(L"Fallback malformed-entry search expected 2 matches, got {}.", matches.size()));
+    state.Require(FindRecordedSearchMatch(matches, L"good-before.txt") != nullptr, L"Fallback malformed-entry search missing good-before.txt.");
+    state.Require(FindRecordedSearchMatch(matches, L"good-after.txt") != nullptr, L"Fallback malformed-entry search missing good-after.txt.");
+    state.Require(FindRecordedSearchMatch(matches, L"bad-entry.txt") == nullptr, L"Fallback malformed-entry search should skip the bad entry.");
+
+    const auto progressSnapshots            = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(completed != nullptr, L"Fallback malformed-entry search missing completed progress.");
+    if (completed != nullptr)
+    {
+        state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Fallback malformed-entry search should report scan backend.");
+        state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_OVERFLOW) != 0u,
+                      L"Fallback malformed-entry search should report an overflow/corrupt-entry warning.");
+        state.Require(completed->scannedFiles == 2u, std::format(L"Fallback malformed-entry search scannedFiles mismatch. got={}", completed->scannedFiles));
+        state.Require(completed->matchedEntries == 2u,
+                      std::format(L"Fallback malformed-entry search matchedEntries mismatch. got={}", completed->matchedEntries));
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"local_search_scan_wide_tree_parallel_walk_name_only",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -596,6 +817,165 @@ SelfTest::RunCase(options,
                                                workers1.elapsedUs,
                                                workers4.elapsedUs,
                                                workers8.elapsedUs));
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_search_scan_deferred_path_materialization",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    constexpr uint32_t kFileCount = 768u;
+
+    CreatedFileSystemInstance created{};
+    const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+    state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                  std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+    if (FAILED(createHr) || ! created.fileSystem)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IInformations> info;
+    state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+    wil::com_ptr<IFileSystemSearch> search;
+    state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+    if (! info || ! search)
+    {
+        return false;
+    }
+
+    const HRESULT setHr = info->SetConfiguration("{\"searchBackendPreference\":\"scan\",\"searchMaxDirectoryWalkers\":4}");
+    state.Require(SUCCEEDED(setHr),
+                  std::format(L"Failed to configure scan backend for deferred path materialization. hr=0x{:08X}", static_cast<unsigned long>(setHr)));
+    if (FAILED(setHr))
+    {
+        return false;
+    }
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_deferred_path_materialization", caseRoot),
+                  L"Failed to prepare search_deferred_path_materialization root.");
+    for (uint32_t index = 0u; index < kFileCount; ++index)
+    {
+        const std::filesystem::path filePath = caseRoot / std::format(L"miss_{:04}.dat", index);
+        state.Require(SelfTest::WriteTextFile(filePath, "miss"), std::format(L"Failed to create {}.", filePath.filename().wstring()));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+    }
+
+    const std::filesystem::path perfPath = SelfTest::GetPerfArtifactPath(L"perf_metrics.jsonl");
+    std::error_code perfEc;
+    const std::uintmax_t perfStartOffset = std::filesystem::exists(perfPath, perfEc) ? std::filesystem::file_size(perfPath, perfEc) : 0u;
+
+    std::wstring rootText    = caseRoot.wstring();
+    std::wstring namePattern = L"hit_*.txt";
+
+    FileSystemSearchQuery query{};
+    query.sizeBytes   = sizeof(FileSystemSearchQuery);
+    query.rootPath    = rootText.c_str();
+    query.namePattern = namePattern.c_str();
+    query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+    RecordingSearchCallback callback;
+    const auto started = std::chrono::steady_clock::now();
+    const HRESULT hr   = search->Search(&query, &callback, nullptr);
+    const uint64_t elapsedUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
+
+    const auto progressSnapshots            = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(SUCCEEDED(hr), std::format(L"Deferred materialization scan failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(callback.Matches().empty(), L"Deferred materialization scan should return no matches.");
+    state.Require(completed != nullptr, L"Deferred materialization scan missing completed progress.");
+    if (completed != nullptr)
+    {
+        state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Deferred materialization scan should use the scan backend.");
+        state.Require(completed->scannedFiles == kFileCount,
+                      std::format(L"Deferred materialization scan expected {} scanned files, got {}.", kFileCount, completed->scannedFiles));
+        state.Require(completed->matchedEntries == 0u, L"Deferred materialization scan should report zero matched entries.");
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto parseUnsignedField = [](std::string_view line, std::string_view field) noexcept -> std::optional<uint64_t>
+    {
+        const size_t fieldPos = line.find(field);
+        if (fieldPos == std::string_view::npos)
+        {
+            return std::nullopt;
+        }
+
+        size_t cursor = fieldPos + field.size();
+        uint64_t value = 0u;
+        bool anyDigit = false;
+        while (cursor < line.size() && line[cursor] >= '0' && line[cursor] <= '9')
+        {
+            anyDigit = true;
+            const uint64_t digit = static_cast<uint64_t>(line[cursor] - '0');
+            if (value > ((std::numeric_limits<uint64_t>::max)() - digit) / 10u)
+            {
+                return std::nullopt;
+            }
+
+            value = (value * 10u) + digit;
+            ++cursor;
+        }
+
+        return anyDigit ? std::optional<uint64_t>(value) : std::nullopt;
+    };
+
+    std::optional<uint64_t> materializedPathPairs;
+    std::optional<uint64_t> scannedItems;
+    std::ifstream perfFile(perfPath, std::ios::binary);
+    if (perfFile)
+    {
+        if (perfStartOffset != 0u)
+        {
+            perfFile.seekg(static_cast<std::streamoff>(perfStartOffset), std::ios::beg);
+        }
+
+        std::string line;
+        while (std::getline(perfFile, line))
+        {
+            if (line.find("\"metric\":\"FileSystem.Search.EntryPathMaterialized\"") == std::string::npos)
+            {
+                continue;
+            }
+
+            materializedPathPairs = parseUnsignedField(line, "\"value0\":");
+            scannedItems          = parseUnsignedField(line, "\"value1\":");
+        }
+    }
+
+    state.Require(materializedPathPairs.has_value(), L"Deferred materialization scan missing FileSystem.Search.EntryPathMaterialized perf metric.");
+    if (materializedPathPairs.has_value())
+    {
+        state.Require(materializedPathPairs.value() == 0u,
+                      std::format(L"Deferred materialization should not materialize nonmatching file paths. got={}.",
+                                  materializedPathPairs.value()));
+    }
+    if (scannedItems.has_value())
+    {
+        state.Require(scannedItems.value() >= kFileCount,
+                      std::format(L"Deferred materialization metric should include scanned items. value1={} fileCount={}.",
+                                  scannedItems.value(),
+                                  kFileCount));
+    }
+
+    Debug::Perf::Emit(L"compare.selftest.local_search_scan_deferred_path_materialization_us",
+                      caseRoot.native(),
+                      elapsedUs,
+                      materializedPathPairs.value_or((std::numeric_limits<uint64_t>::max)()),
+                      kFileCount,
+                      hr);
 
     return state.failure.empty();
 });
@@ -1012,6 +1392,86 @@ SelfTest::RunCase(options,
     return state.failure.empty();
 });
 
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_query_honors_cancel_check",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    struct CancelAfterIndexedCandidates final
+    {
+        CancelAfterIndexedCandidates()                                                              = default;
+        CancelAfterIndexedCandidates(const CancelAfterIndexedCandidates&)                            = delete;
+        CancelAfterIndexedCandidates(CancelAfterIndexedCandidates&&)                                 = delete;
+        CancelAfterIndexedCandidates& operator=(const CancelAfterIndexedCandidates&)                 = delete;
+        CancelAfterIndexedCandidates& operator=(CancelAfterIndexedCandidates&&)                      = delete;
+
+        const std::vector<LocalSearchIndexCore::Candidate>* candidates = nullptr;
+        size_t cancelAfterCandidates                                   = 0u;
+        std::atomic<uint32_t> checks{0u};
+    };
+
+    const auto cancelAfterCandidatesThunk = [](void* cookie) noexcept -> HRESULT
+    {
+        auto* state = static_cast<CancelAfterIndexedCandidates*>(cookie);
+        if (state == nullptr || state->candidates == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        state->checks.fetch_add(1u, std::memory_order_acq_rel);
+        return state->candidates->size() >= state->cancelAfterCandidates ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_query_cancel_check", caseRoot), L"Failed to prepare index_core_query_cancel_check root.");
+
+    constexpr uint32_t kFileCount = 768u;
+    for (uint32_t index = 0u; index < kFileCount; ++index)
+    {
+        const std::filesystem::path filePath = caseRoot / std::format(L"indexed_cancel_{:04}.txt", index);
+        state.Require(SelfTest::WriteTextFile(filePath, "cancel"), std::format(L"Failed to create {}.", filePath.wstring()));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::Repository repository;
+    LocalSearchIndexCore::QueryStats seedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> seedCandidates;
+    HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"indexed_cancel_*.txt", seedStats, seedCandidates);
+    state.Require(SUCCEEDED(hr), std::format(L"Seed indexed cancel query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(seedCandidates.size() == kFileCount,
+                  std::format(L"Seed indexed cancel query expected {} candidates, got {}.", kFileCount, seedCandidates.size()));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::QueryStats cancelStats{};
+    std::vector<LocalSearchIndexCore::Candidate> cancelCandidates;
+    CancelAfterIndexedCandidates cancelState{};
+    cancelState.candidates             = &cancelCandidates;
+    cancelState.cancelAfterCandidates  = 64u;
+    hr = RunIndexedNameQuery(repository,
+                             caseRoot.wstring(),
+                             L"indexed_cancel_*.txt",
+                             FILESYSTEM_SEARCH_NAME_WILDCARD,
+                             cancelStats,
+                             cancelCandidates,
+                             cancelAfterCandidatesThunk,
+                             &cancelState);
+    state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Indexed query should honor CancelCheckFn with ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(cancelState.checks.load(std::memory_order_acquire) >= 1u, L"Indexed query did not invoke the cancel check.");
+    state.Require(cancelCandidates.size() >= cancelState.cancelAfterCandidates && cancelCandidates.size() < seedCandidates.size(),
+                  std::format(L"Indexed query cancellation should stop before the full result set. got={} full={}.",
+                              cancelCandidates.size(),
+                              seedCandidates.size()));
+
+    return state.failure.empty();
+});
+
 constexpr std::wstring_view kRefsCaseName = L"local_index_core_refs_probe_and_query_if_available";
 SelfTest::RunCase(options,
                   suite,
@@ -1124,6 +1584,334 @@ SelfTest::RunCase(options,
     return state.failure.empty();
 });
 
+const auto expectedJournalDirectoryMoveNames = []() noexcept -> std::vector<std::wstring>
+{
+    return {
+        L"inside-child.txt",
+        L"moved-in-child.txt",
+        L"moved-in-nested.txt",
+        L"stable.txt",
+        L"unzipped-child.txt",
+        L"unzipped-nested.txt",
+    };
+};
+
+const auto hasCandidateFullPath =
+    [](const std::vector<LocalSearchIndexCore::Candidate>& candidates, const std::filesystem::path& expectedPath) noexcept -> bool
+{
+    const std::wstring expected = expectedPath.lexically_normal().wstring();
+    return std::ranges::any_of(candidates, [&](const LocalSearchIndexCore::Candidate& candidate) noexcept
+    {
+        return EqualsIgnoreCase(std::filesystem::path(candidate.fullPath).lexically_normal().wstring(), expected);
+    });
+};
+
+const auto hasSqliteEntryFullPath =
+    [](const SqliteIndexStore::ReplaceVolumeRequest& volume, const std::filesystem::path& expectedPath) noexcept -> bool
+{
+    const std::wstring expected = expectedPath.lexically_normal().wstring();
+    return std::ranges::any_of(volume.entries, [&](const SqliteIndexStore::ImportedEntry& entry) noexcept
+    { return EqualsIgnoreCase(std::filesystem::path(entry.fullPath).lexically_normal().wstring(), expected); });
+};
+
+const auto collectSqliteStoredFileNames = [](const SqliteIndexStore::ReplaceVolumeRequest& volume) noexcept -> std::vector<std::wstring>
+{
+    std::vector<std::wstring> names;
+    for (const SqliteIndexStore::ImportedEntry& entry : volume.entries)
+    {
+        if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u && EqualsIgnoreCase(std::filesystem::path(entry.name).extension().wstring(), L".txt"))
+        {
+            names.push_back(entry.name);
+        }
+    }
+
+    std::sort(names.begin(), names.end());
+    return names;
+};
+
+const auto prepareJournalDirectoryMoveFixture =
+    [&](SelfTest::CaseState& state,
+        const std::filesystem::path& caseRoot,
+        std::wstring_view outsideCaseName,
+        std::filesystem::path& outsideRoot) noexcept -> bool
+{
+    state.Require(PrepareSearchCaseRoot(root, outsideCaseName, outsideRoot), L"Failed to prepare outside journal directory-move root.");
+    state.Require(SelfTest::EnsureDirectory(caseRoot / L"inside-dir"), L"Failed to create inside-dir.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"inside-dir" / L"inside-child.txt", "inside"), L"Failed to create inside child.");
+    state.Require(SelfTest::EnsureDirectory(caseRoot / L"move-out-dir"), L"Failed to create move-out-dir.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"move-out-dir" / L"moved-out-child.txt", "out"), L"Failed to create moved-out child.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"stable.txt", "stable"), L"Failed to create stable.txt.");
+    return state.failure.empty();
+};
+
+const auto applyJournalDirectoryMoveMutations =
+    [&](SelfTest::CaseState& state, const std::filesystem::path& caseRoot, const std::filesystem::path& outsideRoot) noexcept -> bool
+{
+    const std::filesystem::path moveInSource = outsideRoot / L"move-in-source";
+    state.Require(SelfTest::EnsureDirectory(moveInSource / L"nested"), L"Failed to create move-in-source nested directory.");
+    state.Require(SelfTest::WriteTextFile(moveInSource / L"moved-in-child.txt", "move-in"), L"Failed to create moved-in child.");
+    state.Require(SelfTest::WriteTextFile(moveInSource / L"nested" / L"moved-in-nested.txt", "move-in nested"),
+                  L"Failed to create moved-in nested child.");
+
+    const std::filesystem::path unzipSource = outsideRoot / L"unzipped-source";
+    state.Require(SelfTest::EnsureDirectory(unzipSource / L"nested"), L"Failed to create unzipped-source nested directory.");
+    state.Require(SelfTest::WriteTextFile(unzipSource / L"unzipped-child.txt", "unzipped"), L"Failed to create unzipped child.");
+    state.Require(SelfTest::WriteTextFile(unzipSource / L"nested" / L"unzipped-nested.txt", "unzipped nested"),
+                  L"Failed to create unzipped nested child.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::rename(moveInSource, caseRoot / L"moved-in-dir", ec);
+    state.Require(! ec, L"Failed to move populated directory into indexed root.");
+    ec.clear();
+    std::filesystem::rename(unzipSource, caseRoot / L"unzipped-dir", ec);
+    state.Require(! ec, L"Failed to move unzipped directory tree into indexed root.");
+    ec.clear();
+    std::filesystem::rename(caseRoot / L"move-out-dir", outsideRoot / L"moved-out-dir", ec);
+    state.Require(! ec, L"Failed to move tracked directory out of indexed root.");
+    ec.clear();
+    std::filesystem::rename(caseRoot / L"inside-dir", caseRoot / L"renamed-inside-dir", ec);
+    state.Require(! ec, L"Failed to rename tracked directory inside indexed root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    return true;
+};
+
+const auto buildJournalDirectoryMoveSyntheticRecords =
+    [](const std::filesystem::path& caseRoot, const std::filesystem::path& outsideRoot) noexcept -> std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests>
+{
+    return {
+        {
+            .idPath         = (caseRoot / L"moved-in-dir").wstring(),
+            .parentPath     = outsideRoot.wstring(),
+            .name           = L"move-in-source",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_OLD_NAME,
+        },
+        {
+            .idPath         = (caseRoot / L"moved-in-dir").wstring(),
+            .parentPath     = caseRoot.wstring(),
+            .name           = L"moved-in-dir",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_NEW_NAME,
+        },
+        {
+            .idPath         = (caseRoot / L"unzipped-dir").wstring(),
+            .parentPath     = outsideRoot.wstring(),
+            .name           = L"unzipped-source",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_OLD_NAME,
+        },
+        {
+            .idPath         = (caseRoot / L"unzipped-dir").wstring(),
+            .parentPath     = caseRoot.wstring(),
+            .name           = L"unzipped-dir",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_NEW_NAME,
+        },
+        {
+            .idPath         = (outsideRoot / L"moved-out-dir").wstring(),
+            .parentPath     = caseRoot.wstring(),
+            .name           = L"move-out-dir",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_OLD_NAME,
+        },
+        {
+            .idPath         = (outsideRoot / L"moved-out-dir").wstring(),
+            .parentPath     = outsideRoot.wstring(),
+            .name           = L"moved-out-dir",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_NEW_NAME,
+        },
+        {
+            .idPath         = (caseRoot / L"renamed-inside-dir").wstring(),
+            .parentPath     = caseRoot.wstring(),
+            .name           = L"inside-dir",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_OLD_NAME,
+        },
+        {
+            .idPath         = (caseRoot / L"renamed-inside-dir").wstring(),
+            .parentPath     = caseRoot.wstring(),
+            .name           = L"renamed-inside-dir",
+            .fileAttributes = FILE_ATTRIBUTE_DIRECTORY,
+            .reason         = USN_REASON_RENAME_NEW_NAME,
+        },
+    };
+};
+
+const auto runPersistedIndexedNameQueryForTests = [](LocalSearchIndexCore::Repository& repository,
+                                                     std::wstring_view rootPath,
+                                                     LocalSearchIndexCore::QueryStats& outStats,
+                                                     std::vector<LocalSearchIndexCore::Candidate>& outCandidates) noexcept -> HRESULT
+{
+    LocalSearchIndexCore::QueryPlan plan{};
+    plan.rootPath           = std::wstring(rootPath);
+    plan.namePattern        = L"*.txt";
+    plan.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    plan.recursive          = true;
+    plan.includeFiles       = true;
+    plan.includeDirectories = false;
+    return repository.QueryPersistedVolumeForTests(plan, outCandidates, &outStats);
+};
+
+const auto requireJournalDirectoryMoveResults =
+    [&](SelfTest::CaseState& state,
+        const std::filesystem::path& caseRoot,
+        const LocalSearchIndexCore::QueryStats& replayStats,
+        const std::vector<LocalSearchIndexCore::Candidate>& replayCandidates,
+        std::wstring_view label) noexcept -> bool
+{
+    state.Require(replayStats.journalReplayApplied, std::format(L"{} should apply journal replay.", label));
+    state.Require(! replayStats.usedNtfsEnumeration, std::format(L"{} should not rebuild with NTFS enumeration during replay.", label));
+    state.Require(CollectIndexedCandidateNames(replayCandidates) == expectedJournalDirectoryMoveNames(),
+                  std::format(L"{} returned an unexpected candidate set after directory moves.", label));
+    state.Require(hasCandidateFullPath(replayCandidates, caseRoot / L"renamed-inside-dir" / L"inside-child.txt"),
+                  std::format(L"{} should keep the in-tree renamed child at the new path.", label));
+    state.Require(! hasCandidateFullPath(replayCandidates, caseRoot / L"inside-dir" / L"inside-child.txt"),
+                  std::format(L"{} should not keep the old in-tree renamed path.", label));
+    state.Require(hasCandidateFullPath(replayCandidates, caseRoot / L"moved-in-dir" / L"nested" / L"moved-in-nested.txt"),
+                  std::format(L"{} should hydrate children of a populated moved-in directory.", label));
+    state.Require(hasCandidateFullPath(replayCandidates, caseRoot / L"unzipped-dir" / L"nested" / L"unzipped-nested.txt"),
+                  std::format(L"{} should hydrate children of an unzipped tree moved into the root.", label));
+    state.Require(! hasCandidateFullPath(replayCandidates, caseRoot / L"move-out-dir" / L"moved-out-child.txt"),
+                  std::format(L"{} should remove the moved-out subtree from the index.", label));
+    return state.failure.empty();
+};
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_journal_replay_directory_moves_snapshot",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_journal_directory_moves_snapshot", caseRoot),
+                  L"Failed to prepare index_core_journal_directory_moves_snapshot root.");
+    std::filesystem::path outsideRoot;
+    if (! prepareJournalDirectoryMoveFixture(state, caseRoot, L"index_core_journal_directory_moves_snapshot_outside", outsideRoot))
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::Repository repository;
+    LocalSearchIndexCore::QueryStats seedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> seedCandidates;
+    HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", seedStats, seedCandidates);
+    state.Require(SUCCEEDED(hr), std::format(L"Directory-move snapshot seed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(CollectIndexedCandidateNames(seedCandidates) == std::vector<std::wstring>{L"inside-child.txt", L"moved-out-child.txt", L"stable.txt"},
+                  L"Directory-move snapshot seed query returned an unexpected candidate set.");
+    UNREFERENCED_PARAMETER(seedStats);
+
+    if (! applyJournalDirectoryMoveMutations(state, caseRoot, outsideRoot))
+    {
+        return false;
+    }
+
+    const std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests> syntheticRecords =
+        buildJournalDirectoryMoveSyntheticRecords(caseRoot, outsideRoot);
+    LocalSearchIndexCore::QueryStats replayStats{};
+    hr = repository.ApplySyntheticJournalForTests(caseRoot.wstring(), syntheticRecords, &replayStats);
+    state.Require(SUCCEEDED(hr), std::format(L"Directory-move snapshot synthetic replay failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::QueryStats persistedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> persistedCandidates;
+    hr = runPersistedIndexedNameQueryForTests(repository, caseRoot.wstring(), persistedStats, persistedCandidates);
+    state.Require(SUCCEEDED(hr), std::format(L"Directory-move snapshot persisted query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(persistedStats.snapshotLoaded, L"Directory-move snapshot persisted query should load the saved snapshot.");
+    state.Require(requireJournalDirectoryMoveResults(state, caseRoot, replayStats, persistedCandidates, L"Directory-move snapshot synthetic replay"),
+                  L"Directory-move snapshot synthetic replay should persist the expected directory-move result set.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_journal_replay_invalidated_rebuilds",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_journal_invalidated_rebuild", caseRoot),
+                  L"Failed to prepare index_core_journal_invalidated_rebuild root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    LocalSearchIndexCore::Repository repository;
+    LocalSearchIndexCore::QueryStats seedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> seedCandidates;
+    HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", seedStats, seedCandidates);
+    state.Require(SUCCEEDED(hr), std::format(L"Journal invalidation seed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(CollectIndexedCandidateNames(seedCandidates) == std::vector<std::wstring>{L"alpha.txt"},
+                  L"Journal invalidation seed query returned an unexpected candidate set.");
+
+    LocalSearchIndexCore::QueryStats syntheticStats{};
+    hr = repository.ApplySyntheticJournalForTests(caseRoot.wstring(), std::span<const LocalSearchIndexCore::SyntheticJournalRecordForTests>{}, &syntheticStats);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Journal invalidation synthetic ready marker failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(syntheticStats.journalId != 0u && syntheticStats.nextUsn != 0u,
+                  L"Journal invalidation synthetic ready marker should assign a deterministic journal position.");
+
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"beta.txt", "beta"), L"Failed to create beta.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    ::Sleep(25u);
+
+    repository.SetNextJournalStateForTests(syntheticStats.journalId, 0u, syntheticStats.nextUsn + 8u);
+    repository.SetNextJournalReplayReadFailureForTests(ERROR_JOURNAL_ENTRY_DELETED);
+    const auto clearInjectedFailure = wil::scope_exit([&] noexcept
+    {
+        repository.SetNextJournalReplayReadFailureForTests(ERROR_SUCCESS);
+    });
+
+    LocalSearchIndexCore::QueryStats rebuildStats{};
+    std::vector<LocalSearchIndexCore::Candidate> rebuildCandidates;
+    hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", rebuildStats, rebuildCandidates);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"Journal invalidation query should rebuild instead of failing. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(rebuildStats.rebuiltJournalRangeInvalid,
+                  L"Journal invalidation query should report a journal-range rebuild after replay read failure.");
+    state.Require(CollectIndexedCandidateNames(rebuildCandidates) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
+                  L"Journal invalidation rebuild should return the fresh filesystem candidate set.");
+
+    return state.failure.empty();
+});
+
 SelfTest::RunCase(options,
                   suite,
                   L"local_index_core_snapshot_corruption_rebuild",
@@ -1159,6 +1947,24 @@ SelfTest::RunCase(options,
 
     state.Require(invalidMagicStats.rebuiltSnapshotCorruption, L"Indexed query should report a rebuild after invalid snapshot magic corruption.");
 
+    hr = repository.CorruptSnapshotForTests(caseRoot.wstring(), LocalSearchIndexCore::SnapshotCorruptionMode::EntryCountTooLarge);
+    state.Require(SUCCEEDED(hr), std::format(L"CorruptSnapshotForTests(EntryCountTooLarge) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    hr = repository.DropCachedVolumeForTests(caseRoot.wstring());
+    state.Require(SUCCEEDED(hr), std::format(L"DropCachedVolumeForTests failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+    LocalSearchIndexCore::QueryStats hugeCountStats{};
+    std::vector<LocalSearchIndexCore::Candidate> hugeCountCandidates;
+    hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", hugeCountStats, hugeCountCandidates);
+    state.Require(SUCCEEDED(hr), std::format(L"Indexed query after huge-count corruption failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(hugeCountStats.rebuiltSnapshotCorruption, L"Indexed query should report a rebuild after impossible snapshot entry count.");
+    state.Require(CollectIndexedCandidateNames(hugeCountCandidates) == CollectIndexedCandidateNames(seedCandidates),
+                  L"Indexed query after huge-count rebuild should preserve the candidate set.");
+
     hr = repository.CorruptSnapshotForTests(caseRoot.wstring(), LocalSearchIndexCore::SnapshotCorruptionMode::NextUsnPastEnd);
     state.Require(SUCCEEDED(hr), std::format(L"CorruptSnapshotForTests(NextUsnPastEnd) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     hr = repository.DropCachedVolumeForTests(caseRoot.wstring());
@@ -1179,6 +1985,1504 @@ SelfTest::RunCase(options,
     }
     state.Require(CollectIndexedCandidateNames(rangeCandidates) == CollectIndexedCandidateNames(seedCandidates),
                   L"Indexed query after corruption rebuild should preserve the candidate set.");
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"local_index_core_usn_record_bounds_reject_corruption",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const size_t nameOffset = static_cast<size_t>(FIELD_OFFSET(USN_RECORD_V2, FileName));
+
+    std::vector<std::byte> validRecordBytes(nameOffset + (2u * sizeof(wchar_t)));
+    auto* validRecord = reinterpret_cast<USN_RECORD_V2*>(validRecordBytes.data());
+    validRecord->RecordLength = static_cast<DWORD>(validRecordBytes.size());
+    validRecord->MajorVersion = 2u;
+    validRecord->MinorVersion = 0u;
+    validRecord->FileNameOffset = static_cast<WORD>(nameOffset);
+    validRecord->FileNameLength = static_cast<WORD>(2u * sizeof(wchar_t));
+    std::memcpy(validRecordBytes.data() + nameOffset, L"ok", 2u * sizeof(wchar_t));
+    state.Require(LocalSearchIndexCore::TryParseUsnRecordForTests(validRecordBytes.data(), validRecordBytes.size()),
+                  L"Valid USN_RECORD_V2 should parse.");
+
+    std::vector<std::byte> oddLengthRecordBytes(nameOffset + sizeof(wchar_t));
+    auto* oddLengthRecord = reinterpret_cast<USN_RECORD_V2*>(oddLengthRecordBytes.data());
+    oddLengthRecord->RecordLength = static_cast<DWORD>(oddLengthRecordBytes.size());
+    oddLengthRecord->MajorVersion = 2u;
+    oddLengthRecord->MinorVersion = 0u;
+    oddLengthRecord->FileNameOffset = static_cast<WORD>(nameOffset);
+    oddLengthRecord->FileNameLength = 1u;
+    state.Require(! LocalSearchIndexCore::TryParseUsnRecordForTests(oddLengthRecordBytes.data(), oddLengthRecordBytes.size()),
+                  L"USN_RECORD_V2 with odd FileNameLength should be rejected.");
+
+    std::vector<std::byte> overflowingNameRecordBytes(nameOffset + (4u * sizeof(wchar_t)) + 16u);
+    auto* overflowingNameRecord = reinterpret_cast<USN_RECORD_V2*>(overflowingNameRecordBytes.data());
+    overflowingNameRecord->RecordLength = static_cast<DWORD>(nameOffset + sizeof(wchar_t));
+    overflowingNameRecord->MajorVersion = 2u;
+    overflowingNameRecord->MinorVersion = 0u;
+    overflowingNameRecord->FileNameOffset = static_cast<WORD>(nameOffset);
+    overflowingNameRecord->FileNameLength = static_cast<WORD>(4u * sizeof(wchar_t));
+    state.Require(! LocalSearchIndexCore::TryParseUsnRecordForTests(overflowingNameRecordBytes.data(), overflowingNameRecordBytes.size()),
+                  L"USN_RECORD_V2 with FileNameOffset + FileNameLength beyond RecordLength should be rejected.");
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_broker_query_batch_rejects_oversized_count",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const auto makeBatchPayload = [](const uint32_t count) noexcept
+    {
+        std::array<std::byte, sizeof(uint32_t) * 2u> payload{};
+        constexpr uint32_t kReserved = 0u;
+        std::memcpy(payload.data(), &count, sizeof(count));
+        std::memcpy(payload.data() + sizeof(count), &kReserved, sizeof(kReserved));
+        return payload;
+    };
+
+    const auto emptyPayload = makeBatchPayload(0u);
+    std::vector<LocalSearchIndexCore::Candidate> emptyCandidates;
+    HRESULT hr = SearchServiceBroker::DecodeQueryBatchForTests(std::span<const std::byte>(emptyPayload.data(), emptyPayload.size()), emptyCandidates);
+    state.Require(hr == S_OK, std::format(L"Empty QueryBatch should decode. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(emptyCandidates.empty(), L"Empty QueryBatch should not produce candidates.");
+
+    const HRESULT protocolErrorHr = HRESULT_FROM_WIN32(RPC_S_PROTOCOL_ERROR);
+    const auto hugeCountPayload   = makeBatchPayload((std::numeric_limits<uint32_t>::max)());
+    std::vector<LocalSearchIndexCore::Candidate> hugeCountCandidates;
+    hr = SearchServiceBroker::DecodeQueryBatchForTests(
+        std::span<const std::byte>(hugeCountPayload.data(), hugeCountPayload.size()), hugeCountCandidates);
+    state.Require(hr == protocolErrorHr,
+                  std::format(L"Huge-count QueryBatch should decode as a failing protocol error. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(FAILED(hr), L"Huge-count QueryBatch protocol error should satisfy FAILED(hr).");
+    state.Require(hugeCountCandidates.empty(), L"Huge-count QueryBatch should leave decoded candidates empty.");
+
+    struct TestFrameHeader final
+    {
+        uint32_t magic           = 0x53535252u;
+        uint32_t protocolVersion = SearchServiceBroker::kProtocolVersion;
+        uint32_t messageType     = 0u;
+        uint32_t payloadBytes    = 0u;
+    };
+
+    struct TestStatusResponsePayload final
+    {
+        uint32_t processId        = 0u;
+        uint32_t pipeNameBytes    = 0u;
+        uint32_t storageRootBytes = 0u;
+        uint32_t reserved         = 0u;
+    };
+
+    const auto readExact = [](HANDLE handle, void* buffer, const uint32_t byteCount) noexcept -> HRESULT
+    {
+        uint8_t* destination = static_cast<uint8_t*>(buffer);
+        uint32_t totalRead   = 0u;
+        while (totalRead < byteCount)
+        {
+            DWORD chunkRead = 0u;
+            if (::ReadFile(handle, destination + totalRead, byteCount - totalRead, &chunkRead, nullptr) == 0)
+            {
+                return HRESULT_FROM_WIN32(::GetLastError());
+            }
+
+            if (chunkRead == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+            }
+
+            totalRead += chunkRead;
+        }
+
+        return S_OK;
+    };
+
+    const auto writeExact = [](HANDLE handle, const void* buffer, const uint32_t byteCount) noexcept -> HRESULT
+    {
+        const uint8_t* source = static_cast<const uint8_t*>(buffer);
+        uint32_t totalWritten = 0u;
+        while (totalWritten < byteCount)
+        {
+            DWORD chunkWritten = 0u;
+            if (::WriteFile(handle, source + totalWritten, byteCount - totalWritten, &chunkWritten, nullptr) == 0)
+            {
+                return HRESULT_FROM_WIN32(::GetLastError());
+            }
+
+            if (chunkWritten == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+            }
+
+            totalWritten += chunkWritten;
+        }
+
+        return S_OK;
+    };
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                  L"Failed to override the search service pipe for malformed QueryBatch test.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    const auto serveSingleFakeServiceFrame = [&](const uint32_t messageType, std::span<const std::byte> responsePayload) noexcept -> HRESULT
+    {
+        wil::unique_handle pipe(::CreateNamedPipeW(pipeName.c_str(),
+                                                   PIPE_ACCESS_DUPLEX,
+                                                   PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                                   1u,
+                                                   4096u,
+                                                   4096u,
+                                                   0u,
+                                                   nullptr));
+        if (! pipe)
+        {
+            return HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        if (::ConnectNamedPipe(pipe.get(), nullptr) == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error != ERROR_PIPE_CONNECTED)
+            {
+                return HRESULT_FROM_WIN32(error);
+            }
+        }
+
+        TestFrameHeader requestHeader{};
+        HRESULT localHr = readExact(pipe.get(), &requestHeader, static_cast<uint32_t>(sizeof(requestHeader)));
+        if (FAILED(localHr))
+        {
+            return localHr;
+        }
+
+        std::vector<std::byte> requestPayload;
+        requestPayload.resize(requestHeader.payloadBytes);
+        if (requestHeader.payloadBytes != 0u)
+        {
+            localHr = readExact(pipe.get(), requestPayload.data(), requestHeader.payloadBytes);
+            if (FAILED(localHr))
+            {
+                return localHr;
+            }
+        }
+
+        TestFrameHeader responseHeader{};
+        responseHeader.messageType  = messageType;
+        responseHeader.payloadBytes = static_cast<uint32_t>(responsePayload.size_bytes());
+        localHr                     = writeExact(pipe.get(), &responseHeader, static_cast<uint32_t>(sizeof(responseHeader)));
+        if (SUCCEEDED(localHr) && ! responsePayload.empty())
+        {
+            localHr = writeExact(pipe.get(), responsePayload.data(), static_cast<uint32_t>(responsePayload.size_bytes()));
+        }
+        if (SUCCEEDED(localHr) && ::FlushFileBuffers(pipe.get()) == 0)
+        {
+            localHr = HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        return localHr;
+    };
+
+    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
+                                                     PIPE_ACCESS_DUPLEX,
+                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                                     1u,
+                                                     4096u,
+                                                     4096u,
+                                                     0u,
+                                                     nullptr));
+    state.Require(!! serverPipe,
+                  std::format(L"Failed to create malformed QueryBatch fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+    if (! serverPipe)
+    {
+        return false;
+    }
+
+    std::atomic<long> serverHr{S_OK};
+    std::jthread server([&, pipe = std::move(serverPipe)](std::stop_token) mutable noexcept
+    {
+        if (::ConnectNamedPipe(pipe.get(), nullptr) == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error != ERROR_PIPE_CONNECTED)
+            {
+                serverHr.store(static_cast<long>(HRESULT_FROM_WIN32(error)));
+                return;
+            }
+        }
+
+        TestFrameHeader requestHeader{};
+        HRESULT localHr = readExact(pipe.get(), &requestHeader, static_cast<uint32_t>(sizeof(requestHeader)));
+        if (FAILED(localHr))
+        {
+            serverHr.store(static_cast<long>(localHr));
+            return;
+        }
+
+        std::vector<std::byte> requestPayload;
+        requestPayload.resize(requestHeader.payloadBytes);
+        if (requestHeader.payloadBytes != 0u)
+        {
+            localHr = readExact(pipe.get(), requestPayload.data(), requestHeader.payloadBytes);
+            if (FAILED(localHr))
+            {
+                serverHr.store(static_cast<long>(localHr));
+                return;
+            }
+        }
+
+        TestFrameHeader batchHeader{};
+        batchHeader.messageType  = 5u;
+        batchHeader.payloadBytes = static_cast<uint32_t>(hugeCountPayload.size());
+        localHr = writeExact(pipe.get(), &batchHeader, static_cast<uint32_t>(sizeof(batchHeader)));
+        if (SUCCEEDED(localHr))
+        {
+            localHr = writeExact(pipe.get(), hugeCountPayload.data(), static_cast<uint32_t>(hugeCountPayload.size()));
+        }
+        if (SUCCEEDED(localHr) && ::FlushFileBuffers(pipe.get()) == 0)
+        {
+            localHr = HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        serverHr.store(static_cast<long>(localHr));
+    });
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath          = L"C:\\";
+    request.namePattern       = L"*";
+    request.nameMode          = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags             = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.includeFiles      = true;
+    request.includeDirectories = false;
+
+    std::vector<LocalSearchIndexCore::Candidate> malformedCandidates;
+    LocalSearchIndexCore::QueryStats stats{};
+    hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, malformedCandidates, &stats);
+    server.join();
+
+    const HRESULT serverResult = static_cast<HRESULT>(serverHr.load());
+    state.Require(SUCCEEDED(serverResult),
+                  std::format(L"Malformed QueryBatch fake server failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
+    state.Require(hr == protocolErrorHr,
+                  std::format(L"Broker Query should fail with RPC_S_PROTOCOL_ERROR for huge-count QueryBatch. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    state.Require(malformedCandidates.empty(), L"Malformed QueryBatch should leave broker query candidates empty.");
+
+    TestStatusResponsePayload statusPayloadPod{};
+    statusPayloadPod.processId = ::GetCurrentProcessId();
+    std::array<std::byte, sizeof(statusPayloadPod)> statusPayload{};
+    std::memcpy(statusPayload.data(), &statusPayloadPod, sizeof(statusPayloadPod));
+
+    CreatedFileSystemInstance created{};
+    const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+    state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                  std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+    if (FAILED(createHr) || ! created.fileSystem)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IInformations> info;
+    state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+    wil::com_ptr<IFileSystemSearch> search;
+    state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+    if (! info || ! search)
+    {
+        return false;
+    }
+
+    const HRESULT setHr = info->SetConfiguration("{\"searchBackendPreference\":\"service\"}");
+    state.Require(SUCCEEDED(setHr), std::format(L"Failed to configure service search. hr=0x{:08X}", static_cast<unsigned long>(setHr)));
+    if (FAILED(setHr))
+    {
+        return false;
+    }
+
+    std::filesystem::path caseRoot;
+    if (! PrepareSearchCaseRoot(root, L"search_service_malformed_querybatch_fallback", caseRoot))
+    {
+        state.Require(false, L"Failed to prepare search_service_malformed_querybatch_fallback root.");
+        return false;
+    }
+    if (! SelfTest::WriteTextFile(caseRoot / L"fallback.txt", "fallback"))
+    {
+        state.Require(false, L"Failed to create fallback.txt.");
+        return false;
+    }
+
+    std::wstring rootText    = caseRoot.wstring();
+    std::wstring namePattern = L"*.txt";
+    FileSystemSearchQuery fallbackQuery{};
+    fallbackQuery.sizeBytes   = sizeof(FileSystemSearchQuery);
+    fallbackQuery.rootPath    = rootText.c_str();
+    fallbackQuery.namePattern = namePattern.c_str();
+    fallbackQuery.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+    fallbackQuery.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+
+    std::atomic<long> fallbackServerHr{S_OK};
+    std::jthread fallbackServer([&](std::stop_token) noexcept
+    {
+        HRESULT localHr = serveSingleFakeServiceFrame(2u, std::span<const std::byte>(statusPayload.data(), statusPayload.size()));
+        if (SUCCEEDED(localHr))
+        {
+            localHr = serveSingleFakeServiceFrame(5u, std::span<const std::byte>(hugeCountPayload.data(), hugeCountPayload.size()));
+        }
+
+        fallbackServerHr.store(static_cast<long>(localHr));
+    });
+
+    RecordingSearchCallback callback;
+    const HRESULT searchHr = search->Search(&fallbackQuery, &callback, nullptr);
+    fallbackServer.join();
+
+    const HRESULT fallbackServerResult = static_cast<HRESULT>(fallbackServerHr.load());
+    state.Require(SUCCEEDED(fallbackServerResult),
+                  std::format(L"Malformed QueryBatch fallback fake server failed. hr=0x{:08X}",
+                              static_cast<unsigned long>(fallbackServerResult)));
+    state.Require(SUCCEEDED(searchHr),
+                  std::format(L"Malformed QueryBatch service search should fall back and succeed. hr=0x{:08X}", static_cast<unsigned long>(searchHr)));
+
+    const auto matches = callback.Matches();
+    state.Require(matches.size() == 1u, std::format(L"Malformed QueryBatch fallback search expected 1 match. got={}", matches.size()));
+    if (! matches.empty())
+    {
+        state.Require(matches[0].displayName == L"fallback.txt", L"Malformed QueryBatch fallback returned the wrong file.");
+    }
+
+    const auto progressSnapshots              = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(completed != nullptr, L"Malformed QueryBatch fallback search missing completed progress.");
+    if (completed != nullptr)
+    {
+        state.Require(completed->backend != FILESYSTEM_SEARCH_BACKEND_SERVICE,
+                      L"Malformed QueryBatch fallback should not complete on the service backend.");
+        state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE) != 0u,
+                      L"Malformed QueryBatch fallback should report the service-unavailable warning.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_broker_buffered_query_caps_unbounded_stream",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    struct TestFrameHeader final
+    {
+        uint32_t magic           = 0x53535252u;
+        uint32_t protocolVersion = SearchServiceBroker::kProtocolVersion;
+        uint32_t messageType     = 0u;
+        uint32_t payloadBytes    = 0u;
+    };
+
+    struct TestCandidateBatchHeader final
+    {
+        uint32_t count    = 0u;
+        uint32_t reserved = 0u;
+    };
+
+    struct TestCandidateEntryHeader final
+    {
+        uint32_t fileAttributes     = 0u;
+        uint32_t metadataFlags      = LocalSearchIndexCore::CANDIDATE_METADATA_NONE;
+        uint32_t fullPathBytes      = 0u;
+        uint32_t displayNameBytes   = 0u;
+        int64_t creationTime100ns   = 0;
+        int64_t lastAccessTime100ns = 0;
+        int64_t endOfFile           = 0;
+        int64_t lastWriteTime100ns  = 0;
+        int64_t changeTime100ns     = 0;
+        int64_t allocationSize      = 0;
+    };
+
+    struct TestQueryCompletePayload final
+    {
+        int32_t result                  = S_OK;
+        uint32_t fileSystemKind         = 0u;
+        uint32_t flags                  = 0u;
+        uint64_t entryCount             = 0u;
+        uint64_t fileCount              = 0u;
+        uint64_t directoryCount         = 0u;
+        uint64_t candidateCount         = 0u;
+        uint64_t nextUsn                = 0u;
+        uint64_t journalId              = 0u;
+        uint64_t snapshotFileBytes      = 0u;
+        uint64_t estimatedMemoryBytes   = 0u;
+        uint32_t ensureReadyDurationMs  = 0u;
+        uint32_t executeQueryDurationMs = 0u;
+    };
+
+    const auto readExact = [](HANDLE handle, void* buffer, const uint32_t byteCount) noexcept -> HRESULT
+    {
+        uint8_t* destination = static_cast<uint8_t*>(buffer);
+        uint32_t totalRead   = 0u;
+        while (totalRead < byteCount)
+        {
+            DWORD chunkRead = 0u;
+            if (::ReadFile(handle, destination + totalRead, byteCount - totalRead, &chunkRead, nullptr) == 0)
+            {
+                return HRESULT_FROM_WIN32(::GetLastError());
+            }
+
+            if (chunkRead == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+            }
+
+            totalRead += chunkRead;
+        }
+
+        return S_OK;
+    };
+
+    const auto writeExact = [](HANDLE handle, const void* buffer, const uint32_t byteCount) noexcept -> HRESULT
+    {
+        const uint8_t* source = static_cast<const uint8_t*>(buffer);
+        uint32_t totalWritten = 0u;
+        while (totalWritten < byteCount)
+        {
+            DWORD chunkWritten = 0u;
+            if (::WriteFile(handle, source + totalWritten, byteCount - totalWritten, &chunkWritten, nullptr) == 0)
+            {
+                return HRESULT_FROM_WIN32(::GetLastError());
+            }
+
+            if (chunkWritten == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+            }
+
+            totalWritten += chunkWritten;
+        }
+
+        return S_OK;
+    };
+
+    const auto appendBytes = [](std::vector<std::byte>& buffer, const void* data, const size_t byteCount)
+    {
+        const auto* bytes = static_cast<const std::byte*>(data);
+        buffer.insert(buffer.end(), bytes, bytes + byteCount);
+    };
+
+    const auto appendUtf16 = [&](std::vector<std::byte>& buffer, const std::wstring& text)
+    {
+        appendBytes(buffer, text.data(), text.size() * sizeof(wchar_t));
+    };
+
+    const auto makeBatchPayload = [&](const uint32_t firstIndex, const uint32_t count) -> std::vector<std::byte>
+    {
+        TestCandidateBatchHeader batchHeader{};
+        batchHeader.count = count;
+
+        std::vector<std::byte> payload;
+        payload.reserve(sizeof(batchHeader) + (static_cast<size_t>(count) * sizeof(TestCandidateEntryHeader)));
+        appendBytes(payload, &batchHeader, sizeof(batchHeader));
+
+        for (uint32_t index = 0u; index < count; ++index)
+        {
+            const uint32_t candidateIndex = firstIndex + index;
+            const std::wstring displayName = std::format(L"candidate_{:05}.txt", candidateIndex);
+            const std::wstring fullPath    = std::wstring(L"C:\\buffered\\") + displayName;
+
+            TestCandidateEntryHeader entry{};
+            entry.fileAttributes   = FILE_ATTRIBUTE_ARCHIVE;
+            entry.fullPathBytes    = static_cast<uint32_t>(fullPath.size() * sizeof(wchar_t));
+            entry.displayNameBytes = static_cast<uint32_t>(displayName.size() * sizeof(wchar_t));
+            appendBytes(payload, &entry, sizeof(entry));
+            appendUtf16(payload, fullPath);
+            appendUtf16(payload, displayName);
+        }
+
+        return payload;
+    };
+
+    const auto isExpectedPipeDisconnect = [](const HRESULT hr) noexcept
+    {
+        return hr == HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE) || hr == HRESULT_FROM_WIN32(ERROR_NO_DATA) ||
+               hr == HRESULT_FROM_WIN32(ERROR_PIPE_NOT_CONNECTED);
+    };
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                  L"Failed to override the search service pipe for buffered-query cap test.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
+                                                     PIPE_ACCESS_DUPLEX,
+                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                                     1u,
+                                                     64u * 1024u,
+                                                     64u * 1024u,
+                                                     0u,
+                                                     nullptr));
+    state.Require(!! serverPipe,
+                  std::format(L"Failed to create buffered-query cap fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+    if (! serverPipe)
+    {
+        return false;
+    }
+
+    constexpr uint32_t kBatchSize       = 256u;
+    constexpr uint32_t kCandidateCount  = 65'537u;
+    std::atomic<long> serverHr{S_OK};
+    std::atomic<uint32_t> candidatesSent{0u};
+    std::jthread server([&, pipe = std::move(serverPipe)](std::stop_token) mutable noexcept
+    {
+        HRESULT localHr = S_OK;
+        if (::ConnectNamedPipe(pipe.get(), nullptr) == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error != ERROR_PIPE_CONNECTED)
+            {
+                serverHr.store(static_cast<long>(HRESULT_FROM_WIN32(error)));
+                return;
+            }
+        }
+
+        TestFrameHeader requestHeader{};
+        localHr = readExact(pipe.get(), &requestHeader, static_cast<uint32_t>(sizeof(requestHeader)));
+        if (SUCCEEDED(localHr))
+        {
+            std::vector<std::byte> requestPayload;
+            requestPayload.resize(requestHeader.payloadBytes);
+            if (requestHeader.payloadBytes != 0u)
+            {
+                localHr = readExact(pipe.get(), requestPayload.data(), requestHeader.payloadBytes);
+            }
+        }
+
+        for (uint32_t offset = 0u; SUCCEEDED(localHr) && offset < kCandidateCount; offset += kBatchSize)
+        {
+            const uint32_t count = (std::min)(kBatchSize, kCandidateCount - offset);
+            const std::vector<std::byte> batchPayload = makeBatchPayload(offset, count);
+
+            TestFrameHeader batchFrame{};
+            batchFrame.messageType  = 5u;
+            batchFrame.payloadBytes = static_cast<uint32_t>(batchPayload.size());
+            localHr                 = writeExact(pipe.get(), &batchFrame, static_cast<uint32_t>(sizeof(batchFrame)));
+            if (SUCCEEDED(localHr))
+            {
+                localHr = writeExact(pipe.get(), batchPayload.data(), static_cast<uint32_t>(batchPayload.size()));
+            }
+
+            if (FAILED(localHr) && isExpectedPipeDisconnect(localHr) && candidatesSent.load(std::memory_order_acquire) != 0u)
+            {
+                localHr = S_OK;
+                break;
+            }
+
+            if (SUCCEEDED(localHr))
+            {
+                candidatesSent.fetch_add(count, std::memory_order_acq_rel);
+            }
+        }
+
+        if (SUCCEEDED(localHr))
+        {
+            TestQueryCompletePayload complete{};
+            complete.entryCount     = kCandidateCount;
+            complete.fileCount      = kCandidateCount;
+            complete.candidateCount = kCandidateCount;
+
+            TestFrameHeader completeFrame{};
+            completeFrame.messageType  = 6u;
+            completeFrame.payloadBytes = static_cast<uint32_t>(sizeof(complete));
+            localHr                    = writeExact(pipe.get(), &completeFrame, static_cast<uint32_t>(sizeof(completeFrame)));
+            if (SUCCEEDED(localHr))
+            {
+                localHr = writeExact(pipe.get(), &complete, static_cast<uint32_t>(sizeof(complete)));
+            }
+            if (FAILED(localHr) && isExpectedPipeDisconnect(localHr) && candidatesSent.load(std::memory_order_acquire) >= kCandidateCount)
+            {
+                localHr = S_OK;
+            }
+        }
+
+        serverHr.store(static_cast<long>(localHr));
+    });
+
+    SearchServiceBroker::QueryRequest request{};
+    request.rootPath           = L"C:\\";
+    request.namePattern        = L"*";
+    request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_INCLUDE_FILES);
+    request.includeFiles       = true;
+    request.includeDirectories = false;
+
+    std::vector<LocalSearchIndexCore::Candidate> candidates;
+    LocalSearchIndexCore::QueryStats stats{};
+    const HRESULT hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, candidates, &stats);
+    server.join();
+
+    const HRESULT serverResult = static_cast<HRESULT>(serverHr.load());
+    state.Require(SUCCEEDED(serverResult),
+                  std::format(L"Buffered-query cap fake server failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
+    const HRESULT overflowHr = HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW);
+    state.Require(hr == overflowHr,
+                  std::format(L"Broker Query should cap no-callback candidate accumulation with ERROR_BUFFER_OVERFLOW. hr=0x{:08X}",
+                              static_cast<unsigned long>(hr)));
+    state.Require(candidates.empty(), std::format(L"Overflowing buffered broker query should clear candidates, got {}.", candidates.size()));
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_source_allocation_and_folding_guard",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const auto contains = [](std::string_view source, std::string_view needle) noexcept
+    {
+        return source.find(needle) != std::string_view::npos;
+    };
+
+    const auto containsBefore = [](std::string_view source, std::string_view before, std::string_view after) noexcept
+    {
+        const size_t beforeOffset = source.find(before);
+        const size_t afterOffset  = source.find(after);
+        return beforeOffset != std::string_view::npos && afterOffset != std::string_view::npos && beforeOffset < afterOffset;
+    };
+
+    const auto sourceBetween = [](std::string_view source, std::string_view beginMarker, std::string_view endMarker) noexcept -> std::string_view
+    {
+        const size_t beginOffset = source.find(beginMarker);
+        if (beginOffset == std::string_view::npos)
+        {
+            return {};
+        }
+
+        const size_t endOffset = source.find(endMarker, beginOffset + beginMarker.size());
+        if (endOffset == std::string_view::npos || endOffset <= beginOffset)
+        {
+            return {};
+        }
+
+        return source.substr(beginOffset, endOffset - beginOffset);
+    };
+
+    const auto findRepoRoot = []() noexcept -> std::filesystem::path
+    {
+        std::error_code ec;
+        std::filesystem::path current = std::filesystem::current_path(ec);
+        if (ec)
+        {
+            return {};
+        }
+
+        for (size_t depth = 0u; depth < 8u && ! current.empty(); ++depth)
+        {
+            std::error_code slnEc;
+            std::error_code brokerEc;
+            if (std::filesystem::exists(current / L"RedSalamander.sln", slnEc) &&
+                std::filesystem::exists(current / L"Common" / L"SearchServiceBroker.cpp", brokerEc))
+            {
+                return current;
+            }
+
+            const std::filesystem::path parent = current.parent_path();
+            if (parent.empty() || parent == current)
+            {
+                break;
+            }
+            current = parent;
+        }
+
+        return {};
+    };
+
+    const auto readSourceFile = [](const std::filesystem::path& path, std::string& outSource) noexcept
+    {
+        outSource.clear();
+        std::ifstream stream(path, std::ios::binary);
+        if (! stream)
+        {
+            return false;
+        }
+
+        outSource.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+        return stream.eof() || stream.good();
+    };
+
+    const auto requireNoBroadCatch = [&](std::wstring_view fileName, std::string_view source) noexcept
+    {
+        state.Require(! contains(source, "catch (...)"), std::format(L"{} must not use catch (...).", fileName));
+    };
+
+    const auto requireBadAllocCatchesTerminate = [&](std::wstring_view fileName, std::string_view source) noexcept
+    {
+        size_t searchOffset = 0u;
+        while (true)
+        {
+            const size_t catchOffset = source.find("catch (const std::bad_alloc&", searchOffset);
+            if (catchOffset == std::string_view::npos)
+            {
+                break;
+            }
+
+            const size_t bodyOpen = source.find('{', catchOffset);
+            if (bodyOpen == std::string_view::npos)
+            {
+                state.Require(false, std::format(L"{} has an unparsable std::bad_alloc catch.", fileName));
+                break;
+            }
+
+            size_t bodyClose       = bodyOpen + 1u;
+            size_t braceDepth      = 1u;
+            bool foundBodyEnd      = false;
+            for (; bodyClose < source.size(); ++bodyClose)
+            {
+                if (source[bodyClose] == '{')
+                {
+                    ++braceDepth;
+                }
+                else if (source[bodyClose] == '}')
+                {
+                    --braceDepth;
+                    if (braceDepth == 0u)
+                    {
+                        foundBodyEnd = true;
+                        break;
+                    }
+                }
+            }
+
+            if (! foundBodyEnd)
+            {
+                state.Require(false, std::format(L"{} has an unterminated std::bad_alloc catch.", fileName));
+                break;
+            }
+
+            const std::string_view body = source.substr(bodyOpen, bodyClose - bodyOpen + 1u);
+            state.Require(contains(body, "std::terminate();"),
+                          std::format(L"{} must terminate inside every std::bad_alloc catch on search paths.", fileName));
+            searchOffset = bodyClose + 1u;
+        }
+    };
+
+    const std::filesystem::path repoRoot = findRepoRoot();
+    state.Require(! repoRoot.empty(), L"Search source guard could not locate the repository root.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    std::string brokerSource;
+    std::string localIndexSource;
+    std::string sqliteSource;
+    std::string pluginSearchSource;
+    std::string searchTextSource;
+    std::string findWindowSource;
+    std::string incrementalSearchSource;
+    state.Require(readSourceFile(repoRoot / L"Common" / L"SearchServiceBroker.cpp", brokerSource), L"Failed to read SearchServiceBroker.cpp.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"LocalSearchIndexCore.cpp", localIndexSource), L"Failed to read LocalSearchIndexCore.cpp.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"SqliteIndexStore.cpp", sqliteSource), L"Failed to read SqliteIndexStore.cpp.");
+    state.Require(readSourceFile(repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.Search.cpp", pluginSearchSource),
+                  L"Failed to read FileSystem.Search.cpp.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"SearchTextHelpers.cpp", searchTextSource), L"Failed to read SearchTextHelpers.cpp.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"FindFilesWindow.cpp", findWindowSource), L"Failed to read FindFilesWindow.cpp.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"FolderViewIncrementalSearch.h", incrementalSearchSource),
+                  L"Failed to read FolderViewIncrementalSearch.h.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::string_view decodeBatch =
+        sourceBetween(brokerSource, "HRESULT DecodeQueryBatchPayload", "[[nodiscard]] size_t ResolveClientBufferedCandidateLimit");
+    state.Require(! decodeBatch.empty(), L"SearchServiceBroker.cpp must keep DecodeQueryBatchPayload discoverable for source guard.");
+    state.Require(containsBefore(decodeBatch,
+                                 "const size_t maxEntriesInPayload = remaining.size_bytes() / sizeof(CandidateEntryHeader);",
+                                 "batchCandidates.reserve(batchHeader.count);"),
+                  L"QueryBatch decode must compute the maximum payload entry count before reserving candidate storage.");
+    state.Require(containsBefore(decodeBatch,
+                                 "if (static_cast<size_t>(batchHeader.count) > maxEntriesInPayload)",
+                                 "batchCandidates.reserve(batchHeader.count);"),
+                  L"QueryBatch decode must reject count > remaining payload entries before reserve.");
+    state.Require(contains(decodeBatch, "return kProtocolErrorHr;"),
+                  L"QueryBatch external-count preflight must fail with the protocol-error HRESULT.");
+
+    const std::string_view queryBody = sourceBetween(brokerSource, "HRESULT Query(const QueryRequest& request,", "HRESULT RequestRebuild(");
+    state.Require(! queryBody.empty(), L"SearchServiceBroker.cpp must keep Query discoverable for source guard.");
+    state.Require(contains(queryBody, "constexpr size_t kMaxClientBufferedCandidates") ||
+                      contains(brokerSource, "constexpr size_t kMaxClientBufferedCandidates"),
+                  L"Broker no-callback candidate accumulation must keep a configured count ceiling.");
+    state.Require(contains(brokerSource, "constexpr uint64_t kMaxClientBufferedCandidateBytes"),
+                  L"Broker no-callback candidate accumulation must keep a configured byte ceiling.");
+    state.Require(containsBefore(queryBody,
+                                 "CanAppendClientBufferedCandidates(outCandidates.size()",
+                                 "outCandidates.insert("),
+                  L"Broker no-callback path must validate count/bytes before accumulating candidates.");
+    state.Require(contains(queryBody, "outCandidates.clear();") && contains(queryBody, "HRESULT_FROM_WIN32(ERROR_BUFFER_OVERFLOW)"),
+                  L"Broker no-callback overflow must clear buffered candidates and return ERROR_BUFFER_OVERFLOW.");
+
+    const std::string_view snapshotLoad = sourceBetween(localIndexSource,
+                                                        "class SnapshotVolumeStore final",
+                                                        "HRESULT Save(const PersistedVolumeState& state, QueryStats& stats) noexcept override");
+    state.Require(! snapshotLoad.empty(), L"LocalSearchIndexCore.cpp must keep snapshot Load discoverable for source guard.");
+    state.Require(containsBefore(snapshotLoad, "const uint64_t maxEntriesInBytes", "outState.entries.reserve(static_cast<size_t>(header.entryCount));"),
+                  L"Snapshot load must derive a file-size entry ceiling before reserving snapshot entries.");
+    state.Require(containsBefore(snapshotLoad,
+                                 "if (header.entryCount > maxEntriesInBytes || header.entryCount > kMaxSizeT)",
+                                 "outState.entries.reserve(static_cast<size_t>(header.entryCount));"),
+                  L"Snapshot load must reject corrupt entryCount before reserve.");
+    state.Require(contains(snapshotLoad, "HRESULT_FROM_WIN32(ERROR_INVALID_DATA)"),
+                  L"Snapshot external-count preflight must reject corruption as ERROR_INVALID_DATA.");
+
+    const std::string_view foldWideText = sourceBetween(searchTextSource, "[[nodiscard]] std::wstring FoldWideText", "struct RegexQuantifier final");
+    state.Require(! foldWideText.empty(), L"SearchTextHelpers.cpp must keep FoldWideText discoverable for source guard.");
+    state.Require(contains(foldWideText, "OrdinalString::FoldCaseInvariant(text)"),
+                  L"SearchTextHelpers literal folding must route through the invariant fold helper.");
+    state.Require(! contains(foldWideText, "CharLowerBuffW") && ! contains(foldWideText, "std::towlower"),
+                  L"SearchTextHelpers literal folding must not use local lowercasing.");
+
+    const std::string_view findResultKey = sourceBetween(findWindowSource, "[[nodiscard]] std::wstring ToLowerCopy", "[[nodiscard]] std::wstring FormatSearchStatusHint");
+    state.Require(! findResultKey.empty(), L"FindFilesWindow.cpp must keep result-key folding discoverable for source guard.");
+    state.Require(contains(findResultKey, "OrdinalString::FoldCaseInvariant(value)") && contains(findResultKey, "MakeResultKey"),
+                  L"Find result identity keys must route through invariant folding.");
+    state.Require(! contains(findResultKey, "std::towlower") && ! contains(findResultKey, "CharLowerBuffW"),
+                  L"Find result identity keys must not use local lowercasing.");
+    state.Require(contains(incrementalSearchSource, "OrdinalString::FindContainsFoldedInvariant") &&
+                      contains(incrementalSearchSource, "OrdinalString::StartsWithFoldedInvariant"),
+                  L"FolderView incremental search folding helpers must use the shared invariant folded search helpers.");
+
+    requireNoBroadCatch(L"SearchServiceBroker.cpp", brokerSource);
+    requireNoBroadCatch(L"LocalSearchIndexCore.cpp", localIndexSource);
+    requireNoBroadCatch(L"SqliteIndexStore.cpp", sqliteSource);
+    requireNoBroadCatch(L"FileSystem.Search.cpp", pluginSearchSource);
+    requireNoBroadCatch(L"SearchTextHelpers.cpp", searchTextSource);
+    requireNoBroadCatch(L"FindFilesWindow.cpp", findWindowSource);
+    requireBadAllocCatchesTerminate(L"SearchServiceBroker.cpp", brokerSource);
+    requireBadAllocCatchesTerminate(L"LocalSearchIndexCore.cpp", localIndexSource);
+    requireBadAllocCatchesTerminate(L"SqliteIndexStore.cpp", sqliteSource);
+    requireBadAllocCatchesTerminate(L"FileSystem.Search.cpp", pluginSearchSource);
+    requireBadAllocCatchesTerminate(L"FindFilesWindow.cpp", findWindowSource);
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_low_hardening_smoke",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const auto isHighSurrogate = [](wchar_t ch) noexcept
+    {
+        return ch >= static_cast<wchar_t>(0xD800) && ch <= static_cast<wchar_t>(0xDBFF);
+    };
+    const auto isLowSurrogate = [](wchar_t ch) noexcept
+    {
+        return ch >= static_cast<wchar_t>(0xDC00) && ch <= static_cast<wchar_t>(0xDFFF);
+    };
+    const auto hasLoneSurrogate = [&](std::wstring_view text) noexcept
+    {
+        for (size_t index = 0u; index < text.size(); ++index)
+        {
+            if (isHighSurrogate(text[index]) && (index + 1u >= text.size() || ! isLowSurrogate(text[index + 1u])))
+            {
+                return true;
+            }
+            if (isLowSurrogate(text[index]) && (index == 0u || ! isHighSurrogate(text[index - 1u])))
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    std::wstring emoji;
+    emoji.push_back(static_cast<wchar_t>(0xD83D));
+    emoji.push_back(static_cast<wchar_t>(0xDE00));
+    const std::wstring snippetText = std::wstring(L"abc") + emoji + L"def";
+    const std::wstring endSnippet  = SearchTextHelpers::BuildSnippet(snippetText, 0u, 1u, 4u);
+    const std::wstring startSnippet = SearchTextHelpers::BuildSnippet(snippetText, 5u, 1u, 4u);
+    state.Require(! hasLoneSurrogate(endSnippet), L"Search snippets must not split a surrogate pair at the end boundary.");
+    state.Require(! hasLoneSurrogate(startSnippet), L"Search snippets must not split a surrogate pair at the start boundary.");
+    state.Require(endSnippet.find(emoji) != std::wstring::npos && startSnippet.find(emoji) != std::wstring::npos,
+                  L"Search snippets should preserve the complete surrogate pair when expanding boundaries.");
+
+    const auto makeDirectoryInfoBuffer = [](std::wstring_view name) noexcept
+    {
+        const size_t byteCount = offsetof(FILE_FULL_DIR_INFO, FileName) + name.size() * sizeof(wchar_t);
+        std::vector<std::byte> buffer(byteCount);
+        auto* info            = reinterpret_cast<FILE_FULL_DIR_INFO*>(buffer.data());
+        info->FileAttributes  = FILE_ATTRIBUTE_ARCHIVE;
+        info->FileNameLength  = static_cast<ULONG>(name.size() * sizeof(wchar_t));
+        if (! name.empty())
+        {
+            std::memcpy(info->FileName, name.data(), name.size() * sizeof(wchar_t));
+        }
+        return buffer;
+    };
+
+    std::vector<std::byte> validDirectoryInfo = makeDirectoryInfoBuffer(L"alpha.txt");
+    state.Require(LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(validDirectoryInfo.data(), validDirectoryInfo.size()),
+                  L"Valid FILE_FULL_DIR_INFO should parse for the bounds-check smoke test.");
+
+    std::vector<std::byte> oddNameLength = validDirectoryInfo;
+    reinterpret_cast<FILE_FULL_DIR_INFO*>(oddNameLength.data())->FileNameLength = 1u;
+    state.Require(! LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(oddNameLength.data(), oddNameLength.size()),
+                  L"FILE_FULL_DIR_INFO with an odd byte FileNameLength must be rejected.");
+
+    std::vector<std::byte> overrunName = validDirectoryInfo;
+    reinterpret_cast<FILE_FULL_DIR_INFO*>(overrunName.data())->FileNameLength += static_cast<ULONG>(sizeof(wchar_t));
+    state.Require(! LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(overrunName.data(), overrunName.size()),
+                  L"FILE_FULL_DIR_INFO with a filename beyond the entry bytes must be rejected.");
+
+    std::vector<std::byte> shortNextEntry = validDirectoryInfo;
+    reinterpret_cast<FILE_FULL_DIR_INFO*>(shortNextEntry.data())->NextEntryOffset = static_cast<ULONG>(offsetof(FILE_FULL_DIR_INFO, FileName) - 1u);
+    state.Require(! LocalSearchIndexCore::TryParseFileFullDirectoryInformationForTests(shortNextEntry.data(), shortNextEntry.size()),
+                  L"FILE_FULL_DIR_INFO with a short NextEntryOffset must be rejected.");
+
+    const auto contains = [](std::string_view source, std::string_view needle) noexcept
+    {
+        return source.find(needle) != std::string_view::npos;
+    };
+    const auto countOccurrences = [](std::string_view source, std::string_view needle) noexcept
+    {
+        size_t count  = 0u;
+        size_t offset = 0u;
+        while (true)
+        {
+            offset = source.find(needle, offset);
+            if (offset == std::string_view::npos)
+            {
+                return count;
+            }
+            ++count;
+            offset += needle.size();
+        }
+    };
+    const auto sourceBetween = [](std::string_view source, std::string_view beginMarker, std::string_view endMarker) noexcept -> std::string_view
+    {
+        const size_t beginOffset = source.find(beginMarker);
+        if (beginOffset == std::string_view::npos)
+        {
+            return {};
+        }
+
+        const size_t endOffset = source.find(endMarker, beginOffset + beginMarker.size());
+        if (endOffset == std::string_view::npos || endOffset <= beginOffset)
+        {
+            return {};
+        }
+
+        return source.substr(beginOffset, endOffset - beginOffset);
+    };
+    const auto readSourceFile = [](const std::filesystem::path& path, std::string& outSource) noexcept
+    {
+        outSource.clear();
+        std::ifstream stream(path, std::ios::binary);
+        if (! stream)
+        {
+            return false;
+        }
+
+        outSource.assign(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
+        return stream.eof() || stream.good();
+    };
+
+    const std::filesystem::path repoRoot = GetWorkspaceRootFromSourcePath();
+    std::string pluginSearchSource;
+    std::string fallbackSource;
+    std::string sqliteSource;
+    std::string localIndexSource;
+    state.Require(readSourceFile(repoRoot / L"Plugins" / L"FileSystem" / L"FileSystem.Search.cpp", pluginSearchSource),
+                  L"Failed to read FileSystem.Search.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"RedSalamander" / L"SearchFallbackEngine.cpp", fallbackSource),
+                  L"Failed to read SearchFallbackEngine.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"SqliteIndexStore.cpp", sqliteSource),
+                  L"Failed to read SqliteIndexStore.cpp for low-hardening guard.");
+    state.Require(readSourceFile(repoRoot / L"Common" / L"LocalSearchIndexCore.cpp", localIndexSource),
+                  L"Failed to read LocalSearchIndexCore.cpp for low-hardening guard.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::string_view nativeMarkQueued = sourceBetween(pluginSearchSource, "[[nodiscard]] bool MarkQueuedDirectory", "[[nodiscard]] bool ShouldUseParallelDirectoryWalk");
+    const std::string_view fallbackMarkQueued = sourceBetween(fallbackSource, "[[nodiscard]] bool MarkQueuedDirectory", "HRESULT CheckSearchCancelled");
+    state.Require(contains(nativeMarkQueued, "runtime.queuedDirectories.erase(visitKey);"),
+                  L"Native search must roll back the logical visit key when physical identity de-dup rejects a directory.");
+    state.Require(contains(fallbackMarkQueued, "runtime.queuedDirectories.erase(visitKey);"),
+                  L"Fallback search must roll back the logical visit key when physical identity de-dup rejects a directory.");
+
+    const std::string_view applyPragmas = sourceBetween(sqliteSource, "[[nodiscard]] HRESULT ApplyPragmas", "[[nodiscard]] HRESULT CreateSchemaVersion1");
+    state.Require(! contains(applyPragmas, "\"VACUUM;\""), L"SQLite bootstrap pragmas must not run full VACUUM inline.");
+
+    const std::string_view replaceVolume = sourceBetween(sqliteSource, "HRESULT ReplaceVolume", "HRESULT ApplyJournalDelta");
+    state.Require(countOccurrences(replaceVolume, "UpdateVolume(db.get(), volumeId, request)") == 1u,
+                  L"SqliteIndexStore::ReplaceVolume should update volume metadata exactly once per existing volume.");
+
+    const std::string_view directoryInfoParser =
+        sourceBetween(localIndexSource, "TryParseFileFullDirectoryInformationEntry", "[[nodiscard]] std::wstring ExtractVolumeRoot");
+    state.Require(contains(directoryInfoParser, "entryBytes > remainingBytes") &&
+                      contains(directoryInfoParser, "entryBytes - kFileNameOffset"),
+                  L"FILE_FULL_DIR_INFO parsing must bound FileNameLength against the validated entry bytes before reading FileName.");
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_broker_stalled_query_honors_cancel",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    struct TestFrameHeader final
+    {
+        uint32_t magic           = 0x53535252u;
+        uint32_t protocolVersion = SearchServiceBroker::kProtocolVersion;
+        uint32_t messageType     = 0u;
+        uint32_t payloadBytes    = 0u;
+    };
+
+    const auto readExact = [](HANDLE handle, void* buffer, const uint32_t byteCount) noexcept -> HRESULT
+    {
+        uint8_t* destination = static_cast<uint8_t*>(buffer);
+        uint32_t totalRead   = 0u;
+        while (totalRead < byteCount)
+        {
+            DWORD chunkRead = 0u;
+            if (::ReadFile(handle, destination + totalRead, byteCount - totalRead, &chunkRead, nullptr) == 0)
+            {
+                return HRESULT_FROM_WIN32(::GetLastError());
+            }
+            if (chunkRead == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+            }
+            totalRead += chunkRead;
+        }
+        return S_OK;
+    };
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                  L"Failed to override the search service pipe for stalled broker query test.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    wil::unique_event_nothrow requestReceived;
+    requestReceived.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_event_nothrow releaseServer;
+    releaseServer.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_event_nothrow clientDone;
+    clientDone.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    state.Require(requestReceived && releaseServer && clientDone, L"Failed to create stalled broker synchronization events.");
+
+    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
+                                                     PIPE_ACCESS_DUPLEX,
+                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                                     1u,
+                                                     4096u,
+                                                     4096u,
+                                                     0u,
+                                                     nullptr));
+    state.Require(!! serverPipe,
+                  std::format(L"Failed to create stalled broker fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+    if (! serverPipe || ! requestReceived || ! releaseServer || ! clientDone)
+    {
+        return false;
+    }
+
+    std::atomic<long> serverHr{S_OK};
+    std::jthread server([&, pipe = std::move(serverPipe)](std::stop_token) mutable noexcept
+    {
+        if (::ConnectNamedPipe(pipe.get(), nullptr) == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error != ERROR_PIPE_CONNECTED)
+            {
+                serverHr.store(static_cast<long>(HRESULT_FROM_WIN32(error)));
+                return;
+            }
+        }
+
+        TestFrameHeader requestHeader{};
+        HRESULT localHr = readExact(pipe.get(), &requestHeader, static_cast<uint32_t>(sizeof(requestHeader)));
+        if (SUCCEEDED(localHr) && requestHeader.payloadBytes <= 64u * 1024u)
+        {
+            std::vector<std::byte> requestPayload(requestHeader.payloadBytes);
+            if (requestHeader.payloadBytes != 0u)
+            {
+                localHr = readExact(pipe.get(), requestPayload.data(), requestHeader.payloadBytes);
+            }
+        }
+        else if (SUCCEEDED(localHr))
+        {
+            localHr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        serverHr.store(static_cast<long>(localHr));
+        static_cast<void>(::SetEvent(requestReceived.get()));
+        static_cast<void>(::WaitForSingleObject(releaseServer.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(5'000))));
+    });
+
+    std::atomic<bool> cancelRequested{false};
+    std::atomic<long> clientHr{E_PENDING};
+    const auto cancelThunk = [](void* cookie) noexcept -> HRESULT
+    {
+        const auto* cancelFlag = static_cast<const std::atomic<bool>*>(cookie);
+        if (cancelFlag == nullptr)
+        {
+            return E_POINTER;
+        }
+        return cancelFlag->load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    std::jthread client([&](std::stop_token) noexcept
+    {
+        SearchServiceBroker::QueryRequest request{};
+        request.rootPath           = L"C:\\";
+        request.namePattern        = L"*";
+        request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+        request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_INCLUDE_FILES);
+        request.includeFiles       = true;
+        request.includeDirectories = false;
+
+        std::vector<LocalSearchIndexCore::Candidate> candidates;
+        LocalSearchIndexCore::QueryStats stats{};
+        const HRESULT hr = SearchServiceBroker::Query(request, nullptr, nullptr, cancelThunk, &cancelRequested, candidates, &stats);
+        clientHr.store(static_cast<long>(hr), std::memory_order_release);
+        static_cast<void>(::SetEvent(clientDone.get()));
+    });
+
+    state.Require(::WaitForSingleObject(requestReceived.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(3'000))) == WAIT_OBJECT_0,
+                  L"Stalled broker fake service did not receive the query request.");
+    const HRESULT serverResult = static_cast<HRESULT>(serverHr.load(std::memory_order_acquire));
+    state.Require(SUCCEEDED(serverResult),
+                  std::format(L"Stalled broker fake service failed while reading the request. hr=0x{:08X}",
+                              static_cast<unsigned long>(serverResult)));
+
+    cancelRequested.store(true, std::memory_order_release);
+    const DWORD cancelWait = ::WaitForSingleObject(clientDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(500)));
+    state.Require(cancelWait == WAIT_OBJECT_0, L"Stalled broker query did not honor cancellation within the bounded wait.");
+
+    static_cast<void>(::SetEvent(releaseServer.get()));
+    if (cancelWait != WAIT_OBJECT_0)
+    {
+        static_cast<void>(::WaitForSingleObject(clientDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(5'000))));
+    }
+    client.join();
+    server.join();
+
+    if (cancelWait == WAIT_OBJECT_0)
+    {
+        const HRESULT queryHr = static_cast<HRESULT>(clientHr.load(std::memory_order_acquire));
+        state.Require(queryHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                      std::format(L"Stalled broker query expected ERROR_CANCELLED after cancellation. hr=0x{:08X}",
+                                  static_cast<unsigned long>(queryHr)));
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"search_service_broker_streaming_query_honors_cancel",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    struct TestFrameHeader final
+    {
+        uint32_t magic           = 0x53535252u;
+        uint32_t protocolVersion = SearchServiceBroker::kProtocolVersion;
+        uint32_t messageType     = 0u;
+        uint32_t payloadBytes    = 0u;
+    };
+
+    struct TestCandidateBatchHeader final
+    {
+        uint32_t count    = 0u;
+        uint32_t reserved = 0u;
+    };
+
+    struct TestCandidateEntryHeader final
+    {
+        uint32_t fileAttributes     = 0u;
+        uint32_t metadataFlags      = LocalSearchIndexCore::CANDIDATE_METADATA_NONE;
+        uint32_t fullPathBytes      = 0u;
+        uint32_t displayNameBytes   = 0u;
+        int64_t creationTime100ns   = 0;
+        int64_t lastAccessTime100ns = 0;
+        int64_t endOfFile           = 0;
+        int64_t lastWriteTime100ns  = 0;
+        int64_t changeTime100ns     = 0;
+        int64_t allocationSize      = 0;
+    };
+
+    struct BatchCancelState final
+    {
+        BatchCancelState()                                             = default;
+        BatchCancelState(const BatchCancelState&)                      = delete;
+        BatchCancelState(BatchCancelState&&)                           = delete;
+        BatchCancelState& operator=(const BatchCancelState&)           = delete;
+        BatchCancelState& operator=(BatchCancelState&&)                = delete;
+
+        std::atomic<bool>* cancelRequested = nullptr;
+        HANDLE batchConsumedEvent          = nullptr;
+        std::atomic<uint32_t> batchesSeen{0u};
+        std::atomic<uint32_t> candidatesSeen{0u};
+    };
+
+    const auto appendBytes = [](std::vector<std::byte>& buffer, const void* source, const size_t byteCount)
+    {
+        const auto* bytes = static_cast<const std::byte*>(source);
+        buffer.insert(buffer.end(), bytes, bytes + byteCount);
+    };
+
+    const auto appendUtf16 = [&](std::vector<std::byte>& buffer, std::wstring_view text)
+    {
+        if (! text.empty())
+        {
+            appendBytes(buffer, text.data(), text.size() * sizeof(wchar_t));
+        }
+    };
+
+    const auto makeQueryBatchPayload = [&](std::initializer_list<std::wstring_view> names)
+    {
+        std::vector<std::byte> payload;
+        TestCandidateBatchHeader batchHeader{};
+        batchHeader.count = static_cast<uint32_t>(names.size());
+        appendBytes(payload, &batchHeader, sizeof(batchHeader));
+
+        for (std::wstring_view name : names)
+        {
+            const std::wstring fullPath = std::wstring(L"C:\\broker-cancel\\") + std::wstring(name);
+            TestCandidateEntryHeader entry{};
+            entry.fileAttributes   = FILE_ATTRIBUTE_NORMAL;
+            entry.fullPathBytes    = static_cast<uint32_t>(fullPath.size() * sizeof(wchar_t));
+            entry.displayNameBytes = static_cast<uint32_t>(name.size() * sizeof(wchar_t));
+            appendBytes(payload, &entry, sizeof(entry));
+            appendUtf16(payload, fullPath);
+            appendUtf16(payload, name);
+        }
+
+        return payload;
+    };
+
+    const auto readExact = [](HANDLE handle, void* buffer, const uint32_t byteCount) noexcept -> HRESULT
+    {
+        uint8_t* destination = static_cast<uint8_t*>(buffer);
+        uint32_t totalRead   = 0u;
+        while (totalRead < byteCount)
+        {
+            DWORD chunkRead = 0u;
+            if (::ReadFile(handle, destination + totalRead, byteCount - totalRead, &chunkRead, nullptr) == 0)
+            {
+                return HRESULT_FROM_WIN32(::GetLastError());
+            }
+            if (chunkRead == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+            }
+            totalRead += chunkRead;
+        }
+        return S_OK;
+    };
+
+    const auto writeExact = [](HANDLE handle, const void* buffer, const uint32_t byteCount) noexcept -> HRESULT
+    {
+        const uint8_t* source = static_cast<const uint8_t*>(buffer);
+        uint32_t totalWritten = 0u;
+        while (totalWritten < byteCount)
+        {
+            DWORD chunkWritten = 0u;
+            if (::WriteFile(handle, source + totalWritten, byteCount - totalWritten, &chunkWritten, nullptr) == 0)
+            {
+                return HRESULT_FROM_WIN32(::GetLastError());
+            }
+            if (chunkWritten == 0u)
+            {
+                return HRESULT_FROM_WIN32(ERROR_BROKEN_PIPE);
+            }
+            totalWritten += chunkWritten;
+        }
+        return S_OK;
+    };
+
+    const auto sendFrame = [&](HANDLE handle, uint32_t messageType, std::span<const std::byte> payload) noexcept -> HRESULT
+    {
+        TestFrameHeader header{};
+        header.messageType  = messageType;
+        header.payloadBytes = static_cast<uint32_t>(payload.size_bytes());
+        HRESULT hr          = writeExact(handle, &header, static_cast<uint32_t>(sizeof(header)));
+        if (SUCCEEDED(hr) && ! payload.empty())
+        {
+            hr = writeExact(handle, payload.data(), static_cast<uint32_t>(payload.size_bytes()));
+        }
+        return hr;
+    };
+
+    const auto cancelThunk = [](void* cookie) noexcept -> HRESULT
+    {
+        auto* cancelChecks = static_cast<std::atomic<bool>*>(cookie);
+        if (cancelChecks == nullptr)
+        {
+            return E_POINTER;
+        }
+        return cancelChecks->load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    const auto batchThunk = [](LocalSearchIndexCore::Candidate* candidates, size_t count, size_t* consumedCount, void* cookie) noexcept -> HRESULT
+    {
+        auto* batchState = static_cast<BatchCancelState*>(cookie);
+        if (batchState == nullptr || batchState->cancelRequested == nullptr || batchState->batchConsumedEvent == nullptr || consumedCount == nullptr ||
+            (count != 0u && candidates == nullptr))
+        {
+            return E_POINTER;
+        }
+
+        *consumedCount = count;
+        batchState->batchesSeen.fetch_add(1u, std::memory_order_acq_rel);
+        batchState->candidatesSeen.fetch_add(static_cast<uint32_t>(count), std::memory_order_acq_rel);
+        batchState->cancelRequested->store(true, std::memory_order_release);
+        static_cast<void>(::SetEvent(batchState->batchConsumedEvent));
+        return S_OK;
+    };
+
+    const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+    const std::wstring pipeName             = MakeUniquePipeName();
+    state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                  L"Failed to override the search service pipe for streaming broker cancel test.");
+    const auto restorePipeOverride = wil::scope_exit([&] noexcept
+    {
+        const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+        static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+    });
+
+    wil::unique_event_nothrow batchConsumed;
+    batchConsumed.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_event_nothrow releaseServer;
+    releaseServer.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    wil::unique_event_nothrow clientDone;
+    clientDone.reset(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    state.Require(batchConsumed && releaseServer && clientDone, L"Failed to create streaming broker cancel synchronization events.");
+
+    wil::unique_handle serverPipe(::CreateNamedPipeW(pipeName.c_str(),
+                                                     PIPE_ACCESS_DUPLEX,
+                                                     PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                                     1u,
+                                                     4096u,
+                                                     4096u,
+                                                     0u,
+                                                     nullptr));
+    state.Require(!! serverPipe,
+                  std::format(L"Failed to create streaming broker fake service pipe. error={}", static_cast<unsigned long>(::GetLastError())));
+    if (! serverPipe || ! batchConsumed || ! releaseServer || ! clientDone)
+    {
+        return false;
+    }
+
+    const std::vector<std::byte> firstBatchPayload = makeQueryBatchPayload({L"alpha.txt", L"beta.txt"});
+    std::atomic<long> serverHr{S_OK};
+    std::jthread server([&, pipe = std::move(serverPipe)](std::stop_token) mutable noexcept
+    {
+        if (::ConnectNamedPipe(pipe.get(), nullptr) == 0)
+        {
+            const DWORD error = ::GetLastError();
+            if (error != ERROR_PIPE_CONNECTED)
+            {
+                serverHr.store(static_cast<long>(HRESULT_FROM_WIN32(error)), std::memory_order_release);
+                return;
+            }
+        }
+
+        TestFrameHeader requestHeader{};
+        HRESULT localHr = readExact(pipe.get(), &requestHeader, static_cast<uint32_t>(sizeof(requestHeader)));
+        if (SUCCEEDED(localHr) && requestHeader.payloadBytes <= 64u * 1024u)
+        {
+            std::vector<std::byte> requestPayload(requestHeader.payloadBytes);
+            if (requestHeader.payloadBytes != 0u)
+            {
+                localHr = readExact(pipe.get(), requestPayload.data(), requestHeader.payloadBytes);
+            }
+        }
+        else if (SUCCEEDED(localHr))
+        {
+            localHr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        if (SUCCEEDED(localHr))
+        {
+            localHr = sendFrame(pipe.get(), 5u, std::span<const std::byte>(firstBatchPayload.data(), firstBatchPayload.size()));
+        }
+        if (SUCCEEDED(localHr) && ::FlushFileBuffers(pipe.get()) == 0)
+        {
+            localHr = HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        serverHr.store(static_cast<long>(localHr), std::memory_order_release);
+        static_cast<void>(::WaitForSingleObject(releaseServer.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(5'000))));
+    });
+
+    std::atomic<bool> cancelRequested{false};
+    BatchCancelState batchState{};
+    batchState.cancelRequested    = &cancelRequested;
+    batchState.batchConsumedEvent = batchConsumed.get();
+    std::atomic<long> clientHr{E_PENDING};
+    std::jthread client([&](std::stop_token) noexcept
+    {
+        SearchServiceBroker::QueryRequest request{};
+        request.rootPath           = L"C:\\";
+        request.namePattern        = L"*.txt";
+        request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+        request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_INCLUDE_FILES);
+        request.includeFiles       = true;
+        request.includeDirectories = false;
+
+        std::vector<LocalSearchIndexCore::Candidate> candidates;
+        LocalSearchIndexCore::QueryStats stats{};
+        const HRESULT hr = SearchServiceBroker::Query(request,
+                                                      nullptr,
+                                                      nullptr,
+                                                      cancelThunk,
+                                                      &cancelRequested,
+                                                      candidates,
+                                                      &stats,
+                                                      batchThunk,
+                                                      &batchState);
+        clientHr.store(static_cast<long>(hr), std::memory_order_release);
+        static_cast<void>(::SetEvent(clientDone.get()));
+    });
+
+    state.Require(::WaitForSingleObject(batchConsumed.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(3'000))) == WAIT_OBJECT_0,
+                  L"Streaming broker fake service did not deliver the first batch to the client.");
+    state.Require(::WaitForSingleObject(clientDone.get(), static_cast<DWORD>(SelfTest::ScaleTimeout(500))) == WAIT_OBJECT_0,
+                  L"Streaming broker query did not honor cancellation after the first batch.");
+
+    static_cast<void>(::SetEvent(releaseServer.get()));
+    client.join();
+    server.join();
+
+    const HRESULT serverResult = static_cast<HRESULT>(serverHr.load(std::memory_order_acquire));
+    state.Require(SUCCEEDED(serverResult),
+                  std::format(L"Streaming broker fake service failed. hr=0x{:08X}", static_cast<unsigned long>(serverResult)));
+    const HRESULT queryHr = static_cast<HRESULT>(clientHr.load(std::memory_order_acquire));
+    state.Require(queryHr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Streaming broker query expected ERROR_CANCELLED after first batch. hr=0x{:08X}",
+                              static_cast<unsigned long>(queryHr)));
+    state.Require(batchState.batchesSeen.load(std::memory_order_acquire) == 1u,
+                  std::format(L"Streaming broker query should consume one batch before cancellation. batches={}",
+                              batchState.batchesSeen.load(std::memory_order_acquire)));
+    state.Require(batchState.candidatesSeen.load(std::memory_order_acquire) == 2u,
+                  std::format(L"Streaming broker query should consume two candidates before cancellation. candidates={}",
+                              batchState.candidatesSeen.load(std::memory_order_acquire)));
 
     return state.failure.empty();
 });
@@ -1315,6 +3619,35 @@ SelfTest::RunCase(options,
     SqliteIndexStore::StoreInfo beforeInfo{};
     std::wstring prepareError;
     state.Require(PrepareSqliteMaintenanceStore(caseRoot, databasePath, beforeInfo, prepareError), prepareError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    sqlite3* walSeedConnection = nullptr;
+    state.Require(OpenSqliteWalSeedConnection(databasePath, walSeedConnection, prepareError), prepareError);
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    const auto closeWalSeedConnection = wil::scope_exit([&]() noexcept
+    {
+        if (walSeedConnection != nullptr)
+        {
+            static_cast<void>(sqlite3_close(walSeedConnection));
+        }
+    });
+
+    SqliteIndexStore::StoreInfo walSeedInfo{};
+    const HRESULT walSeedInspectHr = SqliteIndexStore::InspectStore(databasePath.wstring(), walSeedInfo);
+    state.Require(SUCCEEDED(walSeedInspectHr),
+                  std::format(L"SqliteIndexStore::InspectStore after WAL seed failed. hr=0x{:08X}", static_cast<unsigned long>(walSeedInspectHr)));
+    if (FAILED(walSeedInspectHr))
+    {
+        return false;
+    }
+    state.Require(walSeedInfo.writeAheadLogBytes != 0u,
+                  std::format(L"Automatic checkpoint fixture should have WAL bytes before maintenance, got {}.", walSeedInfo.writeAheadLogBytes));
     if (! state.failure.empty())
     {
         return false;
@@ -2072,6 +4405,100 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"local_index_core_sqlite_authoritative_replays_directory_moves",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"index_core_sqlite_authoritative_directory_moves", caseRoot),
+                  L"Failed to prepare index_core_sqlite_authoritative_directory_moves root.");
+    std::filesystem::path outsideRoot;
+    if (! prepareJournalDirectoryMoveFixture(state, caseRoot, L"index_core_sqlite_authoritative_directory_moves_outside", outsideRoot))
+    {
+        return false;
+    }
+
+    const std::filesystem::path storeRoot  = caseRoot / L"store";
+    const std::filesystem::path sqlitePath = caseRoot / L"authoritative.sqlite3";
+    LocalSearchIndexCore::Repository repository({
+        .snapshotRootDirectory = storeRoot.wstring(),
+        .persistentStoreKind   = LocalSearchIndexCore::PersistentStoreKind::Sqlite,
+        .sqliteDatabasePath    = sqlitePath.wstring(),
+        .sqliteAuthoritative   = true,
+    });
+
+    LocalSearchIndexCore::QueryStats seedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> seedCandidates;
+    HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", seedStats, seedCandidates);
+    state.Require(SUCCEEDED(hr), std::format(L"Authoritative sqlite directory-move seed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(CollectIndexedCandidateNames(seedCandidates) == std::vector<std::wstring>{L"inside-child.txt", L"moved-out-child.txt", L"stable.txt"},
+                  L"Authoritative sqlite directory-move seed query returned an unexpected candidate set.");
+    state.Require(! seedStats.snapshotLoaded, L"Authoritative sqlite directory-move seed should not load a compatibility snapshot.");
+    state.Require(! seedStats.snapshotSaved, L"Authoritative sqlite directory-move seed should not create a compatibility snapshot.");
+
+    if (! applyJournalDirectoryMoveMutations(state, caseRoot, outsideRoot))
+    {
+        return false;
+    }
+
+    const std::vector<LocalSearchIndexCore::SyntheticJournalRecordForTests> syntheticRecords =
+        buildJournalDirectoryMoveSyntheticRecords(caseRoot, outsideRoot);
+    LocalSearchIndexCore::QueryStats replayStats{};
+    hr = repository.ApplySyntheticJournalForTests(caseRoot.wstring(), syntheticRecords, &replayStats);
+    state.Require(SUCCEEDED(hr), std::format(L"Authoritative sqlite directory-move synthetic replay failed. hr=0x{:08X}",
+                                             static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(! replayStats.snapshotLoaded, L"Authoritative sqlite directory-move replay should not load a compatibility snapshot.");
+    state.Require(! replayStats.snapshotSaved, L"Authoritative sqlite directory-move replay should not create a compatibility snapshot.");
+    state.Require(replayStats.snapshotPath.empty(), L"Authoritative sqlite directory-move replay should not report a compatibility snapshot path.");
+
+    SqliteIndexStore::ReplaceVolumeRequest storedVolume{};
+    hr = SqliteIndexStore::LoadVolume(sqlitePath.wstring(), caseRoot.wstring(), storedVolume);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::LoadVolume after directory-move replay failed. hr=0x{:08X}",
+                                             static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(collectSqliteStoredFileNames(storedVolume) == expectedJournalDirectoryMoveNames(),
+                  L"Authoritative sqlite directory-move delta should persist the replayed file set.");
+    state.Require(hasSqliteEntryFullPath(storedVolume, caseRoot / L"renamed-inside-dir" / L"inside-child.txt"),
+                  L"Authoritative sqlite directory-move delta should persist the in-tree renamed child at the new path.");
+    state.Require(! hasSqliteEntryFullPath(storedVolume, caseRoot / L"inside-dir" / L"inside-child.txt"),
+                  L"Authoritative sqlite directory-move delta should delete the old in-tree renamed path.");
+    state.Require(hasSqliteEntryFullPath(storedVolume, caseRoot / L"moved-in-dir" / L"nested" / L"moved-in-nested.txt"),
+                  L"Authoritative sqlite directory-move delta should persist hydrated moved-in children.");
+    state.Require(hasSqliteEntryFullPath(storedVolume, caseRoot / L"unzipped-dir" / L"nested" / L"unzipped-nested.txt"),
+                  L"Authoritative sqlite directory-move delta should persist hydrated unzipped children.");
+    state.Require(! hasSqliteEntryFullPath(storedVolume, caseRoot / L"move-out-dir" / L"moved-out-child.txt"),
+                  L"Authoritative sqlite directory-move delta should delete the moved-out subtree row.");
+
+    LocalSearchIndexCore::QueryStats persistedStats{};
+    std::vector<LocalSearchIndexCore::Candidate> persistedCandidates;
+    hr = runPersistedIndexedNameQueryForTests(repository, caseRoot.wstring(), persistedStats, persistedCandidates);
+    state.Require(SUCCEEDED(hr), std::format(L"Authoritative sqlite directory-move persisted query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(requireJournalDirectoryMoveResults(state, caseRoot, replayStats, persistedCandidates, L"Authoritative sqlite directory-move synthetic replay"),
+                  L"Authoritative sqlite directory-move synthetic replay should persist the expected directory-move result set.");
+
+    auto snapshotFiles = CollectDirectoryFilesByExtension(storeRoot, L".bin");
+    state.Require(snapshotFiles.empty(), L"Authoritative sqlite directory-move flow should not create compatibility snapshot runtime files.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"local_index_core_sqlite_authoritative_reseeds_after_store_loss_during_replay",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -2659,6 +5086,272 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"sqlite_index_store_read_queries_stay_readonly_under_writer_lock",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_readonly_under_writer_lock", caseRoot),
+                  L"Failed to prepare sqlite_readonly_under_writer_lock root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path sqlitePath = caseRoot / L"index-v2.sqlite3";
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::EnsureBootstrap failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = caseRoot.wstring();
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = 51u;
+    replaceRequest.nextUsn        = 510u;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({
+        .fileIdLow  = 1u,
+        .fileIdHigh = 0u,
+        .fullPath   = caseRoot.wstring(),
+        .name       = L"",
+        .attributes = FILE_ATTRIBUTE_DIRECTORY,
+    });
+    replaceRequest.entries.push_back({
+        .fileIdLow      = 2u,
+        .fileIdHigh     = 0u,
+        .parentIdLow    = 1u,
+        .parentIdHigh   = 0u,
+        .fullPath       = (caseRoot / L"alpha.txt").wstring(),
+        .name           = L"alpha.txt",
+        .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+        .sizeBytes      = 5u,
+        .writeTime100ns = 133838640000000000ull,
+    });
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::ReplaceVolume failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    sqlite3* rawWriter             = nullptr;
+    const std::u8string sqliteUtf8 = sqlitePath.u8string();
+    const int openResult = sqlite3_open_v2(reinterpret_cast<const char*>(sqliteUtf8.c_str()),
+                                           &rawWriter,
+                                           SQLITE_OPEN_READWRITE | SQLITE_OPEN_NOMUTEX,
+                                           nullptr);
+    state.Require(openResult == SQLITE_OK && rawWriter != nullptr,
+                  std::format(L"sqlite3_open_v2 writer failed. code={} message='{}'",
+                              openResult,
+                              (rawWriter != nullptr) ? static_cast<const wchar_t*>(sqlite3_errmsg16(rawWriter)) : L"<unknown>"));
+    if (openResult != SQLITE_OK || rawWriter == nullptr)
+    {
+        if (rawWriter != nullptr)
+        {
+            static_cast<void>(sqlite3_close(rawWriter));
+        }
+        return false;
+    }
+
+    const auto closeWriter = wil::scope_exit([&]() noexcept
+    {
+        static_cast<void>(sqlite3_exec(rawWriter, "ROLLBACK;", nullptr, nullptr, nullptr));
+        static_cast<void>(sqlite3_close(rawWriter));
+    });
+
+    const int beginResult = sqlite3_exec(rawWriter, "BEGIN IMMEDIATE;", nullptr, nullptr, nullptr);
+    state.Require(beginResult == SQLITE_OK,
+                  std::format(L"BEGIN IMMEDIATE writer lock failed. code={} message='{}'",
+                              beginResult,
+                              static_cast<const wchar_t*>(sqlite3_errmsg16(rawWriter))));
+    if (beginResult != SQLITE_OK)
+    {
+        return false;
+    }
+
+    SqliteIndexStore::VolumeInfo volumeInfo{};
+    hr = SqliteIndexStore::InspectVolume(sqlitePath.wstring(), caseRoot.wstring(), volumeInfo);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"InspectVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(volumeInfo.entryCount == 2u, std::format(L"InspectVolume should report 2 entries, got {}.", volumeInfo.entryCount));
+
+    SqliteIndexStore::ReplaceVolumeRequest loadedVolume{};
+    hr = SqliteIndexStore::LoadVolume(sqlitePath.wstring(), caseRoot.wstring(), loadedVolume);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"LoadVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(loadedVolume.entries.size() == 2u, std::format(L"LoadVolume should hydrate 2 entries, got {}.", loadedVolume.entries.size()));
+
+    SqliteIndexStore::QueryRequest queryRequest{};
+    queryRequest.rootPath           = caseRoot.wstring();
+    queryRequest.namePattern        = L"alpha*";
+    queryRequest.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    queryRequest.recursive          = true;
+    queryRequest.includeFiles       = true;
+    queryRequest.includeDirectories = false;
+
+    std::vector<std::wstring> names;
+    SqliteIndexStore::QueryRuntimeStats queryStats{};
+    hr = CollectSqliteEnumerateNames(sqlitePath, queryRequest, names, &queryStats);
+    state.Require(SUCCEEDED(hr),
+                  std::format(L"EnumerateVolume must stay read-only under a held writer lock. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(queryStats.readOnlyConnection, L"EnumerateVolume should report a read-only SQLite connection.");
+    state.Require(names == std::vector<std::wstring>{L"alpha.txt"}, L"EnumerateVolume under writer lock returned an unexpected result set.");
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"sqlite_index_store_prefix_prefilter_uses_range_and_literal_metacharacters",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"sqlite_prefix_range_literals", caseRoot), L"Failed to prepare sqlite_prefix_range_literals root.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path sqlitePath = caseRoot / L"index-v2.sqlite3";
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::EnsureBootstrap failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::ReplaceVolumeRequest replaceRequest{};
+    replaceRequest.rootPath       = caseRoot.wstring();
+    replaceRequest.fileSystemKind = LocalSearchIndexCore::FileSystemKind::Ntfs;
+    replaceRequest.journalId      = 61u;
+    replaceRequest.nextUsn        = 610u;
+    replaceRequest.state          = SqliteIndexStore::kVolumeStateReady;
+    replaceRequest.entries.push_back({
+        .fileIdLow  = 1u,
+        .fileIdHigh = 0u,
+        .fullPath   = caseRoot.wstring(),
+        .name       = L"",
+        .attributes = FILE_ATTRIBUTE_DIRECTORY,
+    });
+
+    const std::array<std::wstring_view, 5> fileNames{{L"literal%one.txt", L"literal_one.txt", L"literalAone.txt", L"literalxone.txt", L"other.txt"}};
+    for (size_t index = 0u; index < fileNames.size(); ++index)
+    {
+        replaceRequest.entries.push_back({
+            .fileIdLow      = static_cast<uint64_t>(index + 2u),
+            .fileIdHigh     = 0u,
+            .parentIdLow    = 1u,
+            .parentIdHigh   = 0u,
+            .fullPath       = (caseRoot / fileNames[index]).wstring(),
+            .name           = std::wstring(fileNames[index]),
+            .attributes     = FILE_ATTRIBUTE_ARCHIVE,
+            .sizeBytes      = 5u,
+            .writeTime100ns = 133838640000000000ull + static_cast<uint64_t>(index),
+        });
+    }
+
+    SqliteIndexStore::ReplaceVolumeResult replaceResult{};
+    hr = SqliteIndexStore::ReplaceVolume(sqlitePath.wstring(), replaceRequest, &replaceResult);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::ReplaceVolume failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    SqliteIndexStore::QueryRequest percentRequest{};
+    percentRequest.rootPath           = caseRoot.wstring();
+    percentRequest.namePattern        = L"literal%*";
+    percentRequest.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    percentRequest.recursive          = true;
+    percentRequest.includeFiles       = true;
+    percentRequest.includeDirectories = false;
+
+    SqliteIndexStore::QueryPlanInspectionForTests plan{};
+    hr = SqliteIndexStore::ExplainEnumerateVolumeForTests(sqlitePath.wstring(), percentRequest, plan);
+    state.Require(SUCCEEDED(hr), std::format(L"ExplainEnumerateVolumeForTests failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+    state.Require(plan.prefixLowerBound == L"literal%" && plan.prefixUpperBound == L"literal&",
+                  std::format(L"Percent-literal prefix bounds mismatch. lower='{}' upper='{}' expanded='{}'",
+                              plan.prefixLowerBound,
+                              plan.prefixUpperBound,
+                              plan.expandedSql));
+
+    std::vector<std::wstring> names;
+    SqliteIndexStore::QueryRuntimeStats queryStats{};
+    const auto percentQueryStarted = std::chrono::steady_clock::now();
+    hr = CollectSqliteEnumerateNames(sqlitePath, percentRequest, names, &queryStats);
+    const uint64_t percentQueryElapsedUs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - percentQueryStarted).count());
+    Debug::Perf::Emit(L"compare.selftest.sqlite_prefix_range_query_us",
+                      L"literal-percent",
+                      percentQueryElapsedUs,
+                      queryStats.scannedRows,
+                      static_cast<uint64_t>(names.size()),
+                      hr);
+    state.Require(SUCCEEDED(hr), std::format(L"Percent-literal prefix enumerate failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(queryStats.usedNamePrefilter, L"Percent-literal prefix query should use a SQLite prefilter.");
+    state.Require(names == std::vector<std::wstring>{L"literal%one.txt"},
+                  std::format(L"Percent-literal prefix should only return the literal percent name, got {} candidate(s). lower='{}' upper='{}' expanded='{}' plan='{}'",
+                              names.size(),
+                              plan.prefixLowerBound,
+                              plan.prefixUpperBound,
+                              plan.expandedSql,
+                              plan.detail));
+
+    SqliteIndexStore::QueryRequest underscoreRequest = percentRequest;
+    underscoreRequest.namePattern                    = L"literal_*";
+    names.clear();
+    queryStats = {};
+    hr         = CollectSqliteEnumerateNames(sqlitePath, underscoreRequest, names, &queryStats);
+    state.Require(SUCCEEDED(hr), std::format(L"Underscore-literal prefix enumerate failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    state.Require(queryStats.usedNamePrefilter, L"Underscore-literal prefix query should use a SQLite prefilter.");
+    state.Require(names == std::vector<std::wstring>{L"literal_one.txt"},
+                  std::format(L"Underscore-literal prefix should only return the literal underscore name, got {} candidate(s).", names.size()));
+
+    state.Require(plan.sql.find("LIKE") == std::string::npos, L"Prefix prefilter SQL must not use LIKE.");
+    state.Require(plan.sql.find("name_folded >= ?") != std::string::npos && plan.sql.find("name_folded < ?") != std::string::npos,
+                  L"Prefix prefilter SQL must use a half-open name_folded range.");
+    state.Require(plan.detail.find(L"idx_entries_name_folded") != std::wstring::npos,
+                  std::format(L"Prefix prefilter should use idx_entries_name_folded. plan='{}'", plan.detail));
+    state.Require(plan.detail.find(L"name_folded>?") != std::wstring::npos && plan.detail.find(L"name_folded<?") != std::wstring::npos,
+                  std::format(L"Prefix prefilter plan should constrain name_folded on both bounds. plan='{}'", plan.detail));
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"local_search_native_matches_host_fallback",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -2838,8 +5531,11 @@ SelfTest::RunCase(options,
     state.Require(PrepareSearchCaseRoot(root, L"search_native_unicode_long_path_matches_host_fallback", caseRoot),
                   L"Failed to prepare search_native_unicode_long_path_matches_host_fallback root.");
 
-    const std::filesystem::path unicodeFile = caseRoot / L"rapport-Ã©quipe.txt";
-    state.Require(SelfTest::WriteTextFile(unicodeFile, "alpha needle unicode"), L"Failed to create rapport-Ã©quipe.txt.");
+    const std::filesystem::path unicodeFile = caseRoot / L"rapport-\u00E9quipe.txt";
+    state.Require(SelfTest::WriteTextFile(unicodeFile, "alpha needle unicode"), L"Failed to create rapport-\\u00E9quipe.txt.");
+    const std::wstring unicodeFileName = unicodeFile.filename().wstring();
+    state.Require(unicodeFileName.find(L"\u00E9") != std::wstring::npos && unicodeFileName.find(L"\u00C3") == std::wstring::npos,
+                  L"Unicode/long-path fixture must contain a real U+00E9 filename, not mojibake.");
 
     std::filesystem::path deepDir = caseRoot / L"chemin-long";
     state.Require(SelfTest::EnsureDirectory(deepDir), L"Failed to create chemin-long.");
@@ -2892,8 +5588,11 @@ SelfTest::RunCase(options,
         return false;
     }
 
-    const std::filesystem::path deepUnicodeFile = deepDir / L"rÃ©sultat-final.txt";
-    state.Require(SelfTest::WriteTextFile(deepUnicodeFile, "prefix needle suffix"), L"Failed to create rÃ©sultat-final.txt.");
+    const std::filesystem::path deepUnicodeFile = deepDir / L"r\u00E9sultat-final.txt";
+    state.Require(SelfTest::WriteTextFile(deepUnicodeFile, "prefix needle suffix"), L"Failed to create r\\u00E9sultat-final.txt.");
+    const std::wstring deepUnicodeFileName = deepUnicodeFile.filename().wstring();
+    state.Require(deepUnicodeFileName.find(L"\u00E9") != std::wstring::npos && deepUnicodeFileName.find(L"\u00C3") == std::wstring::npos,
+                  L"Unicode/long-path deep fixture must contain a real U+00E9 filename, not mojibake.");
 
     std::wstring rootText       = caseRoot.wstring();
     std::wstring namePattern    = L"*.txt";
@@ -2951,14 +5650,14 @@ SelfTest::RunCase(options,
         state.Require(nativeMatch.attributes == fallbackMatch.attributes, std::format(L"Unicode/long-path match {} attributes mismatch.", index));
     }
 
-    const RecordedSearchMatch* unicodeMatch = FindRecordedSearchMatch(nativeMatches, L"rapport-Ã©quipe.txt");
-    state.Require(unicodeMatch != nullptr, L"Native Unicode/long-path search missing rapport-Ã©quipe.txt.");
+    const RecordedSearchMatch* unicodeMatch = FindRecordedSearchMatch(nativeMatches, L"rapport-\u00E9quipe.txt");
+    state.Require(unicodeMatch != nullptr, L"Native Unicode/long-path search missing rapport-\\u00E9quipe.txt.");
 
-    const RecordedSearchMatch* deepUnicodeMatch = FindRecordedSearchMatch(nativeMatches, L"rÃ©sultat-final.txt");
-    state.Require(deepUnicodeMatch != nullptr, L"Native Unicode/long-path search missing rÃ©sultat-final.txt.");
+    const RecordedSearchMatch* deepUnicodeMatch = FindRecordedSearchMatch(nativeMatches, L"r\u00E9sultat-final.txt");
+    state.Require(deepUnicodeMatch != nullptr, L"Native Unicode/long-path search missing r\\u00E9sultat-final.txt.");
     if (deepUnicodeMatch != nullptr)
     {
-        state.Require(deepUnicodeMatch->relativePath.find(L"rÃ©sultat-final.txt") != std::wstring::npos,
+        state.Require(deepUnicodeMatch->relativePath.find(L"r\u00E9sultat-final.txt") != std::wstring::npos,
                       L"Unicode/long-path deep match should preserve the nested relative path.");
         if (longPathCreated)
         {
@@ -5936,6 +8635,17 @@ SelfTest::RunCase(options,
     std::filesystem::path caseRoot;
     state.Require(PrepareSearchCaseRoot(root, L"search_service_status_and_query", caseRoot), L"Failed to prepare search_service_status_and_query root.");
     state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+    const std::filesystem::path storageRoot = caseRoot / L"service-store";
+    const std::filesystem::path sqlitePath  = storageRoot / L"index-v2.sqlite3";
+    state.Require(SelfTest::EnsureDirectory(storageRoot), L"Failed to prepare search_service_status_and_query service storage root.");
+
+    SqliteIndexStore::StoreInfo bootstrapInfo{};
+    HRESULT hr = SqliteIndexStore::EnsureBootstrap(sqlitePath.wstring(), &bootstrapInfo);
+    state.Require(SUCCEEDED(hr), std::format(L"SqliteIndexStore::EnsureBootstrap for status roundtrip failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
 
     const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
     const std::wstring pipeName             = MakeUniquePipeName();
@@ -5948,14 +8658,16 @@ SelfTest::RunCase(options,
 
     ForegroundSearchServiceProcess service;
     std::wstring serviceError;
-    state.Require(service.Start(pipeName, 8u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+    const std::wstring extraArgs =
+        std::format(L"--storage-root=\"{}\" --store-backend=sqlite --sqlite-path=\"{}\"", storageRoot.wstring(), sqlitePath.wstring());
+    state.Require(service.Start(pipeName, 8u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError, false, extraArgs), serviceError);
     if (! state.failure.empty())
     {
         return false;
     }
 
     SearchServiceBroker::ServiceStatus status{};
-    HRESULT hr = SearchServiceBroker::GetStatus(status);
+    hr = SearchServiceBroker::GetStatus(status);
     state.Require(SUCCEEDED(hr), std::format(L"SearchServiceBroker::GetStatus failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
     if (FAILED(hr))
     {
@@ -5965,13 +8677,12 @@ SelfTest::RunCase(options,
     state.Require(status.protocolVersion == SearchServiceBroker::kProtocolVersion, L"Search service status reported an unexpected protocol version.");
     state.Require(status.pipeName == pipeName, L"Search service status reported an unexpected pipe name.");
     state.Require(! status.storageRootDirectory.empty(), L"Search service status should report a storage root.");
-    state.Require(EqualsIgnoreCase(status.storageRootDirectory, SearchServiceBroker::GetProgramDataSearchIndexRoot()),
-                  L"Search service should store index data under ProgramData.");
+    state.Require(EqualsIgnoreCase(status.storageRootDirectory, storageRoot.wstring()),
+                  L"Search service should report the overridden test storage root.");
     state.Require(status.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite,
                   L"Search service status should default to the sqlite backend.");
     state.Require(! status.persistentStorePath.empty(), L"SQLite-default service status should report the database path.");
-    state.Require(EqualsIgnoreCase(std::filesystem::path(status.persistentStorePath).parent_path().wstring(), status.storageRootDirectory),
-                  L"SQLite-default service status should place the database under the reported storage root.");
+    state.Require(EqualsIgnoreCase(status.persistentStorePath, sqlitePath.wstring()), L"SQLite-default service status should report the configured database path.");
     state.Require(status.persistentStorePath.ends_with(L"index-v2.sqlite3"), L"SQLite-default service status should report the default index-v2.sqlite3 path.");
     state.Require(! status.writeAheadLogPath.empty(), L"SQLite-default service status should report the WAL path.");
     state.Require(status.writeAheadLogPath.ends_with(L"index-v2.sqlite3-wal"), L"SQLite-default service status should report the default WAL filename.");
@@ -5981,8 +8692,12 @@ SelfTest::RunCase(options,
     state.Require(status.autoCompactionEnabled, L"SQLite-default service status should advertise automatic compaction.");
     state.Require(status.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::Unknown,
                   L"SQLite-default service status should not report a query execution mode before any query runs.");
-    state.Require(status.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
-                  L"SQLite-default service status should report cutover-blocked readiness before any query runs.");
+    state.Require(status.readyForQueryCutover, L"SQLite-default service status should report a ready default store before any query runs.");
+    state.Require(status.storeState == LocalSearchIndexCore::StoreState::Ready, L"SQLite-default service status should report a ready store before any query runs.");
+    state.Require(status.syncPhase == LocalSearchIndexCore::SyncPhase::Watching,
+                  L"SQLite-default service status should report the watching sync phase before any query runs.");
+    state.Require(status.fallbackReason == LocalSearchIndexCore::FallbackReason::None,
+                  L"SQLite-default service status should not report a fallback reason before any query runs.");
 
     SearchServiceBroker::QueryRequest request{};
     request.rootPath           = caseRoot.wstring();
@@ -6007,8 +8722,9 @@ SelfTest::RunCase(options,
     state.Require(stats.candidateCount == 1u, L"Search service query should report one candidate.");
     state.Require(stats.queryExecutionMode == LocalSearchIndexCore::QueryExecutionMode::LiveScanFallback,
                   L"SQLite-default service query should answer from the live filesystem until the exact root is ready in sqlite.");
-    state.Require(stats.fallbackReason == LocalSearchIndexCore::FallbackReason::CutoverBlocked,
-                  L"SQLite-default service query should report cutover-blocked readiness for a cold exact root.");
+    state.Require(stats.fallbackReason == LocalSearchIndexCore::FallbackReason::StoreMissing,
+                  L"SQLite-default service query should report store-missing for a root that has not been mirrored into sqlite.");
+    state.Require(! stats.sqliteCutoverBlocked, L"SQLite-default service query should not report cutover-blocked for a missing mirrored root.");
     state.Require(stats.usedLiveScanFallback, L"SQLite-default service query should report live-scan fallback usage.");
     state.Require(! stats.snapshotLoaded, L"SQLite-default service query should not load a compatibility snapshot.");
     state.Require(! stats.snapshotSaved, L"SQLite-default service query should not save a compatibility snapshot.");
@@ -6330,8 +9046,42 @@ SelfTest::RunCase(options,
     state.Require(firstBatchElapsedMs.has_value(), L"Warm broker batch query should record first-batch latency.");
     if (firstBatchElapsedMs.has_value())
     {
+        const uint32_t batchesSeen     = batchRecorder.BatchesSeen();
+        const uint64_t candidateCount  = static_cast<uint64_t>(batchRecorder.Candidates().size());
+        const uint64_t firstBatchUs    = static_cast<uint64_t>(*firstBatchElapsedMs) * 1000u;
+        const std::wstring perfDetail  = std::format(L"{}|sqlite={}|prefilter={}|liveFallback={}|fallbackReason={}",
+                                                    caseRoot.native(),
+                                                    warmStats.usedSqliteStore,
+                                                    warmStats.usedNamePrefilter,
+                                                    warmStats.usedLiveScanFallback,
+                                                    static_cast<int>(warmStats.fallbackReason));
+        Debug::Perf::Emit(L"compare.selftest.local_search_service_indexed_first_batch_us", perfDetail, firstBatchUs, candidateCount, batchesSeen, S_OK);
+        AppendCompareSelfTestTraceLine(std::format(
+            L"Case: local_search_service_indexed_name_latency_and_parity firstBatchMs={} targetMs={} budgetMs={} batches={} candidates={} sqlite={} "
+            L"prefilter={} liveFallback={} fallbackReason={}",
+            *firstBatchElapsedMs,
+            kWarmIndexedFirstBatchTargetMs,
+            kWarmIndexedFirstBatchBudgetMs,
+            batchesSeen,
+            candidateCount,
+            warmStats.usedSqliteStore,
+            warmStats.usedNamePrefilter,
+            warmStats.usedLiveScanFallback,
+            static_cast<int>(warmStats.fallbackReason)));
+        if (*firstBatchElapsedMs >= kWarmIndexedFirstBatchTargetMs)
+        {
+            AppendCompareSelfTestTraceLine(std::format(
+                L"Case: local_search_service_indexed_name_latency_and_parity first-batch target exceeded under current load; got={} ms target={} ms "
+                L"criticalBudget={} ms.",
+                *firstBatchElapsedMs,
+                kWarmIndexedFirstBatchTargetMs,
+                kWarmIndexedFirstBatchBudgetMs));
+        }
         state.Require(*firstBatchElapsedMs < kWarmIndexedFirstBatchBudgetMs,
-                      std::format(L"Warm broker first batch exceeded budget. got={} ms budget={} ms.", *firstBatchElapsedMs, kWarmIndexedFirstBatchBudgetMs));
+                      std::format(L"Warm broker first batch exceeded critical budget. got={} ms budget={} ms target={} ms.",
+                                  *firstBatchElapsedMs,
+                                  kWarmIndexedFirstBatchBudgetMs,
+                                  kWarmIndexedFirstBatchTargetMs));
     }
 
     std::wstring rootText    = caseRoot.wstring();
@@ -6706,7 +9456,8 @@ SelfTest::RunCase(options,
     const HRESULT searchHr = search->Search(&query, &callback, nullptr);
     state.Require(SUCCEEDED(searchHr), std::format(L"Search with protocol-mismatched service failed. hr=0x{:08X}", static_cast<unsigned long>(searchHr)));
 
-    const RecordedSearchProgress* completed = FindRecordedSearchProgress(callback.ProgressSnapshots(), FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    const auto progressSnapshots            = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
     state.Require(completed != nullptr, L"Search with protocol-mismatched service missing completed progress.");
     if (completed != nullptr)
     {
@@ -6792,7 +9543,8 @@ SelfTest::RunCase(options,
     const auto matches = callback.Matches();
     state.Require(matches.size() == 400u, std::format(L"Disconnect fallback search expected 400 matches, got {}.", matches.size()));
 
-    const RecordedSearchProgress* completed = FindRecordedSearchProgress(callback.ProgressSnapshots(), FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    const auto progressSnapshots            = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
     state.Require(completed != nullptr, L"Disconnect fallback search missing completed progress.");
     if (completed != nullptr)
     {
@@ -6936,6 +9688,120 @@ SelfTest::RunCase(options,
 
 SelfTest::RunCase(options,
                   suite,
+                  L"search_invariant_case_folding_consistency",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    const auto makeExpectedResultKey = [](std::wstring_view pluginId, std::wstring_view instanceContext, std::wstring_view fullPath) noexcept
+    {
+        std::wstring key = OrdinalString::FoldCaseInvariant(pluginId);
+        key.push_back(L'|');
+        key.append(OrdinalString::FoldCaseInvariant(instanceContext));
+        key.push_back(L'|');
+        key.append(OrdinalString::FoldCaseInvariant(fullPath));
+        return key;
+    };
+
+    const std::wstring pluginId        = L"PLUGIN-I-\u0130";
+    const std::wstring instanceContext = L"Instance-\u00C9";
+    const std::wstring fullPath        = L"C:\\Search\\\u0130TEM\\\u00C9quipe.txt";
+    const std::wstring expectedKey     = makeExpectedResultKey(pluginId, instanceContext, fullPath);
+
+    state.Require(DebugMakeFindFilesResultKeyForTests(pluginId, instanceContext, fullPath) == expectedKey,
+                  L"Find result identity key must use invariant folding for non-ASCII path/context text.");
+
+    const char* previousLocaleRaw   = std::setlocale(LC_CTYPE, nullptr);
+    const std::string previousLocale = previousLocaleRaw != nullptr ? std::string(previousLocaleRaw) : std::string();
+    const auto restoreLocale         = wil::scope_exit([&]() noexcept
+    {
+        if (! previousLocale.empty())
+        {
+            static_cast<void>(std::setlocale(LC_CTYPE, previousLocale.c_str()));
+        }
+    });
+
+    bool appliedTurkishLocale = false;
+    const std::array<const char*, 3> turkishLocaleNames{{"Turkish_Turkey.1254", "tr-TR", "tr_TR"}};
+    for (const char* localeName : turkishLocaleNames)
+    {
+        if (std::setlocale(LC_CTYPE, localeName) != nullptr)
+        {
+            appliedTurkishLocale = true;
+            break;
+        }
+    }
+
+    if (appliedTurkishLocale)
+    {
+        state.Require(DebugMakeFindFilesResultKeyForTests(pluginId, instanceContext, fullPath) == expectedKey,
+                      L"Find result identity key must stay invariant under a Turkish C locale.");
+    }
+    else
+    {
+        Debug::Warning(L"CompareSelfTest: Turkish C locale unavailable; invariant key fixture still covers non-ASCII folding.");
+    }
+
+    size_t containsOffset = std::wstring_view::npos;
+    state.Require(OrdinalString::FindContainsFoldedInvariant(L"prefix \u00C9quipe.txt", L"\u00E9QUIPE", containsOffset) && containsOffset == 7u,
+                  std::format(L"Invariant contains helper offset mismatch. got={}", containsOffset));
+    state.Require(FolderViewIncrementalSearch::StartsWithNoCase(L"\u00C9quipe.txt", L"\u00E9QUIPE"),
+                  L"Folder incremental prefix search must use invariant folding.");
+
+    const std::optional<UINT32> folderContainsOffset =
+        FolderViewIncrementalSearch::FindContainsOffsetNoCase(L"prefix \u00C9quipe.txt", L"\u00E9QUIPE");
+    state.Require(folderContainsOffset.has_value() && folderContainsOffset.value() == 7u,
+                  std::format(L"Folder incremental contains offset mismatch. got={}", folderContainsOffset.value_or(UINT32_MAX)));
+
+    size_t literalOffset = std::wstring_view::npos;
+    state.Require(SearchTextHelpers::FindLiteralWithChunkOverlap(L"prefix \u00C9quipe suffix", L"\u00E9QUIPE", false, 4u, literalOffset) &&
+                      literalOffset == 7u,
+                  std::format(L"Literal content folding offset mismatch. got={}", literalOffset));
+
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"search_invariant_case_folding_consistency", caseRoot),
+                  L"Failed to prepare search_invariant_case_folding_consistency root.");
+    const std::filesystem::path filePath = caseRoot / L"\u00C9quipe.txt";
+    state.Require(SelfTest::WriteTextFile(filePath, "RAPPORT \xC3\x89QUIPE"), L"Failed to create invariant-fold search fixture.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring rootText       = caseRoot.wstring();
+    const std::wstring namePattern    = L"\u00E9QUIPE";
+    const std::wstring contentPattern = L"\u00E9quipe";
+
+    FileSystemSearchQuery query{};
+    query.sizeBytes      = sizeof(FileSystemSearchQuery);
+    query.rootPath       = rootText.c_str();
+    query.namePattern    = namePattern.c_str();
+    query.contentPattern = contentPattern.c_str();
+    query.flags          = FILESYSTEM_SEARCH_INCLUDE_FILES;
+    query.nameMode       = FILESYSTEM_SEARCH_NAME_LITERAL;
+    query.contentMode    = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+
+    RecordingSearchCallback callback;
+    const HRESULT hr = SearchFallbackEngine::Execute(baseFs.get(), &query, &callback, nullptr);
+    state.Require(SUCCEEDED(hr), std::format(L"Invariant fallback search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    const auto matches = callback.Matches();
+    state.Require(matches.size() == 1u, std::format(L"Invariant fallback search expected 1 match, got {}.", matches.size()));
+    const RecordedSearchMatch* match = FindRecordedSearchMatch(matches, L"\u00C9quipe.txt");
+    state.Require(match != nullptr, L"Invariant fallback search missing the accented file.");
+    if (match != nullptr)
+    {
+        state.Require((match->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_NAME) != 0u, L"Invariant fallback search should match by name.");
+        state.Require((match->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_CONTENT) != 0u, L"Invariant fallback search should match by content.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
                   L"search_text_helpers_chunk_overlap_literal_and_regex",
                   [&](SelfTest::CaseState& state) noexcept
 {
@@ -6961,6 +9827,190 @@ SelfTest::RunCase(options,
     state.Require(result.matchOffset == 7u, std::format(L"Regex helper offset mismatch. got={}", result.matchOffset));
     state.Require(result.matchLength == 6u, std::format(L"Regex helper length mismatch. got={}", result.matchLength));
     state.Require(result.previewText.find(L"abc123") != std::wstring::npos, L"Regex helper snippet should include the match.");
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"host_fallback_regex_rejected_single_completion",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"host_fallback_regex_rejected", caseRoot), L"Failed to prepare host_fallback_regex_rejected root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"aaa.txt", "aaa"), L"Failed to create aaa.txt.");
+
+    const std::wstring rootText = caseRoot.wstring();
+
+    const auto requireRejected = [&](std::wstring_view label, std::wstring_view regexPattern, bool contentRegex) noexcept
+    {
+        const std::wstring regexText(regexPattern);
+        const std::wstring nameWildcard = L"*.txt";
+
+        FileSystemSearchQuery query{};
+        query.sizeBytes      = sizeof(FileSystemSearchQuery);
+        query.rootPath       = rootText.c_str();
+        query.namePattern    = contentRegex ? nameWildcard.c_str() : regexText.c_str();
+        query.contentPattern = contentRegex ? regexText.c_str() : nullptr;
+        query.flags          = FILESYSTEM_SEARCH_INCLUDE_FILES;
+        query.nameMode       = contentRegex ? FILESYSTEM_SEARCH_NAME_WILDCARD : FILESYSTEM_SEARCH_NAME_REGEX;
+        query.contentMode    = contentRegex ? FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX : FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+        RecordingSearchCallback callback;
+        const HRESULT hr = SearchFallbackEngine::Execute(baseFs.get(), &query, &callback, nullptr);
+        state.Require(hr == E_INVALIDARG,
+                      std::format(L"{} unsafe fallback regex should return E_INVALIDARG, got 0x{:08X}.", label, static_cast<unsigned long>(hr)));
+        state.Require(callback.Matches().empty(), std::format(L"{} unsafe fallback regex should not emit matches.", label));
+        state.Require(callback.ProgressCalls() == 1u,
+                      std::format(L"{} unsafe fallback regex should emit exactly one progress callback, got {}.", label, callback.ProgressCalls()));
+
+        const auto progress                     = callback.ProgressSnapshots();
+        const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+        state.Require(completed != nullptr, std::format(L"{} unsafe fallback regex missing completed progress.", label));
+        if (completed != nullptr)
+        {
+            state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED) != 0u,
+                          std::format(L"{} unsafe fallback regex missing REGEX_REJECTED warning. warnings=0x{:08X}.", label, completed->warningFlags));
+            state.Require(completed->statusHint == E_INVALIDARG,
+                          std::format(L"{} unsafe fallback regex statusHint mismatch. got=0x{:08X}.",
+                                      label,
+                                      static_cast<unsigned long>(completed->statusHint)));
+        }
+    };
+
+    requireRejected(L"duplicate-alternative-name", L"(a|a)*", false);
+    requireRejected(L"prefix-overlap-alternative-name", L"(a|ab)*x", false);
+    requireRejected(L"duplicate-alternative-content", L"(a|a)*", true);
+    requireRejected(L"prefix-overlap-alternative-content", L"(a|ab)*x", true);
+
+    const std::wstring tooLongPattern(SearchTextHelpers::kMaxRegexPatternLength + 1u, L'a');
+    requireRejected(L"too-long-name", tooLongPattern, false);
+    requireRejected(L"too-long-content", tooLongPattern, true);
+
+    std::wstring tooDeepPattern;
+    tooDeepPattern.reserve((SearchTextHelpers::kMaxRegexGroupDepth + 1u) * 2u + 1u);
+    for (size_t depth = 0u; depth <= SearchTextHelpers::kMaxRegexGroupDepth; ++depth)
+    {
+        tooDeepPattern.push_back(L'(');
+    }
+    tooDeepPattern.push_back(L'a');
+    for (size_t depth = 0u; depth <= SearchTextHelpers::kMaxRegexGroupDepth; ++depth)
+    {
+        tooDeepPattern.push_back(L')');
+    }
+    requireRejected(L"too-deep-name", tooDeepPattern, false);
+    requireRejected(L"too-deep-content", tooDeepPattern, true);
+
+    const std::wstring boundedPattern = LR"(^a{2,4}\.txt$)";
+    FileSystemSearchQuery boundedQuery{};
+    boundedQuery.sizeBytes   = sizeof(FileSystemSearchQuery);
+    boundedQuery.rootPath    = rootText.c_str();
+    boundedQuery.namePattern = boundedPattern.c_str();
+    boundedQuery.flags       = FILESYSTEM_SEARCH_INCLUDE_FILES;
+    boundedQuery.nameMode    = FILESYSTEM_SEARCH_NAME_REGEX;
+    boundedQuery.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+    RecordingSearchCallback boundedCallback;
+    const HRESULT boundedHr = SearchFallbackEngine::Execute(baseFs.get(), &boundedQuery, &boundedCallback, nullptr);
+    state.Require(SUCCEEDED(boundedHr),
+                  std::format(L"Host fallback bounded regex should be accepted, got 0x{:08X}.", static_cast<unsigned long>(boundedHr)));
+    if (SUCCEEDED(boundedHr))
+    {
+        state.Require(FindRecordedSearchMatch(boundedCallback.Matches(), L"aaa.txt") != nullptr, L"Host fallback bounded regex should match aaa.txt.");
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"host_fallback_regex_oversized_content_reports_overflow",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"host_fallback_regex_oversized", caseRoot), L"Failed to prepare host_fallback_regex_oversized root.");
+
+    constexpr size_t kRegexHelperLimitForTest = 5u * 1024u * 1024u;
+    std::string payload(kRegexHelperLimitForTest + 64u, 'a');
+    payload.replace(0u, 6u, "needle");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"large.txt", payload), L"Failed to create large.txt.");
+
+    const std::wstring rootText       = caseRoot.wstring();
+    const std::wstring namePattern    = L"*.txt";
+    const std::wstring contentPattern = L"needle";
+
+    FileSystemSearchQuery query{};
+    query.sizeBytes      = sizeof(FileSystemSearchQuery);
+    query.rootPath       = rootText.c_str();
+    query.namePattern    = namePattern.c_str();
+    query.contentPattern = contentPattern.c_str();
+    query.flags          = FILESYSTEM_SEARCH_INCLUDE_FILES;
+    query.nameMode       = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    query.contentMode    = FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX;
+
+    RecordingSearchCallback callback;
+    const HRESULT hr = SearchFallbackEngine::Execute(baseFs.get(), &query, &callback, nullptr);
+    state.Require(SUCCEEDED(hr), std::format(L"Host fallback oversized regex content search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+    state.Require(callback.Matches().empty(), L"Host fallback oversized regex content search should report no clean match under the overflow policy.");
+
+    const auto progress                     = callback.ProgressSnapshots();
+    const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+    state.Require(completed != nullptr, L"Host fallback oversized regex content missing completed progress.");
+    if (completed != nullptr)
+    {
+        state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_OVERFLOW) != 0u,
+                      std::format(L"Host fallback oversized regex content should report OVERFLOW. warnings=0x{:08X}.", completed->warningFlags));
+    }
+
+    return state.failure.empty();
+});
+
+SelfTest::RunCase(options,
+                  suite,
+                  L"host_fallback_regex_cancel_before_after_name_candidate",
+                  [&](SelfTest::CaseState& state) noexcept
+{
+    std::filesystem::path caseRoot;
+    state.Require(PrepareSearchCaseRoot(root, L"host_fallback_regex_cancel_candidate", caseRoot),
+                  L"Failed to prepare host_fallback_regex_cancel_candidate root.");
+    state.Require(SelfTest::WriteTextFile(caseRoot / L"target.txt", "target"), L"Failed to create target.txt.");
+
+    const std::wstring rootText    = caseRoot.wstring();
+    const std::wstring namePattern = LR"(^target.*\.txt$)";
+
+    FileSystemSearchQuery query{};
+    query.sizeBytes   = sizeof(FileSystemSearchQuery);
+    query.rootPath    = rootText.c_str();
+    query.namePattern = namePattern.c_str();
+    query.flags       = FILESYSTEM_SEARCH_INCLUDE_FILES;
+    query.nameMode    = FILESYSTEM_SEARCH_NAME_REGEX;
+    query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+    const auto requireCancelled = [&](std::wstring_view label, uint32_t cancelAfterChecks) noexcept
+    {
+        RecordingSearchCallback callback(RecordingSearchCallback::Mode::Success, cancelAfterChecks);
+        const HRESULT hr = SearchFallbackEngine::Execute(baseFs.get(), &query, &callback, nullptr);
+        state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                      std::format(L"{} regex cancellation should return ERROR_CANCELLED, got 0x{:08X}.",
+                                  label,
+                                  static_cast<unsigned long>(hr)));
+        state.Require(callback.Matches().empty(), std::format(L"{} regex cancellation should not emit matches.", label));
+
+        const auto progress                     = callback.ProgressSnapshots();
+        const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+        state.Require(completed != nullptr, std::format(L"{} regex cancellation missing completed progress.", label));
+        if (completed != nullptr)
+        {
+            state.Require(completed->statusHint == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"{} regex cancellation statusHint mismatch. got=0x{:08X}.",
+                                      label,
+                                      static_cast<unsigned long>(completed->statusHint)));
+        }
+    };
+
+    requireCancelled(L"before-candidate", 3u);
+    requireCancelled(L"after-candidate", 4u);
 
     return state.failure.empty();
 });

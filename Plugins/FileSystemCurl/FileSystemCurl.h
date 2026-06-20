@@ -47,6 +47,7 @@ public:
         unsigned long fileIndex  = 0;
         unsigned long attributes = 0;
         uint64_t sizeBytes       = 0;
+        bool sizeKnown           = false; // false when the listing dialect could not report a file size
         __int64 creationTime     = 0;
         __int64 lastAccessTime   = 0;
         __int64 lastWriteTime    = 0;
@@ -245,6 +246,16 @@ private:
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": ["*"], "move": ["*"] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "supported"
   }
 }
 )json";
@@ -269,6 +280,16 @@ private:
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": ["*"], "move": ["*"] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "supported"
   }
 }
 )json";
@@ -293,6 +314,16 @@ private:
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": ["*"], "move": ["*"] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "supported"
   }
 }
 )json";
@@ -317,6 +348,16 @@ private:
   "crossFileSystem": {
     "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": [], "move": [] }
+  },
+  "pathIdentity": {
+    "version": 1,
+    "pathTextStableIdentity": true,
+    "componentComparison": "ordinalCaseSensitive",
+    "normalization": "none",
+    "preferredSeparator": "/",
+    "acceptedSeparators": ["/"],
+    "casePreserving": true,
+    "caseOnlyRename": "notApplicable"
   }
 }
 )json";

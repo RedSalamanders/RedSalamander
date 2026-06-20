@@ -69,6 +69,81 @@ struct ResolvedAwsContext
 
     std::optional<std::string> accessKeyId;
     std::optional<std::string> secretAccessKey;
+
+    ResolvedAwsContext()                              = default;
+    ResolvedAwsContext(const ResolvedAwsContext&)     = default;
+    ResolvedAwsContext(ResolvedAwsContext&&) noexcept = default;
+
+    ResolvedAwsContext& operator=(const ResolvedAwsContext& other)
+    {
+        if (this == &other)
+        {
+            return *this;
+        }
+
+        SecureClearSensitiveFields();
+
+        connectionName       = other.connectionName;
+        region               = other.region;
+        explicitRegion       = other.explicitRegion;
+        endpointOverride     = other.endpointOverride;
+        useHttps             = other.useHttps;
+        verifyTls            = other.verifyTls;
+        useVirtualAddressing = other.useVirtualAddressing;
+        maxKeys              = other.maxKeys;
+        maxTableResults      = other.maxTableResults;
+        connectTimeoutMs     = other.connectTimeoutMs;
+        requestTimeoutMs     = other.requestTimeoutMs;
+        accessKeyId          = other.accessKeyId;
+        secretAccessKey      = other.secretAccessKey;
+        return *this;
+    }
+
+    ResolvedAwsContext& operator=(ResolvedAwsContext&& other) noexcept
+    {
+        if (this == &other)
+        {
+            return *this;
+        }
+
+        SecureClearSensitiveFields();
+
+        connectionName       = std::move(other.connectionName);
+        region               = std::move(other.region);
+        explicitRegion       = std::move(other.explicitRegion);
+        endpointOverride     = std::move(other.endpointOverride);
+        useHttps             = other.useHttps;
+        verifyTls            = other.verifyTls;
+        useVirtualAddressing = other.useVirtualAddressing;
+        maxKeys              = other.maxKeys;
+        maxTableResults      = other.maxTableResults;
+        connectTimeoutMs     = other.connectTimeoutMs;
+        requestTimeoutMs     = other.requestTimeoutMs;
+        accessKeyId          = std::move(other.accessKeyId);
+        secretAccessKey      = std::move(other.secretAccessKey);
+        other.SecureClearSensitiveFields();
+        return *this;
+    }
+
+    ~ResolvedAwsContext() noexcept
+    {
+        SecureClearSensitiveFields();
+    }
+
+private:
+    void SecureClearSensitiveFields() noexcept
+    {
+        if (accessKeyId.has_value())
+        {
+            SecureWipe::SecureClear(accessKeyId.value());
+            accessKeyId.reset();
+        }
+        if (secretAccessKey.has_value())
+        {
+            SecureWipe::SecureClear(secretAccessKey.value());
+            secretAccessKey.reset();
+        }
+    }
 };
 
 struct S3Location

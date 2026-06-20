@@ -32,7 +32,7 @@ constexpr std::array<ParameterizedCommandPrefix, 13> kParameterizedCommandPrefix
     ParameterizedCommandPrefix{L"cmd/pane/viewWith/", L"cmd/pane/viewWith"},
 };
 
-constexpr std::array<CommandInfo, 125> kCommands = {
+constexpr std::array<CommandInfo, 126> kCommands = {
     CommandInfo{L"cmd/app/about", IDS_CMD_ABOUT, IDS_CMD_DESC_ABOUT, IDM_ABOUT},
     CommandInfo{L"cmd/app/compare", IDS_CMD_COMPARE, IDS_CMD_DESC_COMPARE, IDM_APP_COMPARE},
     CommandInfo{L"cmd/app/exit", IDS_CMD_EXIT, IDS_CMD_DESC_EXIT, IDM_EXIT},
@@ -62,6 +62,7 @@ constexpr std::array<CommandInfo, 125> kCommands = {
     CommandInfo{L"cmd/app/viewWidth", IDS_CMD_VIEW_WIDTH, IDS_CMD_DESC_VIEW_WIDTH, IDM_APP_VIEW_WIDTH},
     CommandInfo{L"cmd/pane/alternateEdit", IDS_CMD_ALTERNATE_EDIT, IDS_CMD_DESC_ALTERNATE_EDIT, IDM_PANE_ALTERNATE_EDIT},
     CommandInfo{L"cmd/pane/alternateView", IDS_CMD_ALTERNATE_VIEW, IDS_CMD_DESC_ALTERNATE_VIEW, IDM_PANE_ALTERNATE_VIEW},
+    CommandInfo{L"cmd/pane/batchRename", IDS_CMD_BATCH_RENAME, IDS_CMD_DESC_BATCH_RENAME, IDM_PANE_BATCH_RENAME},
     CommandInfo{L"cmd/pane/bringCurrentDirToCommandLine",
                 IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE,
                 IDS_CMD_DESC_BRING_CURRENT_DIR_TO_COMMAND_LINE,

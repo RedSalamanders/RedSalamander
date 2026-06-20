@@ -54,12 +54,15 @@ Examples:
 - Upload new objects
 - Overwrite existing objects
 - Delete objects
+- Delete virtual folders / prefixes recursively (every object under the prefix is removed)
+- Move and rename objects and prefixes within the same connection
 
-Current limitations:
+Notes and limitations:
 
-- No server-side rename/move
-- No recursive delete of virtual folders / prefixes
-- "Folders" are virtual path prefixes, not real directory objects
+- Deleting a virtual folder removes all objects under that prefix; this is requested with the recursive flag (as the host does when you confirm deleting a folder). Deleting a prefix without recursion is refused.
+- Object deletes are issued in batches and can run several in parallel.
+- Move and rename are not atomic on the server: they are performed as a copy followed by a delete of the source.
+- "Folders" are virtual path prefixes, not real directory objects.
 
 Cross-filesystem copy/move still works through the host bridge (read -> write), so you can copy between `file:`, `ftp:`, `s3:`, and other supported file systems when both sides allow it.
 
@@ -97,4 +100,4 @@ S3 Table also exposes:
 
 - If a profile keeps prompting for credentials, prefer Connection Manager over embedding defaults in plugin settings.
 - If you are using a custom endpoint or self-signed certificate, check the S3/S3 Table plugin settings and your Connection Manager profile.
-- If a delete fails on what looks like a folder, verify that you selected objects rather than a virtual prefix.
+- Deleting a virtual folder removes every object under that prefix. If a folder delete is refused, the operation was issued without recursion; confirm the delete so the recursive delete is requested.
