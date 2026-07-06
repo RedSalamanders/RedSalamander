@@ -6,7 +6,7 @@
   "dependencies": [
     {
       "name": "7zip",
-      "version>=": "26.1"
+      "version>=": "26.2"
     },
     {
       "name": "wil",
